@@ -60,6 +60,7 @@ class AuthResult:
 
 
 @traces(SWR.SWR_720)
+@traces(SWR.SWR_3711)
 @runtime_checkable
 class AuthProvider(Protocol):
     """Protocol for OAuth authentication providers.
@@ -89,6 +90,18 @@ class AuthProvider(Protocol):
 
     async def refresh(self, token_set: TokenSet) -> AuthResult:
         """Refresh expired access token. Returns original tokens if refresh unsupported."""
+        ...
+
+    def status(self, token_set: TokenSet) -> AuthStatus:
+        """Classify stored tokens without I/O.
+
+        Deciding whether a stored token is usable is a local judgement — an
+        expiry compared against the clock, a token shape checked against what
+        the provider issues. No implementation reaches the network for it, so
+        callers holding no event loop must not have to invent one; that is what
+        this method is for. :meth:`check_status` is its awaitable face and
+        delegates here.
+        """
         ...
 
     async def check_status(self, token_set: TokenSet) -> AuthStatus:

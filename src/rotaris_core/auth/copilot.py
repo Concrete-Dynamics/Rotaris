@@ -182,7 +182,7 @@ class CopilotAuthProvider:
             ),
         )
 
-    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+    def status(self, token_set: TokenSet) -> AuthStatus:
         if not token_set.access_token:
             return AuthStatus.UNAUTHENTICATED
         # Legacy ``gho_`` tokens left behind by earlier releases cannot be
@@ -196,6 +196,9 @@ class CopilotAuthProvider:
         if time.time() >= (token_set.expires_at - _EXPIRY_MARGIN_S):
             return AuthStatus.EXPIRED
         return AuthStatus.AUTHENTICATED
+
+    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+        return self.status(token_set)
 
     async def _request_device_code(
         self,

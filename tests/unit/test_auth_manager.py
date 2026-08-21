@@ -22,8 +22,11 @@ class FakeProvider:
     def provider_id(self) -> str:
         return "fake"
 
-    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+    def status(self, token_set: TokenSet) -> AuthStatus:
         return self._check_result
+
+    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+        return self.status(token_set)
 
     async def refresh(self, token_set: TokenSet) -> AuthResult:
         return self._refresh_result
@@ -348,3 +351,122 @@ def test_logout_clears_staged_codex_tokens(tmp_path, monkeypatch) -> None:
 
     assert calls == [True]
     assert not storage.has_tokens("codex")
+
+
+@verifies(SWR.SWR_3711)
+def test_peek_status_matches_check_status_without_a_loop(tmp_path) -> None:
+    """The synchronous mirror answers the same as its awaitable face."""
+    import asyncio
+
+    storage = TokenStorage(token_dir=tmp_path)
+    storage.save("fake", TokenSet(access_token="stored", refresh_token="ref"))
+
+    for verdict in (AuthStatus.AUTHENTICATED, AuthStatus.EXPIRED, AuthStatus.UNAUTHENTICATED):
+        manager = AuthManager(storage=storage)
+        manager._providers["fake"] = FakeProvider(check_result=verdict)
+
+        assert manager.peek_status("fake") is verdict
+        assert asyncio.run(manager.check_status("fake")) is verdict
+
+
+@verifies(SWR.SWR_3711)
+def test_peek_status_without_provider_or_tokens_is_unauthenticated(tmp_path) -> None:
+    storage = TokenStorage(token_dir=tmp_path)
+    manager = AuthManager(storage=storage)
+
+    assert manager.peek_status("nobody-knows-this-one") is AuthStatus.UNAUTHENTICATED
+
+    manager._providers["fake"] = FakeProvider(check_result=AuthStatus.AUTHENTICATED)
+    assert manager.peek_status("fake") is AuthStatus.UNAUTHENTICATED
+
+
+@verifies(SWR.SWR_3711)
+def test_run_auth_coro_returns_the_value_with_and_without_a_running_loop() -> None:
+    import asyncio
+
+    from rotaris_core.auth.manager import run_auth_coro
+
+    async def answer() -> int:
+        return 42
+
+    assert run_auth_coro(answer()) == 42
+
+    async def from_inside_a_loop() -> int:
+        return run_auth_coro(answer())
+
+    assert asyncio.run(from_inside_a_loop()) == 42
+
+
+@verifies(SWR.SWR_3711)
+def test_run_auth_coro_surfaces_a_failed_handoff_and_leaves_no_orphan(monkeypatch) -> None:
+    """A refused handoff raises its own error, not a stray RuntimeWarning.
+
+    The thread pool refuses new work once the interpreter is shutting down. If
+    the coroutine were left unstarted, Python would report "never awaited" at
+    whatever unrelated line the collector reached next, and the real error would
+    be lost in whichever handler swallowed it.
+    """
+    import asyncio
+    import concurrent.futures
+    import gc
+    import warnings
+
+    from rotaris_core.auth.manager import run_auth_coro
+
+    def refuse(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202, ARG001
+        raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+
+    monkeypatch.setattr(concurrent.futures.ThreadPoolExecutor, "submit", refuse)
+
+    async def answer() -> int:
+        return 42
+
+    async def from_inside_a_loop() -> str:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            try:
+                run_auth_coro(answer())
+            except RuntimeError as exc:
+                message = str(exc)
+            else:
+                message = "no error raised"
+            gc.collect()
+        return message
+
+    assert "interpreter shutdown" in asyncio.run(from_inside_a_loop())
+
+
+@verifies(SWR.SWR_3712)
+async def test_renew_refreshes_a_credential_that_is_still_valid(tmp_path) -> None:
+    """A run looking past its own start renews a token that has not expired yet."""
+    storage = TokenStorage(token_dir=tmp_path)
+    storage.save("fake", TokenSet(access_token="valid-for-now", refresh_token="ref"))
+
+    renewed = TokenSet(access_token="renewed", refresh_token="new-ref")
+    manager = AuthManager(storage=storage)
+    manager._providers["fake"] = FakeProvider(
+        check_result=AuthStatus.AUTHENTICATED,
+        refresh_result=AuthResult(success=True, tokens=renewed),
+    )
+
+    assert await manager.renew("fake") == "renewed"
+    stored = storage.load("fake")
+    assert stored is not None
+    assert stored.access_token == "renewed"
+
+
+@verifies(SWR.SWR_3712)
+async def test_renew_reports_why_it_could_not(tmp_path) -> None:
+    storage = TokenStorage(token_dir=tmp_path)
+    storage.save("fake", TokenSet(access_token="valid-for-now", refresh_token="ref"))
+
+    manager = AuthManager(storage=storage)
+    manager._providers["fake"] = FakeProvider(
+        refresh_result=AuthResult(success=False, error="invalid_grant"),
+    )
+
+    assert await manager.renew("fake") is None
+    assert manager.get_last_error("fake") == "invalid_grant"
+
+    assert await manager.renew("unknown-provider") is None
+    assert manager.get_last_error("unknown-provider") == "Unknown provider: unknown-provider"

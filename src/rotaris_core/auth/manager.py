@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from rotaris_core.auth.provider import (
     AuthFlowType,
@@ -17,6 +17,7 @@ from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
     import threading
+    from collections.abc import Coroutine
     from pathlib import Path
 
     from rotaris_core.auth.provider import AuthProvider
@@ -62,7 +63,46 @@ def get_provider_flow_type(provider_id: str) -> AuthFlowType | None:
     return None
 
 
+@traces(SWR.SWR_3711)
+def run_auth_coro[T](coro: Coroutine[Any, Any, T]) -> T:
+    """Await an auth coroutine from synchronous code, loop or no loop.
+
+    Callers reach the auth manager from every corner of the app — config
+    loading, Qt worker threads, CLI entry points — so the surrounding event
+    loop may or may not exist. When one is already running the coroutine goes
+    to a private loop on a worker thread; otherwise ``asyncio.run`` handles it
+    here.
+
+    Either handoff can fail *before* anything awaits ``coro`` — most visibly at
+    interpreter shutdown, where the thread pool refuses new work. Closing the
+    coroutine on that path keeps the real error visible instead of burying it
+    under a "coroutine ... was never awaited" RuntimeWarning raised much later,
+    at whatever unrelated line the garbage collector happened to reach.
+    """
+    import asyncio
+    import contextlib
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    try:
+        if loop is not None and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result(timeout=30)
+
+        return asyncio.run(coro)
+    except BaseException:
+        with contextlib.suppress(RuntimeError):
+            coro.close()
+        raise
+
+
 @traces(SWR.SWR_703, SWR.SWR_704, SWR.SWR_718, SWR.SWR_720, SWR.SWR_742)
+@traces(SWR.SWR_3711, SWR.SWR_3712)
 class AuthManager:
     """Coordinates authentication providers with persistent token storage.
 
@@ -165,7 +205,7 @@ class AuthManager:
         token_set = self._storage.load(provider_id)
 
         if token_set is not None:
-            status = await provider.check_status(token_set)
+            status = provider.status(token_set)
 
             if status == AuthStatus.AUTHENTICATED:
                 self._set_last_error(provider_id, None)
@@ -196,7 +236,46 @@ class AuthManager:
         _log.error("Authentication failed for %s: %s", provider_id, error)
         return None
 
-    async def check_status(self, provider_id: str) -> AuthStatus:
+    async def renew(self, provider_id: str) -> str | None:
+        """Refresh the stored credential now, whatever its status says.
+
+        :meth:`get_token` renews only what is already unusable, which is the
+        right answer for a caller that needs a token this instant. A caller
+        looking further ahead — a run that will still be going when this token
+        expires — needs to renew one that is *currently* fine, so it asks here.
+
+        Returns the new access token, or ``None`` when the provider cannot
+        refresh without the user; the reason is left in :meth:`get_last_error`.
+        """
+        provider = self._get_or_create_provider(provider_id)
+        if provider is None:
+            self._set_last_error(provider_id, f"Unknown provider: {provider_id}")
+            return None
+
+        token_set = self._storage.load(provider_id)
+        if token_set is None:
+            self._set_last_error(provider_id, "Authentication required")
+            return None
+
+        result = await provider.refresh(token_set)
+        if not (result.success and result.tokens):
+            error = result.error or "Token refresh failed"
+            self._set_last_error(provider_id, error)
+            return None
+
+        self._storage.save(provider_id, result.tokens)
+        self._stage_provider_tokens(provider_id, result.tokens)
+        self._set_last_error(provider_id, None)
+        return result.tokens.access_token
+
+    def peek_status(self, provider_id: str) -> AuthStatus:
+        """Classify the stored credentials for ``provider_id`` without a loop.
+
+        The synchronous mirror of :meth:`check_status`. Every provider decides
+        status from the token set alone, so this is a file read and a handful of
+        comparisons — cheap enough to call at LLM-construction time, and safe to
+        call from a Qt worker or any other thread that holds no event loop.
+        """
         provider = self._get_or_create_provider(provider_id)
         if provider is None:
             return AuthStatus.UNAUTHENTICATED
@@ -205,7 +284,10 @@ class AuthManager:
         if token_set is None:
             return AuthStatus.UNAUTHENTICATED
 
-        return await provider.check_status(token_set)
+        return provider.status(token_set)
+
+    async def check_status(self, provider_id: str) -> AuthStatus:
+        return self.peek_status(provider_id)
 
     async def authenticate(
         self,

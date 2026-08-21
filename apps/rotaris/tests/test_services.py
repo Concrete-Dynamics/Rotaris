@@ -1213,6 +1213,42 @@ def test_config_service_health_check_calls_live_provider_validation(tmp_path, mo
     assert validation_calls == ["deepseek"]
 
 
+@verifies(SWR.SWR_3711)
+def test_config_service_health_check_survives_a_running_event_loop(tmp_path, monkeypatch) -> None:
+    """A health check reached from async code must not fail on the loop it is in.
+
+    ``asyncio.run`` refuses to start inside a running loop, and it refuses
+    *before* awaiting — which used to abandon the status coroutine and report a
+    stray "never awaited" warning somewhere else entirely.
+    """
+    import asyncio
+
+    store = WorkspaceStore()
+    service = ConfigService(tmp_path, store)
+    settings = SimpleNamespace(
+        provider_id="deepseek",
+        display_name="DeepSeek",
+        auth_flow=AuthFlowType.API_KEY,
+    )
+
+    async def authenticated(_manager, provider_id: str) -> AuthStatus:
+        return AuthStatus.AUTHENTICATED
+
+    monkeypatch.setattr(
+        "rotaris_core.auth.provider_settings.get_provider_settings", lambda _provider_id: settings
+    )
+    monkeypatch.setattr("rotaris_core.auth.manager.AuthManager.check_status", authenticated)
+    monkeypatch.setattr(
+        "rotaris_core.auth.provider_settings.validate_provider",
+        lambda _provider_id: SimpleNamespace(success=True, message="Validated DeepSeek."),
+    )
+
+    async def check_from_inside_a_loop() -> str:
+        return service.check_provider_health("deepseek").status
+
+    assert asyncio.run(check_from_inside_a_loop()) == "healthy"
+
+
 @verifies(SWR.SWR_2040, SWR.SWR_2041)
 def test_config_service_health_check_refreshes_models_without_rebuilding_providers(
     tmp_path, monkeypatch

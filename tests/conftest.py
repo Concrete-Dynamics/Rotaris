@@ -398,6 +398,14 @@ def _bypass_auth_storage(request, tmp_path_factory):
                 return_value=AuthStatus.AUTHENTICATED,
             ),
         )
+        # The loop-free twin the config loader reads; patched alongside its
+        # awaitable face so neither path can reach real credentials.
+        stack.enter_context(
+            patch(
+                "rotaris_core.auth.manager.AuthManager.peek_status",
+                return_value=AuthStatus.AUTHENTICATED,
+            ),
+        )
         stack.enter_context(
             patch("rotaris_core.auth.manager.AuthManager.get_token", return_value="test-token"),
         )

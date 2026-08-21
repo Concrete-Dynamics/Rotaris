@@ -41,5 +41,8 @@ class StaticAPIKeyAuthProvider(AuthProvider):
     async def refresh(self, token_set: TokenSet) -> AuthResult:
         return AuthResult(success=bool(token_set.access_token), tokens=token_set)
 
-    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+    def status(self, token_set: TokenSet) -> AuthStatus:
         return AuthStatus.AUTHENTICATED if token_set.access_token else AuthStatus.UNAUTHENTICATED
+
+    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+        return self.status(token_set)

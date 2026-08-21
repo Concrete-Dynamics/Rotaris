@@ -1,0 +1,7 @@
+:root{
+--rt-space-1:4px;--rt-space-2:8px;--rt-space-3:12px;--rt-space-4:16px;--rt-space-5:20px;
+--rt-space-6:24px;--rt-space-8:32px;--rt-space-10:40px;--rt-space-12:48px;--rt-space-16:64px;
+--rt-space-24:96px;
+/* the visible module behind every grid/graph-paper motif in the brand */
+--rt-grid-unit:32px;
+}

@@ -1,0 +1,19 @@
+{
+    "pyright.useLibraryCodeForTypes": true,
+    "pylint.severity": {
+        "convention": "Information",
+        "error": "Error",
+        "fatal": "Error",
+        "refactor": "Hint",
+        "warning": "Warning",
+        "info": "Information"
+    },
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportGeneralTypeIssues": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportAttributeAccessIssue": "none",
+        "reportFunctionMemberAccess": "none",
+        "reportMissingImports": "warning",
+        "reportInvalidTypeForm": "warning"
+    }
+}

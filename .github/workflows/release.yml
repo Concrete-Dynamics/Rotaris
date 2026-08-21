@@ -1,0 +1,194 @@
+name: Release
+
+# AC-001: only a v<major>.<minor>.<patch> tag releases. No branch or PR trigger —
+# this workflow publishes, and publishing cannot be undone.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  # AC-006: the tag and both pyproject versions must agree before anything is
+  # built. The check is a tested Python function, not a shell comparison.
+  guard:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Stdlib-only, like the reqtocode gate: no dependency install needed.
+      - id: check
+        env:
+          PYTHONPATH: src
+        run: |
+          version=$(python -m rotaris_core.packaging verify-version "$GITHUB_REF")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # AC-002/AC-003: every artifact on a native runner, and one platform failing
+  # must not stop the others. `fail-fast: false` keeps the siblings running; the
+  # release job runs `if: always()` so their artifacts still ship.
+  build:
+    needs: guard
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: macos-arm64
+            runner: macos-latest
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # PySide6 links libEGL/libGL even when it never opens a window; libfuse2 is
+      # what appimagetool needs to run.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfuse2
+
+      - run: uv sync --all-packages
+
+      # The desktop app and the two console entry points (SWR-3001).
+      - run: uv run python -m rotaris_core.packaging build rotaris --mode onedir
+      - run: uv run python -m rotaris_core.packaging build rotaris-cli --mode onedir
+      - run: uv run python -m rotaris_core.packaging build rotaris-headless --mode onedir
+
+      - name: Windows installer and portable executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis --no-progress -y
+          & "C:\Program Files (x86)\NSIS\makensis.exe" `
+            "/DVERSION=$env:VERSION" `
+            "/DSOURCE_DIR=$PWD\dist\rotaris" `
+            packaging\installer\rotaris.nsi
+          uv run python -m rotaris_core.packaging build rotaris --mode onefile
+          Move-Item dist\rotaris.exe "dist\Rotaris-$env:VERSION-windows-x64-portable.exe"
+
+      - name: macOS DMG
+        if: runner.os == 'macOS'
+        run: packaging/macos/make_dmg.sh "${VERSION}"
+
+      - name: Linux AppImage
+        if: runner.os == 'Linux'
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+          packaging/linux/make_appimage.sh "${VERSION}"
+
+      # The console entry points travel as one archive per platform: a onedir
+      # build is a tree, not a file. Windows gets a zip because that is what
+      # Explorer opens without help.
+      - name: Archive the console binaries
+        shell: bash
+        run: |
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            (cd dist && 7z a "rotaris-cli-${VERSION}-${PLATFORM}.zip" rotaris-cli rotaris-headless)
+          else
+            tar -czf "dist/rotaris-cli-${VERSION}-${PLATFORM}.tar.gz" \
+              -C dist rotaris-cli rotaris-headless
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          # Only the release assets — not the onedir trees they were made from.
+          path: |
+            dist/Rotaris-*.exe
+            dist/Rotaris-*.dmg
+            dist/Rotaris-*.AppImage
+            dist/rotaris-cli-*.zip
+            dist/rotaris-cli-*.tar.gz
+          if-no-files-found: error
+
+  # AC-003/AC-004: publish whatever arrived. `if: always()` is what makes a
+  # partial release possible; the body names the platforms that are missing.
+  release:
+    needs: [guard, build]
+    if: always() && needs.guard.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The changelog compares against the previous tag; a shallow clone has
+          # no tags to compare against.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          path: staging
+          merge-multiple: true
+      - name: Checksums and release body
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m rotaris_core.packaging checksums --dist staging
+          python -m rotaris_core.packaging notes \
+            --version "${VERSION}" --dist staging --output release-notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Rotaris ${{ needs.guard.outputs.version }}
+          body_path: release-notes.md
+          files: staging/*
+          fail_on_unmatched_files: true
+
+  # AC-005: a publish failure must not roll back the Release, so this runs after
+  # it and never gates it.
+  publish-pypi:
+    needs: [guard, release]
+    runs-on: ubuntu-24.04
+    permissions:
+      # Trusted publishing: PyPI verifies this workflow's identity, so no
+      # long-lived API token is stored in the repository.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # A bare `uv build` in a workspace builds the root package only.
+      - run: uv build --package rotaris-core --out-dir dist/core
+      - run: uv build --package rotaris --out-dir dist/desktop
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/core
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/desktop
+
+  # AC-003, second half: the Release ships, and the run still goes red so a
+  # partial failure is visible rather than silently tolerated.
+  status:
+    needs: [build, release]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail if any platform or the release job failed
+        run: |
+          echo "build=${{ needs.build.result }} release=${{ needs.release.result }}"
+          [ "${{ needs.build.result }}" = "success" ] || exit 1
+          [ "${{ needs.release.result }}" = "success" ] || exit 1

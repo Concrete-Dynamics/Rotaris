@@ -1,0 +1,30 @@
+models:
+  gpt4:
+    provider: openai
+    model_id: openai/gpt-4o
+    api_key_env: OPENAI_API_KEY
+  claude:
+    provider: anthropic
+    model_id: anthropic/claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+
+personas:
+  orchestrator:
+    name: orchestrator
+    model: gpt4
+    tools:
+      - delegate
+      - todo
+      - read_file
+      - write_file
+    delegates_to:
+      - coding-agent
+      - tester
+  coding-agent:
+    name: coding-agent
+    model: gpt4
+    tools:
+      - write_file
+      - read_file
+      - terminal
+      - git_commit

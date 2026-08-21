@@ -1,0 +1,34 @@
+# ReqToCode orphan-test baseline - pre-existing unannotated tests.
+# Each line is 'path/to/test_file.py::test_function_name' excused from
+# the reverse (test -> requirement) check. This file may only SHRINK:
+# add @verifies (or '# @req: SWR-<n>'), mark it
+# '# reqtocode: exempt', or delete the test, then prune via
+#   python -m rotaris_core.reqtocode check --update-baseline
+# Never add entries for new tests.
+apps/rotaris/tests/test_auth_recovery.py::test_auth_failure_retries_once_with_fallback_model
+apps/rotaris/tests/test_auth_recovery.py::test_fallback_retry_opens_nonmodal_primary_reauth_prompt
+apps/rotaris/tests/test_auth_recovery.py::test_non_auth_failure_does_not_retry
+apps/rotaris/tests/test_auth_recovery.py::test_primary_reauth_after_run_ended_sets_model_for_next_run
+apps/rotaris/tests/test_auth_recovery.py::test_primary_reauth_switches_running_flow_back_to_primary
+apps/rotaris/tests/test_auth_recovery.py::test_recovery_dialog_model_selection_restarts_run
+apps/rotaris/tests/test_auth_recovery.py::test_second_auth_failure_closes_background_reauth_prompt
+apps/rotaris/tests/test_auth_recovery.py::test_second_auth_failure_opens_recovery_dialog_with_other_providers
+apps/rotaris/tests/test_diagnostics.py::test_cli_diagnostics_values_override_environment
+apps/rotaris/tests/test_diagnostics.py::test_live_metrics_and_thread_dump_exclude_session_content
+apps/rotaris/tests/test_diagnostics.py::test_metric_shape_contains_counts_not_session_content
+apps/rotaris/tests/test_main_window.py::test_sample_store_transcript_is_deterministic
+tests/unit/test_model_input.py::test_fill_missing_tool_responses_handles_multiple_orphans_in_same_message
+tests/unit/test_model_input.py::test_fill_missing_tool_responses_noop_when_all_responded
+tests/unit/test_model_input.py::test_fill_missing_tool_responses_noop_without_tool_calls
+tests/unit/test_model_input.py::test_fill_missing_tool_responses_preserves_non_dict_messages
+tests/unit/test_model_input.py::test_fill_missing_tool_responses_synthesizes_orphaned_tool_response
+tests/unit/test_model_input.py::test_get_message_tool_call_id_from_dict
+tests/unit/test_model_input.py::test_get_tool_call_id_falls_back_to_tool_call_id_key
+tests/unit/test_model_input.py::test_get_tool_call_id_from_dict
+tests/unit/test_model_input.py::test_get_tool_calls_empty_when_none
+tests/unit/test_model_input.py::test_get_tool_calls_from_dict
+tests/unit/test_model_input.py::test_merge_split_assistant_messages_does_not_merge_across_user_message
+tests/unit/test_model_input.py::test_merge_split_assistant_messages_merges_multiple_splits
+tests/unit/test_model_input.py::test_merge_split_assistant_messages_merges_when_split
+tests/unit/test_model_input.py::test_merge_split_assistant_messages_noop_when_no_split
+tests/unit/test_model_input.py::test_merge_split_assistant_messages_noop_when_no_tool_calls

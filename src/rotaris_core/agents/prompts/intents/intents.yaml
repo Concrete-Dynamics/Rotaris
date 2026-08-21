@@ -1,0 +1,46 @@
+# Per-intent tool gating for the orchestrator (SWR-156).
+#
+# This file governs which TOOLS exist, not what the prompt says. Prompt behaviour per
+# intent is composed by the playbook matrix — see `../playbooks/matrix.yaml` and
+# `docs/architecture/prompt-composition-matrix.md`. The two are deliberately independent:
+# a playbook cell may never reference a tool this file has gated away.
+#
+# Each entry may carry:
+#   allowed_tools: [...]   — optional. Restricts the orchestrator's tool set at runtime.
+#                            When absent, persona-level restrictions (coordinator_only,
+#                            read_only, tool_restrictions) remain in effect.
+#
+# Only the simple intents grant the orchestrator direct write access; every other intent
+# falls through to the coordinator-only bundle.
+
+explicit_trivial:
+  allowed_tools:
+    - delegate
+    - todo
+    - haet_read
+    - read_file
+    - write_file
+    - grep
+    - glob
+    - find
+    - fetch
+    - terminal
+    - git_commit
+    - artifact_read
+    - artifact_list
+
+single_file_change:
+  allowed_tools:
+    - delegate
+    - todo
+    - haet_read
+    - read_file
+    - write_file
+    - grep
+    - glob
+    - find
+    - fetch
+    - terminal
+    - git_commit
+    - artifact_read
+    - artifact_list

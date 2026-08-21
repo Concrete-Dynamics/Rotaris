@@ -2,9 +2,9 @@
 
 A board release **used to be** unattended by construction: the run held no
 coordinator handle, so nothing registered an approval host for it and a run that
-stopped to ask was a run that stopped. Since SWR-3622 it is an ordinary session —
+stopped to ask was a run that stopped. Since SWR-3624 it is an ordinary session —
 it has a handle, an approval host and a person who can be brought to it, and the
-board says on the card when one is waiting (SWR-3623). Nobody is *watching* it,
+board says on the card when one is waiting (SWR-3625). Nobody is *watching* it,
 which is a different thing and the reason the elevation stayed on by default: a
 release the user walked away from should finish, not park on the first write.
 
@@ -18,7 +18,7 @@ Turning the switch off is now a real setting rather than a way to break a
 release. The engine reads ``interactive`` from whether an approval host is
 registered (``agents.factory``), and a coordinator-driven run registers one — so
 an unelevated release stops and asks, the card states it, and answering it lets
-the run carry on. Before SWR-3622 the same switch produced a run that was denied
+the run carry on. Before SWR-3624 the same switch produced a run that was denied
 everything and reported success having changed nothing.
 
 Two things keep that from being the silent elevation SWR-2508 exists to prevent,
@@ -134,7 +134,7 @@ WAIT_BUDGET_STOPS: tuple[tuple[str, float], ...] = (
 )
 
 
-@traces(SWR.SWR_3623)
+@traces(SWR.SWR_3625)
 def answer_wait_seconds() -> float:
     """How long a released run may wait for an answer. ``0`` means no limit.
 
@@ -154,7 +154,7 @@ def answer_wait_seconds() -> float:
     return seconds if seconds >= 0 else WAIT_BUDGET_STOPS[-1][1]
 
 
-@traces(SWR.SWR_3623)
+@traces(SWR.SWR_3625)
 def set_answer_wait_seconds(seconds: float) -> None:
     """Record the chosen budget. Takes effect on the next run started."""
     settings = QSettings()
@@ -162,7 +162,7 @@ def set_answer_wait_seconds(seconds: float) -> None:
     settings.sync()
 
 
-@traces(SWR.SWR_3623)
+@traces(SWR.SWR_3625)
 def wait_budget_index(seconds: float) -> int:
     """Which stop *seconds* is, for the control that offers them.
 

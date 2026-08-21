@@ -1,4 +1,4 @@
-"""Starting a requirement unit's run as a session the user can take part in (SWR-3622).
+"""Starting a requirement unit's run as a session the user can take part in (SWR-3624).
 
 The flow runs on a worker thread and the run coordinator is a ``QObject`` that
 must be touched on Qt's. This module is the hop between them, and it is
@@ -69,7 +69,7 @@ class _Waiter:
         self.ended: SessionRunResult | None = None
 
 
-@traces(SWR.SWR_3622, SWR.SWR_3612)
+@traces(SWR.SWR_3624, SWR.SWR_3612)
 class CoordinatorSessionLauncher(QObject):
     """Fills the ``SessionLauncher`` port with the desktop's own run coordinator."""
 
@@ -95,7 +95,7 @@ class CoordinatorSessionLauncher(QObject):
 
     # ── the port ──────────────────────────────────────────────────────────
 
-    @traces(SWR.SWR_3622)
+    @traces(SWR.SWR_3624)
     def launch(self, launch: SessionLaunch) -> str:
         """Start *launch* as a coordinator session and return its id.
 
@@ -111,7 +111,7 @@ class CoordinatorSessionLauncher(QObject):
         pending.started.wait()
         return pending.session_id
 
-    @traces(SWR.SWR_3622)
+    @traces(SWR.SWR_3624)
     def wait(self, session_id: str) -> SessionRunResult:
         """Block the calling thread until *session_id*'s run ends.
 
@@ -138,7 +138,7 @@ class CoordinatorSessionLauncher(QObject):
 
     # ── Qt's thread ───────────────────────────────────────────────────────
 
-    @traces(SWR.SWR_3622, SWR.SWR_3405)
+    @traces(SWR.SWR_3624, SWR.SWR_3405)
     def _start_on_ui_thread(self, pending: object) -> None:
         """Create the session, over the tree the seam already provisioned.
 
@@ -161,7 +161,7 @@ class CoordinatorSessionLauncher(QObject):
         The session is not focused. A release is started from the board, often
         several at once, and a run that stole the workspace's focus would move
         the user's screen out from under them — the card says where the work is,
-        and the user decides when to go there (SWR-3623).
+        and the user decides when to go there (SWR-3625).
         """
         from pathlib import Path
 

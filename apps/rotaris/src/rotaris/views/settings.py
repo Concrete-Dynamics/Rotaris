@@ -2097,7 +2097,7 @@ class SettingsView(Themed, QWidget):
         layout.addWidget(note)
         return row
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _answer_wait_row(self) -> QWidget:
         """How long a released run waits for the person it is asking.
 

@@ -688,7 +688,7 @@ class RequirementQueueView(Themed, QWidget):
         layout.addWidget(label, 1)
         return row, layout
 
-    @traces(SWR.SWR_3612, SWR.SWR_3623)
+    @traces(SWR.SWR_3612, SWR.SWR_3625)
     def _running_row(self, run: QueueRun) -> QWidget:
         """One run in flight, and the surfaces that already own it (SWR-3612)."""
         text = run.sentence + (" — interrupted by a restart" if run.interrupted else "")
@@ -696,7 +696,7 @@ class RequirementQueueView(Themed, QWidget):
         # the pulse is the one thing on this page that claims something is
         # happening right now, so it stops the moment that stops being true. A
         # run blocked on the user is the same case for the same reason — it is
-        # not working, it is waiting for them (SWR-3623).
+        # not working, it is waiting for them (SWR-3625).
         working = not run.interrupted and not run.awaiting_input
         row, layout = self._row(text, state="running", pulse=working)
         if run.session_id:

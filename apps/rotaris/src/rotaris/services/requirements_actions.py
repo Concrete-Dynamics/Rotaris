@@ -2584,11 +2584,11 @@ def board_run_config(workspace: Path, tree: Path) -> RotarisConfig:
     Then, unless the user turned it off, it is elevated (SWR-3707). Nobody is
     *watching* a board release, so a run that parks on the first write is a run
     that does not finish while the user is away — the elevation is what makes it
-    finishable. It is no longer what makes it *possible*: since SWR-3622 the run
+    finishable. It is no longer what makes it *possible*: since SWR-3624 the run
     is a coordinator session with an approval host, so an unelevated release
     stops, says so on the card, and carries on once it is answered.
 
-    And it carries the wait budget the user chose (SWR-3623), because a run that
+    And it carries the wait budget the user chose (SWR-3625), because a run that
     does stop to ask should wait as long as they said — by default, until they
     answer.
 
@@ -2606,7 +2606,7 @@ def board_run_config(workspace: Path, tree: Path) -> RotarisConfig:
     )
 
     config = load_config(workspace).model_copy(update={"workspace_root": tree})
-    # How long the run may wait for the person it asks (SWR-3623). Applied
+    # How long the run may wait for the person it asks (SWR-3625). Applied
     # whether or not the run is elevated: an elevated run rarely raises an
     # approval and can still ask a *question*, and the budget covers both.
     config = config.model_copy(
@@ -2619,7 +2619,7 @@ def board_run_config(workspace: Path, tree: Path) -> RotarisConfig:
     return elevated(config) if full_permission_runs() else config
 
 
-@traces(SWR.SWR_3622, SWR.SWR_3612)
+@traces(SWR.SWR_3624, SWR.SWR_3612)
 def attach_session_to_run(workspace: Path, session_id: str, launch: UnitLaunch) -> bool:
     """Record *session_id* on *launch*'s run while the run is still going.
 
@@ -2664,7 +2664,7 @@ def attach_session_to_run(workspace: Path, session_id: str, launch: UnitLaunch) 
     return True
 
 
-@traces(SWR.SWR_3622)
+@traces(SWR.SWR_3624)
 def _run_status(status: str, *, failed: bool) -> RunStatus:
     """A coordinator session's status word as the run vocabulary spells it.
 
@@ -2685,7 +2685,7 @@ def _run_status(status: str, *, failed: bool) -> RunStatus:
         return RunStatus.ERROR
 
 
-@traces(SWR.SWR_3622)
+@traces(SWR.SWR_3624)
 @dataclass(frozen=True)
 class SessionLaunch:
     """What a unit run needs the desktop to start a session with.
@@ -2704,7 +2704,7 @@ class SessionLaunch:
     unit_id: str
 
 
-@traces(SWR.SWR_3622)
+@traces(SWR.SWR_3624)
 @dataclass(frozen=True)
 class SessionRunResult:
     """How a launched session ended, in the four fields the report needs.
@@ -2723,7 +2723,7 @@ class SessionRunResult:
 
 @runtime_checkable
 class SessionLauncher(Protocol):
-    """Starts a unit's run as a session a user can take part in (SWR-3622).
+    """Starts a unit's run as a session a user can take part in (SWR-3624).
 
     A port, not a class: the desktop's implementation owns a Qt object and a run
     coordinator, and neither belongs in a module the headless composition
@@ -2789,7 +2789,7 @@ class AgentRunHost:
         # launch it needs to carry exists.
         self._run_agent = run_agent
         self._run_checks = run_checks if run_checks is not None else self._execute_checks
-        # How the unit is actually run (SWR-3622). With a launcher the run is a
+        # How the unit is actually run (SWR-3624). With a launcher the run is a
         # coordinator session the user can steer, pause, stop and answer; without
         # one it is the self-contained ``execute_run`` this host has always used.
         # ``None`` is not a degraded mode — it is what the headless composition
@@ -2939,7 +2939,7 @@ class AgentRunHost:
     def _execute_agent(self, task: str, tree: Path, *, launch: UnitLaunch) -> AgentRunResult:
         """One agent run in *tree*, as a session the user can take part in.
 
-        With a launcher (SWR-3622) the run is started through the desktop's run
+        With a launcher (SWR-3624) the run is started through the desktop's run
         coordinator, so it holds a live handle from the moment it starts: the
         workspace's stop, pause and steer controls act on it, an approval or a
         question it raises reaches a person, and closing the application cancels
@@ -2977,7 +2977,7 @@ class AgentRunHost:
             ),
         )
 
-    @traces(SWR.SWR_3622)
+    @traces(SWR.SWR_3624)
     def _run_as_session(self, task: str, tree: Path, *, launch: UnitLaunch) -> AgentRunResult:
         """Run the unit as a coordinator session and wait for it, on this thread.
 
@@ -3093,7 +3093,7 @@ class FlowRunStarter:
         self._current_for = current_for
         self._host = host
         #: What turns a unit run into a session the user can take part in
-        #: (SWR-3622). Only reaches the *default* host: a caller that injected a
+        #: (SWR-3624). Only reaches the *default* host: a caller that injected a
         #: host of its own already decided how its runs are driven, and quietly
         #: replacing that would make an injected double untestable.
         self._launcher = launcher
@@ -3519,7 +3519,7 @@ class FlowRunStarter:
 
         return no_commit_refusal(self._workspace, req_id)
 
-    @traces(SWR.SWR_3622, SWR.SWR_3612)
+    @traces(SWR.SWR_3624, SWR.SWR_3612)
     def _agent_host(self) -> AgentRunHost:
         """This starter's own host, told how to start a session and what to record.
 

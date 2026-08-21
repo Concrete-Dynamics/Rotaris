@@ -486,7 +486,7 @@ class RequirementCardWidget(Card):
     evidence_activated = Signal(str)
     #: A run of this requirement is waiting on the user and they said they would
     #: answer it — carries the **session id**, not the requirement id, because
-    #: what it opens is that run's session in the workspace (SWR-3623).
+    #: what it opens is that run's session in the workspace (SWR-3625).
     attention_activated = Signal(str)
 
     #: Whether a delivery action may attach to this card at all (SWR-3308).
@@ -560,7 +560,7 @@ class RequirementCardWidget(Card):
         self._alerts.setSpacing(3)
         self.body.addLayout(self._alerts)
 
-        # A run waiting on this user (SWR-3623). Above the alerts and the facts
+        # A run waiting on this user (SWR-3625). Above the alerts and the facts
         # because it is the only thing on a card that is waiting for *them* —
         # everything else on it is a fact about the requirement. A button rather
         # than a label: it is a door into the session, and a door has to be
@@ -672,7 +672,7 @@ class RequirementCardWidget(Card):
         self._announce()
         self._restyle()
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _set_attention(self, card: RequirementCard) -> None:
         """Show — or hide — the one thing on this card that is waiting for the user.
 

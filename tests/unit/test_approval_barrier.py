@@ -165,10 +165,10 @@ def test_redaction_leaves_ordinary_commands_untouched() -> None:
     assert redact_secrets("git commit -m 'ship it'") == "git commit -m 'ship it'"
 
 
-# ── how long a run may wait for the person it is asking (SWR-3623) ──────────
+# ── how long a run may wait for the person it is asking (SWR-3625) ──────────
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_zero_budget_waits_for_the_person_instead_of_denying_at_once() -> None:
     """Productive use: a requirement released on the board raises a permission prompt
     while the user is doing something else, and answers it twenty minutes later.
@@ -192,7 +192,7 @@ def test_a_zero_budget_waits_for_the_person_instead_of_denying_at_once() -> None
     assert sink[0].status is ApprovalWaitStatus.RESOLVED
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_an_indefinite_wait_is_still_released_by_cancelling_the_run() -> None:
     """Patient, not unkillable — the property that makes 'indefinitely' safe to offer.
 
@@ -211,7 +211,7 @@ def test_an_indefinite_wait_is_still_released_by_cancelling_the_run() -> None:
     assert sink[0].status is ApprovalWaitStatus.CANCELLED
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_stated_budget_still_expires() -> None:
     """The other end of the range: a user who chose 5 minutes gets 5 minutes."""
     barrier = ApprovalBarrier()
@@ -220,7 +220,7 @@ def test_a_stated_budget_still_expires() -> None:
     assert barrier.wait_for_response("slow", timeout=0.05).status is ApprovalWaitStatus.TIMED_OUT
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_the_question_barrier_reads_a_zero_budget_the_same_way() -> None:
     """Both barriers block a run on a person; one sentinel, or 'wait for me' means two
     things depending on which one asked.
@@ -246,7 +246,7 @@ def test_the_question_barrier_reads_a_zero_budget_the_same_way() -> None:
     assert sink[0].status is PromptWaitStatus.RESOLVED
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_the_budget_translation_is_stated_in_one_place() -> None:
     """A negative budget reads as indefinite too, so a bad write cannot mean 'deny now'."""
     assert wait_budget(WAIT_INDEFINITELY) is None

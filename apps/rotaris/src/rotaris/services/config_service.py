@@ -292,7 +292,7 @@ class ConfigService:
                     requirement_id=requirement_id,
                     unit_id=unit_id,
                     # Absent on session directories written before a run could
-                    # say it was waiting; those simply are not (SWR-3623).
+                    # say it was waiting; those simply are not (SWR-3625).
                     awaiting_input=bool(item.get("awaiting_input", False)),
                 )
             )

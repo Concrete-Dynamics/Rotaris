@@ -594,11 +594,11 @@ def test_the_suite_wide_silence_is_the_same_answer_the_button_writes() -> None:
     assert notice_suppressed() is True
 
 
-# ── how long a released run waits for its answer (SWR-3623) ────────────────
+# ── how long a released run waits for its answer (SWR-3625) ────────────────
 
 
 @pytest.mark.unit
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_released_run_waits_for_the_person_unless_told_otherwise() -> None:
     """Productive use: a user who has never opened Settings releases a requirement that
     stops to ask them something, and answers it after lunch.
@@ -614,7 +614,7 @@ def test_a_released_run_waits_for_the_person_unless_told_otherwise() -> None:
 
 
 @pytest.mark.unit
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_every_stop_the_control_offers_round_trips() -> None:
     """A stop the control can show but not store is a setting that silently reverts."""
     for index, (_label, seconds) in enumerate(WAIT_BUDGET_STOPS):
@@ -624,7 +624,7 @@ def test_every_stop_the_control_offers_round_trips() -> None:
 
 
 @pytest.mark.unit
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_damaged_preference_reads_as_the_default_not_as_no_limit() -> None:
     """ "The file is damaged" and "wait forever" are different answers, and only one of
     them should follow from a value nobody wrote."""
@@ -637,7 +637,7 @@ def test_a_damaged_preference_reads_as_the_default_not_as_no_limit() -> None:
 
 
 @pytest.mark.unit
-@verifies(SWR.SWR_3623, SWR.SWR_3707)
+@verifies(SWR.SWR_3625, SWR.SWR_3707)
 def test_the_chosen_budget_reaches_the_run_the_board_starts(tmp_path: Path) -> None:
     """Productive use: the user picks 30 minutes and releases a requirement.
 
@@ -649,7 +649,7 @@ def test_the_chosen_budget_reaches_the_run_the_board_starts(tmp_path: Path) -> N
     assert board_run_config(tmp_path, tmp_path).runtime.approval_timeout_seconds == 1800.0
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_the_setting_offers_the_wait_and_records_what_was_chosen(qtbot) -> None:
     """Productive use: a user decides a run should give up after an hour rather than
     wait for them, and finds that where the rest of the release behaviour lives.
@@ -677,7 +677,7 @@ def test_the_setting_offers_the_wait_and_records_what_was_chosen(qtbot) -> None:
 
 
 @pytest.mark.unit
-@verifies(SWR.SWR_3623, SWR.SWR_3707)
+@verifies(SWR.SWR_3625, SWR.SWR_3707)
 def test_an_elevated_run_still_carries_the_budget(tmp_path: Path) -> None:
     """An elevated run raises fewer approvals and can still ask a *question*, and one
     budget covers both barriers."""

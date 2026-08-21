@@ -44,8 +44,8 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.unit
 
-REQ = "SWR-3622"
-UNIT = "swr-3622-interactive-a1b2c3d4"
+REQ = "SWR-3624"
+UNIT = "swr-3624-interactive-a1b2c3d4"
 RUN = "run-1"
 AT = dt.datetime(2026, 8, 21, 12, 0, tzinfo=dt.UTC)
 SESSION = "20260821-131700-7bf1aecac209"
@@ -129,17 +129,17 @@ class RefusingLauncher:
 
 
 # --------------------------------------------------------------------------
-# SWR-3622 — the run is a session the coordinator drives
+# SWR-3624 — the run is a session the coordinator drives
 # --------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_the_launcher_is_the_shape_the_host_asks_for() -> None:
     """The port is structural, so a composition that fills it wrongly fails here."""
     assert isinstance(ScriptedLauncher(), SessionLauncher)
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_a_released_unit_is_run_as_a_session_over_the_tree_the_seam_provisioned(
     tmp_path: Path,
 ) -> None:
@@ -168,7 +168,7 @@ def test_a_released_unit_is_run_as_a_session_over_the_tree_the_seam_provisioned(
     assert launcher.waited == [SESSION]
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_the_report_carries_the_session_the_run_actually_used(tmp_path: Path) -> None:
     tree = tmp_path / "worktree"
     tree.mkdir()
@@ -183,7 +183,7 @@ def test_the_report_carries_the_session_the_run_actually_used(tmp_path: Path) ->
     assert report.session_id == SESSION
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 @pytest.mark.parametrize(
     ("status", "error", "expected"),
     [
@@ -215,7 +215,7 @@ def test_how_a_session_ended_becomes_how_the_unit_ran(
     assert host.start(_launch(tree)).outcome is expected
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_a_session_that_never_started_is_a_stated_failure_not_a_wait(tmp_path: Path) -> None:
     """A launch that produced no session is a launch that did not happen; waiting on it
     would park the flow's worker for the life of the process."""
@@ -229,7 +229,7 @@ def test_a_session_that_never_started_is_a_stated_failure_not_a_wait(tmp_path: P
     assert "could not start a session" in report.failure_reason
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_a_composition_with_no_coordinator_still_runs_the_unit(tmp_path: Path) -> None:
     """Productive use: the headless CLI, and every test with an injected agent.
 
@@ -254,7 +254,7 @@ def test_a_composition_with_no_coordinator_still_runs_the_unit(tmp_path: Path) -
     assert report.session_id == "injected"
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_the_session_is_announced_while_the_run_is_still_going(tmp_path: Path) -> None:
     """The whole point of the announcement: it happens before the wait, not after it.
 
@@ -293,7 +293,7 @@ def test_the_session_is_announced_while_the_run_is_still_going(tmp_path: Path) -
 # --------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_3612, SWR.SWR_3622)
+@verifies(SWR.SWR_3612, SWR.SWR_3624)
 def test_a_live_run_record_gains_the_session_it_is_running_in(tmp_path: Path) -> None:
     """Productive use: the board opens the run of a unit that is working right now.
 
@@ -315,7 +315,7 @@ def test_a_live_run_record_gains_the_session_it_is_running_in(tmp_path: Path) ->
     assert history.load(REQ).get(RUN).outcome is RunOutcome.RUNNING
 
 
-@verifies(SWR.SWR_3612, SWR.SWR_3622)
+@verifies(SWR.SWR_3612, SWR.SWR_3624)
 def test_recording_the_session_twice_changes_nothing(tmp_path: Path) -> None:
     history = ExecutionHistory(tmp_path)
     launch = _launch(tmp_path / "worktree")
@@ -326,7 +326,7 @@ def test_recording_the_session_twice_changes_nothing(tmp_path: Path) -> None:
     assert history.load(REQ).get(RUN).session_id == SESSION
 
 
-@verifies(SWR.SWR_3612, SWR.SWR_3622)
+@verifies(SWR.SWR_3612, SWR.SWR_3624)
 def test_a_history_that_cannot_be_amended_never_fails_the_run(tmp_path: Path) -> None:
     """Navigation is not worth failing a run over."""
     launch = _launch(tmp_path / "worktree")

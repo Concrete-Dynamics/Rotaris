@@ -1,5 +1,5 @@
 ---
-req-id: SWR-3622
+req-id: SWR-3624
 status: approved
 trace: required
 test: required
@@ -9,7 +9,7 @@ date: 2026-08-21
 source: docs/plans/2026-08-14-requirements-board.md
 ---
 
-# SWR-3622 — A released requirement runs as an interactive session
+# SWR-3624 — A released requirement runs as an interactive session
 
 SWR-3612 said a requirement run is a Rotaris run and pointed the board at the
 surfaces that already own one. It is half true: the session exists, it is filed

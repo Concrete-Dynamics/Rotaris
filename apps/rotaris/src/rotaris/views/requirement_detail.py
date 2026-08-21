@@ -399,7 +399,7 @@ class RequirementDetailView(Themed, QWidget):
     #: This requirement's review should be opened (SWR-3603).
     review_requested = Signal(str)
     #: The session id of a run of this requirement that is waiting on the user
-    #: (SWR-3623). Its own signal rather than :attr:`run_activated`, which the
+    #: (SWR-3625). Its own signal rather than :attr:`run_activated`, which the
     #: revision history raises with a *run* id: the two are different names for
     #: different things, and one signal carrying either would be a slot that has
     #: to guess which it got.
@@ -652,7 +652,7 @@ class RequirementDetailView(Themed, QWidget):
         # than no handle.
         self._attention_button = None
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _mount_attention(self, card: QWidget, attention: RequirementAttention | None) -> None:
         """State a run of this requirement that is waiting, at the top of *card*.
 

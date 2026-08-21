@@ -70,7 +70,7 @@ class SessionPersistence:
             # default both to "".
             "requirement_id": state.requirement_id,
             "unit_id": state.unit_id,
-            # Whether this run is blocked on a person right now (SWR-3623).
+            # Whether this run is blocked on a person right now (SWR-3625).
             # Written here for the same reason as the two above and one more:
             # only the *focused* session's pending prompts are ever projected
             # into the desktop's store, so a background run waiting on an

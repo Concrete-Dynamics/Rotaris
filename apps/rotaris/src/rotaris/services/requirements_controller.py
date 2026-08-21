@@ -464,7 +464,7 @@ class RequirementsController(QObject):
         self._committed = False
         self._actions = actions
         self._actions_resolved = actions is not None
-        #: How a released unit's run becomes a session (SWR-3622). ``None``
+        #: How a released unit's run becomes a session (SWR-3624). ``None``
         #: without a coordinator to build one around; a board driven without it
         #: — a test, a headless composition — still releases, and the run takes
         #: the self-contained path it always did.
@@ -477,7 +477,7 @@ class RequirementsController(QObject):
         self._stage_reported.connect(self._apply_stage, Qt.ConnectionType.QueuedConnection)
         # Whether a run is waiting on this user is a fact about a live session,
         # so it arrives on the session list's schedule rather than the board's
-        # (SWR-3623).
+        # (SWR-3625).
         store.sessions_changed.connect(self._sessions_changed)
         self._report_flows(self._actions)
         self._clock: Callable[[], dt.datetime] = (
@@ -641,7 +641,7 @@ class RequirementsController(QObject):
             self._report_flows(self._actions)
         return self._actions
 
-    @traces(SWR.SWR_3622, SWR.SWR_3315)
+    @traces(SWR.SWR_3624, SWR.SWR_3315)
     def _attach_coordinator(self, coordinator: object | None) -> None:
         """Build the way a released unit's run becomes a session, if there is one.
 
@@ -678,9 +678,9 @@ class RequirementsController(QObject):
             ),
         )
 
-    @traces(SWR.SWR_3622)
+    @traces(SWR.SWR_3624)
     def attach_launcher(self, launcher: SessionLauncher) -> None:
-        """Give the area a way to start a unit's run as a session (SWR-3622).
+        """Give the area a way to start a unit's run as a session (SWR-3624).
 
         Public as well as constructor-fed: a coordinator that arrives after this
         controller was built — a workspace opened later, a composition that
@@ -1924,9 +1924,9 @@ class RequirementsController(QObject):
         if callable(push_queue):
             push_queue(published.queue)
 
-    # ── a run waiting on a person (SWR-3623) ──────────────────────────────
+    # ── a run waiting on a person (SWR-3625) ──────────────────────────────
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _waiting_runs(self) -> dict[str, RequirementAttention]:
         """Which requirements have a run blocked on this user, by requirement id.
 
@@ -1935,7 +1935,7 @@ class RequirementsController(QObject):
         session, and the engine's projection is built from the requirement store.
         The join needs no lookup — a requirement-started session already carries
         the requirement and unit it belongs to (SWR-3612), and now says whether
-        it is waiting (SWR-3623).
+        it is waiting (SWR-3625).
 
         First waiting run wins when a requirement has several units waiting at
         once. A card has room for one door, and any of them is the right one to
@@ -1952,7 +1952,7 @@ class RequirementsController(QObject):
             )
         return waiting
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _waiting_sessions(self) -> frozenset[str]:
         """Every session blocked on this user, requirement-started or not.
 
@@ -1965,7 +1965,7 @@ class RequirementsController(QObject):
             session.id for session in self._store.sessions if session.awaiting_input and session.id
         )
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _with_attention(self, state: RequirementsBoardState) -> RequirementsBoardState:
         """*state* with its cards and its queue told what is waiting on the user.
 
@@ -2003,7 +2003,7 @@ class RequirementsController(QObject):
             ),
         )
 
-    @traces(SWR.SWR_3623, SWR.SWR_3307)
+    @traces(SWR.SWR_3625, SWR.SWR_3307)
     def _with_detail_attention(self, detail: RequirementDetail) -> RequirementDetail:
         """*detail* told which of its runs is waiting on the user.
 
@@ -2019,7 +2019,7 @@ class RequirementsController(QObject):
             return detail
         return replace(detail, attention=attention)
 
-    @traces(SWR.SWR_3623, SWR.SWR_3307)
+    @traces(SWR.SWR_3625, SWR.SWR_3307)
     def _restate_detail(self) -> None:
         """Re-state the open detail page when the session list moves under it.
 
@@ -2036,7 +2036,7 @@ class RequirementsController(QObject):
         if updated is not current:
             self._show_detail(updated)
 
-    @traces(SWR.SWR_3623)
+    @traces(SWR.SWR_3625)
     def _sessions_changed(self) -> None:
         """Re-state what is waiting when the session list moves under the board.
 

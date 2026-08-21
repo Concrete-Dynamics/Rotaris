@@ -624,7 +624,7 @@ class RuntimePolicy(BaseModel):
         description=(
             "How long a tool call may wait for an interactive approval (SWR-2504) "
             "before it is denied. Matches the ask_questions prompt budget. "
-            "0 means wait without a limit (SWR-3623) — what a run released from "
+            "0 means wait without a limit (SWR-3625) — what a run released from "
             "the requirements board is given, since the surface that says it is "
             "waiting is the thing that brings the user back to it. A wait with "
             "no limit is still released by cancelling the run."

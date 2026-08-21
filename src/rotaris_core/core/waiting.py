@@ -1,4 +1,4 @@
-"""How long a run may wait for the person it is asking (SWR-3623).
+"""How long a run may wait for the person it is asking (SWR-3625).
 
 Two barriers block a run on a human and they are deliberately separate —
 :class:`~rotaris_core.permissions.approval.ApprovalBarrier` for a permission
@@ -21,7 +21,7 @@ from rotaris_core.reqtocode import SWR, traces
 WAIT_INDEFINITELY = 0.0
 
 
-@traces(SWR.SWR_3623)
+@traces(SWR.SWR_3625)
 def wait_budget(timeout: float) -> float | None:
     """*timeout* as ``threading.Event.wait`` takes it — ``None`` for no limit.
 

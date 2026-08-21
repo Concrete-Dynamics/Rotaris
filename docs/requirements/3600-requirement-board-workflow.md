@@ -47,8 +47,8 @@ Derived from [docs/plans/2026-08-14-requirements-board.md](../plans/2026-08-14-r
 | [SWR-3615](3600-requirement-board-workflow/SWR-3615-verification-is-offered.md) | A user can verify without delivering | approved |
 | [SWR-3616](3600-requirement-board-workflow/SWR-3616-change-work-is-offered.md) | The work a change asks for is offered, never started | approved |
 | [SWR-3620](3600-requirement-board-workflow/SWR-3620-a-pass-reports-progress-to-its-host.md) | Adoption and verification report progress to whoever started them | approved |
-| [SWR-3622](3600-requirement-board-workflow/SWR-3622-a-released-requirement-runs-as-an-interactive-session.md) | A released requirement runs as an interactive session | approved |
-| [SWR-3623](3600-requirement-board-workflow/SWR-3623-a-run-waiting-on-a-person-says-so.md) | A run waiting on a person says so where the requirement is shown | approved |
+| [SWR-3624](3600-requirement-board-workflow/SWR-3624-a-released-requirement-runs-as-an-interactive-session.md) | A released requirement runs as an interactive session | approved |
+| [SWR-3625](3600-requirement-board-workflow/SWR-3625-a-run-waiting-on-a-person-says-so.md) | A run waiting on a person says so where the requirement is shown | approved |
 | [SWR-3707](3600-requirement-board-workflow/SWR-3707-requirement-runs-use-full-permissions.md) | A released requirement runs with full permissions, and Rotaris says so | approved |
 | [SWR-3710](3600-requirement-board-workflow/SWR-3710-clearing-a-blocker-restarts-the-work.md) | Clearing a blocker restarts the work it stopped | approved |
 
@@ -82,10 +82,10 @@ Derived from [docs/plans/2026-08-14-requirements-board.md](../plans/2026-08-14-r
 
 - 2026-08-21 — A released requirement's work became a session a user can take
   part in
-  ([SWR-3622](3600-requirement-board-workflow/SWR-3622-a-released-requirement-runs-as-an-interactive-session.md)),
+  ([SWR-3624](3600-requirement-board-workflow/SWR-3624-a-released-requirement-runs-as-an-interactive-session.md)),
   and a run waiting on a person now says so on every surface that shows the
   requirement
-  ([SWR-3623](3600-requirement-board-workflow/SWR-3623-a-run-waiting-on-a-person-says-so.md)).
+  ([SWR-3625](3600-requirement-board-workflow/SWR-3625-a-run-waiting-on-a-person-says-so.md)).
   SWR-3612 had filed the session where the workspace lists it, but the run held
   no coordinator handle, so stop, pause, steer and answer were all inert for it
   — and a background run blocked on an approval said nothing anywhere, because

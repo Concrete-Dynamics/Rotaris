@@ -245,7 +245,7 @@ def test_list_sessions_skips_corrupt_metadata(tmp_path) -> None:
             "task_title": "",
             "requirement_id": "",
             "unit_id": "",
-            # A fresh session is blocked on nobody (SWR-3623). Asserted here with
+            # A fresh session is blocked on nobody (SWR-3625). Asserted here with
             # the rest of the shape on purpose: this list is what every session
             # surface reads, so a key that stops being written is a surface that
             # silently stops saying something.

@@ -112,7 +112,7 @@ def _cards(store: WorkspaceStore) -> dict[str, object]:
     return {card.req_id: card for card in store.requirements.cards}
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_only_the_requirement_whose_run_is_waiting_says_so(tmp_path, qtbot) -> None:
     store = WorkspaceStore()
     controller = RequirementsController(store, workspace=tmp_path)
@@ -128,7 +128,7 @@ def test_only_the_requirement_whose_run_is_waiting_says_so(tmp_path, qtbot) -> N
     assert cards[QUIET].attention is None
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_the_statement_clears_when_the_run_stops_waiting(tmp_path, qtbot) -> None:
     """Productive use: the user answers the question and goes back to the board.
 
@@ -146,7 +146,7 @@ def test_the_statement_clears_when_the_run_stops_waiting(tmp_path, qtbot) -> Non
     assert _cards(store)[WAITING].attention is None
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_run_a_person_started_never_marks_a_card(tmp_path, qtbot) -> None:
     """A composer session waiting on an approval belongs to no requirement, and a card
     that claimed it would send the user to somebody else's run."""
@@ -159,7 +159,7 @@ def test_a_run_a_person_started_never_marks_a_card(tmp_path, qtbot) -> None:
     assert all(card.attention is None for card in store.requirements.cards)
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_one_card_states_one_waiting_run_when_several_units_wait(tmp_path, qtbot) -> None:
     """A card has room for one door, and any of them frees the requirement."""
     store = WorkspaceStore()
@@ -178,7 +178,7 @@ def test_one_card_states_one_waiting_run_when_several_units_wait(tmp_path, qtbot
     assert attention.session_id in {"session-a", "session-b"}
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_board_evaluation_keeps_what_is_waiting(tmp_path, qtbot) -> None:
     """Productive use: the board re-evaluates while a run is waiting — a commit landed,
     a file changed, the sweep came round.
@@ -197,7 +197,7 @@ def test_a_board_evaluation_keeps_what_is_waiting(tmp_path, qtbot) -> None:
     assert _cards(store)[WAITING].attention is not None
 
 
-@verifies(SWR.SWR_3623, SWR.SWR_3612)
+@verifies(SWR.SWR_3625, SWR.SWR_3612)
 def test_acting_on_the_statement_opens_that_run_in_the_workspace(tmp_path, qtbot) -> None:
     """Productive use: the user sees the card is waiting and goes to answer it.
 
@@ -220,7 +220,7 @@ def test_acting_on_the_statement_opens_that_run_in_the_workspace(tmp_path, qtbot
     assert store.ui.active_view == "workspace"
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_card_with_nothing_waiting_shows_no_control_at_all(qtbot) -> None:
     """Hidden, not blank: an empty control on every card is one the eye learns to skip,
     and this is the state that must not be skipped."""
@@ -229,10 +229,10 @@ def test_a_card_with_nothing_waiting_shows_no_control_at_all(qtbot) -> None:
     assert widget.attention_button.isHidden()
 
 
-# ── the queue names runs, not requirements (SWR-3623) ───────────────────────
+# ── the queue names runs, not requirements (SWR-3625) ───────────────────────
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_only_the_waiting_unit_is_marked_in_the_queue(tmp_path, qtbot) -> None:
     """Productive use: a requirement is running two units and one of them asks something.
 
@@ -251,7 +251,7 @@ def test_only_the_waiting_unit_is_marked_in_the_queue(tmp_path, qtbot) -> None:
     assert running["session-a"].awaiting_input is False
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_a_waiting_queue_row_says_what_it_is_doing() -> None:
     """ "Running" is true and useless for a run that is waiting on the user."""
     waiting = _run(SESSION)
@@ -261,7 +261,7 @@ def test_a_waiting_queue_row_says_what_it_is_doing() -> None:
     assert "Running" not in waiting.sentence
 
 
-@verifies(SWR.SWR_3623)
+@verifies(SWR.SWR_3625)
 def test_the_queue_row_offers_the_answer_and_stops_claiming_progress(qtbot) -> None:
     """Productive use: the user scans the queue to see what their runs are doing.
 
@@ -279,7 +279,7 @@ def test_the_queue_row_offers_the_answer_and_stops_claiming_progress(qtbot) -> N
     assert "Open run" not in buttons
 
 
-# ── the detail page states it beside the run (SWR-3623, SWR-3307) ──────────
+# ── the detail page states it beside the run (SWR-3625, SWR-3307) ──────────
 
 
 def _detail(req_id: str = WAITING) -> RequirementDetail:
@@ -327,7 +327,7 @@ def _open(controller: RequirementsController, board: _DetailBoard, req_id: str =
     controller._detail_ready(_detail(req_id))  # noqa: SLF001
 
 
-@verifies(SWR.SWR_3623, SWR.SWR_3307)
+@verifies(SWR.SWR_3625, SWR.SWR_3307)
 def test_the_detail_page_states_the_waiting_run_in_its_execution_section(tmp_path, qtbot) -> None:
     """Productive use: the user opens the requirement to see what its run is doing.
 
@@ -354,7 +354,7 @@ def test_the_detail_page_states_the_waiting_run_in_its_execution_section(tmp_pat
     assert button in execution.findChildren(QPushButton)
 
 
-@verifies(SWR.SWR_3623, SWR.SWR_3307)
+@verifies(SWR.SWR_3625, SWR.SWR_3307)
 def test_the_detail_page_offers_nothing_when_no_run_is_waiting(tmp_path, qtbot) -> None:
     """The ordinary page, which is most of them."""
     store = WorkspaceStore()
@@ -368,7 +368,7 @@ def test_the_detail_page_offers_nothing_when_no_run_is_waiting(tmp_path, qtbot) 
     assert board.detail_view.attention_button is None
 
 
-@verifies(SWR.SWR_3623, SWR.SWR_3307)
+@verifies(SWR.SWR_3625, SWR.SWR_3307)
 def test_the_open_detail_page_learns_it_without_being_reopened(tmp_path, qtbot) -> None:
     """Productive use: the user is reading a requirement when its run stops to ask.
 
@@ -392,7 +392,7 @@ def test_the_open_detail_page_learns_it_without_being_reopened(tmp_path, qtbot) 
     assert board.detail_view.attention_button is None
 
 
-@verifies(SWR.SWR_3623, SWR.SWR_3313)
+@verifies(SWR.SWR_3625, SWR.SWR_3313)
 def test_restating_a_detail_page_keeps_the_history_it_is_showing(tmp_path, qtbot) -> None:
     """The revision history is a deep read (SWR-3313), and a re-statement that fetched
     the detail again would answer with the board's shallower one and drop it under the
@@ -418,7 +418,7 @@ def test_restating_a_detail_page_keeps_the_history_it_is_showing(tmp_path, qtbot
     assert shown.history_available is True
 
 
-@verifies(SWR.SWR_3623, SWR.SWR_3612)
+@verifies(SWR.SWR_3625, SWR.SWR_3612)
 def test_answering_from_the_detail_page_lands_in_that_run(tmp_path, qtbot) -> None:
     """Productive use: the user is on the detail page and answers from there.
 
@@ -443,7 +443,7 @@ def test_answering_from_the_detail_page_lands_in_that_run(tmp_path, qtbot) -> No
     assert store.ui.active_view == "workspace"
 
 
-# ── the whole way through, once (SWR-3623, SWR-3622) ───────────────────────
+# ── the whole way through, once (SWR-3625, SWR-3624) ───────────────────────
 
 
 class AskingLauncher:
@@ -452,7 +452,7 @@ class AskingLauncher:
     Stands in for the run coordinator and for the agent behind it, and for
     nothing else: the session it writes is a real one, written through the real
     persistence into the directory the real session list reads, because "the
-    metadata is where this fact lives" is the half of SWR-3623 a double would
+    metadata is where this fact lives" is the half of SWR-3625 a double would
     otherwise assume away.
     """
 
@@ -487,7 +487,7 @@ class AskingLauncher:
 
     def wait(self, session_id: str) -> SessionRunResult:
         # However long the user takes. The budget that bounds this for real is
-        # the barrier's (SWR-3623); five seconds is this test refusing to hang.
+        # the barrier's (SWR-3625); five seconds is this test refusing to hang.
         assert self._answered.wait(timeout=5.0), "the run was never answered"
         return SessionRunResult(session_id=session_id, status="completed")
 
@@ -528,7 +528,7 @@ def _unit_launch(tree) -> UnitLaunch:
 
 
 @pytest.mark.e2e
-@verifies(SWR.SWR_3623, SWR.SWR_3622, SWR.SWR_3612)
+@verifies(SWR.SWR_3625, SWR.SWR_3624, SWR.SWR_3612)
 def test_a_released_run_that_stops_to_ask_is_found_answered_and_carries_on(
     tmp_path,
     qtbot,

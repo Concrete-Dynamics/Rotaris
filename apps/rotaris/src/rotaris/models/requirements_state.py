@@ -356,7 +356,7 @@ class QueueRun:
     worktree_path: str = ""
     outcome: str = ""
     interrupted: bool = False
-    #: Whether this run is blocked on the user right now (SWR-3623). Not the
+    #: Whether this run is blocked on the user right now (SWR-3625). Not the
     #: engine's to know — the queue is projected from the requirement store, and
     #: this is a fact about a live session — so it is overlaid on the way to the
     #: store, keyed by :attr:`session_id`.
@@ -368,7 +368,7 @@ class QueueRun:
 
         A run waiting on the user says so in place of its outcome: "Running" is
         true and useless there, and the queue is exactly where a user looks to
-        see what their runs are doing (SWR-3623).
+        see what their runs are doing (SWR-3625).
         """
         what = f"{self.req_id}/{self.unit_id}" if self.unit_id else self.req_id
         if self.awaiting_input:
@@ -431,10 +431,10 @@ class QueueState:
         )
 
 
-# ── a run waiting on a person (SWR-3623) ───────────────────────────────────
+# ── a run waiting on a person (SWR-3625) ───────────────────────────────────
 
 
-@traces(SWR.SWR_3623)
+@traces(SWR.SWR_3625)
 @dataclass(frozen=True)
 class RequirementAttention:
     """One of this requirement's runs is blocked on the user, and where to answer it.
@@ -444,7 +444,7 @@ class RequirementAttention:
     *actionable*: alerts are stated facts a reader takes in, and this is a door.
     It carries the session id for the same reason the card carries its hash —
     so acting on it needs no second lookup, and so the four surfaces that state
-    it (SWR-3623) all open the same run.
+    it (SWR-3625) all open the same run.
     """
 
     session_id: str
@@ -527,7 +527,7 @@ class RequirementCard:
     #: the requirement first.
     current_hash: str = ""
     #: The run of this requirement that is blocked on a person, when one is
-    #: (SWR-3623). ``None`` is the ordinary case and renders nothing at all —
+    #: (SWR-3625). ``None`` is the ordinary case and renders nothing at all —
     #: like the requirement badge on a session row, an empty field here would
     #: read as a question whose text failed to load.
     attention: RequirementAttention | None = None
@@ -575,7 +575,7 @@ class RequirementCard:
 
 
 #: The section that holds what has run and what is in flight — and so the one
-#: that states a run waiting on the user (SWR-3623). Named because both the
+#: that states a run waiting on the user (SWR-3625). Named because both the
 #: table below and the view that mounts that statement have to mean the same
 #: section, and a second spelling of it would fail silently.
 EXECUTION_SECTION = "execution"
@@ -763,7 +763,7 @@ class RequirementDetail:
     #: somebody to accept it (SWR-3616). ``None`` for the common card: nothing
     #: was edited, or the work has already been released.
     offer: ChangeWork | None = None
-    #: The run of this requirement that is blocked on a person (SWR-3623), same
+    #: The run of this requirement that is blocked on a person (SWR-3625), same
     #: value the card carries. Not built by :func:`build_detail`: whether a run
     #: is waiting is a fact about a live session and the projection this detail
     #: is read from knows nothing about those, so it is overlaid on the way to

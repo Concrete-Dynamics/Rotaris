@@ -2315,7 +2315,7 @@ def _session_row(
     # requirement whose id failed to load (SWR-3612).
     requirement_tag = Tag(session.requirement_id, "accent") if session.requirement_id else None
     # A run blocked on a person is the one state a reader must not scroll past
-    # (SWR-3623). A word, like every other badge here, because the colour alone
+    # (SWR-3625). A word, like every other badge here, because the colour alone
     # would carry it.
     waiting_tag = Tag("waiting for you", "wait") if session.awaiting_input else None
     tag_width = sum(

@@ -139,7 +139,7 @@ class RunCoordinator(QObject):
         the prompt and is looking at the transcript already. A run released on
         the board means the opposite — nobody asked to leave the board, and
         several units may start at once — so it starts unfocused and says on the
-        card where the work is (SWR-3622, SWR-3623). The handle is created and
+        card where the work is (SWR-3624, SWR-3625). The handle is created and
         the run is started either way; only the projection differs.
         """
         from rotaris_core.session.manager import SessionManager

@@ -72,7 +72,7 @@ class UserPromptBarrier:
     ) -> PromptResponse:
         """Block until exact prompt resolves, cancels, or times out.
 
-        A *timeout* of zero waits without a limit (SWR-3623), the same reading
+        A *timeout* of zero waits without a limit (SWR-3625), the same reading
         the approval barrier gives it — see
         :func:`~rotaris_core.core.waiting.wait_budget`. A question a released
         run asks is answered when the user gets to it.

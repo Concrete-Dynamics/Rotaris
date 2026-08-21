@@ -27,12 +27,12 @@ Requirement: a run started from the requirements board is given the permissive
 preset **and** the unsandboxed opt-in, for that run only, and the user is told
 so before the first release of each launch.
 
-**Amended by SWR-3622.** When this was written the elevation was also what made
+**Amended by SWR-3624.** When this was written the elevation was also what made
 a release *possible*: no approval host was registered for a board run at all, so
 a prompt it raised had nobody to answer it and the switch below was a way to
 break a release rather than a setting. A board run is now an ordinary session
 with a handle and an approval host, and the board says on the card when one is
-waiting (SWR-3623) — so turning the elevation off yields a run that stops, asks,
+waiting (SWR-3625) — so turning the elevation off yields a run that stops, asks,
 and carries on once answered. The default stays on: nobody is *watching* a
 release, which is a different fact from nobody being *reachable*, and a run the
 user walked away from should finish rather than park.

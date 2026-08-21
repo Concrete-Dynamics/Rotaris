@@ -355,7 +355,7 @@ class ApprovalBarrier:
     def wait_for_response(self, request_id: str, timeout: float) -> ApprovalResponse:
         """Block until *request_id* resolves, is cancelled, or times out.
 
-        A *timeout* of zero waits without a limit (SWR-3623) — the default for a
+        A *timeout* of zero waits without a limit (SWR-3625) — the default for a
         run released from the board, whose whole promise is that the user
         answers in their own time. :func:`~rotaris_core.core.waiting.wait_budget`
         owns that reading so this barrier and the question barrier cannot

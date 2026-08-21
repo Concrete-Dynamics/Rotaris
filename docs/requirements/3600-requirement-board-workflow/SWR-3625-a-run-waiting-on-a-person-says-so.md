@@ -1,5 +1,5 @@
 ---
-req-id: SWR-3623
+req-id: SWR-3625
 status: approved
 trace: required
 test: required
@@ -9,7 +9,7 @@ date: 2026-08-21
 source: docs/plans/2026-08-14-requirements-board.md
 ---
 
-# SWR-3623 — A run waiting on a person says so where the requirement is shown
+# SWR-3625 — A run waiting on a person says so where the requirement is shown
 
 A run that stops to ask something is only useful if the person it is asking
 finds out. Today a pending approval or an agent question is published for the
@@ -47,6 +47,6 @@ integration test raises a question and an approval on a background run and
 asserts the statement on all four surfaces and its clearing. A hermetic
 user-flow test releases a requirement, follows the statement into the session,
 answers it and sees the run continue. The originating product flow is a user
-answering a released run in their own time (SWR-3612, SWR-3622).
+answering a released run in their own time (SWR-3612, SWR-3624).
 
 Epic: [Requirement Board Workflow and Review](../3600-requirement-board-workflow.md)

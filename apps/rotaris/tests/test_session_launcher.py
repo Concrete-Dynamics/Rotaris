@@ -28,8 +28,8 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.integration
 
-REQ = "SWR-3622"
-UNIT = "swr-3622-interactive-a1b2c3d4"
+REQ = "SWR-3624"
+UNIT = "swr-3624-interactive-a1b2c3d4"
 
 
 def _coordinator(tmp_path: Path) -> tuple[RunCoordinator, WorkspaceStore, list[Any]]:
@@ -55,7 +55,7 @@ def _launch(tree: Path) -> SessionLaunch:
     )
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_the_desktop_launcher_fills_the_port_the_host_asks_for(tmp_path, qtbot) -> None:
     coordinator, _store, _handles = _coordinator(tmp_path)
 
@@ -64,7 +64,7 @@ def test_the_desktop_launcher_fills_the_port_the_host_asks_for(tmp_path, qtbot) 
     assert isinstance(launcher, SessionLauncher)
 
 
-@verifies(SWR.SWR_3622, SWR.SWR_3405)
+@verifies(SWR.SWR_3624, SWR.SWR_3405)
 def test_a_released_unit_adopts_the_worktree_the_flow_already_cut(tmp_path, qtbot) -> None:
     """Productive use: the flow provisions the unit's tree, then asks for a session in it.
 
@@ -88,7 +88,7 @@ def test_a_released_unit_adopts_the_worktree_the_flow_already_cut(tmp_path, qtbo
     assert isolation.branch == f"rotaris/req/{UNIT}"
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_a_released_run_does_not_steal_the_workspace_focus(tmp_path, qtbot) -> None:
     """Productive use: a user releases a requirement and keeps reading the board.
 
@@ -111,7 +111,7 @@ def test_a_released_run_does_not_steal_the_workspace_focus(tmp_path, qtbot) -> N
     assert released in coordinator.session_ids
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_the_flow_waits_for_the_session_and_learns_how_it_ended(tmp_path, qtbot) -> None:
     """The seam is synchronous: the host blocks until the unit's run is over.
 
@@ -138,7 +138,7 @@ def test_the_flow_waits_for_the_session_and_learns_how_it_ended(tmp_path, qtbot)
     assert ended[0].status == "completed"
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_a_failed_session_reports_its_reason_rather_than_a_silent_end(tmp_path, qtbot) -> None:
     tree = tmp_path / "worktree"
     tree.mkdir()
@@ -156,7 +156,7 @@ def test_a_failed_session_reports_its_reason_rather_than_a_silent_end(tmp_path, 
     assert ended[0].status == "failed"
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_waiting_on_a_session_nobody_launched_here_ends_rather_than_parks(
     tmp_path,
     qtbot,
@@ -171,7 +171,7 @@ def test_waiting_on_a_session_nobody_launched_here_ends_rather_than_parks(
     assert ended.error
 
 
-@verifies(SWR.SWR_3622, SWR.SWR_2415)
+@verifies(SWR.SWR_3624, SWR.SWR_2415)
 def test_a_released_run_answers_the_controls_a_user_session_answers(tmp_path, qtbot) -> None:
     """Productive use: a user opens the run their release started and takes it over —
     queues a correction, pauses it, stops it.
@@ -195,7 +195,7 @@ def test_a_released_run_answers_the_controls_a_user_session_answers(tmp_path, qt
     assert handles[0].cancels == 1
 
 
-@verifies(SWR.SWR_3622, SWR.SWR_2415)
+@verifies(SWR.SWR_3624, SWR.SWR_2415)
 def test_closing_the_application_stops_a_released_run_rather_than_abandoning_it(
     tmp_path,
     qtbot,
@@ -221,7 +221,7 @@ def test_closing_the_application_stops_a_released_run_rather_than_abandoning_it(
 # ── who builds it (SWR-3315) ───────────────────────────────────────────────
 
 
-@verifies(SWR.SWR_3622, SWR.SWR_3315)
+@verifies(SWR.SWR_3624, SWR.SWR_3315)
 def test_the_board_area_builds_its_own_launcher_from_the_coordinator_it_is_given(
     tmp_path,
     qtbot,
@@ -249,7 +249,7 @@ def test_the_board_area_builds_its_own_launcher_from_the_coordinator_it_is_given
     assert isinstance(controller._launcher, CoordinatorSessionLauncher)  # noqa: SLF001
 
 
-@verifies(SWR.SWR_3622)
+@verifies(SWR.SWR_3624)
 def test_a_composition_that_brings_no_coordinator_leaves_the_launcher_unset(
     tmp_path,
     qtbot,

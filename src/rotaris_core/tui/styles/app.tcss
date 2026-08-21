@@ -1,0 +1,868 @@
+Screen {
+    background: $theme-bg;
+    color: $theme-fg;
+}
+
+RotarisTuiApp {
+    background: $theme-bg;
+    color: $theme-fg;
+}
+
+Header {
+    dock: top;
+    height: 1;
+    background: $theme-bg;
+    color: $theme-blue;
+    border-bottom: solid $theme-border;
+}
+
+HeaderIcon {
+    color: $theme-blue-light;
+}
+
+HeaderTitle {
+    text-style: bold;
+    color: $theme-fg;
+}
+
+HeaderClockSpace {
+    background: $theme-bg;
+}
+
+Footer {
+    dock: bottom;
+    height: 1;
+    background: $theme-bg;
+    color: $theme-blue;
+    border-top: solid $theme-border;
+}
+
+FooterKey {
+    color: $theme-footer-key;
+    text-style: bold;
+    background: $theme-bg;
+}
+
+FooterDescription {
+    color: $theme-fg-muted;
+    background: $theme-bg;
+}
+
+#top-bar {
+    dock: top;
+    height: 1;
+    width: 100%;
+    background: $theme-bg;
+    color: $theme-blue;
+    border-bottom: solid $theme-border;
+    padding: 0 2;
+}
+
+#top-bar-title {
+    width: auto;
+    min-width: 12;
+    color: $theme-fg;
+    text-style: bold;
+}
+
+#top-bar-focus {
+    width: 1fr;
+    max-width: 60%;
+    color: $theme-fg-dim;
+    content-align: center middle;
+}
+
+#top-bar-focus.-running {
+    color: $theme-green;
+    text-style: bold;
+}
+
+#top-bar-focus.-waiting {
+    color: $theme-yellow;
+    text-style: bold;
+}
+
+#top-bar-focus.-succeeded {
+    color: $theme-blue;
+    text-style: bold;
+}
+
+#top-bar-focus.-failed {
+    color: $theme-red;
+    text-style: bold;
+}
+
+#top-bar-focus.-cancelled {
+    color: $theme-purple;
+    text-style: bold;
+}
+
+#top-bar-version {
+    width: auto;
+    min-width: 8;
+    color: $theme-blue-light;
+    content-align: right middle;
+}
+
+#main-grid {
+    layout: grid;
+    grid-size: 2 1;
+    grid-columns: $layout-left-col $layout-right-col;
+    grid-gutter: 1;
+    height: 1fr;
+    padding: 1 2;
+    background: $theme-bg;
+}
+
+#left-pane {
+    height: 100%;
+    width: 100%;
+    layout: vertical;
+}
+
+#right-pane {
+    height: 100%;
+    width: 100%;
+    layout: vertical;
+    border-left: solid $theme-border;
+    background: $theme-bg;
+    padding: 0 0 0 1;
+}
+
+#transcript-switcher {
+    height: 1fr;
+    width: 100%;
+}
+
+#chat-panel {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    background: $theme-bg;
+    color: $theme-fg;
+    border: solid $theme-border;
+    padding: 1 1;
+}
+
+#chat-panel:focus {
+    border: solid $theme-border-focus;
+}
+
+#artifact-editor {
+    height: 100%;
+    width: 100%;
+    background: $theme-bg;
+    color: $theme-fg;
+    border: solid $theme-border;
+    padding: 1 1;
+}
+
+#artifact-editor:focus {
+    border: solid $theme-border-focus;
+}
+
+#discard-artifact-edits-dialog {
+    width: 60;
+    height: auto;
+    border: solid $theme-yellow;
+    background: $theme-bg;
+    color: $theme-fg;
+    padding: 1 2;
+}
+
+#discard-artifact-edits-title {
+    text-style: bold;
+    color: $theme-yellow;
+    margin-bottom: 1;
+}
+
+#input-composer {
+    height: auto;
+    width: 100%;
+    margin-top: 1;
+    background: $theme-bg;
+    border: solid $theme-border;
+    padding: 0 1 1 1;
+}
+
+#input-composer:focus {
+    border: solid $theme-border-focus;
+}
+
+#composer-meta {
+    height: 1;
+    margin-bottom: 1;
+}
+
+#composer-meta-status,
+#composer-meta-toggle,
+#composer-meta-model,
+#composer-meta-timer,
+#composer-meta-settings {
+    width: auto;
+    height: 1;
+    color: $theme-fg-muted;
+}
+
+Input,
+TextArea {
+    background: $theme-bg;
+    color: $theme-fg;
+    border: solid $theme-border-input;
+}
+
+Input:focus,
+TextArea:focus {
+    border: solid $theme-border-focus;
+}
+
+#spinner {
+    height: 1;
+    width: 100%;
+    background: $theme-bg;
+    color: $theme-fg-dim;
+}
+
+
+
+
+#agent-status {
+    height: $layout-right-agents-h;
+    width: 100%;
+    padding: 0 1;
+    overflow-y: auto;
+    border: solid $theme-border;
+}
+
+#todo-pane {
+    height: $layout-right-todo-h;
+    width: 100%;
+    padding: 0 1;
+    overflow-y: auto;
+    border: solid $theme-border;
+}
+
+#info-pane {
+    height: $layout-right-info-h;
+    width: 100%;
+    padding: 0 1;
+    overflow-y: auto;
+    border: solid $theme-border;
+}
+
+/* No border here on purpose: Textual counts borders inside the declared height,
+   so `height: 1` plus a border left zero rows for the text and the bar rendered
+   as a bare rule. The todo pane above already draws its own bottom border, so
+   the separator was a duplicate anyway. */
+#status-bar {
+    height: 1;
+    width: 100%;
+    background: $theme-bg;
+    color: $theme-fg-dim;
+    padding: 0 1;
+}
+
+#status-bar-path {
+    width: 1fr;
+    color: $theme-fg-dim;
+}
+
+#status-bar-sep {
+    width: auto;
+    color: $theme-fg-subtle;
+}
+
+#status-bar-branch {
+    width: auto;
+    color: $theme-green;
+    text-style: bold;
+    content-align: right middle;
+}
+
+SessionPickerScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#session-picker-container {
+    width: 96;
+    max-width: 96%;
+    height: 24;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1;
+}
+
+/* ── Runtime Models Screen ── */
+
+RuntimeModelsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#runtime-models-container {
+    width: 132;
+    max-width: 98%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#runtime-models-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+#runtime-models-help {
+    color: $theme-fg-dim;
+    margin-bottom: 1;
+}
+
+#runtime-models-status {
+    color: $theme-fg-muted;
+    margin-bottom: 1;
+}
+
+/* ── Startup Models Screen ── */
+
+StartupModelsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#startup-models-container {
+    width: 132;
+    max-width: 98%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#startup-models-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+#startup-models-help {
+    color: $theme-fg-dim;
+    margin-bottom: 1;
+}
+
+/* ── Model Picker Screen (nested inside Startup Models) ── */
+
+_ModelPickerScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#model-picker-container {
+    width: 132;
+    max-width: 98%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#model-picker-auth-status {
+    color: $theme-fg-muted;
+    margin-bottom: 1;
+}
+
+#model-picker-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+#model-picker-status {
+    color: $theme-fg-muted;
+    margin-bottom: 1;
+}
+
+ToolResultSettingsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+CompressionSettingsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+ProviderSettingsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#provider-settings-container {
+    width: 88;
+    height: auto;
+    max-height: 90%;
+    padding: 1 2;
+    border: solid $theme-border-focus;
+    background: $theme-bg;
+}
+
+#provider-settings-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+.provider-settings-row {
+    height: auto;
+    margin-top: 1;
+}
+
+.provider-settings-row Label {
+    width: 14;
+    content-align: left middle;
+}
+
+.provider-settings-row Input {
+    width: 1fr;
+}
+
+#provider-settings-status {
+    margin-top: 1;
+    color: $theme-fg-muted;
+}
+
+#provider-settings-hint {
+    margin-top: 1;
+    color: $theme-fg-dim;
+}
+
+#tool-result-settings-container {
+    width: 72;
+    max-width: 92%;
+    height: auto;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+}
+
+#tool-result-settings-title {
+    width: 100%;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.tool-settings-section {
+    width: 100%;
+    text-style: bold;
+    color: $theme-fg-subtle;
+    margin-top: 1;
+}
+
+.tool-settings-row {
+    width: 100%;
+    height: 3;
+    align: left middle;
+}
+
+.tool-settings-row Label {
+    width: 30;
+}
+
+.tool-settings-row Switch {
+    dock: right;
+}
+
+.tool-settings-row Select {
+    width: 20;
+}
+
+#tool-result-actions {
+    width: 100%;
+    height: 3;
+    align: center middle;
+    margin-top: 1;
+}
+
+#tool-result-hint {
+    color: $theme-fg-dim;
+}
+
+#compression-settings-container {
+    width: 76;
+    max-width: 92%;
+    height: auto;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+}
+
+#compression-settings-title {
+    width: 100%;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.compression-settings-row {
+    width: 100%;
+    height: 3;
+    align: left middle;
+}
+
+.compression-settings-row Label {
+    width: 24;
+}
+
+#compression-threshold-slider {
+    width: 32;
+    color: $theme-fg;
+}
+
+#compression-settings-hint {
+    color: $theme-fg-dim;
+    margin-top: 1;
+}
+
+#quota-wait-dialog,
+#message-limit-dialog {
+    width: 96;
+    max-width: 96%;
+    height: auto;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+}
+
+#quota-wait-title,
+#message-limit-title {
+    width: 100%;
+    color: $theme-yellow-vivid;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#quota-wait-body,
+#message-limit-body {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#quota-wait-help {
+    width: 100%;
+    color: $theme-fg-muted;
+    margin-bottom: 1;
+}
+
+#quota-wait-actions,
+#message-limit-actions {
+    width: 100%;
+    height: auto;
+}
+
+#quota-wait-actions Button,
+#message-limit-actions Button {
+    margin-right: 1;
+}
+
+#session-table {
+    width: 100%;
+    height: 100%;
+    background: $theme-bg;
+    color: $theme-fg;
+}
+
+DataTable > .datatable--header {
+    background: $theme-bg;
+    color: $theme-footer-key;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $theme-bg-selection;
+    color: $theme-fg;
+}
+
+DataTable > .datatable--fixed-cursor {
+    background: $theme-bg-selection;
+    color: $theme-fg;
+}
+
+CommandPalette {
+    background: $theme-bg;
+    color: $theme-fg;
+    border: heavy $theme-border-focus;
+}
+
+/* ── Dev Options Screen ── */
+
+DevOptionsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#dev-options-container {
+    width: 80;
+    max-width: 92%;
+    height: auto;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+}
+
+#dev-options-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+#dev-options-summary,
+#dev-options-effective,
+#dev-options-global,
+#dev-options-project {
+    color: $theme-fg;
+    margin-bottom: 1;
+}
+
+#dev-options-hint {
+    color: $theme-fg-dim;
+    margin-bottom: 1;
+}
+
+#dev-options-actions {
+    width: 100%;
+    height: auto;
+}
+
+#dev-options-actions Button {
+    margin-right: 1;
+}
+
+/* ── MCP Servers Screen ── */
+
+MCPServersScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#mcp-servers-container {
+    width: 96;
+    max-width: 96%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#mcp-servers-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+/* ── MCP Secrets Screen ── */
+
+MCPSecretsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#mcp-secrets-container {
+    width: 96;
+    max-width: 96%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#mcp-secrets-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+#mcp-secrets-scope-row {
+    height: auto;
+    align: left middle;
+    margin-top: 1;
+}
+
+#mcp-secrets-scope-label {
+    width: auto;
+    margin-right: 1;
+    color: $theme-fg-dim;
+    content-align: left middle;
+}
+
+#mcp-secrets-scope-row Select {
+    width: 20;
+}
+
+#mcp-secrets-status {
+    margin: 1 0;
+    color: $theme-fg-dim;
+}
+
+#mcp-secrets-expected {
+    margin-top: 1;
+    color: $theme-yellow;
+}
+
+#mcp-secrets-form-row {
+    margin-top: 1;
+    height: auto;
+}
+
+#mcp-secrets-form-row Input {
+    width: 1fr;
+}
+
+#mcp-secrets-key-input {
+    margin-right: 1;
+}
+
+#mcp-secrets-hint {
+    margin-top: 1;
+    color: $theme-fg-subtle;
+    text-style: italic;
+}
+
+/* ── Improvement Proposals Screen ── */
+
+ImprovementProposalsScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#improvement-proposals-container {
+    width: 96;
+    max-width: 96%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#improvement-proposals-title {
+    text-style: bold;
+    color: $theme-blue-light;
+    margin-bottom: 1;
+}
+
+#improvement-proposals-empty {
+    color: $theme-fg-muted;
+}
+
+/* ── Global widgets ── */
+
+Toast {
+    background: $theme-bg;
+    color: $theme-fg;
+    border: solid $theme-border-input;
+}
+
+Toast.-information {
+    border: solid $theme-blue-light;
+}
+
+Toast.-warning {
+    background: $theme-bg-toast-warning;
+    border: solid $theme-yellow-vivid;
+    color: $theme-yellow-vivid;
+}
+
+Toast.-error {
+    background: $theme-bg-toast-error;
+    border: solid $theme-red-vivid;
+    color: $theme-red-vivid;
+}
+
+/* ── Transcript Search Screen ── */
+
+TranscriptSearchScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#transcript-search-container {
+    width: 80;
+    max-width: 92%;
+    height: auto;
+    max-height: 80%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+}
+
+#transcript-search-input {
+    margin-bottom: 1;
+}
+
+#transcript-search-status {
+    height: 1;
+    color: $theme-fg-muted;
+    margin-bottom: 1;
+}
+
+#transcript-search-results {
+    height: auto;
+    max-height: 20;
+    overflow-y: auto;
+    background: $theme-bg;
+    border: solid $theme-border;
+}
+
+/* ── Command Palette Cheatsheet Screen ── */
+
+CommandPaletteCheatsheetScreen {
+    align: center middle;
+    background: $theme-bg-overlay;
+}
+
+#command-palette-container {
+    width: 88;
+    max-width: 94%;
+    height: auto;
+    max-height: 90%;
+    background: $theme-bg;
+    border: heavy $theme-border-focus;
+    padding: 1 2;
+}
+
+#command-palette-search {
+    margin-bottom: 1;
+}
+
+#command-palette-results {
+    height: 2fr;
+    max-height: 20;
+    overflow-y: auto;
+    background: $theme-bg;
+    border: solid $theme-border;
+    margin-bottom: 1;
+}
+
+#command-palette-cheatsheet {
+    height: 1fr;
+    overflow-y: auto;
+    background: $theme-bg;
+    border-top: solid $theme-border;
+    padding: 1 0;
+}
+
+#cheatsheet-body {
+    color: $theme-fg-muted;
+}

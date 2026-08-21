@@ -1,0 +1,111 @@
+:root{
+/* ── ground — true neutral gray. 21% ground stays clearly gray rather than black,
+   while the 5-point steps between levels keep panels, cards and hover states
+   legibly apart, and bright text (94%) holds ~11:1 against it. ── */
+--rt-bg:oklch(21% 0 0);
+--rt-surface:oklch(26.5% 0 0);
+--rt-surface-2:oklch(30.5% 0 0);
+--rt-chrome:oklch(23.5% 0 0);
+--rt-hover:oklch(35% 0 0);
+--rt-overlay:oklch(12% 0 0 / 0.72);
+
+--rt-border:oklch(36% 0 0);
+--rt-border-strong:oklch(48% 0 0);
+--rt-border-panel:oklch(32% 0 0);
+--rt-focus:oklch(83% 0.10 292);
+--rt-divider:color-mix(in oklch, var(--rt-text) 14%, transparent);
+
+--rt-text:oklch(94% 0 0);
+--rt-text-secondary:oklch(80% 0 0);
+--rt-text-tertiary:oklch(68% 0 0);
+--rt-text-disabled:oklch(52% 0 0);
+
+/* ── brand accent — the Z axis, violet (OKLCH hue 292): resolute, technical ── */
+--rt-accent-100:oklch(96% 0.030 292);
+--rt-accent-200:oklch(91% 0.060 292);
+--rt-accent-300:oklch(83% 0.100 292);
+--rt-accent-400:oklch(72% 0.135 292);
+--rt-accent-500:oklch(59% 0.160 292);
+--rt-accent-600:oklch(50% 0.150 292);
+--rt-accent-700:oklch(42% 0.125 292);
+--rt-accent-800:oklch(33% 0.090 292);
+--rt-accent-900:oklch(24% 0.058 292);
+--rt-accent:var(--rt-accent-500);
+--rt-accent-tint-07:oklch(59% 0.160 292 / 0.09);
+--rt-accent-tint-10:oklch(59% 0.160 292 / 0.13);
+--rt-accent-tint-14:oklch(59% 0.160 292 / 0.18);
+
+/* ── axis X — amber, "waiting" ────────────────────────────────────────── */
+--rt-axis-x-100:oklch(96% 0.045 92);
+--rt-axis-x-200:oklch(90% 0.088 90);
+--rt-axis-x-300:oklch(82% 0.132 88);
+--rt-axis-x-400:oklch(74% 0.168 87);
+--rt-axis-x-500:oklch(67% 0.190 86);
+--rt-axis-x-600:oklch(57% 0.172 84);
+--rt-axis-x-700:oklch(46% 0.146 82);
+--rt-axis-x-800:oklch(34% 0.106 80);
+--rt-axis-x-900:oklch(23% 0.066 78);
+
+/* ── axis Y — teal, "running" ─────────────────────────────────────────── */
+--rt-axis-y-100:oklch(96% 0.045 165);
+--rt-axis-y-200:oklch(89% 0.088 165);
+--rt-axis-y-300:oklch(80% 0.136 165);
+--rt-axis-y-400:oklch(72% 0.172 165);
+--rt-axis-y-500:oklch(65% 0.188 165);
+--rt-axis-y-600:oklch(55% 0.168 165);
+--rt-axis-y-700:oklch(44% 0.136 165);
+--rt-axis-y-800:oklch(33% 0.100 165);
+--rt-axis-y-900:oklch(22% 0.066 165);
+
+/* ── axis Z — alias of the brand accent, "done" ──────────────────────── */
+--rt-axis-z-100:var(--rt-accent-100);--rt-axis-z-300:var(--rt-accent-300);
+--rt-axis-z-500:var(--rt-accent-500);--rt-axis-z-700:var(--rt-accent-700);
+--rt-axis-z-800:var(--rt-accent-800);--rt-axis-z-900:var(--rt-accent-900);
+
+/* ── exceptional semantics — outside the three-axis system ───────────── */
+--rt-danger-300:oklch(82% 0.120 25);
+--rt-danger-500:oklch(64% 0.200 25);
+--rt-danger-700:oklch(46% 0.165 25);
+--rt-danger-800:oklch(33% 0.115 25);
+--rt-danger:var(--rt-danger-500);
+--rt-info-300:oklch(84% 0.080 210);
+--rt-info-500:oklch(70% 0.130 210);
+--rt-info-700:oklch(48% 0.100 210);
+
+/* ── data-viz — categorical ramp built from the three axes + their hue midpoints.
+   Use in order; never invent chart colors outside this set. ── */
+--rt-viz-1:var(--rt-accent-400);
+--rt-viz-2:var(--rt-axis-y-400);
+--rt-viz-3:var(--rt-axis-x-400);
+--rt-viz-4:oklch(75% 0.100 205);
+--rt-viz-5:oklch(74% 0.130 125);
+--rt-viz-6:oklch(73% 0.125 350);
+--rt-viz-grid:color-mix(in oklch, var(--rt-text) 10%, transparent);
+
+/* ── product-state aliases (the coordinate system, spoken in product terms) */
+--rt-run:var(--rt-axis-y-500);
+--rt-wait:var(--rt-axis-x-500);
+--rt-done:var(--rt-axis-z-500);
+--rt-fail:var(--rt-danger-500);
+/* health semantics (connections, providers): ok = sound, warn = attention, fail = broken */
+--rt-ok:var(--rt-axis-y-500);
+--rt-warn:var(--rt-axis-x-500);
+
+/* ── diff (Git view) — add rides axis Y (running/ok green-teal), remove rides danger.
+   Text colors sit on translucent washes of the same hue; meta lines use info. ── */
+--rt-diff-add:var(--rt-axis-y-300);
+--rt-diff-add-bg:oklch(65% 0.188 165 / 0.10);
+--rt-diff-del:var(--rt-danger-300);
+--rt-diff-del-bg:oklch(64% 0.200 25 / 0.10);
+--rt-diff-meta:var(--rt-info-300);
+/* ── pill fills — a translucent wash of the hue's 500 stop, carrying light text of
+   the same hue. Softer than the 800 block, without going pastel-bright. ── */
+--rt-fill-accent:oklch(59% 0.160 292 / 0.24);
+--rt-fill-accent-ink:var(--rt-accent-200);
+--rt-fill-x:oklch(67% 0.190 86 / 0.22);
+--rt-fill-x-ink:var(--rt-axis-x-200);
+--rt-fill-y:oklch(65% 0.188 165 / 0.22);
+--rt-fill-y-ink:var(--rt-axis-y-200);
+--rt-fill-danger:oklch(64% 0.200 25 / 0.22);
+--rt-fill-danger-ink:var(--rt-danger-300);
+}

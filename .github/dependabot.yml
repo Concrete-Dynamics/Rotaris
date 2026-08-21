@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      openhands:
+        patterns:
+          - "openhands-*"
+      testing:
+        patterns:
+          - "pytest*"
+          - "respx"
+          - "textual-dev"
+          - "pytest-textual-snapshot"
+      linting:
+        patterns:
+          - "ruff"
+          - "mypy"
+    ignore:
+      # Stay within the declared major-version bounds from pyproject.toml
+      - dependency-name: "openhands-sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "openhands-tools"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "textual"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]

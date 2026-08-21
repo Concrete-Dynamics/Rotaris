@@ -1,0 +1,153 @@
+# Playbook slot variant texts.
+#
+# Design authority: docs/architecture/prompt-composition-matrix.md §3 (SWR-2416).
+# `matrix.yaml` selects exactly one variant id per slot; the text below is what
+# gets rendered into the persona's system prompt under [[ROTARIS:PLAYBOOK]].
+#
+# Variants named `n/a` or `none` render nothing — the slot is suppressed.
+
+slots:
+  ROUTE:
+    label: Route
+    variants:
+      direct: >-
+        Delegate straight to the implementation owner. Do not open a research
+        wave and do not route through a planner first — the owner is capable of
+        scoping its own work.
+      research-then-code: >-
+        Run exactly one research wave before any implementation is assigned.
+        Delegate to `codebase-analyst` for internal questions and `librarian`
+        for external ones, attach their output, then assign the implementation.
+        One wave only — do not iterate research before starting work.
+      plan-first: >-
+        Delegate to `planner` before any implementation. Take every
+        implementation assignment from the plan it produces; do not invent
+        slices alongside it.
+      design-first: >-
+        Delegate to `architect` first and let it publish a design artifact, then
+        `planner`, then implementation. Do not assign implementation work before
+        the design exists.
+      requirements-first: >-
+        Delegate to `requirements-engineer` before anything else. Acceptance
+        criteria must exist and be recorded before research, design, or
+        implementation is assigned.
+      answer-only: >-
+        This request is answered, not implemented. Research, synthesize, and
+        reply. Do not assign implementation work, do not edit files, and do not
+        create an implementation todo.
+
+  AUTONOMY:
+    label: Autonomy
+    variants:
+      full: >-
+        Decide scope, approach, and whether to delegate, on your own. Do not
+        check back mid-task. Report once at completion.
+      bounded: >-
+        Decide freely inside the slice you were assigned. Anything that would
+        change the slice boundary — extra files, adjacent refactors, contract
+        changes — is escalated to your caller rather than absorbed.
+      strict: >-
+        Execute exactly the assignment as written. Make no scope decisions and
+        do not delegate on your own initiative. If the assignment is unclear,
+        incomplete, or wrong, stop and report that instead of improvising.
+
+  RESEARCH:
+    label: Research
+    variants:
+      self: >-
+        Gather your own context with `grep`, `glob`, `read_file`, and Serena's symbol tools.
+        Delegating research is discouraged here — you are expected to follow the
+        call paths yourself.
+      self-then-delegate: >-
+        Start inline. Once a question spans more than a handful of files, or
+        leaves this workspace, hand it to `codebase-analyst` (internal) or
+        `librarian` (external) rather than continuing to read broadly yourself.
+      delegate-required: >-
+        Delegate research to a specialist — `codebase-analyst` for this
+        repository, `librarian` for external libraries, specs, and web sources.
+        Do not perform broad exploration yourself.
+      artifact-required: >-
+        Do not research. The context you need is supplied as attached artifacts;
+        read them with `artifact_read`. If a required artifact is missing or does
+        not answer the assignment, stop and request it. Never improvise the
+        missing context.
+
+  CHUNKING:
+    label: Task sizing
+    variants:
+      whole-feature: >-
+        One assignment is one cohesive feature carried end to end — exploration,
+        cross-module implementation, tests, and focused documentation. Split only
+        independently shippable deliverables, never by file or layer.
+      slice: >-
+        One assignment is a set of related files plus their tests, cut at an
+        acceptance or architectural boundary. Never cut by file or by layer.
+      micro-slice: >-
+        One assignment is a single narrow change with explicit boundaries: named
+        target files and one stated acceptance check. Broad work is divided into
+        ordered, non-overlapping assignments of this size.
+      "n/a": ""
+
+  VERIFY:
+    label: Verification
+    variants:
+      self: >-
+        Run the relevant tests and lints for your own change and report the
+        actual output as evidence. Narrowest relevant suite first, then widen if
+        the blast radius warrants it.
+      self-then-tester: >-
+        Run a narrow smoke check yourself, then hand the affected suites to
+        `tester`. Do not declare the change verified on your smoke check alone.
+      external-only: >-
+        Do not judge your own work. Report what you changed and hand verification
+        to `tester` and `verifier`. Do not claim the change is correct, tested,
+        or complete.
+      gate-only: >-
+        You do not run the tests yourself. Run `verifier` as the final acceptance
+        gate against the original request, and remediate any gaps it reports
+        before declaring completion.
+      none: ""
+
+  ARTIFACT:
+    label: Artifacts
+    variants:
+      optional: >-
+        Session artifacts are available via `artifact_list` / `artifact_read` if
+        they help.
+      read-required: >-
+        Before starting, call `artifact_list` and read anything relevant with
+        `artifact_read`. Prior agents' findings take precedence over re-deriving
+        the same context yourself.
+      publish-required: >-
+        Your findings must end as a published artifact via `artifact_write`, not
+        only as a chat reply. Downstream agents consume the artifact.
+      read+publish: >-
+        Read the existing artifacts first (`artifact_list` / `artifact_read`),
+        and publish your own result with `artifact_write` so downstream agents
+        consume the artifact rather than a paraphrase.
+
+  OUTPUT:
+    label: Report shape
+    variants:
+      narrative: >-
+        Report as a short prose summary of what you found or did.
+      structured: >-
+        Report under fixed headings: what changed · evidence · residual risk ·
+        follow-ups. No preamble, no restatement of the assignment.
+      strict-schema: >-
+        Report in the fixed schema this persona defines and nothing else. No
+        commentary outside the schema, no speculation, no unrequested extras.
+
+  BUDGET:
+    label: Budget
+    variants:
+      tight: >-
+        At most one delegation wave, two concurrent children, and three
+        remediation attempts. Stop and report rather than exceeding it.
+      normal: >-
+        At most three delegation waves and four concurrent children. Keep the
+        team no larger than the work requires.
+      wide: >-
+        Fan-out up to the system ceilings (6 concurrent children, 20 total,
+        delegation depth 3) is permitted when each child owns a distinct,
+        substantial deliverable.

@@ -1,0 +1,488 @@
+# =============================================================================
+# rotaris-core — Example agents.yaml
+#
+# Demonstrates Ollama (local), GitHub Copilot, and vLLM providers together
+# with the full range of configuration options.
+#
+# Place this at:
+#   ~/.config/rotaris/agents.yaml          ← global baseline
+#   <workspace>/.rotaris/agents.yaml       ← workspace overrides (higher priority)
+#
+# Merge semantics: workspace keys FULLY REPLACE matching global keys (no deep merge).
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Top-level defaults
+# ---------------------------------------------------------------------------
+default_persona: orchestrator          # Entry persona for `rotaris-cli run`
+fallback_model: gpt-4o
+default_summary_model: ollama-llama3   # Cheap model used for child-agent reports
+small_model: ollama-llama3             # Resolved wherever a field references "small_model"
+large_model: gpt-4o                    # Resolved wherever a field references "large_model"
+
+
+# ---------------------------------------------------------------------------
+# Model registry
+# Each model has a unique name referenced by personas below.
+# ---------------------------------------------------------------------------
+models:
+
+  # --- Ollama: local inference, no API key required -------------------------
+  ollama-llama3:
+    provider: ollama
+    model_id: ollama/llama3.2           # litellm format: ollama/<model-name>
+    base_url: http://localhost:11434    # default Ollama endpoint
+
+  ollama-codestral:
+    provider: ollama
+    model_id: ollama/codestral          # code-focused local model
+    base_url: http://localhost:11434
+    max_output_tokens: 8192
+
+  ollama-deepseek:
+    provider: ollama
+    model_id: ollama/deepseek-coder-v2  # strong local coding model
+    base_url: http://localhost:11434
+    max_input_tokens: 32768
+    max_output_tokens: 8192
+
+  # --- GitHub Copilot -------------------------------------------------------
+  # Copilot uses an OpenAI-compatible endpoint with OAuth Device Flow.
+  # No API key needed — rotaris-core handles authentication automatically.
+  # On first use, the TUI displays a one-time code and a URL to confirm at
+  # github.com/login/device. Tokens are stored securely and refreshed as needed.
+  copilot-gpt4o:
+    provider: openai                    # litellm handles Copilot as openai-compatible
+    model_id: gpt-4o
+    base_url: https://api.githubcopilot.com
+    auth_provider: copilot              # OAuth Device Flow — no manual token management
+
+  copilot-gpt4o-mini:
+    provider: openai
+    model_id: gpt-4o-mini
+    base_url: https://api.githubcopilot.com
+    auth_provider: copilot
+
+  copilot-o3-mini:
+    provider: openai
+    model_id: o3-mini                   # reasoning model via Copilot
+    base_url: https://api.githubcopilot.com
+    auth_provider: copilot
+    # Slow reasoning models often go silent for several minutes during
+    # internal deliberation. Increase per-model HTTP timeout (default 120s)
+    # and retries to absorb transient provider hiccups.
+    timeout: 600                        # seconds per LLM HTTP request (default: runtime.model_timeout)
+    num_retries: 3                      # retries on transient errors (default: SDK 5)
+
+  # --- OpenAI Codex ---------------------------------------------------------
+  # Codex uses OAuth PKCE flow. On first use, the TUI opens your browser to
+  # auth.openai.com. A local callback server on port 1455 receives the token.
+  # Tokens are stored securely and refreshed automatically when expired.
+  codex-mini:
+    provider: openai
+    model_id: codex-mini-latest
+    base_url: https://chatgpt.com/backend-api/codex
+    auth_provider: codex                # OAuth PKCE Flow — no manual token management
+
+  codex-full:
+    provider: openai
+    model_id: o3-mini                   # use any OpenAI model via Codex auth
+    base_url: https://chatgpt.com/backend-api/codex
+    auth_provider: codex
+
+  # --- vLLM: self-hosted OpenAI-compatible endpoint -------------------------
+  # Start with: vllm serve Qwen/Qwen2.5-Coder-32B-Instruct --port 8000
+  vllm-qwen-coder:
+    provider: openai                    # vLLM exposes an OpenAI-compatible API
+    model_id: Qwen/Qwen2.5-Coder-32B-Instruct
+    base_url: http://localhost:8000/v1
+    api_key: EMPTY                      # vLLM default; replace if auth is configured
+    max_input_tokens: 32768
+    max_output_tokens: 8192
+
+  vllm-mistral:
+    provider: openai
+    model_id: mistralai/Mistral-7B-Instruct-v0.3
+    base_url: http://localhost:8000/v1
+    api_key: EMPTY
+
+  vllm-llama-70b:
+    provider: openai
+    model_id: meta-llama/Meta-Llama-3.1-70B-Instruct
+    base_url: http://gpu-cluster.internal:8000/v1  # remote GPU node
+    api_key_env: VLLM_API_KEY                      # set if cluster requires auth
+
+
+# ---------------------------------------------------------------------------
+# MCP server registry
+# Referenced by name in persona `mcp_servers` lists.
+# ---------------------------------------------------------------------------
+mcp_servers:
+
+  # Symbolic code intelligence: symbols, references, diagnostics, symbolic edits
+  # and project memories. Pinned to an exact release (SWR-2819) — a moving
+  # `git+…` ref would let an upstream push change every persona's tools.
+  # `--project` is deliberately absent: Rotaris fills it in per run, with the
+  # worktree an isolated session actually executes in (SWR-2905).
+  serena:
+    type: stdio
+    command: uvx
+    args: ["--from", "serena-agent==1.7.0", "serena", "start-mcp-server",
+           "--context", "ide", "--transport", "stdio"]
+    env: {}
+
+  playwright:
+    command: npx
+    args: ["-y", "@playwright/mcp@latest", "--headless"]
+    env: {}
+
+  filesystem:
+    command: npx
+    args: ["@modelcontextprotocol/server-filesystem", "."]
+    env: {}
+
+  tavily-search:
+    command: npx
+    args: ["-y", "tavily-mcp@latest"]
+    env:
+      TAVILY_API_KEY: "${TAVILY_API_KEY}"           # forwarded from shell environment
+
+  # Opt-in, not a default since SWR-2818: Serena answers definitions, references
+  # and diagnostics already, bound to the run's own workspace. Uncomment this
+  # block *and* add `lsp` to a persona's `mcp_servers` to bring it back — a
+  # persona that names a server with no block here fails config validation.
+  # lsp:
+  #   command: npx
+  #   args: ["-y", "@theupsider/lsp-mcp@latest"]
+  #   env: {}                                       # diagnostics, definitions, references
+
+  git:
+    command: npx
+    args: ["-y", "@cyanheads/git-mcp-server@latest"]
+    env: {}
+    disabled_tools:                                 # keep only read-only tools (status/diff/log/show/blame/reflog/changelog)
+      - git_init
+      - git_clone
+      - git_clean
+      - git_add
+      - git_commit
+      - git_checkout
+      - git_merge
+      - git_rebase
+      - git_cherry_pick
+      - git_branch
+      - git_remote
+      - git_tag
+      - git_fetch
+      - git_pull
+      - git_push
+      - git_stash
+      - git_reset
+      - git_worktree
+      - git_set_working_dir
+      - git_clear_working_dir
+      - git_wrapup_instructions
+
+
+# ---------------------------------------------------------------------------
+# Personas
+# Each persona maps to a role with its own model, tools, and system prompt.
+# ---------------------------------------------------------------------------
+personas:
+
+  # --- Orchestrator ---------------------------------------------------------
+  # Tech lead. Receives the user task, decomposes it, delegates to specialists.
+  # Uses the powerful Copilot GPT-4o model for high-quality planning.
+  orchestrator:
+    name: orchestrator
+    model: copilot-gpt4o               # strong model for decomposition + routing
+    summary_model: ollama-llama3       # cheap local model for report summaries
+    system_prompt: |
+      You are the lead engineer on this project.
+      Decompose the user's task into concrete subtasks and delegate each to
+      the appropriate specialist persona. Coordinate their outputs and
+      synthesise a final response.
+      Always use the `todo` tool to track progress and `delegate` to fan out work.
+    tools:
+      - ask_questions
+      - delegate
+      - terminal
+      - todo
+      - git_commit
+      - fetch
+      - artifact_read
+      - artifact_list
+      - read_file
+    delegates_to:
+      - librarian
+      - architect
+      - backend-dev
+      - tester
+      - docs-writer
+      - refactorer
+    mcp_servers:
+      - filesystem
+
+  # --- Architect ------------------------------------------------------------
+  # High-level design decisions. Uses reasoning-capable Copilot o3-mini.
+  architect:
+    name: architect
+    model: copilot-o3-mini             # reasoning model for structural thinking
+    summary_model: ollama-llama3
+    system_prompt_file: prompts/architect.md   # external prompt file
+    # Reasoning models can stall for several minutes; raise the per-persona
+    # stall threshold so the TUI doesn't flag every legitimate quiet period.
+    stall_timeout: 300                 # seconds before "STALLED" badge (overrides runtime.child_stall_timeout)
+    fallback_model: copilot-gpt4o-mini # if primary times out, retry once with this faster model
+    can_publish_artifacts: true        # architect publishes its design via artifact_write
+    tools:
+      - ask_questions
+      - delegate
+      - terminal
+      - fetch
+      - artifact_read
+      - artifact_list
+      - artifact_write
+    delegates_to:
+      - backend-dev
+    mcp_servers:
+      - filesystem
+      - tavily-search                  # web research for design decisions
+
+  # --- Backend Developer ----------------------------------------------------
+  # Hands-on implementation. Uses vLLM Qwen Coder for strong code generation.
+  backend-dev:
+    name: backend-dev
+    model: vllm-qwen-coder             # best local code model
+    summary_model: ollama-llama3
+    tools:
+      - delegate
+      - terminal
+      - write_file                    # rotaris-core read/edit workflow
+      - read_file
+      - git_commit
+      - todo
+      - artifact_read
+      - artifact_list
+    delegates_to:
+      - tester
+    custom_tools:
+      - tools/db_schema_tool.py        # project-specific custom tool plugin
+    mcp_servers:
+      - filesystem                     # scoped workspace file access
+
+  # --- Tester ---------------------------------------------------------------
+  # Writes and executes test suites. Cheap local model is sufficient.
+  tester:
+    name: tester
+    model: ollama-codestral            # capable enough for test generation
+    summary_model: ollama-llama3
+    system_prompt: |
+      You write and run test suites. Always aim for high coverage.
+      Report results as structured JSON with passed, failed, and skipped counts.
+      Use `terminal` to execute test runners. Use filesystem MCP tools to read source files.
+    tools:
+      - terminal
+      - todo
+    mcp_servers:
+      - filesystem
+      - playwright                     # browser/UI test execution
+
+  # --- Docs Writer ----------------------------------------------------------
+  # Technical documentation. Copilot GPT-4o-mini balances quality and cost.
+  docs-writer:
+    name: docs-writer
+    model: copilot-gpt4o-mini
+    summary_model: ollama-llama3
+    can_publish_artifacts: true
+    system_prompt: |
+      You write clear, accurate technical documentation.
+      Produce READMEs, API docs, and inline comments in Markdown.
+      Always read the source before writing docs — never invent behaviour.
+    tools:
+      - terminal
+      - fetch
+      - artifact_read
+      - artifact_list
+      - artifact_write
+    mcp_servers:
+      - filesystem
+      - tavily-search                  # research for external references
+
+  # --- Refactorer -----------------------------------------------------------
+  # Code cleanup and tech-debt reduction. Uses vLLM Mistral for fast iteration.
+  refactorer:
+    name: refactorer
+    model: vllm-mistral
+    summary_model: ollama-llama3
+    system_prompt: |
+      You reduce technical debt and improve code quality without changing behaviour.
+      Prefer small, focused changes. Use write_file or haet_edit by default.
+      Always run tests after each change to confirm no regressions.
+    tools:
+      - terminal
+      - write_file
+      - read_file
+      - git_commit
+    delegates_to: []                   # refactorer does not sub-delegate
+    mcp_servers:
+      - filesystem
+
+  # --- Librarian ------------------------------------------------------------
+  # Read-only codebase search. A cheap/fast model is sufficient — it only
+  # reads files and returns reports.
+  librarian:
+    name: librarian
+    model: copilot-gpt4o-mini
+    summary_model: ollama-llama3
+    can_publish_artifacts: true
+    tools:
+      - read_file
+      - fetch
+      - haet_read
+      - glob
+      - grep
+      - artifact_read
+      - artifact_list
+      - artifact_write
+
+  # --- Oracle ---------------------------------------------------------------
+  # Targeted code analyst for precise codebase questions.
+  oracle:
+    name: oracle
+    model: copilot-gpt4o-mini
+    summary_model: ollama-llama3
+    can_publish_artifacts: true
+    tools:
+      - grep
+      - glob
+      - fetch
+      - haet_read
+      - artifact_read
+      - artifact_list
+      - artifact_write
+    mcp_servers:
+      - filesystem
+      - serena
+      - git
+    # Naming a server grants its whole tool surface; `mcp_tools` narrows that per
+    # server to the tools this persona's role needs (SWR-3008). Serena's surface
+    # includes `replace_symbol_body`, `rename_symbol` and `safe_delete_symbol` —
+    # an analyst that only answers questions has no business holding them. Leave a
+    # server out of this map (or drop the map) to keep its whole surface. The
+    # built-in personas ship exactly this arrangement; see the grant table in
+    # `src/rotaris_core/config/defaults.py`.
+    mcp_tools:
+      serena:
+        - find_symbol
+        - get_symbols_overview
+        - find_referencing_symbols
+        - find_implementations
+        - find_declaration
+        - search_for_pattern
+        - get_diagnostics_for_file
+        - list_memories
+        - read_memory
+        - initial_instructions
+
+  planner:
+    name: planner
+    model: copilot-o3-mini             # reasoning model for task decomposition
+    summary_model: ollama-llama3
+    system_prompt_file: prompts/planner.md
+    can_publish_artifacts: true        # planner publishes the execution plan as an artifact
+    tools:
+      - ask_questions
+      - grep
+      - glob
+      - delegate
+      - artifact_read
+      - artifact_list
+      - artifact_write
+    delegates_to:
+      - architect
+      - librarian
+      - oracle
+
+# ---------------------------------------------------------------------------
+# Circuit Breaker (internal loop-detection supervisor)
+# NOT a persona — never appears in persona listings or registry.
+# Runs silently inside the scheduler; injects a corrective message when a
+# child agent is detected to be looping.
+# ---------------------------------------------------------------------------
+circuit_breaker:
+  model: copilot-gpt4o-mini    # lightweight model — only short JSON completions needed
+  timeout_seconds: 2.0         # LLM call budget (seconds); fast fallback on timeout
+
+  # activation_mode controls how thresholds are combined:
+  #   independent — fires when EITHER threshold is exceeded (default)
+  #   weighted    — fires when (tool_calls/tool_threshold)*tool_weight +
+  #                 (messages/message_threshold)*message_weight >= target_score
+  activation_mode: independent
+
+  tool_call_threshold: 10      # unique tool calls before triggering (independent mode)
+  message_count_threshold: 20  # assistant messages before triggering (independent mode)
+
+  # Weights used only when activation_mode is "weighted":
+  tool_weight: 0.6
+  message_weight: 0.4
+  target_score: 1.0            # weighted score threshold (must be > 0)
+
+  max_recent_events: 24        # events sent to circuit-breaker LLM for analysis (min 4)
+  max_transcript_chars: 8000   # max transcript characters submitted to LLM (min 500)
+
+# ---------------------------------------------------------------------------
+# Compressor (context-window compression)
+# NOT a persona — called automatically when a child's context exceeds the
+# threshold_tokens limit for its model.  A cheap/fast model works well here
+# because the task is summarisation, not reasoning.
+#
+# If the configured model key is not found in the models registry the
+# scheduler falls back to fallback_model automatically.
+# ---------------------------------------------------------------------------
+compressor:
+  model: copilot-gpt4o-mini    # model used to summarise forgotten context
+  default_threshold: 120000    # token count that triggers compression (default: 120 000)
+  preserve_recent_turns: 4     # keep this many recent turns verbatim (default: 4)
+
+# ---------------------------------------------------------------------------
+# Runtime policy
+# Fine-tune concurrency limits, timeouts, and security settings.
+# ---------------------------------------------------------------------------
+runtime:
+  max_children: 20           # max total child tasks per parent (default: 20)
+  max_active_children: 6     # max concurrently running child agents (default: 6)
+  max_depth: 3               # max delegation depth below entry persona (default: 3)
+  child_timeout: 1200        # seconds before a child agent is killed (default: 1200)
+  child_stall_timeout: 90    # seconds with no LLM event before logging a STALLED warning (default: 90)
+  model_timeout: 120         # seconds per LLM call (default: 120)
+  shell_timeout: 100         # seconds per shell command (default: 100)
+  shell_max_background_sessions: 20  # max concurrent background terminal sessions (default: 20)
+  shell_background_timeout: 3600     # default timeout (s) for background terminal commands (default: 3600)
+  tool_timeout: 30           # seconds per non-shell tool call (default: 30)
+  summary_timeout: 60        # seconds for child-report summary generation (default: 60)
+  auto_retries_transient: 1  # retry count for transient LLM/network errors (default: 1)
+  auto_retries_validation: 0 # retry count for HAET/validation errors (default: 0)
+  allow_outside_workspace: false  # block file ops outside workspace root (default: false)
+
+  # --- OS-level terminal sandbox (SWR-2507, opt-in) ------------------------
+  # Which sandbox confines terminal commands: off | workspace-write | read-only
+  # (default: off). Needs an OS sandbox backend — Apple Seatbelt on macOS,
+  # bubblewrap on Linux/WSL2; unavailable on native Windows.
+  # Quote it: bare `off` is a YAML 1.1 boolean.
+  sandbox_mode: "off"
+  # Extra absolute paths that stay writable inside the sandbox, on top of the
+  # workspace itself. Entries must be absolute. (default: [])
+  sandbox_writable_roots: []
+  # Whether processes inside the sandbox may reach the network (default: false).
+  sandbox_allow_network: false
+
+  # --- Network egress policy (SWR-2505) ------------------------------------
+  # What the fetch tool does with a host that matches neither list below:
+  # allow | ask | deny (default: ask).
+  network_egress_policy: ask
+  # Host patterns always allowed, whatever network_egress_policy says
+  # (e.g. github.com, *.npmjs.org). (default: [])
+  network_allowed_hosts: []
+  # Host patterns always denied, even if a broader allow would match. (default: [])
+  network_denied_hosts: []

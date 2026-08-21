@@ -1,0 +1,923 @@
+# Prompt composition matrix — persona x intent x model tier.
+#
+# Design authority: docs/architecture/prompt-composition-matrix.md (SWR-2416).
+#
+# Resolution order for a persona's intent key:
+#   1. the concrete intent name (e.g. `small_feature`)
+#   2. the group that contains the intent (see `groups` below)
+#   3. `_default`
+# Resolution order for the tier key inside a matched intent entry:
+#   1. the concrete tier (`small_model` / `medium_model` / `large_model`)
+#   2. `_all`
+#
+# A cell is either a mapping of SLOT -> variant id, or `not_routed: true`.
+# Slots omitted from a cell fall back to the persona's `defaults` mapping.
+# Variant texts live in `variants.yaml`.
+
+# Intent -> persona that actually performs the implementation. The orchestrator's
+# matrix row is keyed on THIS persona's model tier, not on its own.
+owners:
+  refactor: refactorer
+  requirements: requirements-engineer
+  architectural: architect
+  _default: coding-agent
+
+groups:
+  G-answer: [question, exploration]
+  G-clarify: [ambiguous, requirements]
+  G-micro: [explicit_trivial, single_file_change]
+  G-fix: [problem_resolution, refactor]
+  G-build-s: [small_feature]
+  G-build-m: [moderate_feature]
+  G-build-l: [large_feature, architectural, whole_project]
+
+personas:
+  # ── orchestrator ─────────────────────────────────────────────────────────
+  # Axis = implementation-owner tier (see `owners`).
+  orchestrator:
+    defaults:
+      AUTONOMY: full
+      ARTIFACT: read-required
+      OUTPUT: structured
+    intents:
+      explicit_trivial:
+        _all:
+          ROUTE: direct
+          RESEARCH: self
+          CHUNKING: micro-slice
+          VERIFY: self
+          BUDGET: tight
+      single_file_change:
+        _all:
+          ROUTE: direct
+          RESEARCH: self
+          CHUNKING: micro-slice
+          VERIFY: self
+          BUDGET: tight
+      question:
+        _all:
+          ROUTE: answer-only
+          RESEARCH: delegate-required
+          CHUNKING: "n/a"
+          VERIFY: none
+          BUDGET: tight
+      exploration:
+        _all:
+          ROUTE: answer-only
+          RESEARCH: delegate-required
+          CHUNKING: "n/a"
+          VERIFY: none
+          BUDGET: normal
+      ambiguous:
+        _all:
+          ROUTE: requirements-first
+          RESEARCH: delegate-required
+          CHUNKING: "n/a"
+          VERIFY: none
+          BUDGET: tight
+      requirements:
+        _all:
+          ROUTE: requirements-first
+          RESEARCH: delegate-required
+          CHUNKING: "n/a"
+          VERIFY: gate-only
+          BUDGET: normal
+      problem_resolution:
+        small_model:
+          ROUTE: research-then-code
+          RESEARCH: delegate-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        medium_model:
+          ROUTE: direct
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        large_model:
+          ROUTE: direct
+          RESEARCH: self
+          CHUNKING: slice
+          VERIFY: gate-only
+          BUDGET: tight
+      small_feature:
+        small_model:
+          ROUTE: research-then-code
+          RESEARCH: delegate-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        medium_model:
+          ROUTE: direct
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          VERIFY: gate-only
+          BUDGET: tight
+        large_model:
+          ROUTE: direct
+          RESEARCH: self
+          CHUNKING: whole-feature
+          VERIFY: gate-only
+          BUDGET: tight
+      moderate_feature:
+        small_model:
+          ROUTE: plan-first
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+        medium_model:
+          ROUTE: plan-first
+          RESEARCH: delegate-required
+          CHUNKING: slice
+          VERIFY: gate-only
+          BUDGET: normal
+        large_model:
+          ROUTE: direct
+          RESEARCH: self
+          CHUNKING: whole-feature
+          VERIFY: gate-only
+          BUDGET: normal
+      large_feature:
+        small_model:
+          ROUTE: design-first
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+        medium_model:
+          ROUTE: plan-first
+          RESEARCH: delegate-required
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+        large_model:
+          ROUTE: plan-first
+          RESEARCH: self-then-delegate
+          CHUNKING: whole-feature
+          VERIFY: gate-only
+          BUDGET: normal
+      refactor:
+        small_model:
+          ROUTE: research-then-code
+          RESEARCH: delegate-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        medium_model:
+          ROUTE: research-then-code
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        large_model:
+          ROUTE: direct
+          RESEARCH: self
+          CHUNKING: whole-feature
+          VERIFY: gate-only
+          BUDGET: tight
+      architectural:
+        small_model:
+          ROUTE: design-first
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+        medium_model:
+          ROUTE: design-first
+          RESEARCH: delegate-required
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        large_model:
+          ROUTE: design-first
+          RESEARCH: self-then-delegate
+          CHUNKING: whole-feature
+          VERIFY: gate-only
+          BUDGET: normal
+      whole_project:
+        small_model:
+          ROUTE: design-first
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+        medium_model:
+          ROUTE: design-first
+          RESEARCH: delegate-required
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+        large_model:
+          ROUTE: plan-first
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: wide
+
+  # ── coding-agent ─────────────────────────────────────────────────────────
+  coding-agent:
+    defaults:
+      ARTIFACT: read-required
+      OUTPUT: structured
+    intents:
+      G-answer:
+        _all:
+          not_routed: true
+      G-clarify:
+        _all:
+          not_routed: true
+      G-micro:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: micro-slice
+          VERIFY: self
+          BUDGET: tight
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: micro-slice
+          VERIFY: self
+          BUDGET: tight
+      problem_resolution:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+      refactor:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+      small_feature:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: whole-feature
+          VERIFY: self
+          BUDGET: normal
+      moderate_feature:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: whole-feature
+          VERIFY: self
+          BUDGET: normal
+      large_feature:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: whole-feature
+          VERIFY: self-then-tester
+          BUDGET: normal
+      architectural:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: whole-feature
+          VERIFY: self
+          BUDGET: normal
+      whole_project:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        large_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+      # Fallback when the orchestrator delegates for an unrouted intent anyway.
+      _default:
+        _all:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: micro-slice
+          VERIFY: self
+          BUDGET: tight
+
+  # ── planner ──────────────────────────────────────────────────────────────
+  planner:
+    defaults:
+      ROUTE: research-then-code
+      ARTIFACT: read+publish
+      VERIFY: none
+    intents:
+      G-answer:
+        _all:
+          not_routed: true
+      G-micro:
+        _all:
+          not_routed: true
+      G-clarify:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          CHUNKING: "n/a"
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: delegate-required
+          CHUNKING: "n/a"
+          OUTPUT: structured
+          BUDGET: tight
+        large_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          CHUNKING: "n/a"
+          OUTPUT: structured
+          BUDGET: tight
+      G-fix:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-s:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          not_routed: true
+        large_model:
+          not_routed: true
+      G-build-m:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: normal
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: whole-feature
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-l:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: normal
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: delegate-required
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: wide
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: wide
+
+  # ── architect ────────────────────────────────────────────────────────────
+  architect:
+    defaults:
+      ARTIFACT: publish-required
+      CHUNKING: "n/a"
+      VERIFY: none
+    intents:
+      G-answer:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: tight
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: tight
+      G-build-l:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: delegate-required
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: normal
+      G-clarify:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: delegate-required
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: normal
+      _default:
+        _all:
+          not_routed: true
+
+  # ── tester ───────────────────────────────────────────────────────────────
+  tester:
+    defaults:
+      ARTIFACT: read-required
+      VERIFY: self
+    intents:
+      G-answer:
+        _all:
+          not_routed: true
+      G-clarify:
+        _all:
+          not_routed: true
+      G-micro:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: tight
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: tight
+      G-fix:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-s:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: whole-feature
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-m:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: whole-feature
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-l:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: whole-feature
+          OUTPUT: structured
+          BUDGET: normal
+
+  # ── verifier ─────────────────────────────────────────────────────────────
+  verifier:
+    defaults:
+      ARTIFACT: read-required
+      CHUNKING: "n/a"
+      VERIFY: gate-only
+      OUTPUT: strict-schema
+    intents:
+      G-answer:
+        _all:
+          not_routed: true
+      G-clarify:
+        _all:
+          not_routed: true
+      _default:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          BUDGET: normal
+
+  # ── ui-verifier ──────────────────────────────────────────────────────────
+  ui-verifier:
+    defaults:
+      ARTIFACT: read-required
+      CHUNKING: "n/a"
+      VERIFY: gate-only
+      OUTPUT: strict-schema
+    intents:
+      G-answer:
+        _all:
+          not_routed: true
+      G-clarify:
+        _all:
+          not_routed: true
+      _default:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          BUDGET: normal
+
+  # ── librarian ────────────────────────────────────────────────────────────
+  librarian:
+    defaults:
+      ARTIFACT: publish-required
+      CHUNKING: "n/a"
+      VERIFY: none
+    intents:
+      _default:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          OUTPUT: structured
+          BUDGET: normal
+
+  # ── codebase-analyst ─────────────────────────────────────────────────────
+  codebase-analyst:
+    defaults:
+      ARTIFACT: publish-required
+      CHUNKING: "n/a"
+      VERIFY: none
+    intents:
+      _default:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: self
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          OUTPUT: structured
+          BUDGET: normal
+
+  # ── docs-writer ──────────────────────────────────────────────────────────
+  docs-writer:
+    defaults:
+      ARTIFACT: read+publish
+      VERIFY: self
+    intents:
+      G-answer:
+        _all:
+          not_routed: true
+      G-micro:
+        _all:
+          not_routed: true
+      G-clarify:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: structured
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+      _default:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          OUTPUT: structured
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          CHUNKING: slice
+          OUTPUT: structured
+          BUDGET: normal
+
+  # ── refactorer ───────────────────────────────────────────────────────────
+  refactorer:
+    defaults:
+      ARTIFACT: read-required
+      OUTPUT: structured
+    intents:
+      refactor:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self
+          CHUNKING: whole-feature
+          VERIFY: self
+          BUDGET: normal
+      G-build-l:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          CHUNKING: micro-slice
+          VERIFY: external-only
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: slice
+          VERIFY: self-then-tester
+          BUDGET: normal
+        large_model:
+          AUTONOMY: bounded
+          RESEARCH: artifact-required
+          CHUNKING: slice
+          VERIFY: self
+          BUDGET: normal
+      _default:
+        _all:
+          not_routed: true
+
+  # ── requirements-engineer ────────────────────────────────────────────────
+  requirements-engineer:
+    defaults:
+      ARTIFACT: read-required
+      CHUNKING: "n/a"
+      VERIFY: none
+    intents:
+      G-clarify:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: delegate-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-m:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: delegate-required
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: normal
+      G-build-l:
+        small_model:
+          AUTONOMY: strict
+          RESEARCH: artifact-required
+          OUTPUT: strict-schema
+          BUDGET: tight
+        medium_model:
+          AUTONOMY: bounded
+          RESEARCH: delegate-required
+          OUTPUT: structured
+          BUDGET: normal
+        large_model:
+          AUTONOMY: full
+          RESEARCH: self-then-delegate
+          OUTPUT: structured
+          BUDGET: normal
+      _default:
+        _all:
+          not_routed: true
+
+  # `intent-classifier` is deliberately absent: it runs before a classification
+  # exists, so neither matrix axis is defined for it (docs §4.3).

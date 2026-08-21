@@ -1,0 +1,14 @@
+:root{
+--rt-radius-sm:6px;--rt-radius-md:10px;--rt-radius-lg:16px;--rt-radius-pill:999px;
+--rt-shadow-sm:0 0 0 1px var(--rt-border);
+--rt-shadow-md:0 0 0 1px var(--rt-border-strong),0 8px 22px oklch(10% 0.01 70 / 0.5);
+--rt-shadow-lg:0 0 0 1px var(--rt-border-strong),0 22px 48px oklch(10% 0.01 70 / 0.6);
+/* motion — calm & precise: short distances, decelerating ease-out, nothing springy */
+--rt-ease:cubic-bezier(.4,0,.2,1); /* @kind other */
+--rt-ease-out:cubic-bezier(0,0,.2,1); /* @kind other */
+--rt-ease-in:cubic-bezier(.4,0,1,1); /* @kind other */
+--rt-duration-fast:100ms; /* @kind other */
+--rt-duration:180ms; /* @kind other */
+--rt-duration-slow:260ms; /* @kind other */
+--rt-shift:4px; /* @kind other */
+}

@@ -47,6 +47,8 @@ Derived from [docs/plans/2026-08-14-requirements-board.md](../plans/2026-08-14-r
 | [SWR-3615](3600-requirement-board-workflow/SWR-3615-verification-is-offered.md) | A user can verify without delivering | approved |
 | [SWR-3616](3600-requirement-board-workflow/SWR-3616-change-work-is-offered.md) | The work a change asks for is offered, never started | approved |
 | [SWR-3620](3600-requirement-board-workflow/SWR-3620-a-pass-reports-progress-to-its-host.md) | Adoption and verification report progress to whoever started them | approved |
+| [SWR-3622](3600-requirement-board-workflow/SWR-3622-releasing-a-blocked-requirement-asks.md) | Releasing a requirement with unmet dependencies asks first | approved |
+| [SWR-3623](3600-requirement-board-workflow/SWR-3623-handle-the-root-blocker-first.md) | The board resolves the blocker chain and starts at its root | approved |
 | [SWR-3707](3600-requirement-board-workflow/SWR-3707-requirement-runs-use-full-permissions.md) | A released requirement runs with full permissions, and Rotaris says so | approved |
 | [SWR-3710](3600-requirement-board-workflow/SWR-3710-clearing-a-blocker-restarts-the-work.md) | Clearing a blocker restarts the work it stopped | approved |
 
@@ -77,3 +79,12 @@ Derived from [docs/plans/2026-08-14-requirements-board.md](../plans/2026-08-14-r
   The matrix has no `Ready → Ready` edge, so a card cleared back into `Ready` was
   one no board gesture could start; the only way out was a round trip through
   `Backlog`.
+
+- 2026-08-21 — A drop on `Ready` now consults the dependency gate before it
+  dispatches anything
+  ([SWR-3622](3600-requirement-board-workflow/SWR-3622-releasing-a-blocked-requirement-asks.md)),
+  and resolves the chain above the requirement so the user can start at its root
+  ([SWR-3623](3600-requirement-board-workflow/SWR-3623-handle-the-root-blocker-first.md)).
+  SWR-3510's gate was pure, tested and constructed nowhere: a held requirement
+  carried no blocker on the board at all, and the wait first became visible as a
+  scheduler hold on a unit, after the run had already been dispatched.

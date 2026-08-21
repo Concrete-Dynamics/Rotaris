@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     import datetime as dt
     from collections.abc import Iterable
 
+    from rotaris_core.requirements.change.dependencies import DependencyReport, ReleasePlan
     from rotaris_core.requirements.delivery.history import RevisionEntry
     from rotaris_core.requirements.delivery.projection import (
         BoardEntry,
@@ -70,11 +71,13 @@ __all__ = [
     "BoardColumn",
     "DetailSection",
     "EvidenceSegment",
+    "HeldDependency",
     "PendingAction",
     "QueueCandidate",
     "QueueRun",
     "QueueState",
     "RelationLink",
+    "ReleaseHold",
     "RequirementCard",
     "RequirementDetail",
     "RequirementFact",
@@ -86,6 +89,7 @@ __all__ = [
     "build_card",
     "build_detail",
     "build_queue_state",
+    "build_release_hold",
     "counted",
     "describe_age",
     "describe_moment",
@@ -298,6 +302,107 @@ class Blocker:
         return ". ".join(part for part in parts if part)
 
 
+# ── what holds a release, as the prompt shows it (SWR-3622, SWR-3623) ──────
+
+
+@traces(SWR.SWR_3622)
+@dataclass(frozen=True)
+class HeldDependency:
+    """One requirement in the way of a release, in the gate's own words.
+
+    :attr:`reason` is :class:`~rotaris_core.requirements.change.dependencies
+    .DependencyBlocker`'s ``detail``, carried through character for character.
+    "Waiting" and "delivered against a specification that has since moved" need
+    different actions from a user, and only the gate knows which this is.
+    """
+
+    req_id: str
+    reason: str
+    #: ``unsatisfied`` / ``stale`` / ``unknown`` / ``cycle`` — the gate's kind.
+    kind: str = ""
+
+    @property
+    def sentence(self) -> str:
+        """``SWR-3101 is Backlog, not Done`` — the gate's line, unchanged."""
+        return self.reason or f"{self.req_id} has not been delivered"
+
+    @property
+    def accessible_description(self) -> str:
+        """The sentence, named for the requirement it is about."""
+        return f"{self.req_id}: {self.sentence}"
+
+
+@traces(SWR.SWR_3622, SWR.SWR_3623)
+@dataclass(frozen=True)
+class ReleaseHold:
+    """Why a release was not performed, and every way out of it.
+
+    The board's shape of :class:`~rotaris_core.requirements.change.dependencies
+    .ReleasePlan`, built by :func:`build_release_hold`. It exists for the reason
+    :class:`Blocker` does: a widget does not import the change-propagation
+    package, and the value it renders is a small one whose whole content a test
+    can assert without building a dialog.
+    """
+
+    req_id: str
+    #: What holds it *directly*, in the gate's order.
+    held_by: tuple[HeldDependency, ...] = ()
+    #: The whole chain, roots first, with :attr:`req_id` last.
+    chain: tuple[str, ...] = ()
+    #: The requirement to start with, or ``""`` when there is none to offer.
+    root: str = ""
+    #: The column :attr:`root` would be moved *from*, so the release names the
+    #: move it is actually making.
+    root_state: str = ""
+    #: Why :attr:`root` may not be released, or ``""`` when it may.
+    root_reason: str = ""
+    #: ``SWR-1 → SWR-2 → SWR-1`` when a loop is in the chain, else ``""``.
+    cycle: str = ""
+
+    @property
+    def held(self) -> bool:
+        """Whether anything is in the way at all."""
+        return bool(self.held_by)
+
+    @property
+    def resolvable(self) -> bool:
+        """Whether there is a root this board may release."""
+        return bool(self.root) and not self.root_reason
+
+    @property
+    def heading(self) -> str:
+        """``SWR-2608 waits for 2 requirements`` — what the prompt leads with."""
+        count = len(self.held_by)
+        if count == 1:
+            return f"{self.req_id} waits for {self.held_by[0].req_id}"
+        return f"{self.req_id} waits for {counted(count, 'requirement')}"
+
+    @property
+    def chain_sentence(self) -> str:
+        """The chain as arrows — ``""`` when there is no order worth stating.
+
+        Empty in two cases. A chain of one blocker is already the whole story,
+        and repeating it as an arrow would be two accounts of one fact. And a
+        chain caught in a **cycle** has no order at all: printing one would be a
+        sequence that cannot be worked through, where :attr:`cycle` and
+        :attr:`root_reason` say the true thing.
+        """
+        if self.cycle or len(self.chain) < 3:  # noqa: PLR2004 - root, middle, requirement
+            return ""
+        return " → ".join(self.chain)
+
+    @property
+    def accessible_description(self) -> str:
+        """Every fact this hold states, in reading order."""
+        parts = [
+            self.heading,
+            *(item.accessible_description for item in self.held_by),
+            f"In order: {self.chain_sentence}" if self.chain_sentence else "",
+            self.root_reason,
+        ]
+        return ". ".join(part for part in parts if part)
+
+
 # ── the delivery queue, as the board shows and controls it (SWR-3608) ──────
 
 
@@ -468,6 +573,13 @@ class RequirementCard:
     #: a board action can record the hash it acted on (SWR-3610) without opening
     #: the requirement first.
     current_hash: str = ""
+    #: The requirements SWR-3510's gate says this one waits for — undelivered, or
+    #: delivered against a specification that has since moved. Deliberately kept
+    #: out of :attr:`alerts` and :attr:`facts`: a dependency that has not landed
+    #: is not an exceptional fact about a card sitting in ``Backlog``, it is the
+    #: normal shape of a plan. It is read where it changes what happens — the
+    #: drop indicator during a drag, and the release itself (SWR-3622).
+    waits_for: tuple[str, ...] = ()
 
     @property
     def accessible_name(self) -> str:
@@ -1132,6 +1244,14 @@ class RequirementsBoardState:
     #: above into an explanation, because a control that cannot change anything
     #: is worse than no control.
     analysis_enabled: bool = True
+    #: SWR-3510's gate over the whole board, carried through from the projection.
+    #: Whole rather than per card because the chain above one requirement is a
+    #: fact about the graph: resolving it needs every verdict (SWR-3623). The
+    #: engine's own value — a board that rebuilt the gate from :attr:`~Requirement
+    #: Card.waits_for` would be a second implementation of it. ``None`` for a
+    #: board that was never projected, which is not the same as a board whose
+    #: gate found nothing.
+    dependencies: DependencyReport | None = None
 
     @cached_property
     def _by_id(self) -> dict[str, RequirementCard]:
@@ -1365,6 +1485,7 @@ def build_card(entry: BoardEntry, *, now: dt.datetime | None = None) -> Requirem
         schedulable=entry.schedulable,
         blocked_from=str(entry.delivery.blocked_from or ""),
         current_hash=entry.current_hash,
+        waits_for=entry.dependency.blocked_by,
     )
 
 
@@ -1652,6 +1773,34 @@ def build_blockers(entry: BoardEntry) -> tuple[Blocker, ...]:
     )
 
 
+@traces(SWR.SWR_3622, SWR.SWR_3623)
+def build_release_hold(plan: ReleasePlan) -> ReleaseHold:
+    """What the release prompt shows, from the gate's own plan.
+
+    Carried through, never composed: every sentence in the result is
+    :class:`~rotaris_core.requirements.change.dependencies.DependencyBlocker`'s
+    or :class:`~rotaris_core.requirements.change.dependencies.DependencyCycle`'s
+    (SWR-3510). A board that worded "why this is not moving" itself would offer
+    a way forward the engine never promised to honour.
+    """
+    return ReleaseHold(
+        req_id=plan.req_id,
+        held_by=tuple(
+            HeldDependency(
+                req_id=blocker.blocking_id,
+                reason=blocker.detail,
+                kind=str(blocker.kind),
+            )
+            for blocker in plan.blockers
+        ),
+        chain=plan.chain if plan.blocked else (),
+        root=plan.root,
+        root_state=str(plan.root_state) if plan.root_state is not None else "",
+        root_reason=plan.root_reason,
+        cycle=plan.cycle.message if plan.cycle is not None else "",
+    )
+
+
 @traces(SWR.SWR_3313)
 def _revision(entry: RevisionEntry, *, now: dt.datetime | None) -> Revision:
     """One engine revision as the panel words it — ordering and marking are its own.
@@ -1929,6 +2078,7 @@ def build_board_state(
         available=True,
         queue=build_queue_state(projection.queue),
         adoption=_adoption_offer(projection),
+        dependencies=projection.dependencies,
     )
 
 

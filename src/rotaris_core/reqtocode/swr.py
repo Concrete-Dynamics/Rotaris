@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 4e9c3df4ff3aaeff02f71e2b1c5de38ad79f01395e851bf66bc6fb7a6116f357
+# GLOBAL-HASH: 400a7e7b3e53fc3d24ca0a841a5f531c92fb066a4963d88aaa4b0e009f996c73
 
 from __future__ import annotations
 
@@ -4656,6 +4656,12 @@ class SWR(IntEnum):
     SWR_3621 = 3621
     """[draft] Image attachments in the desktop prompt - docs/requirements/2000-rotaris-desktop/SWR-3621-image-attachments-in-prompt.md"""
 
+    SWR_3622 = 3622
+    """[approved] Releasing a requirement with unmet dependencies asks first - docs/requirements/3600-requirement-board-workflow/SWR-3622-releasing-a-blocked-requirement-asks.md"""
+
+    SWR_3623 = 3623
+    """[approved] The board resolves the blocker chain and starts at its root - docs/requirements/3600-requirement-board-workflow/SWR-3623-handle-the-root-blocker-first.md"""
+
     SWR_3700 = 3700
     """[approved] Themeable design-token layer - docs/requirements/2000-rotaris-desktop/SWR-3700-themeable-design-token-layer.md"""
 
@@ -6315,7 +6321,7 @@ META: dict[int, ReqMeta] = {
     3517: ReqMeta('SWR-3517', 3517, ReqStatus.APPROVED, 'One reader of the annotation grammar', 'docs/requirements/3500-requirement-change-propagation/SWR-3517-one-annotation-grammar.md', True, True, 'ac4b69a94d4e1050', 'technical', (3507,)),
     3518: ReqMeta('SWR-3518', 3518, ReqStatus.APPROVED, 'A migration plan survives the read that produced it', 'docs/requirements/3500-requirement-change-propagation/SWR-3518-migration-plan-store.md', True, True, 'c289977fca4d1513', 'technical', (3507,)),
     3519: ReqMeta('SWR-3519', 3519, ReqStatus.APPROVED, 'An evaluation states its depth, can be stopped, and strands no requirement', 'docs/requirements/3500-requirement-change-propagation/SWR-3519-evaluation-depth-and-catch-up.md', True, True, 'fc91dc597bfb8d31', 'technical', (3515,)),
-    3600: ReqMeta('SWR-3600', 3600, ReqStatus.APPROVED, 'Requirement Board Workflow and Review', 'docs/requirements/3600-requirement-board-workflow.md', False, False, '1327067bfbec980a', 'product', ()),
+    3600: ReqMeta('SWR-3600', 3600, ReqStatus.APPROVED, 'Requirement Board Workflow and Review', 'docs/requirements/3600-requirement-board-workflow.md', False, False, '74b4e7c02ec4dadf', 'product', ()),
     3601: ReqMeta('SWR-3601', 3601, ReqStatus.APPROVED, 'Moving a card is a workflow action', 'docs/requirements/3600-requirement-board-workflow/SWR-3601-drag-and-drop-workflow-actions.md', True, True, 'ff5c9332055c7cdd', 'product', ()),
     3602: ReqMeta('SWR-3602', 3602, ReqStatus.APPROVED, 'A refused move says why', 'docs/requirements/3600-requirement-board-workflow/SWR-3602-refused-drops-explain.md', True, True, '366136beeb3711f3', 'product', ()),
     3603: ReqMeta('SWR-3603', 3603, ReqStatus.APPROVED, 'Review view', 'docs/requirements/3600-requirement-board-workflow/SWR-3603-review-view.md', True, True, '959e222fce25647a', 'product', ()),
@@ -6337,6 +6343,8 @@ META: dict[int, ReqMeta] = {
     3619: ReqMeta('SWR-3619', 3619, ReqStatus.APPROVED, 'Desktop terminal stream bridge and emulated screen', 'docs/requirements/2000-rotaris-desktop/SWR-3619-terminal-stream-bridge.md', True, True, 'f99ca65fa9afefc8', 'technical', (2428,)),
     3620: ReqMeta('SWR-3620', 3620, ReqStatus.APPROVED, 'Adoption and verification report progress to whoever started them', 'docs/requirements/3600-requirement-board-workflow/SWR-3620-a-pass-reports-progress-to-its-host.md', True, True, 'a8fa09efc03e43a1', 'technical', (3615,)),
     3621: ReqMeta('SWR-3621', 3621, ReqStatus.DRAFT, 'Image attachments in the desktop prompt', 'docs/requirements/2000-rotaris-desktop/SWR-3621-image-attachments-in-prompt.md', True, True, '32566c41d72bac06', 'product', ()),
+    3622: ReqMeta('SWR-3622', 3622, ReqStatus.APPROVED, 'Releasing a requirement with unmet dependencies asks first', 'docs/requirements/3600-requirement-board-workflow/SWR-3622-releasing-a-blocked-requirement-asks.md', True, True, '988abbb9870bbe45', 'product', ()),
+    3623: ReqMeta('SWR-3623', 3623, ReqStatus.APPROVED, 'The board resolves the blocker chain and starts at its root', 'docs/requirements/3600-requirement-board-workflow/SWR-3623-handle-the-root-blocker-first.md', True, True, 'eb3514ea89cba9f0', 'product', ()),
     3700: ReqMeta('SWR-3700', 3700, ReqStatus.APPROVED, 'Themeable design-token layer', 'docs/requirements/2000-rotaris-desktop/SWR-3700-themeable-design-token-layer.md', True, True, '9967ed94fe077204', 'technical', (2093,)),
     3701: ReqMeta('SWR-3701', 3701, ReqStatus.APPROVED, 'A user can choose the Rotaris theme, and it applies without a relaunch', 'docs/requirements/2000-rotaris-desktop/SWR-3701-theme-selection.md', True, True, '0b0fd0d161a887ff', 'product', ()),
     3702: ReqMeta('SWR-3702', 3702, ReqStatus.APPROVED, 'Design-system component library', 'docs/requirements/2000-rotaris-desktop/SWR-3702-design-system-components.md', True, True, '972d72d591e3b10c', 'technical', (3700,)),

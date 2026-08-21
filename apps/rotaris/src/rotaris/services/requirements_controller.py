@@ -53,6 +53,7 @@ import html
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -76,8 +77,10 @@ from rotaris.services.requirements_actions import (
     RunsInFlight,
     StageReporting,
     action_for_move,
+    dispatches_a_run,
     move_options,
     resume_column,
+    waiting_for_dependencies,
 )
 from rotaris.services.requirements_bridge import (
     RefreshKind,
@@ -89,7 +92,6 @@ from rotaris.widgets.cards import make_button
 from rotaris.widgets.feedback import EmptyState, InlineBanner
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
     from rotaris_core.requirements.delivery.evaluation import RequirementEvaluator
@@ -97,6 +99,7 @@ if TYPE_CHECKING:
     from rotaris.models.requirements_state import (
         PendingAction,
         QueueState,
+        ReleaseHold,
         RequirementDetail,
     )
     from rotaris.models.store import WorkspaceStore
@@ -111,6 +114,7 @@ if TYPE_CHECKING:
     from rotaris.services.requirements_bridge import BoardDelta, BoardSource
     from rotaris.views.requirement_queue import SchedulingControls
     from rotaris.views.requirement_review import DeferredReviews
+    from rotaris.widgets.release_blockers_dialog import ReleaseBlockerDecision
     from rotaris.widgets.requirement_blockers import RequirementBlockerPanel
     from rotaris.widgets.requirement_editor import (
         RequirementCreationForm,
@@ -123,8 +127,14 @@ __all__ = [
     "NO_COMMIT_NOTICE",
     "REFRESH_ACTION",
     "WORKSPACE_VIEW",
+    "ReleasePrompt",
     "RequirementsController",
 ]
+
+#: How a held release asks (SWR-3622). Declared as a type rather than left to a
+#: bare ``Callable`` at the attribute, so what a test installs and what the
+#: dialog answers with are one contract.
+ReleasePrompt = Callable[["ReleaseHold"], "ReleaseBlockerDecision"]
 
 #: Where a run's own surfaces live (SWR-3612). Named rather than spelled at each
 #: call site, because "the requirements view does not rebuild a transcript" is
@@ -453,6 +463,22 @@ class RequirementsController(QObject):
         #: given (SWR-3707). Per controller and not persisted, because that is
         #: what "again next launch" means; the permanent answer is a preference.
         self._run_permissions_told = False
+        #: How a held release asks the user what to do (SWR-3622). A callable
+        #: rather than a hard-wired dialog: this is the controller's whole
+        #: dependency on Qt for the gate, and a test replaces it to answer
+        #: without a live modal. Resolved on first use, so a window constructor
+        #: never imports a widget it may not need.
+        self.release_prompt: ReleasePrompt | None = None
+        #: Requirements whose release the user put off to deal with the chain
+        #: first (SWR-3623). Session-scoped and deliberately not persisted: it
+        #: is a memory of one gesture, and a board read on the next launch is
+        #: not evidence that the user still wants that run.
+        self._deferred_releases: set[str] = set()
+        #: Guards the one re-entrant call: releasing a root goes back through
+        #: :meth:`move_requirement`. The root is unblocked by construction, so
+        #: the prompt would not raise again — this makes that a property of the
+        #: code rather than of the gate agreeing with itself.
+        self._resolving_release = False
         #: Whether this workspace has been seen with a commit to base runs on
         #: (SWR-3419). One controller holds one workspace for its whole life, and
         #: a checkout that has committed stays committed, so the answer is asked
@@ -963,6 +989,17 @@ class RequirementsController(QObject):
             return self._no_actions(req_id, source, target)
         action = action_for_move(source, target)
         if action is not None:
+            # Before the permission notice and before anything is marked in
+            # flight: a card that appeared in Ready and then jumped back would
+            # be an answer the engine never gave (SWR-3622).
+            answered = self._resolve_release_blockers(
+                action,
+                req_id,
+                source=source,
+                target=target,
+            )
+            if answered is not None:
+                return answered
             if not self._disclose_run_permissions(action, req_id):
                 return self._cancelled(str(action), req_id, source=source, target=target)
             self._begin(actions.begin(action, req_id, source=source, target=target))
@@ -1735,6 +1772,143 @@ class RequirementsController(QObject):
             suppress_notice()
         return True
 
+    # ── the dependency gate, at the moment of a release (SWR-3622) ────────
+
+    @traces(SWR.SWR_3622, SWR.SWR_3623, SWR.SWR_3510)
+    def _resolve_release_blockers(
+        self,
+        action: BoardAction,
+        req_id: str,
+        *,
+        source: str,
+        target: str,
+    ) -> ActionOutcome | None:
+        """Ask before releasing a held requirement. ``None`` to go ahead unchanged.
+
+        Asked of :func:`~rotaris.services.requirements_actions.dispatches_a_run`
+        rather than of a list kept here, for the reason
+        :meth:`_disclose_run_permissions` is: a second list would gate a
+        different set of gestures from the one that actually starts work
+        (SWR-3311).
+
+        Silent in four cases. There is nothing to gate when the move does not
+        start a run. There is nothing to *ask* when this is the recursive
+        release of a root — that requirement is unblocked by construction. A
+        board that was never projected has no gate to read. And a requirement
+        the gate lets through is released exactly as before, with no dialog and
+        no extra read.
+        """
+        from rotaris_core.requirements.change.dependencies import plan_release
+
+        from rotaris.models.requirements_state import build_release_hold
+
+        if self._resolving_release or not dispatches_a_run(action, target):
+            return None
+        report = self._store.requirements.dependencies
+        if report is None:
+            return None
+        plan = plan_release(req_id, report)
+        if not plan.blocked:
+            return None
+
+        decision = self._ask_about_release(build_release_hold(plan))
+        from rotaris.widgets.release_blockers_dialog import ReleaseBlockerChoice
+
+        if decision.choice is ReleaseBlockerChoice.RELEASE_ANYWAY:
+            self._deferred_releases.discard(req_id)
+            return None
+        if decision.choice is ReleaseBlockerChoice.NAVIGATE:
+            self._deferred_releases.add(req_id)
+            return self._went_to_blocker(req_id, decision.target, source=source, target=target)
+        if decision.choice is ReleaseBlockerChoice.HANDLE_FIRST:
+            self._deferred_releases.add(req_id)
+            return self._release_the_root(plan.root, str(plan.root_state or ""))
+        return self._held(req_id, plan.message, source=source, target=target)
+
+    def _ask_about_release(self, hold: ReleaseHold) -> ReleaseBlockerDecision:
+        """Put *hold* to the user through whatever this controller asks with."""
+        prompt = self.release_prompt
+        if prompt is None:
+            from rotaris.widgets.release_blockers_dialog import release_blocker_prompt
+
+            prompt = self.release_prompt = release_blocker_prompt
+        return prompt(hold)
+
+    @traces(SWR.SWR_3622, SWR.SWR_3317)
+    def _went_to_blocker(
+        self,
+        req_id: str,
+        blocker_id: str,
+        *,
+        source: str,
+        target: str,
+    ) -> ActionOutcome:
+        """Take the user to *blocker_id* and report that nothing moved.
+
+        The board already knows how to go to a card it holds — open its column,
+        scroll the board to it, realise it and focus it (SWR-3317, SWR-3321) —
+        so this asks for that rather than reimplementing four steps of it.
+        """
+        self.select(blocker_id)
+        show = getattr(self._view, "show_on_board", None)
+        if callable(show):
+            show(blocker_id)
+        from rotaris.services.requirements_actions import ActionOutcome as Outcome
+
+        return self._finish(
+            Outcome(
+                action=str(BoardAction.RELEASE),
+                req_id=req_id,
+                accepted=False,
+                source=source,
+                target=target,
+                reason=(
+                    f"Nothing was moved and nothing was started. Showing {blocker_id},"
+                    f" which {req_id} waits for."
+                ),
+            ),
+        )
+
+    @traces(SWR.SWR_3623)
+    def _release_the_root(self, root: str, root_state: str) -> ActionOutcome | None:
+        """Release *root* instead, through the one write path (SWR-3610).
+
+        Back through :meth:`move_requirement`, so the root's release is the same
+        gesture as any other: the same permission notice, the same in-flight
+        card, the same feedback. The guard makes the recursion one level deep
+        whatever the gate says about the root.
+        """
+        from rotaris_core.requirements.delivery.state import DeliveryState
+
+        self._resolving_release = True
+        try:
+            return self.move_requirement(root, root_state, str(DeliveryState.READY))
+        finally:
+            self._resolving_release = False
+
+    @traces(SWR.SWR_3622, SWR.SWR_3602)
+    def _held(
+        self,
+        req_id: str,
+        reason: str,
+        *,
+        source: str,
+        target: str,
+    ) -> ActionOutcome:
+        """The user read what is in the way and stopped. Their decision, worded as one."""
+        from rotaris.services.requirements_actions import ActionOutcome as Outcome
+
+        return self._finish(
+            Outcome(
+                action=str(BoardAction.RELEASE),
+                req_id=req_id,
+                accepted=False,
+                source=source,
+                target=target,
+                reason=f"Nothing was started and nothing moved. {reason}",
+            ),
+        )
+
     @traces(SWR.SWR_3707, SWR.SWR_3602)
     def _cancelled(
         self,
@@ -1791,6 +1965,61 @@ class RequirementsController(QObject):
         if callable(push):
             push(pending, feedback)
 
+    @traces(SWR.SWR_3623, SWR.SWR_3602)
+    def _report_freed_releases(self) -> None:
+        """Say when a release the user put off is no longer held (SWR-3623).
+
+        Told, never started. The user deferred to the chain rather than to a
+        timer, and the gesture that starts an unattended run is still theirs to
+        make — but they should not have to poll a board of several hundred cards
+        to find out that they can make it.
+
+        Said once: the id leaves the deferred set as the feedback goes out, so a
+        board that evaluates every few seconds does not repeat itself. Anything
+        the new board no longer carries is dropped with it, which is the deferral
+        being resolved by the requirement going away.
+
+        It **supersedes** the refusal that started the deferral rather than
+        joining it. Feedback stands until it is dismissed or resolved (SWR-3602),
+        and "SWR-502 waits for SWR-501" being no longer true is exactly that
+        resolution — leaving both would have one card saying two contradictory
+        things about itself.
+        """
+        from rotaris_core.requirements.delivery.state import DeliveryState
+
+        if not self._deferred_releases:
+            return
+        state = self._store.requirements
+        report = state.dependencies
+        freed: list[ActionFeedback] = []
+        for req_id in sorted(self._deferred_releases):
+            card = state.card(req_id)
+            if card is None:
+                self._deferred_releases.discard(req_id)
+                continue
+            if report is not None and report.verdict_for(req_id).blocked:
+                continue
+            self._deferred_releases.discard(req_id)
+            freed.append(
+                ActionFeedback(
+                    req_id=req_id,
+                    action=str(BoardAction.RELEASE),
+                    title=f"{req_id} is no longer waiting for anything",
+                    reason=(
+                        "Every requirement it depended on is Done and current."
+                        " Drop it on Ready to release it."
+                    ),
+                    source=card.delivery,
+                    target=str(DeliveryState.READY),
+                    accepted=True,
+                ),
+            )
+        if not freed:
+            return
+        superseded = {item.req_id for item in freed}
+        kept = tuple(item for item in state.feedback if item.req_id not in superseded)
+        self._publish(state.pending, (*kept, *freed))
+
     @traces(SWR.SWR_3601, SWR.SWR_3602)
     def move_options_for(self, req_id: str) -> tuple[MoveOption, ...]:
         """Which columns *req_id* can be moved to, and why the others cannot.
@@ -1804,7 +2033,23 @@ class RequirementsController(QObject):
             # An epic's state follows from its children and is never set
             # (SWR-3212, SWR-3308): it has no drop target at all.
             return ()
-        return move_options(card.delivery, blocked_from=card.blocked_from)
+        options = move_options(card.delivery, blocked_from=card.blocked_from)
+        return tuple(self._with_dependency_hint(option, card.waits_for) for option in options)
+
+    @traces(SWR.SWR_3622)
+    def _with_dependency_hint(self, option: MoveOption, waits_for: tuple[str, ...]) -> MoveOption:
+        """The Ready column's consequence, replaced while a *held* card is in the air.
+
+        Reachability is untouched: the transition matrix has nothing to say
+        about dependencies, and a drop the rail refused would be this surface
+        keeping a second gate. What changes is what the rail *says* will happen
+        — which is a question, not a run (SWR-3622).
+        """
+        from rotaris_core.requirements.delivery.state import DeliveryState
+
+        if not waits_for or not option.reachable or option.target != str(DeliveryState.READY):
+            return option
+        return replace(option, consequence=waiting_for_dependencies(waits_for))
 
     def _push_moves(self, state: RequirementsBoardState) -> None:
         push = getattr(self._view, "set_move_options", None)
@@ -1840,6 +2085,7 @@ class RequirementsController(QObject):
         if blocked is not None:
             state = replace(state, notice=blocked)
         self._store.set_requirements(state, delta)
+        self._report_freed_releases()
         published = self._store.requirements
         self._push_to_view(published, delta)
         # Which drops each card now accepts follows from its new delivery state,

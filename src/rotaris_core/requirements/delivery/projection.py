@@ -52,6 +52,12 @@ from typing import TYPE_CHECKING, Protocol, Self, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from rotaris_core.reqtocode import SWR, traces
+from rotaris_core.requirements.change.dependencies import (  # noqa: TC001 - Pydantic field types.
+    DependencyReport,
+    DependencyVerdict,
+    RequirementReadiness,
+    evaluate_dependencies,
+)
 from rotaris_core.requirements.delivery.audit import AuditTrail  # noqa: TC001 - a field type.
 from rotaris_core.requirements.delivery.completion import (  # noqa: TC001 - Pydantic field types.
     CompletionReport,
@@ -1161,6 +1167,15 @@ class BoardEntry(BaseModel):
     blockers: tuple[BlockerView, ...] = ()
     review: ReviewView | None = None
 
+    #: What SWR-3510's dependency gate says about this requirement: whether its
+    #: ``depends-on`` targets have been delivered *and are current*, and which
+    #: ones have not. Deliberately **not** folded into :attr:`blockers`: a
+    #: blocker is something raised against a requirement that is already moving,
+    #: and an undelivered dependency is a fact about a requirement sitting
+    #: quietly in ``Backlog``. The board reads this when a release is attempted
+    #: (SWR-3622), not on every card.
+    dependency: DependencyVerdict = DependencyVerdict(req_id="")
+
     # -- deep views, gathered only when asked --------------------------------
     completion: CompletionReport | None = None
     history: RevisionHistory | None = None
@@ -1180,6 +1195,10 @@ class BoardEntry(BaseModel):
         ):
             if other != self.req_id:
                 raise ValueError(f"{self.req_id}: {what} belong to {other}")
+        if self.dependency.req_id and self.dependency.req_id != self.req_id:
+            raise ValueError(
+                f"{self.req_id}: dependency verdict belongs to {self.dependency.req_id}",
+            )
         if self.epic is not None and self.epic.req_id != self.req_id:
             raise ValueError(f"{self.req_id}: epic progress belongs to {self.epic.req_id}")
         if self.is_epic and self.epic is None:
@@ -1329,6 +1348,10 @@ class BoardProjection(BaseModel):
     notices: tuple[str, ...] = ()
     #: Ids the source no longer declares but Rotaris has data for (SWR-3113).
     removed: tuple[str, ...] = ()
+    #: SWR-3510's gate over the whole set, evaluated once per pass. Kept whole
+    #: as well as per entry because the chain above one requirement is a fact
+    #: about the *graph* — resolving it needs every verdict, not one (SWR-3623).
+    dependencies: DependencyReport = DependencyReport()
 
     @model_validator(mode="after")
     def _one_entry_per_requirement(self) -> Self:
@@ -1601,6 +1624,7 @@ def _entry_for(
     obligations: RequirementObligations,
     aggregate: EpicProgress | None,
     notices: tuple[str, ...],
+    dependency: DependencyVerdict,
 ) -> BoardEntry:
     """Assemble one entry, once every fact about it is known.
 
@@ -1653,6 +1677,7 @@ def _entry_for(
         relations=part.relations,
         execution=part.execution,
         blockers=inputs.blockers.get(req_id, ()),
+        dependency=dependency,
         review=inputs.reviews.get(req_id),
         completion=inputs.completions.get(req_id),
         history=inputs.histories.get(req_id),
@@ -1708,6 +1733,11 @@ def project_board(inputs: BoardInputs) -> BoardProjection:
         )
 
     aggregates = aggregate_epics(hierarchy, progress)
+    # Second pass, and the reason there is one: readiness is per requirement but
+    # the *gate* is over the whole set (SWR-3510). An epic's state is the one its
+    # children imply, so the aggregate has to exist before a dependency on an
+    # epic can be judged — the same ordering `_entry_for` already relies on.
+    gate = _dependency_gate(parts, aggregates)
     entries = tuple(
         _entry_for(
             part,
@@ -1715,6 +1745,7 @@ def project_board(inputs: BoardInputs) -> BoardProjection:
             obligations=obligations[part.requirement.req_id],
             aggregate=aggregates.get(part.requirement.req_id) if part.epic else None,
             notices=notices.get(part.requirement.req_id, ()),
+            dependency=gate.verdict_for(part.requirement.req_id),
         )
         for part in parts
     )
@@ -1726,7 +1757,43 @@ def project_board(inputs: BoardInputs) -> BoardProjection:
         evaluated_at=inputs.evaluated_at,
         notices=_board_notices(inputs, graph),
         removed=tuple(entry.req_id for entry in inputs.index.tombstones if entry.active),
+        dependencies=gate,
     )
+
+
+@traces(SWR.SWR_3510, SWR.SWR_3622)
+def _dependency_gate(
+    parts: Sequence[_EntryParts],
+    aggregates: Mapping[str, EpicProgress],
+) -> DependencyReport:
+    """SWR-3510's gate over this board, evaluated once. Pure.
+
+    The gate was written, tested and constructed nowhere: until this, a
+    requirement whose ``depends-on`` target was not delivered carried nothing at
+    all on the board, and the wait first became visible as a scheduler hold on a
+    unit — after the run had been dispatched (SWR-3622).
+
+    Both halves of readiness come from where SWR-3202 keeps them: the current
+    hash from the source, the delivered one from Rotaris' own record. The state
+    is the entry's, aggregate included, so a dependency on an epic reads the
+    status its children imply rather than the ``Backlog`` its record holds for
+    ever (SWR-3212).
+    """
+    edges: dict[str, tuple[str, ...]] = {}
+    readiness: dict[str, RequirementReadiness] = {}
+    for part in parts:
+        req_id = part.requirement.req_id
+        aggregate = aggregates.get(req_id) if part.epic else None
+        # The relations view rather than the requirement's own field, so the
+        # gate reads the same edges the detail view and the graph draw.
+        edges[req_id] = part.relations.depends_on
+        readiness[req_id] = RequirementReadiness(
+            req_id=req_id,
+            state=aggregate.state if aggregate is not None else part.record.delivery.state,
+            current_hash=part.requirement.current_hash,
+            satisfied_hash=part.record.satisfied_hash,
+        )
+    return evaluate_dependencies(edges, readiness)
 
 
 # --------------------------------------------------------------------------

@@ -25,6 +25,7 @@ from rotaris_core.requirements.change.dependencies import (
     evaluate_dependencies,
     find_cycles,
     gate,
+    plan_release,
     readiness_of,
     release_after,
 )
@@ -345,3 +346,167 @@ def test_a_blocker_states_its_reason_and_a_cycle_names_its_cycle() -> None:
         )
     with pytest.raises(ValidationError, match="names each member once"):
         DependencyCycle(members=(FOUNDATION, FOUNDATION))
+
+
+# ── the chain a held release has to work through (SWR-3623) ────────────────
+
+MIDDLE = "SWR-503"
+TOP = "SWR-504"
+
+
+def held(
+    *ids: str, state: DeliveryState = DeliveryState.BACKLOG
+) -> dict[str, RequirementReadiness]:
+    """Readiness for a set of requirements that have all delivered nothing."""
+    return {req_id: readiness(req_id, state=state) for req_id in ids}
+
+
+@verifies(SWR.SWR_3623)
+def test_the_chain_above_a_held_requirement_comes_back_roots_first() -> None:
+    """Productive use: the user wants TOP, and needs to know what to work on instead.
+
+    A line of three: TOP waits for MIDDLE waits for FOUNDATION. The useful answer
+    is FOUNDATION — the one with nothing of its own left to wait for — and the
+    whole chain in the order it has to land, so the user can see how far away
+    what they asked for actually is.
+    """
+    report = evaluate_dependencies(
+        {TOP: (MIDDLE,), MIDDLE: (FOUNDATION,)},
+        held(FOUNDATION, MIDDLE, TOP),
+    )
+
+    plan = plan_release(TOP, report)
+
+    assert plan.blocked is True
+    assert plan.order == (FOUNDATION, MIDDLE)
+    assert plan.root == FOUNDATION
+    assert plan.resolvable is True
+    assert plan.root_state is DeliveryState.BACKLOG
+    assert plan.chain == (FOUNDATION, MIDDLE, TOP)
+    # The direct blocker is the one the gate raised, carried through untouched.
+    assert [blocker.blocking_id for blocker in plan.blockers] == [MIDDLE]
+    assert plan.message == f"{TOP} waits for {MIDDLE}; start with {FOUNDATION}"
+
+
+@verifies(SWR.SWR_3623)
+def test_a_requirement_nothing_holds_has_no_chain_to_work_through() -> None:
+    """The gate lets it through, so the release goes ahead with nothing to ask."""
+    report = evaluate_dependencies(
+        {DEPENDENT: (FOUNDATION,)},
+        chain(
+            foundation=readiness(FOUNDATION, state=DeliveryState.DONE, satisfied="hash-1"),
+            dependent=readiness(DEPENDENT, state=DeliveryState.BACKLOG),
+        ),
+    )
+
+    plan = plan_release(DEPENDENT, report)
+
+    assert plan.blocked is False
+    assert plan.order == ()
+    assert plan.root == ""
+    assert plan.resolvable is False
+    assert plan.chain == (DEPENDENT,)
+
+
+@verifies(SWR.SWR_3623)
+def test_two_chains_meeting_at_one_root_propose_that_root_once() -> None:
+    """A diamond: TOP waits for both middles, and both wait for FOUNDATION.
+
+    Deterministic and de-duplicated. A plan that proposed a different root on
+    the second read would send the user to a different card for no reason they
+    could see.
+    """
+    report = evaluate_dependencies(
+        {TOP: (MIDDLE, DEPENDENT), MIDDLE: (FOUNDATION,), DEPENDENT: (FOUNDATION,)},
+        held(FOUNDATION, DEPENDENT, MIDDLE, TOP),
+    )
+
+    plan = plan_release(TOP, report)
+
+    assert plan.order == (FOUNDATION, DEPENDENT, MIDDLE)
+    assert plan.root == FOUNDATION
+    assert plan_release(TOP, report).order == plan.order
+
+
+@verifies(SWR.SWR_3623, SWR.SWR_3510)
+def test_a_cycle_in_the_chain_is_stated_and_no_root_is_invented() -> None:
+    """Nothing in a loop can be released, so the plan offers nobody and says why."""
+    report = evaluate_dependencies(
+        {TOP: (FOUNDATION,), FOUNDATION: (MIDDLE,), MIDDLE: (FOUNDATION,)},
+        held(FOUNDATION, MIDDLE, TOP),
+    )
+
+    plan = plan_release(TOP, report)
+
+    assert plan.blocked is True
+    assert plan.resolvable is False
+    assert plan.cycle is not None
+    assert plan.cycle.contains(FOUNDATION)
+    # The loop as a user has to break it, not the downstream symptom.
+    assert f"{FOUNDATION} → {MIDDLE} → {FOUNDATION}" in plan.root_reason
+    assert "broken in the source" in plan.root_reason
+    # Every member is still named: a plan that lost one would understate the work.
+    assert set(plan.order) == {FOUNDATION, MIDDLE}
+
+
+@verifies(SWR.SWR_3623, SWR.SWR_3109)
+def test_a_dangling_dependency_is_named_as_unknown_rather_than_released() -> None:
+    """Rotaris cannot release a requirement its own store does not contain."""
+    report = evaluate_dependencies({TOP: ("SWR-9999",)}, held(TOP))
+
+    plan = plan_release(TOP, report)
+
+    assert plan.unknown == ("SWR-9999",)
+    assert plan.root == "SWR-9999"
+    assert plan.resolvable is False
+    assert "Nothing is known about SWR-9999" in plan.root_reason
+    assert plan.root_state is None
+
+
+@verifies(SWR.SWR_3623)
+def test_a_root_already_in_flight_is_reported_in_its_own_state() -> None:
+    """ "Start with SWR-501" would be a second release of work already running."""
+    report = evaluate_dependencies(
+        {TOP: (FOUNDATION,)},
+        chain(
+            foundation=readiness(FOUNDATION, state=DeliveryState.RUNNING),
+            top=readiness(TOP, state=DeliveryState.BACKLOG),
+        ),
+    )
+
+    plan = plan_release(TOP, report)
+
+    assert plan.root == FOUNDATION
+    assert plan.resolvable is False
+    assert plan.root_reason == f"{FOUNDATION} is already Running; the work on it has started."
+
+
+@verifies(SWR.SWR_3623)
+def test_a_root_that_needs_an_update_is_still_a_root() -> None:
+    """`Needs Update → Ready` is a release, so a re-specified root is offered."""
+    report = evaluate_dependencies(
+        {TOP: (FOUNDATION,)},
+        chain(
+            foundation=readiness(FOUNDATION, state=DeliveryState.NEEDS_UPDATE),
+            top=readiness(TOP, state=DeliveryState.BACKLOG),
+        ),
+    )
+
+    plan = plan_release(TOP, report)
+
+    assert plan.resolvable is True
+    assert plan.root_state is DeliveryState.NEEDS_UPDATE
+    assert plan.root_reason == ""
+
+
+@verifies(SWR.SWR_3623)
+def test_a_deep_chain_is_walked_without_recursion() -> None:
+    """A requirement store is user-supplied: depth must not end a board pass."""
+    ids = [f"SWR-{6000 + step}" for step in range(400)]
+    edges = {child: (parent,) for parent, child in zip(ids, ids[1:], strict=False)}
+
+    report = evaluate_dependencies(edges, held(*ids))
+    plan = plan_release(ids[-1], report)
+
+    assert plan.root == ids[0]
+    assert len(plan.order) == len(ids) - 1

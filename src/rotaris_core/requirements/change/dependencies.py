@@ -42,7 +42,7 @@ from rotaris_core.requirements.delivery.state import DeliveryState
 from rotaris_core.requirements.model import RelationKind, requirement_sort_key
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
 
     from rotaris_core.requirements.delivery.satisfied import SatisfiedLog
     from rotaris_core.requirements.model import CanonicalRequirement
@@ -55,11 +55,13 @@ __all__ = [
     "DependencyRelease",
     "DependencyReport",
     "DependencyVerdict",
+    "ReleasePlan",
     "RequirementReadiness",
     "dependency_edges",
     "evaluate_dependencies",
     "find_cycles",
     "gate",
+    "plan_release",
     "readiness_of",
     "release_after",
 ]
@@ -261,6 +263,11 @@ class DependencyVerdict(BaseModel):
 
     req_id: str
     blockers: tuple[DependencyBlocker, ...] = ()
+    #: The requirement's *own* delivery state. Carried so a report answers both
+    #: halves of "may this start" — what holds it, and what state it is in —
+    #: without a second read against the store (SWR-3623). A verdict built
+    #: without one reads ``Backlog``, which is the state that releases.
+    state: DeliveryState = DeliveryState.BACKLOG
 
     @model_validator(mode="after")
     def _about_one_requirement(self) -> Self:
@@ -540,7 +547,14 @@ def evaluate_dependencies(
                         detail=known.detail,
                     ),
                 )
-        verdicts.append(DependencyVerdict(req_id=req_id, blockers=tuple(blockers)))
+        known_self = readiness.get(req_id)
+        verdicts.append(
+            DependencyVerdict(
+                req_id=req_id,
+                blockers=tuple(blockers),
+                state=known_self.state if known_self is not None else DeliveryState.BACKLOG,
+            ),
+        )
 
     return DependencyReport(verdicts=tuple(verdicts), cycles=cycles)
 
@@ -624,3 +638,230 @@ def gate(
         for requirement in requirements
     }
     return evaluate_dependencies(dependencies, readiness)
+
+
+# ── the order the chain has to land in (SWR-3623) ──────────────────────────
+
+
+#: Why each state a *root* blocker might be in cannot be released, in the
+#: engine's own vocabulary. Consulted only after
+#: :func:`~rotaris_core.requirements.delivery.transitions.is_legal` has already
+#: said no, so this is the sentence for a refusal and never the decision.
+_ROOT_REFUSALS: dict[DeliveryState, str] = {
+    DeliveryState.READY: "{req_id} is already Ready; its run is waiting on the queue.",
+    DeliveryState.RUNNING: "{req_id} is already Running; the work on it has started.",
+    DeliveryState.REVIEW: "{req_id} is already in Review; its result is waiting to be accepted.",
+    DeliveryState.BLOCKED: (
+        "{req_id} is Blocked. A blocked requirement returns to the state it was blocked in"
+        " and is not released from here (SWR-3201)."
+    ),
+    DeliveryState.DONE: (
+        "{req_id} is Done, but the specification moved since it was delivered. Rotaris moves it"
+        " to Needs Update on the next evaluation, and it is released from there (SWR-3502)."
+    ),
+}
+
+
+@traces(SWR.SWR_3623)
+class ReleasePlan(BaseModel):
+    """What has to be delivered before one requirement can be, and in what order.
+
+    The value behind "handle the blockers first": a requirement nobody may
+    release yet is not a dead end, it is the *bottom* of a chain, and the useful
+    answer is which requirement to work on instead. This walks the unsatisfied
+    ``depends-on`` ancestors of one requirement and puts them in the order they
+    have to land — roots first, so :attr:`root` is a requirement with nothing of
+    its own left to wait for.
+
+    Deterministic: the walk breaks every tie with
+    :func:`~rotaris_core.requirements.model.requirement_sort_key`, so the same
+    board always proposes the same root and a user is never sent to a different
+    requirement by two reads of one project.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    req_id: str
+    #: Every unsatisfied ancestor, roots first. Excludes :attr:`req_id` itself.
+    order: tuple[str, ...] = ()
+    #: What holds :attr:`req_id` *directly*, carried verbatim from its verdict so
+    #: a surface prints the gate's own sentence rather than a paraphrase.
+    blockers: tuple[DependencyBlocker, ...] = ()
+    #: A loop somewhere in the chain. Carried even when :attr:`root` is outside
+    #: it: a user releasing the root still needs to know the chain does not end.
+    cycle: DependencyCycle | None = None
+    #: Ancestors the requirement set does not contain — a dangling ``depends-on``
+    #: (SWR-3109). Named rather than dropped; nothing can release them.
+    unknown: tuple[str, ...] = ()
+    #: Why :attr:`root` may not be released, or ``""`` when it may.
+    root_reason: str = ""
+    #: What state :attr:`root` is in, so a caller moves it from the right column.
+    root_state: DeliveryState | None = None
+
+    @property
+    def blocked(self) -> bool:
+        """Whether anything holds this requirement at all."""
+        return bool(self.blockers)
+
+    @property
+    def root(self) -> str:
+        """The requirement to start with — ``""`` when nothing holds this one."""
+        return self.order[0] if self.order else ""
+
+    @property
+    def resolvable(self) -> bool:
+        """Whether :attr:`root` is a requirement this board may actually release."""
+        return bool(self.order) and not self.root_reason
+
+    @property
+    def chain(self) -> tuple[str, ...]:
+        """The order with this requirement last — ``SWR-1 → SWR-2 → SWR-3``.
+
+        Read as *waits for*, left to right: the first entry is the one with
+        nothing left to wait for, the last is the requirement that was asked
+        about.
+        """
+        return (*self.order, self.req_id)
+
+    @property
+    def message(self) -> str:
+        """One line for a log or a refusal."""
+        if not self.blocked:
+            return f"{self.req_id}: every dependency is Done and current"
+        waiting = ", ".join(blocker.blocking_id for blocker in self.blockers)
+        if self.resolvable:
+            return f"{self.req_id} waits for {waiting}; start with {self.root}"
+        because = self.root_reason or "there is no root to start with"
+        return f"{self.req_id} waits for {waiting}; {because}"
+
+
+@traces(SWR.SWR_3623, SWR.SWR_3510)
+def plan_release(req_id: str, report: DependencyReport) -> ReleasePlan:
+    """The chain above *req_id*, in the order it has to land. Pure.
+
+    Reads the gate's own answer rather than the relation graph: every edge here
+    is one :func:`evaluate_dependencies` already judged *unsatisfied*, so an
+    ancestor that is Done and current is simply absent and the chain a user is
+    shown is the work that is actually left.
+
+    Iterative, with a visited set, for the reason :func:`find_cycles` is: a
+    dependency graph is user-supplied data, and neither a deep chain nor a loop
+    may end a board pass with a ``RecursionError`` or a hang. The order is
+    produced by Kahn's algorithm over the reached subgraph, taking the lowest id
+    among the candidates at each step; anything a cycle leaves unemitted is
+    appended in id order, so the plan is always the *whole* chain.
+    """
+    wanted = req_id.strip()
+    blockers = report.verdict_for(wanted).blockers
+    if not blockers:
+        return ReleasePlan(req_id=wanted)
+
+    reached: set[str] = set()
+    unknown: set[str] = set()
+    pending = [wanted]
+    while pending:
+        current = pending.pop()
+        for blocker in report.verdict_for(current).blockers:
+            target = blocker.blocking_id
+            if blocker.kind is DependencyBlockKind.UNKNOWN:
+                unknown.add(target)
+            if target == wanted or target in reached:
+                continue
+            reached.add(target)
+            pending.append(target)
+
+    dependencies = {
+        member: tuple(
+            target
+            for target in report.verdict_for(member).blocked_by
+            if target in reached and target != member
+        )
+        for member in reached
+    }
+    order = _kahn(reached, dependencies)
+    cycle = next(
+        (found for member in order if (found := report.cycle_for(member)) is not None),
+        None,
+    )
+
+    root = order[0] if order else ""
+    root_state = report.verdict_for(root).state if root and root not in unknown else None
+    reason = _root_refusal(root, root_state, cycle=cycle, unknown=unknown)
+
+    return ReleasePlan(
+        req_id=wanted,
+        order=order,
+        blockers=blockers,
+        cycle=cycle,
+        unknown=tuple(sorted(unknown, key=requirement_sort_key)),
+        root_reason=reason,
+        root_state=root_state,
+    )
+
+
+def _root_refusal(
+    root: str,
+    root_state: DeliveryState | None,
+    *,
+    cycle: DependencyCycle | None,
+    unknown: Collection[str],
+) -> str:
+    """Why *root* may not be released, or ``""``.
+
+    The matrix decides and this only words the answer: a state
+    :func:`~rotaris_core.requirements.delivery.transitions.is_legal` accepts is
+    never refused here, so the sentence and the behaviour cannot drift apart.
+    """
+    from rotaris_core.requirements.delivery.state import ActorKind
+    from rotaris_core.requirements.delivery.transitions import is_legal
+
+    if not root:
+        return ""
+    if root in unknown:
+        return (
+            f"Nothing is known about {root}: this project's requirements do not contain it,"
+            " so Rotaris has nothing to release (SWR-3109)."
+        )
+    if cycle is not None and cycle.contains(root):
+        return (
+            f"{cycle.message}. Nothing in the loop can be released until it is broken"
+            " in the source (SWR-3510)."
+        )
+    if root_state is None or is_legal(root_state, DeliveryState.READY, ActorKind.USER):
+        return ""
+    template = _ROOT_REFUSALS.get(
+        root_state,
+        f"{{req_id}} is {root_state.label}, and this board does not release it from there.",
+    )
+    return template.format(req_id=root)
+
+
+def _kahn(members: set[str], dependencies: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
+    """*members* ordered so nothing precedes what it waits for. Deterministic.
+
+    The lowest id among the ready candidates goes first, which is what makes two
+    reads of one project propose the same root. A cycle leaves candidates empty
+    with members remaining; those are appended in id order rather than dropped,
+    because a plan that lost a member would tell a user the chain is shorter
+    than it is.
+    """
+    emitted: list[str] = []
+    done: set[str] = set()
+    remaining = set(members)
+    while remaining:
+        candidates = sorted(
+            (
+                member
+                for member in remaining
+                if all(target in done for target in dependencies.get(member, ()))
+            ),
+            key=requirement_sort_key,
+        )
+        if not candidates:
+            emitted.extend(sorted(remaining, key=requirement_sort_key))
+            break
+        chosen = candidates[0]
+        emitted.append(chosen)
+        done.add(chosen)
+        remaining.discard(chosen)
+    return tuple(emitted)

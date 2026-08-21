@@ -164,6 +164,7 @@ __all__ = [
     "requirement_source_for",
     "requirement_source_path",
     "schedule_now",
+    "waiting_for_dependencies",
     "workspace_actions",
     "workspace_editing",
 ]
@@ -491,6 +492,27 @@ class MoveOption:
         because = self.consequence if self.reachable else self.reason
         name = f"{self.indicator} {self.label}"
         return f"{name} — {because}" if because else name
+
+
+@traces(SWR.SWR_3622)
+def waiting_for_dependencies(waits_for: Sequence[str]) -> str:
+    """What the ``Ready`` column says while a *held* card is in the air.
+
+    The drop is still legal — the transition matrix has nothing to say about
+    dependencies (SWR-3510 is a separate gate) — so this replaces the
+    consequence rather than the reachability: the rail still reads ``→``, and it
+    reads what will actually happen next, which is a question rather than a run.
+    A card that only learns this after the drop teaches nothing, which is the
+    same reasoning SWR-3602 applies to refusals.
+    """
+    if not waits_for:
+        return ""
+    named = ", ".join(waits_for)
+    what = "dependency has" if len(waits_for) == 1 else "dependencies have"
+    return (
+        f"{len(waits_for)} {what} not been delivered ({named}). "
+        "You will be asked before anything starts."
+    )
 
 
 @traces(SWR.SWR_3601, SWR.SWR_3201)

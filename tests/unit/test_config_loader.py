@@ -1349,7 +1349,9 @@ def test_load_llm_for_codex_auth_rewrites_platform_base_url_to_codex_backend(
     workspace_root.mkdir()
     (workspace_root / loader.WORKSPACE_CONFIG_DIR_NAME).mkdir()
     monkeypatch.setattr(loader, "GLOBAL_CONFIG_DIR", global_dir)
-    monkeypatch.setattr(loader, "_resolve_auth_provider_token", lambda *_args: "codex-token")
+    monkeypatch.setattr(
+        loader, "_resolve_auth_provider_token", lambda *_args, **_kwargs: "codex-token"
+    )
     (global_dir / "agents.yaml").write_text(
         """
 models:
@@ -1385,7 +1387,9 @@ def test_load_llm_for_codex_auth_defaults_to_codex_backend_when_base_url_missing
     workspace_root.mkdir()
     (workspace_root / loader.WORKSPACE_CONFIG_DIR_NAME).mkdir()
     monkeypatch.setattr(loader, "GLOBAL_CONFIG_DIR", global_dir)
-    monkeypatch.setattr(loader, "_resolve_auth_provider_token", lambda *_args: "codex-token")
+    monkeypatch.setattr(
+        loader, "_resolve_auth_provider_token", lambda *_args, **_kwargs: "codex-token"
+    )
     (global_dir / "agents.yaml").write_text(
         """
 models:
@@ -1414,7 +1418,9 @@ def test_load_llm_for_codex_auth_clears_inferred_max_output_tokens(
     workspace_root.mkdir()
     (workspace_root / loader.WORKSPACE_CONFIG_DIR_NAME).mkdir()
     monkeypatch.setattr(loader, "GLOBAL_CONFIG_DIR", global_dir)
-    monkeypatch.setattr(loader, "_resolve_auth_provider_token", lambda *_args: "codex-token")
+    monkeypatch.setattr(
+        loader, "_resolve_auth_provider_token", lambda *_args, **_kwargs: "codex-token"
+    )
     (global_dir / "agents.yaml").write_text(
         """
 models:
@@ -1447,7 +1453,9 @@ def test_load_llm_for_codex_auth_includes_account_header_when_available(
     workspace_root.mkdir()
     (workspace_root / loader.WORKSPACE_CONFIG_DIR_NAME).mkdir()
     monkeypatch.setattr(loader, "GLOBAL_CONFIG_DIR", global_dir)
-    monkeypatch.setattr(loader, "_resolve_auth_provider_token", lambda *_args: "codex-token")
+    monkeypatch.setattr(
+        loader, "_resolve_auth_provider_token", lambda *_args, **_kwargs: "codex-token"
+    )
 
     from rotaris_core.auth import storage as storage_module
 
@@ -1490,7 +1498,9 @@ def test_load_llm_for_codex_auth_seeds_openhands_subscription_credentials(
     workspace_root.mkdir()
     (workspace_root / loader.WORKSPACE_CONFIG_DIR_NAME).mkdir()
     monkeypatch.setattr(loader, "GLOBAL_CONFIG_DIR", global_dir)
-    monkeypatch.setattr(loader, "_resolve_auth_provider_token", lambda *_args: "codex-token")
+    monkeypatch.setattr(
+        loader, "_resolve_auth_provider_token", lambda *_args, **_kwargs: "codex-token"
+    )
 
     from rotaris_core.auth import storage as storage_module
 
@@ -1549,7 +1559,9 @@ def test_load_llm_for_codex_auth_omits_unsupported_responses_parameters(
     workspace_root.mkdir()
     (workspace_root / loader.WORKSPACE_CONFIG_DIR_NAME).mkdir()
     monkeypatch.setattr(loader, "GLOBAL_CONFIG_DIR", global_dir)
-    monkeypatch.setattr(loader, "_resolve_auth_provider_token", lambda *_args: "codex-token")
+    monkeypatch.setattr(
+        loader, "_resolve_auth_provider_token", lambda *_args, **_kwargs: "codex-token"
+    )
     (global_dir / "agents.yaml").write_text(
         """
 models:
@@ -1598,6 +1610,47 @@ def test_resolve_auth_provider_token_accepts_codex_token_with_current_oauth_scop
     )
 
     assert token == "stored-token"
+
+
+@verifies(SWR.SWR_3711)
+def test_resolve_auth_provider_token_never_leaves_a_running_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An authenticated credential is resolved without touching the event loop.
+
+    Hosts build models from inside a running loop, so every hop out of one costs
+    a thread carrying its own private loop — and a hop that fails takes the real
+    error with it. Making ``run_auth_coro`` explode proves the usable-credential
+    path never reaches it.
+    """
+    import asyncio
+
+    from rotaris_core.auth import manager as manager_module
+    from rotaris_core.auth import storage as storage_module
+
+    class FakeStorage:
+        def load(self, provider_id: str) -> TokenSet | None:
+            assert provider_id == "codex"
+            return TokenSet(
+                access_token="stored-token",
+                refresh_token="refresh-token",
+                extra={"requested_scopes": "openid profile email offline_access"},
+            )
+
+    def explode(coro: object) -> None:
+        coro.close()  # type: ignore[attr-defined]
+        raise AssertionError("resolving an authenticated credential must not run a coroutine")
+
+    monkeypatch.setattr(storage_module, "TokenStorage", FakeStorage)
+    monkeypatch.setattr(manager_module, "run_auth_coro", explode)
+
+    async def resolve_from_inside_a_loop() -> str | None:
+        return loader._resolve_auth_provider_token(
+            "codex-model",
+            SimpleNamespace(auth_provider="codex"),
+        )
+
+    assert asyncio.run(resolve_from_inside_a_loop()) == "stored-token"
 
 
 @verifies(SWR.SWR_316, SWR.SWR_1704)

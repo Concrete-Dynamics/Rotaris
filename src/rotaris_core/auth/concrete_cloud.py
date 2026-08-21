@@ -228,12 +228,15 @@ class ConcreteCloudAuthProvider:
             )
         return _build_token_set_from_response(response.json(), discovery=discovery)
 
-    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+    def status(self, token_set: TokenSet) -> AuthStatus:
         if not token_set.access_token:
             return AuthStatus.UNAUTHENTICATED
         if token_set.is_expired:
             return AuthStatus.EXPIRED
         return AuthStatus.AUTHENTICATED
+
+    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+        return self.status(token_set)
 
     async def _discover(self) -> dict[str, str] | AuthResult:
         if not ISSUER:

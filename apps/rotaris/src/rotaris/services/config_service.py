@@ -441,9 +441,7 @@ class ConfigService:
 
     def check_provider_health(self, provider_id: str) -> ProviderInfo:
         """Verify stored credentials and make a provider-specific free catalog call."""
-        import asyncio
-
-        from rotaris_core.auth.manager import AuthManager
+        from rotaris_core.auth.manager import AuthManager, run_auth_coro
         from rotaris_core.auth.provider import AuthStatus
         from rotaris_core.auth.provider_settings import get_provider_settings, validate_provider
 
@@ -471,7 +469,7 @@ class ConfigService:
                 "warning",
                 "",
             )
-        status = asyncio.run(
+        status = run_auth_coro(
             AuthManager(workspace_root=self.workspace).check_status(provider_id),
         )
         if status is AuthStatus.UNAUTHENTICATED:

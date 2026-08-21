@@ -323,7 +323,7 @@ class CodexAuthProvider:
                 ),
             )
 
-    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+    def status(self, token_set: TokenSet) -> AuthStatus:
         if not token_set.access_token:
             return AuthStatus.UNAUTHENTICATED
         if token_set.is_expired:
@@ -331,6 +331,9 @@ class CodexAuthProvider:
         if not _has_required_scopes(token_set):
             return AuthStatus.UNAUTHENTICATED
         return AuthStatus.AUTHENTICATED
+
+    async def check_status(self, token_set: TokenSet) -> AuthStatus:
+        return self.status(token_set)
 
     def _serve_until_callback(self, server: HTTPServer) -> None:
         server.serve_forever(poll_interval=0.1)

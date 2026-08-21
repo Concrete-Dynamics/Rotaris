@@ -362,6 +362,7 @@ async def _run_task(
     """
     from openhands.sdk.event.condenser import Condensation
 
+    from rotaris_core.auth.session_auth import keep_auth_fresh
     from rotaris_core.improvement import RunType
     from rotaris_core.ralph import bootstrap
     from rotaris_core.ralph.intent_classifier import (
@@ -372,205 +373,221 @@ async def _run_task(
     from rotaris_core.session.diagnostics import SessionDiagnostics, conversations_dir
     from rotaris_core.tracking.tracker import GlobalTracker
 
-    session_dir = session_manager.session_dir(state.session_id)
-    diag = SessionDiagnostics(session_dir)
-    state.transcript_events.append(
-        {
-            "role": "user",
-            "content": task,
-        },
-    )
-    _persist_session_state(session_manager, state)
-
-    classification = await bootstrap.classify_run_intent(
-        config,
-        task,
-        entrypoint="background",
-        progress=state.ralph_progress,
-    )
-    intent_tools = intent_tools_for(classification.intent)
-    state.run_intent = classification.intent.value
-    classification_prompt_text = f"Intent classified: {classification.intent.value}"
-    user_visible_classification_text = classification_status_text(classification)
-    state.transcript_events.append(
-        {
-            "role": "system",
-            "content": classification_prompt_text,
-        },
-    )
-    diag.timeline(
-        "intent_classified",
-        actor="background",
-        message=user_visible_classification_text,
-        metadata={"fallback": classification.fallback, "reason": classification.reason},
-    )
-    _persist_session_state(session_manager, state)
-
-    todo, _top_level_task = bootstrap.build_run_todo(state, task, session_dir)
-    state.todo_state = todo.model_dump(mode="json")
-    if user_visible_classification_text != classification_prompt_text:
-        state.transcript_events[-1]["content"] = user_visible_classification_text
-    _persist_session_state(session_manager, state)
-
-    def apply_conversation_event(record: Any, event: object) -> None:
-        if isinstance(event, Condensation):
-            from uuid import uuid4
-
-            GlobalTracker().track_compression_completion(
-                record.canonical_name,
-                event.llm_response_id or str(uuid4()),
-            )
+    # Credentials are resolved once, here, on the run's own loop, and kept ahead
+    # of their expiry for as long as the run lasts (SWR-3712). Before this, every
+    # model build resolved its own, and whichever build first met an expired
+    # token paid for the refresh on whatever thread it happened to be on.
+    async with keep_auth_fresh(config) as auth_report:
+        session_dir = session_manager.session_dir(state.session_id)
+        diag = SessionDiagnostics(session_dir)
+        if not auth_report.ok:
+            # Named here so a run that later fails on a provider call has the
+            # authentication reason in its own record, not only in the log.
             diag.timeline(
-                "compression",
-                actor=record.canonical_name,
-                message="Conversation compression completed",
-                metadata={"llm_response_id": event.llm_response_id},
+                "auth_not_primed",
+                actor="background",
+                message="Some provider credentials could not be resolved before the run.",
+                metadata={"providers": auth_report.unresolved},
             )
-        elif (
-            getattr(event, "event_type", None) == "compression"
-            and getattr(event, "phase", None) == "done"
-        ):
-            from uuid import uuid4
+        state.transcript_events.append(
+            {
+                "role": "user",
+                "content": task,
+            },
+        )
+        _persist_session_state(session_manager, state)
 
-            GlobalTracker().track_compression_completion(record.canonical_name, str(uuid4()))
-            diag.timeline(
-                "compression",
-                actor=record.canonical_name,
-                message="Conversation compression completed",
+        classification = await bootstrap.classify_run_intent(
+            config,
+            task,
+            entrypoint="background",
+            progress=state.ralph_progress,
+        )
+        intent_tools = intent_tools_for(classification.intent)
+        state.run_intent = classification.intent.value
+        classification_prompt_text = f"Intent classified: {classification.intent.value}"
+        user_visible_classification_text = classification_status_text(classification)
+        state.transcript_events.append(
+            {
+                "role": "system",
+                "content": classification_prompt_text,
+            },
+        )
+        diag.timeline(
+            "intent_classified",
+            actor="background",
+            message=user_visible_classification_text,
+            metadata={"fallback": classification.fallback, "reason": classification.reason},
+        )
+        _persist_session_state(session_manager, state)
+
+        todo, _top_level_task = bootstrap.build_run_todo(state, task, session_dir)
+        state.todo_state = todo.model_dump(mode="json")
+        if user_visible_classification_text != classification_prompt_text:
+            state.transcript_events[-1]["content"] = user_visible_classification_text
+        _persist_session_state(session_manager, state)
+
+        def apply_conversation_event(record: Any, event: object) -> None:
+            if isinstance(event, Condensation):
+                from uuid import uuid4
+
+                GlobalTracker().track_compression_completion(
+                    record.canonical_name,
+                    event.llm_response_id or str(uuid4()),
+                )
+                diag.timeline(
+                    "compression",
+                    actor=record.canonical_name,
+                    message="Conversation compression completed",
+                    metadata={"llm_response_id": event.llm_response_id},
+                )
+            elif (
+                getattr(event, "event_type", None) == "compression"
+                and getattr(event, "phase", None) == "done"
+            ):
+                from uuid import uuid4
+
+                GlobalTracker().track_compression_completion(record.canonical_name, str(uuid4()))
+                diag.timeline(
+                    "compression",
+                    actor=record.canonical_name,
+                    message="Conversation compression completed",
+                )
+
+        message_limit_observer = iteration_observer or _BackgroundMessageLimitObserver(
+            session_manager, state
+        )
+        # ``message_limit_observer`` stays the host/background observer everywhere
+        # below (entry-model resolver, ``bind_ralph_loop``, ``persists_transcript``);
+        # only the loop sees the composite, so streaming adds hooks without changing
+        # which agent factory or transcript policy the run uses.
+        loop_observer = (
+            _with_stream_observer(message_limit_observer, state.session_id)
+            if stream_events
+            else message_limit_observer
+        )
+        loop_observer = _with_extra_observers(loop_observer, extra_observers)
+
+        ralph = RalphLoop(
+            config=config,
+            workspace_root=str(config.workspace_root),
+            conversation_persistence_dir=conversations_dir(session_dir),
+            conversation_event_callback=apply_conversation_event,
+            run_type=run_type or RunType.TASK_RUN,
+            summary_agent=bootstrap.make_summary_agent_factory(config),
+            improvement_collector_factory=bootstrap.make_improvement_collector_factory(config),
+            improvement_context_provider=bootstrap.make_improvement_context_provider(state),
+            iteration_observer=loop_observer,
+            mcp_manager=session_manager.mcp_manager,
+            publish_session_lifecycle=publish_session_lifecycle,
+        )
+        ralph._message_count = state.message_count  # noqa: SLF001
+        ralph._message_limit = state.message_limit or config.runtime.message_limit  # noqa: SLF001
+        if state.message_limit is None:
+            state.message_limit = ralph._message_limit  # noqa: SLF001
+        ralph.run_intent = classification.intent.value
+        bind_ralph_loop = getattr(message_limit_observer, "bind_ralph_loop", None)
+        if callable(bind_ralph_loop):
+            bind_ralph_loop(ralph)
+        if interrupt_handler is not None:
+            interrupt_handler.set_callbacks(
+                on_first_interrupt=lambda: ralph.request_shutdown(force=False),
+                on_second_interrupt=lambda: ralph.request_shutdown(force=True),
             )
 
-    message_limit_observer = iteration_observer or _BackgroundMessageLimitObserver(
-        session_manager, state
-    )
-    # ``message_limit_observer`` stays the host/background observer everywhere
-    # below (entry-model resolver, ``bind_ralph_loop``, ``persists_transcript``);
-    # only the loop sees the composite, so streaming adds hooks without changing
-    # which agent factory or transcript policy the run uses.
-    loop_observer = (
-        _with_stream_observer(message_limit_observer, state.session_id)
-        if stream_events
-        else message_limit_observer
-    )
-    loop_observer = _with_extra_observers(loop_observer, extra_observers)
+        # An unanswerable approval under the 'abort' policy has to stop the run
+        # (SWR-2504).  A desktop host registered its interactive host before this
+        # runner started, so attach to whatever is there instead of replacing it.
+        from rotaris_core.permissions import discard_approval_host, ensure_approval_host
 
-    ralph = RalphLoop(
-        config=config,
-        workspace_root=str(config.workspace_root),
-        conversation_persistence_dir=conversations_dir(session_dir),
-        conversation_event_callback=apply_conversation_event,
-        run_type=run_type or RunType.TASK_RUN,
-        summary_agent=bootstrap.make_summary_agent_factory(config),
-        improvement_collector_factory=bootstrap.make_improvement_collector_factory(config),
-        improvement_context_provider=bootstrap.make_improvement_context_provider(state),
-        iteration_observer=loop_observer,
-        mcp_manager=session_manager.mcp_manager,
-        publish_session_lifecycle=publish_session_lifecycle,
-    )
-    ralph._message_count = state.message_count  # noqa: SLF001
-    ralph._message_limit = state.message_limit or config.runtime.message_limit  # noqa: SLF001
-    if state.message_limit is None:
-        state.message_limit = ralph._message_limit  # noqa: SLF001
-    ralph.run_intent = classification.intent.value
-    bind_ralph_loop = getattr(message_limit_observer, "bind_ralph_loop", None)
-    if callable(bind_ralph_loop):
-        bind_ralph_loop(ralph)
-    if interrupt_handler is not None:
-        interrupt_handler.set_callbacks(
-            on_first_interrupt=lambda: ralph.request_shutdown(force=False),
-            on_second_interrupt=lambda: ralph.request_shutdown(force=True),
+        ensure_approval_host(state.session_id).on_abort = lambda: ralph.request_shutdown(
+            force=False
         )
 
-    # An unanswerable approval under the 'abort' policy has to stop the run
-    # (SWR-2504).  A desktop host registered its interactive host before this
-    # runner started, so attach to whatever is there instead of replacing it.
-    from rotaris_core.permissions import discard_approval_host, ensure_approval_host
+        # With the host settled, the run's effective permission mode is known:
+        # an unattended, unsandboxed run in a permissive mode is downgraded to
+        # 'ask' unless the workspace opted in (SWR-2508).
+        from rotaris_core.permissions import announce_effective_permission_mode
 
-    ensure_approval_host(state.session_id).on_abort = lambda: ralph.request_shutdown(force=False)
+        announce_effective_permission_mode(state, config, diag)
+        _persist_session_state(session_manager, state)
 
-    # With the host settled, the run's effective permission mode is known:
-    # an unattended, unsandboxed run in a permissive mode is downgraded to
-    # 'ask' unless the workspace opted in (SWR-2508).
-    from rotaris_core.permissions import announce_effective_permission_mode
+        # From here on every permission decision of every agent in this session is
+        # appended to <session_dir>/evidence/permissions.jsonl (SWR-2506).
+        from rotaris_core.permissions import discard_audit_session, register_audit_session
 
-    announce_effective_permission_mode(state, config, diag)
-    _persist_session_state(session_manager, state)
+        register_audit_session(state.session_id, session_dir)
 
-    # From here on every permission decision of every agent in this session is
-    # appended to <session_dir>/evidence/permissions.jsonl (SWR-2506).
-    from rotaris_core.permissions import discard_audit_session, register_audit_session
-
-    register_audit_session(state.session_id, session_dir)
-
-    agent_factory = bootstrap.make_agent_factory(
-        config,
-        intent_tools=intent_tools,
-        intent=classification.intent.value,
-        run_override=delegation_strategy or "",
-        # Hosts (Rotaris) flip observer.entry_model_override mid-run to move
-        # the entry persona onto another model from the next iteration on —
-        # e.g. back to the primary model after a provider re-authentication.
-        resolve_model=(
-            bootstrap.make_entry_model_resolver(config, message_limit_observer)
-            if iteration_observer is not None
-            else None
-        ),
-    )
-
-    try:
-        progress = await ralph.run(
-            todo=todo,
-            agent_factory=agent_factory,
-            session_id=state.session_id,
-            max_iterations=max_iterations,
-        )
-    finally:
-        # Releases any thread still blocked on an approval, so a cancelled or
-        # failed run cannot leave a dispatch waiting forever (SWR-2504).
-        discard_approval_host(state.session_id)
-        discard_audit_session(state.session_id)
-        # A mode the user switched to mid-run belongs to that run only; a later
-        # run of the same session id starts from its config again (SWR-2503).
-        from rotaris_core.permissions import discard_session_mode_override
-
-        discard_session_mode_override(state.session_id)
-
-    # Hosts whose observer already streamed the live transcript (Rotaris) mark
-    # themselves with `persists_transcript`; re-appending per-iteration
-    # responses would duplicate every agent message in their chat view.
-    if not getattr(message_limit_observer, "persists_transcript", False):
-        for iteration in progress.iterations:
-            response_text = iteration.agent_response or iteration.report_summary
-            if not response_text:
-                continue
-            state.transcript_events.append(
-                {
-                    "role": "agent",
-                    "name": iteration.task_id,
-                    "content": response_text,
-                },
-            )
-
-    from rotaris_core.tokens import TokenSnapshot
-
-    # Each iteration stores the GlobalTracker's cumulative aggregate (already
-    # includes all prior iterations), so we must NOT sum them — doing so would
-    # multiply-count tokens.  Take the last non-None value instead.
-    final_token_usage: TokenSnapshot | None = None
-    for iteration in progress.iterations:
-        if iteration.token_usage is not None:
-            final_token_usage = TokenSnapshot.model_validate(iteration.token_usage)
-    if final_token_usage is not None:
-        state.token_usage = final_token_usage.model_dump(mode="json")
-
-    bootstrap.apply_progress_to_state(state, progress, todo, ralph)
-    if post_run_improvement_job_sink is not None:
-        post_run_improvement_job_sink(
-            ralph.capture_post_run_improvement_job(
-                session_id=state.session_id,
-                progress=progress,
-                todo=todo,
+        agent_factory = bootstrap.make_agent_factory(
+            config,
+            intent_tools=intent_tools,
+            intent=classification.intent.value,
+            run_override=delegation_strategy or "",
+            # Hosts (Rotaris) flip observer.entry_model_override mid-run to move
+            # the entry persona onto another model from the next iteration on —
+            # e.g. back to the primary model after a provider re-authentication.
+            resolve_model=(
+                bootstrap.make_entry_model_resolver(config, message_limit_observer)
+                if iteration_observer is not None
+                else None
             ),
         )
-    # Guaranteed final write before the event loop shuts down.
-    await _flush_session_state(session_manager, state)
-    return progress
+
+        try:
+            progress = await ralph.run(
+                todo=todo,
+                agent_factory=agent_factory,
+                session_id=state.session_id,
+                max_iterations=max_iterations,
+            )
+        finally:
+            # Releases any thread still blocked on an approval, so a cancelled or
+            # failed run cannot leave a dispatch waiting forever (SWR-2504).
+            discard_approval_host(state.session_id)
+            discard_audit_session(state.session_id)
+            # A mode the user switched to mid-run belongs to that run only; a later
+            # run of the same session id starts from its config again (SWR-2503).
+            from rotaris_core.permissions import discard_session_mode_override
+
+            discard_session_mode_override(state.session_id)
+
+        # Hosts whose observer already streamed the live transcript (Rotaris) mark
+        # themselves with `persists_transcript`; re-appending per-iteration
+        # responses would duplicate every agent message in their chat view.
+        if not getattr(message_limit_observer, "persists_transcript", False):
+            for iteration in progress.iterations:
+                response_text = iteration.agent_response or iteration.report_summary
+                if not response_text:
+                    continue
+                state.transcript_events.append(
+                    {
+                        "role": "agent",
+                        "name": iteration.task_id,
+                        "content": response_text,
+                    },
+                )
+
+        from rotaris_core.tokens import TokenSnapshot
+
+        # Each iteration stores the GlobalTracker's cumulative aggregate (already
+        # includes all prior iterations), so we must NOT sum them — doing so would
+        # multiply-count tokens.  Take the last non-None value instead.
+        final_token_usage: TokenSnapshot | None = None
+        for iteration in progress.iterations:
+            if iteration.token_usage is not None:
+                final_token_usage = TokenSnapshot.model_validate(iteration.token_usage)
+        if final_token_usage is not None:
+            state.token_usage = final_token_usage.model_dump(mode="json")
+
+        bootstrap.apply_progress_to_state(state, progress, todo, ralph)
+        if post_run_improvement_job_sink is not None:
+            post_run_improvement_job_sink(
+                ralph.capture_post_run_improvement_job(
+                    session_id=state.session_id,
+                    progress=progress,
+                    todo=todo,
+                ),
+            )
+        # Guaranteed final write before the event loop shuts down.
+        await _flush_session_state(session_manager, state)
+        return progress

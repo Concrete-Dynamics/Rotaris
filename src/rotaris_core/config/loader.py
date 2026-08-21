@@ -26,7 +26,7 @@ from rotaris_core.models.thinking_catalog import resolve_reasoning_control
 from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import Callable
 
     from openhands.sdk import LLM
 
@@ -233,26 +233,20 @@ def _resolve_model_api_key(model_name: str, model_cfg: Any) -> str | None:
     return None
 
 
-def _run_auth_coro[T](coro: Coroutine[Any, Any, T]) -> T:
-    import asyncio
+def _resolve_auth_provider_token(
+    model_name: str,
+    model_cfg: Any,
+    *,
+    workspace_root: Path | None = None,
+) -> str | None:
+    """Resolve token via OAuth auth provider (non-interactive, stored tokens only).
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        import concurrent.futures
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(asyncio.run, coro)
-            return future.result(timeout=30)
-
-    return asyncio.run(coro)
-
-
-def _resolve_auth_provider_token(model_name: str, model_cfg: Any) -> str | None:
-    """Resolve token via OAuth auth provider (non-interactive, stored tokens only)."""
+    Reading the status is a local judgement (:meth:`AuthManager.peek_status`), so
+    the usable-token case costs one file read and no event loop — which matters
+    because hosts build LLMs from inside a running loop and every hop out of it
+    needs a thread. Only a refresh is real I/O, and by the time a run reaches
+    here ``session_auth.prime_auth_providers`` has usually already done it.
+    """
     auth_provider_id = getattr(model_cfg, "auth_provider", None)
     if auth_provider_id is None:
         return None
@@ -269,17 +263,17 @@ def _resolve_auth_provider_token(model_name: str, model_cfg: Any) -> str | None:
         )
         return None
 
-    from rotaris_core.auth.manager import AuthManager
+    from rotaris_core.auth.manager import AuthManager, run_auth_coro
     from rotaris_core.auth.provider import AuthStatus
 
-    manager = AuthManager(storage=storage)
-    status = _run_auth_coro(manager.check_status(auth_provider_id))
+    manager = AuthManager(storage=storage, workspace_root=workspace_root)
+    status = manager.peek_status(auth_provider_id)
     if status == AuthStatus.AUTHENTICATED:
         return token_set.access_token
 
     if status == AuthStatus.EXPIRED:
         _log.debug("Stored token for '%s' is expired, attempting refresh", auth_provider_id)
-        return _run_auth_coro(manager.get_token(auth_provider_id))
+        return run_auth_coro(manager.get_token(auth_provider_id))
 
     _log.debug(
         "Stored token for '%s' is not usable; interactive authentication is required",
@@ -1239,7 +1233,7 @@ def _ensure_copilot_litellm_tokens(workspace_root: Path) -> None:
         litellm_copilot_token_dir,
         stage_copilot_tokens,
     )
-    from rotaris_core.auth.manager import AuthManager
+    from rotaris_core.auth.manager import AuthManager, run_auth_coro
     from rotaris_core.auth.provider import AuthStatus
     from rotaris_core.auth.storage import TokenStorage
 
@@ -1252,11 +1246,12 @@ def _ensure_copilot_litellm_tokens(workspace_root: Path) -> None:
         return
 
     manager = AuthManager(storage=storage, workspace_root=workspace_root)
-    status = _run_auth_coro(manager.check_status("copilot"))
+    status = manager.peek_status("copilot")
     if status == AuthStatus.AUTHENTICATED:
         stage_copilot_tokens(token_set, token_dir=token_dir)
     elif status == AuthStatus.EXPIRED:
-        _run_auth_coro(manager.get_token("copilot"))
+        # ``get_token`` re-stages the bridge files itself once the refresh lands.
+        run_auth_coro(manager.get_token("copilot"))
 
 
 @traces(SWR.SWR_306, SWR.SWR_308, SWR.SWR_310, SWR.SWR_311, SWR.SWR_1704)
@@ -1349,10 +1344,11 @@ def load_llm_for_model(
 
         llm_cls = _build_quota_aware_llm_class(_LLM, force_chat_completions=True)
     else:
-        api_key = _resolve_auth_provider_token(model_name, model_cfg) or _resolve_model_api_key(
+        api_key = _resolve_auth_provider_token(
             model_name,
             model_cfg,
-        )
+            workspace_root=config.workspace_root,
+        ) or _resolve_model_api_key(model_name, model_cfg)
         if api_key is not None:
             from rotaris_core.auth.api_key import api_key_validation_error
 

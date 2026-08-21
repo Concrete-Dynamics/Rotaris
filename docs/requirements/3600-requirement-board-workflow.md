@@ -49,6 +49,8 @@ Derived from [docs/plans/2026-08-14-requirements-board.md](../plans/2026-08-14-r
 | [SWR-3620](3600-requirement-board-workflow/SWR-3620-a-pass-reports-progress-to-its-host.md) | Adoption and verification report progress to whoever started them | approved |
 | [SWR-3622](3600-requirement-board-workflow/SWR-3622-releasing-a-blocked-requirement-asks.md) | Releasing a requirement with unmet dependencies asks first | approved |
 | [SWR-3623](3600-requirement-board-workflow/SWR-3623-handle-the-root-blocker-first.md) | The board resolves the blocker chain and starts at its root | approved |
+| [SWR-3624](3600-requirement-board-workflow/SWR-3624-a-released-requirement-runs-as-an-interactive-session.md) | A released requirement runs as an interactive session | approved |
+| [SWR-3625](3600-requirement-board-workflow/SWR-3625-a-run-waiting-on-a-person-says-so.md) | A run waiting on a person says so where the requirement is shown | approved |
 | [SWR-3707](3600-requirement-board-workflow/SWR-3707-requirement-runs-use-full-permissions.md) | A released requirement runs with full permissions, and Rotaris says so | approved |
 | [SWR-3710](3600-requirement-board-workflow/SWR-3710-clearing-a-blocker-restarts-the-work.md) | Clearing a blocker restarts the work it stopped | approved |
 
@@ -79,6 +81,17 @@ Derived from [docs/plans/2026-08-14-requirements-board.md](../plans/2026-08-14-r
   The matrix has no `Ready → Ready` edge, so a card cleared back into `Ready` was
   one no board gesture could start; the only way out was a round trip through
   `Backlog`.
+
+- 2026-08-21 — A released requirement's work became a session a user can take
+  part in
+  ([SWR-3624](3600-requirement-board-workflow/SWR-3624-a-released-requirement-runs-as-an-interactive-session.md)),
+  and a run waiting on a person now says so on every surface that shows the
+  requirement
+  ([SWR-3625](3600-requirement-board-workflow/SWR-3625-a-run-waiting-on-a-person-says-so.md)).
+  SWR-3612 had filed the session where the workspace lists it, but the run held
+  no coordinator handle, so stop, pause, steer and answer were all inert for it
+  — and a background run blocked on an approval said nothing anywhere, because
+  only the focused session's pending prompts were ever published.
 
 - 2026-08-21 — A drop on `Ready` now consults the dependency gate before it
   dispatches anything

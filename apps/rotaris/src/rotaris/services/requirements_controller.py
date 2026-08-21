@@ -55,7 +55,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QCoreApplication, QObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -64,6 +64,7 @@ from rotaris_core.reqtocode import SWR, traces
 from rotaris.models.requirements_state import (
     ActionFeedback,
     PassProgress,
+    RequirementAttention,
     RequirementsBoardState,
     SourceProposalOffer,
     counted,
@@ -110,8 +111,10 @@ if TYPE_CHECKING:
         MoveOption,
         RequirementActions,
         RequirementProposal,
+        SessionLauncher,
     )
     from rotaris.services.requirements_bridge import BoardDelta, BoardSource
+    from rotaris.services.run_coordinator import RunCoordinator
     from rotaris.views.requirement_queue import SchedulingControls
     from rotaris.views.requirement_review import DeferredReviews
     from rotaris.widgets.release_blockers_dialog import ReleaseBlockerDecision
@@ -439,6 +442,7 @@ class RequirementsController(QObject):
         source: BoardSource | None = None,
         actions: RequirementActions | None = None,
         clock: Callable[[], dt.datetime] | None = None,
+        coordinator: object | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -486,11 +490,21 @@ class RequirementsController(QObject):
         self._committed = False
         self._actions = actions
         self._actions_resolved = actions is not None
+        #: How a released unit's run becomes a session (SWR-3624). ``None``
+        #: without a coordinator to build one around; a board driven without it
+        #: — a test, a headless composition — still releases, and the run takes
+        #: the self-contained path it always did.
+        self._launcher: SessionLauncher | None = None
+        self._attach_coordinator(coordinator)
         # A flow ends on the worker thread that ran it, and the feedback it has
         # to supersede lives here. One queued hop, so nothing on the board is
         # ever touched from that thread (SWR-3601).
         self._flow_ended.connect(self._apply_flow_end, Qt.ConnectionType.QueuedConnection)
         self._stage_reported.connect(self._apply_stage, Qt.ConnectionType.QueuedConnection)
+        # Whether a run is waiting on this user is a fact about a live session,
+        # so it arrives on the session list's schedule rather than the board's
+        # (SWR-3625).
+        store.sessions_changed.connect(self._sessions_changed)
         self._report_flows(self._actions)
         self._clock: Callable[[], dt.datetime] = (
             clock if clock is not None else lambda: dt.datetime.now(dt.UTC)
@@ -649,9 +663,65 @@ class RequirementsController(QObject):
         if self._workspace is not None:
             from rotaris.services.requirements_actions import workspace_actions
 
-            self._actions = workspace_actions(self._workspace)
+            self._actions = workspace_actions(self._workspace, launcher=self._launcher)
             self._report_flows(self._actions)
         return self._actions
+
+    @traces(SWR.SWR_3624, SWR.SWR_3315)
+    def _attach_coordinator(self, coordinator: object | None) -> None:
+        """Build the way a released unit's run becomes a session, if there is one.
+
+        The window constructs this controller and registers its surface, and
+        that is the whole of what it does with the requirements area (SWR-3315)
+        — so the run coordinator arrives as a collaborator and the launcher
+        around it is built here, where every other collaborator of this area is
+        built.
+
+        Asked structurally, like the write path is. A composition driven by
+        something that is not a coordinator — a test double, a headless run —
+        leaves the launcher unset, and a release runs its unit the
+        self-contained way it always did rather than failing on a coordinator
+        that was never there.
+        """
+        if coordinator is None or self._workspace is None:
+            return
+        if not hasattr(coordinator, "launch_new") or not hasattr(
+            coordinator,
+            "session_run_finished",
+        ):
+            return
+        from rotaris.services.session_launcher import CoordinatorSessionLauncher  # noqa: PLC0415
+
+        # Cast, not an annotation: the two attributes above are the whole of
+        # what is required of it, and asking the type system for the concrete
+        # class here would make every composition import the coordinator to say
+        # it has none.
+        self.attach_launcher(
+            CoordinatorSessionLauncher(
+                cast("RunCoordinator", coordinator),
+                self._workspace,
+                parent=self,
+            ),
+        )
+
+    @traces(SWR.SWR_3624)
+    def attach_launcher(self, launcher: SessionLauncher) -> None:
+        """Give the area a way to start a unit's run as a session (SWR-3624).
+
+        Public as well as constructor-fed: a coordinator that arrives after this
+        controller was built — a workspace opened later, a composition that
+        assembles in another order — has the same seam to hand itself to.
+
+        Attaching after the write path has already been resolved re-resolves it,
+        because a starter built without a launcher runs its units the old way for
+        the rest of the session — silently, which is the failure this method
+        exists to prevent.
+        """
+        self._launcher = launcher
+        if self._actions_resolved:
+            self._actions_resolved = False
+            self._actions = None
+            _ = self.actions
 
     @property
     @traces(SWR.SWR_3316, SWR.SWR_3605, SWR.SWR_3606)
@@ -958,7 +1028,7 @@ class RequirementsController(QObject):
     def _show_detail(self, detail: RequirementDetail) -> None:
         show = getattr(self._view, "show_detail", None)
         if callable(show):
-            show(detail)
+            show(self._with_detail_attention(detail))
 
     # ── the writing half (SWR-3601, SWR-3602, SWR-3610) ───────────────────
 
@@ -2084,6 +2154,7 @@ class RequirementsController(QObject):
         blocked = self._no_commit_notice()
         if blocked is not None:
             state = replace(state, notice=blocked)
+        state = self._with_attention(state)
         self._store.set_requirements(state, delta)
         self._report_freed_releases()
         published = self._store.requirements
@@ -2095,6 +2166,152 @@ class RequirementsController(QObject):
         push_actions = getattr(self._view, "set_actions", None)
         if callable(push_actions):
             push_actions(published.pending, published.feedback)
+        push_queue = getattr(self._view, "set_queue", None)
+        if callable(push_queue):
+            push_queue(published.queue)
+
+    # ── a run waiting on a person (SWR-3625) ──────────────────────────────
+
+    @traces(SWR.SWR_3625)
+    def _waiting_runs(self) -> dict[str, RequirementAttention]:
+        """Which requirements have a run blocked on this user, by requirement id.
+
+        Joined from the session list rather than from the board, because the
+        board cannot know it: whether a run is waiting is a fact about a live
+        session, and the engine's projection is built from the requirement store.
+        The join needs no lookup — a requirement-started session already carries
+        the requirement and unit it belongs to (SWR-3612), and now says whether
+        it is waiting (SWR-3625).
+
+        First waiting run wins when a requirement has several units waiting at
+        once. A card has room for one door, and any of them is the right one to
+        open: answering it is what frees the requirement to make progress, and
+        the next one will state itself as soon as this one is answered.
+        """
+        waiting: dict[str, RequirementAttention] = {}
+        for session in self._store.sessions:
+            if not session.awaiting_input or not session.requirement_id:
+                continue
+            waiting.setdefault(
+                session.requirement_id,
+                RequirementAttention(session_id=session.id, unit_id=session.unit_id),
+            )
+        return waiting
+
+    @traces(SWR.SWR_3625)
+    def _waiting_sessions(self) -> frozenset[str]:
+        """Every session blocked on this user, requirement-started or not.
+
+        The queue keys on the session rather than on the requirement because it
+        lists *runs*: one requirement can have several units in flight and only
+        one of them waiting, and marking the requirement's other rows would
+        point the user at runs with nothing to answer.
+        """
+        return frozenset(
+            session.id for session in self._store.sessions if session.awaiting_input and session.id
+        )
+
+    @traces(SWR.SWR_3625)
+    def _with_attention(self, state: RequirementsBoardState) -> RequirementsBoardState:
+        """*state* with its cards and its queue told what is waiting on the user.
+
+        Applied on the way to the store rather than inside the bridge: the bridge
+        turns the engine's projection into cards and holds nothing about live
+        sessions, and giving it a second input would make "what the board shows"
+        depend on two clocks it cannot see.
+
+        The two surfaces key differently on purpose. A card names its
+        requirement, so it takes the first waiting run of that requirement. A
+        queue row names one *run*, so it keys on the session: a requirement with
+        three units in flight and one of them waiting must not light up the other
+        two, which have nothing to answer.
+
+        Returns *state* unchanged when nothing is waiting and nothing says it is,
+        which is the ordinary case — so an evaluation with nothing to say about
+        attention costs no allocation and produces no delta the view has to diff.
+        """
+        waiting = self._waiting_runs()
+        sessions = self._waiting_sessions()
+        stated = any(card.attention is not None for card in state.cards) or any(
+            run.awaiting_input for run in state.queue.running
+        )
+        if not waiting and not sessions and not stated:
+            return state
+        return replace(
+            state,
+            cards=tuple(replace(card, attention=waiting.get(card.req_id)) for card in state.cards),
+            queue=replace(
+                state.queue,
+                running=tuple(
+                    replace(run, awaiting_input=run.session_id in sessions)
+                    for run in state.queue.running
+                ),
+            ),
+        )
+
+    @traces(SWR.SWR_3625, SWR.SWR_3307)
+    def _with_detail_attention(self, detail: RequirementDetail) -> RequirementDetail:
+        """*detail* told which of its runs is waiting on the user.
+
+        The same overlay the cards get, applied at the same seam and for the
+        same reason: the detail this is built from comes out of the engine's
+        projection, which knows the requirement's runs but not whether one of
+        them is blocked on a person right now. Returned unchanged when the
+        answer already matches, so re-showing an unchanged detail allocates
+        nothing.
+        """
+        attention = self._waiting_runs().get(detail.req_id)
+        if attention == detail.attention:
+            return detail
+        return replace(detail, attention=attention)
+
+    @traces(SWR.SWR_3625, SWR.SWR_3307)
+    def _restate_detail(self) -> None:
+        """Re-state the open detail page when the session list moves under it.
+
+        Read back off the panel rather than re-fetched from the bridge: what is
+        on screen may be the deep read (SWR-3313), and asking for the detail
+        again would answer with the board's shallower one and silently drop the
+        revision history the user is looking at.
+        """
+        panel = getattr(self._view, "detail_view", None)
+        current = getattr(panel, "detail", None)
+        if current is None:
+            return
+        updated = self._with_detail_attention(current)
+        if updated is not current:
+            self._show_detail(updated)
+
+    @traces(SWR.SWR_3625)
+    def _sessions_changed(self) -> None:
+        """Re-state what is waiting when the session list moves under the board.
+
+        The session list refreshes on its own schedule — a run starting, a run
+        ending, the periodic sweep — and a card that learned it was waiting only
+        at the next board evaluation would say so minutes late, or keep saying it
+        after the user had already answered. This is the other half of
+        :meth:`_with_attention`: one of them applies the fact, and the other
+        notices it changed.
+
+        Published only when the answer actually differs, because this fires far
+        more often than the board changes.
+        """
+        # Before the board's own early return: a user reading one requirement's
+        # detail page is exactly the user this has something to tell, and the
+        # page is open whether or not the board behind it has cards.
+        self._restate_detail()
+        current = self._store.requirements
+        if not current.cards and not current.queue.running:
+            return
+        updated = self._with_attention(current)
+        if updated.cards == current.cards and updated.queue == current.queue:
+            return
+        self._store.set_requirements(updated)
+        published = self._store.requirements
+        self._push_to_view(published, None)
+        # The queue is its own surface with its own setter, so a re-statement
+        # that only moved a run's waiting flag reaches the board and nothing
+        # else unless it is pushed here too (SWR-3608).
         push_queue = getattr(self._view, "set_queue", None)
         if callable(push_queue):
             push_queue(published.queue)

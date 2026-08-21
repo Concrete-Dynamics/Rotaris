@@ -64,7 +64,7 @@ from PySide6.QtWidgets import (
 )
 from rotaris_core.reqtocode import SWR, traces
 
-from rotaris.models.requirements_state import NO_HISTORY_REASON, Revision
+from rotaris.models.requirements_state import EXECUTION_SECTION, NO_HISTORY_REASON, Revision
 from rotaris.theme import delivery_color, health_color, raise_to_readable, tokens
 from rotaris.theme.manager import Themed
 from rotaris.widgets.cards import Card, SectionLabel, Tag, make_button, set_action_availability
@@ -74,8 +74,14 @@ from rotaris.widgets.requirement_card import StateChip
 
 if TYPE_CHECKING:
     from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QPushButton
 
-    from rotaris.models.requirements_state import Blocker, DetailSection, RequirementDetail
+    from rotaris.models.requirements_state import (
+        Blocker,
+        DetailSection,
+        RequirementAttention,
+        RequirementDetail,
+    )
     from rotaris.theme.spec import Theme
 
 __all__ = [
@@ -392,11 +398,18 @@ class RequirementDetailView(Themed, QWidget):
     blocker_answered = Signal(str, str)
     #: This requirement's review should be opened (SWR-3603).
     review_requested = Signal(str)
+    #: The session id of a run of this requirement that is waiting on the user
+    #: (SWR-3625). Its own signal rather than :attr:`run_activated`, which the
+    #: revision history raises with a *run* id: the two are different names for
+    #: different things, and one signal carrying either would be a slot that has
+    #: to guess which it got.
+    attention_activated = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._detail: RequirementDetail | None = None
         self._sections: dict[str, QWidget] = {}
+        self._attention_button: QPushButton | None = None
         self.setObjectName("requirementDetail")
         self.setAccessibleName("Requirement detail")
         root = QVBoxLayout(self)
@@ -547,6 +560,8 @@ class RequirementDetailView(Themed, QWidget):
         anchor = self._body.indexOf(self.blocker_panel)
         for offset, section in enumerate(detail.sections):
             widget = self._section_widget(section)
+            if section.key == EXECUTION_SECTION:
+                self._mount_attention(widget, detail.attention)
             self._sections[section.key] = widget
             self._body.insertWidget(anchor + offset, widget)
         # Straight from the projection (SWR-3313): the order is the engine's, the
@@ -632,6 +647,42 @@ class RequirementDetailView(Themed, QWidget):
             widget.setParent(None)
             widget.deleteLater()
         self._sections = {}
+        # It lives inside the execution card, so it dies with it. Dropped here
+        # rather than left dangling: a handle to a deleted C++ object is worse
+        # than no handle.
+        self._attention_button = None
+
+    @traces(SWR.SWR_3625)
+    def _mount_attention(self, card: QWidget, attention: RequirementAttention | None) -> None:
+        """State a run of this requirement that is waiting, at the top of *card*.
+
+        Above the units and runs rather than among them: this section lists what
+        has happened and what is in flight, and the one line in it that is
+        waiting on the *reader* is the one they need before they read the rest.
+        Nothing at all when nothing is waiting — an empty control on every
+        detail page is one the eye learns to skip, and this is the state that
+        must not be skipped.
+        """
+        if attention is None or not attention.session_id:
+            return
+        button = make_button(attention.stated, "ghost")
+        button.setObjectName("detailAttention")
+        button.setAccessibleName(attention.stated)
+        button.setAccessibleDescription(attention.announced)
+        button.setToolTip(attention.announced)
+        session_id = attention.session_id
+        button.clicked.connect(lambda: self.attention_activated.emit(session_id))
+        # Index 0 of a card's body is its header row; content starts at 1.
+        body = getattr(card, "body", None)
+        if body is None:
+            return
+        body.insertWidget(1, button)
+        self._attention_button = button
+
+    @property
+    def attention_button(self) -> QPushButton | None:
+        """The waiting run's control, or ``None`` when nothing is waiting."""
+        return self._attention_button
 
     def _section_widget(self, section: DetailSection) -> QWidget:
         t = tokens()

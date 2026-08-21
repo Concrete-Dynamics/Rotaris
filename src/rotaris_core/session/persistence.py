@@ -70,6 +70,15 @@ class SessionPersistence:
             # default both to "".
             "requirement_id": state.requirement_id,
             "unit_id": state.unit_id,
+            # Whether this run is blocked on a person right now (SWR-3625).
+            # Written here for the same reason as the two above and one more:
+            # only the *focused* session's pending prompts are ever projected
+            # into the desktop's store, so a background run waiting on an
+            # approval or a question had no way to say so anywhere. Reading it
+            # off the metadata every session list already loads gives every
+            # surface the same answer at once, and it survives a restart.
+            # Absent on older session directories; readers must default it False.
+            "awaiting_input": bool(state.pending_approvals) or bool(state.pending_questions),
         }
         metadata_path = session_dir / "metadata.json"
         _atomic_write(metadata_path, json.dumps(metadata, indent=2))

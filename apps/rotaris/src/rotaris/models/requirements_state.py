@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DETAIL_SECTIONS",
+    "EXECUTION_SECTION",
     "NO_HISTORY_REASON",
     "PENDING_HISTORY_REASON",
     "READ_ONLY_SOURCE_NOTICE",
@@ -460,11 +461,23 @@ class QueueRun:
     worktree_path: str = ""
     outcome: str = ""
     interrupted: bool = False
+    #: Whether this run is blocked on the user right now (SWR-3625). Not the
+    #: engine's to know — the queue is projected from the requirement store, and
+    #: this is a fact about a live session — so it is overlaid on the way to the
+    #: store, keyed by :attr:`session_id`.
+    awaiting_input: bool = False
 
     @property
     def sentence(self) -> str:
-        """``SWR-3101/unit-1 — run-7 (Running)``."""
+        """``SWR-3101/unit-1 — run-7 (Running)``.
+
+        A run waiting on the user says so in place of its outcome: "Running" is
+        true and useless there, and the queue is exactly where a user looks to
+        see what their runs are doing (SWR-3625).
+        """
         what = f"{self.req_id}/{self.unit_id}" if self.unit_id else self.req_id
+        if self.awaiting_input:
+            return f"{what} — {self.run_id} (waiting for your answer)"
         state = f" ({_label(self.outcome)})" if self.outcome else ""
         return f"{what} — {self.run_id}{state}"
 
@@ -523,6 +536,51 @@ class QueueState:
         )
 
 
+# ── a run waiting on a person (SWR-3625) ───────────────────────────────────
+
+
+@traces(SWR.SWR_3625)
+@dataclass(frozen=True)
+class RequirementAttention:
+    """One of this requirement's runs is blocked on the user, and where to answer it.
+
+    Carried as a value rather than as another sentence in
+    :attr:`RequirementCard.alerts` because it is the one thing on a card that is
+    *actionable*: alerts are stated facts a reader takes in, and this is a door.
+    It carries the session id for the same reason the card carries its hash —
+    so acting on it needs no second lookup, and so the four surfaces that state
+    it (SWR-3625) all open the same run.
+    """
+
+    session_id: str
+    unit_id: str = ""
+
+    @property
+    def sentence(self) -> str:
+        """``Waiting for your answer`` — worded once, for every surface."""
+        return "Waiting for your answer"
+
+    @property
+    def stated(self) -> str:
+        """The sentence for a surface with room to name the run it belongs to.
+
+        A card has room for one line and one door, so it prints
+        :attr:`sentence`. The detail view prints this beside the unit list it
+        already shows, where "which of these is waiting" is the question the
+        reader actually has.
+        """
+        if not self.unit_id:
+            return self.sentence
+        return f"{self.sentence}: {self.unit_id}"
+
+    @property
+    def announced(self) -> str:
+        """The sentence a screen reader gets, naming the unit when there is one."""
+        if not self.unit_id:
+            return f"{self.sentence}. Open this run to answer it."
+        return f"{self.sentence} on unit {self.unit_id}. Open this run to answer it."
+
+
 # ── the card (SWR-3304) ────────────────────────────────────────────────────
 
 
@@ -573,6 +631,11 @@ class RequirementCard:
     #: a board action can record the hash it acted on (SWR-3610) without opening
     #: the requirement first.
     current_hash: str = ""
+    #: The run of this requirement that is blocked on a person, when one is
+    #: (SWR-3625). ``None`` is the ordinary case and renders nothing at all —
+    #: like the requirement badge on a session row, an empty field here would
+    #: read as a question whose text failed to load.
+    attention: RequirementAttention | None = None
     #: The requirements SWR-3510's gate says this one waits for — undelivered, or
     #: delivered against a specification that has since moved. Deliberately kept
     #: out of :attr:`alerts` and :attr:`facts`: a dependency that has not landed
@@ -609,6 +672,7 @@ class RequirementCard:
         parts = [
             f"{self.lifecycle_label}, {self.delivery_label}",
             f"health {self.health_label}",
+            *((self.attention.announced,) if self.attention is not None else ()),
             *self.alerts,
             self.units_label,
             self.last_run_announced,
@@ -622,13 +686,19 @@ class RequirementCard:
 # ── the detail view (SWR-3307) ─────────────────────────────────────────────
 
 
+#: The section that holds what has run and what is in flight — and so the one
+#: that states a run waiting on the user (SWR-3625). Named because both the
+#: table below and the view that mounts that statement have to mean the same
+#: section, and a second spelling of it would fail silently.
+EXECUTION_SECTION = "execution"
+
 #: The five sections SWR-3307 names, in order, with the message each shows when
 #: it has nothing. Declared as data so the view cannot render four of them and
 #: so a section's empty state is written once rather than per widget.
 DETAIL_SECTIONS: tuple[tuple[str, str, str], ...] = (
     ("requirement", "Requirement", "This requirement could not be read from its source."),
     ("relations", "Relations", "This requirement stands on its own: no epic, no relations."),
-    ("execution", "Execution", "Nothing has run for this requirement yet."),
+    (EXECUTION_SECTION, "Execution", "Nothing has run for this requirement yet."),
     ("traceability", "Traceability", "No implementation site and no covering test are recorded."),
     ("verification", "Verification", "Nothing has verified this requirement yet."),
 )
@@ -805,6 +875,12 @@ class RequirementDetail:
     #: somebody to accept it (SWR-3616). ``None`` for the common card: nothing
     #: was edited, or the work has already been released.
     offer: ChangeWork | None = None
+    #: The run of this requirement that is blocked on a person (SWR-3625), same
+    #: value the card carries. Not built by :func:`build_detail`: whether a run
+    #: is waiting is a fact about a live session and the projection this detail
+    #: is read from knows nothing about those, so it is overlaid on the way to
+    #: the view — exactly as the board's cards are.
+    attention: RequirementAttention | None = None
 
     def section(self, key: str) -> DetailSection | None:
         """One section by key, or ``None`` when this detail carries none."""

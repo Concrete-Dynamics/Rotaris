@@ -31,6 +31,7 @@ from PySide6.QtCore import QMimeData, QPoint, QSettings, Qt
 from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QDialog, QPushButton
 from rotaris_core.config import loader as config_loader
+from rotaris_core.core.waiting import WAIT_INDEFINITELY
 from rotaris_core.permissions.modes import resolve_effective_mode
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.requirements.delivery.completion import CompletionEvidence, completion_gate
@@ -47,11 +48,16 @@ from rotaris.services.requirement_run_permissions import (
     FULL_PERMISSION_KEY,
     FULL_PERMISSION_MODE,
     NOTICE_SUPPRESSED_KEY,
+    WAIT_BUDGET_KEY,
+    WAIT_BUDGET_STOPS,
+    answer_wait_seconds,
     elevated,
     full_permission_runs,
     notice_suppressed,
+    set_answer_wait_seconds,
     set_full_permission_runs,
     suppress_notice,
+    wait_budget_index,
 )
 from rotaris.services.requirements_actions import RequirementActions, board_run_config
 from rotaris.services.requirements_controller import RequirementsController
@@ -586,3 +592,99 @@ def test_the_suite_wide_silence_is_the_same_answer_the_button_writes() -> None:
     assert notice_suppressed() is False
     suppress_notice()
     assert notice_suppressed() is True
+
+
+# ── how long a released run waits for its answer (SWR-3625) ────────────────
+
+
+@pytest.mark.unit
+@verifies(SWR.SWR_3625)
+def test_a_released_run_waits_for_the_person_unless_told_otherwise() -> None:
+    """Productive use: a user who has never opened Settings releases a requirement that
+    stops to ask them something, and answers it after lunch.
+
+    Expected outcome: it is still waiting. Indefinitely is the default because the point
+    of saying on the board that a run needs them is that the answer comes later — a
+    default of five minutes would make the statement an obituary.
+    """
+    QSettings().remove(WAIT_BUDGET_KEY)
+
+    assert answer_wait_seconds() == WAIT_INDEFINITELY
+    assert WAIT_BUDGET_STOPS[-1] == ("Indefinitely", WAIT_INDEFINITELY)
+
+
+@pytest.mark.unit
+@verifies(SWR.SWR_3625)
+def test_every_stop_the_control_offers_round_trips() -> None:
+    """A stop the control can show but not store is a setting that silently reverts."""
+    for index, (_label, seconds) in enumerate(WAIT_BUDGET_STOPS):
+        set_answer_wait_seconds(seconds)
+        assert answer_wait_seconds() == seconds
+        assert wait_budget_index(answer_wait_seconds()) == index
+
+
+@pytest.mark.unit
+@verifies(SWR.SWR_3625)
+def test_a_damaged_preference_reads_as_the_default_not_as_no_limit() -> None:
+    """ "The file is damaged" and "wait forever" are different answers, and only one of
+    them should follow from a value nobody wrote."""
+    QSettings().setValue(WAIT_BUDGET_KEY, "not a number")
+
+    assert answer_wait_seconds() == WAIT_INDEFINITELY
+    # A value from a version offering a stop this one does not still shows the safe end
+    # of the range rather than the shortest.
+    assert wait_budget_index(47.0) == len(WAIT_BUDGET_STOPS) - 1
+
+
+@pytest.mark.unit
+@verifies(SWR.SWR_3625, SWR.SWR_3707)
+def test_the_chosen_budget_reaches_the_run_the_board_starts(tmp_path: Path) -> None:
+    """Productive use: the user picks 30 minutes and releases a requirement.
+
+    Expected outcome: the run is started with that budget. A preference the run config
+    did not carry would be a control that reads back its own value and changes nothing.
+    """
+    set_answer_wait_seconds(1800.0)
+
+    assert board_run_config(tmp_path, tmp_path).runtime.approval_timeout_seconds == 1800.0
+
+
+@verifies(SWR.SWR_3625)
+def test_the_setting_offers_the_wait_and_records_what_was_chosen(qtbot) -> None:
+    """Productive use: a user decides a run should give up after an hour rather than
+    wait for them, and finds that where the rest of the release behaviour lives.
+
+    Expected outcome: the control is beside the switch that governs the same question,
+    it shows what is currently chosen, and moving it writes the preference a release
+    will read. A control that read its own value back and changed nothing is the failure
+    this test exists for.
+    """
+    from rotaris.views.settings import SettingsView
+
+    QSettings().remove(WAIT_BUDGET_KEY)
+    view = SettingsView(WorkspaceStore())
+    qtbot.addWidget(view)
+
+    assert view.answer_wait_value.text() == "Indefinitely"
+    assert view.answer_wait_slider.maximum() == len(WAIT_BUDGET_STOPS) - 1
+    assert view.answer_wait_slider.accessibleName()
+
+    view.answer_wait_slider.setValue(wait_budget_index(3600.0))
+
+    assert view.answer_wait_value.text() == "1 hour"
+    assert answer_wait_seconds() == 3600.0
+    assert view.answer_wait_slider.accessibleDescription()
+
+
+@pytest.mark.unit
+@verifies(SWR.SWR_3625, SWR.SWR_3707)
+def test_an_elevated_run_still_carries_the_budget(tmp_path: Path) -> None:
+    """An elevated run raises fewer approvals and can still ask a *question*, and one
+    budget covers both barriers."""
+    QSettings().setValue(FULL_PERMISSION_KEY, True)
+    set_answer_wait_seconds(WAIT_INDEFINITELY)
+
+    config = board_run_config(tmp_path, tmp_path)
+
+    assert config.runtime.permission_mode == FULL_PERMISSION_MODE
+    assert config.runtime.approval_timeout_seconds == WAIT_INDEFINITELY

@@ -11,22 +11,31 @@ date: 2026-08-21
 # SWR-3707 — A released requirement runs with full permissions, and Rotaris says so
 
 Releasing a requirement (SWR-3601) starts a run nobody is watching. The flow is
-dispatched onto a worker thread, the agent works in the requirement's own
-worktree, and no approval host is registered for that session — the desktop
-registers one only for runs started from the composer, where a human is sitting
-in front of the transcript that raised the question.
+dispatched onto a worker thread and the agent works in the requirement's own
+worktree, so the user is somewhere else — on the board, or away from the machine
+entirely.
 
-A permission prompt in that run therefore has nobody to answer it. The workspace
-default is `ask`, so an unattended release is denied on the first tool that needs
-approval and stops before it has read a line of the repository. Configuring
-`autonomous` does not fix it either: SWR-2508 downgrades an unattended,
-unsandboxed run straight back to `ask` unless the workspace also opts in through
-`runtime.allow_unsandboxed_autonomous`. Both halves have to be answered together
-or a release cannot be relied on to finish.
+A run that stops to ask therefore does not finish while they are gone. The
+workspace default is `ask`, so an unelevated release parks on the first tool
+that needs approval. Configuring `autonomous` does not fix it on its own either:
+SWR-2508 downgrades an unsandboxed run straight back to `ask` unless the
+workspace also opts in through `runtime.allow_unsandboxed_autonomous`. Both
+halves have to be answered together or a release cannot be relied on to finish
+unattended.
 
 Requirement: a run started from the requirements board is given the permissive
 preset **and** the unsandboxed opt-in, for that run only, and the user is told
 so before the first release of each launch.
+
+**Amended by SWR-3624.** When this was written the elevation was also what made
+a release *possible*: no approval host was registered for a board run at all, so
+a prompt it raised had nobody to answer it and the switch below was a way to
+break a release rather than a setting. A board run is now an ordinary session
+with a handle and an approval host, and the board says on the card when one is
+waiting (SWR-3625) — so turning the elevation off yields a run that stops, asks,
+and carries on once answered. The default stays on: nobody is *watching* a
+release, which is a different fact from nobody being *reachable*, and a run the
+user walked away from should finish rather than park.
 
 ## Acceptance criteria
 

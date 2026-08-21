@@ -484,6 +484,10 @@ class RequirementCardWidget(Card):
     selected = Signal(str)
     #: The traceability ring was opened (SWR-3306).
     evidence_activated = Signal(str)
+    #: A run of this requirement is waiting on the user and they said they would
+    #: answer it — carries the **session id**, not the requirement id, because
+    #: what it opens is that run's session in the workspace (SWR-3625).
+    attention_activated = Signal(str)
 
     #: Whether a delivery action may attach to this card at all (SWR-3308).
     ACCEPTS_DELIVERY_ACTIONS = True
@@ -555,6 +559,17 @@ class RequirementCardWidget(Card):
         self._alerts.setContentsMargins(0, 0, 0, 0)
         self._alerts.setSpacing(3)
         self.body.addLayout(self._alerts)
+
+        # A run waiting on this user (SWR-3625). Above the alerts and the facts
+        # because it is the only thing on a card that is waiting for *them* —
+        # everything else on it is a fact about the requirement. A button rather
+        # than a label: it is a door into the session, and a door has to be
+        # reachable without a mouse (SWR-3314).
+        self.attention_button = make_button("", "ghost")
+        self.attention_button.setObjectName("cardAttention")
+        self.attention_button.clicked.connect(self._open_attention)
+        self.attention_button.hide()
+        self.body.addWidget(self.attention_button)
 
         self._facts = QVBoxLayout()
         self._facts.setContentsMargins(0, 0, 0, 0)
@@ -638,6 +653,7 @@ class RequirementCardWidget(Card):
         self.evidence_label.setAccessibleName(evidence)
         self.evidence_label.setAccessibleDescription(explained)
         self.evidence_label.setToolTip(explained)
+        self._set_attention(card)
         self._fill(self._alerts, _alert_lines(card))
         self._fill(self._facts, _fact_lines(card))
         execution = f"{card.units_label} · {card.last_run_label}"
@@ -655,6 +671,44 @@ class RequirementCardWidget(Card):
         self.setAccessibleName(card.accessible_name)
         self._announce()
         self._restyle()
+
+    @traces(SWR.SWR_3625)
+    def _set_attention(self, card: RequirementCard) -> None:
+        """Show — or hide — the one thing on this card that is waiting for the user.
+
+        Hidden rather than blanked when there is nothing waiting: an empty
+        control on every card is a control the eye learns to skip, and the state
+        this exists to make unmissable would go with it.
+        """
+        attention = card.attention
+        if attention is None:
+            # Named even while hidden. The board's accessibility sweep walks the
+            # whole tree rather than the visible part of it, on the grounds that
+            # a control which is nameless when hidden is one nobody notices is
+            # nameless the moment it is shown (SWR-3314).
+            self.attention_button.setText("")
+            self.attention_button.setAccessibleName(f"No run of {card.req_id} is waiting for you")
+            self.attention_button.setAccessibleDescription("")
+            self.attention_button.setToolTip("")
+            self.attention_button.hide()
+            return
+        self.attention_button.setText(attention.sentence)
+        self.attention_button.setAccessibleName(f"{attention.sentence} — {card.req_id}")
+        self.attention_button.setAccessibleDescription(attention.announced)
+        self.attention_button.setToolTip(attention.announced)
+        self.attention_button.setEnabled(bool(attention.session_id))
+        self.attention_button.show()
+
+    def _open_attention(self) -> None:
+        """Answer the run that is waiting — nowhere else, and never silently.
+
+        A requirement whose run is waiting but whose session id has not been
+        recorded yet has nothing to open, so the control says so by being
+        disabled rather than by raising a signal nobody can act on.
+        """
+        attention = self._card.attention
+        if attention is not None and attention.session_id:
+            self.attention_activated.emit(attention.session_id)
 
     def _restyle(self) -> None:
         """Every presentation value this card holds, against the active theme.

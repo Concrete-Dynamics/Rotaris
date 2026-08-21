@@ -124,6 +124,7 @@ class RunCoordinator(QObject):
         run_config: Any | None = None,
         requirement_id: str = "",
         unit_id: str = "",
+        focus: bool = True,
     ) -> str:
         """Start an additional run and focus it. Returns its session id, or ''.
 
@@ -133,6 +134,13 @@ class RunCoordinator(QObject):
         *requirement_id* and *unit_id* say what the run is for (SWR-3612). Both
         default to empty, which is what a person starting a run from the composer
         means — not "unknown" — and nothing is rendered for it.
+
+        *focus* is what the composer means by starting a run: the person typed
+        the prompt and is looking at the transcript already. A run released on
+        the board means the opposite — nobody asked to leave the board, and
+        several units may start at once — so it starts unfocused and says on the
+        card where the work is (SWR-3624, SWR-3625). The handle is created and
+        the run is started either way; only the projection differs.
         """
         from rotaris_core.session.manager import SessionManager
 
@@ -154,7 +162,8 @@ class RunCoordinator(QObject):
             requirement_id=requirement_id,
             unit_id=unit_id,
         )
-        self.focus(session_id)
+        if focus:
+            self.focus(session_id)
         try:
             started = handle.start(
                 prompt,

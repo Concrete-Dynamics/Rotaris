@@ -28,6 +28,7 @@ from enum import StrEnum
 from threading import RLock
 from typing import Any
 
+from rotaris_core.core.waiting import wait_budget
 from rotaris_core.permissions.engine import (
     Decision,
     DecisionSource,
@@ -352,13 +353,20 @@ class ApprovalBarrier:
             return tuple(self._pending)
 
     def wait_for_response(self, request_id: str, timeout: float) -> ApprovalResponse:
-        """Block until *request_id* resolves, is cancelled, or times out."""
+        """Block until *request_id* resolves, is cancelled, or times out.
+
+        A *timeout* of zero waits without a limit (SWR-3625) — the default for a
+        run released from the board, whose whole promise is that the user
+        answers in their own time. :func:`~rotaris_core.core.waiting.wait_budget`
+        owns that reading so this barrier and the question barrier cannot
+        disagree about it.
+        """
         with self._lock:
             pending = self._pending.get(request_id)
         if pending is None:
             return ApprovalResponse(ApprovalWaitStatus.CANCELLED)
 
-        if not pending.event.wait(timeout=max(timeout, 0.0)):
+        if not pending.event.wait(timeout=wait_budget(timeout)):
             with self._lock:
                 if self._pending.get(request_id) is pending:
                     self._pending.pop(request_id, None)

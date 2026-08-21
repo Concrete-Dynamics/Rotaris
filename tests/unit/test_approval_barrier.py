@@ -4,8 +4,15 @@ Expected outcome: exactly the answered call resumes, and no waiting call can han
 from __future__ import annotations
 
 import threading
+import time
 from typing import TYPE_CHECKING
 
+from rotaris_core.core.waiting import WAIT_INDEFINITELY, wait_budget
+from rotaris_core.orchestrator.user_prompt_barrier import (
+    PromptResponse,
+    PromptWaitStatus,
+    UserPromptBarrier,
+)
 from rotaris_core.permissions import (
     ApprovalBarrier,
     ApprovalOption,
@@ -20,6 +27,13 @@ from rotaris_core.reqtocode import SWR, verifies
 
 if TYPE_CHECKING:
     from rotaris_core.permissions import ApprovalResponse
+
+
+class _Conversation:
+    """The only thing ``UserPromptBarrier`` asks of a conversation: a stable id."""
+
+    def __init__(self, conversation_id: str) -> None:
+        self.id = conversation_id
 
 
 def _wait_in_thread(
@@ -149,3 +163,92 @@ def test_secret_arguments_are_masked_by_name() -> None:
 @verifies(SWR.SWR_2504)
 def test_redaction_leaves_ordinary_commands_untouched() -> None:
     assert redact_secrets("git commit -m 'ship it'") == "git commit -m 'ship it'"
+
+
+# ── how long a run may wait for the person it is asking (SWR-3625) ──────────
+
+
+@verifies(SWR.SWR_3625)
+def test_a_zero_budget_waits_for_the_person_instead_of_denying_at_once() -> None:
+    """Productive use: a requirement released on the board raises a permission prompt
+    while the user is doing something else, and answers it twenty minutes later.
+
+    Expected outcome: the call is still waiting when they get to it. Zero used to be
+    rejected by the schema, and the smallest legal budget denied the call on a timer —
+    a decision made for the user by the clock.
+    """
+    barrier = ApprovalBarrier()
+    barrier.create("patient")
+    sink: list[ApprovalResponse] = []
+    waiter = _wait_in_thread(barrier, "patient", sink, timeout=WAIT_INDEFINITELY)
+
+    # Long enough that any finite budget derived from 0 would have expired.
+    time.sleep(0.2)
+    assert sink == [], "the wait gave up on its own"
+    assert barrier.pending_ids() == ("patient",)
+
+    assert barrier.resolve("patient", ApprovalOption.APPROVE_ONCE) is True
+    waiter.join(timeout=5)
+    assert sink[0].status is ApprovalWaitStatus.RESOLVED
+
+
+@verifies(SWR.SWR_3625)
+def test_an_indefinite_wait_is_still_released_by_cancelling_the_run() -> None:
+    """Patient, not unkillable — the property that makes 'indefinitely' safe to offer.
+
+    Productive use: a user stops a released run that is sitting on a prompt.
+    Expected outcome: the run stops, rather than the stop waiting out a budget with
+    no end.
+    """
+    barrier = ApprovalBarrier()
+    barrier.create("doomed")
+    sink: list[ApprovalResponse] = []
+    waiter = _wait_in_thread(barrier, "doomed", sink, timeout=WAIT_INDEFINITELY)
+
+    barrier.cancel_all()
+    waiter.join(timeout=5)
+
+    assert sink[0].status is ApprovalWaitStatus.CANCELLED
+
+
+@verifies(SWR.SWR_3625)
+def test_a_stated_budget_still_expires() -> None:
+    """The other end of the range: a user who chose 5 minutes gets 5 minutes."""
+    barrier = ApprovalBarrier()
+    barrier.create("slow")
+
+    assert barrier.wait_for_response("slow", timeout=0.05).status is ApprovalWaitStatus.TIMED_OUT
+
+
+@verifies(SWR.SWR_3625)
+def test_the_question_barrier_reads_a_zero_budget_the_same_way() -> None:
+    """Both barriers block a run on a person; one sentinel, or 'wait for me' means two
+    things depending on which one asked.
+
+    Productive use: a released run asks a question rather than for a permission.
+    Expected outcome: it waits exactly as long.
+    """
+    barrier = UserPromptBarrier()
+    conversation = _Conversation("conv-1")
+    prompt_id = barrier.create_prompt(conversation)
+    sink: list[PromptResponse] = []
+
+    def _run() -> None:
+        sink.append(barrier.wait_for_response(conversation, prompt_id, WAIT_INDEFINITELY))
+
+    waiter = threading.Thread(target=_run)
+    waiter.start()
+    time.sleep(0.2)
+    assert sink == [], "the question gave up on its own"
+
+    assert barrier.resolve(conversation, prompt_id, {"q1": {"answer": "yes"}}) is True
+    waiter.join(timeout=5)
+    assert sink[0].status is PromptWaitStatus.RESOLVED
+
+
+@verifies(SWR.SWR_3625)
+def test_the_budget_translation_is_stated_in_one_place() -> None:
+    """A negative budget reads as indefinite too, so a bad write cannot mean 'deny now'."""
+    assert wait_budget(WAIT_INDEFINITELY) is None
+    assert wait_budget(-1.0) is None
+    assert wait_budget(300.0) == 300.0

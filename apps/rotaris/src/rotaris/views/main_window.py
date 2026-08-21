@@ -222,6 +222,7 @@ class MainWindow(Themed, QMainWindow):
         self.requirements_controller = RequirementsController(
             store,
             workspace=getattr(config_service, "workspace", None),
+            coordinator=self.run_bridge,
             parent=self,
         )
         self.requirements = self.requirements_controller.surface

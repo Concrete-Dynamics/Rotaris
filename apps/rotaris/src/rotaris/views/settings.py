@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSlider,
     QSpinBox,
     QTabWidget,
     QTreeWidget,
@@ -1662,6 +1663,7 @@ class SettingsView(Themed, QWidget):
         self.runtime_rows.addWidget(mode_row)
 
         self.runtime_rows.addWidget(self._released_run_permission_row())
+        self.runtime_rows.addWidget(self._answer_wait_row())
 
         redaction_row = QWidget()
         redaction_layout = QHBoxLayout(redaction_row)
@@ -2077,17 +2079,84 @@ class SettingsView(Themed, QWidget):
             "Released requirements run with full permissions"
         )
         self.released_run_toggle.setAccessibleDescription(
-            "A requirement released on the board runs unattended, so it is given every "
-            "tool and does not stop to ask. Turned off, it follows the permission mode "
-            "above and may stop partway."
+            "A requirement released on the board is given every tool and does not stop "
+            "to ask, so it finishes while you are away. Turned off, it follows the "
+            "permission mode above and asks you — the board says which run is waiting."
         )
         self.released_run_toggle.toggled.connect(set_full_permission_runs)
         top.addWidget(self.released_run_toggle)
         layout.addLayout(top)
 
         note = QLabel(
-            "Nobody is watching a released run, so a permission prompt it raises has "
-            "nobody to answer it. Turn this off and a release follows the mode above."
+            "Nobody is watching a released run, so one that stops to ask waits until "
+            "you come back to it. Turn this off and a release follows the mode above, "
+            "saying on its card when it needs you."
+        )
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        return row
+
+    @traces(SWR.SWR_3625)
+    def _answer_wait_row(self) -> QWidget:
+        """How long a released run waits for the person it is asking.
+
+        Beside the switch above because the two answer one question between them
+        — what happens when a run needs you — and separating them would leave
+        the budget looking like a property of the permission mode, which it is
+        not: an elevated run asks fewer things and can still ask a question.
+
+        Discrete stops rather than a number field: the useful answers are an
+        order of magnitude apart, and the one that matters most is not a duration
+        at all.
+        """
+        from rotaris.services.requirement_run_permissions import (
+            WAIT_BUDGET_STOPS,
+            answer_wait_seconds,
+            set_answer_wait_seconds,
+            wait_budget_index,
+        )
+
+        row = QWidget()
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(0, 2, 0, 2)
+
+        top = QHBoxLayout()
+        top.setContentsMargins(0, 0, 0, 0)
+        top.addWidget(QLabel("A released run waits for your answer for"))
+        top.addStretch(1)
+        self.answer_wait_value = QLabel()
+        self.answer_wait_value.setObjectName("muted")
+        top.addWidget(self.answer_wait_value)
+        layout.addLayout(top)
+
+        self.answer_wait_slider = QSlider(Qt.Orientation.Horizontal)
+        self.answer_wait_slider.setMinimum(0)
+        self.answer_wait_slider.setMaximum(len(WAIT_BUDGET_STOPS) - 1)
+        self.answer_wait_slider.setPageStep(1)
+        self.answer_wait_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.answer_wait_slider.setTickInterval(1)
+        self.answer_wait_slider.setValue(wait_budget_index(answer_wait_seconds()))
+        self.answer_wait_slider.setAccessibleName("How long a released run waits for your answer")
+
+        def _show(index: int) -> None:
+            label, _seconds = WAIT_BUDGET_STOPS[index]
+            self.answer_wait_value.setText(label)
+            self.answer_wait_slider.setAccessibleDescription(
+                f"A released run that needs you waits {label.lower()}."
+            )
+
+        def _chose(index: int) -> None:
+            _show(index)
+            set_answer_wait_seconds(WAIT_BUDGET_STOPS[index][1])
+
+        _show(self.answer_wait_slider.value())
+        self.answer_wait_slider.valueChanged.connect(_chose)
+        layout.addWidget(self.answer_wait_slider)
+
+        note = QLabel(
+            "When the wait runs out the request is refused and the run carries on "
+            "without it. Stopping a run always ends the wait, whatever this says."
         )
         note.setObjectName("muted")
         note.setWordWrap(True)

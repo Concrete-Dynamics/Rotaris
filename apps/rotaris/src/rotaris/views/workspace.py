@@ -2314,9 +2314,13 @@ def _session_row(
     # Nothing at all for a run a person started: an empty badge would read as a
     # requirement whose id failed to load (SWR-3612).
     requirement_tag = Tag(session.requirement_id, "accent") if session.requirement_id else None
+    # A run blocked on a person is the one state a reader must not scroll past
+    # (SWR-3625). A word, like every other badge here, because the colour alone
+    # would carry it.
+    waiting_tag = Tag("waiting for you", "wait") if session.awaiting_input else None
     tag_width = sum(
         badge.sizeHint().width() + top.spacing()
-        for badge in (tag, requirement_tag)
+        for badge in (tag, requirement_tag, waiting_tag)
         if badge is not None
     )
     switch.setText(
@@ -2337,11 +2341,16 @@ def _session_row(
         for part in (
             "Currently focused run" if session.focused else "",
             f"Started for requirement {session.attribution}" if session.attribution else "",
+            session.attention,
         )
         if part
     ]
     if described:
         switch.setAccessibleDescription(". ".join(described))
+    if waiting_tag is not None:
+        waiting_tag.setAccessibleName(session.attention)
+        waiting_tag.setToolTip(f"{session.attention}. Open this run to answer it.")
+        top.addWidget(waiting_tag)
     if requirement_tag is not None:
         requirement_tag.setAccessibleName(f"Requirement {session.attribution}")
         requirement_tag.setToolTip(f"This run implements requirement {session.attribution}.")

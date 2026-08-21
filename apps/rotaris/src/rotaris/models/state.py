@@ -265,6 +265,21 @@ class SessionInfo:
     requirement_id: str = ""
     #: The execution unit within :attr:`requirement_id`. Same rule.
     unit_id: str = ""
+    #: Whether this run is blocked on a person — an approval it raised or a
+    #: question it asked (SWR-3625). Read from the session's own metadata, so it
+    #: is answered for every session at once rather than for the focused one:
+    #: only the focused run's pending prompts are ever projected into the store,
+    #: which is exactly why a background run had no way to say it was waiting.
+    awaiting_input: bool = False
+
+    @property
+    def attention(self) -> str:
+        """``Waiting for your answer`` — or empty, which is the ordinary case.
+
+        A sentence rather than a flag at the render site, so the four surfaces
+        that state it (SWR-3625) cannot word it four ways.
+        """
+        return "Waiting for your answer" if self.awaiting_input else ""
 
     @property
     def attribution(self) -> str:

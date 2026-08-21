@@ -123,6 +123,7 @@ if TYPE_CHECKING:
     from rotaris_core.requirements.sources.base import RequirementSource
     from rotaris_core.requirements.writeback import RequirementWriteBack
     from rotaris_core.run_result import RunResult as AgentRunResult
+    from rotaris_core.run_result import RunStatus
     from rotaris_core.verifier.runner import CheckResult
 
     from rotaris.services.requirement_editing import RequirementEditing
@@ -150,9 +151,13 @@ __all__ = [
     "RunPreflight",
     "RunRefusedError",
     "RunStarter",
+    "SessionLaunch",
+    "SessionLauncher",
+    "SessionRunResult",
     "TransitionPort",
     "WorkspaceProposals",
     "action_for_move",
+    "attach_session_to_run",
     "move_options",
     "offer_technical_requirements",
     "refusal_lines",
@@ -1734,6 +1739,7 @@ def workspace_actions(
     clock: Callable[[], dt.datetime] | None = None,
     dispatch: Callable[[Callable[[], None]], None] | None = None,
     run_agent: Callable[[str, Path], AgentRunResult] | None = None,
+    launcher: SessionLauncher | None = None,
 ) -> RequirementActions | None:
     """The board's write path over *workspace*, or ``None`` when it has none.
 
@@ -1856,6 +1862,7 @@ def workspace_actions(
                 host=(
                     AgentRunHost(workspace, run_agent=run_agent) if run_agent is not None else None
                 ),
+                launcher=launcher,
                 dispatch=dispatch,
                 proposals=WorkspaceProposals(workspace, clock=clock),
                 clock=clock,
@@ -2596,10 +2603,16 @@ def board_run_config(workspace: Path, tree: Path) -> RotarisConfig:
     (SWR-3405): a requirement worktree carries no ``.rotaris/`` of its own, and
     reloading from there would silently give the run the built-in defaults.
 
-    Then, unless the user turned it off, it is elevated (SWR-3707). A board
-    release is unattended — no approval host is registered for it — so a run
-    left on the workspace's ``ask`` is denied on the first tool that needs
-    approval, and the elevation is what makes the release finishable at all.
+    Then, unless the user turned it off, it is elevated (SWR-3707). Nobody is
+    *watching* a board release, so a run that parks on the first write is a run
+    that does not finish while the user is away — the elevation is what makes it
+    finishable. It is no longer what makes it *possible*: since SWR-3624 the run
+    is a coordinator session with an approval host, so an unelevated release
+    stops, says so on the card, and carries on once it is answered.
+
+    And it carries the wait budget the user chose (SWR-3625), because a run that
+    does stop to ask should wait as long as they said — by default, until they
+    answer.
 
     A function rather than a method: the elevation is the interesting half and
     it must be readable without an agent, a network or a Qt event loop behind
@@ -2608,10 +2621,150 @@ def board_run_config(workspace: Path, tree: Path) -> RotarisConfig:
     """
     from rotaris_core.config.loader import load_config
 
-    from rotaris.services.requirement_run_permissions import elevated, full_permission_runs
+    from rotaris.services.requirement_run_permissions import (
+        answer_wait_seconds,
+        elevated,
+        full_permission_runs,
+    )
 
     config = load_config(workspace).model_copy(update={"workspace_root": tree})
+    # How long the run may wait for the person it asks (SWR-3625). Applied
+    # whether or not the run is elevated: an elevated run rarely raises an
+    # approval and can still ask a *question*, and the budget covers both.
+    config = config.model_copy(
+        update={
+            "runtime": config.runtime.model_copy(
+                update={"approval_timeout_seconds": answer_wait_seconds()},
+            ),
+        },
+    )
     return elevated(config) if full_permission_runs() else config
+
+
+@traces(SWR.SWR_3624, SWR.SWR_3612)
+def attach_session_to_run(workspace: Path, session_id: str, launch: UnitLaunch) -> bool:
+    """Record *session_id* on *launch*'s run while the run is still going.
+
+    SWR-3612 says opening a unit's run focuses its session, and the board reads
+    the session id off the run record. But ``RunRecord.of_start`` seeds that
+    field from the *specification snapshot*, which is captured before any agent
+    session exists, and the real id only arrives with ``of_result`` — so a live
+    run had nothing to open, and a run that ended without a report (the
+    application closed, which is how a released run usually ends) never got one
+    at all. The affordance existed for finished runs that reported, and for
+    nothing else.
+
+    Appending is the supported shape rather than a trick: ``ExecutionHistory`` is
+    one append-only file per requirement, and ``RequirementHistory.of`` keeps a
+    run's *newest* content at its first-seen position, which is how ``open`` and
+    ``complete`` already write the same run twice.
+
+    ``False`` when there is nothing to amend or the history could not be read.
+    Never raises: a run must not fail because the board lost a way to navigate
+    to it.
+    """
+    import logging
+
+    from rotaris_core.requirements.execution.history import ExecutionHistory
+
+    if not session_id:
+        return False
+    try:
+        history = ExecutionHistory(workspace)
+        record = history.load(launch.req_id).get(launch.run_id)
+        if record is None or record.session_id == session_id:
+            return False
+        history.append(record.model_copy(update={"session_id": session_id}))
+    except Exception:  # noqa: BLE001 — navigation is not worth failing a run over.
+        logging.getLogger(__name__).warning(
+            "Could not record session %s on run %s.",
+            session_id,
+            launch.run_id,
+            exc_info=True,
+        )
+        return False
+    return True
+
+
+@traces(SWR.SWR_3624)
+def _run_status(status: str, *, failed: bool) -> RunStatus:
+    """A coordinator session's status word as the run vocabulary spells it.
+
+    The desktop's handle reports the status the *session* ended in, which is the
+    same vocabulary :class:`~rotaris_core.run_result.RunStatus` uses — but it
+    travels as a bare string through two Qt signals, so a word neither side
+    recognises must land somewhere honest rather than as a silent success. It
+    lands on ``ERROR``, because "the run ended in a state nobody named" is a
+    failure to report, not a delivery.
+    """
+    from rotaris_core.run_result import RunStatus
+
+    if failed:
+        return RunStatus.FAILED
+    try:
+        return RunStatus(status.strip().lower())
+    except ValueError:
+        return RunStatus.ERROR
+
+
+@traces(SWR.SWR_3624)
+@dataclass(frozen=True)
+class SessionLaunch:
+    """What a unit run needs the desktop to start a session with.
+
+    A value rather than the ``UnitLaunch`` itself: the launcher lives on Qt's
+    thread and the launch is composed on the flow's, so what crosses between
+    them is deliberately small and already resolved. The worktree is the one the
+    seam provisioned — a launcher that created its own would give the unit two
+    trees and the run would report on the wrong one (SWR-3405).
+    """
+
+    prompt: str
+    tree: Path
+    branch: str
+    req_id: str
+    unit_id: str
+
+
+@traces(SWR.SWR_3624)
+@dataclass(frozen=True)
+class SessionRunResult:
+    """How a launched session ended, in the four fields the report needs.
+
+    ``read_claim`` reads ``summary`` and ``error``; ``_outcome`` reads
+    ``status``; the record needs ``session_id``. Everything else about the run is
+    measured from the repository afterwards (SWR-3408), so carrying more here
+    would be carrying the agent's word for facts Rotaris checks itself.
+    """
+
+    session_id: str
+    status: str = ""
+    summary: str = ""
+    error: str = ""
+
+
+@runtime_checkable
+class SessionLauncher(Protocol):
+    """Starts a unit's run as a session a user can take part in (SWR-3624).
+
+    A port, not a class: the desktop's implementation owns a Qt object and a run
+    coordinator, and neither belongs in a module the headless composition
+    imports. A test fills it with three lines.
+
+    :meth:`launch` is called from the flow's worker thread and returns as soon as
+    the session has an id; :meth:`wait` blocks that same thread until the session
+    ends. Blocking is the shape :class:`~rotaris_core.requirements.execution.run_seam.RunHost`
+    asks for — "a host that blocks is trivially wrapped in a thread" — and it is
+    what lets a coordinator-driven run keep the seam's synchronous contract.
+    """
+
+    def launch(self, launch: SessionLaunch) -> str:
+        """Start the session and return its id, or ``""`` if it did not start."""
+        ...
+
+    def wait(self, session_id: str) -> SessionRunResult:
+        """Block until *session_id* ends, and say how."""
+        ...
 
 
 @traces(SWR.SWR_3416, SWR.SWR_3413, SWR.SWR_3603, SWR.SWR_3410)
@@ -2648,6 +2801,8 @@ class AgentRunHost:
         max_iterations: int | None = None,
         run_agent: Callable[[str, Path], AgentRunResult] | None = None,
         run_checks: Callable[[Path], SuiteRun] | None = None,
+        launcher: SessionLauncher | None = None,
+        session_started: Callable[[str, UnitLaunch], None] | None = None,
     ) -> None:
         self._workspace = workspace
         self._max_iterations = max_iterations
@@ -2656,6 +2811,14 @@ class AgentRunHost:
         # launch it needs to carry exists.
         self._run_agent = run_agent
         self._run_checks = run_checks if run_checks is not None else self._execute_checks
+        # How the unit is actually run (SWR-3624). With a launcher the run is a
+        # coordinator session the user can steer, pause, stop and answer; without
+        # one it is the self-contained ``execute_run`` this host has always used.
+        # ``None`` is not a degraded mode — it is what the headless composition
+        # and every test with an injected agent get, and both must keep working
+        # exactly as they did.
+        self._launcher = launcher
+        self._session_started = session_started
 
     @property
     def workspace(self) -> Path:
@@ -2796,16 +2959,27 @@ class AgentRunHost:
 
     @traces(SWR.SWR_3612)
     def _execute_agent(self, task: str, tree: Path, *, launch: UnitLaunch) -> AgentRunResult:
-        """One agent run in *tree*, through the shared host entry point.
+        """One agent run in *tree*, as a session the user can take part in.
 
-        The session is registered in the **base workspace**, not in the run's
-        worktree. A requirement worktree gets its own `.rotaris/` if something
-        writes one, and a session filed there is invisible: the desktop lists
-        `<workspace>/.rotaris/sessions/`, so a requirement-started session would
-        not appear at all and the badge naming its requirement would have nothing
-        to attach to (SWR-3612). The worktree stays the run's *working
+        With a launcher (SWR-3624) the run is started through the desktop's run
+        coordinator, so it holds a live handle from the moment it starts: the
+        workspace's stop, pause and steer controls act on it, an approval or a
+        question it raises reaches a person, and closing the application cancels
+        it instead of abandoning it. Without one — the headless composition, a
+        test with an injected agent — it takes the self-contained path below, and
+        that path is unchanged.
+
+        Either way the session is registered in the **base workspace**, not in
+        the run's worktree. A requirement worktree gets its own `.rotaris/` if
+        something writes one, and a session filed there is invisible: the desktop
+        lists `<workspace>/.rotaris/sessions/`, so a requirement-started session
+        would not appear at all and the badge naming its requirement would have
+        nothing to attach to (SWR-3612). The worktree stays the run's *working
         directory*; only where the session is filed moves.
         """
+        if self._launcher is not None:
+            return self._run_as_session(task, tree, launch=launch)
+
         import asyncio
 
         from rotaris_core.run_host import RunRequest, execute_run
@@ -2823,6 +2997,49 @@ class AgentRunHost:
                 ),
                 SessionManager(self._workspace),
             ),
+        )
+
+    @traces(SWR.SWR_3624)
+    def _run_as_session(self, task: str, tree: Path, *, launch: UnitLaunch) -> AgentRunResult:
+        """Run the unit as a coordinator session and wait for it, on this thread.
+
+        The wait is the point rather than a cost: the seam is synchronous by
+        design (SWR-3416), the flow is already on a worker of its own, and a host
+        that blocks is the shape that module says it wants. What the coordinator
+        buys is everything a user-started session has — a live handle, an
+        approval host, and a stop that reaches the agent.
+
+        The session id is announced the moment it exists, before the run ends, so
+        the board can open the session it started while it is still running
+        (SWR-3612). A launch that produces no session is a launch that did not
+        happen, and it is reported as an error rather than waited on forever.
+        """
+        from rotaris_core.run_result import RunResult, RunStatus
+
+        session_id = self._launcher.launch(  # type: ignore[union-attr]  # guarded by _execute_agent
+            SessionLaunch(
+                prompt=task,
+                tree=tree,
+                branch=launch.workspace.branch,
+                req_id=launch.req_id,
+                unit_id=launch.unit_id or "",
+            ),
+        )
+        if not session_id:
+            return RunResult(
+                session_id="",
+                status=RunStatus.ERROR,
+                summary="",
+                error="the desktop could not start a session for this unit",
+            )
+        if self._session_started is not None:
+            self._session_started(session_id, launch)
+        ended = self._launcher.wait(session_id)  # type: ignore[union-attr]  # same guard
+        return RunResult(
+            session_id=ended.session_id or session_id,
+            status=_run_status(ended.status, failed=bool(ended.error)),
+            summary=ended.summary,
+            error=ended.error,
         )
 
     def _execute_checks(self, tree: Path) -> SuiteRun:
@@ -2884,6 +3101,7 @@ class FlowRunStarter:
         transitions: TransitionPort,
         current_for: Callable[[str], CanonicalRequirement | None],
         host: RunHost | None = None,
+        launcher: SessionLauncher | None = None,
         isolation: IsolationProvider | None = None,
         limits_for: Callable[[], SchedulerLimits] | None = None,
         dispatch: Callable[[Callable[[], None]], None] | None = None,
@@ -2896,6 +3114,11 @@ class FlowRunStarter:
         self._transitions = transitions
         self._current_for = current_for
         self._host = host
+        #: What turns a unit run into a session the user can take part in
+        #: (SWR-3624). Only reaches the *default* host: a caller that injected a
+        #: host of its own already decided how its runs are driven, and quietly
+        #: replacing that would make an injected double untestable.
+        self._launcher = launcher
         self._isolation = isolation
         self._limits_for = limits_for
         self._proposals = proposals
@@ -3318,6 +3541,40 @@ class FlowRunStarter:
 
         return no_commit_refusal(self._workspace, req_id)
 
+    @traces(SWR.SWR_3624, SWR.SWR_3612)
+    def _agent_host(self) -> AgentRunHost:
+        """This starter's own host, told how to start a session and what to record.
+
+        The two collaborators travel together because they are two halves of one
+        fact: the session that runs the unit, and the run record that can be
+        opened to reach it. A host given a launcher and no way to record the
+        session it started would run interactively and still leave the board
+        unable to navigate to it, which is the state SWR-3612 was already in.
+        """
+        return AgentRunHost(
+            self._workspace,
+            launcher=self._launcher,
+            session_started=self._record_session,
+        )
+
+    @traces(SWR.SWR_3612)
+    def _record_session(self, session_id: str, launch: UnitLaunch) -> None:
+        """Put the session a unit started on its run record, or say why not.
+
+        Never silently: a run whose session was not recorded is a card that
+        cannot open its own work, and the user meets that as a control that does
+        nothing rather than as a failure anyone reported.
+        """
+        if not attach_session_to_run(self._workspace, session_id, launch):
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).warning(
+                "the session %s of %s could not be recorded on its run, "
+                "so the board cannot open it",
+                session_id,
+                launch.unit_id or launch.req_id,
+            )
+
     @traces(SWR.SWR_3409, SWR.SWR_3419, SWR.SWR_3420)
     def _flow(self, target: TargetBranch | None) -> RequirementFlow:
         """The composition a board release runs — the engine's builders, called.
@@ -3353,7 +3610,7 @@ class FlowRunStarter:
                     else GitIsolation(self._workspace, target=target)
                 ),
                 host=dispatching_host(
-                    self._host if self._host is not None else AgentRunHost(self._workspace),
+                    self._host if self._host is not None else self._agent_host(),
                     # A unit carrying an approved worklist is mechanical: the
                     # edits are decided, and an agent asked to make them could
                     # make different ones (SWR-3507).

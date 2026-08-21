@@ -7,6 +7,7 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
+from rotaris_core.core.waiting import wait_budget
 from rotaris_core.reqtocode import SWR, traces
 
 QuestionAnswersPayload = dict[str, dict[str, str | None]]
@@ -69,14 +70,20 @@ class UserPromptBarrier:
         prompt_id: str,
         timeout: float,
     ) -> PromptResponse:
-        """Block until exact prompt resolves, cancels, or times out."""
+        """Block until exact prompt resolves, cancels, or times out.
+
+        A *timeout* of zero waits without a limit (SWR-3625), the same reading
+        the approval barrier gives it — see
+        :func:`~rotaris_core.core.waiting.wait_budget`. A question a released
+        run asks is answered when the user gets to it.
+        """
         conversation_id = _conversation_key(conversation)
         with self._lock:
             pending = self._pending.get(conversation_id)
             if pending is None or pending.prompt_id != prompt_id:
                 return PromptResponse(PromptWaitStatus.CANCELLED)
 
-        if not pending.event.wait(timeout=max(timeout, 0.0)):
+        if not pending.event.wait(timeout=wait_budget(timeout)):
             with self._lock:
                 current = self._pending.get(conversation_id)
                 if current is pending:

@@ -2994,7 +2994,7 @@ class AgentRunHost:
         """
         from rotaris_core.run_result import RunResult, RunStatus
 
-        session_id = self._launcher.launch(  # type: ignore[union-attr] — guarded by _execute_agent
+        session_id = self._launcher.launch(  # type: ignore[union-attr]  # guarded by _execute_agent
             SessionLaunch(
                 prompt=task,
                 tree=tree,
@@ -3012,7 +3012,7 @@ class AgentRunHost:
             )
         if self._session_started is not None:
             self._session_started(session_id, launch)
-        ended = self._launcher.wait(session_id)  # type: ignore[union-attr] — same guard
+        ended = self._launcher.wait(session_id)  # type: ignore[union-attr]  # same guard
         return RunResult(
             session_id=ended.session_id or session_id,
             status=_run_status(ended.status, failed=bool(ended.error)),
@@ -3532,12 +3532,26 @@ class FlowRunStarter:
         return AgentRunHost(
             self._workspace,
             launcher=self._launcher,
-            session_started=lambda session_id, launch: attach_session_to_run(
-                self._workspace,
-                session_id,
-                launch,
-            ),
+            session_started=self._record_session,
         )
+
+    @traces(SWR.SWR_3612)
+    def _record_session(self, session_id: str, launch: UnitLaunch) -> None:
+        """Put the session a unit started on its run record, or say why not.
+
+        Never silently: a run whose session was not recorded is a card that
+        cannot open its own work, and the user meets that as a control that does
+        nothing rather than as a failure anyone reported.
+        """
+        if not attach_session_to_run(self._workspace, session_id, launch):
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).warning(
+                "the session %s of %s could not be recorded on its run, "
+                "so the board cannot open it",
+                session_id,
+                launch.unit_id or launch.req_id,
+            )
 
     @traces(SWR.SWR_3409, SWR.SWR_3419, SWR.SWR_3420)
     def _flow(self, target: TargetBranch | None) -> RequirementFlow:

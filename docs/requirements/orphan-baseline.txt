@@ -1,0 +1,6 @@
+# ReqToCode orphan-code baseline - pre-existing untraced modules.
+# Each line is a repo-relative .py path excused from the reverse
+# (code -> requirement) check. This file may only SHRINK: trace the
+# module (add @traces), mark it '# reqtocode: exempt', or delete it,
+# then prune via  python -m rotaris_core.reqtocode check --update-baseline
+# Never add entries for new modules.

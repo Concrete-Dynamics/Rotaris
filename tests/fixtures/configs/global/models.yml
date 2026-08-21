@@ -1,0 +1,9 @@
+models:
+  gpt4:
+    provider: openai
+    model_id: openai/gpt-4o
+    api_key_env: OPENAI_API_KEY
+  gpt4-mini:
+    provider: openai
+    model_id: openai/gpt-4o-mini
+    api_key_env: OPENAI_API_KEY

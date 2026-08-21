@@ -1,0 +1,21 @@
+personas:
+  coding-agent:
+    name: coding-agent
+    model: claude
+    summary_model: gpt4-mini
+    tools:
+      - write_file
+      - read_file
+      - terminal
+      - git_commit
+      - fetch
+
+models:
+  claude:
+    provider: anthropic
+    model_id: anthropic/claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+
+runtime:
+  max_children: 4
+  child_timeout: 600

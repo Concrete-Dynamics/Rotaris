@@ -1,0 +1,107 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Lint check",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false
+		},
+		{
+			"label": "lint",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false
+		},
+		{
+			"label": "Validation 1: Lint",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false
+		},
+		{
+			"label": "run unit tests",
+			"type": "shell",
+			"command": "cd /media/cyberdave/BIGJ1/Development/Apps/geraet/geraet-ai && .venv/bin/python -c \"import subprocess, sys; r = subprocess.run(['.venv/bin/python','-m','pytest','tests/unit/','--tb=short','-q','--timeout=60'],capture_output=True,text=True); open('/tmp/out.txt','w').write(r.stdout[:100]+chr(10)+'---BEGIN_FAIL---'+chr(10)); open('/tmp/failures.txt','w').write(r.stdout[r.stdout.find('FAILURES')+10:r.stdout.find('===',r.stdout.rfind('====')))open('/tmp/tail.txt','w').write(r.stdout[-3000:]); open('/tmp/rc.txt','w').write(str(r.returncode)); open('/tmp/merged.txt','w').write(open('/tmp/failures.txt').read()+chr(10)+chr(10)+open('/tmp/tail.txt').read())\"",
+			"isBackground": false
+		},
+		{
+			"label": "Unit tests via script",
+			"type": "shell",
+			"command": "cd /media/cyberdave/BIGJ1/Development/Apps/geraet/geraet-ai && .venv/bin/python <<'PYEOF'\nimport subprocess\nr = subprocess.run(\n    ['.venv/bin/python', '-m', 'pytest', 'tests/unit/', '--tb=short', '-q', '--timeout=60'],\n    capture_output=True, text=True, cwd='/media/cyberdave/BIGJ1/Development/Apps/geraet/geraet-ai'\n)\nstdout = r.stdout\nstderr = r.stderr\n\n# Write clean files\nwith open('/tmp/py_out.txt', 'w') as f:\n    f.write(stdout)\nwith open('/tmp/py_err.txt', 'w') as f:\n    f.write(stderr)\nwith open('/tmp/py_rc.txt', 'w') as f:\n    f.write(str(r.returncode))\nwith open('/tmp/py_tail.txt', 'w') as f:\n    f.write(stdout[-5000:])\n\n# Extract failures section \nfi = stdout.find('FAILURES')\nti = stdout.rfind('=====')\nif fi >= 0 and ti > fi:\n    with open('/tmp/py_failures.txt', 'w') as f:\n        f.write(stdout[fi:ti+len('==')])\nelse:\n    with open('/tmp/py_failures.txt', 'w') as f:\n        f.write('NO_FAILURES_SECTION_FOUND')\n\nprint(f'Returned={r.returncode}, wrote to /tmp/py_*')\nPYEOF\n",
+			"isBackground": false
+		},
+		{
+			"label": "batch-unit-tests",
+			"type": "shell",
+			"command": "/media/cyberdave/BIGJ1/Development/Apps/geraet/geraet-ai/.venv/bin/python -u -m pytest /media/cyberdave/BIGJ1/Development/Apps/geraet/geraet-ai/tests/unit/ -k \"not test_tui_workflows and not test_token_tracking and not test_auth_codex and not test_auth_concrete_cloud and not test_concrete_cloud_provider and not test_agent_status_animation and not test_slash_commands and not test_input_composer_slash_commands and not test_search_tools and not test_tui_streaming\" --tb=line --timeout=90 --junitxml=/tmp/junit.xml > /tmp/pytest_full.log 2>&1 ; echo \"EXIT=$?\" >> /tmp/pytest_full.log",
+			"isBackground": false
+		},
+		{
+			"label": "manual lint",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"label": "validate-lint",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"label": "Quick lint",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false
+		},
+		{
+			"label": "make format",
+			"type": "shell",
+			"command": "make format",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false
+		},
+		{
+			"label": "make lint",
+			"type": "shell",
+			"command": "make lint",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": false
+		},
+		{
+			"label": "uv sync rotaris",
+			"type": "shell",
+			"command": "~/.local/bin/uv sync --frozen --all-packages --extra claude-code",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"group": "build",
+			"presentation": {
+				"clear": true,
+				"showReuseMessage": false
+			}
+		}
+	]
+}

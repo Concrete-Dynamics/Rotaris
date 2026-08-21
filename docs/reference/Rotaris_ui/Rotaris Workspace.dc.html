@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/nocturne-7d3a0c9f-0685-4904-862b-a3b47756c90c/styles.css">
+  <script src="_ds/nocturne-7d3a0c9f-0685-4904-862b-a3b47756c90c/_ds_bundle.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+  <style>
+    html,body{height:100%;margin:0;overflow:hidden}
+    ::-webkit-scrollbar{width:8px;height:8px}
+    ::-webkit-scrollbar-thumb{background:#3f424d;border-radius:4px}
+    ::-webkit-scrollbar-track{background:transparent}
+    @keyframes rt-pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+  </style>
+</helmet>
+
+<div style="width:100vw;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:13px">
+
+  <!-- ══════════ TITLE BAR ══════════ -->
+  <div data-screen-label="Title bar" style="height:42px;flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;background:#1a1c2c;border-bottom:1px solid #292b31;-webkit-app-region:drag">
+    <div style="display:flex;gap:8px;flex:none">
+      <div style="width:12px;height:12px;border-radius:50%;background:#4a3f45;border:1px solid #5a4a50"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#4a4740;border:1px solid #5a554a"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#3f4a44;border:1px solid #4a5a52"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;flex:none">
+      <div style="width:24px;height:24px;border:1px dashed var(--color-accent-700);border-radius:6px;display:grid;place-items:center;color:var(--color-accent-400);font-size:12px;font-weight:600;font-family:var(--font-heading)">R</div>
+      <div style="display:flex;align-items:baseline;gap:7px">
+        <span style="font-family:var(--font-heading);font-weight:500;font-size:14px;letter-spacing:0.02em">Rotaris</span>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600)">v0.55.3</span>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;justify-content:center">
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 14px;border:1px solid #292b31;border-radius:7px;background:var(--color-bg);font-size:12px;color:var(--color-neutral-400)">
+        <i class="ph ph-folder-simple" style="color:var(--color-neutral-600)"></i>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px">~/dev/rotaris-core</span>
+        <span style="color:var(--color-neutral-700)">·</span>
+        <span>auth-flow-refactor</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex:none">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-neutral-500)">
+        <span style="width:7px;height:7px;border-radius:50%;background:{{sessionStatusColor}};display:inline-block"></span>
+        <span>session {{sessionStatusLabel}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ MAIN ROW ══════════ -->
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- NAV RAIL -->
+    <div style="width:66px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0;background:#1a1c2c;border-right:1px solid #292b31">
+      <sc-for list="{{navItems}}" as="nav" hint-placeholder-count="6">
+        <div onClick="{{nav.go}}" style="{{nav.style}}" style-hover="color:#d2cefd">
+          <i class="ph {{nav.icon}}" style="font-size:19px"></i>
+          <span style="font-size:9px;letter-spacing:0.05em;font-weight:500">{{nav.label}}</span>
+        </div>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:var(--color-accent-900);border:1px solid var(--color-accent-800);display:grid;place-items:center;color:var(--color-accent-300);font-size:11px;font-weight:600">JD</div>
+    </div>
+
+    <!-- ═══════ VIEW: DASHBOARD ═══════ -->
+    <sc-if value="{{isDashboard}}" hint-placeholder-val="{{true}}">
+    <div data-screen-label="Dashboard" style="flex:1;min-width:0;overflow:auto;padding:26px 30px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:8px">
+        <h4 style="margin:0;font-size:19px">Overview</h4>
+        <span style="font-size:12px;color:var(--color-neutral-500)">session <span style="color:var(--color-neutral-300)">auth-flow-refactor</span> · running 26m 12s</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px"><i class="ph ph-clock-counter-clockwise" style="margin-right:6px"></i>Sessions</button>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px"><i class="ph ph-plus" style="margin-right:6px"></i>New session</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;font-size:10.5px;color:var(--color-neutral-600)">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:2px;background:var(--color-accent-600);display:inline-block;border-radius:1px"></span>this session</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:2px;background:#3f424d;display:inline-block;border-radius:1px"></span>account-wide</span>
+      </div>
+
+      <!-- KPI strip -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:14px 16px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:8px">Cumulative tokens</div>
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:24px;color:var(--color-text)">612,480</span>
+            <span style="font-size:11px;color:var(--color-neutral-600)">tok</span>
+          </div>
+          <svg width="100%" height="22" viewBox="0 0 160 22" preserveAspectRatio="none" style="margin-top:8px;display:block"><polyline points="0,20 20,19 40,17 55,17 70,13 85,12 100,9 115,9 130,6 145,4 160,2" fill="none" stroke="#9184d9" stroke-width="1.5"></polyline></svg>
+        </div>
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:14px 16px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:8px">Tool calls</div>
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:24px">147</span>
+            <span style="font-size:11px;color:var(--color-neutral-600)">across 11 agents</span>
+          </div>
+          <div style="display:flex;gap:5px;margin-top:12px;font-size:10.5px;color:var(--color-neutral-500)">
+            <span style="padding:2px 7px;border:1px solid #3f424d;border-radius:4px;font-family:ui-monospace,Menlo,monospace">shell 41</span>
+            <span style="padding:2px 7px;border:1px solid #3f424d;border-radius:4px;font-family:ui-monospace,Menlo,monospace">haet_edit 38</span>
+            <span style="padding:2px 7px;border:1px solid #3f424d;border-radius:4px;font-family:ui-monospace,Menlo,monospace">grep 24</span>
+          </div>
+        </div>
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:14px 16px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:8px">Git — rotaris/auth-refactor</div>
+          <div style="display:flex;align-items:baseline;gap:10px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:16px;color:var(--color-neutral-400)">↑4 <span style="font-size:11px;color:var(--color-neutral-600)">↓0</span></span>
+            <span style="font-size:11px;color:var(--color-neutral-600)">vs master</span>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:var(--color-neutral-500)">9 files touched · 3 uncommitted</div>
+        </div>
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:14px 16px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:8px">Agents</div>
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:24px">11</span>
+            <span style="font-size:11px;color:var(--color-neutral-600)">depth 2 / 3 · fan-out 3 / 8</span>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:13px;font-size:11px;font-family:ui-monospace,Menlo,monospace">
+            <span style="color:#5fbf8d">run 3</span><span style="color:#cbb26a">wait 3</span><span style="color:#9184d9">done 5</span><span style="color:#d97b7b">fail 0</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:12px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+
+          <!-- Recent sessions -->
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:16px 18px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:12px">Sessions</div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:16px;align-items:center;padding:7px 10px;border-radius:6px;background:rgba(145,132,217,0.07);border:1px solid var(--color-accent-900)">
+                <div style="display:flex;align-items:center;gap:8px"><i class="ph-fill ph-record" style="color:#5fbf8d;font-size:10px"></i><span style="font-size:12.5px">auth-flow-refactor</span><span style="font-size:10.5px;color:var(--color-neutral-600)">attached</span></div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)"><i class="ph ph-git-branch" style="font-size:11px"></i> rotaris/auth-refactor</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">612k tok</span>
+                <span style="font-size:11px;color:var(--color-neutral-600)">26m</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:16px;align-items:center;padding:7px 10px;border-radius:6px" style-hover="background:#282a38">
+                <div style="display:flex;align-items:center;gap:8px"><i class="ph ph-moon" style="color:#7bbfd4;font-size:12px"></i><span style="font-size:12.5px;color:var(--color-neutral-300)">docs-sweep</span><span style="font-size:10.5px;color:var(--color-neutral-600)">background</span></div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)"><i class="ph ph-git-branch" style="font-size:11px"></i> rotaris/docs-pass</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">98k tok</span>
+                <span style="font-size:11px;color:var(--color-neutral-600)">1h 12m</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:16px;align-items:center;padding:7px 10px;border-radius:6px" style-hover="background:#282a38">
+                <div style="display:flex;align-items:center;gap:8px"><i class="ph ph-check-circle" style="color:var(--color-neutral-600);font-size:13px"></i><span style="font-size:12.5px;color:var(--color-neutral-400)">ralph: migrate-config-loader</span><span style="font-size:10.5px;color:var(--color-neutral-600)">completed · 9 iterations</span></div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)"><i class="ph ph-git-branch" style="font-size:11px"></i> rotaris/config-v2</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">1.2M tok</span>
+                <span style="font-size:11px;color:var(--color-neutral-600)">yesterday</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context windows -->
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:16px 18px">
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+              <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Context windows</div>
+              <div style="flex:1"></div>
+              <span style="font-size:10.5px;color:var(--color-neutral-600)">┊ compression threshold 80%</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ctxRows}}" as="c" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:150px 1fr 150px;gap:12px;align-items:center">
+                  <div style="display:flex;align-items:center;gap:7px;min-width:0">
+                    <span style="width:6px;height:6px;border-radius:50%;background:{{c.dot}};flex:none"></span>
+                    <span style="font-size:12px;color:var(--color-neutral-300);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{c.name}}</span>
+                  </div>
+                  <div style="position:relative;height:5px;background:#22242f;border-radius:3px">
+                    <div style="position:absolute;inset:0 auto 0 0;width:{{c.pct}};background:{{c.bar}};border-radius:3px"></div>
+                    <div style="position:absolute;top:-3px;bottom:-3px;left:80%;width:1px;background:#595d6c"></div>
+                  </div>
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;font-size:11px;color:var(--color-neutral-500);text-align:right">{{c.nums}}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Active now -->
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid var(--color-accent-700);border-radius:var(--radius-md);padding:16px 18px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:12px">Active now</div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div style="display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:7px 10px;border-radius:6px" style-hover="background:#282a38">
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#5fbf8d;animation:rt-pulse 1.6s infinite"></span><span style="font-size:12.5px">orchestrator</span></div>
+                <div style="font-size:12px;color:var(--color-neutral-500)"><span style="font-family:ui-monospace,Menlo,monospace;color:#7bbfd4">wait_for_tasks</span> — waiting on coding-agent-1, tester</div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">26m 12s</span>
+              </div>
+              <div style="display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:7px 10px;border-radius:6px" style-hover="background:#282a38">
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#5fbf8d;animation:rt-pulse 1.6s infinite"></span><span style="font-size:12.5px">coding-agent-1</span></div>
+                <div style="font-size:12px;color:var(--color-neutral-500)"><span style="font-family:ui-monospace,Menlo,monospace;color:#7bbfd4">haet_edit</span> — src/api/session.py · 4 anchors verified</div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">14m 40s</span>
+              </div>
+              <div style="display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:7px 10px;border-radius:6px" style-hover="background:#282a38">
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#5fbf8d;animation:rt-pulse 1.6s infinite"></span><span style="font-size:12.5px">tester</span></div>
+                <div style="font-size:12px;color:var(--color-neutral-500)"><span style="font-family:ui-monospace,Menlo,monospace;color:#7bbfd4">shell</span> — pytest tests/unit -x -q · running 38s</div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">6m 03s</span>
+              </div>
+              <div style="display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:7px 10px;border-radius:6px" style-hover="background:#282a38">
+                <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#cbb26a"></span><span style="font-size:12.5px;color:var(--color-neutral-400)">coding-agent-2</span></div>
+                <div style="font-size:12px;color:var(--color-neutral-600)">waiting on dependencies — depends_on: coding-agent-1</div>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <!-- Subscription limits -->
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-left:2px solid #3f424d;border-radius:var(--radius-md);padding:16px 18px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:14px">Subscription limits</div>
+            <div style="margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span style="font-size:12px;color:var(--color-neutral-300)"><i class="ph ph-github-logo" style="margin-right:6px;color:var(--color-neutral-500)"></i>Copilot premium requests</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)">412 / 1,500</span>
+              </div>
+              <div style="height:5px;background:#22242f;border-radius:3px;position:relative"><div style="position:absolute;inset:0 auto 0 0;width:27%;background:#9184d9;border-radius:3px"></div></div>
+              <div style="font-size:10.5px;color:var(--color-neutral-600);margin-top:5px">resets Jul 1 · 27% used</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span style="font-size:12px;color:var(--color-neutral-300)"><i class="ph ph-open-ai-logo" style="margin-right:6px;color:var(--color-neutral-500)"></i>Codex weekly limit</span>
+                <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)">63%</span>
+              </div>
+              <div style="height:5px;background:#22242f;border-radius:3px;position:relative"><div style="position:absolute;inset:0 auto 0 0;width:63%;background:#cbb26a;border-radius:3px"></div></div>
+              <div style="font-size:10.5px;color:var(--color-neutral-600);margin-top:5px">resets in 2d 14h · 5h window at 22%</div>
+            </div>
+          </div>
+
+          <!-- Mini agent tree -->
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+            <div style="display:flex;align-items:center;margin-bottom:12px">
+              <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Agent tree</div>
+              <div style="flex:1"></div>
+              <a href="#" onClick="{{goMissionLink}}" style="font-size:11px;color:var(--color-accent-300);text-decoration:none">Mission control →</a>
+            </div>
+            <div style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.9;font-variant-numeric:tabular-nums">
+              <sc-for list="{{miniTree}}" as="t" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:8px;white-space:pre">
+                  <span style="color:#595d6c">{{t.branch}}</span>
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{t.dot}};flex:none"></span>
+                  <span style="color:{{t.color}};font-family:var(--font-body);font-size:12px">{{t.name}}</span>
+                  <span style="color:#595d6c;font-size:10.5px">{{t.meta}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Improvement proposals -->
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+            <div style="display:flex;align-items:center;margin-bottom:10px">
+              <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Improvement proposals</div>
+              <div style="flex:1"></div>
+              <span class="tag tag-accent" style="font-size:10px">2 new</span>
+            </div>
+            <div style="font-size:12px;color:var(--color-neutral-400);line-height:1.6">
+              <div style="padding:6px 0;border-bottom:1px solid #292b31">Cache LSP diagnostics between tester runs <span style="color:var(--color-neutral-600)">· collector · 12m ago</span></div>
+              <div style="padding:6px 0">Persona memory: repo prefers ruff over black <span style="color:var(--color-neutral-600)">· collector · 1h ago</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ═══════ VIEW: WORKSPACE ═══════ -->
+    <sc-if value="{{isWorkspace}}" hint-placeholder-val="{{false}}">
+    <div data-screen-label="Workspace" style="flex:1;min-width:0;display:flex;position:relative">
+
+      <!-- Left column -->
+      <div style="width:236px;flex:none;border-right:1px solid #292b31;display:flex;flex-direction:column;background:#1c1e2d">
+        <div style="padding:14px 14px 10px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:9px">Worktrees</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="padding:8px 10px;border-radius:6px;background:rgba(145,132,217,0.08);border:1px solid var(--color-accent-900)">
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#5fbf8d"></span>auth-flow-refactor</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500);margin-top:3px;padding-left:13px">rotaris/auth-refactor ↑4</div>
+            </div>
+            <div style="padding:8px 10px;border-radius:6px" style-hover="background:#252736">
+              <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--color-neutral-400)"><span style="width:6px;height:6px;border-radius:50%;background:#7bbfd4"></span>docs-sweep</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);margin-top:3px;padding-left:13px">rotaris/docs-pass ↑1</div>
+            </div>
+          </div>
+        </div>
+        <div style="height:1px;margin:4px 14px;background:linear-gradient(90deg,transparent,#33364200 0,#333642 24px,#333642 calc(100% - 24px),transparent)"></div>
+        <div style="padding:10px 14px;flex:1;overflow:auto">
+          <div style="display:flex;align-items:center;margin-bottom:9px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Agents</div>
+            <div style="flex:1"></div>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#5fbf8d">3 live</span>
+          </div>
+          <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:2.0">
+            <sc-for list="{{miniTree}}" as="t" hint-placeholder-count="8">
+              <div style="display:flex;align-items:center;gap:7px;white-space:pre;cursor:pointer;border-radius:4px" style-hover="background:#252736">
+                <span style="color:#595d6c">{{t.branch}}</span>
+                <span style="width:5px;height:5px;border-radius:50%;background:{{t.dot}};flex:none"></span>
+                <span style="color:{{t.color}};font-family:var(--font-body);font-size:11.5px">{{t.name}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:14px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:8px">Todos <span style="font-family:ui-monospace,Menlo,monospace;letter-spacing:0;text-transform:none;color:var(--color-neutral-500)">4/7</span></div>
+            <div style="font-size:11.5px;line-height:1.9;color:var(--color-neutral-400)">
+              <div><i class="ph ph-check" style="color:#5fbf8d;margin-right:6px"></i><s style="color:var(--color-neutral-600)">Map handler call graph</s></div>
+              <div><i class="ph ph-check" style="color:#5fbf8d;margin-right:6px"></i><s style="color:var(--color-neutral-600)">Design async interface</s></div>
+              <div><i class="ph ph-circle-notch" style="color:#cbb26a;margin-right:6px"></i>Convert session handlers</div>
+              <div><i class="ph ph-circle" style="color:#595d6c;margin-right:6px"></i>Update tests + docs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: transcript -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+        <div style="flex:1;overflow:auto;padding:18px 26px;display:flex;flex-direction:column;gap:1px;font-size:12.5px">
+
+          <div style="display:flex;gap:12px;padding:8px 10px;border-radius:6px;background:rgba(145,132,217,0.07)">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);padding-top:2px;flex:none">14:02:11</span>
+            <span style="font-size:11px;font-weight:600;color:var(--color-accent-300);width:112px;flex:none;padding-top:1px">you</span>
+            <span style="color:var(--color-text)">Refactor the API layer to use async handlers. Keep the public interface stable and make sure the unit suite stays green.</span>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:6px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);padding-top:2px;flex:none">14:02:14</span>
+            <span style="font-size:11px;font-weight:600;color:#7bbfd4;width:112px;flex:none;padding-top:1px">intent</span>
+            <span style="color:var(--color-neutral-500)">Classified as <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-neutral-300)">refactor</span> — orchestrator instructions tailored for behaviour-preserving change.</span>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:6px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);padding-top:2px;flex:none">14:02:31</span>
+            <span style="font-size:11px;font-weight:600;color:var(--color-accent-400);width:112px;flex:none;padding-top:1px">orchestrator</span>
+            <span style="color:var(--color-neutral-300)">Decomposed into 6 subtasks. Analysis first (codebase-analyst ∥ librarian), then architecture, then implementation fan-out with tester gating each merge. Verifier runs as the final acceptance gate.</span>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:4px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:transparent;flex:none">14:02:31</span>
+            <span style="width:112px;flex:none"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-neutral-500)"><span style="color:#7bbfd4">▸ delegate</span> coding-agent-1 <span style="color:var(--color-neutral-600)">depends_on=[architect] · background id b-101</span></span>
+          </div>
+          <div style="display:flex;gap:12px;padding:4px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:transparent;flex:none">14:02:31</span>
+            <span style="width:112px;flex:none"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-neutral-500)"><span style="color:#7bbfd4">▸ delegate</span> librarian <span style="color:var(--color-neutral-600)">background id b-102</span></span>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:6px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);padding-top:2px;flex:none">14:11:02</span>
+            <span style="font-size:11px;font-weight:600;color:#5fbf8d;width:112px;flex:none;padding-top:1px">coding-agent-1</span>
+            <span style="color:var(--color-neutral-300)">Converting <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px">src/api/session.py</span> — 6 of 9 handlers now async; wrapping blocking IO in <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px">asyncio.to_thread</span>.</span>
+          </div>
+          <div style="display:flex;gap:12px;padding:4px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:transparent;flex:none">14:11:02</span>
+            <span style="width:112px;flex:none"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-neutral-500)"><span style="color:#7bbfd4">▸ haet_edit</span> src/api/session.py <span style="color:#5fbf8d">4 anchors ok</span> <span style="color:var(--color-neutral-600)">· queue pos 1</span></span>
+          </div>
+          <div style="display:flex;gap:12px;padding:4px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:transparent;flex:none">14:11:02</span>
+            <span style="width:112px;flex:none"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--color-neutral-500)"><span style="color:#7bbfd4">▸ shell</span> pytest tests/unit/test_session.py -x -q <span style="color:#5fbf8d">exit 0 · 3.2s</span></span>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:6px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);padding-top:2px;flex:none">14:18:47</span>
+            <span style="font-size:11px;font-weight:600;color:#7bbfd4;width:112px;flex:none;padding-top:1px">system</span>
+            <span style="color:var(--color-neutral-500)">Background task <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-neutral-300)">b-102</span> completed — librarian report available. <a href="#" style="color:var(--color-accent-300)">Open report</a></span>
+          </div>
+
+          <div style="display:flex;gap:12px;padding:6px 10px;border-radius:6px" style-hover="background:#232532">
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);padding-top:2px;flex:none">14:26:05</span>
+            <span style="font-size:11px;font-weight:600;color:#5fbf8d;width:112px;flex:none;padding-top:1px">tester</span>
+            <span style="color:var(--color-neutral-300);display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#5fbf8d;animation:rt-pulse 1.6s infinite;flex:none"></span>Running unit suite against converted handlers…</span>
+          </div>
+        </div>
+
+        <!-- Composer -->
+        <div style="flex:none;padding:12px 26px 16px;border-top:1px solid #292b31;background:#1a1c2c">
+          <div style="border:1px solid #3f424d;border-radius:10px;background:var(--color-bg);padding:11px 14px" style-focus="border-color:var(--color-accent-600)">
+            <div style="font-size:13px;color:var(--color-neutral-600);min-height:20px">Message orchestrator — type / for commands, ↑ for history…</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+              <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:var(--color-neutral-300);cursor:pointer" style-hover="border-color:var(--color-accent-700)"><i class="ph ph-user-gear" style="color:var(--color-neutral-500)"></i>orchestrator<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+              <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:var(--color-neutral-300);cursor:pointer;font-family:ui-monospace,Menlo,monospace" style-hover="border-color:var(--color-accent-700)"><i class="ph ph-cpu" style="color:var(--color-neutral-500)"></i>copilot/gpt-5<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+              <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;color:var(--color-neutral-300);cursor:pointer" style-hover="border-color:var(--color-accent-700)"><i class="ph ph-brain" style="color:var(--color-neutral-500)"></i>reasoning: high<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+              <div style="display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border:1px solid var(--color-accent-800);border-radius:6px;font-size:11.5px;color:var(--color-accent-200);cursor:pointer" style-hover="border-color:var(--color-accent-700)"><i class="ph ph-lightning" style="color:var(--color-accent-400)"></i>api-conventions<span onClick="{{toggleSkillScope}}" style="font-size:9.5px;color:var(--color-neutral-500);border-left:1px solid #3f424d;padding-left:6px;margin-left:1px">{{skillScopeLabel}}</span><i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+              <div style="flex:1"></div>
+              <i class="ph ph-archive-tray" title="Stash prompt" style="color:var(--color-neutral-500);font-size:16px;cursor:pointer" style-hover="color:var(--color-accent-300)"></i>
+              <button class="btn btn-primary" style="font-size:12px;padding:5px 14px">Send<i class="ph ph-paper-plane-right" style="margin-left:7px"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: inspector -->
+      <div style="width:288px;flex:none;border-left:1px solid #292b31;background:#1c1e2d;overflow:auto;padding:16px">
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:12px">Inspector</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#5fbf8d;animation:rt-pulse 1.6s infinite"></span>
+          <span style="font-size:14px;font-weight:500">coding-agent-1</span>
+        </div>
+        <div style="font-size:11px;color:var(--color-neutral-600);margin-bottom:14px;padding-left:17px">running · 14m 40s · depth 1 · 38 tool calls</div>
+
+        <div style="display:flex;justify-content:center;margin:6px 0 14px">
+          <svg width="108" height="108" viewBox="0 0 108 108">
+            <circle cx="54" cy="54" r="46" fill="none" stroke="#22242f" stroke-width="7"></circle>
+            <circle cx="54" cy="54" r="46" fill="none" stroke="#9184d9" stroke-width="7" stroke-linecap="round" stroke-dasharray="205.2 83.8" transform="rotate(-90 54 54)"></circle>
+            <circle cx="54" cy="54" r="46" fill="none" stroke="#d97b7b" stroke-width="2" stroke-dasharray="1.5 287.5" stroke-dashoffset="-229.6" transform="rotate(-90 54 54)"></circle>
+            <text x="54" y="51" text-anchor="middle" fill="#e9e9ed" font-size="19" font-family="ui-monospace,Menlo,monospace">71%</text>
+            <text x="54" y="67" text-anchor="middle" fill="#75798c" font-size="9" font-family="ui-monospace,Menlo,monospace">91.3k / 128k</text>
+          </svg>
+        </div>
+        <div style="text-align:center;font-size:10.5px;color:var(--color-neutral-600);margin-bottom:16px">context window · compresses at 80%</div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+          <div>
+            <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Model</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid #3f424d;border-radius:6px;font-size:12px;cursor:pointer;font-family:ui-monospace,Menlo,monospace" style-hover="border-color:var(--color-accent-700)">copilot/gpt-5<i class="ph ph-caret-down" style="font-size:11px;color:var(--color-neutral-600)"></i></div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Reasoning strength</div>
+            <div style="display:flex;border:1px solid #3f424d;border-radius:6px;overflow:hidden;font-size:11.5px;text-align:center">
+              <div style="flex:1;padding:5px 0;color:var(--color-neutral-500);cursor:pointer" style-hover="background:#282a38">low</div>
+              <div style="flex:1;padding:5px 0;background:rgba(145,132,217,0.14);color:var(--color-accent-200);border-left:1px solid #3f424d;border-right:1px solid #3f424d;cursor:pointer">medium</div>
+              <div style="flex:1;padding:5px 0;color:var(--color-neutral-500);cursor:pointer" style-hover="background:#282a38">high</div>
+            </div>
+            <div style="font-size:10px;color:var(--color-neutral-600);margin-top:6px;line-height:1.5">override for <span style="color:var(--color-accent-300)">this instance</span> only · session default is <span style="color:var(--color-neutral-400)">high</span></div>
+          </div>
+        </div>
+
+        <div style="height:1px;background:linear-gradient(90deg,transparent,#333642 24px,#333642 calc(100% - 24px),transparent);margin:14px 0"></div>
+
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:9px">Tools</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px;font-family:ui-monospace,Menlo,monospace">
+          <span style="padding:2px 8px;border:1px solid var(--color-accent-800);border-radius:4px;font-size:10.5px;color:var(--color-accent-300)">haet_edit ✓</span>
+          <span style="padding:2px 8px;border:1px solid var(--color-accent-800);border-radius:4px;font-size:10.5px;color:var(--color-accent-300)">shell ✓</span>
+          <span style="padding:2px 8px;border:1px solid var(--color-accent-800);border-radius:4px;font-size:10.5px;color:var(--color-accent-300)">read_file ✓</span>
+          <span style="padding:2px 8px;border:1px solid #3f424d;border-radius:4px;font-size:10.5px;color:var(--color-neutral-500)">write_file</span>
+          <span style="padding:2px 8px;border:1px solid #3f424d;border-radius:4px;font-size:10.5px;color:var(--color-neutral-500)">grep</span>
+          <span style="padding:2px 8px;border:1px solid #3f424d;border-radius:4px;font-size:10.5px;color:var(--color-neutral-500)">lsp</span>
+          <span style="padding:2px 8px;border:1px solid #3f424d;border-radius:4px;font-size:10.5px;color:var(--color-neutral-500)">fetch</span>
+        </div>
+
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:9px">Artifacts</div>
+        <div style="font-size:11.5px;color:var(--color-neutral-400);line-height:2;margin-bottom:16px">
+          <div style="cursor:pointer" style-hover="color:var(--color-text)"><span style="color:#5fbf8d">●</span> plan-async-refactor <span style="color:var(--color-neutral-600)">· planner</span></div>
+          <div style="cursor:pointer" style-hover="color:var(--color-text)"><span style="color:#5fbf8d">●</span> aiohttp-migration-notes <span style="color:var(--color-neutral-600)">· librarian</span></div>
+          <div style="cursor:pointer" style-hover="color:var(--color-text)"><span style="color:var(--color-neutral-600)">○</span> report-coding-agent-1 <span style="color:var(--color-neutral-600)">· pending</span></div>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" style="flex:1;font-size:11.5px;padding:6px 0"><i class="ph ph-chat-teardrop-text" style="margin-right:6px"></i>Steer</button>
+          <button class="btn btn-ghost" style="flex:1;font-size:11.5px;padding:6px 0;color:#d97b7b"><i class="ph ph-x-circle" style="margin-right:6px"></i>Cancel</button>
+        </div>
+        <div style="font-size:10px;color:var(--color-neutral-600);margin-top:6px;text-align:center">cancel cascades to 2 descendants</div>
+      </div>
+
+      <!-- Floating subagent panel -->
+      <sc-if value="{{showPanel}}" hint-placeholder-val="{{false}}">
+      <div style="position:absolute;right:308px;bottom:96px;width:420px;background:#232532;border-radius:10px;box-shadow:var(--shadow-md);overflow:hidden;z-index:5">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 12px;background:#282a3a;border-bottom:1px solid #33364a;cursor:grab">
+          <i class="ph ph-dots-six-vertical" style="color:var(--color-neutral-600)"></i>
+          <span style="font-size:12px;font-weight:500">coding-agent</span>
+          <span style="font-size:10.5px;color:var(--color-neutral-600)">2 instances</span>
+          <div style="flex:1"></div>
+          <i class="ph ph-arrows-out-simple" style="color:var(--color-neutral-500);font-size:13px;cursor:pointer" style-hover="color:var(--color-text)"></i>
+          <i class="ph ph-x" onClick="{{closePanel}}" style="color:var(--color-neutral-500);font-size:13px;cursor:pointer" style-hover="color:var(--color-text)"></i>
+        </div>
+        <div style="display:flex;border-bottom:1px solid #33364a;font-size:11.5px">
+          <div style="padding:7px 14px;border-bottom:2px solid var(--color-accent);color:var(--color-accent-200);display:flex;align-items:center;gap:7px"><span style="width:5px;height:5px;border-radius:50%;background:#5fbf8d"></span>instance 1</div>
+          <div style="padding:7px 14px;color:var(--color-neutral-500);cursor:pointer;display:flex;align-items:center;gap:7px" style-hover="color:var(--color-neutral-300)"><span style="width:5px;height:5px;border-radius:50%;background:#cbb26a"></span>instance 2</div>
+        </div>
+        <div style="padding:12px 14px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.9;color:var(--color-neutral-500);max-height:150px;overflow:auto">
+          <div><span style="color:#7bbfd4">▸ read_file</span> src/api/session.py <span style="color:var(--color-neutral-600)">L120–210</span></div>
+          <div><span style="color:#7bbfd4">▸ haet_edit</span> src/api/session.py <span style="color:#5fbf8d">4 anchors ok</span></div>
+          <div><span style="color:#7bbfd4">▸ shell</span> pytest tests/unit/test_session.py -x -q <span style="color:#5fbf8d">exit 0</span></div>
+          <div style="color:var(--color-neutral-400);font-family:var(--font-body);font-size:11.5px">Converting remaining handlers — get_token, refresh…</div>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ═══════ VIEW: MISSION CONTROL ═══════ -->
+    <sc-if value="{{isMission}}" hint-placeholder-val="{{false}}">
+    <div data-screen-label="Mission control" style="flex:1;min-width:0;display:flex">
+      <div style="flex:1;min-width:0;overflow:auto;padding:26px 30px">
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px">
+          <h4 style="margin:0;font-size:19px">Mission control</h4>
+          <span style="font-size:12px;color:var(--color-neutral-500)">delegation DAG · {{strategyLabel}}</span>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:12px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px">
+            <span style="color:#5fbf8d">run 3</span><span style="color:#cbb26a">wait 3</span><span style="color:#9184d9">done 5</span><span style="color:#d97b7b">fail 0</span>
+          </div>
+        </div>
+        <div style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);margin-bottom:16px">depth 2 / 3 · fan-out 3 / 8 · child timeout 20m</div>
+
+        <!-- Depth ruler -->
+        <div style="display:grid;grid-template-columns:300px 64px 1fr 130px 130px 56px;gap:10px;padding:0 12px 7px;border-bottom:1px solid #292b31;font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">
+          <span>agent · d0 — d3</span><span>state</span><span>activity</span><span>model</span><span>context</span><span style="text-align:right">t / s</span>
+        </div>
+
+        <sc-for list="{{treeRows}}" as="r" hint-placeholder-count="11">
+          <div onClick="{{r.focus}}" style="{{r.rowStyle}}" style-hover="background:#232532">
+            <div style="display:flex;align-items:center;min-width:0">
+              <span style="font-family:ui-monospace,Menlo,monospace;color:#4a4d5c;white-space:pre;font-size:11.5px">{{r.branch}}</span>
+              <span style="width:7px;height:7px;border-radius:50%;background:{{r.dot}};flex:none;margin-right:8px;{{r.pulse}}"></span>
+              <span style="font-size:12.5px;color:{{r.nameColor}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.name}}</span>
+            </div>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:{{r.dot}}">{{r.state}}</span>
+            <span style="font-size:11.5px;color:var(--color-neutral-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.activity}}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500)">{{r.model}}</span>
+            <div style="display:flex;align-items:center;gap:7px">
+              <div style="flex:1;position:relative;height:4px;background:#22242f;border-radius:2px">
+                <div style="position:absolute;inset:0 auto 0 0;width:{{r.ctxPct}};background:{{r.ctxColor}};border-radius:2px"></div>
+              </div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600);width:30px;text-align:right">{{r.ctxPct}}</span>
+            </div>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);text-align:right">{{r.meta}}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- Mission side panel -->
+      <div style="width:300px;flex:none;border-left:1px solid #292b31;background:#1c1e2d;overflow:auto;padding:18px">
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:12px">Selected agent</div>
+        <div style="display:flex;align-items:center;gap:9px"><span style="width:8px;height:8px;border-radius:50%;background:#5fbf8d;animation:rt-pulse 1.6s infinite"></span><span style="font-size:15px;font-weight:500">{{focusName}}</span></div>
+        <div style="font-size:11px;color:var(--color-neutral-600);margin:5px 0 16px;padding-left:17px">{{focusMeta}}</div>
+
+        <div style="background:var(--color-bg);border:1px solid #292b31;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:11.5px">
+            <span style="color:var(--color-neutral-600)">persona</span><span>{{focusPersona}}</span>
+            <span style="color:var(--color-neutral-600)">parent</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">{{focusParent}}</span>
+            <span style="color:var(--color-neutral-600)">depends</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">{{focusDeps}}</span>
+            <span style="color:var(--color-neutral-600)">context</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">{{focusCtx}}</span>
+            <span style="color:var(--color-neutral-600)">tools</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">{{focusTools}}</span>
+          </div>
+        </div>
+
+        <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Applies to</div>
+        <div style="display:flex;border:1px solid #3f424d;border-radius:6px;overflow:hidden;font-size:11px;text-align:center;margin-bottom:12px">
+          <div onClick="{{setOverrideScope.instance}}" style="{{overrideScopeStyle.instance}}">this instance</div>
+          <div onClick="{{setOverrideScope.type}}" style="{{overrideScopeStyle.type}}">coding-agent (type)</div>
+        </div>
+        <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Model</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid #3f424d;border-radius:6px;font-size:12px;cursor:pointer;font-family:ui-monospace,Menlo,monospace;margin-bottom:10px" style-hover="border-color:var(--color-accent-700)">{{focusModel}}<i class="ph ph-caret-down" style="font-size:11px;color:var(--color-neutral-600)"></i></div>
+        <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Reasoning strength</div>
+        <div style="display:flex;border:1px solid #3f424d;border-radius:6px;overflow:hidden;font-size:11.5px;text-align:center;margin-bottom:6px">
+          <div style="flex:1;padding:5px 0;color:var(--color-neutral-500);cursor:pointer" style-hover="background:#282a38">low</div>
+          <div style="flex:1;padding:5px 0;background:rgba(145,132,217,0.14);color:var(--color-accent-200);border-left:1px solid #3f424d;border-right:1px solid #3f424d;cursor:pointer">medium</div>
+          <div style="flex:1;padding:5px 0;color:var(--color-neutral-500);cursor:pointer" style-hover="background:#282a38">high</div>
+        </div>
+        <div style="font-size:10px;color:var(--color-neutral-600);margin-bottom:16px;line-height:1.5">{{overrideScopeNote}}</div>
+
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn btn-secondary" style="flex:1;font-size:11.5px;padding:6px 0"><i class="ph ph-app-window" style="margin-right:6px"></i>Open window</button>
+          <button class="btn btn-ghost" style="flex:1;font-size:11.5px;padding:6px 0;color:#d97b7b">Cancel</button>
+        </div>
+        <div style="font-size:10px;color:var(--color-neutral-600);text-align:center">opens a dedicated window with one tab per instance</div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ═══════ VIEW: GIT ═══════ -->
+    <sc-if value="{{isGit}}" hint-placeholder-val="{{false}}">
+    <div data-screen-label="Git" style="flex:1;min-width:0;overflow:auto;padding:26px 30px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:22px">
+        <h4 style="margin:0;font-size:19px">Git</h4>
+        <span style="font-size:12px;color:var(--color-neutral-500)">git-first — every session works on its own worktree</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px"><i class="ph ph-git-fork" style="margin-right:6px"></i>New worktree</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:380px 1fr;gap:12px;align-items:start">
+        <!-- Worktrees -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Worktrees</div>
+          <div style="background:var(--color-surface);border:1px solid var(--color-accent-900);border-radius:var(--radius-md);padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+              <i class="ph ph-git-branch" style="color:var(--color-accent-400)"></i>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">rotaris/auth-refactor</span>
+              <div style="flex:1"></div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5fbf8d">↑4</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">↓0</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--color-neutral-500);padding-left:25px">~/dev/rotaris-core · session <span style="color:var(--color-neutral-300)">auth-flow-refactor</span> <span style="color:#5fbf8d">● running</span></div>
+            <div style="display:flex;gap:14px;padding-left:25px;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)">
+              <span><span style="color:#5fbf8d">+412</span> <span style="color:#d97b7b">−188</span></span>
+              <span>9 files</span>
+              <span>4 commits by agents</span>
+            </div>
+          </div>
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:14px 16px" style-hover="border-color:#3f424d">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+              <i class="ph ph-git-branch" style="color:var(--color-neutral-500)"></i>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--color-neutral-300)">rotaris/docs-pass</span>
+              <div style="flex:1"></div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5fbf8d">↑1</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-600)">↓0</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--color-neutral-500);padding-left:25px">../rotaris-core-docs · session <span style="color:var(--color-neutral-300)">docs-sweep</span> <span style="color:#7bbfd4">◐ background</span></div>
+          </div>
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:14px 16px" style-hover="border-color:#3f424d">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+              <i class="ph ph-git-branch" style="color:var(--color-neutral-500)"></i>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--color-neutral-300)">master</span>
+              <div style="flex:1"></div>
+              <span style="font-size:10.5px;color:var(--color-neutral-600)">base</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--color-neutral-500);padding-left:25px">../rotaris-core-main · no session <span style="color:var(--color-neutral-600)">○ idle</span></div>
+          </div>
+
+          <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:14px 16px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:10px">Commit policy</div>
+            <div style="font-size:11.5px;color:var(--color-neutral-500);line-height:1.7">Agents may create <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-neutral-300)">local commits only</span> via git_commit — no push, pull, rebase or amend. You review and push.</div>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px;min-width:0">
+          <div style="display:flex;align-items:center;margin-bottom:12px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">History — rotaris/auth-refactor</div>
+            <div style="flex:1"></div>
+            <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600)">ahead of master by 4</span>
+          </div>
+          <sc-for list="{{commits}}" as="g" hint-placeholder-count="7">
+            <div style="display:grid;grid-template-columns:26px 76px 1fr auto auto;gap:12px;align-items:center;padding:7px 8px;border-radius:6px" style-hover="background:#282a38">
+              <span style="font-family:ui-monospace,Menlo,monospace;color:{{g.graphColor}};white-space:pre;font-size:13px">{{g.graph}}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-accent-300)">{{g.hash}}</span>
+              <span style="font-size:12px;color:{{g.msgColor}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{g.msg}}</span>
+              <span style="font-size:10.5px;padding:2px 8px;border:1px solid #3f424d;border-radius:4px;color:var(--color-neutral-500);font-family:ui-monospace,Menlo,monospace">{{g.author}}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-600);text-align:right;width:64px">{{g.time}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ═══════ VIEW: LIBRARY ═══════ -->
+    <sc-if value="{{isLibrary}}" hint-placeholder-val="{{false}}">
+    <div data-screen-label="Library" style="flex:1;min-width:0;overflow:auto;padding:26px 30px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:22px">
+        <h4 style="margin:0;font-size:19px">Library</h4>
+        <span style="font-size:12px;color:var(--color-neutral-500)">MCP servers · skills · prompts</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:start">
+
+        <!-- MCP -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="display:flex;align-items:center;margin-bottom:13px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">MCP servers</div>
+            <div style="flex:1"></div>
+            <span style="font-size:10.5px;color:var(--color-neutral-600)">auto-discovered from mcp.json</span>
+          </div>
+          <sc-for list="{{mcpRows}}" as="m" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <span style="color:{{m.glyphColor}};font-size:11px;width:12px">{{m.glyph}}</span>
+              <div style="min-width:0;flex:1">
+                <div style="font-size:12.5px;color:{{m.nameColor}}">{{m.name}} <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600)">{{m.type}}</span></div>
+                <div style="font-size:10.5px;color:var(--color-neutral-600)">{{m.desc}}</div>
+              </div>
+              <sc-if value="{{m.sessionOverride}}" hint-placeholder-val="{{false}}">
+                <span class="tag tag-accent" style="font-size:9px">session</span>
+              </sc-if>
+              <div style="width:30px;height:16px;border-radius:9px;background:{{m.toggleBg}};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;width:12px;height:12px;border-radius:50%;background:{{m.knobColor}};{{m.knobPos}}"></div></div>
+            </div>
+          </sc-for>
+          <div style="margin-top:10px;font-size:10.5px;color:var(--color-neutral-600);display:flex;gap:12px"><span>● yaml</span><span style="color:#7bbfd4">◆ project</span><span style="color:#7bbfd4">◇ user</span><span>○ default</span><span style="flex:1"></span><span style="color:var(--color-accent-300)">▮ session override</span></div>
+        </div>
+
+        <!-- Skills -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="display:flex;align-items:center;margin-bottom:13px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Skills</div>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" style="font-size:11px;padding:3px 9px"><i class="ph ph-plus" style="margin-right:5px"></i>Load SKILL.md</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="border:1px solid #33364a;border-radius:7px;padding:10px 12px" style-hover="border-color:var(--color-accent-800)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="font-size:12.5px">api-conventions</span>
+                <span class="tag tag-neutral" style="font-size:9.5px">project</span>
+                <span class="tag tag-accent" style="font-size:9.5px">this session</span>
+                <div style="flex:1"></div>
+                <span style="font-size:10px;color:#5fbf8d">in context</span>
+              </div>
+              <div style="font-size:11px;color:var(--color-neutral-500)">Handler naming, error envelopes, pagination rules for src/api.</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600);margin-top:5px">triggers /api · docs/skills/api/SKILL.md</div>
+            </div>
+            <div style="border:1px solid #33364a;border-radius:7px;padding:10px 12px" style-hover="border-color:var(--color-accent-800)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="font-size:12.5px">release-checklist</span>
+                <span class="tag tag-neutral" style="font-size:9.5px">user</span>
+                <span class="tag tag-outline" style="font-size:9.5px">every session</span>
+                <div style="flex:1"></div>
+                <a href="#" style="font-size:11px;color:var(--color-accent-300);text-decoration:none">Load</a>
+              </div>
+              <div style="font-size:11px;color:var(--color-neutral-500)">Version bump, tag, wheel build and GitHub Release steps.</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600);margin-top:5px">triggers /release · ~/.config/rotaris/skills/…</div>
+            </div>
+            <div style="border:1px solid #33364a;border-radius:7px;padding:10px 12px" style-hover="border-color:var(--color-accent-800)">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="font-size:12.5px">traceability</span>
+                <span class="tag tag-neutral" style="font-size:9.5px">project</span>
+                <div style="flex:1"></div>
+                <a href="#" style="font-size:11px;color:var(--color-accent-300);text-decoration:none">Load</a>
+              </div>
+              <div style="font-size:11px;color:var(--color-neutral-500)">Map requirements to @req-annotated tests; regenerate the matrix.</div>
+              <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600);margin-top:5px">triggers /trace · docs/skills/traceability/SKILL.md</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--color-neutral-500);line-height:1.6"><span style="color:var(--color-neutral-400)">AGENTS.md context:</span> 3 files merged — user-global, project root, cwd — injected into every agent.</div>
+          <div style="margin-top:6px;font-size:10px;color:var(--color-neutral-600)">tag shows load scope — <span style="color:var(--color-accent-300)">this session</span> only, or <span style="color:var(--color-neutral-400)">every session</span> (global)</div>
+        </div>
+
+        <!-- Prompts -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:13px">Prompt stash</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+            <div style="border:1px solid #33364a;border-radius:7px;padding:9px 12px;display:flex;gap:10px;align-items:center" style-hover="border-color:var(--color-accent-800)">
+              <i class="ph ph-archive-tray" style="color:var(--color-neutral-500)"></i>
+              <span style="font-size:11.5px;color:var(--color-neutral-400);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">also add rate limiting to the token refresh endpoint…</span>
+              <a href="#" style="font-size:11px;color:var(--color-accent-300);text-decoration:none">Pop</a>
+            </div>
+            <div style="border:1px solid #33364a;border-radius:7px;padding:9px 12px;display:flex;gap:10px;align-items:center" style-hover="border-color:var(--color-accent-800)">
+              <i class="ph ph-archive-tray" style="color:var(--color-neutral-500)"></i>
+              <span style="font-size:11.5px;color:var(--color-neutral-400);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">write an ADR for the async migration decision</span>
+              <a href="#" style="font-size:11px;color:var(--color-accent-300);text-decoration:none">Pop</a>
+            </div>
+          </div>
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:10px">History</div>
+          <div style="font-size:11.5px;color:var(--color-neutral-500);line-height:2.1">
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" style-hover="color:var(--color-text)">Refactor the API layer to use async handlers…</div>
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" style-hover="color:var(--color-text)">Run the unit suite and fix the two failing session tests</div>
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" style-hover="color:var(--color-text)">Summarize open TODOs in docs/requirement-log/unresolved</div>
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" style-hover="color:var(--color-text)">/compress</div>
+          </div>
+          <div style="margin-top:10px;font-size:10.5px;color:var(--color-neutral-600)">persists per workspace · cycle with ↑ ↓ in the composer</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ═══════ VIEW: SETTINGS ═══════ -->
+    <sc-if value="{{isSettings}}" hint-placeholder-val="{{false}}">
+    <div data-screen-label="Settings" style="flex:1;min-width:0;overflow:auto;padding:26px 30px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:22px">
+        <h4 style="margin:0;font-size:19px">Settings</h4>
+        <span style="font-size:12px;color:var(--color-neutral-500)">writes to .rotaris/agents.yaml · field-wise overlay over global config</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;max-width:1100px">
+
+        <!-- Startup models -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:13px">Startup model slots</div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <sc-for list="{{modelSlots}}" as="s" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center">
+                <span style="font-size:12px;color:var(--color-neutral-400);font-family:ui-monospace,Menlo,monospace;font-size:11.5px">{{s.slot}}</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid #3f424d;border-radius:6px;font-size:11.5px;cursor:pointer;font-family:ui-monospace,Menlo,monospace" style-hover="border-color:var(--color-accent-700)">{{s.model}}<i class="ph ph-caret-down" style="font-size:11px;color:var(--color-neutral-600)"></i></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:12px;font-size:10.5px;color:var(--color-neutral-600)">catalog merges configured models with live Copilot + Codex catalogs</div>
+        </div>
+
+        <!-- Providers -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:13px">Providers</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="border:1px solid #33364a;border-radius:7px;padding:11px 13px;display:flex;align-items:center;gap:11px">
+              <i class="ph ph-github-logo" style="font-size:18px;color:var(--color-neutral-400)"></i>
+              <div style="flex:1">
+                <div style="font-size:12.5px">GitHub Copilot <span style="font-size:10px;color:#5fbf8d;margin-left:6px">● connected</span></div>
+                <div style="font-size:10.5px;color:var(--color-neutral-600)">Device Flow (RFC 8628) · 24 models discovered · token 0600</div>
+              </div>
+              <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Sign out</button>
+            </div>
+            <div style="border:1px solid #33364a;border-radius:7px;padding:11px 13px;display:flex;align-items:center;gap:11px">
+              <i class="ph ph-open-ai-logo" style="font-size:18px;color:var(--color-neutral-400)"></i>
+              <div style="flex:1">
+                <div style="font-size:12.5px">OpenAI Codex <span style="font-size:10px;color:#5fbf8d;margin-left:6px">● connected</span></div>
+                <div style="font-size:10.5px;color:var(--color-neutral-600)">PKCE authorization code · refresh handled automatically</div>
+              </div>
+              <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Sign out</button>
+            </div>
+            <div style="border:1px dashed #33364a;border-radius:7px;padding:11px 13px;display:flex;align-items:center;gap:11px;color:var(--color-neutral-500);cursor:pointer" style-hover="border-color:var(--color-accent-700)">
+              <i class="ph ph-plus-circle" style="font-size:18px"></i>
+              <div style="font-size:12px">Add provider — 30+ via litellm, or an OpenAI-compatible endpoint</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delegation -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:13px">Delegation strategy — default for new sessions</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{strategies}}" as="st" hint-placeholder-count="3">
+              <div style="{{st.style}}" style-hover="border-color:var(--color-accent-700)">
+                <i class="ph {{st.icon}}" style="font-size:17px;color:{{st.iconColor}};margin-top:2px"></i>
+                <div style="flex:1">
+                  <div style="font-size:12.5px;color:{{st.titleColor}}">{{st.title}}</div>
+                  <div style="font-size:11px;color:var(--color-neutral-500);line-height:1.55">{{st.desc}}</div>
+                </div>
+                <span style="width:14px;height:14px;border-radius:50%;border:1px solid {{st.radioBorder}};display:grid;place-items:center;margin-top:3px;flex:none"><span style="width:6px;height:6px;border-radius:50%;background:{{st.radioFill}}"></span></span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px">
+            <div>
+              <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Depth cap</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border:1px solid #3f424d;border-radius:6px;font-size:12px;font-family:ui-monospace,Menlo,monospace;cursor:pointer" style-hover="border-color:var(--color-accent-700)">3<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+            </div>
+            <div>
+              <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Fan-out limit</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border:1px solid #3f424d;border-radius:6px;font-size:12px;font-family:ui-monospace,Menlo,monospace;cursor:pointer" style-hover="border-color:var(--color-accent-700)">8<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+            </div>
+            <div>
+              <div style="font-size:10.5px;color:var(--color-neutral-600);margin-bottom:4px">Child timeout</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border:1px solid #3f424d;border-radius:6px;font-size:12px;font-family:ui-monospace,Menlo,monospace;cursor:pointer" style-hover="border-color:var(--color-accent-700)">20m<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Runtime & security -->
+        <div style="background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;margin-bottom:13px">Runtime &amp; security</div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <div style="flex:1"><div style="font-size:12.5px">Compression threshold</div><div style="font-size:10.5px;color:var(--color-neutral-600)">force-compress agent context at this fill level</div></div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--color-accent-300)">80%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <div style="flex:1"><div style="font-size:12.5px">Circuit breaker</div><div style="font-size:10.5px;color:var(--color-neutral-600)">detect unproductive loops, inject corrective prompts, escalate to termination</div></div>
+              <div style="width:30px;height:16px;border-radius:9px;background:var(--color-accent-700);position:relative;cursor:pointer"><div style="position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:var(--color-accent-200)"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <div style="flex:1"><div style="font-size:12.5px">Secret redaction</div><div style="font-size:10.5px;color:var(--color-neutral-600)">redact keys and tokens in UI, logs, transcripts, artifacts</div></div>
+              <div style="width:30px;height:16px;border-radius:9px;background:var(--color-accent-700);position:relative;cursor:pointer"><div style="position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:var(--color-accent-200)"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <div style="flex:1"><div style="font-size:12.5px">Allow file access outside workspace</div><div style="font-size:10.5px;color:var(--color-neutral-600)">unsafe — shows a persistent indicator when enabled</div></div>
+              <div style="width:30px;height:16px;border-radius:9px;background:#3f424d;position:relative;cursor:pointer"><div style="position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#75798c"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <div style="flex:1"><div style="font-size:12.5px">Post-run improvement loop</div><div style="font-size:10.5px;color:var(--color-neutral-600)">collector analyzes finished runs; proposals need approval before the Improver acts</div></div>
+              <div style="width:30px;height:16px;border-radius:9px;background:var(--color-accent-700);position:relative;cursor:pointer"><div style="position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:var(--color-accent-200)"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:6px" style-hover="background:#282a38">
+              <div style="flex:1"><div style="font-size:12.5px">Ralph loop iteration cap</div><div style="font-size:10.5px;color:var(--color-neutral-600)">bound for autonomous multi-step runs</div></div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--color-accent-300)">25</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-persona overrides -->
+        <div style="grid-column:1 / -1;background:var(--color-surface);border:1px solid #292b31;border-radius:var(--radius-md);padding:16px 18px">
+          <div style="display:flex;align-items:center;margin-bottom:13px">
+            <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600">Per-persona overrides</div>
+            <div style="flex:1"></div>
+            <span style="font-size:10.5px;color:var(--color-neutral-600)">unset fields inherit from slots above</span>
+          </div>
+          <div style="display:grid;grid-template-columns:170px 1fr 190px 150px 1fr;gap:10px;padding:0 8px 7px;font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-600);font-weight:600;border-bottom:1px solid #292b31">
+            <span>persona</span><span>role</span><span>model</span><span>reasoning</span><span>tools</span>
+          </div>
+          <sc-for list="{{personaRows}}" as="p" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:170px 1fr 190px 150px 1fr;gap:10px;align-items:center;padding:7px 8px;border-radius:6px;border-bottom:1px solid #22242f" style-hover="background:#282a38">
+              <span style="font-size:12px">{{p.name}}</span>
+              <span style="font-size:11px;color:var(--color-neutral-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.role}}</span>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 9px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;cursor:pointer;font-family:ui-monospace,Menlo,monospace;color:{{p.modelColor}}" style-hover="border-color:var(--color-accent-700)">{{p.model}}<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 9px;border:1px solid #3f424d;border-radius:5px;font-size:10.5px;cursor:pointer;color:var(--color-neutral-400)" style-hover="border-color:var(--color-accent-700)">{{p.reasoning}}<i class="ph ph-caret-down" style="font-size:10px;color:var(--color-neutral-600)"></i></div>
+              <span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--color-neutral-600);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{p.tools}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+
+  <!-- ══════════ STATUS BAR ══════════ -->
+  <div style="height:27px;flex:none;display:flex;align-items:center;gap:18px;padding:0 14px;background:#1a1c2c;border-top:1px solid #292b31;font-size:11px;color:var(--color-neutral-500);font-family:ui-monospace,Menlo,monospace">
+    <span><i class="ph ph-folder-simple" style="margin-right:5px"></i>~/dev/rotaris-core</span>
+    <span style="color:var(--color-accent-300)"><i class="ph ph-git-branch" style="margin-right:5px"></i>rotaris/auth-refactor ↑4</span>
+    <span style="flex:1"></span>
+    <span><span style="color:#5fbf8d">●</span> CB armed</span>
+    <span>redaction on</span>
+    <span>workspace-scoped</span>
+    <span style="color:var(--color-neutral-400)">copilot/gpt-5</span>
+    <span style="color:var(--color-accent-300)">612,480 tok</span>
+    <span>1 bg session</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;delegationStrategy&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;orchestrator&quot;, &quot;swarm&quot;, &quot;single&quot;], &quot;default&quot;: &quot;orchestrator&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Session&quot; },
+  &quot;showFloatingPanel&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Workspace&quot; }
+}">
+class Component extends DCLogic {
+  state = { view: "dashboard", panelOpen: true, skillScope: "agent", overrideScope: "instance" };
+
+  renderVals() {
+    const v = this.state.view;
+    const set = (view) => () => this.setState({ view });
+    const strategy = this.props.delegationStrategy ?? "orchestrator";
+    const strategyLabels = { orchestrator: "Orchestrator", swarm: "Swarm", single: "Single agent" };
+
+    const NAV = [
+      { id: "dashboard", icon: "ph-gauge", label: "Overview" },
+      { id: "workspace", icon: "ph-chats-circle", label: "Workspace" },
+      { id: "mission", icon: "ph-tree-structure", label: "Mission" },
+      { id: "git", icon: "ph-git-branch", label: "Git" },
+      { id: "library", icon: "ph-stack", label: "Library" },
+      { id: "settings", icon: "ph-sliders-horizontal", label: "Settings" },
+    ];
+    const navItems = NAV.map((n) => ({
+      ...n,
+      go: set(n.id),
+      style: {
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
+        padding: "9px 0", width: "54px", borderRadius: "8px", cursor: "pointer",
+        color: v === n.id ? "#d2cefd" : "#75798c",
+        background: v === n.id ? "rgba(145,132,217,0.10)" : "transparent",
+        boxShadow: v === n.id ? "inset 2px 0 0 #9184d9" : "none",
+      },
+    }));
+
+    const C = { run: "#5fbf8d", wait: "#cbb26a", done: "#9184d9", sum: "#7bbfd4", fail: "#d97b7b", dim: "#595d6c" };
+
+    const ctxRows = [
+      { name: "orchestrator", pct: "48%", nums: "96,412 / 200,000", dot: C.run, bar: "#9184d9" },
+      { name: "coding-agent-1", pct: "71%", nums: "91,300 / 128,000", dot: C.run, bar: "#cbb26a" },
+      { name: "tester", pct: "17%", nums: "22,040 / 128,000", dot: C.run, bar: "#9184d9" },
+      { name: "coding-agent-2", pct: "3%", nums: "4,120 / 128,000", dot: C.wait, bar: "#595d6c" },
+      { name: "docs-writer", pct: "0%", nums: "— / 128,000", dot: C.dim, bar: "#595d6c" },
+    ];
+
+    const miniTree = [
+      { branch: "", name: "orchestrator", dot: C.run, color: "#e9e9ed", meta: "26m" },
+      { branch: "├─", name: "planner", dot: C.done, color: "#9397ab", meta: "done" },
+      { branch: "├─", name: "codebase-analyst", dot: C.done, color: "#9397ab", meta: "done" },
+      { branch: "├─", name: "architect", dot: C.done, color: "#9397ab", meta: "done" },
+      { branch: "├─", name: "coding-agent-1", dot: C.run, color: "#e9e9ed", meta: "14m" },
+      { branch: "│  ├─", name: "librarian", dot: C.done, color: "#9397ab", meta: "done" },
+      { branch: "│  └─", name: "tester", dot: C.run, color: "#e9e9ed", meta: "6m" },
+      { branch: "├─", name: "coding-agent-2", dot: C.wait, color: "#9397ab", meta: "wait" },
+      { branch: "└─", name: "verifier", dot: C.wait, color: "#9397ab", meta: "queued" },
+    ];
+
+    const rowBase = {
+      display: "grid", gridTemplateColumns: "300px 64px 1fr 130px 130px 56px",
+      gap: "10px", alignItems: "center", padding: "8px 12px",
+      borderBottom: "1px solid #22242f", borderRadius: "6px", cursor: "pointer",
+    };
+    const pulse = "animation:rt-pulse 1.6s infinite";
+    const mkRow = (o) => ({
+      focus: () => {}, rowStyle: o.sel ? { ...rowBase, background: "rgba(145,132,217,0.07)" } : rowBase,
+      pulse: o.dot === C.run ? pulse : "",
+      nameColor: o.dot === C.run ? "#e9e9ed" : "#9397ab",
+      ctxColor: parseInt(o.ctxPct) >= 60 ? "#cbb26a" : "#9184d9",
+      ...o,
+    });
+    const treeRows = [
+      mkRow({ branch: "", name: "orchestrator", dot: C.run, state: "run", activity: "wait_for_tasks — waiting on coding-agent-1, tester", model: "copilot/gpt-5", ctxPct: "48%", meta: "41t" }),
+      mkRow({ branch: "├─ ", name: "intent-classifier", dot: C.done, state: "done", activity: "classified: refactor", model: "gpt-5-nano", ctxPct: "2%", meta: "0t" }),
+      mkRow({ branch: "├─ ", name: "planner", dot: C.done, state: "done", activity: "plan-async-refactor published", model: "gpt-5-mini", ctxPct: "9%", meta: "6t" }),
+      mkRow({ branch: "├─ ", name: "codebase-analyst", dot: C.done, state: "done", activity: "call graph of src/api handlers", model: "gpt-5-mini", ctxPct: "22%", meta: "18t" }),
+      mkRow({ branch: "├─ ", name: "architect", dot: C.done, state: "done", activity: "async interface contract agreed", model: "copilot/gpt-5", ctxPct: "31%", meta: "12t" }),
+      mkRow({ branch: "├─ ", name: "coding-agent-1", dot: C.run, state: "run", activity: "haet_edit src/api/session.py · 4 anchors ok", model: "copilot/gpt-5", ctxPct: "71%", meta: "38t", sel: true }),
+      mkRow({ branch: "│   ├─ ", name: "librarian", dot: C.done, state: "done", activity: "aiohttp migration notes → artifact", model: "gpt-5-mini", ctxPct: "14%", meta: "9t" }),
+      mkRow({ branch: "│   └─ ", name: "tester", dot: C.run, state: "run", activity: "shell pytest tests/unit -x -q · 38s", model: "gpt-5-mini", ctxPct: "17%", meta: "11t" }),
+      mkRow({ branch: "├─ ", name: "coding-agent-2", dot: C.wait, state: "wait", activity: "depends_on: coding-agent-1", model: "copilot/gpt-5", ctxPct: "3%", meta: "0t" }),
+      mkRow({ branch: "├─ ", name: "docs-writer", dot: C.wait, state: "queued", activity: "queued — README + requirement log", model: "gpt-5-mini", ctxPct: "0%", meta: "0t" }),
+      mkRow({ branch: "└─ ", name: "verifier", dot: C.wait, state: "queued", activity: "final acceptance gate", model: "copilot/gpt-5", ctxPct: "0%", meta: "0t" }),
+    ];
+
+    const commits = [
+      { graph: "●", graphColor: "#9184d9", hash: "a3f9c21", msg: "refactor: convert session handlers to async", author: "coding-agent", time: "4m", msgColor: "#e9e9ed" },
+      { graph: "●", graphColor: "#9184d9", hash: "7c02e8d", msg: "refactor: async token store with to_thread wrappers", author: "coding-agent", time: "18m", msgColor: "#cfd3e5" },
+      { graph: "●", graphColor: "#9184d9", hash: "f14b990", msg: "test: session handler async smoke coverage", author: "tester", time: "22m", msgColor: "#cfd3e5" },
+      { graph: "●", graphColor: "#9184d9", hash: "05dd317", msg: "docs: ADR-014 async migration decision", author: "docs-writer", time: "31m", msgColor: "#cfd3e5" },
+      { graph: "○", graphColor: "#595d6c", hash: "c9a1b02", msg: "merge: config loader v2 (master)", author: "you", time: "2d", msgColor: "#9397ab" },
+      { graph: "○", graphColor: "#595d6c", hash: "881f6ae", msg: "feat: MCP auto-discovery from mcp.json", author: "you", time: "3d", msgColor: "#9397ab" },
+      { graph: "○", graphColor: "#595d6c", hash: "2b44c17", msg: "chore: bump to v0.55.3", author: "you", time: "4d", msgColor: "#9397ab" },
+    ];
+
+    const mcpRows = [
+      { glyph: "●", glyphColor: "#e9e9ed", name: "playwright", nameColor: "#e9e9ed", type: "stdio", desc: "browser automation · headless", on: true },
+      { glyph: "●", glyphColor: "#e9e9ed", name: "tavily", nameColor: "#e9e9ed", type: "[http]", desc: "web search", on: true },
+      { glyph: "◆", glyphColor: "#7bbfd4", name: "filesystem", nameColor: "#e9e9ed", type: "stdio", desc: "scoped file access · discovered in project mcp.json", on: true },
+      { glyph: "◇", glyphColor: "#7bbfd4", name: "github", nameColor: "#75798c", type: "stdio", desc: "command not found — marked unavailable", on: false },
+      { glyph: "○", glyphColor: "#75798c", name: "postgres", nameColor: "#75798c", type: "stdio", desc: "disabled for this workspace \u2014 global default is on", on: false, sessionOverride: true },
+    ].map((m) => ({
+      ...m,
+      toggleBg: m.on ? "var(--color-accent-700)" : "#3f424d",
+      knobColor: m.on ? "var(--color-accent-200)" : "#75798c",
+      knobPos: m.on ? "right:2px" : "left:2px",
+    }));
+
+    const modelSlots = [
+      { slot: "small_model", model: "copilot/gpt-5-nano" },
+      { slot: "medium_model", model: "copilot/gpt-5-mini" },
+      { slot: "large_model", model: "copilot/gpt-5" },
+      { slot: "default_summary_model", model: "medium_model" },
+      { slot: "fallback_model", model: "small_model" },
+    ];
+
+    const stratBase = { display: "flex", gap: "11px", alignItems: "flex-start", padding: "11px 13px", borderRadius: "7px", border: "1px solid #33364a", cursor: "pointer" };
+    const strategies = [
+      { id: "orchestrator", icon: "ph-tree-structure", title: "Orchestrator", desc: "Tech-lead decomposes, delegates over a dependency DAG, runs the completion gate." },
+      { id: "swarm", icon: "ph-graph", title: "Swarm", desc: "Peer agents claim subtasks from a shared queue; artifacts coordinate, no central lead." },
+      { id: "single", icon: "ph-user", title: "Single agent", desc: "One agent, no delegation — fastest for small, well-scoped tasks." },
+    ].map((s) => {
+      const sel = s.id === strategy;
+      return {
+        ...s,
+        style: sel ? { ...stratBase, border: "1px solid var(--color-accent-700)", background: "rgba(145,132,217,0.07)" } : stratBase,
+        iconColor: sel ? "#b5abfc" : "#75798c",
+        titleColor: sel ? "#e9e9ed" : "#b2b6ca",
+        radioBorder: sel ? "#9184d9" : "#595d6c",
+        radioFill: sel ? "#9184d9" : "transparent",
+      };
+    });
+
+    const personaRows = [
+      { name: "orchestrator", role: "Tech lead — decompose, delegate, completion gate", model: "large_model", reasoning: "high", tools: "delegate · todo · haet_read · artifact_read", modelColor: "#d2cefd" },
+      { name: "coding-agent", role: "Implementation — write, edit, verify code", model: "large_model", reasoning: "medium", tools: "write_file · haet_edit · shell · grep · lsp", modelColor: "#d2cefd" },
+      { name: "tester", role: "QA — write and run tests, coverage gaps", model: "medium_model", reasoning: "medium", tools: "write_file · haet_edit · shell · lsp", modelColor: "#9397ab" },
+      { name: "librarian", role: "External reference — docs, RFCs, web research", model: "medium_model", reasoning: "low", tools: "fetch · read_file · haet_read · tavily", modelColor: "#9397ab" },
+      { name: "codebase-analyst", role: "Internal analyst — call graphs, LSP, read-only", model: "medium_model", reasoning: "medium", tools: "grep · glob · find · lsp", modelColor: "#9397ab" },
+      { name: "verifier", role: "Final acceptance gate vs original request", model: "large_model", reasoning: "high", tools: "haet_read · grep · shell · lsp", modelColor: "#d2cefd" },
+    ];
+
+    const skillScope = this.state.skillScope ?? "agent";
+    const overrideScope = this.state.overrideScope ?? "instance";
+    const scopeSeg = (active) => ({
+      flex: 1, padding: "5px 0", cursor: "pointer",
+      color: active ? "var(--color-accent-200)" : "var(--color-neutral-500)",
+      background: active ? "rgba(145,132,217,0.14)" : "transparent",
+    });
+
+    return {
+      isDashboard: v === "dashboard", isWorkspace: v === "workspace", isMission: v === "mission",
+      isGit: v === "git", isLibrary: v === "library", isSettings: v === "settings",
+      navItems, ctxRows, miniTree, treeRows, commits, mcpRows, modelSlots, strategies, personaRows,
+      strategyLabel: strategyLabels[strategy] ?? strategy,
+      goMissionLink: (e) => { e.preventDefault(); this.setState({ view: "mission" }); },
+      showPanel: (this.props.showFloatingPanel ?? true) && this.state.panelOpen,
+      closePanel: () => this.setState({ panelOpen: false }),
+      focusName: "coding-agent-1", focusMeta: "running · 14m 40s · depth 1 · spawned by orchestrator",
+      focusPersona: "coding-agent", focusParent: "orchestrator", focusDeps: "[architect] ✓",
+      focusCtx: "91,300 / 128,000 · 71%", focusTools: "38 calls · haet_edit 21", focusModel: "copilot/gpt-5",
+      sessionStatusLabel: "running", sessionStatusColor: "#5fbf8d",
+      skillScopeLabel: skillScope === "agent" ? "this agent" : "all agents",
+      toggleSkillScope: () => this.setState({ skillScope: skillScope === "agent" ? "session" : "agent" }),
+      overrideScopeStyle: { instance: scopeSeg(overrideScope === "instance"), type: scopeSeg(overrideScope === "type") },
+      setOverrideScope: { instance: () => this.setState({ overrideScope: "instance" }), type: () => this.setState({ overrideScope: "type" }) },
+      overrideScopeNote: overrideScope === "instance"
+        ? "override applies to this running instance only · session default is high"
+        : "override applies to every coding-agent instance in this session · does not change the global default",
+    };
+  }
+}
+</script>
+</body>
+</html>

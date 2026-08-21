@@ -1,0 +1,5 @@
+interface:
+  display_name: "Rotaris Requirement Writer"
+  short_description: "Drafts rotaris-core requirement documents from feature ideas."
+  icon: "📝"
+  primary_color: "#4B5563"

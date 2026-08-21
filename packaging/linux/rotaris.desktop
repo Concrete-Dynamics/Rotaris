@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Rotaris
+Comment=Desktop workspace for the Rotaris multi-agent orchestration framework
+Exec=rotaris %f
+Icon=rotaris
+Terminal=false
+Categories=Development;IDE;

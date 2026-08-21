@@ -1,0 +1,30 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.swp
+*.swo
+.DS_Store
+.sisyphus/
+.rotaris/
+# Pre-rename workspace state dir; kept so un-migrated checkouts stay clean.
+.geraet-ai/
+.tokensave/
+venv-windows/
+
+.tmp/
+.claude/.headroom_wrap_marker.json
+.claude/settings.local.json
+lsp-mcp/
+.serena/
+# Local git worktrees for parallel agent runs
+.tmp_wt/
+# Session-managed git worktrees (EnterWorktree)
+.claude/worktrees/

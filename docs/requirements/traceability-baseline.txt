@@ -1,0 +1,51 @@
+# ReqToCode bootstrap baseline - pre-existing traceability debt.
+# Each line: SWR-<n> followed by the unmet flags (trace/test) it is
+# excused from. This file may only SHRINK: pay debt by annotating the
+# implementation/tests, then prune via
+#   python -m rotaris_core.reqtocode check --update-baseline
+# Never add entries for new work.
+SWR-160 test
+SWR-351 test
+SWR-356 test
+SWR-365 trace
+SWR-380 test
+SWR-709 test
+SWR-710 test
+SWR-711 test
+SWR-759 test
+SWR-801 test
+SWR-831 test
+SWR-834 test
+SWR-844 test
+SWR-848 test
+SWR-853 test
+SWR-1063 test
+SWR-1111 test
+SWR-1116 test
+SWR-1135 test
+SWR-1139 test
+SWR-1140 test
+SWR-1165 test
+SWR-1171 test
+SWR-1181 test
+SWR-1239 test
+SWR-1251 test
+SWR-1261 test
+SWR-1262 test
+SWR-1263 test
+SWR-1264 test
+SWR-1265 test
+SWR-1266 test
+SWR-1269 test
+SWR-1270 test
+SWR-1317 test
+SWR-1507 test
+SWR-1508 test
+SWR-1509 test
+SWR-1514 test
+SWR-1519 test
+SWR-1530 test
+SWR-1607 test
+SWR-1802 test
+SWR-2064 test
+SWR-2067 test

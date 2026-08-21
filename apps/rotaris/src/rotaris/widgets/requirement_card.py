@@ -682,6 +682,14 @@ class RequirementCardWidget(Card):
         """
         attention = card.attention
         if attention is None:
+            # Named even while hidden. The board's accessibility sweep walks the
+            # whole tree rather than the visible part of it, on the grounds that
+            # a control which is nameless when hidden is one nobody notices is
+            # nameless the moment it is shown (SWR-3314).
+            self.attention_button.setText("")
+            self.attention_button.setAccessibleName(f"No run of {card.req_id} is waiting for you")
+            self.attention_button.setAccessibleDescription("")
+            self.attention_button.setToolTip("")
             self.attention_button.hide()
             return
         self.attention_button.setText(attention.sentence)

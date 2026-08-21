@@ -45,8 +45,9 @@ flight, so the board can open the session it started at the time that matters.
 
 Unit tests cover the adoption of the seam's worktree, the fallback for a
 composition with no coordinator, and the session id reaching the run record
-mid-run. An integration test pauses, steers and stops a unit run through the
-coordinator. The originating product flow is a user releasing a requirement and
-taking part in the work it started (SWR-3413, SWR-3612).
+mid-run. Integration tests queue a prompt into a released run, pause it and stop
+it through the coordinator, and close the application on one to see it cancelled
+rather than abandoned. The originating product flow is a user releasing a
+requirement and taking part in the work it started (SWR-3413, SWR-3612).
 
 Epic: [Requirement Board Workflow and Review](../3600-requirement-board-workflow.md)

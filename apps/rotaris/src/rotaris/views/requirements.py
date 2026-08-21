@@ -1956,6 +1956,11 @@ class RequirementsView(Themed, QWidget):
         self.detail_view.evidence_requested.connect(self.open_evidence)
         self.detail_view.graph_requested.connect(self.open_graph)
         self.detail_view.run_activated.connect(self.open_run_requested)
+        # The same door the card offers (SWR-3623), landing in the same place:
+        # the detail page states which run is waiting, and acting on it focuses
+        # that session in the Workspace rather than drawing a second transcript
+        # here (SWR-3612).
+        self.detail_view.attention_activated.connect(self.open_run_requested)
         self.detail_view.commit_activated.connect(self.open_commit_requested)
         self.detail_view.edit_requested.connect(self.edit_requested)
         self.detail_view.blockers_requested.connect(self.blockers_requested)

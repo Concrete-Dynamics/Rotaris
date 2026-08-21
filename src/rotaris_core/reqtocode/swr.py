@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 8c3a8c182e78c1f78da9536f2d2d7b9ca0f5ad9116382cd93783d5577b0c758f
+# GLOBAL-HASH: 067e75faa2db871798ebf422baaaa4a50996205c131a1cbb24b80ec1d8ce3133
 
 from __future__ import annotations
 
@@ -6337,7 +6337,7 @@ META: dict[int, ReqMeta] = {
     3619: ReqMeta('SWR-3619', 3619, ReqStatus.APPROVED, 'Desktop terminal stream bridge and emulated screen', 'docs/requirements/2000-rotaris-desktop/SWR-3619-terminal-stream-bridge.md', True, True, 'f99ca65fa9afefc8', 'technical', (2428,)),
     3620: ReqMeta('SWR-3620', 3620, ReqStatus.APPROVED, 'Adoption and verification report progress to whoever started them', 'docs/requirements/3600-requirement-board-workflow/SWR-3620-a-pass-reports-progress-to-its-host.md', True, True, 'a8fa09efc03e43a1', 'technical', (3615,)),
     3621: ReqMeta('SWR-3621', 3621, ReqStatus.DRAFT, 'Image attachments in the desktop prompt', 'docs/requirements/2000-rotaris-desktop/SWR-3621-image-attachments-in-prompt.md', True, True, '32566c41d72bac06', 'product', ()),
-    3622: ReqMeta('SWR-3622', 3622, ReqStatus.APPROVED, 'A released requirement runs as an interactive session', 'docs/requirements/3600-requirement-board-workflow/SWR-3622-a-released-requirement-runs-as-an-interactive-session.md', True, True, 'd5061267fa50ffd4', 'product', ()),
+    3622: ReqMeta('SWR-3622', 3622, ReqStatus.APPROVED, 'A released requirement runs as an interactive session', 'docs/requirements/3600-requirement-board-workflow/SWR-3622-a-released-requirement-runs-as-an-interactive-session.md', True, True, '99bf14355b26357c', 'product', ()),
     3623: ReqMeta('SWR-3623', 3623, ReqStatus.APPROVED, 'A run waiting on a person says so where the requirement is shown', 'docs/requirements/3600-requirement-board-workflow/SWR-3623-a-run-waiting-on-a-person-says-so.md', True, True, '900dec6cff1d1990', 'product', ()),
     3700: ReqMeta('SWR-3700', 3700, ReqStatus.APPROVED, 'Themeable design-token layer', 'docs/requirements/2000-rotaris-desktop/SWR-3700-themeable-design-token-layer.md', True, True, '9967ed94fe077204', 'technical', (2093,)),
     3701: ReqMeta('SWR-3701', 3701, ReqStatus.APPROVED, 'A user can choose the Rotaris theme, and it applies without a relaunch', 'docs/requirements/2000-rotaris-desktop/SWR-3701-theme-selection.md', True, True, '0b0fd0d161a887ff', 'product', ()),

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import datetime as dt
 import threading
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -39,6 +38,8 @@ from rotaris.services.requirements_actions import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from rotaris_core.requirements.execution.snapshot import RunSnapshot
 
 pytestmark = pytest.mark.unit

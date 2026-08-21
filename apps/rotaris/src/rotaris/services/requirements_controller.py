@@ -54,7 +54,7 @@ import json
 import logging
 import time
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QCoreApplication, QObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -111,6 +111,7 @@ if TYPE_CHECKING:
         SessionLauncher,
     )
     from rotaris.services.requirements_bridge import BoardDelta, BoardSource
+    from rotaris.services.run_coordinator import RunCoordinator
     from rotaris.views.requirement_queue import SchedulingControls
     from rotaris.views.requirement_review import DeferredReviews
     from rotaris.widgets.requirement_blockers import RequirementBlockerPanel
@@ -431,6 +432,7 @@ class RequirementsController(QObject):
         source: BoardSource | None = None,
         actions: RequirementActions | None = None,
         clock: Callable[[], dt.datetime] | None = None,
+        coordinator: object | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -462,11 +464,12 @@ class RequirementsController(QObject):
         self._committed = False
         self._actions = actions
         self._actions_resolved = actions is not None
-        #: How a released unit's run becomes a session (SWR-3622). ``None`` until
-        #: the window attaches one; a board driven without it — a test, a
-        #: headless composition — still releases, and the run takes the
-        #: self-contained path it always did.
+        #: How a released unit's run becomes a session (SWR-3622). ``None``
+        #: without a coordinator to build one around; a board driven without it
+        #: — a test, a headless composition — still releases, and the run takes
+        #: the self-contained path it always did.
         self._launcher: SessionLauncher | None = None
+        self._attach_coordinator(coordinator)
         # A flow ends on the worker thread that ran it, and the feedback it has
         # to supersede lives here. One queued hop, so nothing on the board is
         # ever touched from that thread (SWR-3601).
@@ -638,15 +641,50 @@ class RequirementsController(QObject):
             self._report_flows(self._actions)
         return self._actions
 
+    @traces(SWR.SWR_3622, SWR.SWR_3315)
+    def _attach_coordinator(self, coordinator: object | None) -> None:
+        """Build the way a released unit's run becomes a session, if there is one.
+
+        The window constructs this controller and registers its surface, and
+        that is the whole of what it does with the requirements area (SWR-3315)
+        — so the run coordinator arrives as a collaborator and the launcher
+        around it is built here, where every other collaborator of this area is
+        built.
+
+        Asked structurally, like the write path is. A composition driven by
+        something that is not a coordinator — a test double, a headless run —
+        leaves the launcher unset, and a release runs its unit the
+        self-contained way it always did rather than failing on a coordinator
+        that was never there.
+        """
+        if coordinator is None or self._workspace is None:
+            return
+        if not hasattr(coordinator, "launch_new") or not hasattr(
+            coordinator,
+            "session_run_finished",
+        ):
+            return
+        from rotaris.services.session_launcher import CoordinatorSessionLauncher  # noqa: PLC0415
+
+        # Cast, not an annotation: the two attributes above are the whole of
+        # what is required of it, and asking the type system for the concrete
+        # class here would make every composition import the coordinator to say
+        # it has none.
+        self.attach_launcher(
+            CoordinatorSessionLauncher(
+                cast("RunCoordinator", coordinator),
+                self._workspace,
+                parent=self,
+            ),
+        )
+
     @traces(SWR.SWR_3622)
     def attach_launcher(self, launcher: SessionLauncher) -> None:
         """Give the area a way to start a unit's run as a session (SWR-3622).
 
-        Attached rather than composed here, and for the same reason the write
-        path is not composed in the window: starting a session needs the
-        application's run coordinator, which is a Qt object owned by the window,
-        while this controller is built from a workspace path. The window has
-        both and hands one to the other.
+        Public as well as constructor-fed: a coordinator that arrives after this
+        controller was built — a workspace opened later, a composition that
+        assembles in another order — has the same seam to hand itself to.
 
         Attaching after the write path has already been resolved re-resolves it,
         because a starter built without a launcher runs its units the old way for
@@ -964,7 +1002,7 @@ class RequirementsController(QObject):
     def _show_detail(self, detail: RequirementDetail) -> None:
         show = getattr(self._view, "show_detail", None)
         if callable(show):
-            show(detail)
+            show(self._with_detail_attention(detail))
 
     # ── the writing half (SWR-3601, SWR-3602, SWR-3610) ───────────────────
 
@@ -1965,6 +2003,39 @@ class RequirementsController(QObject):
             ),
         )
 
+    @traces(SWR.SWR_3623, SWR.SWR_3307)
+    def _with_detail_attention(self, detail: RequirementDetail) -> RequirementDetail:
+        """*detail* told which of its runs is waiting on the user.
+
+        The same overlay the cards get, applied at the same seam and for the
+        same reason: the detail this is built from comes out of the engine's
+        projection, which knows the requirement's runs but not whether one of
+        them is blocked on a person right now. Returned unchanged when the
+        answer already matches, so re-showing an unchanged detail allocates
+        nothing.
+        """
+        attention = self._waiting_runs().get(detail.req_id)
+        if attention == detail.attention:
+            return detail
+        return replace(detail, attention=attention)
+
+    @traces(SWR.SWR_3623, SWR.SWR_3307)
+    def _restate_detail(self) -> None:
+        """Re-state the open detail page when the session list moves under it.
+
+        Read back off the panel rather than re-fetched from the bridge: what is
+        on screen may be the deep read (SWR-3313), and asking for the detail
+        again would answer with the board's shallower one and silently drop the
+        revision history the user is looking at.
+        """
+        panel = getattr(self._view, "detail_view", None)
+        current = getattr(panel, "detail", None)
+        if current is None:
+            return
+        updated = self._with_detail_attention(current)
+        if updated is not current:
+            self._show_detail(updated)
+
     @traces(SWR.SWR_3623)
     def _sessions_changed(self) -> None:
         """Re-state what is waiting when the session list moves under the board.
@@ -1979,6 +2050,10 @@ class RequirementsController(QObject):
         Published only when the answer actually differs, because this fires far
         more often than the board changes.
         """
+        # Before the board's own early return: a user reading one requirement's
+        # detail page is exactly the user this has something to tell, and the
+        # page is open whether or not the board behind it has cards.
+        self._restate_detail()
         current = self._store.requirements
         if not current.cards and not current.queue.running:
             return

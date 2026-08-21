@@ -61,6 +61,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DETAIL_SECTIONS",
+    "EXECUTION_SECTION",
     "NO_HISTORY_REASON",
     "PENDING_HISTORY_REASON",
     "READ_ONLY_SOURCE_NOTICE",
@@ -455,6 +456,19 @@ class RequirementAttention:
         return "Waiting for your answer"
 
     @property
+    def stated(self) -> str:
+        """The sentence for a surface with room to name the run it belongs to.
+
+        A card has room for one line and one door, so it prints
+        :attr:`sentence`. The detail view prints this beside the unit list it
+        already shows, where "which of these is waiting" is the question the
+        reader actually has.
+        """
+        if not self.unit_id:
+            return self.sentence
+        return f"{self.sentence}: {self.unit_id}"
+
+    @property
     def announced(self) -> str:
         """The sentence a screen reader gets, naming the unit when there is one."""
         if not self.unit_id:
@@ -560,13 +574,19 @@ class RequirementCard:
 # ── the detail view (SWR-3307) ─────────────────────────────────────────────
 
 
+#: The section that holds what has run and what is in flight — and so the one
+#: that states a run waiting on the user (SWR-3623). Named because both the
+#: table below and the view that mounts that statement have to mean the same
+#: section, and a second spelling of it would fail silently.
+EXECUTION_SECTION = "execution"
+
 #: The five sections SWR-3307 names, in order, with the message each shows when
 #: it has nothing. Declared as data so the view cannot render four of them and
 #: so a section's empty state is written once rather than per widget.
 DETAIL_SECTIONS: tuple[tuple[str, str, str], ...] = (
     ("requirement", "Requirement", "This requirement could not be read from its source."),
     ("relations", "Relations", "This requirement stands on its own: no epic, no relations."),
-    ("execution", "Execution", "Nothing has run for this requirement yet."),
+    (EXECUTION_SECTION, "Execution", "Nothing has run for this requirement yet."),
     ("traceability", "Traceability", "No implementation site and no covering test are recorded."),
     ("verification", "Verification", "Nothing has verified this requirement yet."),
 )
@@ -743,6 +763,12 @@ class RequirementDetail:
     #: somebody to accept it (SWR-3616). ``None`` for the common card: nothing
     #: was edited, or the work has already been released.
     offer: ChangeWork | None = None
+    #: The run of this requirement that is blocked on a person (SWR-3623), same
+    #: value the card carries. Not built by :func:`build_detail`: whether a run
+    #: is waiting is a fact about a live session and the projection this detail
+    #: is read from knows nothing about those, so it is overlaid on the way to
+    #: the view — exactly as the board's cards are.
+    attention: RequirementAttention | None = None
 
     def section(self, key: str) -> DetailSection | None:
         """One section by key, or ``None`` when this detail carries none."""

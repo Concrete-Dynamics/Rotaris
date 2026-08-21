@@ -222,9 +222,9 @@ class MainWindow(Themed, QMainWindow):
         self.requirements_controller = RequirementsController(
             store,
             workspace=getattr(config_service, "workspace", None),
+            coordinator=self.run_bridge,
             parent=self,
         )
-        self._attach_session_launcher(config_service)
         self.requirements = self.requirements_controller.surface
         self.git = GitView(store)
         self.library = LibraryView(store)
@@ -392,34 +392,6 @@ class MainWindow(Themed, QMainWindow):
         QTimer.singleShot(0, self._resolve_project_initialization)
         QTimer.singleShot(0, self._offer_hook_review)
         self.install_theme_hook()
-
-    @traces(SWR.SWR_3622)
-    def _attach_session_launcher(self, config_service: Any) -> None:
-        """Let a released requirement start its work as a session (SWR-3622).
-
-        The one place the two halves meet: the run coordinator is this window's,
-        and the board's write path is the requirements controller's. Neither can
-        build the other, so the window — which holds both — hands one over.
-
-        Asked structurally, like every other optional collaborator here. A window
-        driven by a double that is not a coordinator, and a workspace the board
-        cannot write to, both leave the board releasing exactly as it did before:
-        the run takes the self-contained path and nothing about this window fails
-        because a test did not bring a coordinator.
-        """
-        workspace = getattr(config_service, "workspace", None)
-        coordinator = self.run_bridge
-        if workspace is None or coordinator is None:
-            return
-        if not hasattr(coordinator, "launch_new") or not hasattr(
-            coordinator,
-            "session_run_finished",
-        ):
-            return
-        from rotaris.services.session_launcher import CoordinatorSessionLauncher
-
-        self.session_launcher = CoordinatorSessionLauncher(coordinator, workspace, parent=self)
-        self.requirements_controller.attach_launcher(self.session_launcher)
 
     def apply_theme(self, theme: Theme) -> None:
         """Restyle the toast — the only surface this window paints itself.

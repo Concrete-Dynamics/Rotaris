@@ -63,6 +63,13 @@ The user-visible flows these serve are already covered by `test_views.py`,
 `test_terminal_panel.py` and `test_transcript_tool_thinking.py`, which drive the same view
 through clicks and keyboard.
 
+This bounds the cost of *laying out* a long transcript. It says nothing about the cost
+of producing the model it lays out, which is upstream and, when this was written, still
+grew with session length — so a long session could satisfy every criterion here and
+still update slowly.
+[SWR-2454 — The live view keeps up with the run](SWR-2454-live-view-keeps-up-with-the-run.md)
+carries the same bounded-cost property across that upstream half.
+
 Derived from: [SWR-2447 — Transcript repaints on a timer while a row is live](../2000-rotaris-desktop/SWR-2447-live-transcript-repaint-tick.md)
 
 Epic: [Rotaris Desktop](../2000-rotaris-desktop.md)

@@ -33,6 +33,32 @@ DEFAULT_ROWS = 24
 DEFAULT_HISTORY = 2000
 
 
+class _NewlineScreen(pyte.HistoryScreen):
+    """A history screen whose newline mode survives every reset.
+
+    Two of the three sources feeding this emulator carry Unix newlines rather
+    than a real ``\\r\\n``: the tmux tap joins captured rows with ``\\n``, and a
+    session reloaded from disk holds text written the same way.  Without
+    ``LNM`` a bare line feed is an index with no carriage return, so the second
+    line starts under the end of the first and the output walks diagonally off
+    the right-hand edge.
+
+    ``pyte`` restores the default mode set on every reset, and resets are
+    routine here — a ``screen`` frame replaces the whole screen, and a program
+    may send ``ESC c`` itself — so the mode is re-armed there rather than set
+    once.  Construction is the exception: ``pyte`` overwrites the mode set
+    *after* its own constructor calls ``reset``, so that one is armed below.
+    """
+
+    def __init__(self, columns: int, lines: int, history: int, ratio: float) -> None:
+        super().__init__(columns, lines, history=history, ratio=ratio)
+        self.set_mode(pyte.modes.LNM)
+
+    def reset(self) -> None:
+        super().reset()
+        self.set_mode(pyte.modes.LNM)
+
+
 @traces(SWR.SWR_3619)
 @dataclass(frozen=True, slots=True)
 class TerminalCell:
@@ -76,8 +102,7 @@ class TerminalScreen:
         self.truncated = False
         self._history = history
         self._revision = 0
-        self._screen = pyte.HistoryScreen(max(1, cols), max(1, rows), history=history, ratio=0.5)
-        self._screen.set_mode(pyte.modes.LNM)
+        self._screen = _NewlineScreen(max(1, cols), max(1, rows), history=history, ratio=0.5)
         self._stream = pyte.Stream(self._screen)
 
     # ── identity and change tracking ─────────────────────────────────────

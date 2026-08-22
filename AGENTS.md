@@ -388,16 +388,12 @@ uv run pytest tests/unit/test_module.py::test_name -q --timeout=30       # one t
 uv run pytest tests/unit/ tests/integration/ -k "expr" -q --timeout=30   # by name
 uv run pytest --lf -q --timeout=30                                       # last failures
 # ── Full pass (post-merge, on the merged tree — Workflow § 5) — always parallel ──
-uv run pytest -q --timeout=120 -n auto   # full suite (= make test); ~150s vs ~750s serial
+uv run pytest -q --timeout=120 -n auto   # full suite, 6225 tests (= make test)
 uv run pytest tests/unit/ -n auto -q --timeout=120         # unit only
 uv run pytest tests/integration/ -n auto -q --timeout=120  # integration/e2e only
-# desktop (= make test-rotaris): parallel pass, then the one serial-marked test
+# desktop (= make test-rotaris), 1462 tests: parallel pass, then the serial ones
 uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
 uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
-# Note: the Qt suite parallelizes (67s at `-n auto` vs 217s serial). `-n auto` =
-# 16 workers — don't raise it (oversubscribes sandboxed-terminal tests). Mark
-# tests `@pytest.mark.serial` when they need a core to themselves. No `-x` on a
-# parallel pass: the first failure would hide every other result.
 # Coverage, lint, format, typecheck —
 uv run pytest --cov=rotaris_core --cov-report=term-missing                     # coverage (= make test-cov)
 uv run ruff check src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'    # lint (= make lint)
@@ -407,7 +403,32 @@ uv run python -m rotaris_core.reqtocode check --fix                             
 uv run python -m rotaris .            # run desktop app (--demo for demo data)
 ```
 
-## Conventions
+### What a full pass actually costs
+
+Budget **5–7 minutes for the engine suite and about 10 for the desktop one**, on
+an 8-core laptop, measured 2026-08-22. That is the number to plan against; the
+older ~150s and 67s figures were measured against a much smaller suite and are
+gone. Wall time swings by up to 50% between identical runs on the same commit —
+thermal state, not your change — so re-measure before quoting a number rather
+than repeating one.
+
+Both suites take `--dist loadfile` from `addopts`, so a worker gets whole files
+rather than individual tests. The reasoning is in `pyproject.toml` next to the
+setting; do not override it with `--dist load` to chase a faster number.
+
+`-n auto` is **physical** cores — xdist asks psutil, which both packages declare
+for that reason. Do not substitute a literal `-n 16`: it is right on one machine
+and oversubscribed on the next, and the sandboxed-terminal tests are the first
+to fail when it is. Mark a test `@pytest.mark.serial` when it needs a core to
+itself. Never `-x` on a parallel pass — the first failure would hide every other
+result.
+
+**Judge a red run against the baseline, not against zero.** A handful of tests
+here fail intermittently under load without any change to the code
+(`docs/testing/flaky-quarantine.md` names the ones already triaged), and at
+least one flips on machine state rather than on anything in the tree. Before
+attributing a failure to your change, re-run that node id alone; if it fails on
+the commit before yours too, say so instead of fixing it.
 
 - ruff, mypy (`strict`), line length, target version: configured in `pyproject.toml` (source of truth).
 - HAET edit engine, playbook prompt matrix, session persistence/diagnostics internals: [02-code-topology.md](docs/architecture/02-code-topology.md), [prompt-composition-matrix.md](docs/architecture/prompt-composition-matrix.md), [1500-sessions-diagnostics.md](docs/requirements/1500-sessions-diagnostics.md).

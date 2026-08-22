@@ -6429,7 +6429,7 @@ wheels = [
 
 [[package]]
 name = "rotaris"
-version = "0.120.0"
+version = "0.120.1"
 source = { editable = "apps/rotaris" }
 dependencies = [
     { name = "mistune" },
@@ -6450,6 +6450,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-qt" },
     { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
     { name = "pyyaml" },
     { name = "ruff" },
 ]
@@ -6471,13 +6472,14 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.25" },
     { name = "pytest-qt", specifier = ">=4.4" },
     { name = "pytest-timeout", specifier = ">=2.0" },
+    { name = "pytest-xdist", specifier = ">=3.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.11" },
 ]
 
 [[package]]
 name = "rotaris-core"
-version = "0.120.0"
+version = "0.120.1"
 source = { editable = "." }
 dependencies = [
     { name = "claude-agent-sdk" },
@@ -6506,6 +6508,7 @@ claude-code = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "psutil" },
     { name = "pyinstaller" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -6544,6 +6547,7 @@ provides-extras = ["claude-code"]
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.15" },
+    { name = "psutil", specifier = ">=6.0" },
     { name = "pyinstaller", specifier = ">=6.11" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.25" },

@@ -1,6 +1,6 @@
 [project]
 name = "rotaris-core"
-version = "0.120.0"
+version = "0.120.1"
 description = "CLI-native agentic orchestration framework built on OpenHands SDK"
 requires-python = ">=3.12"
 license = "MIT"
@@ -40,6 +40,14 @@ dev = [
     "pytest-cov>=6.0",
     "pytest-timeout>=2.0",
     "pytest-xdist>=3.0",
+    # Load-bearing for `-n auto`, not a convenience. xdist resolves `auto` to
+    # `psutil.cpu_count(logical=False)` when psutil imports and falls back to
+    # `os.cpu_count()` when it does not — physical cores against logical ones,
+    # a factor of two on any hyperthreaded box. It reaches the environment today
+    # only as a runtime dependency of `apps/rotaris`, so a sync of this package
+    # alone would silently double the worker count and halve the CPU each test
+    # gets. Declared here so the engine suite's parallelism is its own business.
+    "psutil>=6.0",
     "mypy>=1.15",
     "ruff>=0.11",
     "respx>=0.22",
@@ -59,7 +67,18 @@ testpaths = ["tests"]
 # recorded baseline while their body is empty, so syrupy sees a snapshot no
 # test claims. That is a hygiene signal, not a failure: warn instead of
 # failing the run, or every quarantine would also break the exit code.
-addopts = "--snapshot-warn-unused"
+#
+# `--dist loadfile` gives each worker whole test files instead of individual
+# tests. It is set here rather than in the Makefile because the command that
+# matters is the one someone types by hand, and it buys two things at once.
+# Speed: measured 323s against 399s, and 207s against 364s, on two separate
+# back-to-back pairs of the full engine suite. Determinism: process-wide state
+# — the prompt registry, the skill catalogue, the Textual theme, the sandbox
+# probe caches — is then perturbed only by a file's own neighbours, in a fixed
+# order, instead of by whichever tests from 550 files a scheduler happened to
+# interleave on that worker on that run. `--dist load` is what made the same
+# commit green once and red the next time with nothing changed in between.
+addopts = "--snapshot-warn-unused --dist loadfile"
 markers = [
     "capability: end-to-end capability tests against a real LLM (slow, requires model endpoint)",
     "unit: a focused unit in isolation; collaborators replaced where isolation is the point",

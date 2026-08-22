@@ -1029,7 +1029,11 @@ def create_agent_for_persona(
                 tools.append(Tool(name="todo", params=binding_params))
             elif tool_name == "terminal":
                 _register_terminal_tool_factory(config)
-                tools.append(Tool(name="terminal"))
+                # The identity rides along: without it the factory cannot tell
+                # which run to publish live terminal frames under, or whose
+                # terminal this is, and streaming silently switches itself off
+                # (SWR-3618).
+                tools.append(Tool(name="terminal", params=binding_params))
             elif tool_name == "fetch":
                 _register_fetch_tool_factory(config)
                 tools.append(Tool(name="fetch"))

@@ -79,6 +79,15 @@ def _sanitize_stream_part(raw_part: str) -> tuple[str, bool]:
     cleaned = sanitize_visible_text(raw_part)
     if cleaned.strip():
         return cleaned, False
+    if raw_part and not raw_part.strip():
+        # Whitespace is content while a message streams (SWR-1217). A provider
+        # sends the blank line between two Markdown blocks as a delta of its
+        # own, and the space between two words the same way; dropping either
+        # welds the pieces together, so the paragraph after a heading is parsed
+        # as part of the heading. Returned raw rather than sanitised: on a
+        # whitespace-only delta the tidy-up has nothing left to remove but the
+        # indentation the line after it needs.
+        return raw_part, False
     if _content_is_internal(raw_part):
         return "", True
     return "", False

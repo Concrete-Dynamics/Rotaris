@@ -229,6 +229,63 @@ def test_streaming_can_be_switched_off_without_touching_the_command(
     assert observation.exit_code == 0
 
 
+@verifies(SWR.SWR_3618)
+def test_an_agents_own_terminal_tool_streams_under_its_run_and_its_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    hub: TerminalStreamHub,
+) -> None:
+    """Productive use: the person watching a run opens the terminal window mid-command.
+
+    The tool is taken from the agent the factory actually builds, because the
+    only thing that tells it *which* run to publish under is the identity the
+    agent's tool spec carries.  A spec built without one leaves every screen
+    empty and the window stuck on "No terminal yet", with nothing failing.
+    """
+    from openhands.sdk.llm.llm import LLM
+    from openhands.sdk.tool.registry import resolve_tool
+
+    from rotaris_core.agents.factory import create_agent_for_persona
+
+    workspace = tmp_path / "workspace"
+    (workspace / ".rotaris").mkdir(parents=True)
+    persona = PersonaConfig(name="verifier", model="small_model", tools=["terminal"])
+    config = RotarisConfig(
+        personas={persona.name: persona},
+        default_persona=persona.name,
+        workspace_root=workspace,
+    )
+    config.runtime.terminal_stream_interval_ms = 20
+    monkeypatch.setattr(
+        "rotaris_core.agents.tool_registration._terminal_registered_config_id",
+        None,
+        raising=False,
+    )
+    monkeypatch.setattr("rotaris_core.terminal_stream.hub.default_hub", lambda: hub)
+    monkeypatch.setattr("openhands.tools.terminal.impl._is_tmux_available", lambda: False)
+    monkeypatch.setattr(
+        "openhands.tools.terminal.impl.create_terminal_session",
+        lambda work_dir, **kwargs: _BlockingSession(work_dir),
+    )
+
+    agent = create_agent_for_persona(
+        persona,
+        config,
+        {"session_id": SESSION, "child_canonical_name": "verify-foundation"},
+    )(LLM(model="openai/gpt-4o-mini", api_key="test"))
+    spec = next(spec for spec in agent.tools if spec.name == "terminal")
+    tool = resolve_tool(spec, _FakeConvState(workspace))[0]
+
+    tool.executor(HardenedTerminalAction(command="npm run build"))
+
+    listed = {info.stream_id: info for info in hub.open_streams(SESSION)}
+    assert "fg:verify-foundation" in listed, (
+        "the run's terminal must be listed under the session the desktop follows, "
+        f"and under the agent's own name; got {sorted(listed)}"
+    )
+    assert "step 3" in frames_to_text(hub.replay(SESSION, "fg:verify-foundation"))
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="the PTY backend is POSIX-only")
 @verifies(SWR.SWR_3618)
 def test_a_real_shell_command_streams_its_own_output(

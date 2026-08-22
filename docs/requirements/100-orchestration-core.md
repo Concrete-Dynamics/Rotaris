@@ -685,6 +685,18 @@ accepting. In Auto mode behaviour is unchanged.
 
 > See: [SWR-168–175 — Plan-Mode / Auto-Mode Gate](100-orchestration-core/SWR-168-plan-auto-mode-gate.md)
 
+## SWR-176 — A resumed run inherits its session's intent instead of asking what you meant
+
+status: approved
+
+A short continuation prompt such as `continue` classifies as `ambiguous`, which
+routes the orchestrator to clarify rather than resume. When a resumed run cannot
+be classified and its session still holds unfinished work, it inherits the intent
+that session already recorded. Deterministic: no extra model call, no
+cross-session data.
+
+> See: [SWR-176 — A resumed run inherits its session's intent instead of asking what you meant](100-orchestration-core/SWR-176-resume-intent-carry-over.md)
+
 ## SWR-2912 — Every child record reaches a terminal state when its run ends
 
 status: approved

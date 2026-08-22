@@ -74,19 +74,101 @@ def _prior_orchestrator_response(progress: RalphProgressFile | dict[str, Any] | 
     return None
 
 
-@traces(SWR.SWR_147, SWR.SWR_148, SWR.SWR_167)
+@traces(SWR.SWR_176)
+def _has_unfinished_work(todo_state: dict[str, Any] | None) -> bool:
+    """Whether *todo_state* still holds a task that never completed.
+
+    ``ABANDONED`` counts as unfinished alongside ``PENDING`` and
+    ``IN_PROGRESS``: a crashed run leaves work in any of the three, and a person
+    typing "continue" after a failure means that work, not a fresh start. Only a
+    todo whose tasks all completed has nothing left to continue.
+    """
+    if not todo_state:
+        return False
+
+    from rotaris_core.tools.todo_state import TaskStatus, TodoList
+
+    try:
+        todo = TodoList.model_validate(todo_state)
+    except (TypeError, ValueError):
+        # An unreadable todo is not evidence of unfinished work. Say no and let
+        # the classifier's own result stand.
+        return False
+    return any(
+        task.status is not TaskStatus.COMPLETED for phase in todo.phases for task in phase.tasks
+    )
+
+
+@traces(SWR.SWR_176)
+def carry_over_run_intent(
+    classification: IntentClassificationResult,
+    *,
+    prior_intent: str,
+    todo_state: dict[str, Any] | None,
+) -> IntentClassificationResult:
+    """Inherit the session's recorded intent when this run could not be classified.
+
+    A continuation prompt — "continue", "go on", "keep going" — carries no scope
+    of its own, so it classifies as ``ambiguous``, and ``ambiguous`` routes the
+    orchestrator to the ``G-clarify`` playbook group: it shapes requirements and
+    delegates research instead of resuming what stopped. The session already
+    holds the answer in the intent its previous run recorded (SWR-176).
+
+    Deterministic by construction — no model call, no ranking, and nothing from
+    outside this session. The worst case is re-using a decision already made for
+    this same session, which is why it needs no confidence threshold.
+
+    Returns *classification* unchanged unless all of these hold: the result is
+    unusable (``ambiguous`` or ``fallback``), *prior_intent* names a real
+    non-``ambiguous`` category, and *todo_state* still has unfinished work.
+    """
+    from rotaris_core.ralph.intent_classifier import IntentCategory
+
+    usable = not classification.fallback and classification.intent is not IntentCategory.AMBIGUOUS
+    if usable:
+        return classification
+
+    try:
+        inherited = IntentCategory(prior_intent)
+    except ValueError:
+        # No prior run, or a snapshot written before ``run_intent`` existed.
+        return classification
+    if inherited is IntentCategory.AMBIGUOUS:
+        # Inheriting ambiguity resolves nothing.
+        return classification
+    if not _has_unfinished_work(todo_state):
+        return classification
+
+    return classification.model_copy(
+        update={
+            "intent": inherited,
+            "fallback": False,
+            "carried_over": True,
+            "reason": f"continued the session's previous intent ({inherited.value})",
+        },
+    )
+
+
+@traces(SWR.SWR_147, SWR.SWR_148, SWR.SWR_167, SWR.SWR_176)
 async def classify_run_intent(
     config: RotarisConfig,
     task_text: str,
     *,
     entrypoint: str,
     progress: RalphProgressFile | dict[str, Any] | None = None,
+    prior_intent: str = "",
+    todo_state: dict[str, Any] | None = None,
 ) -> IntentClassificationResult:
-    """Classify user intent with bounded, attributable same-session history."""
+    """Classify user intent with bounded, attributable same-session history.
+
+    *prior_intent* and *todo_state* come from the session being resumed and are
+    read before the host overwrites ``SessionState.run_intent`` with this run's
+    result; both default to "fresh session", so a new run behaves as before.
+    """
     from rotaris_core.ralph import intent_classifier
 
     try:
-        return await intent_classifier.classify_initial_intent(
+        classification = await intent_classifier.classify_initial_intent(
             config,
             task_text,
             metadata={"entrypoint": entrypoint},
@@ -94,11 +176,16 @@ async def classify_run_intent(
         )
     except Exception as exc:  # noqa: BLE001
         _log.warning("Intent classification pre-flight failed (%s); continuing", exc)
-        return intent_classifier.IntentClassificationResult(
+        classification = intent_classifier.IntentClassificationResult(
             intent=intent_classifier.FALLBACK_INTENT,
             reason=f"classification pre-flight error: {exc}",
             fallback=True,
         )
+    return carry_over_run_intent(
+        classification,
+        prior_intent=prior_intent,
+        todo_state=todo_state,
+    )
 
 
 @traces(SWR.SWR_2128)

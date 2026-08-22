@@ -1811,6 +1811,23 @@ def test_markdown_renderer_renders_gfm_tables_strikethrough_and_task_lists() -> 
     assert "checkbox" in checked or "<li" in checked
 
 
+@verifies(SWR.SWR_2021)
+def test_transcript_document_sizes_markdown_headings_from_the_type_scale() -> None:
+    """A `#` heading inside a row is a section label, not a page title: Qt's own 2em
+    default reads as a second message rather than a heading in this one."""
+    from rotaris.theme import tokens
+    from rotaris.views.transcript import _document_css
+
+    css = _document_css("message")
+    scale = tokens().type.scale
+
+    assert f"h1{{font-size:{scale.md}px" in css
+    assert f"h2{{font-size:{scale.base}px" in css
+    assert f"h3,h4,h5,h6{{font-size:{scale.sm}px" in css
+    # every heading level stays inside the row's own ladder
+    assert scale.md < scale.h3
+
+
 @verifies(SWR.SWR_2082)
 def test_markdown_cache_is_bounded_by_entries_and_content_size() -> None:
     clear_markdown_cache()

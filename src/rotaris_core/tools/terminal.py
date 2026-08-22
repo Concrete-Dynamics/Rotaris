@@ -1757,7 +1757,17 @@ class HardenedTerminalTool(ToolDefinition[HardenedTerminalAction, HardenedTermin
         stream_key: str = "",
         stream_interval_s: float = 0.1,
         executor: ToolExecutor[Any, Any] | None = None,
+        **identity: Any,
     ) -> Sequence[Self]:
+        """Build the tool; *identity* is the agent's ``Tool.params``, ignored here.
+
+        A ``terminal`` spec carries who is calling it (SWR-2426), and this class
+        is registered under that name directly as well as behind the runtime
+        factory. Whichever registration wins has to survive the same spec, so
+        the identity keys are accepted and dropped rather than fatal — the
+        factory is where they mean something.
+        """
+        del identity
         working_dir = conv_state.workspace.working_dir
         if not os.path.isdir(working_dir):
             raise ValueError(f"working_dir '{working_dir}' is not a valid directory")

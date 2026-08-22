@@ -392,3 +392,25 @@ def test_a_second_runs_settings_do_not_reach_the_first_runs_terminal(
         f"the run being watched must keep streaming when a later run starts; got {listed}"
     )
     assert "step 3" in frames_to_text(hub.replay("watched-run", "fg:coder-1"))
+
+
+@verifies(SWR.SWR_2426, SWR.SWR_3618)
+def test_the_terminal_tool_survives_the_identity_its_spec_carries(tmp_path: Path) -> None:
+    """Productive use: a session is restored and its agents rebuild their tools.
+
+    Expected outcome: the run starts. ``terminal`` is registered twice — once as
+    this class directly, once behind the runtime factory — and a spec now
+    carries the caller's identity for streaming. The registration that does not
+    read those keys must still accept them: refusing turned a restored session
+    into "Run failed" before the agent took a single step."""
+    from rotaris_core.agents.tool_registration import identity_params
+    from rotaris_core.tools.terminal import HardenedTerminalTool
+
+    workspace = tmp_path / "workspace"
+    (workspace / ".rotaris").mkdir(parents=True)
+    params = identity_params("coder", {"child_canonical_name": "coder-1", "session_id": "sess"})
+
+    tools = HardenedTerminalTool.create(conv_state=_FakeConvState(workspace), **params)
+
+    assert len(tools) == 1
+    assert tools[0].name == "terminal"

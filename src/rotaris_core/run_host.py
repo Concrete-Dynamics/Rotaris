@@ -110,6 +110,12 @@ class RunRequest:
     # carries the attribution it was created with.
     requirement_id: str = ""
     unit_id: str = ""
+    #: Name a *new* session before it exists, so a host can show the run in its
+    #: own lists before the worker reports back. Ignored when resuming.
+    new_session_id: str | None = None
+    #: Which delegation strategy the run's orchestrator uses. ``None`` leaves
+    #: the loop's own default in place.
+    delegation_strategy: str | None = None
 
 
 #: Prefix every "the run never started" diagnostic carries.  It is part of the
@@ -395,8 +401,11 @@ def _bind_worktree(
         session_manager.workspace_root,
         storage_subpath=config.worktree_storage_subpath,
     )
+    # ``…_unique`` rather than ``create_for_session``: parallel launches
+    # routinely collide on the requested branch, and resolving a free variant
+    # is what keeps the second run from failing over a name.
     state.worktree = (
-        service.create_for_session(state.session_id, request.worktree_branch)
+        service.create_for_session_unique(state.session_id, request.worktree_branch)
         if request.isolate
         else service.attach_existing(request.worktree_path)  # type: ignore[arg-type]
     )
@@ -519,6 +528,8 @@ async def execute_run(
     *,
     event_sink: EventSink | None = None,
     iteration_observer: RalphIterationObserver | None = None,
+    on_session_ready: Callable[[SessionState], RalphIterationObserver | None] | None = None,
+    improvement_job_sink: Callable[[Any], None] | None = None,
     cancel_event: asyncio.Event | None = None,
     notice: Callable[[str], None] | None = None,
 ) -> RunResult:
@@ -535,6 +546,17 @@ async def execute_run(
         iteration_observer: A host's *own* loop observer.  Passing one replaces
             the headless message-limit observer and enables the mid-run
             entry-model override, which is why the SDK does not pass one.
+        on_session_ready: The host's binding point, called once the session
+            exists, its lock is held, its worktree is bound and its sandbox
+            verdict is recorded — and before the loop starts.  It is both the
+            "this run is now identifiable" notification a host needs to show the
+            run in its own lists, and the host's chance to build an observer
+            that needs the :class:`SessionState`: whatever it returns is used as
+            ``iteration_observer``.  Returning ``None`` leaves that slot alone.
+        improvement_job_sink: Where the post-run improvement job goes.  Without
+            one the job is awaited here, which is right for a host that has
+            nothing else to do; a host with a UI thread takes the job instead
+            and runs it where it will not block anything.
         cancel_event: Set it to stop the run.  The result is then
             :attr:`RunStatus.INTERRUPTED` (exit code 130), the same outcome
             Ctrl-C produces.
@@ -575,6 +597,7 @@ async def execute_run(
     else:
         state = session_manager.create_session(
             config,
+            session_id=request.new_session_id,
             requirement_id=request.requirement_id,
             unit_id=request.unit_id,
         )
@@ -588,6 +611,27 @@ async def execute_run(
                 state.session_id,
                 event_sink,
             )
+
+    # SWR-2507, before anything else this run does: a session that asked for a
+    # sandbox it cannot have fails at launch with the backend's own reason,
+    # rather than reaching its first shell command and failing there — or, worse,
+    # running it on the host. The verdict is recorded on the state in the same
+    # breath, so the snapshot can never claim a mechanism that did not start.
+    from rotaris_core.sandbox.session import sandbox_verdict
+
+    try:
+        state.sandboxed, state.sandbox_backend = sandbox_verdict(config)
+    except Exception as exc:
+        session_manager.release_lock(state.session_id)
+        if not request.session_id:
+            # Only a session this call created; a resumed one is the user's
+            # history and must survive a failed launch.
+            session_manager.persistence.delete_session(state.session_id)
+        return _failed_before_run(
+            f"{PRE_RUN_ERROR_PREFIX}{exc}",
+            state.session_id,
+            event_sink,
+        )
 
     from rotaris_core.session.metrics import hydrate_tracker_from_session
 
@@ -615,6 +659,15 @@ async def execute_run(
     )
     state.execution_status = "running"
     persist_session_state(session_manager, state)
+
+    # Everything a host needs to name this run now exists: the session id, its
+    # worktree branch and its sandbox verdict. A host that builds an observer
+    # around the state hands it back here rather than pre-building one it could
+    # not have (see ``on_session_ready``).
+    if on_session_ready is not None:
+        host_observer = on_session_ready(state)
+        if host_observer is not None:
+            iteration_observer = host_observer
 
     post_run_improvement_job: Any | None = None
     progress: RalphProgressFile | None = None
@@ -684,14 +737,26 @@ async def execute_run(
     # ``execute_run`` — the CLI and the Python SDK.  Rotaris' desktop run bridge
     # drives ``cli.background._run_task`` directly and is not wired here; giving
     # it the same attach/detach pair is its own change.
-    register_event_sink(
-        state.session_id,
-        attach_session_store(
+    # A store that cannot be opened — a read-only session directory, an
+    # exhausted disk — costs this session its replay (SWR-2902) and its
+    # trajectory export (SWR-2903). It must not also cost the user the run, so
+    # the host's own sink is registered on its own and the run goes on.
+    try:
+        session_sink: EventSink | None = attach_session_store(
             session_dir,
             session_id=state.session_id,
             downstream=event_sink,
-        ),
-    )
+        )
+    except Exception:  # noqa: BLE001 - a run without history beats a run that dies.
+        _log.warning(
+            "Could not attach the event store for %s; this session will have no "
+            "stored history to replay or export.",
+            state.session_id,
+            exc_info=True,
+        )
+        session_sink = event_sink
+    if session_sink is not None:
+        register_event_sink(state.session_id, session_sink)
     publish(
         state.session_id,
         _session_start_event(state, config, request.task, request.max_iterations),
@@ -724,6 +789,7 @@ async def execute_run(
                 request.max_iterations,
                 interrupt_handler=bridge,
                 iteration_observer=iteration_observer,
+                delegation_strategy=request.delegation_strategy,
                 post_run_improvement_job_sink=_capture_post_run_improvement_job,
                 # Unconditional since SWR-2901: the loop's events are what the
                 # store persists, so switching them off for a run without a
@@ -776,7 +842,12 @@ async def execute_run(
             },
         )
         persist_session_state(session_manager, state)
-        if post_run_improvement_job is not None:
+        if post_run_improvement_job is not None and improvement_job_sink is not None:
+            # Handed over rather than awaited: a host with a UI thread runs this
+            # where it will not hold the run open, and applies the result the
+            # same way the branch below does.
+            improvement_job_sink(post_run_improvement_job)
+        elif post_run_improvement_job is not None:
             # Awaited, not ``asyncio.run``: this coroutine used to run in a
             # second event loop opened after the first one closed, which a
             # host that owns its loop cannot do.
@@ -834,6 +905,17 @@ async def execute_run(
                 state.session_id,
                 exc_info=True,
             )
+        # The disabled-hook tally lives on the runner and has to be read before
+        # it is discarded below. Every host gets it, for the same reason every
+        # host gets the start advisory: the run switched a hook off, and the
+        # person whose config it is should hear so once (SWR-2704).
+        if notice is not None:
+            from rotaris_core.hooks.runner import disabled_hooks_notice
+
+            with contextlib.suppress(Exception):
+                finish_notice = disabled_hooks_notice(hook_runner)
+                if finish_notice:
+                    notice(finish_notice)
         discard_event_sink(state.session_id)
         # Same reason the sink is discarded here: a store or a hook runner left
         # registered would append this session's history — or fire its hooks —

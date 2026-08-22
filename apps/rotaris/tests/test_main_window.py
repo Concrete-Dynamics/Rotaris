@@ -66,13 +66,20 @@ def test_user_answers_exact_waiting_agent_through_rotaris(
         user_prompt_barrier=barrier,
         _active_conversations={"other-agent": other, "asking-agent": asking},
     )
+    # Built on the worker's real shape — an observer holding the loop — rather
+    # than on a ``_ralph`` attribute the worker has never had. The invented one
+    # is what kept a dead answer path looking covered.
+    #
     # Closing the window shuts the bridge down, which cancels the worker, so the
-    # fake has to answer that call too (Windows delivers closeEvent on teardown).
-    bridge._worker = SimpleNamespace(
-        _ralph=SimpleNamespace(scheduler=scheduler),
-        cancel_pending_questions=lambda: None,
-        cancel=lambda: None,
-    )
+    # fake has to answer those calls too (Windows delivers closeEvent on teardown).
+    from rotaris.services.run_bridge import _RunWorker
+
+    worker = _RunWorker.__new__(_RunWorker)
+    worker._observer = SimpleNamespace(ralph=SimpleNamespace(scheduler=scheduler))
+    worker.cancel_pending_approvals = lambda: None
+    worker.cancel = lambda: None
+    bridge._worker = worker
+    bridge._run_active = True
 
     window = MainWindow(store, config_service=service, run_bridge=bridge)
     qtbot.addWidget(window)

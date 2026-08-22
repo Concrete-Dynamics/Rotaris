@@ -71,7 +71,7 @@ if TYPE_CHECKING:
     from rotaris_core.hooks.models import ResolvedHook
     from rotaris_core.session.diagnostics import SessionDiagnostics
 
-__all__ = ["HookOutcome", "HookRunner", "publish_skipped_hooks"]
+__all__ = ["HookOutcome", "HookRunner", "disabled_hooks_notice", "publish_skipped_hooks"]
 
 _log = logging.getLogger(__name__)
 
@@ -781,3 +781,26 @@ class HookRunner:
                 outcome.hook_id,
                 exc_info=True,
             )
+
+
+@traces(SWR.SWR_2704)
+def disabled_hooks_notice(runner: object) -> str:
+    """Warning for hooks a run switched off after repeated failures, or ``""``.
+
+    Reports the count only. A hook's *name* is written by whoever wrote the
+    config it came from, and an advisory is not a place to render text the user
+    has not opened on purpose.
+    """
+    try:
+        disabled = runner.disabled_hook_ids  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001 - a warning must not become the failure.
+        return ""
+    count = len(disabled)
+    if not count:
+        return ""
+    noun = "hook" if count == 1 else "hooks"
+    return (
+        f"{count} {noun} failed repeatedly and {'was' if count == 1 else 'were'} "
+        f"switched off for the rest of this session. See the session's "
+        f"diagnostics for the command output."
+    )

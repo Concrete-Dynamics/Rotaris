@@ -540,6 +540,19 @@ def _force_sandbox_verdict(monkeypatch: pytest.MonkeyPatch, *, available: bool) 
     )
     monkeypatch.setattr("rotaris_core.sandbox.session.probe_sandbox", lambda: verdict)
 
+    # The same verdict through the *launch* probe. ``probe_sandbox`` answers
+    # "is a sandbox active" for the session.start field; ``ensure_sandbox_available``
+    # answers "may this run start at all" and goes through the backend. Pinning
+    # only the first left a run that reported itself sandboxed and then met the
+    # host's real, absent backend at launch.
+    class _Backend:
+        name = verdict.backend
+
+        def probe(self) -> object:
+            return verdict
+
+    monkeypatch.setattr("rotaris_core.sandbox.session.resolve_backend", lambda: _Backend())
+
 
 def _install_fake_run_with_a_tool_call(monkeypatch: pytest.MonkeyPatch) -> None:
     """A scripted run that exercises the iteration *and* tool event families."""
@@ -605,8 +618,10 @@ def test_a_headless_stream_json_run_is_consumable_end_to_end(
         "_load_config",
         lambda workspace_root, _config_path: _sandboxed_config(workspace_root),
     )
-    # A sandbox was configured but this host cannot provide one.
-    _force_sandbox_verdict(monkeypatch, available=False)
+    # The sandbox this config asks for is available here. A configured sandbox
+    # the host *cannot* provide no longer produces a stream at all — the run is
+    # refused before it starts; that is the test below.
+    _force_sandbox_verdict(monkeypatch, available=True)
     _install_fake_run_with_a_tool_call(monkeypatch)
 
     code = argparse_app.main(
@@ -652,13 +667,34 @@ def test_a_headless_stream_json_run_is_consumable_end_to_end(
     assert "deploy" in tool_start["arguments"]["command"], "readable text must survive"
 
     # 6 — sandboxed reports availability, not configuration.
-    assert events[0]["sandboxed"] is False
+    assert events[0]["sandboxed"] is True
 
-    # And the other half of that contract: an available sandbox reports true for
-    # the very same configuration.
-    _force_sandbox_verdict(monkeypatch, available=True)
+
+@verifies(SWR.SWR_2507)
+def test_a_sandbox_the_host_cannot_provide_refuses_the_run_before_it_starts(
+    headless_workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Productive use: a CI job asks for a sandbox on a runner that has none.
+
+    Expected outcome: the job fails at launch, naming the reason, rather than
+    executing the whole run on the bare host and reporting ``sandboxed: false``
+    in a field nobody reads. SWR-2507 forbids the quiet downgrade, and the
+    desktop has always refused here; this is the headless host being held to the
+    same promise now that both share one lifecycle.
+
+    The stream is therefore one line — the terminal ``result`` — which is what a
+    consumer needs to tell "refused before it began" from "ran and failed"."""
+    monkeypatch.setattr(
+        argparse_app,
+        "_load_config",
+        lambda workspace_root, _config_path: _sandboxed_config(workspace_root),
+    )
+    _force_sandbox_verdict(monkeypatch, available=False)
     _install_fake_run_with_a_tool_call(monkeypatch)
-    argparse_app.main(
+
+    code = argparse_app.main(
         [
             "run",
             "ship the release",
@@ -668,4 +704,14 @@ def test_a_headless_stream_json_run_is_consumable_end_to_end(
             "stream-json",
         ],
     )
-    assert _stream_events(capsys.readouterr().out)[0]["sandboxed"] is True
+
+    events = _stream_events(capsys.readouterr().out)
+    assert [event["event"] for event in events] == ["result"]
+    reported = RunStatus(events[-1]["result"]["status"])
+    assert reported is RunStatus.ERROR
+    assert code == EXIT_CODES[reported]
+    # The backend's own reason and remediation, not a generic refusal: what the
+    # operator needs is the missing tool's name and how to install it.
+    error = events[-1]["result"]["error"]
+    assert "bwrap was not found on PATH" in error
+    assert "install bubblewrap" in error

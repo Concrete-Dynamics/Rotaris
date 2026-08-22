@@ -958,17 +958,18 @@ appended rows and their successor; painting touches only the visible rows.
 
 Full requirement: [SWR-2452 — Transcript geometry is incremental and never partially laid out](2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md)
 
-## SWR-2453 — A desktop run is the same run as a CLI run
+## SWR-2453 — Every run the desktop starts is the same run as a CLI run
 
-A run started from the desktop must behave the same as one started from the CLI, the
-TUI or the SDK for the same workspace, task and config, and the desktop must not carry
-a second implementation of run-lifecycle behaviour — session creation and resume,
-locking, worktree binding, session start/end, hook dispatch, per-iteration
-checkpointing, result derivation, and release on every exit path. Closes the desktop
-exemption recorded in SWR-1830. States sameness, not mechanism: the desktop keeps its
-own event loop, worker thread and session identity.
+Every run the desktop starts must behave the same as one started from the CLI, the TUI
+or the SDK for the same workspace, task and config, and no host may keep a private
+re-composition of run-lifecycle behaviour — session creation and resume, locking,
+worktree binding, event-store attach, session start/end, hook dispatch, per-iteration
+checkpointing, result derivation, and release on every exit path. The ordinary and
+requirement-driven runs already satisfy this; the worktree integration run does not,
+and is the remaining half of the exemption SWR-1830 recorded. States sameness, not
+mechanism: the desktop keeps its own event loop, worker thread and session identity.
 
-Full requirement: [SWR-2453 — A desktop run is the same run as a CLI run](2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
+Full requirement: [SWR-2453 — Every run the desktop starts is the same run as a CLI run](2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
 
 ## SWR-2454 — The live view keeps up with the run
 

@@ -419,6 +419,10 @@ class TranscriptListModel(QAbstractListModel):
             "remove": 0,
             "update": 0,
             "reset": 0,
+            # A delta whose boundary does not fit this model (SWR-2454). Counted
+            # rather than logged: it is the reconciler's cue, and a test that
+            # cares about the delta path wants to know it never happened.
+            "refused": 0,
         }
 
     @override
@@ -455,6 +459,66 @@ class TranscriptListModel(QAbstractListModel):
     @property
     def events(self) -> list[TranscriptEvent]:
         return self._events
+
+    @traces(SWR.SWR_2454)
+    def apply_delta(self, first: int, rows: list[TranscriptEvent]) -> bool:
+        """Replace the rows from *first* on, told where the change begins.
+
+        :meth:`sync` does the same model operations but has to *find* the
+        boundary, and finding it compares every row before it — the one O(N)
+        step left in an otherwise incremental path. A live run already knows
+        where it reached back to, so it says so and this applies it directly.
+
+        Out-of-range boundaries are refused rather than clamped: a delta that
+        does not fit the model is a delta about a different transcript, and the
+        reconciling read is the right way to recover from that.
+        """
+        old_count = len(self._events)
+        if first < 0 or first > old_count:
+            self.operation_counts["refused"] += 1
+            return False
+        new_count = first + len(rows)
+        if rows == self._events[first:]:
+            self.operation_counts["noop"] += 1
+            return False
+
+        if first == old_count:
+            self.beginInsertRows(QModelIndex(), old_count, new_count - 1)
+            self._events.extend(rows)
+            self.endInsertRows()
+            self.operation_counts["insert"] += new_count - old_count
+            return True
+
+        if new_count < old_count:
+            # Shorter: settle the rows that stay, then drop the tail. Removal
+            # last so no index the update used is invalidated under it.
+            self._events[first:new_count] = rows
+            self.dataChanged.emit(
+                self.index(first, 0),
+                self.index(new_count - 1, 0),
+                [EVENT_ROLE, int(Qt.ItemDataRole.DisplayRole)],
+            )
+            self.operation_counts["update"] += len(rows)
+            self.beginRemoveRows(QModelIndex(), new_count, old_count - 1)
+            del self._events[new_count:]
+            self.endRemoveRows()
+            self.operation_counts["remove"] += old_count - new_count
+            return True
+
+        overlap = old_count - first
+        self._events[first:old_count] = rows[:overlap]
+        self.dataChanged.emit(
+            self.index(first, 0),
+            self.index(old_count - 1, 0),
+            [EVENT_ROLE, int(Qt.ItemDataRole.DisplayRole)],
+        )
+        self.operation_counts["update"] += overlap
+        if new_count > old_count:
+            self.beginInsertRows(QModelIndex(), old_count, new_count - 1)
+            self._events.extend(rows[overlap:])
+            self.endInsertRows()
+            self.operation_counts["insert"] += new_count - old_count
+        return True
 
     def sync(self, events: list[TranscriptEvent]) -> bool:
         """Apply common append, truncate, and streamed-tail updates incrementally."""
@@ -1476,6 +1540,22 @@ class TranscriptListView(Themed, QAbstractItemView):
         """
         self._source_events = list(events)
         return self.transcript_model.sync(self._display_events())
+
+    @traces(SWR.SWR_2454)
+    def apply_events_delta(self, first: int, rows: list[TranscriptEvent]) -> bool:
+        """Feed the transcript a suffix, told where it begins.
+
+        Refuses — and answers ``False`` — while tool grouping is on: grouping
+        rewrites which rows exist, so a boundary in source events is not a
+        boundary in displayed rows. The caller falls back to
+        :meth:`set_events`, which is correct and merely not cheap.
+        """
+        if first < 0 or first > len(self._source_events):
+            return False
+        if self._group_tools_getter is not None and self._group_tools_getter():
+            return False
+        self._source_events[first:] = rows
+        return self.transcript_model.apply_delta(first, rows)
 
     @traces(SWR.SWR_2432)
     def _display_events(self) -> list[TranscriptEvent]:

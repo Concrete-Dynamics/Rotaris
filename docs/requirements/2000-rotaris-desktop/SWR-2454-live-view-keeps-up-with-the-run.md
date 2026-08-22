@@ -60,21 +60,30 @@ sessions that matter most are the ones served worst.
 
 #### Scope of the cost criterion, as of 2026-08-22
 
-The bounded-cost criterion is satisfied first for the sessions this process is
-executing, and that is where it is currently gated. A session executing in
-**another** process is reached only through the filesystem, and the durable
-record it leaves is not a delta a reader can follow cheaply: the session state
-files are rewritten whole, and the one append-only log a run does leave —
-`evidence/events.jsonl` (SWR-2901) — carries no transcript content, so the view
-cannot be built from it. Following a foreign session at O(change) therefore
-depends on the wire schema (SWR-1829) gaining an event that carries what the
-transcript renders. Until it does, a foreign session is served by a
-whole-session read whose *frequency* is bounded but whose *cost per read* is
-not, and the latency ceiling in § Reach is what keeps that honest.
+Two limitations, both dated, and neither a permission: the criteria above are
+the obligation, and a design that makes either gap structurally permanent has
+chosen wrongly.
 
-This is a dated limitation, not a permission: the criterion above is the
-obligation, and a design that meets it for local sessions while making the
-foreign path structurally unable to meet it has chosen wrongly.
+**A session executing in another process** is reached only through the
+filesystem, and the durable record it leaves is not a delta a reader can follow
+cheaply: the session state files are rewritten whole, and the one append-only
+log a run does leave — `evidence/events.jsonl` (SWR-2901) — carries no
+transcript content, so the view cannot be built from it. Following a foreign
+session at O(change) therefore depends on the wire schema (SWR-1829) gaining an
+event that carries what the transcript renders. Until it does, a foreign session
+is served by a whole-session read whose *frequency* is bounded but whose *cost
+per read* is not, and the latency ceiling in § Reach is what keeps that honest.
+
+**Within this process, the transcript is served first.** It is the only surface
+whose cost grew with the session, and it is the one the criteria were written
+about. The rest — child states, todos, pending approvals, verifier progress,
+token counts — is bounded by how much is happening at once rather than by how
+long the session has run, and stays on the reconciling read that already serves
+every foreign session. Two consequences follow and are stated rather than left
+to be discovered: those surfaces keep the reconciler's latency rather than the
+250 ms budget, and the desktop keeps shortening the persistence debounce for
+them, which is the coupling SWR-2130's scope note exists to end. Giving them a
+channel of their own is what closes both.
 
 ### Reach — what must keep working
 

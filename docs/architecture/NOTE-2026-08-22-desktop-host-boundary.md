@@ -233,6 +233,40 @@ session as `RunRequest.session_id` deadlocks. `create_session` acquires the lock
 and `persistence.acquire_lock` is `O_CREAT|O_EXCL` behind a stale-pid reaper, so
 a lock held by a *live* pid — our own — returns `False`.
 
+### What the implementation landed, and what it left standing
+
+Both requirements are satisfied for the case they were written about, and three
+things are left standing on purpose. Written down here because the second is
+easy to mistake for an oversight.
+
+Landed: every desktop run path goes through `execute_run`, the integration run
+included; the transcript reaches the view through `_SessionObserver`'s delta
+sink rather than through a snapshot read, at a cost bounded by the change from
+the run's own thread all the way to `TranscriptListModel.apply_delta`. The poll
+is now that surface's *reconciler* — the backstop for a delta the projector
+refuses — rather than its source. `apps/rotaris/tests/test_live_view_latency.py`
+pins that by stopping the timer: with no poll running, the rows still arrive.
+
+Left standing:
+
+1. **A foreign session is still whole-state per read** — the SWR-1829
+   prerequisite above.
+2. **Only the transcript is on the live channel.** Child states, todos,
+   approvals, verifier progress and token counts still reach the view through
+   the reconciling read, because their cost is bounded by concurrency and never
+   grew with the session. The thing to keep in view is not their cost but their
+   *latency*: they hold the reconciler's, and the desktop still shortens the
+   persistence debounce for them — exactly the SWR-2130 coupling that
+   requirement's scope note wants gone. The transcript no longer needs it; they
+   do.
+3. **Two stages inside the view still read the whole list.** An agent filter
+   (SWR-2099) and tool grouping (SWR-2432) each rewrite which rows exist, so a
+   boundary in source rows is not a boundary in displayed rows. Both are
+   *refused* by `TranscriptScrollArea.apply_events_delta` rather than
+   approximated, and the whole-list refresh runs instead — correct, and merely
+   as expensive as it always was. With neither on, which is the default, the
+   cheap path holds end to end.
+
 ## Open questions for the implementation plan
 
 1. **The 250 ms budget in SWR-2454 is a proposal, not a measurement.** It comes

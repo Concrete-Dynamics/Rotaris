@@ -85,6 +85,12 @@ class AgentWindow(Themed, QMainWindow):
         store.agents_changed.connect(self.refresh)
         store.artifacts_changed.connect(self.refresh)
         store.transcript_changed.connect(self._refresh_transcripts)
+        # A live run reports its transcript through ``transcript_delta`` alone
+        # (SWR-2454). This window rebuilds from the whole list either way — it
+        # shows one agent's slice, which a source-row boundary does not
+        # describe — so it answers the narrow signal with the wide refresh. It
+        # only exists while a pop-out is open, so that cost is a user's choice.
+        store.transcript_delta.connect(self._on_transcript_delta)
         self.refresh()
         self.install_theme_hook()
 
@@ -129,6 +135,10 @@ class AgentWindow(Themed, QMainWindow):
             page = self.tabs.widget(index)
             if isinstance(page, _AgentTab):
                 page.refresh_transcript()
+
+    @traces(SWR.SWR_2454)
+    def _on_transcript_delta(self, _first: int, _rows: object) -> None:
+        self._refresh_transcripts()
 
 
 @traces(SWR.SWR_2093, SWR.SWR_2421, SWR.SWR_2432, SWR.SWR_3010)

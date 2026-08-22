@@ -14,6 +14,32 @@ from typing import Literal
 from rotaris_core.reqtocode import SWR, traces
 
 
+@traces(SWR.SWR_2454)
+@dataclass(frozen=True, slots=True)
+class TranscriptDelta:
+    """What changed in a running session's transcript, and where it starts.
+
+    The unit the live path moves. Raw rows, not projected ones: projection is
+    the view's half of the work, and doing it here would put a second
+    derivation of "what a row renders as" on the run's own thread.
+
+    ``first`` is a raw index into the session's ``transcript_events`` — the
+    earliest row that may have changed. Everything from there on is in
+    ``rows``; everything before it is untouched. Both are copies, because the
+    run goes on mutating the originals.
+    """
+
+    #: Raw index the change reaches back to.
+    first: int
+    #: Raw rows from :attr:`first` onward, copied.
+    rows: list[dict[str, object]]
+    #: Edit-diff artifacts recorded since the previous delta, copied. Only the
+    #: new ones: the consumer keeps the ones it has already been given.
+    new_diffs: list[dict[str, object]] = field(default_factory=list)
+    #: Agent name → persona, for rows that carry no persona of their own.
+    personas: dict[str, str] = field(default_factory=dict)
+
+
 class AgentState(StrEnum):
     RUNNING = "running"
     WAITING = "waiting"

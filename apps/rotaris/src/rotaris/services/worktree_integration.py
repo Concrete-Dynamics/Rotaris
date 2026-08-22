@@ -149,7 +149,9 @@ class _WorktreeIntegrationWorker(QObject):
             )
             if not _completed(result):
                 raise RuntimeError(
-                    result.error or result.summary or "Integration agent did not complete the merge."
+                    result.error
+                    or result.summary
+                    or "Integration agent did not complete the merge."
                 )
             self.progress.emit("Verifying integration and updating base branch…")
             service.finalize_integration(manager, plan)

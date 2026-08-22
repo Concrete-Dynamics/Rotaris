@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import time
 from types import SimpleNamespace
@@ -12,7 +13,10 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 from rotaris_core.reqtocode import SWR, traces
 from rotaris_core.runchannel import InProcessRunControl, RunControl
 
+from rotaris.models.state import TranscriptDelta
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from rotaris_core.permissions import EffectiveMode
@@ -156,10 +160,17 @@ class RunBridge(QObject):
         """Session this handle drives ('' before the run reports started)."""
         return self._session_id
 
-    @traces(SWR.SWR_2434)
+    @traces(SWR.SWR_2434, SWR.SWR_2454)
     def set_projection_enabled(self, enabled: bool) -> None:
-        """Focus (or unfocus) this handle's writes to the shared store."""
+        """Focus (or unfocus) this handle's writes to the shared store.
+
+        Losing focus also hands the transcript back to the reconciling read:
+        the store is about to hold a different session, and a projector seeded
+        on this one would place the next delta against the wrong transcript.
+        """
         self.projection_enabled = enabled
+        if not enabled:
+            self.config_service.release_transcript_delta_feed()
 
     @traces(SWR.SWR_2504)
     def resolve_approval(self, request_id: str, option: str) -> bool:
@@ -217,6 +228,7 @@ class RunBridge(QObject):
         worker.improvement_job_ready.connect(self._queue_improvement_job)
         worker.worktree_ready.connect(self._on_worktree_ready)
         worker.hook_notice.connect(self._on_hook_notice)
+        worker.transcript_delta.connect(self._on_transcript_delta)
         worker.finished.connect(thread.quit)
         worker.failed.connect(thread.quit)
         self._thread = thread
@@ -503,6 +515,28 @@ class RunBridge(QObject):
         self._poller.stop()
         self._begin_final_refresh("failed", message)
 
+    @Slot(object)
+    @traces(SWR.SWR_2454)
+    def _on_transcript_delta(self, delta: object) -> None:
+        """Put a live run's transcript change on screen. Qt thread, queued.
+
+        Guarded by the same two conditions the refresh is: a background run
+        keeps producing deltas but only the focused handle may write the shared
+        transcript, and a handle that is shutting down writes nothing at all.
+
+        Never raises past this frame. The reconciling read is the backstop: a
+        delta that cannot be applied costs one refresh of latency, never a row.
+        """
+        if not self.projection_enabled or self._shutting_down:
+            return
+        try:
+            self.config_service.apply_transcript_delta(cast("TranscriptDelta", delta))
+        except Exception:  # noqa: BLE001 - a view failure must not reach the run
+            _log.warning("Could not apply a transcript delta; reconciling instead.", exc_info=True)
+            self.config_service.release_transcript_delta_feed()
+            return
+        self.store_updated.emit()
+
     @Slot()
     def _poll(self) -> None:
         with self.diagnostics.span("RunBridge._poll"):
@@ -614,8 +648,14 @@ class RunBridge(QObject):
             self.refresh_failed.emit(f"Final session refresh failed after 3 attempts: {message}")
             self._complete_run_signal()
 
-    @traces(SWR.SWR_2507)
+    @traces(SWR.SWR_2507, SWR.SWR_2454)
     def _begin_final_refresh(self, kind: str, payload: str) -> None:
+        # The run is over, so its delta feed is over: the final read is the
+        # authority on what the session ended up as, and it has to be allowed to
+        # write the transcript. It is also the read that applies the retroactive
+        # "this session is no longer live" rules — an unsettled tool row, an
+        # unstamped reasoning burst — which no delta can express.
+        self.config_service.release_transcript_delta_feed()
         self._final_completion = (kind, payload)
         self._final_refresh_attempts = 0
         if not self._session_id:
@@ -808,6 +848,10 @@ class _RunWorker(QObject):
     #: A hook advisory this run has to show the user (SWR-2701, SWR-2704).
     #: Never carries a hook's command text.
     hook_notice = Signal(str)
+    #: One :class:`~rotaris.models.state.TranscriptDelta` (SWR-2454). Emitted
+    #: from the run's own thread and delivered queued, which is the whole of
+    #: what this worker's observer is allowed to do with Qt.
+    transcript_delta = Signal(object)
 
     def __init__(
         self,
@@ -878,9 +922,17 @@ class _RunWorker(QObject):
         approval host that lets the window answer an ``ask`` decision.
         """
         # The default 10s persistence debounce is tuned for headless/background
-        # runs. Rotaris polls the persisted snapshot every 750ms to drive a
-        # live view, so a 10s debounce made streaming look "stuck then bursty"
-        # — batches of transcript/child-state changes would land all at once.
+        # runs; the desktop shortens it because a snapshot read is still how it
+        # learns some of what a run is doing.
+        #
+        # Narrower than it was. The transcript no longer waits for this window
+        # (SWR-2454): the observer hands its changes to the view directly, and
+        # the read is that surface's reconciler rather than its source. What
+        # still comes through the snapshot is everything else — child states,
+        # todos, approvals, verifier progress, token counts — so the window
+        # stays short until those have a channel of their own. SWR-2130 is the
+        # requirement that says this coupling should not exist; this is how much
+        # of it is left.
         from rotaris_core.run_host import RunRequest, execute_run
         from rotaris_core.session.manager import SessionManager
 
@@ -899,6 +951,11 @@ class _RunWorker(QObject):
             self.worktree_ready.emit(state.session_id, getattr(worktree, "branch", "") or "")
             self.started.emit(state.session_id)
             observer = _SessionObserver(asyncio.get_running_loop(), manager, state)
+            # The live channel (SWR-2454). ``emit`` is the sink's whole job: Qt
+            # queues the delivery to the receiver's thread, so nothing on the
+            # run's side waits for the view and no Qt object is reachable from
+            # the run.
+            observer.bind_delta_sink(self.transcript_delta.emit)
             self._observer = observer
             self._register_approval_host(observer, state.session_id)
             return observer
@@ -1251,6 +1308,166 @@ class _SessionObserver:
         # The running suite's control handle (SWR-2610), held only while a suite
         # is in flight so the GUI's Skip can never address a finished run.
         self._verifier_control: Any | None = None
+        # ── the live channel (SWR-2454) ───────────────────────────────────
+        #
+        # This observer already knew every change as it happened; what it did
+        # with that knowledge was write it to disk and let a timer find it
+        # again. ``_delta_sink`` is the other half: the same change, handed
+        # straight to the view. Durability and liveness are now two consumers
+        # of one event rather than one pretending to be the other (SWR-2130).
+        self._delta_sink: Callable[[TranscriptDelta], None] | None = None
+        #: Raw index of each appended row, by object identity. Only appends go
+        #: in here, and ``_append_row`` is the only place a row is appended.
+        self._row_index: dict[int, int] = {}
+        #: How many rows the view has been told about, and how many edit diffs.
+        #: A delta carries what came after these.
+        self._emitted_len = 0
+        self._emitted_diff_len = 0
+
+    @traces(SWR.SWR_2454)
+    def bind_delta_sink(self, sink: Callable[[TranscriptDelta], None] | None) -> None:
+        """Where transcript changes go, besides the session record.
+
+        A sink that raises, blocks or is absent must cost the view and nothing
+        else, so this is the only thing the run knows about its consumer and
+        :meth:`_publish_delta` is where that promise is kept.
+        """
+        self._delta_sink = sink
+
+    def _held_rows(self) -> list[dict[str, Any]]:
+        """Every transcript row this observer may still mutate in place.
+
+        The streamed tail, an open tool call, an unsettled check, a reasoning
+        burst that may still be folded. Bounded by how much is happening at
+        once — agents, in-flight calls, checks — and not by how long the session
+        has been running, which is what makes the delta boundary cheap to
+        compute and cheap to send.
+        """
+        held: list[dict[str, Any]] = []
+        for source in (
+            self._stream_segments,
+            self._thinking_segments,
+            self._last_thinking_rows,
+            self._committed_message_segments,
+            self._tool_rows,
+            self._verifier_rows,
+        ):
+            held.extend(source.values())
+        return held
+
+    def _save(self) -> None:
+        """Make the session record current. Nothing in the transcript changed.
+
+        These surfaces — approvals, questions, todos, child state, token
+        counts — are bounded by how much is happening at once rather than by
+        how long the session has run, so they stay on the reconciling read that
+        already serves every session this process is not executing.
+        """
+        self.manager.persister.request_save(self.state)
+
+    def _touch(self, *rows: dict[str, Any]) -> None:
+        """Make the change durable, then make it visible — in that order.
+
+        Args:
+            rows: Rows this change mutated that the observer has already let go
+                of. Anything it still holds is found by :meth:`_held_rows`, so
+                the ordinary call needs no arguments.
+
+        Durable first, deliberately: a view that has seen an event the record
+        has not is a view that can contradict a resume, which is the one thing
+        SWR-2454 forbids outright.
+        """
+        self.manager.persister.request_save(self.state)
+        self._publish_delta(rows)
+
+    @traces(SWR.SWR_2454)
+    def _publish_delta(self, extra_rows: tuple[dict[str, Any], ...] = ()) -> None:
+        """Send the changed part of the transcript to the view, if anyone is listening.
+
+        The boundary is the earliest row that can still change — every held row,
+        and the end of what the view was last told about. Everything from there
+        on is copied and sent; nothing before it moved.
+
+        Never raises. A broken view consumer degrades the view, exactly as a
+        broken event-bus consumer degrades the stream and not the run.
+        """
+        sink = self._delta_sink
+        if sink is None:
+            return
+        try:
+            rows = self.state.transcript_events
+            total = len(rows)
+            if total < self._emitted_len:
+                # The transcript shrank — only ``clear_transcript`` does that.
+                # There is no delta to describe, so the whole thing is sent
+                # again from row zero; a consumer reads ``first == 0`` as "start
+                # over from this", which is also what makes a clear cost nothing
+                # to deliver.
+                self._reset_delta_tracking()
+                for index, row in enumerate(rows):
+                    self._row_index[id(row)] = index
+                self._emitted_len = total
+                self._emitted_diff_len = len(self.state.ui_edit_diffs)
+                sink(
+                    TranscriptDelta(
+                        first=0,
+                        rows=copy.deepcopy(rows),
+                        new_diffs=copy.deepcopy(self.state.ui_edit_diffs),
+                        personas=self._persona_map(),
+                    )
+                )
+                return
+            first = min(
+                [self._emitted_len]
+                + [
+                    index
+                    for index in (
+                        self._row_index.get(id(row)) for row in (*self._held_rows(), *extra_rows)
+                    )
+                    if index is not None
+                ]
+            )
+            if first >= total and self._emitted_diff_len >= len(self.state.ui_edit_diffs):
+                return
+            diffs = self.state.ui_edit_diffs
+            payload = TranscriptDelta(
+                first=first,
+                # Copied at the boundary: these dicts are the run's own rows and
+                # it goes on mutating them. Handing the live ones to another
+                # thread is the race this copy exists to prevent.
+                rows=copy.deepcopy(rows[first:]),
+                new_diffs=copy.deepcopy(diffs[self._emitted_diff_len :]),
+                personas=self._persona_map(),
+            )
+            self._emitted_len = total
+            self._emitted_diff_len = len(diffs)
+            sink(payload)
+        except Exception:  # noqa: BLE001 - the view is not allowed to fail the run
+            _log.warning("Could not publish a transcript delta; the view will reconcile.")
+
+    def _reset_delta_tracking(self) -> None:
+        """Forget what the view was told; the next delta starts from nothing."""
+        self._row_index.clear()
+        self._emitted_len = 0
+        self._emitted_diff_len = 0
+
+    def _persona_map(self) -> dict[str, str]:
+        """Agent name → persona, for rows that do not carry one themselves.
+
+        Bounded by the number of agents, rebuilt per delta rather than cached:
+        a child that appears between two deltas has to be able to colour the
+        rows it is already producing.
+        """
+        personas: dict[str, str] = {}
+        for child in self.state.child_states:
+            persona = str(child.get("persona") or "")
+            if not persona:
+                continue
+            for key in ("canonical_name", "name", "agent_id"):
+                value = str(child.get(key) or "")
+                if value:
+                    personas[value] = persona
+        return personas
 
     @traces(SWR.SWR_2434)
     def bind_ralph_loop(self, ralph: Any) -> None:
@@ -1330,11 +1547,11 @@ class _SessionObserver:
         self._tool_rows.clear()
         self._tool_started.clear()
         self._verifier_rows.clear()
-        self.manager.persister.request_save(self.state)
+        self._touch()
 
     def _append_system_row(self, content: str) -> None:
         self._append_row({"role": "system", "content": content})
-        self.manager.persister.request_save(self.state)
+        self._touch()
 
     # ── verification phase (SWR-2609 / SWR-2610) ──────────────────────────
     #
@@ -1357,7 +1574,7 @@ class _SessionObserver:
             "started_at": time.time(),
             "deadline_s": 0.0,
         }
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     @traces(SWR.SWR_2609)
     def on_verifier_check_started(
@@ -1398,7 +1615,7 @@ class _SessionObserver:
             }
         )
         self._verifier_rows[f"{iteration_num}:{index}"] = row
-        self.manager.persister.request_save(self.state)
+        self._touch()
 
     @traces(SWR.SWR_2609, SWR.SWR_2610)
     def on_verifier_check_finished(
@@ -1437,7 +1654,9 @@ class _SessionObserver:
         row["tool_terminal"] = True
         row["status"] = _VERIFIER_ROW_STATUS.get(status, "failed")
         row["duration"] = float(getattr(result, "duration_s", 0.0) or 0.0)
-        self.manager.persister.request_save(self.state)
+        # Named explicitly: the row was popped from ``_verifier_rows`` above, so
+        # it is no longer among the rows ``_held_rows`` reports.
+        self._touch(row)
 
     @traces(SWR.SWR_2609)
     def on_verifier_run(self, iteration_num: int, result: Any) -> None:
@@ -1453,7 +1672,7 @@ class _SessionObserver:
         self._verifier_rows.clear()
         self.state.verifier_state = None
         self.state.gate_warning = _gate_warning_for(result)
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     @traces(SWR.SWR_2610)
     def skip_verifier_check(self) -> bool:
@@ -1615,14 +1834,14 @@ class _SessionObserver:
         pending = dict(self.state.pending_approvals or {})
         pending[request_id] = payload
         self.state.pending_approvals = pending
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     def _clear_pending_approval(self, request_id: str) -> None:
         pending = dict(self.state.pending_approvals or {})
         if pending.pop(request_id, None) is None:
             return
         self.state.pending_approvals = pending
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     def _store_pending_questions(
         self,
@@ -1635,7 +1854,7 @@ class _SessionObserver:
             "prompt_id": prompt_id,
             "steps": steps,
         }
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     @staticmethod
     def _timestamp() -> str:
@@ -1643,6 +1862,10 @@ class _SessionObserver:
 
     def _append_row(self, row: dict[str, Any]) -> dict[str, Any]:
         row.setdefault("ts", self._timestamp())
+        # Recorded before the append so the index is the one the row lands at.
+        # This is the only place a transcript row is created, which is what
+        # makes ``_row_index`` complete rather than best-effort (SWR-2454).
+        self._row_index[id(row)] = len(self.state.transcript_events)
         self.state.transcript_events.append(row)
         return row
 
@@ -1676,7 +1899,7 @@ class _SessionObserver:
             changed = self._apply_agent_message_event(agent_name, persona, event)
 
         if changed:
-            self.manager.persister.request_save(self.state)
+            self._touch()
 
     @traces(SWR.SWR_2417, SWR.SWR_2444, SWR.SWR_2432)
     def _apply_action_event(self, agent_name: str, persona: str, event: Any) -> bool:
@@ -1910,7 +2133,7 @@ class _SessionObserver:
             changed = True
 
         if changed:
-            self.manager.persister.request_save(self.state)
+            self._touch()
 
     @traces(SWR.SWR_2446)
     def _append_thinking(
@@ -2105,11 +2328,11 @@ class _SessionObserver:
         self.state.child_states = list(existing.values())
         if todo is not None:
             self.state.todo_state = todo.model_dump(mode="json")
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     def _apply_todo(self, todo: Any) -> None:
         self.state.agent_todo_state = todo.model_dump(mode="json")
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     def _edit_todo(
         self,
@@ -2130,7 +2353,7 @@ class _SessionObserver:
             for task in phase.get("tasks", []):
                 if task.get("id") == task_id:
                     task["status"] = status
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     def _set_prompt_tokens(self, agent_name: str, tokens: int) -> None:
         from rotaris_core.session.state import AgentMetrics
@@ -2138,11 +2361,11 @@ class _SessionObserver:
         metrics = self.state.agent_metrics.setdefault(agent_name, AgentMetrics())
         metrics.last_prompt_tokens = tokens
         self.state.root_context_tokens = tokens
-        self.manager.persister.request_save(self.state)
+        self._save()
 
     def _set_tokens(self, usage: dict[str, Any]) -> None:
         self.state.token_usage = usage
-        self.manager.persister.request_save(self.state)
+        self._save()
 
 
 def _isolation_request_fields(isolation: Any) -> dict[str, Any]:

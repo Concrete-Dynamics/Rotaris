@@ -19,8 +19,7 @@ policy), [textualize_testing_guide.md](docs/testing/textualize_testing_guide.md)
 (ReqToCode runbook), [terminology-glossary.md](docs/terminology-glossary.md).
 For architecture detail start at [docs/architecture.md](docs/architecture.md),
 especially [02-code-topology.md](docs/architecture/02-code-topology.md) and
-[14-e2e-trace.md](docs/architecture/14-e2e-trace.md). Command aliases also live in
-`Makefile` and `pyproject.toml`.
+[14-e2e-trace.md](docs/architecture/14-e2e-trace.md).
 
 ## Naming
 
@@ -237,11 +236,6 @@ slice you just wrote.
 `master`, after the merge, in § 5. A multi-minute suite in front of the merge
 blocks the next slice and catches nothing a post-merge run does not.
 
-With the hooks installed this gate is mostly automatic: [pre-commit](#git-hooks)
-already runs ReqToCode → `ruff format` → `ruff check --fix` and stages what it
-regenerates, so a commit that went through is a branch that passed. A broken
-trace therefore never reaches the merge.
-
 ### 4. Merge into `master` yourself — no review, no waiting
 
 **Merging is the agent's job, not a human's.** With § 3 green and the branch
@@ -373,7 +367,7 @@ not done — keep going until it is, or state plainly what is blocked and why.
 
 **No orphan code, bidirectional or bust.** ALL production code and ALL tests trace to a requirement: implementations carry `@traces(SWR.SWR_<n>)`, tests carry `@verifies(SWR.SWR_<n>)` (`from rotaris_core.reqtocode import SWR, traces, verifies`). Code with no requirement is spec drift. Supplementary code (helpers, plumbing, refactors) with no product requirement → author a **technical requirement** (`type: technical`, `derived-from: SWR-<origin>`) and mirror the `Derived requirements:` link back on the origin. Full workflow: [.github/copilot-instructions.md](.github/copilot-instructions.md) and [docs/requirements/README.md](docs/requirements/README.md).
 
-- Enforced by verifier, `tests/unit/reqtocode/` meta-tests, CI, and git hooks. A broken trace is a broken build.
+- Enforced by verifier, `tests/unit/reqtocode/` meta-tests, and CI. A broken trace is a broken build.
 - After any edit under `docs/requirements/`, run `python -m rotaris_core.reqtocode diff` **first** — it lists the exact `@traces`/`@verifies` sites to update (`check` misses text-only edits; `diff --strict` gates them). Then `check --fix` → `check` → loop tests green.
 - Every production module under `src/rotaris_core/` and `apps/rotaris/src/` needs ≥1 `@traces()` or an explicit `# reqtocode: exempt` (`__init__.py` + generated `swr.py` auto-excused). Orphan-test rule in [tests/AGENTS.md](tests/AGENTS.md).
 - Implementing a requirement → set `status: approved` in its frontmatter in the same change + update epic index. Commit requirement docs + `swr.py` + code + tests as one unit, req id in the message.
@@ -381,7 +375,8 @@ not done — keep going until it is, or state plainly what is blocked and why.
 
 ## Commands
 
-All commands use `uv run` (cross-platform: Linux and Windows). `make` targets
+All commands use `uv run` (cross-platform: Linux and Windows) — never activate
+`.venv`, call `.venv/bin/*`, or invoke bare `pytest`/`ruff`/`mypy`. `make` targets
 (`make test`, `make lint`, …) are thin aliases over the same commands but require
 `make`, which Windows lacks — prefer the `uv run` forms below.
 
@@ -399,13 +394,10 @@ uv run pytest tests/integration/ -n auto -q --timeout=120  # integration/e2e onl
 # desktop (= make test-rotaris): parallel pass, then the one serial-marked test
 uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
 uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
-# Note: the Qt suite *does* parallelize — 217s single-process vs 67s at `-n auto`.
-# Only `@pytest.mark.serial` tests need a core to themselves; mark a test that way
-# when it drives concurrent runs and asserts on their interleaving.
-# Note: `-n auto` means 16 workers here; `-n 24 --dist worksteal` measured *slower*
-# (180s) and oversubscribed the sandboxed-terminal tests. Do not raise it.
-# Note: no `-x` on a parallel full pass — the first failure tears down every
-# worker, so one flake would hide every other result.
+# Note: the Qt suite parallelizes (67s at `-n auto` vs 217s serial). `-n auto` =
+# 16 workers — don't raise it (oversubscribes sandboxed-terminal tests). Mark
+# tests `@pytest.mark.serial` when they need a core to themselves. No `-x` on a
+# parallel pass: the first failure would hide every other result.
 # Coverage, lint, format, typecheck —
 uv run pytest --cov=rotaris_core --cov-report=term-missing                     # coverage (= make test-cov)
 uv run ruff check src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'    # lint (= make lint)
@@ -413,38 +405,12 @@ uv run ruff format src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude '
 uv run mypy src/rotaris_core/ && uv run mypy apps/rotaris/src/rotaris/          # typecheck strict (= make typecheck)
 uv run python -m rotaris_core.reqtocode check --fix                             # reqtocode fix (= make reqtocode-fix)
 uv run python -m rotaris .            # run desktop app (--demo for demo data)
-
-# Install the pre-commit hook (the only one):
-python .pre-commit-hook.py --install  # or: make install-hook
 ```
-
-## Git hooks
-
-One hook, one script (`.pre-commit-hook.py`). Install with `make install-hook`.
-
-| Hook           | Runs                                       | Speed    |
-| -------------- | ------------------------------------------ | -------- |
-| **pre-commit** | ReqToCode → ruff format → ruff check --fix | ~5-15 s  |
-
-**No hook runs tests or mypy.** They ran in a `pre-push` hook once; it was
-removed on purpose, because nothing multi-minute may sit between an agent and
-its next slice. Both live in the post-merge full pass instead
-([§ 5](#5-verify-on-master-then-fix-forward-on-a-bugfix-branch)).
-
-The hook stops at the first failure with a meaningful message showing the
-reproduce command, and auto-stages regenerated `swr.py` and any
-reformatted/fixed Python files, so the commit always contains clean code. An
-older install may carry the ReqToCode stage only — `make install-hook` again to
-pick up the ruff stages.
-
-Use `uv run` for every Python tool invocation. Do not activate `.venv`, call
-`.venv/bin/*`, or invoke bare `pytest`, `ruff`, or `mypy`.
 
 ## Conventions
 
-- Line length 100; `target-version = "py312"`; ruff selects `E,F,I,N,W,UP,B,SIM,TCH`; `E501` ignored.
-- mypy `strict = true` on both packages.
-- HAET edit engine, playbook prompt matrix, session persistence/diagnostics internals: [docs/architecture/02-code-topology.md](docs/architecture/02-code-topology.md), [docs/architecture/prompt-composition-matrix.md](docs/architecture/prompt-composition-matrix.md), [docs/requirements/1500-sessions-diagnostics.md](docs/requirements/1500-sessions-diagnostics.md).
+- ruff, mypy (`strict`), line length, target version: configured in `pyproject.toml` (source of truth).
+- HAET edit engine, playbook prompt matrix, session persistence/diagnostics internals: [02-code-topology.md](docs/architecture/02-code-topology.md), [prompt-composition-matrix.md](docs/architecture/prompt-composition-matrix.md), [1500-sessions-diagnostics.md](docs/requirements/1500-sessions-diagnostics.md).
 
 ## OpenHands SDK
 

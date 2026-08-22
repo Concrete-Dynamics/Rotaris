@@ -129,6 +129,22 @@ def resolve_runtime_binding(key: str | None) -> RuntimeToolBinding:
 
 
 @traces(SWR.SWR_2426)
+def lookup_runtime_binding(key: str | None) -> RuntimeToolBinding | None:
+    """The binding for *key*, or ``None`` — never another agent's.
+
+    :func:`resolve_runtime_binding` falls back to the most recently registered
+    binding, which is right for a dependency that would otherwise be missing
+    altogether. It is wrong for anything a *policy* is read from: handing a
+    stale key the last run's sandbox spec is exactly the confusion this module
+    exists to prevent, so those callers ask here and keep their own default.
+    """
+    if key is None:
+        return None
+    with _bindings_lock:
+        return _runtime_bindings.get(key)
+
+
+@traces(SWR.SWR_2426)
 def discard_runtime_binding(key: str | None) -> None:
     """Drop a binding once its agent is done, so long runs do not accumulate them."""
     if key is None:
@@ -502,8 +518,12 @@ def _run_config(binding_key: object, registered: RotarisConfig) -> RotarisConfig
     kept as the fallback for a ``Tool`` spec that outlived its binding — a
     conversation resumed after a restart — because refusing to build the tool
     would fail the whole conversation over an attribution problem.
+
+    An *exact* binding or nothing: a key nobody registered must not be served
+    the last run's sandbox spec, which is what the general fallback would do.
     """
-    bound = resolve_runtime_binding(str(binding_key) if binding_key is not None else None).config
+    binding = lookup_runtime_binding(str(binding_key) if binding_key is not None else None)
+    bound = binding.config if binding is not None else None
     return cast("RotarisConfig", bound) if bound is not None else registered
 
 

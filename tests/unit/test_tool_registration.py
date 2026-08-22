@@ -526,3 +526,31 @@ def test_a_question_reaches_the_user_of_the_run_that_asked_it() -> None:
     assert len(barriers["run-a"].asked) == 1
     assert barriers["run-b"].asked == [], "the other run's user was never asked anything"
     assert observation.answers == {"scope": {"freeform": "yes"}}
+
+
+@verifies(SWR.SWR_2426, SWR.SWR_2505)
+def test_a_stale_spec_keeps_its_own_factorys_policy_not_a_neighbours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a conversation is resumed after a restart, next to a live run.
+
+    Expected outcome: the resumed agent's fetch tool enforces the policy of the
+    run that built it, not whichever binding happens to be newest. A missing
+    binding is a lookup that failed; answering it with the most recent run's
+    allow-list would hand a resumed agent someone else's network."""
+    strict = _run_config("run-a", network_egress_policy="deny")
+    monkeypatch.setattr(
+        "rotaris_core.agents.tool_registration._fetch_registered_config_id",
+        None,
+        raising=False,
+    )
+    _register_fetch_tool_factory(strict)
+    # A live neighbour registers a binding; the resumed spec's key is not it.
+    register_runtime_binding(
+        "other-run/coder-1",
+        RuntimeToolBinding(config=_run_config("run-b", network_egress_policy="allow")),
+    )
+
+    executor = _resolve("fetch", {"binding_key": "gone-with-the-old-process/coder-1"}).executor
+
+    assert executor.egress_policy.disposition == "deny"

@@ -1,4 +1,4 @@
-"""Reaching a run that shares this process (SWR-2426).
+"""Reaching a run that shares this process (SWR-2453).
 
 Three different mechanisms answer the one interface, and which is which is the
 useful part of reading this file:
@@ -34,7 +34,7 @@ _FAILED = ControlResult(False)
 _OK = ControlResult(True)
 
 
-@traces(SWR.SWR_2426)
+@traces(SWR.SWR_2453)
 class InProcessRunControl:
     """Drive a run executing in this process.
 

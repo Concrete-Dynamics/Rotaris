@@ -1,10 +1,15 @@
 """The desktop run carries lifecycle hooks and checkpoints (SWR-2436, SWR-2701).
 
-Rotaris does not go through ``rotaris_core.run_host.execute_run``; its run
-workers drive ``cli.background._run_task`` directly. That shortcut used to skip
-the two things the headless lifecycle composes on top of the loop — the hook
-dispatcher and the checkpoint writer — so the *primary* interface was the one
-host that had neither.
+Rotaris' run workers used to drive ``cli.background._run_task`` directly, and
+that shortcut skipped the two things the shared lifecycle composes on top of the
+loop — the hook dispatcher and the checkpoint writer — so the *primary*
+interface was the one host that had neither. Every desktop run path now goes
+through ``rotaris_core.run_host.execute_run``, which composes both.
+
+The tests still install their fake runtime by patching
+``rotaris_core.cli.background._run_task``: ``execute_run`` imports it inside its
+own body, so the patch point survived the migration and reaches the run through
+the lifecycle rather than around it.
 
 These tests prove the composition through its user-observable effects: a hook
 process that actually ran (a file it wrote), a checkpoint ref that actually

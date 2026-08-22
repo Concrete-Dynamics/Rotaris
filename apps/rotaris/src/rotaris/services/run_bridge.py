@@ -46,13 +46,15 @@ _VERIFIER_ROW_STATUS: dict[str, str] = {
 class RunLifecycleExtras:
     """The hook runner and loop observers a desktop run must carry.
 
-    Rotaris does not go through ``rotaris_core.run_host.execute_run``: its
-    workers drive ``cli.background._run_task`` directly, because the desktop
-    owns the event loop, the observer slot and the session identity in ways the
-    headless lifecycle does not model. That shortcut used to skip the two things
-    ``execute_run`` composes on top of the loop — the lifecycle-hook dispatcher
-    (SWR-2701/2703) and the per-iteration checkpoint writer (SWR-2436) — so the
-    desktop, the *primary* interface, was the one host with neither.
+    The last remnant of the forked lifecycle, and on its way out. Rotaris'
+    ordinary and requirement-driven runs go through
+    ``rotaris_core.run_host.execute_run``; the **worktree integration run** is
+    the one path that still drives ``cli.background._run_task`` directly and
+    hand-composes the two things ``execute_run`` composes on top of the loop —
+    the lifecycle-hook dispatcher (SWR-2701/2703) and the per-iteration
+    checkpoint writer (SWR-2436). It is therefore also the one path with no
+    event store, no ``session.start``/``session.end`` and no lifecycle-derived
+    result. SWR-2453 moves it across and deletes this class.
 
     This object is that composition, reproduced verbatim:
 

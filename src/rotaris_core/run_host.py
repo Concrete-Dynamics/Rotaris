@@ -733,10 +733,12 @@ async def execute_run(
     # longer decides *whether* a sink exists, only what the store's tee forwards
     # to — ``None`` means "persist, stream nowhere".
     #
-    # Scope, stated so it is not over-read: this covers the hosts that call
-    # ``execute_run`` — the CLI and the Python SDK.  Rotaris' desktop run bridge
-    # drives ``cli.background._run_task`` directly and is not wired here; giving
-    # it the same attach/detach pair is its own change.
+    # Scope, stated so it is not over-read: this covers every host that calls
+    # ``execute_run``, which since SWR-2453 is all of them — the CLI, the Python
+    # SDK, and each of Rotaris' desktop run paths.  A host that reached the
+    # runtime below this function would still get no store, which is why "no
+    # host carries a private re-composition of the lifecycle" is a requirement
+    # rather than a convention.
     # A store that cannot be opened — a read-only session directory, an
     # exhausted disk — costs this session its replay (SWR-2902) and its
     # trajectory export (SWR-2903). It must not also cost the user the run, so

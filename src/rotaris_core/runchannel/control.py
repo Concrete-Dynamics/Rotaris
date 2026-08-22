@@ -1,4 +1,4 @@
-"""The interface a host calls, and the live objects that answer it (SWR-2426).
+"""The interface a host calls, and the live objects that answer it (SWR-2453).
 
 :class:`RunControl` is deliberately flat and scalar: one method per operation,
 arguments a message can carry, and a :class:`ControlResult` back. That shape is
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 __all__ = ["RunControl", "RunSurface"]
 
 
-@traces(SWR.SWR_2426)
+@traces(SWR.SWR_2453)
 @runtime_checkable
 class RunSurface(Protocol):
     """The live run, as the process executing it can reach it.
@@ -51,7 +51,7 @@ class RunSurface(Protocol):
     def cancel_questions(self, agent_id: str, prompt_id: str) -> bool: ...
 
 
-@traces(SWR.SWR_2426)
+@traces(SWR.SWR_2453)
 class RunControl(Protocol):
     """Everything a host may ask of a run.
 

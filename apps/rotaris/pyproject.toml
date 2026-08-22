@@ -2,7 +2,7 @@
 name = "rotaris"
 # One product version (SWR-3002 AC-006): `rotaris` and `rotaris-core` release
 # together under one tag, so this must stay in step with the root pyproject.
-version = "0.120.0"
+version = "0.120.1"
 description = "Rotaris — desktop workspace for the Rotaris multi-agent orchestration framework"
 requires-python = ">=3.12"
 license = "MIT"
@@ -27,6 +27,11 @@ dev = [
     "pytest-asyncio>=0.25",
     "pytest-qt>=4.4",
     "pytest-timeout>=2.0",
+    # The documented desktop command is a parallel one, and `addopts` below
+    # names a distribution mode, so xdist has to be this package's own
+    # dependency rather than something the shared workspace environment happens
+    # to supply.
+    "pytest-xdist>=3.0",
     "ruff>=0.11",
     "mypy>=1.15",
     "PyYAML>=6.0",
@@ -42,6 +47,12 @@ rotaris-core = { workspace = true }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 qt_api = "pyside6"
+# Mirrors the root `addopts` for the same two reasons, and the Qt suite needs it
+# more than the engine one does: the theme manager, `QSettings` and the
+# `QApplication` itself are process-wide, and `test_theme_switching_flow.py`
+# already documents in a fixture that a worker fed tests from many files lets
+# one file's leftover theme decide another file's assertion.
+addopts = "--dist loadfile"
 # Mirrors the root marker list: CI runs `pytest apps/rotaris/tests` from the
 # repository root, so that config applies there and this one applies when the
 # suite is run from inside apps/rotaris.

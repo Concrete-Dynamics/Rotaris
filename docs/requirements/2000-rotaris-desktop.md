@@ -1012,6 +1012,16 @@ and a quota failure names the real balance.
 
 Full requirement: [SWR-3013 — Rotaris Cloud credit is visible before it runs out](2000-rotaris-desktop/SWR-3013-cloud-credit-surface.md)
 
+## SWR-3716 — The first launch offers Rotaris Cloud and lets the user in without it
+
+A launch with no usable provider credential opens a first-launch guide: Rotaris Cloud
+as the one recommendation, `Other providers` and `I have an API key` beside it, and a
+skip that opens the application fully rather than leaving a shell behind a nag. After a
+skip the guide is reachable from a dismissible notice, from Settings → Providers, and
+from every surface that cannot start a run without a credential.
+
+Full requirement: [SWR-3716 — The first launch offers Rotaris Cloud and lets the user in without it](2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md)
+
 ## SWR-3619 — Desktop terminal stream bridge and emulated screen
 
 Technical requirement derived from SWR-2428. The desktop side of terminal streaming: a Qt

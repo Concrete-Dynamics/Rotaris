@@ -86,6 +86,24 @@ def test_focus_switches_projection_without_touching_background_lifecycles(tmp_pa
     assert [session.focused for session in store.sessions if session.id == second] == [False]
 
 
+@verifies(SWR.SWR_2415, SWR.SWR_2434)
+def test_continuing_an_already_focused_session_projects_the_run_it_starts(tmp_path, qtbot) -> None:
+    """Continuing a run from the dashboard focuses the session first, while it
+    still has no handle. The handle `resume` creates afterwards must project,
+    or the run streams into its snapshot behind a workspace that never moves."""
+    coordinator, store, handles = _coordinator(tmp_path)
+    store.set_sessions(
+        [SessionInfo(id="older", name="older", status="completed", branch="rotaris/session/older")]
+    )
+
+    assert coordinator.focus("older") is True  # no handle exists for it yet
+    assert coordinator.resume("older", "continue please") is True
+
+    assert len(handles) == 1
+    assert handles[0].projection_enabled is True
+    assert handles[0].synced == 1
+
+
 @verifies(SWR.SWR_2415)
 def test_cancel_and_failure_affect_only_one_handle(tmp_path, qtbot) -> None:
     coordinator, _store, handles = _coordinator(tmp_path)

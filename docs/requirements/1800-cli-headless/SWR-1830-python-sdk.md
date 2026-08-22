@@ -26,9 +26,15 @@ using the same runtime as the CLI/TUI (no forked behavior).
   point, and the lifecycle itself lived inside the synchronous, typer-coupled
   `cli/background.py::run_background`. It was therefore extracted to
   `rotaris_core.run_host.execute_run`, which is host-neutral and is the single
-  entry point the CLI and the SDK both call. Rotaris (desktop) drives the loop
-  itself and composes the same pieces rather than calling `execute_run` — see
-  `apps/rotaris/src/rotaris/services/run_bridge.py`.
+  entry point the CLI and the SDK both call. Rotaris (desktop) does not call it:
+  it drives the loop itself and re-composes the same pieces by hand. That is a
+  standing exception to the "no forked behavior" rule above, not a design this
+  requirement endorses — it has already produced exactly the drift the rule
+  exists to prevent, with lifecycle behaviour reaching the primary interface
+  late and only by duplication. Closing it is scoped as
+  [SWR-2453 — A desktop run is the same run as a CLI run](../2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md);
+  until that lands, `apps/rotaris/src/rotaris/services/run_bridge.py` is the
+  second copy.
 - The API is exported from a dedicated public module with a documented
   stability contract; internal modules remain private.
 - Headless approval policy (SWR-2504) applies; the SDK may register a

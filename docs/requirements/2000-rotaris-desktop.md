@@ -582,6 +582,17 @@ legacy-id: REQ-20260714-ROTARIS-MEM-003
 date: 2026-07-14
 source: docs/requirement-log/done/requirements-20260714-rotaris-memory-responsiveness.md
 
+**Scope narrowed by [SWR-2454 — The live view keeps up with the run](2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md).**
+This requirement is not superseded: its property — no run-driven I/O or
+projection on the Qt event loop — is one SWR-2454 explicitly preserves, and it
+remains binding. What SWR-2454 removes is the assumption behind the second half
+of the sentence: that a periodic whole-session *refresh* is how the desktop
+learns what a run is doing. Where that assumption no longer holds, "one read in
+flight and one coalesced pending refresh" governs the reconciling read that
+remains — the one serving sessions this process is not executing — rather than
+the focused session's liveness. Read the two together; neither alone states the
+whole obligation.
+
 ## SWR-2067 — Reasoning-content repair must run before execution resumes, never during read-only UI polling.
 
 legacy-id: REQ-20260714-ROTARIS-MEM-004
@@ -946,6 +957,31 @@ transcript blank for `rowCount / batchSize` frames on every refresh. Appending m
 appended rows and their successor; painting touches only the visible rows.
 
 Full requirement: [SWR-2452 — Transcript geometry is incremental and never partially laid out](2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md)
+
+## SWR-2453 — A desktop run is the same run as a CLI run
+
+A run started from the desktop must behave the same as one started from the CLI, the
+TUI or the SDK for the same workspace, task and config, and the desktop must not carry
+a second implementation of run-lifecycle behaviour — session creation and resume,
+locking, worktree binding, session start/end, hook dispatch, per-iteration
+checkpointing, result derivation, and release on every exit path. Closes the desktop
+exemption recorded in SWR-1830. States sameness, not mechanism: the desktop keeps its
+own event loop, worker thread and session identity.
+
+Full requirement: [SWR-2453 — A desktop run is the same run as a CLI run](2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
+
+## SWR-2454 — The live view keeps up with the run
+
+While a run executes, the desktop's live surfaces must reflect new activity within a
+bounded latency, and the per-update work must be proportional to what changed rather
+than to how much the session has accumulated — a 3000-event session costs what a
+30-event one costs. Preserves what any design must keep: sessions executing in another
+process stay observable, the view never contradicts what a resume would restore, no
+run-driven work on the Qt event loop (SWR-2066), and a failing view consumer never
+touches the run. Narrows SWR-2066; extends SWR-2452's bounded-cost property upstream of
+the view.
+
+Full requirement: [SWR-2454 — The live view keeps up with the run](2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md)
 
 ## SWR-2913 — A session that is not running shows no live agent
 

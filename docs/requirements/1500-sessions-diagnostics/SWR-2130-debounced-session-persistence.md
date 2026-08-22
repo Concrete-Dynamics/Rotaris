@@ -37,6 +37,19 @@ status changes are always durable.
 - `SessionManager.persister` exposes a single cached `SessionPersister`
   instance per manager.
 
+## Scope note — the debounce is a durability knob, not a liveness one
+
+The debounce window governs how promptly a run's state becomes *durable*. It is
+not a means of controlling how promptly a user interface learns what a run is
+doing, and must not be tuned for that purpose. A host that shortens it to make
+its view feel live is paying in write amplification for a property it should be
+getting some other way, and is coupling its refresh rate to the durability
+layer's. Callers today do exactly this — the desktop constructs its
+`SessionManager` with a 0.5 s window for view reasons — which
+[SWR-2454 — The live view keeps up with the run](../2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md)
+exists to unpick. Whatever that lands on, this requirement's window stays free
+to be chosen on durability grounds alone.
+
 Derived from: [SWR-1545 — Session persistence must write split state files for resume state, run config, and UI transcript.](../1500-sessions-diagnostics.md)
 
 Epic: [Session Persistence & Diagnostics](../1500-sessions-diagnostics.md)

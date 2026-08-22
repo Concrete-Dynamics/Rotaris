@@ -52,13 +52,22 @@ PRIMARY_VIEWS = (
 
 @pytest.fixture
 def window(qtbot):
-    """A fully populated window, shown, so every view has something to sweep."""
+    """A fully populated window, shown, so every view has something to sweep.
+
+    Destroyed rather than merely closed. This file is the suite's heaviest
+    producer of shown top-level windows, and leaving them alive makes every
+    later test in the same worker walk them — see `dispose_window` in
+    `conftest.py` for the measurement.
+    """
+    from conftest import dispose_window
+
     window = MainWindow(sample_store())
     qtbot.addWidget(window)
     window.resize(1440, 900)
     window.show()
     qtbot.waitExposed(window)
-    return window
+    yield window
+    dispose_window(window)
 
 
 def _shown(window: MainWindow, qtbot, name: str):

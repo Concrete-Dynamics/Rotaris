@@ -13,6 +13,8 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from PySide6.QtWidgets import QWidget
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 APP_ROOT = Path(__file__).parents[1]
@@ -27,6 +29,25 @@ if str(SRC) not in sys.path:
 REPO_ROOT = Path(__file__).parents[3]
 if (REPO_ROOT / "tests" / "__init__.py").exists() and str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Count verdicts, so a run that loses some cannot exit 0.
+
+    The Qt suite is where this matters most — it is the one that has produced a
+    run with no summary line at all. Reasoning in `tests/verdict_guard.py`.
+    """
+    from tests.verdict_guard import record_report
+
+    record_report(report)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    from tests.verdict_guard import missing_verdicts
+
+    if (message := missing_verdicts(session, exitstatus)) is not None:
+        session.exitstatus = 1
+        print(f"\n[verdict-guard] {message}", file=sys.stderr)
 
 
 #: Where the per-test settings stores live, and the counter that names them.
@@ -139,3 +160,47 @@ def no_leaked_allocation_sampler() -> Iterator[None]:
         "a diagnostics allocation sampler outlived its test"
     )
     assert not tracemalloc.is_tracing(), "this test left tracemalloc running for the next one"
+
+
+def dispose_window(window: QWidget) -> None:
+    """Destroy *window* now, instead of leaving it for whoever runs next.
+
+    `qtbot.addWidget` closes a widget at the end of a test but does not destroy
+    it, and a window that was `show()`n is not collected on its own either. The
+    survivors pile up in `QApplication.topLevelWidgets()` — and almost everything
+    this suite does is a walk over exactly that list. `ThemeManager.apply`
+    repolishes every top-level widget and all of its descendants; Qt re-resolves
+    style and fonts over the same set whenever the font database changes.
+
+    The cost is quadratic in a way that does not look like one, because it is
+    billed to the wrong test. Measured: `test_design_language.py` takes **6s**
+    alone and **1718s** when `test_accessibility_sweep.py` — seven shown
+    `MainWindow`s — precedes it in the same process, with 52s of that spent
+    tearing down a test whose body asserts a single `KeyError`.
+
+    It is also where the "flaky segfault" came from. Once one test crosses
+    `--timeout=120`, pytest-timeout's Windows path is `os._exit(1)`: the worker
+    dies mid-run, xdist prints `node down: Not properly terminated`, and a suite
+    that is merely slow presents as a crash in whichever test the scheduler
+    happened to put there.
+
+    Deliberately a helper a fixture calls, not an autouse sweep over every
+    top-level widget. That was tried: closing and deleting widgets `qtbot` also
+    owns made three workers die inside `pytest-qt`'s own `_process_events` on the
+    *following* test's setup. A window is disposed of by whoever created it.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+    from shiboken6 import isValid
+
+    if not isValid(window):
+        return
+    window.close()
+    window.deleteLater()
+    app = QApplication.instance()
+    if app is not None:
+        # `processEvents` does not run deferred deletions: they are delivered
+        # only when the event loop unwinds to the level that posted them, which
+        # never happens in a test. Naming the event type is what frees the C++
+        # object here rather than at some later, unrelated test's expense.
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)

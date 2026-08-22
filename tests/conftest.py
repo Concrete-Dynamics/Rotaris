@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import time
 from contextlib import ExitStack
 from itertools import count
@@ -69,8 +70,6 @@ def _regenerate_traceables() -> None:
     A requirement edit becomes a failing verification meta-test in the same
     run; parse errors are left for tests/unit/reqtocode to surface.
     """
-    import sys
-
     repo_root = Path(__file__).resolve().parents[1]
     try:
         from rotaris_core.reqtocode.generator import regenerate_if_stale
@@ -82,6 +81,21 @@ def _regenerate_traceables() -> None:
             print(f"[reqtocode] PARSE ERROR: {error}", file=sys.stderr)
     except Exception as exc:  # never block collection; meta-tests report details
         print(f"[reqtocode] regeneration skipped: {exc!r}", file=sys.stderr)
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Count verdicts, so a run that loses some cannot exit 0. See verdict_guard."""
+    from tests.verdict_guard import record_report
+
+    record_report(report)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    from tests.verdict_guard import missing_verdicts
+
+    if (message := missing_verdicts(session, exitstatus)) is not None:
+        session.exitstatus = 1
+        print(f"\n[verdict-guard] {message}", file=sys.stderr)
 
 
 def pytest_configure(config: pytest.Config) -> None:

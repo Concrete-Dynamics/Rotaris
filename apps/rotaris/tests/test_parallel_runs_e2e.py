@@ -95,6 +95,17 @@ class FakeAgent:
             self._released.add(session_id)
         self._gate(session_id).set()
 
+    def hold(self, session_id: str) -> None:
+        """Make the *next* run for this session block again.
+
+        A release belongs to the run it let finish. Continuing the same session
+        starts a second run under the same id, and a test that has to assert
+        while that one is live needs its gate closed again.
+        """
+        with self._lock:
+            self._released.discard(session_id)
+            self._gates.pop(session_id, None)
+
     def release_all(self) -> None:
         with self._lock:
             self._released_everything = True
@@ -351,6 +362,75 @@ def test_continuing_a_session_after_reopening_shows_the_run_it_starts(
         timeout=10000,
     )
     assert coordinator.focused_session_id == session_id
+
+    agent.release_all()
+    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    coordinator.shutdown_all()
+
+
+@verifies(SWR.SWR_3714)
+def test_continuing_a_session_does_not_inherit_the_previous_runs_live_agents(
+    repository: Path, agent: FakeAgent, monkeypatch: pytest.MonkeyPatch, qtbot
+) -> None:
+    """Productive use: a user continues a session whose previous run was killed
+    before it could close its agents.
+    Expected outcome: the workspace shows those agents as ended. Only the
+    continuation's own agents are live — a pulsing dot for a conversation that
+    stopped yesterday cannot be cancelled, steered or waited for, and it makes
+    the live counter say nothing true."""
+    window, coordinator, store = _window(repository, qtbot)
+    _start_new_session(window, qtbot, monkeypatch, "first task")
+    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 1, timeout=5000)
+    session_id = coordinator.focused_session_id
+    agent.release(session_id)
+    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    # The continuation has to still be running while the assertions run: a
+    # session that reports no run settles its agents through SWR-2913, which
+    # would make this test pass without reading a single child record.
+    agent.hold(session_id)
+
+    # What a killed run leaves on disk: a record that never reached a terminal
+    # state. Written into the snapshot rather than mocked, because the whole
+    # question is what the next run reads back.
+    manager = SessionManager(repository)
+    state = manager.load_session(session_id)
+    state.child_states = [
+        *state.child_states,
+        {
+            "canonical_name": "ghost-agent",
+            "name": "ghost-agent",
+            "persona": "coding-agent",
+            "state": "running",
+            "active_tools": ["terminal"],
+        },
+    ]
+    manager.flush_session(state)
+    manager.release_lock(session_id)
+
+    window.show_view("workspace")
+    settle(qtbot)
+    composer = find_by_accessible_name(
+        window.workspace, "Run prompt", QPlainTextEdit, visible_only=True
+    )
+    type_text(qtbot, composer, "second task")
+    click_by_name(qtbot, window.workspace, "Continue run", QPushButton)
+    # The first run's own "Run completed" notice is still standing here, so the
+    # evidence that the submission was accepted is the run itself.
+    qtbot.waitUntil(lambda: coordinator.active_session_ids == [session_id], timeout=5000)
+
+    qtbot.waitUntil(
+        lambda: any("working on second task" in event.text for event in store.transcript),
+        timeout=10000,
+    )
+    ghost = store.agents.get("ghost-agent")
+    assert ghost is not None, "the previous run's agent vanished instead of being closed"
+    assert ghost.is_live is False
+    assert ghost.active_tools == []
+    # The session itself is live, which is what makes this the interesting case:
+    # SWR-2913 settles agents only when the session reports no run, so nothing
+    # but the sweep can have closed this one.
+    assert store.session_status == "running"
+    assert [node.id for node in store.agent_list() if node.is_live] == []
 
     agent.release_all()
     qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)

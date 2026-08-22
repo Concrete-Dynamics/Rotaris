@@ -18,6 +18,7 @@ alone.
 
 from __future__ import annotations
 
+import datetime as dt
 import gc
 import json
 import os
@@ -38,6 +39,7 @@ from rotaris_core.session.liveness import pid_is_alive
 from rotaris_core.session.manager import SessionManager
 from rotaris_core.session.recovery import (
     INTERRUPTED_EXECUTION_STATUS,
+    ORPHANED_CHILD_STATE,
     detect_stale_sessions,
     session_is_live,
 )
@@ -336,3 +338,76 @@ def test_a_session_with_an_unreadable_lock_is_never_repaired(tmp_path: Path) -> 
     assert result.exit_code == 0
     assert "repaired" not in result.stdout
     assert manager.read_session_snapshot(state.session_id).execution_status == "running"
+
+
+@verifies(SWR.SWR_3714)
+async def test_continuing_a_session_settles_the_children_its_previous_run_left_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Productive use: a user continues the session whose run was killed mid-flight.
+    Expected outcome: the run it starts is the only live thing in the snapshot —
+    the agents the dead run left open read as ended, and the one that finished
+    keeps its outcome."""
+    from rotaris_core.cli import background
+    from rotaris_core.events.bus import reset_event_registry
+    from rotaris_core.eventstore import reset_event_store_registry
+    from rotaris_core.ralph.state import RalphProgressFile
+    from rotaris_core.run_host import RunRequest, execute_run
+
+    async def _fake_run_task(
+        _task: str,
+        _config: object,
+        _session_manager: object,
+        state: SessionState,
+        _max_iterations: int | None,
+        **_kwargs: object,
+    ) -> RalphProgressFile:
+        return RalphProgressFile(
+            session_id=state.session_id,
+            started_at=dt.datetime.now(dt.UTC),
+            total_tasks=1,
+            completed_tasks=1,
+        )
+
+    monkeypatch.setattr(background, "_run_task", _fake_run_task)
+    reset_event_registry()
+    reset_event_store_registry()
+
+    root = _repository(tmp_path)
+    config = RotarisConfig(workspace_root=root)
+    manager = SessionManager(root)
+    state = manager.create_session(config)
+    session_id = state.session_id
+    # Exactly what a killed process leaves behind: records that never reached a
+    # terminal state, beside one that did.
+    state.child_states = [
+        {"canonical_name": "coding-agent", "state": "running", "active_tools": ["terminal"]},
+        {
+            "canonical_name": "verifier",
+            "state": "succeeded",
+            "completed_at": "2026-08-21T21:02:36Z",
+        },
+    ]
+    state.execution_status = "running"
+    manager.flush_session(state)
+    manager.persistence.release_lock(session_id)
+
+    try:
+        result = await execute_run(
+            RunRequest(task="carry on", config=config, session_id=session_id),
+            manager,
+        )
+    finally:
+        reset_event_registry()
+        reset_event_store_registry()
+
+    assert result.session_id == session_id
+    children = {
+        str(child["canonical_name"]): child
+        for child in manager.read_session_snapshot(session_id).child_states
+    }
+    assert children["coding-agent"]["state"] == ORPHANED_CHILD_STATE
+    assert children["coding-agent"]["completed_at"]
+    assert children["coding-agent"]["active_tools"] == []
+    assert children["verifier"]["state"] == "succeeded"
+    assert children["verifier"]["completed_at"] == "2026-08-21T21:02:36Z"

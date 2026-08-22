@@ -697,6 +697,19 @@ to be running for the hosts to read back.
 
 > See: [SWR-2912 — Every child record reaches a terminal state when its run ends](100-orchestration-core/SWR-2912-terminal-child-records-on-run-end.md)
 
+## SWR-3714 — Continuing a session settles the children its previous run left running
+
+status: approved
+
+SWR-2912 can only close a run's records from inside the process that owns it, so
+a quit desktop, a killed host or a hard cancel leaves children at `running` for
+ever. Continuing the session used to show them again as live agents beside the
+ones actually working. A run that has just taken the session lock owns the
+session alone and has started nothing yet, so every non-terminal record it reads
+back is settled to `cancelled` before the first iteration.
+
+> See: [SWR-3714 — Continuing a session settles the children its previous run left running](100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md)
+
 ## History
 
 Source documents merged into this epic (sections preserved verbatim; requirement tables migrated to the files above).

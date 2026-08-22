@@ -94,8 +94,13 @@ def sanitize_visible_text(content: object) -> str:
     for marker in _INLINE_INTERNAL_MARKERS:
         cleaned = cleaned.replace(marker, "")
 
-    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-    cleaned = re.sub(r" *\n *", "\n", cleaned)
+    # Both tidy-ups are anchored away from the start of a line: leading spaces
+    # are Markdown structure — a nested list item, an indented code line — and
+    # collapsing them flattens the list and unindents the code (SWR-1217). What
+    # is left is what marker removal actually leaves behind: a doubled space
+    # inside a sentence, and trailing space before a newline.
+    cleaned = re.sub(r"(?<=\S)[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
     if had_tool_call_markup:
         cleaned = cleaned.rstrip()
     return cleaned

@@ -6429,7 +6429,7 @@ wheels = [
 
 [[package]]
 name = "rotaris"
-version = "0.119.0"
+version = "0.119.1"
 source = { editable = "apps/rotaris" }
 dependencies = [
     { name = "mistune" },
@@ -6477,7 +6477,7 @@ dev = [
 
 [[package]]
 name = "rotaris-core"
-version = "0.119.0"
+version = "0.119.1"
 source = { editable = "." }
 dependencies = [
     { name = "claude-agent-sdk" },

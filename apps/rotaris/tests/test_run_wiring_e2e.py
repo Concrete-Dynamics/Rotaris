@@ -425,6 +425,60 @@ def test_streaming_tokens_render_live_and_finalize_without_duplication(tmp_path)
     assert [e.text for e in agent_rows] == ["Hello world.", "Second answer."]
 
 
+@verifies(SWR.SWR_1217, SWR.SWR_2021, SWR.SWR_2058)
+def test_streamed_markdown_reaches_the_row_with_its_block_breaks_intact(tmp_path) -> None:
+    """Productive use: a desktop user reads a streaming answer as the Markdown it was written in.
+    Expected outcome: the blank line between a heading and its paragraph survives the stream, so
+    the row shows a heading followed by a paragraph instead of one heading swallowing both.
+    """
+    sdk = sdk_events()
+    h = ObserverHarness(tmp_path)
+    deltas = ["## Scope", "\n\n", "Foundation", " implemented,", " not", " verified."]
+    try:
+        for delta in deltas:
+            h.token(token_chunk(delta))
+        h.drain()
+        h.event(message_event(sdk, "".join(deltas)))
+        h.drain()
+        store = h.reload_into_store(tmp_path)
+    finally:
+        h.close()
+
+    agent_rows = [e for e in store.transcript if e.kind == "message"]
+    assert [e.text for e in agent_rows] == ["## Scope\n\nFoundation implemented, not verified."]
+
+    rendered = _event_html(0, agent_rows[0], False)
+    assert "<h2>Scope</h2>" in rendered
+    assert "<p>Foundation implemented, not verified.</p>" in rendered
+
+
+@verifies(SWR.SWR_2058)
+def test_committed_message_replaces_a_segment_it_differs_from_only_in_whitespace(
+    tmp_path,
+) -> None:
+    """Productive use: a user reads one answer once, however the provider chunked it.
+    Expected outcome: whitespace that only survives a delta boundary does not turn the
+    committed message into a second copy of the same row.
+    """
+    sdk = sdk_events()
+    h = ObserverHarness(tmp_path)
+    try:
+        # Each delta is sanitized on its own, so the doubled space that spans the
+        # boundary reaches the segment; the whole message is sanitized once and
+        # collapses it. Same message, different characters.
+        h.token(token_chunk("Found the issue after "))
+        h.token(token_chunk(" reading app.py"))
+        h.drain()
+        h.event(message_event(sdk, "Found the issue after  reading app.py"))
+        h.drain()
+        store = h.reload_into_store(tmp_path)
+    finally:
+        h.close()
+
+    agent_rows = [e for e in store.transcript if e.kind == "message"]
+    assert [e.text for e in agent_rows] == ["Found the issue after reading app.py"]
+
+
 @verifies(SWR.SWR_2056)
 def test_replayed_committed_message_does_not_duplicate_transcript_row(tmp_path) -> None:
     sdk = sdk_events()

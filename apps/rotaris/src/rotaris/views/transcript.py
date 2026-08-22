@@ -2079,9 +2079,19 @@ def _plain_html(text: str) -> str:
 
 
 def _document_css(kind: str) -> str:
+    t = tokens()
+    scale = t.type.scale
+    # A Markdown heading inside a transcript row labels a section of one
+    # message, not a page. Qt's own `h1` is 2em of the row's 13px body, which
+    # reads as a different message arriving rather than as a heading in this
+    # one — so the ladder is re-cut from the type scale, tight enough that the
+    # three levels a model actually writes stay distinguishable side by side.
     return (
-        f"a{{color:{tokens().color.accent[300]};text-decoration:underline;}}"
+        f"a{{color:{t.color.accent[300]};text-decoration:underline;}}"
         "p{margin:0 0 6px 0;} ul,ol{margin-top:2px;margin-bottom:6px;}"
+        f"h1{{font-size:{scale.md}px;margin:8px 0 4px 0;}}"
+        f"h2{{font-size:{scale.base}px;margin:8px 0 4px 0;}}"
+        f"h3,h4,h5,h6{{font-size:{scale.sm}px;margin:6px 0 3px 0;}}"
     )
 
 

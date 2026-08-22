@@ -6,16 +6,20 @@ import html
 import json
 import time
 from collections import OrderedDict
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast, override
 
 from PySide6.QtCore import (
     QAbstractItemModel,
     QAbstractListModel,
     QEvent,
+    QItemSelection,
+    QItemSelectionModel,
     QModelIndex,
     QPersistentModelIndex,
     QPoint,
     QPointF,
+    QRect,
     QRectF,
     QSize,
     Qt,
@@ -33,13 +37,13 @@ from PySide6.QtGui import (
     QKeySequence,
     QMouseEvent,
     QPainter,
+    QPaintEvent,
+    QRegion,
     QResizeEvent,
     QTextDocument,
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QAbstractSlider,
-    QListView,
     QMenu,
     QStyle,
     QStyledItemDelegate,
@@ -52,9 +56,10 @@ from rotaris import theme
 from rotaris.markdown import markdown_to_html
 from rotaris.theme import tokens
 from rotaris.theme.manager import Themed
+from rotaris.views.transcript_geometry import RowGeometry
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Container, Sequence
+    from collections.abc import Callable, Container, Iterator, Sequence
 
     from rotaris.models.state import AgentNode, QuestionStep, TranscriptDiff, TranscriptEvent
     from rotaris.models.store import WorkspaceStore
@@ -75,6 +80,9 @@ _ROLE_WIDTH = 112
 _COLUMN_SPACING = 12
 _BODY_X = _ROW_MARGIN_X + _TIMESTAMP_WIDTH + _COLUMN_SPACING + _ROLE_WIDTH + _COLUMN_SPACING
 _MIN_ROW_HEIGHT = 30
+#: How many times a full re-measure may chase the viewport width. Two passes
+#: settle the "does the scrollbar fit" question; a third is a safety net.
+_MAX_LAYOUT_PASSES = 3
 _SIZE_CACHE_LIMIT = 4096
 #: Far smaller than the size cache: a laid-out `QTextDocument` costs real
 #: memory, and only rows near the viewport are ever painted.
@@ -857,9 +865,9 @@ class TranscriptDelegate(QStyledItemDelegate):
             else:
                 expansion.add(identity)
             self._drop_event_caches(transcript_event)
+            # The view re-measures this one row off `sizeHintChanged` and moves
+            # the rows below it; nothing else in the transcript is touched.
             self.sizeHintChanged.emit(index)
-            self._view.doItemsLayout()
-            self._view.update(index)
             return True
         if anchor.startswith("rotaris-terminal:"):
             self._view.terminal_popout_requested.emit(transcript_event.stream_id)
@@ -1022,8 +1030,22 @@ class TranscriptDelegate(QStyledItemDelegate):
             painter.fillRect(view_option.rect, color.accent[900].qcolor)
 
 
-class TranscriptListView(Themed, QListView):
-    """Virtual transcript list with exact whole-message copy support."""
+class TranscriptListView(Themed, QAbstractItemView):
+    """A transcript that owns its own row geometry (SWR-2452).
+
+    `QAbstractItemView` rather than `QListView`, and the difference is the whole
+    point. `QListView` throws its entire item layout away on every row insertion
+    and every `dataChanged`, so one appended row re-measures the whole
+    conversation — and under batched layout it rebuilds that layout a slice per
+    event-loop pass, painting the rows it has not reached yet as background.
+    That is what made a long chat blank and refill on every refresh.
+
+    Everything above the geometry is unchanged: the same model, the same
+    delegate, the same identity-keyed caches. What changes is that
+    `TranscriptListModel.sync`'s incremental insert/update finally reaches a
+    layout that honours it. Appending measures the appended rows; painting
+    measures nothing at all.
+    """
 
     #: A terminal row asked to be opened in the pop-out window (SWR-2428).
     terminal_popout_requested = Signal(str)
@@ -1031,21 +1053,23 @@ class TranscriptListView(Themed, QListView):
     @traces(SWR.SWR_2452)
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        #: Row heights and their running totals. The rows themselves live in the
+        #: model; this is only where they sit.
+        self._geometry = RowGeometry()
+        #: The width every row in `_geometry` was measured at. A row's height is
+        #: a function of its width, so a change here invalidates all of them —
+        #: and a height-only resize must not touch it.
+        self._measured_width = -1
+        #: Re-entry guard for `remeasure_all` — see its docstring.
+        self._reflowing = False
+        #: Row under the pointer, for `State_MouseOver`. `QListView` kept this
+        #: privately and its own painter read it; a view that paints its own
+        #: rows has to keep it itself.
+        self._hover_row = -1
         model = TranscriptListModel(self)
         self.setModel(model)
         self._delegate = TranscriptDelegate(self)
         self.setItemDelegate(self._delegate)
-        # Not `Batched`. Qt throws the whole item layout away on every row
-        # insertion and every `dataChanged`, and batched mode then rebuilds it
-        # `batchSize` rows per event-loop pass — during which every row past the
-        # laid-out prefix has a zero-height `visualRect` and paints as
-        # background. With the viewport pinned to the tail, the tail lands in
-        # the *last* batch, so the whole transcript reads blank until then, for
-        # `rowCount / batchSize` frames. Laying out in one pass costs the same
-        # total work and never shows a half-built transcript.
-        self.setLayoutMode(QListView.LayoutMode.SinglePass)
-        self.setResizeMode(QListView.ResizeMode.Adjust)
-        self.setMovement(QListView.Movement.Static)
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -1059,7 +1083,6 @@ class TranscriptListView(Themed, QListView):
         # projection of this list once grouping is on (SWR-2432).
         self._source_events: list[TranscriptEvent] = []
         self._following_tail = True
-        self._pin_pending = False
         self._stepper_questions: list[QuestionStep] | None = None
         self._stepper_modal: QuestionStepper | None = None
         self._run_bridge: RunBridge | None = None
@@ -1073,12 +1096,12 @@ class TranscriptListView(Themed, QListView):
             "Agent activity and messages. A green border means new output is followed. "
             "Select a row, then use Copy message or Ctrl+C."
         )
+        #: True while the view is moving the scrollbar itself. Pinning the tail,
+        #: restoring an anchor and jumping to a search hit all move it, and none
+        #: of them is the reader deciding where to look.
+        self._adjusting = False
         scrollbar = self.verticalScrollBar()
-        scrollbar.rangeChanged.connect(self._scroll_range_changed)
-        scrollbar.actionTriggered.connect(self._scroll_action_triggered)
-        scrollbar.sliderPressed.connect(lambda: self.set_following_tail(False))
-        scrollbar.sliderMoved.connect(self._slider_moved)
-        scrollbar.sliderReleased.connect(self._sync_tail_state_from_position)
+        scrollbar.valueChanged.connect(self._scroll_value_changed)
         # Live rows (thinking without duration, running tools) show elapsed
         # labels that must keep counting between store refreshes (SWR-2447).
         self._live_repaint = QTimer(self)
@@ -1087,6 +1110,16 @@ class TranscriptListView(Themed, QListView):
         model.rowsInserted.connect(self._update_live_timer)
         model.dataChanged.connect(self._update_live_timer)
         model.modelReset.connect(self._update_live_timer)
+        # Geometry follows the model row by row. Connected after the delegate
+        # exists, because measuring a row goes through it — and connected to the
+        # model's own signals rather than the `QAbstractItemView` slots of the
+        # same name, so the order relative to the delegate's cache invalidation
+        # is written down here rather than left to Qt.
+        model.rowsInserted.connect(self._rows_inserted)
+        model.rowsRemoved.connect(self._rows_removed)
+        model.dataChanged.connect(self._rows_changed)
+        model.modelReset.connect(self._model_reset)
+        self._delegate.sizeHintChanged.connect(self._row_size_hint_changed)
         self.install_theme_hook()
 
     def apply_theme(self, theme: Theme) -> None:
@@ -1097,21 +1130,256 @@ class TranscriptListView(Themed, QListView):
         dropped and the rows measured again, or the transcript keeps the palette
         the reader just left until the next store refresh happens to touch it.
         """
+        # `QAbstractItemView`, not `QListView` — the selector has to name a class
+        # this widget actually is, or the rule silently matches nothing and the
+        # transcript renders on the window's background with no border.
         self.setStyleSheet(
-            f"QListView#transcriptView{{background:{theme.color.bg};"
+            f"QAbstractItemView#transcriptView{{background:{theme.color.bg};"
             f"border:{theme.size.hairline}px solid {theme.color.border};}}"
-            f'QListView#transcriptView[followingTail="true"]{{'
+            f'QAbstractItemView#transcriptView[followingTail="true"]{{'
             f"border:{theme.size.hairline}px solid {theme.color.run};}}"
         )
         self._delegate.invalidate_rendered_caches()
-        self.doItemsLayout()
-        self.viewport().update()
+        self.remeasure_all()
 
     @property
     def transcript_model(self) -> TranscriptListModel:
         model = self.model()
         assert isinstance(model, TranscriptListModel)
         return model
+
+    # ── measuring ────────────────────────────────────────────────────────
+
+    def _view_item_option(self) -> QStyleOptionViewItem:
+        """The option a delegate expects: this widget's font, palette and state."""
+        option = QStyleOptionViewItem()
+        # Qt 6 spells it `initViewItemOption`; it fills in font, palette and
+        # decoration size, and clears the widget-level hover flag that
+        # `initFrom` alone would leave on every row.
+        initialise = getattr(self, "initViewItemOption", None)
+        if initialise is not None:
+            initialise(option)
+        else:  # pragma: no cover - Qt 5 shape, kept so the fallback is honest
+            option.initFrom(self)
+        writable = cast("Any", option)
+        writable.state &= ~QStyle.StateFlag.State_MouseOver
+        writable.state &= ~QStyle.StateFlag.State_Selected
+        return option
+
+    @traces(SWR.SWR_2452)
+    def _measure(self, rows: range, option: QStyleOptionViewItem | None = None) -> list[int]:
+        """Ask the delegate how tall *rows* are, in order."""
+        option = option if option is not None else self._view_item_option()
+        model = self.transcript_model
+        delegate = self.itemDelegate()
+        width = max(1, self.viewport().width())
+        heights: list[int] = []
+        writable = cast("Any", option)
+        for row in rows:
+            writable.rect = QRect(0, 0, width, 0)
+            heights.append(max(1, delegate.sizeHint(option, model.index(row, 0)).height()))
+        return heights
+
+    @traces(SWR.SWR_2452)
+    def remeasure_all(self, anchor: tuple[str, int] | None = None) -> None:
+        """Measure every row from scratch — a reset, a theme change, a new width.
+
+        Once is usually enough and twice always is. A row is measured against
+        the width it wraps at, and that width is the viewport's — but the
+        viewport's width depends on whether the scrollbar is showing, which
+        depends on the total height, which is what we are measuring. So: measure,
+        publish the range, and if the scrollbar came or went underneath us,
+        measure again at the width it left behind. The loop is bounded because
+        the second pass either agrees with the first or settles the question.
+        """
+        if self._reflowing:
+            return
+        self._reflowing = True
+        try:
+            for _ in range(_MAX_LAYOUT_PASSES):
+                width = max(1, self.viewport().width())
+                option = self._view_item_option()
+                rows = range(self.transcript_model.rowCount())
+                self._geometry.reset(self._measure(rows, option))
+                self._measured_width = width
+                self._refresh_scrollbars()
+                if max(1, self.viewport().width()) == width:
+                    break
+        finally:
+            self._reflowing = False
+        self._settle_position(anchor)
+
+    @traces(SWR.SWR_2452)
+    def _reflow_if_width_changed(self) -> bool:
+        """Re-measure everything if the viewport is a different width than before.
+
+        The viewport can change width without the view being resized — a
+        scrollbar appearing takes the space out of it — so this is asked at the
+        viewport, not at the widget.
+        """
+        if max(1, self.viewport().width()) == self._measured_width:
+            return False
+        self.remeasure_all(self._capture_anchor())
+        return True
+
+    @traces(SWR.SWR_2452)
+    def _remeasure(self, rows: range) -> bool:
+        """Re-measure *rows* that already exist; True when any height moved."""
+        option = self._view_item_option()
+        model = self.transcript_model
+        count = model.rowCount()
+        moved = False
+        for row in rows:
+            if not 0 <= row < count:
+                continue
+            height = self._measure(range(row, row + 1), option)[0]
+            moved = self._geometry.set_height(row, height) or moved
+        return moved
+
+    @staticmethod
+    def _with_successor(first: int, last: int) -> range:
+        """*first*..*last* plus the row after them.
+
+        Attribution (SWR-2906) gives a row its label only when the role above it
+        differs, so a row's height depends on the row before it. Touching row
+        *r* can therefore change the height of *r+1*, and nothing further —
+        every other row still sits behind the same neighbour it did.
+        """
+        return range(first, last + 2)
+
+    # ── the model moved ──────────────────────────────────────────────────
+
+    @traces(SWR.SWR_2452)
+    def _rows_inserted(self, _parent: QModelIndex, first: int, last: int) -> None:
+        anchor = self._capture_anchor()
+        option = self._view_item_option()
+        self._geometry.insert(first, self._measure(range(first, last + 1), option))
+        self._remeasure(range(last + 1, last + 2))
+        self._geometry_settled(anchor)
+
+    @traces(SWR.SWR_2452)
+    def _rows_removed(self, _parent: QModelIndex, first: int, last: int) -> None:
+        anchor = self._capture_anchor()
+        self._geometry.remove(first, last - first + 1)
+        # The row that moved up into `first` now follows a different one.
+        self._remeasure(range(first, first + 1))
+        self._geometry_settled(anchor)
+
+    @traces(SWR.SWR_2452)
+    def _rows_changed(
+        self,
+        top_left: QModelIndex,
+        bottom_right: QModelIndex,
+        _roles: object = None,
+    ) -> None:
+        anchor = self._capture_anchor()
+        if self._remeasure(self._with_successor(top_left.row(), bottom_right.row())):
+            self._geometry_settled(anchor)
+        else:
+            # Same heights, new content: repaint the rows, move nothing.
+            for row in range(top_left.row(), bottom_right.row() + 1):
+                self.update(self.transcript_model.index(row, 0))
+
+    @traces(SWR.SWR_2452)
+    def _model_reset(self) -> None:
+        self.remeasure_all()
+
+    @traces(SWR.SWR_2452)
+    def _row_size_hint_changed(self, index: QModelIndex) -> None:
+        """One row's height changed without its data changing.
+
+        The delegate says so when auto-collapse lets a tool row out of the
+        recent pair, or when a box is expanded — the row is the same row, it is
+        simply taller now.
+        """
+        if not index.isValid():
+            return
+        anchor = self._capture_anchor()
+        if self._remeasure(range(index.row(), index.row() + 1)):
+            self._geometry_settled(anchor)
+        else:
+            self.update(index)
+
+    # ── scrollbars, tail, anchor ─────────────────────────────────────────
+
+    @traces(SWR.SWR_2452)
+    def _geometry_settled(self, anchor: tuple[str, int] | None = None) -> None:
+        """Publish a geometry change: scrollbars, then where the reader was."""
+        # Every row in the geometry was measured at the width the viewport has
+        # now: a width change re-measures all of them before anything else is
+        # allowed to touch the geometry, so recording it here records that the
+        # whole index is consistent, not just the rows this change moved.
+        width = max(1, self.viewport().width())
+        self._measured_width = width
+        self._refresh_scrollbars()
+        if max(1, self.viewport().width()) != width:
+            # Publishing the range showed or hid the scrollbar, which took the
+            # width the rows were just measured at with it.
+            self.remeasure_all(anchor)
+            return
+        self._settle_position(anchor)
+
+    def _settle_position(self, anchor: tuple[str, int] | None) -> None:
+        """Put the viewport back where the reader had it, and repaint."""
+        if self._following_tail:
+            self._pin_to_tail()
+        elif anchor is not None:
+            self._restore_anchor(anchor)
+        self.viewport().update()
+
+    def _refresh_scrollbars(self) -> None:
+        """One exact range for the whole transcript, set once.
+
+        `QListView` grew this range in batches as it laid rows out, which is why
+        following the tail needed a coalescing timer to stop the viewport
+        jumping several times per append. An exact total needs none of that.
+        """
+        page = max(0, self.viewport().height())
+        bar = self.verticalScrollBar()
+        with self._adjusting_scroll():
+            bar.setPageStep(page)
+            bar.setSingleStep(_MIN_ROW_HEIGHT)
+            # A shrinking range clamps the value, which is the geometry moving
+            # the reader rather than the reader moving themselves.
+            bar.setRange(0, max(0, self._geometry.total() - page))
+
+    @traces(SWR.SWR_2452)
+    def _capture_anchor(self) -> tuple[str, int] | None:
+        """The row the reader is looking at, and where on screen it sits.
+
+        Identity rather than row number, and an offset rather than a raw scroll
+        value: rows can be inserted above the viewport and rows above it can
+        change height, and in both cases a pixel position restored verbatim
+        moves the text under the reader's eyes.
+        """
+        if self._following_tail:
+            return None
+        model = self.transcript_model
+        row = self._geometry.row_at(self.verticalScrollBar().value())
+        event = model.event_at(row)
+        if event is None:
+            return None
+        return (_event_identity(event), self._geometry.top(row) - self.verticalScrollBar().value())
+
+    @traces(SWR.SWR_2452)
+    def _restore_anchor(self, anchor: tuple[str, int]) -> None:
+        identity, offset = anchor
+        row = self._row_of_identity(identity)
+        if row < 0:
+            return
+        with self._adjusting_scroll():
+            self.verticalScrollBar().setValue(self._geometry.top(row) - offset)
+
+    def _row_of_identity(self, identity: str) -> int:
+        """Where the anchored row went. Usually nowhere, so look there first."""
+        events = self.transcript_model.events
+        previous = self._geometry.row_at(self.verticalScrollBar().value())
+        if 0 <= previous < len(events) and _event_identity(events[previous]) == identity:
+            return previous
+        for row, event in enumerate(events):
+            if _event_identity(event) == identity:
+                return row
+        return -1
 
     @traces(SWR.SWR_2432)
     def set_events(self, events: list[TranscriptEvent]) -> bool:
@@ -1129,24 +1397,211 @@ class TranscriptListView(Themed, QListView):
             return list(self._source_events)
         return group_tool_runs(self._source_events, self._delegate.expanded_groups)
 
+    # ── the QAbstractItemView contract ───────────────────────────────────
+
+    @override
+    @traces(SWR.SWR_2452)
+    def visualRect(self, index: QModelIndex | QPersistentModelIndex) -> QRect:  # noqa: N802
+        if not index.isValid() or index.row() >= len(self._geometry):
+            return QRect()
+        return QRect(
+            -self.horizontalOffset(),
+            self._geometry.top(index.row()) - self.verticalOffset(),
+            max(1, self.viewport().width()),
+            self._geometry.height(index.row()),
+        )
+
+    @override
+    @traces(SWR.SWR_2452)
+    def indexAt(self, point: QPoint) -> QModelIndex:  # noqa: N802
+        row = self._geometry.row_at(point.y() + self.verticalOffset())
+        if row < 0:
+            return QModelIndex()
+        return self.transcript_model.index(row, 0)
+
+    @override
+    @traces(SWR.SWR_2452)
+    def scrollTo(  # noqa: N802
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        hint: QAbstractItemView.ScrollHint = QAbstractItemView.ScrollHint.EnsureVisible,
+    ) -> None:
+        if not index.isValid() or index.row() >= len(self._geometry):
+            return
+        top = self._geometry.top(index.row())
+        height = self._geometry.height(index.row())
+        page = self.viewport().height()
+        bar = self.verticalScrollBar()
+        if hint == QAbstractItemView.ScrollHint.PositionAtTop:
+            target = top
+        elif hint == QAbstractItemView.ScrollHint.PositionAtBottom:
+            target = top + height - page
+        elif hint == QAbstractItemView.ScrollHint.PositionAtCenter:
+            target = top - (page - height) // 2
+        elif top < bar.value():
+            target = top
+        elif top + height > bar.value() + page:
+            target = top + height - page
+        else:
+            return
+        with self._adjusting_scroll():
+            bar.setValue(max(bar.minimum(), min(target, bar.maximum())))
+
+    @override
+    def verticalOffset(self) -> int:  # noqa: N802
+        return self.verticalScrollBar().value()
+
+    @override
+    def horizontalOffset(self) -> int:  # noqa: N802
+        # The transcript wraps rather than scrolling sideways, and the
+        # horizontal bar is off — so there is never an offset to apply.
+        return 0
+
+    @override
+    def isIndexHidden(self, index: QModelIndex | QPersistentModelIndex) -> bool:  # noqa: N802
+        return False
+
+    @override
+    @traces(SWR.SWR_2452)
+    def moveCursor(  # noqa: N802
+        self,
+        cursor_action: QAbstractItemView.CursorAction,
+        modifiers: Qt.KeyboardModifier,
+    ) -> QModelIndex:
+        """Keyboard navigation. `QListView` supplied this; a custom view owes it.
+
+        Reading a transcript without a mouse means arrow keys, Page Up/Down and
+        Home/End, so all of them resolve to a row here rather than only the two
+        that a list happens to make free.
+        """
+        model = self.transcript_model
+        count = model.rowCount()
+        if count == 0:
+            return QModelIndex()
+        current = self.currentIndex()
+        row = current.row() if current.isValid() else 0
+        page = max(1, self.viewport().height() // max(1, _MIN_ROW_HEIGHT))
+        actions = QAbstractItemView.CursorAction
+        if cursor_action in {actions.MoveDown, actions.MoveNext}:
+            row += 1
+        elif cursor_action in {actions.MoveUp, actions.MovePrevious}:
+            row -= 1
+        elif cursor_action == actions.MovePageDown:
+            row += page
+        elif cursor_action == actions.MovePageUp:
+            row -= page
+        elif cursor_action in {actions.MoveHome, actions.MoveLeft}:
+            row = 0
+        elif cursor_action in {actions.MoveEnd, actions.MoveRight}:
+            row = count - 1
+        return model.index(max(0, min(row, count - 1)), 0)
+
+    @override
+    def setSelection(  # noqa: N802
+        self, rect: QRect, command: QItemSelectionModel.SelectionFlag
+    ) -> None:
+        selection_model = self.selectionModel()
+        if selection_model is None:
+            return
+        normalised = rect.normalized()
+        first = self._geometry.row_at(normalised.top() + self.verticalOffset())
+        last = self._geometry.row_at(normalised.bottom() + self.verticalOffset())
+        model = self.transcript_model
+        if first < 0 and last < 0:
+            selection_model.select(QItemSelection(), command)
+            return
+        first = max(first, 0)
+        last = last if last >= 0 else model.rowCount() - 1
+        selection_model.select(QItemSelection(model.index(first, 0), model.index(last, 0)), command)
+
+    @override
+    def visualRegionForSelection(  # noqa: N802
+        self, selection: QItemSelection
+    ) -> QRegion:
+        region = QRegion()
+        model = self.transcript_model
+        for span in cast("Sequence[Any]", selection):
+            for row in range(span.top(), span.bottom() + 1):
+                region = region.united(QRegion(self.visualRect(model.index(row, 0))))
+        return region
+
+    @override
+    @traces(SWR.SWR_2452)
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802
+        """Paint the rows the viewport touches, and no others.
+
+        A repaint runs on hover, on every live tick and on every scroll step, so
+        it must cost the viewport rather than the conversation. Nothing here
+        measures: the geometry is already current by the time a paint happens.
+        """
+        painter = QPainter(self.viewport())
+        model = self.transcript_model
+        delegate = self.itemDelegate()
+        offset = self.verticalOffset()
+        selection_model = self.selectionModel()
+        current = self.currentIndex()
+        width = max(1, self.viewport().width())
+        first, last = self._geometry.visible_span(offset, offset + self.viewport().height())
+        base = self._view_item_option()
+        for row in range(first, last):
+            index = model.index(row, 0)
+            option = QStyleOptionViewItem(base)
+            writable = cast("Any", option)
+            writable.rect = QRect(
+                0, self._geometry.top(row) - offset, width, self._geometry.height(row)
+            )
+            writable.index = index
+            if selection_model is not None and selection_model.isSelected(index):
+                writable.state |= QStyle.StateFlag.State_Selected
+            if row == self._hover_row:
+                writable.state |= QStyle.StateFlag.State_MouseOver
+            if current.isValid() and current.row() == row and self.hasFocus():
+                writable.state |= QStyle.StateFlag.State_HasFocus
+            delegate.paint(painter, option, index)
+
+    @override
+    @traces(SWR.SWR_2452)
+    def viewportEvent(self, event: QEvent) -> bool:  # noqa: N802
+        """The viewport's own resize is where a width change actually shows up."""
+        handled = super().viewportEvent(event)
+        if event.type() == QEvent.Type.Resize:
+            self._reflow_if_width_changed()
+        return handled
+
+    @override
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self._set_hover_row(self.indexAt(event.position().toPoint()).row())
+        super().mouseMoveEvent(event)
+
+    @override
+    def leaveEvent(self, event: QEvent) -> None:  # noqa: N802
+        self._set_hover_row(-1)
+        super().leaveEvent(event)
+
+    def _set_hover_row(self, row: int) -> None:
+        """Repaint the row leaving the pointer and the row taking it, only."""
+        if row == self._hover_row:
+            return
+        model = self.transcript_model
+        previous = self._hover_row
+        self._hover_row = row
+        for touched in (previous, row):
+            if 0 <= touched < model.rowCount():
+                self.update(model.index(touched, 0))
+
     @traces(SWR.SWR_2432)
     def refresh_grouping(self, *, force_layout: bool = False) -> None:
         """Re-project after a group toggle or a change to the grouping setting.
 
         `force_layout` is for the changes that leave the rows themselves alone
         and only alter their heights — auto-collapse is the one that does that.
-        Everything else lays out only when the projection actually moved, since
-        measuring every row is the most expensive thing this view does and must
-        never be a reflex to an unrelated refresh.
+        Everything else re-measures only what the model says moved, which the
+        geometry already handles as the sync runs.
         """
-        saved_scroll = self.verticalScrollBar().value()
-        follow_tail = self._following_tail
         if self.transcript_model.sync(self._display_events()):
-            self.restore_after_model_change(saved_scroll, follow_tail)
-        elif not force_layout:
             return
-        self.doItemsLayout()
-        self.viewport().update()
+        if force_layout:
+            self.remeasure_all()
 
     @traces(SWR.SWR_2447, SWR.SWR_2432)
     def _live_rows(self) -> list[int]:
@@ -1393,55 +1848,64 @@ class TranscriptListView(Themed, QListView):
         if following:
             self._pin_to_tail()
 
+    @traces(SWR.SWR_2452)
     def restore_after_model_change(self, saved_scroll: int, following_tail: bool) -> None:
+        """Re-assert tail following after a refresh; the position is already right.
+
+        `saved_scroll` is a pixel value read before the model changed, and it is
+        deliberately ignored: rows above the viewport can change height in the
+        same refresh, and putting the scrollbar back where it was would then
+        move the text under the reader. The view anchors on the row itself as
+        each change lands, which is the thing the caller actually wanted. The
+        parameter stays so the call site reads the same and no caller has to
+        care which of the two it gets.
+        """
+        del saved_scroll
         self.set_following_tail(following_tail)
-        if not following_tail:
-            self.verticalScrollBar().setValue(saved_scroll)
 
+    @traces(SWR.SWR_2452)
     def _pin_to_tail(self) -> None:
-        """Scroll to the bottom once per event-loop turn.
+        """Land the viewport at the bottom, in one step.
 
-        Batched layout means the scrollbar's maximum grows in steps after rows
-        are inserted, so an append fires several pin requests — the explicit one
-        from the refresh, then one per `rangeChanged`. Pinning on each of them
-        moves the viewport several times in as many frames, which is the jump
-        that reads as flicker. Coalescing lands the tail exactly once, after the
-        layout has settled.
+        This used to need a coalescing timer: batched layout grew the
+        scrollbar's maximum in stages, so an append fired several pin requests
+        and moved the viewport once per stage — several frames of jumping. The
+        geometry now knows the exact total before anyone paints, so the tail is
+        one assignment.
         """
         scrollbar = self.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-        if self._pin_pending:
+        with self._adjusting_scroll():
+            scrollbar.setValue(scrollbar.maximum())
+
+    @traces(SWR.SWR_2452)
+    def _scroll_value_changed(self, value: int) -> None:
+        """The reader moved: follow the tail exactly while they are at the tail.
+
+        Read off the value rather than the action that produced it. The old
+        shape asked `actionTriggered` which way the scroll went and re-checked
+        the position a tick later, because a batched layout had not finished
+        growing the scrollbar yet and the answer was not available in the same
+        turn. The range is now exact the moment the geometry changes, so the
+        position *is* the answer — and it covers the wheel, the keyboard, the
+        slider and the page areas without enumerating any of them.
+        """
+        if self._adjusting:
             return
-        self._pin_pending = True
-        QTimer.singleShot(0, self._settle_tail)
-
-    def _settle_tail(self) -> None:
-        self._pin_pending = False
-        if not self._following_tail:
-            return
-        scrollbar = self.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-
-    def _scroll_range_changed(self, _minimum: int, _maximum: int) -> None:
-        if self._following_tail:
-            self._pin_to_tail()
-
-    def _scroll_action_triggered(self, action: int) -> None:
-        upward_actions = {
-            QAbstractSlider.SliderAction.SliderSingleStepSub.value,
-            QAbstractSlider.SliderAction.SliderPageStepSub.value,
-            QAbstractSlider.SliderAction.SliderToMinimum.value,
-        }
-        if action in upward_actions:
-            self.set_following_tail(False)
-        QTimer.singleShot(0, self._sync_tail_state_from_position)
-
-    def _slider_moved(self, value: int) -> None:
         self.set_following_tail(value == self.verticalScrollBar().maximum())
 
     def _sync_tail_state_from_position(self) -> None:
         scrollbar = self.verticalScrollBar()
         self.set_following_tail(scrollbar.value() == scrollbar.maximum())
+
+    @contextmanager
+    def _adjusting_scroll(self) -> Iterator[None]:
+        """Move the scrollbar without it counting as the reader moving it."""
+        previous = self._adjusting
+        self._adjusting = True
+        try:
+            yield
+        finally:
+            self._adjusting = previous
 
     def copy_selected_message(self) -> bool:
         event = self.transcript_model.event_at(self.currentIndex().row())
@@ -1452,15 +1916,22 @@ class TranscriptListView(Themed, QListView):
         return True
 
     @override
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        scrollbar = self.verticalScrollBar()
-        saved_scroll = scrollbar.value()
+    @traces(SWR.SWR_2452)
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        """Re-measure on a width change, and only on a width change.
+
+        A row's height is a function of the width it wraps at, so a narrower
+        viewport genuinely invalidates every measurement. A taller one does not
+        invalidate a single one — and dragging the bottom edge of the window
+        used to re-measure the whole conversation on every frame of the drag.
+        """
+        anchor = self._capture_anchor()
         super().resizeEvent(event)
-        self.doItemsLayout()
-        if self._following_tail:
-            self._pin_to_tail()
-        else:
-            scrollbar.setValue(saved_scroll)
+        if self._reflow_if_width_changed():
+            return
+        # Height only: every measurement still stands. The page step and the
+        # scroll range are all that moved.
+        self._geometry_settled(anchor)
 
     @override
     def keyPressEvent(self, event: QKeyEvent) -> None:

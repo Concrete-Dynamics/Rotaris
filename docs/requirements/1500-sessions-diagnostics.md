@@ -279,13 +279,13 @@ source: docs/requirement-log/done/requirements-20260522-shared-artifacts.md
 
 `RotarisDelegateAction` shall accept an optional `attach_artifacts: list[str]` (artifact ids or slugs). The corresponding artifacts shall be injected in full (incl. `snippets` and `highlight_paths`) at the head of the child's task payload.
 
-## SWR-1526 — Hybrid auto-injection - baseline
+## SWR-1526 — Hybrid auto-injection - baseline index
 
 legacy-id: REQ-20260522-ART-010
 date: 2026-05-22
 source: docs/requirement-log/done/requirements-20260522-shared-artifacts.md
 
-Whenever a child transitions from `QUEUED` to `RUNNING`, the system shall prepend a `PRIOR SIBLING SUMMARIES` block containing the `summary + key_findings` of every succeeded sibling artifact in the parent's scope, capped at a configurable token budget. Over the cap, the system shall replace the overflow with an elision marker pointing to `artifact_list`.
+Whenever a child transitions from `QUEUED` to `RUNNING`, the system shall prepend a `PRIOR SIBLING ARTIFACT INDEX` block listing every succeeded sibling artifact in the parent's scope as **one line** — slug, id, source persona, status, and a one-line summary capped at 160 characters. The block shall carry neither `key_findings` nor bodies; it shall name `artifact_read` as the way to obtain them. The block is capped at a token budget of ~2.5k tokens; over the cap, the system shall replace the overflow with an elision marker pointing to `artifact_list`.
 
 ## SWR-1527 — Hybrid auto-injection - full body
 
@@ -302,7 +302,7 @@ legacy-id: REQ-20260522-ART-012
 date: 2026-05-22
 source: docs/requirement-log/done/requirements-20260522-shared-artifacts.md
 
-Persona config shall accept `skip_auto_sibling_context: bool = false`; `RotarisDelegateAction` shall accept `suppress_auto_context: bool = false`. Either flag set true shall suppress the baseline `PRIOR SIBLING SUMMARIES` block for the spawned child.
+Persona config shall accept `skip_auto_sibling_context: bool = false`; `RotarisDelegateAction` shall accept `suppress_auto_context: bool = false`. Either flag set true shall suppress the baseline `PRIOR SIBLING ARTIFACT INDEX` block for the spawned child.
 
 ## SWR-1529 — Summary-agent tags
 

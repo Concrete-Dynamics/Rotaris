@@ -181,8 +181,78 @@ def test_baseline_block_returns_contributing_artifact_ids(tmp_path: Path) -> Non
 
     block, ids = store.baseline_block()
 
-    assert "PRIOR SIBLING SUMMARIES" in block
+    assert "PRIOR SIBLING ARTIFACT INDEX" in block
     assert ids == [art.id]
+
+
+@verifies(SWR.SWR_1526)
+def test_baseline_block_is_a_one_line_index_without_findings(tmp_path: Path) -> None:
+    """The baseline orients the child; it does not hand it the evidence."""
+    store = SessionArtifactStore(tmp_path)
+    art = store.publish(
+        slug="plan-foo",
+        title="Plan",
+        body="Add the field, then wire it.\n\nEvidence: src/rotaris_core/deep/module.py:42",
+        persona="planner",
+    )
+
+    block, _ids = store.baseline_block()
+
+    entries = [line for line in block.splitlines() if line.startswith("- ")]
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.startswith(f"- plan-foo [{art.id}] (planner, published): ")
+    # Summary only — the second body line stays on disk until artifact_read asks.
+    assert "Add the field, then wire it." in entry
+    assert "KEY FINDINGS" not in block
+    assert "src/rotaris_core/deep/module.py:42" not in block
+    assert 'artifact_read("<slug>")' in block
+
+
+@verifies(SWR.SWR_1526)
+def test_baseline_index_entry_truncates_a_long_summary_to_one_line(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path)
+    store.publish(
+        slug="wordy",
+        title="Wordy",
+        body="lorem ipsum " * 40,
+        persona="librarian",
+    )
+
+    block, _ids = store.baseline_block()
+
+    entry = next(line for line in block.splitlines() if line.startswith("- wordy "))
+    assert entry.endswith("…")
+    assert len(entry) < 260
+
+
+@verifies(SWR.SWR_1526, SWR.SWR_1527)
+def test_index_baseline_does_not_thin_the_attached_full_block(tmp_path: Path) -> None:
+    """Slimming the baseline must not cost the explicitly attached artifacts."""
+    store = SessionArtifactStore(tmp_path)
+    rec = _make_child_record("child-1", "task-abc")
+    artifact = store.upsert_from_child_report(rec, _make_report())
+
+    baseline, _ = store.baseline_block()
+    full, _ = store.full_block([artifact.id])
+
+    assert "finding one" not in baseline
+    assert "KEY FINDINGS" in full
+    assert "finding one" in full
+    assert "SNIPPETS:" in full
+
+
+@verifies(SWR.SWR_1526)
+def test_baseline_block_elides_over_its_budget(tmp_path: Path) -> None:
+    store = SessionArtifactStore(tmp_path)
+    for i in range(12):
+        store.publish(slug=f"art-{i}", title=f"Art {i}", body=f"Summary {i}", persona="librarian")
+
+    block, ids = store.baseline_block(max_chars=600)
+
+    assert len(ids) < 12
+    assert "elided to stay within" in block
+    assert "artifact_list()" in block
 
 
 @verifies(SWR.SWR_127)

@@ -440,9 +440,11 @@ Forward upstream findings by reference, never by paraphrase:
 - `attach_artifacts=[id_or_slug, ...]` — published artifacts. Always use this when
   delegating to a planner, architect, or implementer after research, so the child sees the
   actual snippets.
-- The framework also prepends a compact "PRIOR SIBLING SUMMARIES" baseline to every child
-  unless you set `suppress_auto_context: true`. Set that only for pure-execution children
-  that should not be biased by prior research.
+- The framework also prepends a "PRIOR SIBLING ARTIFACT INDEX" to every child unless you
+  set `suppress_auto_context: true` — one line per artifact, slug plus a one-line summary,
+  no findings and no bodies. It tells the child what exists, not what it says; the child
+  pulls the bodies it needs with `artifact_read`. Attach the artifacts a child must not
+  miss rather than trusting it to find them in the index.
 
 NEVER paste a previous child's output into a new task description, and never restate its
 findings in your own words — both lose fidelity and cause drift. Reference them by id.

@@ -111,7 +111,7 @@ class RotarisDelegateAction(Action):
     suppress_auto_context: bool = Field(
         default=False,
         description=(
-            "When true, suppresses the automatic 'PRIOR SIBLING SUMMARIES' baseline block "
+            "When true, suppresses the automatic 'PRIOR SIBLING ARTIFACT INDEX' block "
             "that is normally prepended to every child's payload. Use sparingly — e.g. for "
             "pure-execution children that should not be biased by prior research."
         ),

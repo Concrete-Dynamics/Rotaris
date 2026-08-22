@@ -43,6 +43,13 @@ _BASE62_ALPHABET = string.digits + string.ascii_lowercase + string.ascii_upperca
 _SLUG_SAFE = re.compile(r"[^a-z0-9]+")
 _MAX_SLUG_LEN = 64
 
+# Auto-injection budget for the sibling index, in characters (~4 chars/token, so
+# ~2.5k tokens). The index carries one line per artifact — orientation only; the
+# child pulls the bodies it actually needs via ``artifact_read``.
+BASELINE_MAX_CHARS = 10_000
+# Per-entry cap for the one-line summary. Longer summaries are elided inline.
+_MAX_INDEX_SUMMARY_CHARS = 160
+
 # Closed set of valid artifact tags for filtering and publish-time validation.
 # Tags are flat (no prefix) and describe the lifecycle phase a deliverable belongs to.
 VALID_ARTIFACT_TAGS: frozenset[str] = frozenset(
@@ -624,15 +631,18 @@ class SessionArtifactStore:
         self,
         *,
         exclude_ids: set[str] | None = None,
-        max_chars: int = 32000,
+        max_chars: int = BASELINE_MAX_CHARS,
         task_name: str | None = None,
         task_payload: str | None = None,
         actor: str | None = None,
     ) -> tuple[str, Sequence[str]]:
-        """Return a deterministic ``PRIOR SIBLING SUMMARIES`` block.
+        """Return a deterministic ``PRIOR SIBLING ARTIFACT INDEX`` block.
 
-        ``max_chars`` is a coarse approximation of an 8k-token budget at
-        4 chars/token. Over the cap the block ends with an elision marker.
+        One line per artifact — slug, id, persona, status and a one-line summary.
+        Key findings and bodies are deliberately absent: the index is orientation,
+        and the child pulls what it needs with ``artifact_read``. ``max_chars`` is a
+        coarse approximation of a ~2.5k-token budget at 4 chars/token. Over the cap
+        the block ends with an elision marker.
         """
         excluded = exclude_ids or set()
         with self._lock:
@@ -650,8 +660,10 @@ class SessionArtifactStore:
         items.sort(key=lambda r: self._artifact_score(r, query), reverse=True)
 
         header = (
-            "PRIOR SIBLING SUMMARIES: (concise digest of every succeeded prior "
-            "child in this session — call `artifact_read(id)` for full body)\n\n"
+            "PRIOR SIBLING ARTIFACT INDEX: (one line per prior child artifact in this "
+            "session — slug and a one-line summary only, no findings and no bodies. "
+            'Most relevant first. Call `artifact_read("<slug>")` on the entries your '
+            "task actually depends on; do not act on a summary line alone.)\n\n"
         )
         blocks: list[str] = []
         resolved_ids: list[str] = []
@@ -659,20 +671,20 @@ class SessionArtifactStore:
         used = len(header)
         elided = 0
         for r in items:
-            block = self._format_summary_block(r)
-            if used + len(block) + 2 > max_chars:
+            block = self._format_index_entry(r)
+            if used + len(block) + 1 > max_chars:
                 elided += 1
                 elided_ids.append(r.id)
                 continue
             blocks.append(block)
             resolved_ids.append(r.id)
-            used += len(block) + 2
+            used += len(block) + 1
         if not blocks and elided == 0:
             return "", []
-        body = "\n\n".join(blocks)
+        body = "\n".join(blocks)
         if elided:
             body += (
-                f"\n\n[... {elided} additional artifact(s) elided to stay within "
+                f"\n[... {elided} additional artifact(s) elided to stay within "
                 "the auto-injection token budget. Call `artifact_list()` to browse.]"
             )
         self._record_context_selection(
@@ -813,6 +825,23 @@ class SessionArtifactStore:
             elided_artifact_ids=elided_artifact_ids,
             full_artifact_ids=full_artifact_ids,
         )
+
+    @staticmethod
+    def _format_index_entry(record: ArtifactRecord) -> str:
+        """Render one artifact as a single index line for the baseline block.
+
+        Slug first — it is what the child passes back to ``artifact_read`` — then
+        the id (what diagnostics and ``attach_artifacts`` key on), the persona and
+        the status, then a whitespace-collapsed one-line summary. No key findings:
+        for ``agent_published`` records those hold the entire body.
+        """
+        summary = " ".join((record.summary or "").split())
+        if len(summary) > _MAX_INDEX_SUMMARY_CHARS:
+            summary = summary[: _MAX_INDEX_SUMMARY_CHARS - 1].rstrip() + "…"
+        head = (
+            f"- {record.slug} [{record.id}] ({record.source_persona or 'unknown'}, {record.status})"
+        )
+        return f"{head}: {summary}" if summary else head
 
     @staticmethod
     def _format_summary_block(record: ArtifactRecord) -> str:

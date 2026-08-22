@@ -397,7 +397,7 @@ class PersonaConfig(BaseModel):
     skip_auto_sibling_context: bool = Field(
         default=False,
         description=(
-            "When true, suppress the automatic ``PRIOR SIBLING SUMMARIES`` baseline "
+            "When true, suppress the automatic ``PRIOR SIBLING ARTIFACT INDEX`` "
             "block normally prepended to every spawned child's payload. Use for "
             "pure-execution children that should not be biased by prior research."
         ),

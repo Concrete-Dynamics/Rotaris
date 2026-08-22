@@ -92,7 +92,7 @@ def test_baseline_block_is_prepended_by_default(
 
     spawned = child_manager._children["impl"]
     payload = spawned.task_payload
-    assert "PRIOR SIBLING SUMMARIES" in payload
+    assert "PRIOR SIBLING ARTIFACT INDEX" in payload
     assert "research-input-composer" in payload
     assert "design-foo" in payload
     assert payload.endswith("Do the thing")
@@ -113,7 +113,7 @@ def test_suppress_auto_context_disables_baseline(
         ),
     )
     payload = _spawned_payload(child_manager, "impl")
-    assert "PRIOR SIBLING SUMMARIES" not in payload
+    assert "PRIOR SIBLING ARTIFACT INDEX" not in payload
     assert payload.startswith("AUTHORITATIVE WORKSPACE ROOT:\n")
     assert payload.endswith("\n\nDo the thing")
     assert child_manager._children["impl"].received_artifact_ids == []
@@ -129,7 +129,7 @@ def test_persona_skip_auto_sibling_context_disables_baseline(
     child_manager.config = executor.scheduler.config
     executor(RotarisDelegateAction(persona="executor", task_name="run", task="Just run"))
     payload = _spawned_payload(child_manager, "run")
-    assert "PRIOR SIBLING SUMMARIES" not in payload
+    assert "PRIOR SIBLING ARTIFACT INDEX" not in payload
 
 
 @verifies(SWR.SWR_114, SWR.SWR_1525, SWR.SWR_1527)
@@ -181,7 +181,7 @@ def test_attached_artifact_excluded_from_baseline(
 
     payload = _spawned_payload(child_manager, "impl")
     # The baseline block must not duplicate the attached artifact.
-    baseline_start = payload.find("PRIOR SIBLING SUMMARIES")
+    baseline_start = payload.find("PRIOR SIBLING ARTIFACT INDEX")
     baseline_end = payload.find("PRIOR AGENT CONTEXT (FULL)")
     baseline = payload[baseline_start:baseline_end] if baseline_start != -1 else ""
     assert "research-input-composer" not in baseline

@@ -147,6 +147,26 @@ def _executor(
     return executor, recording_session, registry
 
 
+@pytest.fixture(autouse=True)
+def _clean_tool_bindings() -> Any:
+    """Keep this module's bindings out of every other test in the worker.
+
+    A binding left registered is not merely untidy now: an unknown key with more
+    than one live binding raises rather than guessing which run a tool call
+    belongs to, so a leak here fails somebody else's test instead of this one.
+    """
+    from rotaris_core.agents import tool_registration
+
+    def _clear() -> None:
+        with tool_registration._bindings_lock:  # noqa: SLF001
+            tool_registration._runtime_bindings.clear()  # noqa: SLF001
+            tool_registration._last_runtime_binding = None  # noqa: SLF001
+
+    _clear()
+    yield
+    _clear()
+
+
 def _config(workspace_root: Path, mode: str = "workspace-write") -> RotarisConfig:
     persona = PersonaConfig(name="coder", model="small_model")
     config = RotarisConfig(

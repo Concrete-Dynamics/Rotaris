@@ -91,10 +91,13 @@ sessions that matter most are the ones served worst.
 | Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py` (new), `tests/integration/test_cross_process_session_observation.py` (new) |
 | User-flow E2E | A user watches a long-running task in the desktop: new transcript rows, todos and agent state appear promptly throughout, the transcript stays readable as it grows, and the session the user was watching resumes to exactly what was on screen | Public product boundary → user-observable result | `apps/rotaris/tests/test_long_session_liveness_e2e.py` (new) |
 
-Related: [SWR-2453 — A desktop run is the same run as a CLI run](SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
-(the lifecycle half of the same boundary),
-[SWR-2066](../2000-rotaris-desktop.md#swr-2066) (the off-event-loop property this
-requirement preserves and narrows — see that entry),
+Related: [SWR-2453 — Every run the desktop starts is the same run as a CLI run](SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
+(the lifecycle half of the same boundary; the two are independent — the main
+desktop run paths already call the shared lifecycle, so this requirement does not
+wait on that one),
+SWR-2066, in the [Rotaris Desktop epic](../2000-rotaris-desktop.md) (the
+off-event-loop property this requirement preserves, and the refresh assumption
+it narrows — that entry carries the scope note),
 [SWR-2452 — Transcript geometry is incremental](SWR-2452-incremental-transcript-geometry.md)
 (the same bounded-cost property, already satisfied in the view layer),
 [SWR-2901 — Session event store](../2900-event-store/SWR-2901-session-event-store.md)

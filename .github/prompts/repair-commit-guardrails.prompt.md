@@ -1,12 +1,12 @@
 ---
-description: "Use when: a commit, pre-commit hook, CI gate, test suite, lint, typecheck, or ReqToCode guardrail fails and the branch must be repaired and made push-ready."
+description: "Use when: a commit, CI gate, test suite, lint, typecheck, or ReqToCode guardrail fails and the branch must be repaired and made push-ready."
 name: "Repair Commit Guardrails"
 argument-hint: "Paste the failure output, name the failed gate, or give the commit SHA/range to investigate"
 ---
 
 Repair a failed commit guardrail in the Rotaris repository. Work from the
 concrete failure supplied in `$ARGUMENTS`; if none is supplied, inspect the
-latest relevant Git and hook state to identify it.
+latest relevant Git and CI state to identify it.
 
 Your goal is to leave the working tree with the underlying defect fixed and
 the affected push gates passing. Do not make a commit or push unless explicitly
@@ -26,7 +26,7 @@ asked.
   incorrect or stale test, broken traceability, missed generated artifact,
   lint/type error, or configuration/tooling defect.
 - Fix the root cause with the smallest coherent change. Do not weaken tests,
-  delete traces, add baseline exceptions, or bypass hooks to make a failure
+  delete traces, add baseline exceptions, or bypass guardrails to make a failure
   disappear.
 - For product changes and bug fixes, bump `pyproject.toml` as required by
   `AGENTS.md`.

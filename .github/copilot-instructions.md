@@ -16,7 +16,7 @@ bidirectionally: `@traces(SWR.SWR_<n>)` on the implementation, `@verifies(SWR.SW
 on the covering test. Code with no requirement *is* spec drift — when no product
 requirement covers the code, author a **technical requirement** rather than skipping
 traceability. A broken trace is a broken build (verifier, `tests/unit/reqtocode/`
-meta-tests, `.github/workflows/reqtocode.yml`, pre-commit hook).
+meta-tests, `.github/workflows/reqtocode.yml`).
 
 Full rules: [AGENTS.md §Critical rules](../AGENTS.md#critical-rules--reqtocode-enforced-build-breaking).
 Store format: [docs/requirements/README.md](../docs/requirements/README.md).

@@ -92,7 +92,6 @@ work. Do **not** leave it orphaned or force-fit an unrelated requirement.
   a technical requirement is mandatory (Flow D) — orphan code is spec drift.
 - Never silence a violation by deleting annotations, weakening a requirement, or
   adding baseline entries.
-- Never bypass the pre-commit hook.
 - Never reuse or renumber an `SWR-<n>` id; deprecate instead of deleting.
 - pytest regenerates `swr.py` at session start — a requirement edit becomes a
   failing meta-test in the same run; that failure is a work item, not noise.

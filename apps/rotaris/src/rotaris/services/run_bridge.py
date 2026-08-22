@@ -2366,6 +2366,12 @@ class _SessionObserver:
             changed = True
 
         text_delta, _has_reasoning = extract_stream_text(chunk)
+        if text_delta and not text_delta.strip() and agent_name not in self._stream_segments:
+            # A blank line ahead of the first visible token belongs to no
+            # message yet — opening a row for it would show an empty one. Once
+            # a segment is open the same whitespace is kept, because that is
+            # what separates the Markdown blocks inside it (SWR-1217).
+            text_delta = ""
         if text_delta:
             # Visible text ends the thinking burst.
             self._finish_thinking(agent_name)
@@ -2469,20 +2475,33 @@ class _SessionObserver:
         self._finish_thinking(agent_name)
         self._committed_message_segments.pop(agent_name, None)
 
+    @staticmethod
+    def _message_key(text: str) -> str:
+        """Whitespace-insensitive form of a message, for matching two copies of it.
+
+        A streamed segment is assembled delta by delta while the final message
+        arrives whole, so the two are sanitised at different boundaries and
+        their whitespace can differ by a space or a newline. Comparing the
+        words is what actually answers "is this the same message" — comparing
+        the characters answers it wrong and posts the message twice.
+        """
+        return " ".join(text.split())
+
     def _persist_visible_text(self, agent_name: str, persona: str, content: str) -> None:
         """Commit an agent message, replacing its own streamed segment if any."""
         self._finish_thinking(agent_name)
+        message_key = self._message_key(content)
         seg = self._stream_segments.pop(agent_name, None)
         if seg is not None:
-            streamed = str(seg.get("content", ""))
-            if not streamed.strip() or content.startswith(streamed) or streamed.startswith(content):
+            streamed = self._message_key(str(seg.get("content", "")))
+            if not streamed or message_key.startswith(streamed) or streamed.startswith(message_key):
                 seg["content"] = content
                 self._committed_message_segments[agent_name] = seg
                 return
         committed = self._committed_message_segments.get(agent_name)
         if committed is not None:
-            prior = str(committed.get("content", ""))
-            if prior and content.startswith(prior):
+            prior = self._message_key(str(committed.get("content", "")))
+            if prior and message_key.startswith(prior):
                 committed["content"] = content
                 return
         row = self._append_row(

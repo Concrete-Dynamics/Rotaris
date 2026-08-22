@@ -55,6 +55,34 @@ def test_extract_stream_text_preserves_line_breaks_for_structured_content_blocks
     assert has_reasoning is False
 
 
+@verifies(SWR.SWR_1217, SWR.SWR_550)
+def test_extract_stream_text_keeps_a_blank_line_delta_between_markdown_blocks() -> None:
+    """A provider streams the blank line after a heading as a delta of its own;
+    dropping it makes the next paragraph part of the heading."""
+    deltas = ["## Classification", "\n\n", "TYPE D — a scope decision."]
+
+    streamed = "".join(
+        extract_stream_text(
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=delta))])
+        )[0]
+        for delta in deltas
+    )
+
+    assert streamed == "## Classification\n\nTYPE D — a scope decision."
+
+
+@verifies(SWR.SWR_1217)
+def test_extract_stream_text_keeps_a_space_only_delta_between_words() -> None:
+    chunk = SimpleNamespace(
+        choices=[SimpleNamespace(delta=SimpleNamespace(content=" "))],
+    )
+
+    text, has_reasoning = extract_stream_text(chunk)
+
+    assert text == " "
+    assert has_reasoning is False
+
+
 @verifies(SWR.SWR_1012)
 def test_extract_stream_text_detects_reasoning_without_exposing_it() -> None:
     chunk = SimpleNamespace(

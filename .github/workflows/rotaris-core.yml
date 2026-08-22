@@ -37,11 +37,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
       - run: uv sync --all-packages
-      # `-n auto` is what makes the full suite affordable (measured 748s serial
-      # against 147s across 16 workers). No `-x`: under xdist the first failure
-      # kills every worker, so one flake would hide the rest of the run. The
-      # per-test timeout has to clear the worst case under that contention,
-      # which is well above the 30s a serial run needs.
+      # `-n auto` is what makes the full suite affordable; `--dist loadfile`
+      # comes from `addopts` in pyproject.toml, where the measurements behind
+      # both are recorded. Runner core counts differ from a developer box, so
+      # the wall time here is its own number -- do not copy one into the other.
+      # No `-x`: under xdist the first failure kills every worker, so one flake
+      # would hide the rest of the run. The per-test timeout has to clear the
+      # worst case under that contention, well above what a serial run needs.
       #
       # Capability tests are deselected rather than left to skip themselves:
       # they drive a real LLM endpoint, and CI has no credentials for one.

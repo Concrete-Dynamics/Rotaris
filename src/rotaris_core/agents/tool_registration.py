@@ -74,6 +74,18 @@ class RuntimeToolBinding:
     #: process-global, and a closure would hand the last run's workspace to
     #: whichever agent resolved next.
     gate_tools: Any = None
+    #: The configuration this agent's run launched with.  Parallel runs share
+    #: one process and one tool registry, so the last run to build an agent
+    #: used to own ``terminal`` and ``fetch`` for *every* run — handing one
+    #: run's sandbox spec (SWR-2507) and egress policy (SWR-2505) to another's
+    #: commands.  Resolved per call instead, from the key in ``Tool.params``.
+    config: Any = None
+    #: Where ``ask_questions`` puts a question and how long it waits. Bound the
+    #: same way and for the same reason: a barrier belongs to one run, and a
+    #: closure would post one run's question to another run's user.
+    user_prompt_barrier: Any = None
+    on_questions_stored: Any = None
+    response_timeout: float = 300.0
 
 
 _bindings_lock = RLock()
@@ -481,9 +493,30 @@ def _split_binding_key(binding_key: object) -> tuple[str, str]:
     return session_id, scope
 
 
-@traces(SWR.SWR_2507)
+@traces(SWR.SWR_2426)
+def _run_config(binding_key: object, registered: RotarisConfig) -> RotarisConfig:
+    """The configuration of the run whose agent is resolving this tool.
+
+    *registered* is the config that happened to register the factory, which is
+    the right answer only when there is exactly one run in the process. It is
+    kept as the fallback for a ``Tool`` spec that outlived its binding — a
+    conversation resumed after a restart — because refusing to build the tool
+    would fail the whole conversation over an attribution problem.
+    """
+    bound = resolve_runtime_binding(str(binding_key) if binding_key is not None else None).config
+    return cast("RotarisConfig", bound) if bound is not None else registered
+
+
+@traces(SWR.SWR_2426, SWR.SWR_2507)
 def _register_terminal_tool_factory(config: RotarisConfig) -> None:
-    """Register a factory for the hardened terminal tool with runtime defaults."""
+    """Register a factory for the hardened terminal tool with runtime defaults.
+
+    *config* is the fallback only. A ``Tool`` spec that still has its binding
+    resolves its own run's configuration below, because the registry is
+    process-global: with two runs in one process the closure here belongs to
+    whichever run built an agent last, and a command would otherwise be
+    sandboxed — or not — according to the wrong run's settings (SWR-2507).
+    """
     global _terminal_registered_config_id  # noqa: PLW0603
 
     config_id = (id(config), _sandbox_registration_key(config))
@@ -500,36 +533,39 @@ def _register_terminal_tool_factory(config: RotarisConfig) -> None:
         # The binding key already carries both halves the live terminal stream
         # needs (SWR-3618): which run to publish under, and which agent's
         # terminal this is, so two agents' commands never share one stream.
-        stream_session_id, stream_key = _split_binding_key(params.get("binding_key"))
+        binding_key = params.get("binding_key")
+        stream_session_id, stream_key = _split_binding_key(binding_key)
+        run_config = _run_config(binding_key, config)
         # Resolved here rather than at registration time so the writable root is
         # the directory this conversation actually runs in — the SWR-2404
         # worktree when isolation is on, the workspace itself otherwise.
         from rotaris_core.sandbox.session import ensure_sandbox_available, resolve_sandbox_spec
 
-        spec = resolve_sandbox_spec(config, state.workspace.working_dir)
+        spec = resolve_sandbox_spec(run_config, state.workspace.working_dir)
         # ``ensure_sandbox_available`` raises rather than returning a passthrough
         # backend, so a session that asked for a sandbox it cannot have fails to
         # start with the backend's own remediation instead of quietly running
         # its commands on the host (SWR-2507).
         backend = None if spec is None else ensure_sandbox_available(spec)
+        runtime = run_config.runtime
         stream_hub = None
-        if config.runtime.terminal_stream_enabled and stream_session_id:
+        if runtime.terminal_stream_enabled and stream_session_id:
             from rotaris_core.terminal_stream.hub import default_hub
 
             stream_hub = default_hub()
-            stream_hub.set_buffer_bytes(config.runtime.terminal_stream_buffer_kb * 1024)
+            stream_hub.set_buffer_bytes(runtime.terminal_stream_buffer_kb * 1024)
 
         return HardenedTerminalTool.create(
             conv_state=state,
-            default_timeout_seconds=float(config.runtime.shell_timeout),
-            max_background_sessions=config.runtime.shell_max_background_sessions,
-            background_default_timeout=float(config.runtime.shell_background_timeout),
+            default_timeout_seconds=float(runtime.shell_timeout),
+            max_background_sessions=runtime.shell_max_background_sessions,
+            background_default_timeout=float(runtime.shell_background_timeout),
             sandbox_spec=spec,
             sandbox_backend=backend,
             stream_hub=stream_hub,
             stream_session_id=stream_session_id,
             stream_key=stream_key,
-            stream_interval_s=config.runtime.terminal_stream_interval_ms / 1000.0,
+            stream_interval_s=runtime.terminal_stream_interval_ms / 1000.0,
         )
 
     with _suppress_registry_duplicate_log():
@@ -554,22 +590,24 @@ def _register_fetch_tool_factory(config: RotarisConfig) -> None:
         FetchTool,
     )
 
-    # SWR-2505: without this the executor falls back to its permissive default
-    # and the configured host lists are never enforced on a real run.
-    egress_policy = NetworkEgressPolicy.from_runtime(config.runtime)
-
     def _factory(
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[FetchAction, FetchObservation]]:
-        del conv_state, params
+        del conv_state
+        run_config = _run_config(params.get("binding_key"), config)
+        # SWR-2505: without this the executor falls back to its permissive
+        # default and the configured host lists are never enforced on a real
+        # run. Built per call, from the calling run's own config: one process
+        # can hold two runs, and an allow-list is not lent between them.
+        egress_policy = NetworkEgressPolicy.from_runtime(run_config.runtime)
         return [
             FetchTool(
                 description=_FETCH_TOOL_DESCRIPTION,
                 action_type=FetchAction,
                 observation_type=FetchObservation,
                 executor=FetchExecutor(
-                    timeout=float(config.runtime.tool_timeout),
+                    timeout=float(run_config.runtime.tool_timeout),
                     egress_policy=egress_policy,
                 ),
             ),
@@ -579,12 +617,14 @@ def _register_fetch_tool_factory(config: RotarisConfig) -> None:
         _register_tool_factory("fetch", _factory)
 
 
-def _register_ask_questions_tool_factory(
-    user_prompt_barrier: Any,
-    on_questions_stored: Any,
-    response_timeout: float,
-) -> None:
-    """Register an AskQuestionsTool factory bound to the session's barrier."""
+@traces(SWR.SWR_2426)
+def _register_ask_questions_tool_factory() -> None:
+    """Register an AskQuestionsTool factory that finds its own run's barrier.
+
+    A barrier belongs to one run and one waiting person. The registry does not:
+    with two runs in a process, a closure here would post the second run's
+    question to the first run's user, and wait on a barrier nobody is watching.
+    """
     from rotaris_core.tools.ask_questions import (
         AskQuestionsAction,
         AskQuestionsObservation,
@@ -595,11 +635,12 @@ def _register_ask_questions_tool_factory(
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[AskQuestionsAction, AskQuestionsObservation]]:
-        del conv_state, params
+        del conv_state
+        binding = resolve_runtime_binding(params.get("binding_key"))
         return AskQuestionsTool.create(
-            user_prompt_barrier=user_prompt_barrier,
-            on_questions_stored=on_questions_stored,
-            response_timeout=response_timeout,
+            user_prompt_barrier=binding.user_prompt_barrier,
+            on_questions_stored=binding.on_questions_stored,
+            response_timeout=binding.response_timeout,
         )
 
     with _suppress_registry_duplicate_log():

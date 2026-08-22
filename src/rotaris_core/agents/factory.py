@@ -803,10 +803,19 @@ def _ensure_mcp_stderr_fix() -> None:
 
 
 @traces(SWR.SWR_2426)
-def _build_runtime_tool_binding(runtime_kwargs: dict[str, Any] | None) -> RuntimeToolBinding:
-    """Collect one agent's non-serialisable tool dependencies from its runtime kwargs."""
+def _build_runtime_tool_binding(
+    runtime_kwargs: dict[str, Any] | None,
+    config: RotarisConfig,
+) -> RuntimeToolBinding:
+    """Collect one agent's non-serialisable tool dependencies from its runtime kwargs.
+
+    *config* travels with them because the tool registry is process-global and
+    the run that registered a factory need not be the run that calls it: the
+    sandbox spec, the egress allow-list and the shell timeouts all have to come
+    from the run whose agent is holding the tool (SWR-2426).
+    """
     if not runtime_kwargs:
-        return RuntimeToolBinding()
+        return RuntimeToolBinding(config=config)
     child_manager = runtime_kwargs.get("child_manager")
     artifact_store = runtime_kwargs.get("artifact_store")
     if artifact_store is None:
@@ -818,6 +827,10 @@ def _build_runtime_tool_binding(runtime_kwargs: dict[str, Any] | None) -> Runtim
         agent_factory=runtime_kwargs.get("agent_factory"),
         todo_state_callback=runtime_kwargs.get("todo_state_callback"),
         gate_tools=runtime_kwargs.get("gate_tools"),
+        config=config,
+        user_prompt_barrier=runtime_kwargs.get("user_prompt_barrier"),
+        on_questions_stored=runtime_kwargs.get("on_questions_stored"),
+        response_timeout=float(runtime_kwargs.get("response_timeout", 300.0)),
     )
 
 
@@ -988,7 +1001,7 @@ def create_agent_for_persona(
         binding_key = build_binding_key(runtime_kwargs, persona.name)
         register_runtime_binding(
             binding_key,
-            _build_runtime_tool_binding(runtime_kwargs),
+            _build_runtime_tool_binding(runtime_kwargs, config),
         )
         register_permission_engine(
             binding_key,
@@ -1019,11 +1032,12 @@ def create_agent_for_persona(
                 continue
             elif tool_name == "ask_questions":
                 assert runtime_kwargs is not None
-                barrier = runtime_kwargs["user_prompt_barrier"]
-                on_stored = runtime_kwargs.get("on_questions_stored")
-                timeout = float(runtime_kwargs.get("response_timeout", 300.0))
-                _register_ask_questions_tool_factory(barrier, on_stored, timeout)
-                tools.append(Tool(name="ask_questions"))
+                # Checked here so a persona that declares the tool without a
+                # barrier still fails at agent build, not at question time.
+                if "user_prompt_barrier" not in runtime_kwargs:
+                    raise KeyError("user_prompt_barrier")
+                _register_ask_questions_tool_factory()
+                tools.append(Tool(name="ask_questions", params=binding_params))
             elif tool_name == "todo":
                 _register_todo_tool_factory()
                 tools.append(Tool(name="todo", params=binding_params))
@@ -1036,7 +1050,7 @@ def create_agent_for_persona(
                 tools.append(Tool(name="terminal", params=binding_params))
             elif tool_name == "fetch":
                 _register_fetch_tool_factory(config)
-                tools.append(Tool(name="fetch"))
+                tools.append(Tool(name="fetch", params=binding_params))
             elif tool_name in {"grep", "glob"}:
                 _register_grep_glob_tool_factories(config.workspace_root)
                 tools.append(Tool(name=tool_name))

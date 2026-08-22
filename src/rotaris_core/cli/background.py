@@ -402,6 +402,11 @@ async def _run_task(
             task,
             entrypoint="background",
             progress=state.ralph_progress,
+            # Read before the assignment below overwrites it: on a resume this
+            # still holds the *previous* run's intent, which is what an
+            # unclassifiable continuation prompt inherits (SWR-176).
+            prior_intent=state.run_intent,
+            todo_state=state.todo_state,
         )
         intent_tools = intent_tools_for(classification.intent)
         state.run_intent = classification.intent.value

@@ -488,7 +488,10 @@ class _RecordingBarrier:
         from rotaris_core.orchestrator.user_prompt_barrier import PromptResponse, PromptWaitStatus
 
         del conversation, prompt_id, timeout
-        return PromptResponse(status=PromptWaitStatus.RESOLVED, answers={"scope": "yes"})
+        return PromptResponse(
+            status=PromptWaitStatus.RESOLVED,
+            answers={"scope": {"freeform": "yes"}},
+        )
 
     def discard(self, conversation: object) -> None:
         del conversation
@@ -522,4 +525,4 @@ def test_a_question_reaches_the_user_of_the_run_that_asked_it() -> None:
 
     assert len(barriers["run-a"].asked) == 1
     assert barriers["run-b"].asked == [], "the other run's user was never asked anything"
-    assert observation.answers == {"scope": "yes"}
+    assert observation.answers == {"scope": {"freeform": "yes"}}

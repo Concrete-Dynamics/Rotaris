@@ -332,3 +332,63 @@ def test_a_real_shell_command_streams_its_own_output(
             cleanup()
 
     assert "line-1" in streamed and "line-3" in streamed
+
+
+@verifies(SWR.SWR_2426, SWR.SWR_3618)
+def test_a_second_runs_settings_do_not_reach_the_first_runs_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    hub: TerminalStreamHub,
+) -> None:
+    """Productive use: someone starts a second run while the first one is still working.
+
+    Expected outcome: the first run's terminal keeps streaming. Both runs share
+    one process and one tool registry keyed by name, so building the second
+    run's agent used to hand *its* settings to the first run's commands — and
+    the window watching them went blank mid-run for no reason the user could
+    see. The same wire carries the sandbox spec, which is why it matters more
+    than a lost preview."""
+    from openhands.sdk.llm.llm import LLM
+    from openhands.sdk.tool.registry import resolve_tool
+
+    from rotaris_core.agents.factory import create_agent_for_persona
+
+    workspace = tmp_path / "workspace"
+    (workspace / ".rotaris").mkdir(parents=True)
+    monkeypatch.setattr("rotaris_core.terminal_stream.hub.default_hub", lambda: hub)
+    monkeypatch.setattr("openhands.tools.terminal.impl._is_tmux_available", lambda: False)
+    monkeypatch.setattr(
+        "openhands.tools.terminal.impl.create_terminal_session",
+        lambda work_dir, **kwargs: _BlockingSession(work_dir),
+    )
+
+    specs = {}
+    for session, streaming in (("watched-run", True), ("later-run", False)):
+        persona = PersonaConfig(name="coder", model="small_model", tools=["terminal"])
+        config = RotarisConfig(
+            personas={persona.name: persona},
+            default_persona=persona.name,
+            workspace_root=workspace,
+        )
+        config.runtime.terminal_stream_enabled = streaming
+        config.runtime.terminal_stream_interval_ms = 20
+        monkeypatch.setattr(
+            "rotaris_core.agents.tool_registration._terminal_registered_config_id",
+            None,
+            raising=False,
+        )
+        agent = create_agent_for_persona(
+            persona,
+            config,
+            {"session_id": session, "child_canonical_name": "coder-1"},
+        )(LLM(model="openai/gpt-4o-mini", api_key="test"))
+        specs[session] = next(spec for spec in agent.tools if spec.name == "terminal")
+
+    tool = resolve_tool(specs["watched-run"], _FakeConvState(workspace))[0]
+    tool.executor(HardenedTerminalAction(command="pytest -q"))
+
+    listed = [info.stream_id for info in hub.open_streams("watched-run")]
+    assert listed == ["fg:coder-1"], (
+        f"the run being watched must keep streaming when a later run starts; got {listed}"
+    )
+    assert "step 3" in frames_to_text(hub.replay("watched-run", "fg:coder-1"))

@@ -639,6 +639,7 @@ def test_summarized_run_failure_emits_run_failed_for_recovery(tmp_path, qtbot, m
         interrupt_handler=None,
         iteration_observer=None,
         delegation_strategy=None,
+        **_lifecycle_kwargs,
     ):
         return SimpleNamespace(iterations=[])
 
@@ -685,6 +686,7 @@ def test_run_bridge_end_to_end_polls_events_into_store(tmp_path, qtbot, monkeypa
         interrupt_handler=None,
         iteration_observer=None,
         delegation_strategy=None,
+        **_lifecycle_kwargs,
     ):
         state.transcript_events.append({"role": "user", "content": prompt})
         scheduler = SimpleNamespace(

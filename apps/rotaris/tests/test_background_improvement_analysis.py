@@ -168,6 +168,7 @@ def test_task_state_is_persisted_before_rotaris_starts_analysis(
         iteration_observer=None,
         delegation_strategy=None,
         post_run_improvement_job_sink=None,
+        **_lifecycle_kwargs,
     ):
         del interrupt_handler, iteration_observer, delegation_strategy
         job = _PersistedStateJob(tmp_path, state.session_id)

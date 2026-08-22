@@ -204,9 +204,15 @@ def test_a_run_that_dies_before_it_starts_still_stores_how_it_ended(
 
     The runtime is faked as raising *before* publishing anything, which is the
     real shape of a failure inside ``_run_task``'s intent classification: the
-    Ralph loop that would have published ``session.start`` is never built. The
-    store is therefore a single line, and that line is the terminal one — the
-    property that distinguishes a finished run from an abandoned one."""
+    Ralph loop that would have published ``session.start`` is never built.
+
+    The desktop used to store *only* the terminal line for this case, because it
+    drove the loop directly and the lifecycle that publishes ``session.start``
+    lived a layer above it. Now that both hosts share ``execute_run``, the run
+    that died has the same three lines a headless one would — which is the point
+    of there being one lifecycle. What the assertion is really about is
+    unchanged: the last line says how the run ended, so a finished run cannot be
+    mistaken for an abandoned one."""
     root = _workspace(tmp_path, monkeypatch)
     sessions: list[str] = []
 
@@ -232,7 +238,7 @@ def test_a_run_that_dies_before_it_starts_still_stores_how_it_ended(
 
     assert sessions
     events = _stored_events(root, sessions[0])
-    assert [event["event"] for event in events] == ["result"]
+    assert [event["event"] for event in events] == ["session.start", "session.end", "result"]
     terminal = events[-1]["result"]
     assert terminal["status"] == "error"
     assert "the model provider refused" in terminal["error"]
@@ -249,7 +255,10 @@ def test_a_store_that_cannot_be_opened_does_not_fail_the_run(tmp_path, qtbot, mo
     def refuse(*_args: Any, **_kwargs: Any) -> Any:
         raise OSError("read-only file system")
 
-    monkeypatch.setattr("rotaris_core.eventstore.attach_session_store", refuse)
+    # Patched where the lifecycle binds it. The desktop used to attach the store
+    # itself; now ``run_host.execute_run`` does it for every host, so this is the
+    # name that has to fail for the run to meet a store it cannot open.
+    monkeypatch.setattr("rotaris_core.run_host.attach_session_store", refuse)
 
     store = WorkspaceStore()
     bridge = _bridge(root, store)

@@ -220,15 +220,12 @@ def _ensure_sdk_terminal_registered() -> None:
 
         _sdk_terminal_registered = True
 
-    # Always restore the hardened version — defensive against future restricted
-    # registrations under the same name. Suppress the duplicate warning: the
-    # overwrite is intentional and expected once the tool is first registered.
-    from openhands.sdk.tool import register_tool
-
-    from rotaris_core.tools.terminal import HardenedTerminalTool
-
-    with _suppress_registry_duplicate_log():
-        register_tool("terminal", HardenedTerminalTool)
+    # Deliberately does *not* re-register "terminal". Importing the SDK package
+    # auto-registers its own terminal tool under that name, and
+    # ``_register_terminal_tool_factory`` replaces it with the runtime-bound
+    # factory — the only registration that can read which run is calling
+    # (SWR-2426). Claiming the name here as well made the winner depend on
+    # ordering, and the loser rejected the identity every spec now carries.
 
 
 @traces(SWR.SWR_539, SWR.SWR_540, SWR.SWR_541, SWR.SWR_542, SWR.SWR_543, SWR.SWR_544, SWR.SWR_545)
@@ -806,6 +803,7 @@ def _ensure_mcp_stderr_fix() -> None:
 def _build_runtime_tool_binding(
     runtime_kwargs: dict[str, Any] | None,
     config: RotarisConfig,
+    extra_read_roots: Sequence[Any] = (),
 ) -> RuntimeToolBinding:
     """Collect one agent's non-serialisable tool dependencies from its runtime kwargs.
 
@@ -815,7 +813,11 @@ def _build_runtime_tool_binding(
     from the run whose agent is holding the tool (SWR-2426).
     """
     if not runtime_kwargs:
-        return RuntimeToolBinding(config=config)
+        return RuntimeToolBinding(
+            config=config,
+            workspace_root=config.workspace_root,
+            extra_read_roots=tuple(extra_read_roots),
+        )
     child_manager = runtime_kwargs.get("child_manager")
     artifact_store = runtime_kwargs.get("artifact_store")
     if artifact_store is None:
@@ -831,6 +833,8 @@ def _build_runtime_tool_binding(
         user_prompt_barrier=runtime_kwargs.get("user_prompt_barrier"),
         on_questions_stored=runtime_kwargs.get("on_questions_stored"),
         response_timeout=float(runtime_kwargs.get("response_timeout", 300.0)),
+        workspace_root=config.workspace_root,
+        extra_read_roots=tuple(extra_read_roots),
     )
 
 
@@ -1001,7 +1005,11 @@ def create_agent_for_persona(
         binding_key = build_binding_key(runtime_kwargs, persona.name)
         register_runtime_binding(
             binding_key,
-            _build_runtime_tool_binding(runtime_kwargs, config),
+            _build_runtime_tool_binding(
+                runtime_kwargs,
+                config,
+                skill_catalog.extra_read_roots(),
+            ),
         )
         register_permission_engine(
             binding_key,
@@ -1043,22 +1051,23 @@ def create_agent_for_persona(
                 tools.append(Tool(name="todo", params=binding_params))
             elif tool_name == "terminal":
                 _register_terminal_tool_factory(config)
-                # The identity rides along: without it the factory cannot tell
-                # which run to publish live terminal frames under, or whose
-                # terminal this is, and streaming silently switches itself off
-                # (SWR-3618).
                 tools.append(Tool(name="terminal", params=binding_params))
             elif tool_name == "fetch":
                 _register_fetch_tool_factory(config)
                 tools.append(Tool(name="fetch", params=binding_params))
             elif tool_name in {"grep", "glob"}:
                 _register_grep_glob_tool_factories(config.workspace_root)
-                tools.append(Tool(name=tool_name))
+                tools.append(Tool(name=tool_name, params=binding_params))
             elif tool_name in {"artifact_read", "artifact_list", "artifact_write"}:
                 _register_artifact_tool_factories()
                 tools.append(Tool(name=TOOL_NAME_MAP[tool_name], params=binding_params))
             else:
-                tools.append(Tool(name=TOOL_NAME_MAP[tool_name]))
+                # Identity rides on *every* spec, so no branch can forget it.
+                # Both defects this mechanism was extended for were a missing
+                # ``params=`` on one branch: live terminal streaming silently
+                # off (SWR-3618), and one run's policy served to another
+                # (SWR-2426). A factory that does not need identity ignores it.
+                tools.append(Tool(name=TOOL_NAME_MAP[tool_name], params=binding_params))
 
         for custom_tool_path in persona.custom_tools:
             from pathlib import Path as _Path

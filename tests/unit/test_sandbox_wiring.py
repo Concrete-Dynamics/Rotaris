@@ -413,11 +413,6 @@ def _capture_terminal_factory(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
         "rotaris_core.agents.tool_registration._register_tool_factory",
         _record,
     )
-    monkeypatch.setattr(
-        "rotaris_core.agents.tool_registration._terminal_registered_config_id",
-        None,
-        raising=False,
-    )
     return registrations
 
 
@@ -481,46 +476,76 @@ def test_registration_refuses_a_session_whose_sandbox_cannot_start(
         registrations[-1](conv_state=_FakeConvState(tmp_path))
 
 
-@verifies(SWR.SWR_2507)
-def test_changing_the_sandbox_setting_re_registers_the_terminal_tool(
+@verifies(SWR.SWR_2426, SWR.SWR_2507)
+def test_a_changed_sandbox_setting_reaches_the_next_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Productive use: an operator turns the sandbox on for their next session.
-    Expected outcome: the next session gets a terminal tool built for the new setting
-    instead of the memoized one from the previous session."""
-    from rotaris_core.agents.tool_registration import _register_terminal_tool_factory
+    Expected outcome: the next session's terminal is built for the new setting.
 
+    Asserted through what the tool *does* rather than through how many times the
+    factory was installed. The registration used to be memoized on the config,
+    so "did it take effect" and "was it re-registered" were the same question;
+    now the setting is read per call from the calling run's own binding, and
+    only the first question means anything."""
+    from rotaris_core.agents.tool_registration import (
+        RuntimeToolBinding,
+        _register_terminal_tool_factory,
+        register_runtime_binding,
+    )
+
+    monkeypatch.setattr(
+        "rotaris_core.sandbox.session.resolve_backend",
+        lambda: FakeBackend(available=False),
+    )
     registrations = _capture_terminal_factory(monkeypatch)
     config = _config(tmp_path, "off")
+    register_runtime_binding("sess/coder", RuntimeToolBinding(config=config))
+    _register_terminal_tool_factory(config)
 
-    _register_terminal_tool_factory(config)
-    _register_terminal_tool_factory(config)
-    assert len(registrations) == 1
+    # Sandbox off: the unavailable backend is nobody's problem.
+    registrations[-1](conv_state=_FakeConvState(tmp_path), binding_key="sess/coder")
 
     config.runtime.sandbox_mode = "workspace-write"
-    _register_terminal_tool_factory(config)
 
-    assert len(registrations) == 2
+    with pytest.raises(SandboxUnavailableError):
+        registrations[-1](conv_state=_FakeConvState(tmp_path), binding_key="sess/coder")
 
 
-@verifies(SWR.SWR_2507)
-def test_an_unchanged_config_is_still_registered_only_once(
+@verifies(SWR.SWR_2426, SWR.SWR_2507)
+def test_two_sessions_each_get_their_own_sandbox_setting(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Productive use: several agents in one session each ask for the terminal tool.
-    Expected outcome: the factory is installed once, as before the sandbox existed."""
-    from rotaris_core.agents.tool_registration import _register_terminal_tool_factory
+    """Productive use: one run is sandboxed, another is not, and both are open.
+    Expected outcome: each run's commands are governed by the setting that run
+    launched with. The tool registry is keyed by name alone, so the sandboxed
+    run used to be handed whichever setting was registered last — silently
+    running on the host while its badge said otherwise."""
+    from rotaris_core.agents.tool_registration import (
+        RuntimeToolBinding,
+        _register_terminal_tool_factory,
+        register_runtime_binding,
+    )
 
+    monkeypatch.setattr(
+        "rotaris_core.sandbox.session.resolve_backend",
+        lambda: FakeBackend(available=False),
+    )
     registrations = _capture_terminal_factory(monkeypatch)
-    config = _config(tmp_path, "off")
+    sandboxed = _config(tmp_path, "workspace-write")
+    plain = _config(tmp_path, "off")
+    register_runtime_binding("sandboxed/coder", RuntimeToolBinding(config=sandboxed))
+    register_runtime_binding("plain/coder", RuntimeToolBinding(config=plain))
+    _register_terminal_tool_factory(sandboxed)
+    # The unsandboxed run registers last, which is what used to decide it.
+    _register_terminal_tool_factory(plain)
 
-    _register_terminal_tool_factory(config)
-    _register_terminal_tool_factory(config)
-    _register_terminal_tool_factory(config)
+    registrations[-1](conv_state=_FakeConvState(tmp_path), binding_key="plain/coder")
 
-    assert len(registrations) == 1
+    with pytest.raises(SandboxUnavailableError):
+        registrations[-1](conv_state=_FakeConvState(tmp_path), binding_key="sandboxed/coder")
 
 
 # ---------------------------------------------------------------------------

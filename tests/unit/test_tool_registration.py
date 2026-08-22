@@ -554,3 +554,95 @@ def test_a_stale_spec_keeps_its_own_factorys_policy_not_a_neighbours(
     executor = _resolve("fetch", {"binding_key": "gone-with-the-old-process/coder-1"}).executor
 
     assert executor.egress_policy.disposition == "deny"
+
+
+# ---------------------------------------------------------------------------
+# the rule, not the cases
+
+
+@verifies(SWR.SWR_2426)
+def test_every_tool_spec_an_agent_builds_carries_its_identity() -> None:
+    """Productive use: someone adds a tool to a persona and ships it.
+
+    Expected outcome: it arrives knowing which run called it. Both defects this
+    mechanism was extended for were one branch of the tool loop missing
+    ``params=binding_params`` — live terminal streaming silently off for every
+    run (SWR-3618), and one run's sandbox and egress policy served to another
+    (SWR-2426). Neither was caught, because every test asserted a tool it
+    already knew about. This asserts the rule instead, so a tool added later
+    cannot repeat it."""
+    from openhands.sdk.llm.llm import LLM
+
+    from rotaris_core.agents.factory import TOOL_NAME_MAP, create_agent_for_persona
+
+    persona = PersonaConfig(
+        name="coder",
+        model="gpt-4o",
+        # Everything a persona may declare, minus the tools that need delegation
+        # wiring or a barrier to be built at all — they are covered above.
+        tools=sorted(
+            set(TOOL_NAME_MAP)
+            - {"delegate", "background_output", "wait_for_tasks", "ask_questions"}
+        ),
+    )
+    config = RotarisConfig(personas={persona.name: persona}, default_persona=persona.name)
+    runtime_kwargs = {"session_id": "sess-a", "child_canonical_name": "coder-1"}
+
+    agent = create_agent_for_persona(persona, config, runtime_kwargs)(
+        LLM(model="openai/gpt-4o-mini", api_key="test")
+    )
+
+    expected = build_binding_key(runtime_kwargs, persona.name)
+    without = [spec.name for spec in agent.tools if spec.params.get("binding_key") != expected]
+    assert not without, f"these tool specs cannot tell which run called them: {without}"
+
+
+@verifies(SWR.SWR_2426)
+def test_every_registered_tool_survives_the_identity_it_is_handed() -> None:
+    """Productive use: a session is restored and every agent rebuilds its tools.
+
+    Expected outcome: the run starts. A resolver that rejects the identity keys
+    turns a restored session into "Run failed" before the agent takes a step —
+    which is exactly what `HardenedTerminalTool.create()` did once the terminal
+    spec started carrying them."""
+    from openhands.sdk.llm.llm import LLM
+    from openhands.sdk.tool.registry import resolve_tool
+
+    from rotaris_core.agents.factory import TOOL_NAME_MAP, create_agent_for_persona
+
+    persona = PersonaConfig(
+        name="coder",
+        model="gpt-4o",
+        tools=sorted(
+            set(TOOL_NAME_MAP)
+            - {"delegate", "background_output", "wait_for_tasks", "ask_questions"}
+        ),
+    )
+    config = RotarisConfig(personas={persona.name: persona}, default_persona=persona.name)
+    runtime_kwargs = {"session_id": "sess-a", "child_canonical_name": "coder-1"}
+    agent = create_agent_for_persona(persona, config, runtime_kwargs)(
+        LLM(model="openai/gpt-4o-mini", api_key="test")
+    )
+    conv_state = _ConvState(config.workspace_root)
+
+    rejected: list[str] = []
+    for spec in agent.tools:
+        try:
+            resolve_tool(spec, conv_state)
+        except TypeError as exc:  # a strict create() refusing the identity keys
+            rejected.append(f"{spec.name}: {exc}")
+
+    assert not rejected, f"these resolvers refuse the identity every spec carries: {rejected}"
+
+
+class _ConvState:
+    """The two attributes a tool factory reads off a conversation."""
+
+    def __init__(self, working_dir: Any) -> None:
+        self.workspace = _Workspace(working_dir)
+        self.env_observation_persistence_dir = None
+
+
+class _Workspace:
+    def __init__(self, working_dir: Any) -> None:
+        self.working_dir = str(working_dir)

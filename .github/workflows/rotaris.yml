@@ -36,12 +36,15 @@ jobs:
       # Rotaris test deps (pytest-qt etc.) live in its PEP 735 dev dependency
       # group, which plain --all-packages syncs by default.
       - run: uv sync --all-packages
-      # Two passes, the same split the Makefile's `test-rotaris` target uses: the Qt
-      # suite parallelises (measured 194s single-process vs 132s across the two
-      # passes on a 4-core box, same 1086 passing), and the handful of `serial`
-      # tests drive concurrent runs and assert on their interleaving, so they need
-      # a core to themselves. The timeout has to clear the worst case under that
-      # contention, which is well above the 30s a single-process run needed.
+      # Two passes, the same split the Makefile's `test-rotaris` target uses: the
+      # Qt suite parallelises, and the handful of `serial` tests drive concurrent
+      # runs and assert on their interleaving, so they need a core to themselves.
+      # `--dist loadfile` comes from the package's own `addopts`, which is where
+      # the reasoning lives -- the theme manager and `QSettings` are process-wide
+      # and do not survive a worker fed tests from many files at once.
+      # The timeout has to clear the worst case under that contention, well above
+      # what a single-process run needs. Runner core counts differ from a
+      # developer box; treat any wall time here as its own number.
       - run: uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
       - run: uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
       - run: uv run ruff check apps/rotaris/src apps/rotaris/tests

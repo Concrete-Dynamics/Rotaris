@@ -15,11 +15,21 @@ rotaris:
 rotaris-demo:
 	uv run python -m rotaris --demo
 
-# The full pass. `-n auto` is what makes it affordable: measured 748s serial vs
-# 147s across 16 workers on the same tree. No `-x` -- under xdist the first
-# failure kills every worker, and one flake would then hide the rest of the run.
-# The timeout is per test and has to clear the worst case under 16-way CPU
-# contention, which is well above the 30s a serial run needs.
+# The full pass, 6225 tests. Measured 2026-08-22 on an 8-core/16-thread laptop:
+# 258-399s wall against about 1500s of summed test time, so `-n auto` is what
+# makes it affordable. `--dist loadfile` comes from `addopts` in pyproject.toml,
+# which is also where the measurements behind it are written down.
+#
+# `-n auto` is *physical* cores, not logical ones -- xdist asks psutil, which is
+# a declared dev dependency for exactly that reason. Do not replace it with a
+# literal: the number is right on one machine and wrong on the next.
+#
+# No `-x` -- under xdist the first failure kills every worker, and one flake
+# would then hide the rest of the run. The timeout is per test and has to clear
+# the worst case under full CPU contention, well above what a serial run needs.
+#
+# Re-measure before quoting these numbers: the same command on the same commit
+# has landed anywhere between 258s and 399s here depending on thermal state.
 test:
 	uv run pytest -q --timeout=120 -n auto
 
@@ -27,9 +37,12 @@ test:
 test-parallel:
 	uv run pytest tests/unit/ tests/integration/ -n auto -q --timeout=120
 
-# The Qt suite parallelizes after all: 217s single-process vs 67s across 16
-# workers, same 642 passing. The `serial` marker carves out the one test that
-# needs a core to itself; it runs in a second, single-process pass.
+# The Qt suite, 1462 tests. Measured 2026-08-22: 611s at `-n auto`, where the
+# slowest entries are fixture *setup* and *teardown* rather than any test body
+# -- most of that bill is one `MainWindow` built per test across 26 files, not
+# work the assertions need. Treat the number as a standing debt, not a target.
+# The `serial` marker carves out the tests that need a core to themselves; they
+# run in a second, single-process pass.
 test-rotaris:
 	uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
 	uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial

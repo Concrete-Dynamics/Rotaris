@@ -214,6 +214,14 @@ class RunCoordinator(QObject):
         keep their queued prompts; only what the window renders changes.
         """
         if session_id == self._focused_id:
+            # Re-assert instead of returning early. A handle can be created
+            # *after* its session was focused: continuing a persisted run
+            # focuses it while it has no handle at all, and ``resume`` then
+            # creates one — unfocused, like every other handle. Without this
+            # the resumed run streams into its snapshot with the workspace
+            # still showing the state it was resumed from: a live run whose
+            # transcript, agents and tokens never move.
+            self._project_focused_handle()
             return True
         previous = self._handles.get(self._focused_id)
         if previous is not None:
@@ -222,13 +230,19 @@ class RunCoordinator(QObject):
         self.store.set_focused_session(session_id)
         if session_id:
             self._load_focused_projection(session_id)
-        handle = self._handles.get(session_id)
-        if handle is not None:
-            handle.set_projection_enabled(True)
-            handle.sync_queued_prompts()
-        else:
+        if not self._project_focused_handle():
             self.store.set_queued_prompts([])
         self.focus_changed.emit(session_id)
+        return True
+
+    def _project_focused_handle(self) -> bool:
+        """Let the focused session's handle own the shared store. ``False``
+        when that session has no handle — nothing runs for it yet."""
+        handle = self._handles.get(self._focused_id)
+        if handle is None:
+            return False
+        handle.set_projection_enabled(True)
+        handle.sync_queued_prompts()
         return True
 
     @property

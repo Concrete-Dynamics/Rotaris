@@ -300,6 +300,63 @@ def test_run_rows_read_as_task_wording_with_the_id_kept_reachable(
     coordinator.shutdown_all()
 
 
+@verifies(SWR.SWR_2434, SWR.SWR_2415)
+def test_continuing_a_session_after_reopening_shows_the_run_it_starts(
+    repository: Path, agent: FakeAgent, monkeypatch: pytest.MonkeyPatch, qtbot
+) -> None:
+    """Productive use: a user reopens Rotaris, picks a finished run out of Overview
+    and asks it to carry on.
+    Expected outcome: the workspace shows the continued run's work — not the state
+    it was continued from.
+
+    The window that continues the run is a *second* one over the same workspace,
+    because that is what makes the run's session focused while no handle exists
+    for it yet: "Continue run" focuses it, and only the prompt that follows
+    creates the handle. A handle born after its session was focused used to keep
+    the projection off, so the run streamed into its snapshot while transcript,
+    task agents and token counts sat exactly where the reopened window had put
+    them — a live run that reads as a hung one."""
+    first_window, first_coordinator, _first_store = _window(repository, qtbot)
+    _start_new_session(first_window, qtbot, monkeypatch, "first task")
+    qtbot.waitUntil(lambda: len(first_coordinator.active_session_ids) == 1, timeout=5000)
+    session_id = first_coordinator.focused_session_id
+    agent.release(session_id)
+    qtbot.waitUntil(lambda: not first_coordinator.active_session_ids, timeout=5000)
+    first_coordinator.shutdown_all()
+    first_window.close()
+
+    window, coordinator, store = _window(repository, qtbot)
+    window.show_view("dashboard")
+    settle(qtbot)
+    # A reopened window has no task wording for the run yet — the label is not
+    # persisted — so the row reads as the session id (SWR-2907's tooltip case).
+    resume_control = f"Continue session {session_id}"
+    qtbot.waitUntil(
+        lambda: bool(find_all_by_accessible_name(window.dashboard, resume_control, QPushButton)),
+        timeout=5000,
+    )
+    click_by_name(qtbot, window.dashboard, resume_control, QPushButton)
+
+    composer = find_by_accessible_name(
+        window.workspace, "Run prompt", QPlainTextEdit, visible_only=True
+    )
+    type_text(qtbot, composer, "second task")
+    click_by_name(qtbot, window.workspace, "Continue run", QPushButton)
+    assert _blocking_notice(window) is None, _blocking_notice(window)
+
+    # The agent's own line, not the user's echoed prompt: only the projection of
+    # the running session can put it in the transcript.
+    qtbot.waitUntil(
+        lambda: any("working on second task" in event.text for event in store.transcript),
+        timeout=10000,
+    )
+    assert coordinator.focused_session_id == session_id
+
+    agent.release_all()
+    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    coordinator.shutdown_all()
+
+
 # Same shape as the serial test above: two live sessions, and the notification it
 # waits on is raised by the one being released while the other still runs. Given a
 # core to itself it settles well inside the 5s deadline; sharing four with the other

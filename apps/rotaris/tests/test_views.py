@@ -3120,15 +3120,23 @@ def test_user_reads_a_burst_of_tool_calls_as_one_row_and_opens_it(qtbot) -> None
 
 
 def _count_relayouts(view) -> list[int]:
-    """Record every explicit full items-layout the transcript view asks for."""
+    """Record every re-projection of the transcript the view is asked for.
+
+    A re-projection is the expensive thing: it decides which rows exist and
+    then re-measures whatever moved. It used to be observable as a full
+    `doItemsLayout`, but the view no longer has one to ask for — an insertion
+    measures the inserted rows and an unchanged transcript measures nothing
+    (SWR-2452). What remains worth counting is the call that re-derives the
+    rows, which is exactly what an unrelated UI change must not trigger.
+    """
     calls: list[int] = []
-    original = view.doItemsLayout
+    original = view.refresh_grouping
 
-    def counted() -> None:
+    def counted(*, force_layout: bool = False) -> None:
         calls.append(1)
-        original()
+        original(force_layout=force_layout)
 
-    view.doItemsLayout = counted
+    view.refresh_grouping = counted
     return calls
 
 

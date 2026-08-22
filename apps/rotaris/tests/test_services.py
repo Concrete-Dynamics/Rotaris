@@ -96,6 +96,25 @@ def test_pending_question_projection_is_copied_and_emits_only_on_change() -> Non
     assert emissions == [projection.pending_questions]
 
 
+def _worker_waiting_on(barrier, conversation, agent_id: str = "agent-a"):
+    """A run worker whose loop has *agent_id* blocked on *barrier*.
+
+    Built around the worker's real attributes — an observer holding the loop —
+    rather than around the shape the caller wishes it had. The previous double
+    invented a ``_ralph`` attribute the worker has never had, which is what let
+    a dead code path look covered.
+    """
+    from rotaris.services.run_bridge import _RunWorker
+
+    scheduler = SimpleNamespace(
+        user_prompt_barrier=barrier,
+        _active_conversations={agent_id: conversation},
+    )
+    worker = _RunWorker.__new__(_RunWorker)
+    worker._observer = SimpleNamespace(ralph=SimpleNamespace(scheduler=scheduler))
+    return worker
+
+
 @verifies(SWR.SWR_2423)
 def test_run_bridge_cancel_questions_releases_exact_waiter(tmp_path) -> None:
     """Productive use: a user can close a prompt without waiting for its timeout.
@@ -111,16 +130,45 @@ def test_run_bridge_cancel_questions_releases_exact_waiter(tmp_path) -> None:
     barrier = UserPromptBarrier()
     conversation = SimpleNamespace(id="conversation-a")
     prompt_id = barrier.create_prompt(conversation)
-    scheduler = SimpleNamespace(
-        user_prompt_barrier=barrier,
-        _active_conversations={"agent-a": conversation},
-    )
-    bridge._worker = SimpleNamespace(_ralph=SimpleNamespace(scheduler=scheduler))
+    bridge._worker = _worker_waiting_on(barrier, conversation)
+    bridge._run_active = True
 
     assert bridge.cancel_questions("agent-a", prompt_id)
     response = barrier.wait_for_response(conversation, prompt_id, timeout=0.1)
     assert response.status is PromptWaitStatus.CANCELLED
     bridge._worker = None
+    bridge._run_active = False
+
+
+@verifies(SWR.SWR_2423)
+def test_an_answered_question_reaches_the_agent_that_asked_it(tmp_path) -> None:
+    """Productive use: an agent asks a question and the user answers it.
+
+    Expected outcome: the agent gets the answer and carries on. This went
+    through an attribute the run worker does not have, so every answer was
+    dropped and the agent waited out its full timeout instead — with a test
+    double supplying the missing attribute, so the suite stayed green."""
+    from rotaris_core.orchestrator.user_prompt_barrier import (
+        PromptWaitStatus,
+        UserPromptBarrier,
+    )
+
+    store = WorkspaceStore()
+    bridge = RunBridge(tmp_path, store, ConfigService(tmp_path, store))
+    barrier = UserPromptBarrier()
+    conversation = SimpleNamespace(id="conversation-a")
+    prompt_id = barrier.create_prompt(conversation)
+    bridge._worker = _worker_waiting_on(barrier, conversation)
+    bridge._run_active = True
+
+    answers = {"scope": {"freeform": "the whole module"}}
+    assert bridge.resolve_questions("agent-a", prompt_id, answers)
+
+    response = barrier.wait_for_response(conversation, prompt_id, timeout=0.1)
+    assert response.status is PromptWaitStatus.RESOLVED
+    assert response.answers == answers
+    bridge._worker = None
+    bridge._run_active = False
 
 
 @verifies(SWR.SWR_2098)

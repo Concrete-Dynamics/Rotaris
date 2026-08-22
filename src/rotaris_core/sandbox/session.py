@@ -36,6 +36,7 @@ __all__ = [
     "resolve_sandbox_spec",
     "sandbox_mode_of",
     "sandbox_status",
+    "sandbox_verdict",
 ]
 
 
@@ -124,3 +125,27 @@ def sandbox_status(config: Any) -> tuple[bool, str]:
     if not availability.available:
         return (False, "")
     return (True, availability.backend)
+
+
+@traces(SWR.SWR_2507)
+def sandbox_verdict(config: Any) -> tuple[bool, str]:
+    """``(sandboxed, backend name)`` for the config a run is really launching with.
+
+    Raises :class:`SandboxUnavailableError` when the config asks for a sandbox
+    this host cannot provide, because SWR-2507 forbids quietly downgrading that
+    session to unsandboxed execution.
+
+    Unlike :func:`sandbox_status`, which answers "is a sandbox active" and
+    reports an unavailable one as simply inactive, this is the *launch* probe:
+    one call decides both whether the run may start and what its snapshot
+    records, so the two can never disagree, and the raised error carries the
+    reason and remediation a host has to show.
+
+    ``workspace_root`` is read leniently: an ``off`` config never reaches a path
+    that needs it, and a host handing this a duck-typed config must not lose a
+    run that asked for no sandbox at all.
+    """
+    spec = resolve_sandbox_spec(config, getattr(config, "workspace_root", ""))
+    if spec is None:
+        return (False, "")
+    return (True, ensure_sandbox_available(spec).name)

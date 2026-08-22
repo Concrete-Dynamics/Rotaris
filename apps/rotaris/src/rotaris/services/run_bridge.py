@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 from rotaris_core.reqtocode import SWR, traces
+from rotaris_core.runchannel import InProcessRunControl, RunControl
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -235,152 +236,6 @@ def install_run_lifecycle_extras(
     )
 
 
-@traces(SWR.SWR_2901)
-def install_run_event_store(*, session_manager: Any, session_id: str) -> None:
-    """Persist every event this desktop run emits (SWR-2901).
-
-    Rotaris drives ``cli.background._run_task`` directly, one layer below
-    ``run_host.execute_run`` — which is the layer where the store is attached.
-    Without this call the *primary* interface is the one host that leaves no
-    trace behind: the CLI stores, the Python SDK stores, and the desktop
-    sessions a user actually cares about replay and export as empty.
-
-    The pair is the one ``execute_run`` uses, not a second invention.
-    :func:`~rotaris_core.eventstore.attach_session_store` opens
-    ``<session_dir>/evidence/events.jsonl``, registers it under the session id
-    and returns a tee; registering that tee on the event bus is what makes the
-    store see exactly the sequence a stream consumer sees. Both registries bind
-    late and are keyed by session, so no signature has to change and two
-    concurrent desktop runs cannot write into each other's history.
-
-    Call it immediately before the guarded run block, so nothing this run
-    publishes can predate the store, and pair every call with
-    :func:`discard_run_event_store` in that block's ``finally``.
-
-    What that does *not* buy is a guaranteed ``session.start``. This host takes
-    that event from the Ralph loop, which ``_run_task`` builds only after it has
-    classified the run's intent — a model call that can fail. A run that dies
-    there is stored with its terminal ``result`` and nothing else, where a
-    headless run would still have the ``session.start`` ``execute_run``
-    publishes itself. Closing that last gap means the two hosts sharing one
-    bootstrap rather than this one growing a second copy of the lifecycle.
-
-    Never raises. When the store cannot be opened — a read-only session
-    directory, an exhausted disk — the user loses this session's replay
-    (SWR-2902) and its trajectory export (SWR-2903). They must not also lose
-    the run.
-    """
-    if not session_id:
-        return
-    try:
-        from rotaris_core.events.bus import register_event_sink
-        from rotaris_core.eventstore import attach_session_store
-
-        register_event_sink(
-            session_id,
-            attach_session_store(
-                session_manager.session_dir(session_id),
-                session_id=session_id,
-            ),
-        )
-    except Exception:  # noqa: BLE001 - a run without history beats a run that dies.
-        _log.warning(
-            "Could not attach the event store for %s; this session will have no "
-            "stored history to replay or export.",
-            session_id,
-            exc_info=True,
-        )
-
-
-@traces(SWR.SWR_2901)
-def discard_run_event_store(session_id: str) -> None:
-    """Stop persisting for *session_id*. Idempotent, and never raises.
-
-    Must run *after* the terminal ``result`` event has been published, for the
-    reason the store's own coverage attaches at the sink seam rather than at
-    the registry: a stored session whose last line is not the terminal event is
-    indistinguishable from one whose process was killed mid-run.
-
-    Both halves are dropped together. A sink left registered would append the
-    next run's events to this session, and a store left registered would keep
-    the file handle bound to a session that is over.
-    """
-    if not session_id:
-        return
-    try:
-        from rotaris_core.events.bus import discard_event_sink
-        from rotaris_core.eventstore import detach_session_store
-
-        discard_event_sink(session_id)
-        detach_session_store(session_id)
-    except Exception:  # noqa: BLE001 - cleanup must not fail a finished run.
-        _log.warning("Could not detach the event store for %s.", session_id, exc_info=True)
-
-
-@traces(SWR.SWR_1828, SWR.SWR_2901)
-def publish_terminal_run_result(
-    *,
-    state: Any,
-    progress: Any,
-    error: str | None,
-    interrupted: bool,
-) -> None:
-    """Close this run on the bus with its terminal ``result`` event.
-
-    The Ralph loop publishes ``session.start``/``session.end`` but deliberately
-    not ``result``: that event carries the session state and the aggregate
-    token/cost figures the loop does not hold, so it belongs to whoever owns the
-    run's end. For the CLI and the SDK that is ``run_host.execute_run``; for the
-    desktop it is this worker, or every stored desktop session ends without the
-    one event that says how it ended.
-
-    Built from the same :func:`~rotaris_core.run_result.build_run_result` the
-    headless hosts use, so a stored desktop session and a stored CI run describe
-    their outcome with identical fields.
-
-    Never raises: ``build_run_result`` cannot and ``publish`` swallows a sink
-    failure, but the event model is still *constructed* here, and a validation
-    error escaping into the caller's ``finally`` would skip the deregistrations
-    that follow it.
-    """
-    session_id = str(getattr(state, "session_id", "") or "")
-    if not session_id:
-        return
-    try:
-        from rotaris_core.events.bus import publish
-        from rotaris_core.events.schema import ResultEvent
-        from rotaris_core.run_result import build_run_result
-
-        # The run's last report artifact, in the ``_artifact_refs`` shape
-        # ``build_run_result`` filters down to four keys.
-        report = next(
-            (
-                artifact
-                for artifact in reversed(list(getattr(state, "report_artifacts", None) or []))
-                if isinstance(artifact, dict)
-            ),
-            None,
-        )
-        result = build_run_result(
-            session_id=session_id,
-            state=state,
-            progress=progress,
-            report=report,
-            error=error,
-            interrupted=interrupted,
-        )
-        publish(
-            session_id,
-            ResultEvent(session_id=session_id, result=result.model_dump(mode="json")),
-        )
-    except Exception:  # noqa: BLE001 - a terminal event must not strand a run.
-        _log.warning(
-            "Could not publish the terminal result event for %s.",
-            session_id,
-            exc_info=True,
-        )
-
-
 @traces(
     SWR.SWR_2007,
     SWR.SWR_2024,
@@ -466,8 +321,30 @@ class RunBridge(QObject):
         self._poller.timeout.connect(self._poll)
 
     @property
+    def _control(self) -> RunControl:
+        """Every reach into the live run goes through here.
+
+        The handle keeps its own "is a run active" question — that is about this
+        window's state — and the control owns *how* the run is reached, which is
+        the half that changes when a run stops sharing this process (SWR-2426).
+
+        Built on first use rather than in ``__init__`` so that it reads the
+        handle's current state through the two accessors below, and so a handle
+        built without running ``__init__`` still answers "there is no run"
+        instead of raising.
+        """
+        control = getattr(self, "_control_impl", None)
+        if control is None:
+            control = InProcessRunControl(
+                lambda: getattr(self, "_session_id", ""),
+                lambda: getattr(self, "_worker", None) if self.running else None,
+            )
+            self._control_impl = control
+        return control
+
+    @property
     def running(self) -> bool:
-        return self._run_active
+        return getattr(self, "_run_active", False)
 
     @property
     def session_id(self) -> str:
@@ -481,64 +358,16 @@ class RunBridge(QObject):
 
     @traces(SWR.SWR_2504)
     def resolve_approval(self, request_id: str, option: str) -> bool:
-        """Answer one pending permission approval shown by Rotaris.
-
-        Returns ``False`` when the waiting dispatch is already gone (run ended,
-        request timed out), so the caller can show a delivery error instead of
-        pretending the tool call proceeds.
-        """
-        from rotaris_core.permissions import ApprovalOption, resolve_approval_host
-
-        if not request_id or not self._session_id:
-            return False
-        host = resolve_approval_host(self._session_id)
-        if host is None:
-            return False
-        try:
-            choice = ApprovalOption(option)
-        except ValueError:
-            return False
-        return bool(host.barrier.resolve(request_id, choice))
+        """Answer one pending permission approval shown by Rotaris."""
+        return bool(self._control.resolve_approval(request_id, option))
 
     def resolve_questions(self, agent_id: str, prompt_id: str, answers: object) -> bool:
         """Resolve the exact pending prompt shown by Rotaris."""
-        return self._finish_questions(agent_id, prompt_id, answers)
+        return bool(self._control.resolve_questions(agent_id, prompt_id, _answers_of(answers)))
 
     def cancel_questions(self, agent_id: str, prompt_id: str) -> bool:
         """Cancel the exact pending prompt shown by Rotaris."""
-        return self._finish_questions(agent_id, prompt_id, None)
-
-    def _finish_questions(
-        self,
-        agent_id: str,
-        prompt_id: str,
-        answers: object | None,
-    ) -> bool:
-        if self._worker is None:
-            return False
-        ralph = getattr(self._worker, "_ralph", None)
-        if ralph is None:
-            return False
-        scheduler = getattr(ralph, "scheduler", None)
-        if scheduler is None:
-            return False
-        barrier = getattr(scheduler, "user_prompt_barrier", None)
-        if barrier is None:
-            return False
-        conversation = getattr(scheduler, "_active_conversations", {}).get(agent_id)
-        if conversation is None:
-            return False
-
-        if answers is None:
-            return bool(barrier.cancel(conversation, prompt_id))
-
-        from rotaris.models.state import QuestionAnswers
-
-        if isinstance(answers, QuestionAnswers):
-            answers_dict = answers.answers
-        else:
-            answers_dict = getattr(answers, "answers", {})
-        return bool(barrier.resolve(conversation, prompt_id, answers_dict))
+        return bool(self._control.cancel_questions(agent_id, prompt_id))
 
     def start(
         self,
@@ -629,55 +458,21 @@ class RunBridge(QObject):
         self.worktree_resolved.emit(session_id, branch)
 
     def steer(self, agent_id: str, text: str) -> bool:
-        if not self.running or not agent_id or not text.strip():
-            return False
-        from rotaris_core.api.prompts import prompt_api
-
-        prompt_api.submit_steering(agent_id, text.strip())
-        return True
+        return bool(self._control.steer(agent_id, text))
 
     @traces(SWR.SWR_2434)
     def queue_prompt(self, text: str) -> str:
         """Queue a follow-up owned by — and only consumable by — this run."""
-        if not self.running or not text.strip():
-            return ""
-        from rotaris_core.api.prompts import prompt_api
-
-        return prompt_api.submit_queued(
-            text.strip(),
-            {"session_id": self._session_id},
-            session_id=self._session_id,
-        )
+        return self._control.queue_prompt(text).value
 
     def edit_queued_prompt(self, prompt_id: str, text: str) -> bool:
-        if not self.running or not prompt_id or not text.strip():
-            return False
-        from rotaris_core.api.prompts import prompt_api
-
-        try:
-            prompt_api.update_queued(prompt_id, text)
-        except (KeyError, ValueError):
-            return False
-        return True
+        return bool(self._control.edit_queued_prompt(prompt_id, text))
 
     def delete_queued_prompt(self, prompt_id: str) -> bool:
-        if not self.running or not prompt_id:
-            return False
-        from rotaris_core.api.prompts import prompt_api
-
-        try:
-            prompt_api.unqueue(prompt_id)
-        except (KeyError, ValueError):
-            return False
-        return True
+        return bool(self._control.delete_queued_prompt(prompt_id))
 
     def cancel_agent(self, agent_id: str) -> bool:
-        if not self.running:
-            return False
-        if agent_id == "orchestrator":
-            self.cancel()
-            return True
-        return self._worker.cancel_agent(agent_id) if self._worker is not None else False
+        return bool(self._control.cancel_agent(agent_id))
 
     @traces(SWR.SWR_2610)
     def skip_verifier_check(self) -> bool:
@@ -686,16 +481,12 @@ class RunBridge(QObject):
         Returns False when nothing is being verified, so a host may wire this
         to an always-present control without tracking the phase itself.
         """
-        if not self.running or self._worker is None:
-            return False
-        return self._worker.skip_verifier_check()
+        return bool(self._control.skip_verifier_check())
 
     def pause(self) -> bool:
         """Ask the run to finish its current step, then stop (graceful — as
         opposed to :meth:`cancel`, which cancels the run task outright)."""
-        if not self.running or self._worker is None:
-            return False
-        return self._worker.pause()
+        return bool(self._control.pause())
 
     def pause_agent(self, agent_id: str) -> bool:
         """Graceful pause only applies to the whole run (orchestrator node) —
@@ -712,9 +503,7 @@ class RunBridge(QObject):
         model. Used to switch back to the primary model after the user
         re-authenticated its provider while the run continued on the fallback.
         """
-        if not self.running or self._worker is None or not model_key:
-            return False
-        return self._worker.switch_entry_model(model_key)
+        return bool(self._control.switch_entry_model(model_key))
 
     def switch_entry_reasoning(self, reasoning: str) -> bool:
         """Point the active run's entry persona at another reasoning level.
@@ -724,9 +513,7 @@ class RunBridge(QObject):
         reasoning. Used to change entry-agent reasoning without restarting the
         run.
         """
-        if not self.running or self._worker is None or not reasoning:
-            return False
-        return self._worker.switch_entry_reasoning(reasoning)
+        return bool(self._control.switch_entry_reasoning(reasoning))
 
     @traces(SWR.SWR_2503, SWR.SWR_2509)
     def set_permission_mode(self, mode: str) -> bool:
@@ -737,21 +524,15 @@ class RunBridge(QObject):
         for this session, so the run's very next tool call is judged under the
         new mode. Returns ``False`` when there is no run to change.
         """
-        if not self.running or self._worker is None or not mode:
-            return False
-        return self._worker.set_permission_mode(mode)
+        return bool(self._control.set_permission_mode(mode))
 
     def force_compress(self) -> bool:
         """Request context compression for every currently active conversation."""
-        if not self.running or self._worker is None:
-            return False
-        return self._worker.force_compress()
+        return bool(self._control.force_compress())
 
     def clear_transcript(self) -> bool:
         """Clear and persist transcript state on the active run loop."""
-        if not self.running or self._worker is None:
-            return False
-        return self._worker.clear_transcript()
+        return bool(self._control.clear_transcript())
 
     def edit_todo(
         self,
@@ -760,15 +541,10 @@ class RunBridge(QObject):
         text: str = "",
     ) -> bool:
         """Write a desktop todo edit into the active agent's live list."""
-        if not self.running or self._worker is None:
-            return False
-        return self._worker.edit_todo(operation, target_id, text)
+        return bool(self._control.edit_todo(operation, target_id, text))
 
     def cancel(self) -> None:
-        if self._worker is not None:
-            self._worker.cancel_pending_questions()
-            self._worker.cancel_pending_approvals()
-            self._worker.cancel()
+        self._control.cancel()
 
     def shutdown(self) -> None:
         self._shutting_down = True
@@ -1249,6 +1025,7 @@ class _RunWorker(QObject):
         self.new_session_id = new_session_id
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task[Any] | None = None
+        self._cancel: asyncio.Event | None = None
         self._observer: _SessionObserver | None = None
         self._failure_detail = ""
         # Session whose approval host this worker registered (SWR-2504); kept
@@ -1279,211 +1056,101 @@ class _RunWorker(QObject):
                 self.finished.emit(status)
 
     async def _execute(self) -> str:
+        """Run this handle's task through the one host-neutral lifecycle.
+
+        Everything from "which session is this" to "release the lock" lives in
+        :func:`~rotaris_core.run_host.execute_run`, which the CLI and the Python
+        SDK already use. The desktop used to drive ``cli.background._run_task``
+        one layer below it and keep its own copy of the surrounding lifecycle —
+        the event-store attach, the terminal ``result`` event, the hook runner,
+        the checkpoint observer. Two copies of "which session am I and who holds
+        its lock" disagree the moment one of them is fixed, and this one already
+        had a gap the other did not: a run that died during intent
+        classification was stored without its ``session.start``.
+
+        What stays here is genuinely this host's: a Qt signal per lifecycle
+        moment, an observer that needs the live :class:`SessionState`, and the
+        approval host that lets the window answer an ``ask`` decision.
+        """
         # The default 10s persistence debounce is tuned for headless/background
         # runs. Rotaris polls the persisted snapshot every 750ms to drive a
         # live view, so a 10s debounce made streaming look "stuck then bursty"
         # — batches of transcript/child-state changes would land all at once.
-        from rotaris_core.cli.background import _run_task, config_for_session_worktree
+        from rotaris_core.run_host import RunRequest, execute_run
         from rotaris_core.session.manager import SessionManager
 
         manager = SessionManager(self.workspace, persist_debounce_seconds=0.5)
-        post_run_improvement_job: object | None = None
-
-        def capture_post_run_improvement_job(job: object | None) -> None:
-            nonlocal post_run_improvement_job
-            post_run_improvement_job = job
-
-        run_config = self.config
-        if self.session_id:
-            from rotaris_core.session.recovery import settle_orphaned_children
-
-            state = manager.load_session(self.session_id)
-            if not manager.acquire_lock(self.session_id):
-                raise RuntimeError(f"Unable to acquire session lock: {self.session_id}")
-            # The lock is ours and nothing of this run has started, so a record
-            # still claiming to run belongs to a run that is gone (SWR-3714).
-            # Left un-settled, the previous run's agents come back as live rows
-            # in the tree the continuation is about to add to.
-            settle_orphaned_children(state)
-            run_config = config_for_session_worktree(run_config, manager, state)
-        else:
-            state = manager.create_session(
-                run_config,
-                session_id=self.new_session_id or getattr(self.isolation, "session_id", None),
-            )
-            try:
-                if self.isolation is not None:
-                    from rotaris_core.session.worktrees import GitWorktreeService
-
-                    service = GitWorktreeService(
-                        manager.workspace_root,
-                        storage_subpath=run_config.worktree_storage_subpath,
-                    )
-                    if getattr(self.isolation, "create", True):
-                        # Parallel launches routinely collide on the requested
-                        # branch; the service resolves a free variant instead of
-                        # failing the run.
-                        state.worktree = service.create_for_session_unique(
-                            state.session_id,
-                            getattr(self.isolation, "branch", None),
-                        )
-                    else:
-                        path = getattr(self.isolation, "path", None)
-                        if path is None:
-                            raise RuntimeError("An existing worktree path is required.")
-                        state.worktree = service.attach_existing(path)
-                    run_config = config_for_session_worktree(run_config, manager, state)
-                    state.config_snapshot = run_config.model_dump(mode="json")
-                    await manager.persister.flush(state)
-            except Exception:
-                manager.release_lock(state.session_id)
-                manager.persistence.delete_session(state.session_id)
-                raise
-        self._run_config = run_config
-        try:
-            sandboxed, sandbox_backend = _sandbox_verdict(run_config)
-        except Exception:
-            # SWR-2507: a session that asked for a sandbox it cannot get must
-            # fail visibly, never quietly run on the host. Same cleanup as the
-            # worktree failure above — release the lock, drop a session this
-            # run created — then re-raise so the window reports the backend's
-            # own reason and remediation. Raised before ``started`` is emitted,
-            # so the loop is never entered.
-            manager.release_lock(state.session_id)
-            if not self.session_id:
-                # Only a session this run created; a resumed one is the user's
-                # history and must survive a failed launch.
-                manager.persistence.delete_session(state.session_id)
-            raise
-        state.sandboxed = sandboxed
-        state.sandbox_backend = sandbox_backend
-        worktree = getattr(state, "worktree", None)
-        self.worktree_ready.emit(state.session_id, getattr(worktree, "branch", "") or "")
-        self.started.emit(state.session_id)
-        state.execution_status = "running"
-        # All run writes must go through the persister: it serializes with its
-        # own in-flight debounced writes. A bare manager.flush_session here can
-        # collide with a debounced asyncio.to_thread write on the same snapshot
-        # files (os.replace on Windows raises PermissionError on that race).
-        await manager.persister.flush(state)
         self._loop = asyncio.get_running_loop()
-        self._task = asyncio.current_task()
-        # Outside the try, and paired with ``discard()`` in its ``finally``: the
-        # hook runner has to be registered before the first agent is built, and
-        # the tool-hook gate resolves it by session id from inside that agent.
-        extras = install_run_lifecycle_extras(
-            config=run_config,
-            session_manager=manager,
-            state=state,
-        )
-        # Same placement and the same reason as the extras above: attached
-        # outside the try so nothing this run publishes can predate the store,
-        # and paired with ``discard_run_event_store`` in the ``finally`` below.
-        install_run_event_store(session_manager=manager, session_id=state.session_id)
-        # Terminal-result inputs, declared here so the ``finally`` can build the
-        # run's ``result`` event on every exit path — completion, cancellation
-        # and failure alike.
-        progress: Any = None
-        run_error: str | None = None
-        interrupted = False
-        try:
-            if extras.notice:
-                self.hook_notice.emit(extras.notice)
+        self._cancel = asyncio.Event()
+
+        def _on_session_ready(state: Any) -> Any:
+            from rotaris_core.cli.background import config_for_session_worktree
+
+            # The config the run really launched with: the mid-run permission
+            # mode change (SWR-2503) must re-resolve against the worktree-rooted
+            # copy, not the pre-launch one.
+            self._run_config = config_for_session_worktree(self.config, manager, state)
+            worktree = getattr(state, "worktree", None)
+            self.worktree_ready.emit(state.session_id, getattr(worktree, "branch", "") or "")
+            self.started.emit(state.session_id)
             observer = _SessionObserver(asyncio.get_running_loop(), manager, state)
             self._observer = observer
             self._register_approval_host(observer, state.session_id)
-            run_task_kwargs: dict[str, Any] = {
-                "iteration_observer": observer,
-                "delegation_strategy": self.delegation_strategy,
-            }
-            # Test doubles and external hosts that retain the old runner
-            # signature still execute the task path; the real shared runner
-            # receives the terminal-job hand-off.
-            parameters = inspect.signature(_run_task).parameters
-            if "post_run_improvement_job_sink" in parameters:
-                run_task_kwargs["post_run_improvement_job_sink"] = capture_post_run_improvement_job
-            if extras.observers and accepts_extra_observers(_run_task):
-                run_task_kwargs["extra_observers"] = extras.observers
-            # Unconditional, for the reason SWR-2901 makes it unconditional in
-            # ``run_host.execute_run``: the loop's iteration, child and tool
-            # events are what the store persists, so leaving them off would
-            # attach a store to a run that emits almost nothing into it. The
-            # flag switches the channel only — the desktop still reads its live
-            # view from the persisted snapshot, not from the stream.
-            if accepts_keyword(_run_task, "stream_events"):
-                run_task_kwargs["stream_events"] = True
-            progress = await _run_task(
-                self.prompt,
-                run_config,
+            return observer
+
+        request = RunRequest(
+            task=self.prompt,
+            config=self.config,
+            session_id=self.session_id,
+            max_iterations=self.config.runtime.max_iterations,
+            new_session_id=self.new_session_id or getattr(self.isolation, "session_id", None),
+            delegation_strategy=self.delegation_strategy,
+            **_isolation_request_fields(self.isolation),
+        )
+        try:
+            result = await execute_run(
+                request,
                 manager,
-                state,
-                run_config.runtime.max_iterations,
-                **run_task_kwargs,
+                on_session_ready=_on_session_ready,
+                improvement_job_sink=self.improvement_job_ready.emit,
+                cancel_event=self._cancel,
+                notice=self.hook_notice.emit,
             )
-            from rotaris_core.ralph.state import summarize_run_progress
-
-            status, summary, _severity = summarize_run_progress(progress)
-            state.execution_status = status
-            self._failure_detail = summary if status == "failed" else ""
-            state.transcript_events.append({"role": "system", "content": summary})
-            await manager.persister.flush(state)
-            if post_run_improvement_job is not None:
-                self.improvement_job_ready.emit(post_run_improvement_job)
-        except asyncio.CancelledError:
-            interrupted = True
-            state.execution_status = "paused"
-            state.transcript_events.append(
-                {"role": "system", "content": "Run paused from Rotaris."}
-            )
-            await manager.persister.flush(state)
-        except Exception as exc:
-            from rotaris_core.llm_errors import format_llm_runtime_error
-
-            # The same rendering the headless hosts put in ``RunResult.error``,
-            # so the stored outcome of a failed desktop run reads identically.
-            run_error = format_llm_runtime_error(exc)
-            state.execution_status = "failed"
-            await manager.persister.flush(state)
-            raise
         finally:
             from rotaris_core.permissions import discard_approval_host
 
             discard_approval_host(self._approval_session_id)
             self._approval_session_id = ""
-            # Read before discarding: the disabled-hook tally lives on the
-            # runner, and discard() drops the reference to it.
-            finish_notice = extras.finish_notice()
-            # Every exit path, cancellation and failure included: a runner left
-            # registered would fire this session's hooks on the next run.
-            extras.discard()
-            if finish_notice:
-                self.hook_notice.emit(finish_notice)
-            # Published while the bus registration is still live, and only then
-            # torn down: the ``result`` event is the half that proves the run
-            # ended, and a stored session without it cannot be told apart from
-            # one whose process was killed mid-run.
-            #
-            # Ordered *before* ``release_lock`` deliberately. Every other
-            # statement in this block swallows its own failures; releasing a
-            # session lock does not, and on Windows it is a documented raiser
-            # (see the persister note above). A raise there would cost the run
-            # its terminal event and leave both the sink and the store
-            # registered for this session id for the life of the process — so
-            # the next event published under it would append to a session that
-            # is already over, which is precisely the ambiguity this pair
-            # exists to prevent.
-            publish_terminal_run_result(
-                state=state,
-                progress=progress,
-                error=run_error,
-                interrupted=interrupted,
-            )
-            discard_run_event_store(state.session_id)
-            manager.release_lock(state.session_id)
             self._task = None
             self._loop = None
+            self._cancel = None
             self._observer = None
-        return state.execution_status
+
+        status = self._status_of(result)
+        # What the window shows when it offers recovery. ``error`` is the
+        # rendered runtime failure; ``summary`` carries the loop's own wording
+        # for a run that failed without raising, which is the case the auth
+        # fallback is triggered from.
+        self._failure_detail = (result.error or result.summary or "") if status == "failed" else ""
+        return status
+
+    @staticmethod
+    def _status_of(result: Any) -> str:
+        """The status string this window's signals are written against.
+
+        ``RunResult.status`` is the machine-facing outcome; the window speaks
+        the session's own ``execution_status`` vocabulary, and a run that never
+        started has no session status at all.
+        """
+        from rotaris_core.run_result import RunStatus
+
+        if result.status is RunStatus.INTERRUPTED:
+            return "paused"
+        if result.status in (RunStatus.FAILED, RunStatus.ERROR):
+            return "failed"
+        if result.status is RunStatus.MAX_ITERATIONS:
+            return "max_iterations"
+        return "completed"
 
     @traces(SWR.SWR_2504)
     def _register_approval_host(self, observer: _SessionObserver, session_id: str) -> None:
@@ -1505,15 +1172,54 @@ class _RunWorker(QObject):
         self._approval_session_id = session_id
 
     def cancel(self) -> None:
-        loop, task = self._loop, self._task
-        if loop is not None and task is not None and not task.done():
-            loop.call_soon_threadsafe(task.cancel)
+        """Ask the run to stop, from the Qt thread.
+
+        Setting the lifecycle's cancel event rather than cancelling the task:
+        ``execute_run`` gives the loop its grace period and still reports a
+        terminal result, where a bare ``task.cancel`` unwound through whichever
+        await happened to be in flight.
+        """
+        loop, cancel = self._loop, self._cancel
+        if loop is not None and cancel is not None:
+            loop.call_soon_threadsafe(cancel.set)
 
     def cancel_pending_questions(self) -> None:
         """Release synchronous tool waits before cancelling the async run."""
         ralph = self._observer.ralph if self._observer is not None else None
         if ralph is not None:
             ralph.scheduler.user_prompt_barrier.cancel_all()
+
+    @traces(SWR.SWR_2423)
+    def resolve_questions(self, agent_id: str, prompt_id: str, answers: object) -> bool:
+        """Answer the exact prompt *agent_id* is waiting on."""
+        return self._finish_questions(agent_id, prompt_id, answers)
+
+    @traces(SWR.SWR_2423)
+    def cancel_questions(self, agent_id: str, prompt_id: str) -> bool:
+        """Withdraw that prompt without answering it."""
+        return self._finish_questions(agent_id, prompt_id, None)
+
+    def _finish_questions(self, agent_id: str, prompt_id: str, answers: object | None) -> bool:
+        """Resolve or cancel one waiting conversation's prompt.
+
+        Reached through the run's observer, which is what actually holds the
+        loop. This used to be done from the handle by reading a ``_ralph``
+        attribute off the worker — an attribute the worker has never had, so
+        every answer the user typed was dropped and the prompt sat there until
+        it timed out. Its test built a double that *did* have one, which is why
+        nothing said so.
+        """
+        ralph = self._observer.ralph if self._observer is not None else None
+        scheduler = getattr(ralph, "scheduler", None)
+        if scheduler is None:
+            return False
+        barrier = getattr(scheduler, "user_prompt_barrier", None)
+        conversation = getattr(scheduler, "_active_conversations", {}).get(agent_id)
+        if barrier is None or conversation is None:
+            return False
+        if answers is None:
+            return bool(barrier.cancel(conversation, prompt_id))
+        return bool(barrier.resolve(conversation, prompt_id, _answers_of(answers)))
 
     @traces(SWR.SWR_2504)
     def cancel_pending_approvals(self) -> None:
@@ -2632,3 +2338,28 @@ class _SessionObserver:
     def _set_tokens(self, usage: dict[str, Any]) -> None:
         self.state.token_usage = usage
         self.manager.persister.request_save(self.state)
+
+
+def _isolation_request_fields(isolation: Any) -> dict[str, Any]:
+    """Translate the window's isolation choice into ``RunRequest`` fields."""
+    if isolation is None:
+        return {}
+    if getattr(isolation, "create", True):
+        return {"isolate": True, "worktree_branch": getattr(isolation, "branch", None)}
+    path = getattr(isolation, "path", None)
+    if path is None:
+        raise RuntimeError("An existing worktree path is required.")
+    from pathlib import Path as _Path
+
+    return {"worktree_path": _Path(path)}
+
+
+def _answers_of(answers: object) -> dict[str, dict[str, str | None]]:
+    """The plain answer payload, whatever shape the window handed over.
+
+    A ``QuestionAnswers`` is a UI model; only what is inside it can cross into
+    a run, which is the whole reason the control interface takes a mapping.
+    """
+    if isinstance(answers, dict):
+        return answers
+    return dict(getattr(answers, "answers", {}) or {})

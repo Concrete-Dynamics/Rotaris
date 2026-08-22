@@ -1692,13 +1692,14 @@ class WorkspaceView(Themed, QWidget):
         self._refresh_terminals_button()
         model = self.transcript_scroll.transcript_model
         old_count = model.rowCount()
-        scrollbar = self.transcript_scroll.verticalScrollBar()
-        saved_scroll = scrollbar.value()
         follow_tail = self.transcript_scroll.following_tail
+        # No scroll position is saved here on purpose. The view anchors on the
+        # row the reader is looking at as each change lands, which survives rows
+        # above it changing height; a pixel value read before the refresh does
+        # not (SWR-2452).
         if not self.transcript_scroll.set_events(events):
             return
 
-        self.transcript_scroll.restore_after_model_change(saved_scroll, follow_tail)
         # Counted in displayed rows, not source events: with grouping on, ten
         # new calls that join one group are one new row, and the badge must
         # match what scrolling down would actually reveal.

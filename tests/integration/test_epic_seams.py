@@ -22,13 +22,16 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture(autouse=True)
 def _reset_fetch_registration() -> Iterator[None]:
-    """Clear the process-global factory memo around each test."""
+    """Keep the process-global fallback config from leaking between tests.
+
+    There is no registration memo any more — registering is unconditional and
+    idempotent, because the factory reads its run's config per call. What is
+    still global is the fallback a spec with no live binding lands on."""
     import rotaris_core.agents.tool_registration as registration
 
-    saved = registration._fetch_registered_config_id  # noqa: SLF001
-    registration._fetch_registered_config_id = None  # noqa: SLF001
+    saved = registration._fallback_config  # noqa: SLF001
     yield
-    registration._fetch_registered_config_id = saved  # noqa: SLF001
+    registration._fallback_config = saved  # noqa: SLF001
 
 
 class _Runtime:

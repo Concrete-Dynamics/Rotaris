@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, cast
 from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from openhands.sdk.conversation.state import ConversationState
     from openhands.sdk.tool.tool import ToolDefinition
@@ -34,18 +34,33 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-# Memoization flags for runtime-bound tool factories (keyed by workspace root or
-# config identity). These live alongside the functions that read them.
-_haet_registered_root: str | None = None
-_file_tools_registered_root: tuple[str, tuple[str, ...]] | None = None
-_grep_glob_registered_root: str | None = None
-# Terminal registration is keyed by config identity *and* by the sandbox
-# settings that identity resolves to (SWR-2507).  Identity alone is not enough:
-# a per-session sandbox toggle that flips on the same config object would
-# otherwise be served the previously registered factory, and the session would
-# run unsandboxed while believing it was sandboxed.
-_terminal_registered_config_id: tuple[int, tuple[Any, ...]] | None = None
-_fetch_registered_config_id: tuple[int, tuple[Any, ...]] | None = None
+# Registration is unconditional and idempotent. Every factory below reads its
+# run's state at *resolve* time from the binding key in ``Tool.params``, so
+# re-registering installs an identical factory — and re-asserts Rotaris' claim
+# on a name the SDK's own import may otherwise hold, which is the only ordering
+# that reliably wins.
+#
+# There used to be a memoization key per registrar (workspace root, config
+# identity), because the factories closed over those. That key was itself a way
+# for one run to poison another: run B's registration was *skipped* when run A's
+# key matched, leaving B's agents resolving A's factory (SWR-2426).
+#: What a tool falls back to when its ``Tool`` spec has no live binding — a
+#: conversation resumed after a restart, say.  Written by registration, read
+#: only when an exact binding lookup finds nothing, and never used to decide
+#: anything for an agent whose own binding is present.
+_fallback_config: RotarisConfig | None = None
+#: Split in two because the registrars know different halves: all three record
+#: the workspace root they were called for, and only the file tools know which
+#: extra roots may additionally be read. One combined value let whichever
+#: registrar ran last erase the other's half.
+_fallback_root: Any = None
+_fallback_extra_read_roots: tuple[Any, ...] = ()
+
+#: Engines are cached by the root they were built for, not by run: two runs
+#: sharing a workspace share the read-before-write ledger and undo stacks they
+#: always shared, and two runs in different worktrees no longer can.
+_engines_lock = RLock()
+_engines: dict[tuple[str, Any], Any] = {}
 
 # Binding key used by agents created without child context (the entry agent).
 ROOT_BINDING_KEY = "__root__"
@@ -86,6 +101,12 @@ class RuntimeToolBinding:
     user_prompt_barrier: Any = None
     on_questions_stored: Any = None
     response_timeout: float = 300.0
+    #: The directory this run's file tools may reach, and the extra roots it may
+    #: additionally read. A run isolated into an SWR-2404 worktree has a
+    #: genuinely different root from one in the main checkout, so a factory that
+    #: closed over this decided the file boundary by registration order.
+    workspace_root: Any = None
+    extra_read_roots: tuple[Any, ...] = ()
 
 
 _bindings_lock = RLock()
@@ -109,17 +130,26 @@ def resolve_runtime_binding(key: str | None) -> RuntimeToolBinding:
 
     A missing key means the ``Tool`` spec outlived its binding — a conversation
     resumed from disk after the process restarted, say.  Falling back to the
-    most recent binding preserves the pre-SWR-2426 behaviour instead of failing
-    the whole conversation, but it is a real attribution risk, so it is logged.
+    most recent binding keeps that conversation alive instead of failing it over
+    an attribution problem, but the fallback is only *unambiguous* while one run
+    holds the process. With two live runs the most recent binding is a coin
+    toss, so the lookup raises rather than guessing which user is waiting and
+    which workspace is meant.
     """
     with _bindings_lock:
         if key is not None:
             binding = _runtime_bindings.get(key)
             if binding is not None:
                 return binding
+        live = len(_runtime_bindings)
         fallback = _last_runtime_binding
     if fallback is None:
         return RuntimeToolBinding()
+    if live > 1:
+        raise LookupError(
+            f"No runtime tool binding for {key!r}, and {live} are live. Refusing to "
+            "guess which run this tool call belongs to."
+        )
     _log.warning(
         "No runtime tool binding for key %r; falling back to the most recent binding. "
         "Tool identity may be attributed to the wrong agent.",
@@ -230,20 +260,18 @@ def _register_tool_factory(name: str, factory: Any) -> None:
     register_tool(name, RuntimeToolSet)
 
 
-@traces(SWR.SWR_666)
+@traces(SWR.SWR_666, SWR.SWR_2426)
 def _register_haet_tool_factories(workspace_root: Any) -> None:
     """Register HAET tool factories that inject HAETEngine.
 
-    Idempotent per workspace root: re-registration is skipped when the same
-    root has already been registered, avoiding spurious duplicate-tool warnings
-    in the SDK registry log.
+    *workspace_root* is only the fallback for a spec with no live binding: the
+    engine each call gets is built for the root of the run whose agent is
+    resolving the tool, because a factory that closed over one root handed it to
+    every run in the process (SWR-2426).
     """
-    global _haet_registered_root  # noqa: PLW0603
+    global _fallback_root  # noqa: PLW0603
 
-    root_str = str(workspace_root)
-    if _haet_registered_root == root_str:
-        return
-    _haet_registered_root = root_str
+    _fallback_root = workspace_root
 
     from rotaris_core.haet.engine import HAETEngine
     from rotaris_core.haet.tool import (
@@ -259,14 +287,16 @@ def _register_haet_tool_factories(workspace_root: Any) -> None:
         HAETReadTool,
     )
 
-    engine = HAETEngine(workspace_root)
+    def _engine_for(binding_key: object) -> Any:
+        root, _extra = _run_roots(binding_key)
+        return _cached_engine("haet", str(root), lambda: HAETEngine(root))
 
     def _haet_read_factory(
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[HAETReadAction, HAETReadObservation]]:
-        del conv_state, params
-        executor = HAETReadExecutor(engine)
+        del conv_state
+        executor = HAETReadExecutor(_engine_for(params.get("binding_key")))
         return [
             HAETReadTool(
                 description=_HAET_READ_DESCRIPTION,
@@ -280,8 +310,8 @@ def _register_haet_tool_factories(workspace_root: Any) -> None:
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[HAETEditAction, HAETEditObservation]]:
-        del conv_state, params
-        executor = HAETEditExecutor(engine)
+        del conv_state
+        executor = HAETEditExecutor(_engine_for(params.get("binding_key")))
         return [
             HAETEditTool(
                 description=_HAET_EDIT_DESCRIPTION,
@@ -304,24 +334,22 @@ def _register_file_tool_factories(
 ) -> None:
     """Register factories for ReadFileTool and WriteFileTool.
 
-    Both tools share a single ``FileToolEngine`` instance so that the
+    Both tools share a single ``FileToolEngine`` per workspace root, so that the
     read-before-write ledger and undo stacks are consistent across calls.
 
-    Idempotent per workspace root: re-registration is skipped when the same
-    root has already been registered.
+    The roots here are the fallback for a spec with no live binding. Which tree
+    a call may actually touch is resolved per call from the calling agent's
+    binding, because two runs in one process can sit in different worktrees
+    (SWR-2404) and a closure would give both of them whichever registered last.
     """
-    global _file_tools_registered_root  # noqa: PLW0603
+    global _fallback_root, _fallback_extra_read_roots  # noqa: PLW0603
 
     from pathlib import Path as _Path
 
     root_path = _Path(workspace_root).resolve()
-    root_str = str(root_path)
     extra_root_paths = tuple(_Path(root).resolve() for root in extra_read_roots)
-    extra_root_strs = tuple(str(root) for root in extra_root_paths)
-    registration_key = (root_str, extra_root_strs)
-    if _file_tools_registered_root == registration_key:
-        return
-    _file_tools_registered_root = registration_key
+    _fallback_root = root_path
+    _fallback_extra_read_roots = extra_root_paths
 
     from rotaris_core.tools.file_engine import FileToolEngine
     from rotaris_core.tools.file_read import (
@@ -339,14 +367,22 @@ def _register_file_tool_factories(
         WriteFileTool,
     )
 
-    engine = FileToolEngine(root_path, extra_read_roots=extra_root_paths)
+    def _engine_for(binding_key: object) -> Any:
+        root, extra = _run_roots(binding_key)
+        resolved = _Path(root).resolve()
+        resolved_extra = tuple(_Path(entry).resolve() for entry in extra)
+        return _cached_engine(
+            "file",
+            (str(resolved), tuple(str(entry) for entry in resolved_extra)),
+            lambda: FileToolEngine(resolved, extra_read_roots=resolved_extra),
+        )
 
     def _read_file_factory(
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[ReadFileAction, ReadFileObservation]]:
-        del conv_state, params
-        executor = ReadFileExecutor(engine)
+        del conv_state
+        executor = ReadFileExecutor(_engine_for(params.get("binding_key")))
         return [
             ReadFileTool(
                 description=_READ_FILE_DESCRIPTION,
@@ -360,8 +396,8 @@ def _register_file_tool_factories(
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[WriteFileAction, WriteFileObservation]]:
-        del conv_state, params
-        executor = WriteFileExecutor(engine)
+        del conv_state
+        executor = WriteFileExecutor(_engine_for(params.get("binding_key")))
         return [
             WriteFileTool(
                 description=_WRITE_FILE_DESCRIPTION,
@@ -375,20 +411,19 @@ def _register_file_tool_factories(
     _register_tool_factory("write_file", _write_file_factory)
 
 
+@traces(SWR.SWR_2426)
 def _register_grep_glob_tool_factories(workspace_root: Any) -> None:
     """Register factories for GrepTool and GlobTool.
 
-    Idempotent per workspace root: skips re-registration if the same root was
-    already registered, preventing duplicate-tool warnings in the SDK registry.
+    The searched tree is resolved per call from the calling agent's binding, so
+    one run cannot search another's worktree; *workspace_root* is the fallback
+    for a spec whose binding is gone.
     """
-    global _grep_glob_registered_root  # noqa: PLW0603
+    global _fallback_root  # noqa: PLW0603
 
     from pathlib import Path as _Path
 
-    root_str = str(_Path(workspace_root).resolve())
-    if _grep_glob_registered_root == root_str:
-        return
-    _grep_glob_registered_root = root_str
+    _fallback_root = _Path(workspace_root).resolve()
 
     from rotaris_core.tools.search import (
         GlobAction,
@@ -401,13 +436,15 @@ def _register_grep_glob_tool_factories(workspace_root: Any) -> None:
         GrepTool,
     )
 
-    root = _Path(workspace_root).resolve()
+    def _root_for(binding_key: object) -> Any:
+        root, _extra = _run_roots(binding_key)
+        return _Path(root).resolve()
 
     def _grep_factory(
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[GrepAction, GrepObservation]]:
-        del conv_state, params
+        del conv_state
         return [
             GrepTool(
                 description=(
@@ -419,7 +456,7 @@ def _register_grep_glob_tool_factories(workspace_root: Any) -> None:
                 ),
                 action_type=GrepAction,
                 observation_type=GrepObservation,
-                executor=GrepExecutor(root),
+                executor=GrepExecutor(_root_for(params.get("binding_key"))),
             ),
         ]
 
@@ -427,7 +464,7 @@ def _register_grep_glob_tool_factories(workspace_root: Any) -> None:
         conv_state: object = None,
         **params: Any,
     ) -> Sequence[ToolDefinition[GlobAction, GlobObservation]]:
-        del conv_state, params
+        del conv_state
         return [
             GlobTool(
                 description=(
@@ -437,7 +474,7 @@ def _register_grep_glob_tool_factories(workspace_root: Any) -> None:
                 ),
                 action_type=GlobAction,
                 observation_type=GlobObservation,
-                executor=GlobExecutor(root),
+                executor=GlobExecutor(_root_for(params.get("binding_key"))),
             ),
         ]
 
@@ -446,12 +483,10 @@ def _register_grep_glob_tool_factories(workspace_root: Any) -> None:
         _register_tool_factory("glob", _glob_factory)
 
 
-# Suppress benign "Duplicate tool name registered" warnings emitted by the
-# SDK registry when grep/glob are re-registered across runs. The actual
-# guard is the ``_grep_glob_registered_root`` short-circuit above; the
-# warning still fires when a *different* subsystem (e.g. an MCP server)
-# registers the same name with a different factory. We log a debug-level
-# trace from our own logger if needed.
+# Suppress the benign "Duplicate tool name registered" warning the SDK registry
+# emits when grep/glob are re-registered. Re-registration is now the norm rather
+# than an accident — every agent build re-asserts these factories, and each one
+# is identical because the searched root is resolved per call.
 cast("Any", _register_grep_glob_tool_factories).__wrapped__ = _register_grep_glob_tool_factories
 
 
@@ -459,39 +494,6 @@ def _register_grep_glob_tool_factories_silenced(workspace_root: Any) -> None:
     """Silenced wrapper: same behaviour but suppresses SDK duplicate warnings."""
     with _suppress_registry_duplicate_log():
         _register_grep_glob_tool_factories(workspace_root)
-
-
-@traces(SWR.SWR_2507)
-def _sandbox_registration_key(config: RotarisConfig) -> tuple[Any, ...]:
-    """The sandbox settings a registered terminal factory was built for.
-
-    Part of the memoization key so that changing the sandbox for the next
-    session re-registers the factory instead of silently reusing the previous
-    one.  Read straight off the config rather than through the sandbox package
-    so this stays a cheap dict lookup on a hot registration path.
-    """
-    runtime = config.runtime
-    return (
-        runtime.sandbox_mode,
-        tuple(runtime.sandbox_writable_roots),
-        runtime.sandbox_allow_network,
-    )
-
-
-@traces(SWR.SWR_2505)
-def _egress_registration_key(config: RotarisConfig) -> tuple[Any, ...]:
-    """The egress settings a registered fetch factory was built for.
-
-    Same reasoning as :func:`_sandbox_registration_key`: identity alone would
-    let a tightened host list be ignored because the previous factory, holding
-    the looser policy, is still registered against the same config object.
-    """
-    runtime = config.runtime
-    return (
-        runtime.network_egress_policy,
-        tuple(runtime.network_allowed_hosts),
-        tuple(runtime.network_denied_hosts),
-    )
 
 
 @traces(SWR.SWR_3618)
@@ -510,21 +512,61 @@ def _split_binding_key(binding_key: object) -> tuple[str, str]:
 
 
 @traces(SWR.SWR_2426)
-def _run_config(binding_key: object, registered: RotarisConfig) -> RotarisConfig:
+def _run_config(binding_key: object) -> RotarisConfig:
     """The configuration of the run whose agent is resolving this tool.
 
-    *registered* is the config that happened to register the factory, which is
-    the right answer only when there is exactly one run in the process. It is
-    kept as the fallback for a ``Tool`` spec that outlived its binding — a
-    conversation resumed after a restart — because refusing to build the tool
-    would fail the whole conversation over an attribution problem.
-
     An *exact* binding or nothing: a key nobody registered must not be served
-    the last run's sandbox spec, which is what the general fallback would do.
+    another run's sandbox spec, which is what the general fallback would do.
+    The registration-time config is kept only for a ``Tool`` spec that outlived
+    its binding — a conversation resumed after a restart — because refusing to
+    build the tool would fail that conversation over an attribution problem.
     """
     binding = lookup_runtime_binding(str(binding_key) if binding_key is not None else None)
     bound = binding.config if binding is not None else None
-    return cast("RotarisConfig", bound) if bound is not None else registered
+    if bound is not None:
+        return cast("RotarisConfig", bound)
+    if _fallback_config is None:
+        raise LookupError(
+            f"No runtime tool binding for {binding_key!r} and no configuration to fall "
+            "back on; the tool cannot know which run it belongs to."
+        )
+    return _fallback_config
+
+
+@traces(SWR.SWR_2426)
+def _run_roots(binding_key: object) -> tuple[Any, tuple[Any, ...]]:
+    """The workspace root and extra read roots of the calling agent's run.
+
+    The file, HAET and search tools all answer "may this path be touched" from
+    this pair, so it is the one piece of run state that must never come from a
+    neighbour: with SWR-2404 isolation on, run A's root is a worktree run B
+    cannot see, and swapping them is a silent escape rather than an error.
+    """
+    binding = lookup_runtime_binding(str(binding_key) if binding_key is not None else None)
+    if binding is not None and binding.workspace_root is not None:
+        return binding.workspace_root, tuple(binding.extra_read_roots)
+    if _fallback_root is None:
+        raise LookupError(
+            f"No runtime tool binding for {binding_key!r} and no workspace root to fall "
+            "back on; the tool cannot know which tree it may touch."
+        )
+    return _fallback_root, _fallback_extra_read_roots
+
+
+def _cached_engine(kind: str, key: Any, build: Callable[[], Any]) -> Any:
+    """One engine per (tool family, resolved root), built on first use.
+
+    The read-before-write ledger and undo stacks have to survive across calls,
+    which is why these are not rebuilt per resolve — and why they are keyed by
+    the root rather than by the run: two runs in one workspace shared a ledger
+    before this module resolved roots per call, and still should.
+    """
+    with _engines_lock:
+        engine = _engines.get((kind, key))
+        if engine is None:
+            engine = build()
+            _engines[(kind, key)] = engine
+        return engine
 
 
 @traces(SWR.SWR_2426, SWR.SWR_2507)
@@ -537,12 +579,9 @@ def _register_terminal_tool_factory(config: RotarisConfig) -> None:
     whichever run built an agent last, and a command would otherwise be
     sandboxed — or not — according to the wrong run's settings (SWR-2507).
     """
-    global _terminal_registered_config_id  # noqa: PLW0603
+    global _fallback_config  # noqa: PLW0603
 
-    config_id = (id(config), _sandbox_registration_key(config))
-    if _terminal_registered_config_id == config_id:
-        return
-    _terminal_registered_config_id = config_id
+    _fallback_config = config
 
     from rotaris_core.tools.terminal import HardenedTerminalTool
 
@@ -555,7 +594,7 @@ def _register_terminal_tool_factory(config: RotarisConfig) -> None:
         # terminal this is, so two agents' commands never share one stream.
         binding_key = params.get("binding_key")
         stream_session_id, stream_key = _split_binding_key(binding_key)
-        run_config = _run_config(binding_key, config)
+        run_config = _run_config(binding_key)
         # Resolved here rather than at registration time so the writable root is
         # the directory this conversation actually runs in — the SWR-2404
         # worktree when isolation is on, the workspace itself otherwise.
@@ -594,12 +633,9 @@ def _register_terminal_tool_factory(config: RotarisConfig) -> None:
 
 def _register_fetch_tool_factory(config: RotarisConfig) -> None:
     """Register a factory for FetchTool with runtime defaults."""
-    global _fetch_registered_config_id  # noqa: PLW0603
+    global _fallback_config  # noqa: PLW0603
 
-    config_id = (id(config), _egress_registration_key(config))
-    if _fetch_registered_config_id == config_id:
-        return
-    _fetch_registered_config_id = config_id
+    _fallback_config = config
 
     from rotaris_core.permissions.network import NetworkEgressPolicy
     from rotaris_core.tools.fetch import (
@@ -615,7 +651,7 @@ def _register_fetch_tool_factory(config: RotarisConfig) -> None:
         **params: Any,
     ) -> Sequence[ToolDefinition[FetchAction, FetchObservation]]:
         del conv_state
-        run_config = _run_config(params.get("binding_key"), config)
+        run_config = _run_config(params.get("binding_key"))
         # SWR-2505: without this the executor falls back to its permissive
         # default and the configured host lists are never enforced on a real
         # run. Built per call, from the calling run's own config: one process

@@ -89,6 +89,41 @@ def test_a_whole_screen_frame_replaces_and_a_delta_appends() -> None:
 
 
 @verifies(SWR.SWR_3619)
+def test_unix_newlines_start_a_line_rather_than_stepping_across_the_screen() -> None:
+    # The tmux tap joins captured rows with "\n" and a reloaded session holds
+    # text written the same way.  Without newline mode each line would start
+    # under the end of the one above and walk off the right-hand edge.
+    screen = TerminalScreen(40, 8)
+
+    screen.feed("collected 3 items\n3 passed\n")
+
+    assert screen.tail_text(8) == ["collected 3 items", "3 passed"]
+
+
+@verifies(SWR.SWR_3619)
+def test_a_redrawn_screen_does_not_break_the_line_breaks_after_it() -> None:
+    # Every stream opens with a "screen" frame, and replacing a screen resets
+    # the emulator — which used to drop newline mode with it, so all the output
+    # a person actually watched arrived staircased.
+    screen = TerminalScreen(40, 8)
+
+    screen.feed_frame("screen", "first\nsecond\n")
+    screen.feed_frame("delta", "third\nfourth\n")
+
+    assert screen.tail_text(8) == ["first", "second", "third", "fourth"]
+
+
+@verifies(SWR.SWR_3619)
+def test_a_command_that_resets_the_terminal_keeps_its_line_breaks() -> None:
+    # `reset` sends RIS, which resets the emulator from inside the stream.
+    screen = TerminalScreen(40, 8)
+
+    screen.feed("\x1bcafter reset\nnext line\n")
+
+    assert screen.tail_text(8) == ["after reset", "next line"]
+
+
+@verifies(SWR.SWR_3619)
 def test_the_revision_moves_only_when_the_screen_does() -> None:
     screen = TerminalScreen(20, 5)
     start = screen.revision

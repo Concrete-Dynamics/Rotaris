@@ -59,6 +59,7 @@ from rotaris_core.eventstore.sink import attach_session_store, detach_session_st
 from rotaris_core.hooks.registry import discard_hook_runner, register_hook_runner
 from rotaris_core.reqtocode import SWR, traces
 from rotaris_core.run_result import RunResult, RunStatus, build_run_result
+from rotaris_core.session.recovery import settle_orphaned_children
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Mapping
@@ -503,7 +504,15 @@ def persist_session_state(session_manager: SessionManager, state: SessionState) 
     session_manager.persister.request_save(state)
 
 
-@traces(SWR.SWR_1830, SWR.SWR_1828, SWR.SWR_1832, SWR.SWR_2408, SWR.SWR_2409, SWR.SWR_2901)
+@traces(
+    SWR.SWR_1830,
+    SWR.SWR_1828,
+    SWR.SWR_1832,
+    SWR.SWR_2408,
+    SWR.SWR_2409,
+    SWR.SWR_2901,
+    SWR.SWR_3714,
+)
 async def execute_run(
     request: RunRequest,
     session_manager: SessionManager,
@@ -559,6 +568,9 @@ async def execute_run(
                 request.session_id,
                 event_sink,
             )
+        # The lock is ours and nothing of this run has started, so a record still
+        # claiming to run belongs to a run that is gone (SWR-3714).
+        settle_orphaned_children(state)
         config = config_for_session_worktree(config, session_manager, state)
     else:
         state = session_manager.create_session(

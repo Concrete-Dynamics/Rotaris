@@ -71,6 +71,18 @@ ACTIVE_EXECUTION_STATUSES: frozenset[str] = frozenset(
 #: :data:`ACTIVE_EXECUTION_STATUSES`, so a repaired session is never busy again.
 INTERRUPTED_EXECUTION_STATUS: str = "interrupted"
 
+#: Child states that are already over, spelled as they appear in a snapshot's
+#: plain dicts. Mirrors :meth:`ChildTaskState.is_terminal` and is pinned to it by
+#: ``test_terminal_child_states_match_the_state_machine``: importing the enum
+#: here would drag the orchestrator barrel — and everything the scheduler
+#: imports — into every UI path that reads this module.
+TERMINAL_CHILD_STATES: frozenset[str] = frozenset({"succeeded", "failed", "cancelled", "blocked"})
+
+#: What a child that lost its run is set to. ``cancelled`` is the one terminal
+#: state reachable from every non-terminal state in ``VALID_TRANSITIONS``, which
+#: is why SWR-2912's in-process sweep already targets it.
+ORPHANED_CHILD_STATE: str = "cancelled"
+
 #: Used when a session's ``updated_at`` cannot be parsed. Unreachable through
 #: ``list_sessions`` (which drops such entries) but keeps the type total.
 _UNKNOWN_TIME = dt.datetime.fromtimestamp(0, dt.UTC)
@@ -272,6 +284,41 @@ def _record_repair(manager: SessionManager, repaired: StaleSession) -> None:
         )
     except Exception:  # noqa: BLE001 - diagnostics must never fail a repair.
         return
+
+
+@traces(SWR.SWR_3714)
+def settle_orphaned_children(state: Any) -> int:
+    """Close child records a previous run left open. Returns how many moved.
+
+    Called by a run that has just taken the session lock and started nothing of
+    its own, which is what makes the answer unambiguous: it owns the session
+    alone, so every non-terminal record in the snapshot belongs to a run that no
+    longer exists (SWR-3714). No liveness probe is needed — unlike
+    :func:`repair_stale_session`, holding the lock already proves the previous
+    owner is gone.
+
+    ``cancelled`` is the target for the same reason SWR-2912's own sweep uses it:
+    it is the one terminal state reachable from every non-terminal state. The
+    completion time and the cleared tool chips matter as much as the state — a
+    host renders "running since yesterday" from ``completed_at`` being absent,
+    and a live tool chip on a stopped agent is the same contradiction one step
+    down.
+
+    Idempotent, and deliberately total rather than clever: a record that is
+    already terminal keeps its outcome, its completion time and its artifacts.
+    """
+    settled_at = dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z")
+    settled = 0
+    for child in getattr(state, "child_states", None) or []:
+        if not isinstance(child, dict):
+            continue
+        if str(child.get("state", "")).strip().lower() in TERMINAL_CHILD_STATES:
+            continue
+        child["state"] = ORPHANED_CHILD_STATE
+        child["completed_at"] = child.get("completed_at") or settled_at
+        child["active_tools"] = []
+        settled += 1
+    return settled
 
 
 @traces(SWR.SWR_2437, SWR.SWR_2817)

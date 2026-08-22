@@ -1295,9 +1295,16 @@ class _RunWorker(QObject):
 
         run_config = self.config
         if self.session_id:
+            from rotaris_core.session.recovery import settle_orphaned_children
+
             state = manager.load_session(self.session_id)
             if not manager.acquire_lock(self.session_id):
                 raise RuntimeError(f"Unable to acquire session lock: {self.session_id}")
+            # The lock is ours and nothing of this run has started, so a record
+            # still claiming to run belongs to a run that is gone (SWR-3714).
+            # Left un-settled, the previous run's agents come back as live rows
+            # in the tree the continuation is about to add to.
+            settle_orphaned_children(state)
             run_config = config_for_session_worktree(run_config, manager, state)
         else:
             state = manager.create_session(

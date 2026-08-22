@@ -14,6 +14,7 @@ session live only leaves the user where they already were.
 
 from __future__ import annotations
 
+import datetime as dt
 import gc
 import json
 import subprocess
@@ -29,16 +30,18 @@ from rotaris_core.session.manager import SessionManager
 from rotaris_core.session.recovery import (
     ACTIVE_EXECUTION_STATUSES,
     INTERRUPTED_EXECUTION_STATUS,
+    ORPHANED_CHILD_STATE,
+    TERMINAL_CHILD_STATES,
     detect_stale_sessions,
     repair_stale_session,
     repair_stale_sessions,
     session_is_live,
+    settle_orphaned_children,
 )
+from rotaris_core.session.state import SessionState
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from rotaris_core.session.state import SessionState
 
 pytestmark = pytest.mark.unit
 
@@ -398,3 +401,70 @@ def test_repair_leaves_a_live_session_alone_while_correcting_a_dead_one(tmp_path
     assert [entry.session_id for entry in repaired] == [dead.session_id]
     assert manager.read_session_snapshot(live.session_id).execution_status == "running"
     assert (manager.session_dir(live.session_id) / "lock").exists() is True
+
+
+def _snapshot() -> SessionState:
+    """A snapshot with nothing but the fields every session carries."""
+    now = dt.datetime.now(dt.UTC)
+    return SessionState(session_id="s1", workspace_root=".", created_at=now, updated_at=now)
+
+
+@verifies(SWR.SWR_3714)
+def test_orphaned_children_are_settled_and_finished_ones_are_left_alone() -> None:
+    """Productive use: a user continues a session whose previous run was killed.
+    Expected outcome: the agents that never finished are closed, and the one that
+    did keeps everything it recorded."""
+    state = _snapshot()
+    state.child_states = [
+        {"canonical_name": "died-mid-flight", "state": "running", "active_tools": ["terminal"]},
+        {"canonical_name": "never-dispatched", "state": "queued", "active_tools": []},
+        {"canonical_name": "waiting-on-a-slot", "state": "waiting_on_model_slot"},
+        {
+            "canonical_name": "finished",
+            "state": "succeeded",
+            "completed_at": "2026-08-21T21:02:36.304493Z",
+            "produced_artifact_ids": ["art_1"],
+        },
+    ]
+
+    assert settle_orphaned_children(state) == 3
+
+    settled = {child["canonical_name"]: child for child in state.child_states}
+    for name in ("died-mid-flight", "never-dispatched", "waiting-on-a-slot"):
+        assert settled[name]["state"] == ORPHANED_CHILD_STATE
+        assert settled[name]["completed_at"], f"{name} would still read as running since forever"
+        assert settled[name]["active_tools"] == []
+    assert settled["finished"] == {
+        "canonical_name": "finished",
+        "state": "succeeded",
+        "completed_at": "2026-08-21T21:02:36.304493Z",
+        "produced_artifact_ids": ["art_1"],
+    }
+
+
+@verifies(SWR.SWR_3714)
+def test_settling_orphaned_children_is_idempotent() -> None:
+    """A second continuation of the same session must not rewrite what the first
+    one already closed — the completion time it recorded is the honest one."""
+    state = _snapshot()
+    state.child_states = [{"canonical_name": "died-mid-flight", "state": "running"}]
+
+    assert settle_orphaned_children(state) == 1
+    first = [dict(child) for child in state.child_states]
+
+    assert settle_orphaned_children(state) == 0
+    assert state.child_states == first
+
+
+@verifies(SWR.SWR_3714)
+def test_terminal_child_states_match_the_state_machine() -> None:
+    """The plain strings this module matches on are the state machine's own.
+
+    They are spelled out rather than imported so that reading a session snapshot
+    never drags in the orchestrator barrel; this is what keeps the copy honest.
+    """
+    from rotaris_core.orchestrator.child_state import ChildTaskState
+
+    assert {str(state) for state in ChildTaskState if state.is_terminal()} == TERMINAL_CHILD_STATES
+    assert str(ChildTaskState.CANCELLED) == ORPHANED_CHILD_STATE
+    assert ChildTaskState(ORPHANED_CHILD_STATE).is_terminal() is True

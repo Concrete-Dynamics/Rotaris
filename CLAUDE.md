@@ -1,11 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-**Canonical agent instructions live in [AGENTS.md](AGENTS.md)** — read that first.
-It carries the architecture map, naming, rules, workflow, critical ReqToCode rules,
-commands, conventions, and links to every scoped instruction file and policy doc.
-
 Before touching code, read
 [AGENTS.md § Workflow](AGENTS.md#workflow--worktree-merge-verify-fix-forward): it
 decides whether the work belongs in a worktree, on a branch in the main
@@ -13,11 +7,6 @@ checkout, or straight on `master`, and it sets the order — **fast gate, merge
 into `master` unasked, verify the merged tree, fix forward on a short `fix/…`
 branch**. Nothing there waits for a human, and the long suites run after the
 merge, never in front of it.
-
-This file adds only what is true for **Claude Code sessions and false or
-meaningless for the other agents** — Rotaris' own agents and anything else
-reading AGENTS.md. One fact, one home: everything shared belongs in AGENTS.md or
-the scoped file that owns it, and nothing here may be copied there.
 
 ## Worktrees in Claude Code sessions
 

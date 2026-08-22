@@ -27,3 +27,5 @@ one is on screen and drops back afterwards.
   roughly a quarter second instead, and returns to ~1 s when none remain.
 - When no live row remains after a model sync, the timer is stopped.
 - The timer never mutates model data; it only schedules a repaint.
+
+Derived requirements: [SWR-2452 — Transcript geometry is incremental and never partially laid out](SWR-2452-incremental-transcript-geometry.md)

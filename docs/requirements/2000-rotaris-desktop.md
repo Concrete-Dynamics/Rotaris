@@ -937,6 +937,16 @@ on active sessions. Built-in personas are protected from deletion.
 
 Full requirement: [SWR-2451 — Create and delete personas from Settings UI](2000-rotaris-desktop/SWR-2451-create-delete-personas.md)
 
+## SWR-2452 — Transcript geometry is incremental and never partially laid out
+
+Technical requirement derived from SWR-2447. The transcript view owns its row geometry
+instead of borrowing `QListView`'s, which discarded the whole item layout on every
+insertion and every `dataChanged` and rebuilt it a batch per event-loop pass — leaving the
+transcript blank for `rowCount / batchSize` frames on every refresh. Appending measures the
+appended rows and their successor; painting touches only the visible rows.
+
+Full requirement: [SWR-2452 — Transcript geometry is incremental and never partially laid out](2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md)
+
 ## SWR-2913 — A session that is not running shows no live agent
 
 The run header and the agent list are two readings of one snapshot (SWR-2122), and nothing

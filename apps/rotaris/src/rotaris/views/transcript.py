@@ -1028,16 +1028,22 @@ class TranscriptListView(Themed, QListView):
     #: A terminal row asked to be opened in the pop-out window (SWR-2428).
     terminal_popout_requested = Signal(str)
 
+    @traces(SWR.SWR_2452)
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         model = TranscriptListModel(self)
         self.setModel(model)
         self._delegate = TranscriptDelegate(self)
         self.setItemDelegate(self._delegate)
-        self.setLayoutMode(QListView.LayoutMode.Batched)
-        # Large enough to avoid a visibly growing scrollbar for ordinary
-        # sessions, while retaining batched layout for very long transcripts.
-        self.setBatchSize(250)
+        # Not `Batched`. Qt throws the whole item layout away on every row
+        # insertion and every `dataChanged`, and batched mode then rebuilds it
+        # `batchSize` rows per event-loop pass — during which every row past the
+        # laid-out prefix has a zero-height `visualRect` and paints as
+        # background. With the viewport pinned to the tail, the tail lands in
+        # the *last* batch, so the whole transcript reads blank until then, for
+        # `rowCount / batchSize` frames. Laying out in one pass costs the same
+        # total work and never shows a half-built transcript.
+        self.setLayoutMode(QListView.LayoutMode.SinglePass)
         self.setResizeMode(QListView.ResizeMode.Adjust)
         self.setMovement(QListView.Movement.Static)
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)

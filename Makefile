@@ -1,4 +1,4 @@
-.PHONY: install install-dev install-rotaris rotaris rotaris-demo test test-parallel test-rotaris test-capability reqtocode reqtocode-fix install-hook lint format typecheck clean
+.PHONY: install install-dev install-rotaris rotaris rotaris-demo test test-parallel test-rotaris test-capability reqtocode reqtocode-fix lint format typecheck clean
 
 install:
 	uv sync --all-packages
@@ -60,10 +60,3 @@ reqtocode:
 
 reqtocode-fix:
 	uv run python -m rotaris_core.reqtocode check --fix
-
-install-hook:
-	@PYTHON=$$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo python); \
-	"$$PYTHON" .pre-commit-hook.py --install
-	@echo ""
-	@echo "💡 On Windows without make, run: python .pre-commit-hook.py --install"
-	@echo "   Installs the pre-commit hook (ReqToCode + ruff). No hook runs tests."

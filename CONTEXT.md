@@ -1,35 +1,26 @@
 # CONTEXT.md
 
-Domain language, design decisions, and architectural invariants for Rotaris. Intended to orient AI agents doing architecture work. For commands and file layout, see CLAUDE.md.
+Design decisions and architectural invariants for Rotaris, plus the few domain
+terms the glossary does not own. Intended to orient AI agents doing architecture
+work. For commands and file layout, see CLAUDE.md.
 
 ---
 
 ## Domain Language
 
-Glossary under [docs/terminology-glossary.md](docs/terminology-glossary.md). Key terms:
+Canonical glossary with source references: [docs/terminology-glossary.md](docs/terminology-glossary.md).
+The terms below are the ones that live only here:
 
-| Term                       | Meaning                                                                                                                                                                                                                                                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Persona**                | A named agent role (e.g., `orchestrator`, `tester`) with its own system prompt, toolset, model assignment, and optional MCP servers. Defined in `agents.yaml`.                                                                                                                                                                |
-| **Ralph Loop**             | Bounded iterative autonomous driver. Picks the next `PENDING` todo task, runs it via one child agent, records outcome, repeats until a stop condition fires. Sequential — one task at a time.                                                                                                                                 |
-| **Scheduler**              | Async harness that picks `QUEUED` children from `ChildManager`, wraps each `LocalConversation.run()` in `asyncio.to_thread`, and harvests terminal states via `asyncio.wait(FIRST_COMPLETED)`.                                                                                                                                |
-| **ChildManager**           | Owns the delegation DAG: cycle detection (DFS at spawn time), depth enforcement (≤3), fan-out cap (≤8 active children), name deduplication, and cascade-blocking logic. Uses `threading.Lock` because `RotarisDelegateTool` runs inside `asyncio.to_thread`.                                                                   |
-| **ChildTaskRecord**        | Pydantic model tracking one delegated task's lifecycle. All state changes go through `record.transition(new_state)` — never set `record.state` directly.                                                                                                                                                                      |
-| **SummaryAgent**           | Cheap LLM call after each child completes. Converts the transcript into a `ChildReportArtifact` (structured JSON). The report is the parent–child hand-off contract. Retries once on JSON parse failure; produces a deterministic fallback on double failure.                                                                 |
-| **RotarisDelegateTool**     | The `delegate` tool used by orchestrator and worker personas alike. Registers via a closure-captured factory so child agents can be constructed without JSON serialization.                                                                                                                                                   |
-| **HAET**                   | Hash-Anchored Edit Tool. Each line tagged with a 4-char base62 hash of its content (xxHash32); hunks reference the anchor + mandatory `anchor_line_number` + per-file `snapshot_id` (xxh64).                                                                                                                                  |
-| **Todo**                   | Session-scoped task list with stable IDs and phases. States: `pending` → `in_progress` → `completed` / `abandoned`. Serves as Ralph Loop's progress anchor and is visible in the TUI todo pane.                                                                                                                               |
-| **Session**                | Persistent JSON snapshot of all execution state: transcript, child states, reports, todo, config snapshot. PID-based file lock (`O_CREAT                                                                                                                                                                                      | O_EXCL`). Stored at `<workspace>/.rotaris/sessions/<session_id>/`. |
-| **LocalConversation**      | OpenHands SDK object. Its `.run()` method is synchronous — must always be wrapped in `asyncio.to_thread()`.                                                                                                                                                                                                                   |
-| **ChildReportArtifact**    | Structured JSON produced by `SummaryAgent` after each child completes. Fields: `agent_name`, `persona`, `status`, `summary`, `edited_files`, `created_files`, `artifacts`, `commands`, `tests`, `errors`, `next_recommended_actions`.                                                                                         |
-| **Steering injection**     | Mechanism to inject guidance messages into a running child conversation mid-flight. Used by the TUI to surface user feedback without stopping the agent.                                                                                                                                                                      |
-| **Compressor**             | `agents/compressor.py` — LLM-based transcript compressor. Invoked when a child's context approaches limits. Produces a `CompressionResult` with token savings metrics.                                                                                                                                                        |
+| Term                       | Meaning                                                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LocalConversation**      | OpenHands SDK object. Its `.run()` method is synchronous — must always be wrapped in `asyncio.to_thread()`.                                                                                                                                                                                                                  |
+| **Steering injection**     | Mechanism to inject guidance messages into a running child conversation mid-flight. Used by the TUI to surface user feedback without stopping the agent.                                                                                                                                                                     |
 | **Iteration Observer**     | `RalphIterationObserver` (`ralph/iteration_observer.py`) — lifecycle hook seam for one Ralph iteration. The base loop owns semantics; observers (no-op default, `TuiIterationObserver`) mirror progress to a host surface. All hooks fire on the event loop thread except `on_child_spawned` (may fire from a worker thread). |
-| **Run Bootstrap**          | `ralph/bootstrap.py` — the shared run-setup pipeline (intent classification, contextual todo, summary-agent / improvement-collector / agent factories, post-run state application) consumed by both CLI background and TUI entry points.                                                                                      |
-| **Session Persister**      | `session/persister.py::SessionPersister` — the single debounce layer for session snapshots. Debounced writes run via `asyncio.to_thread` on a deep copy; parked saves are written by a timer; non-running statuses flush synchronously. Hosts reach it via `SessionManager.persister`.                                        |
-| **Tool Activity Registry** | `ToolActivityRegistry` (`orchestrator/scheduler_conversation.py`) — lock-protected per-child registry of in-flight tool call ids. Written from SDK worker threads, read by graceful-pause poll threads and UI/signal threads.                                                                                                 |
-| **Wait Barrier**           | `WaitBarrier` (`orchestrator/wait_barrier.py`), owned by `ChildManager` — the explicit handshake between the `wait_for_tasks` tool (parent registers task ids to block on, from the SDK worker thread) and the scheduler drain (consumes them on the event loop). Keyed by conversation identity.                             |
-| **Terminal outcome**       | `tools/terminal_outcome.py` — classifier that separates terminal command outcomes (`success`, `shell_failure`, `suspicious_success`, `soft_pause`, timeout/request/tool failures, background states) from internal tool execution errors so diagnostics, TUI, and summaries read shell results consistently.                  |
+| **Run Bootstrap**          | `ralph/bootstrap.py` — the shared run-setup pipeline (intent classification, contextual todo, summary-agent / improvement-collector / agent factories, post-run state application) consumed by both CLI background and TUI entry points.                                                                                     |
+| **Session Persister**      | `session/persister.py::SessionPersister` — the single debounce layer for session snapshots. Debounced writes run via `asyncio.to_thread` on a deep copy; parked saves are written by a timer; non-running statuses flush synchronously. Hosts reach it via `SessionManager.persister`.                                       |
+| **Tool Activity Registry** | `ToolActivityRegistry` (`orchestrator/scheduler_conversation.py`) — lock-protected per-child registry of in-flight tool call ids. Written from SDK worker threads, read by graceful-pause poll threads and UI/signal threads.                                                                                                |
+| **Wait Barrier**           | `WaitBarrier` (`orchestrator/wait_barrier.py`), owned by `ChildManager` — the explicit handshake between the `wait_for_tasks` tool (parent registers task ids to block on, from the SDK worker thread) and the scheduler drain (consumes them on the event loop). Keyed by conversation identity.                            |
+| **Terminal outcome**       | `tools/terminal_outcome.py` — classifier that separates terminal command outcomes (`success`, `shell_failure`, `suspicious_success`, `soft_pause`, timeout/request/tool failures, background states) from internal tool execution errors so diagnostics, TUI, and summaries read shell results consistently.                 |
 
 ---
 
@@ -132,22 +123,11 @@ duplicate orchestrator (session 20260707-103842). The loop exits when a pass
 finds no wait request, no pending notifications, and no queued children it
 has not already attempted to spawn.
 
-### MCP server unavailability
-
-If a configured MCP server is unreachable at startup, it is silently excluded from the agent's tool list. The TUI shows it as unavailable. No hard failure.
-
-### Secret handling
-
-`api_key` fields are Pydantic `SecretStr` — they never appear in `model_dump()` output, logs, transcripts, or report artifacts. The redaction is structural, not string-scanning.
-
 ---
 
 ## Architectural Boundaries
 
-- `scheduler ↔ child_manager ↔ delegate_tool` form a circular dependency triangle. Cross-imports within this group must stay inside function bodies, not at module scope.
-- `mcp/` is an import redirector only — it prevents `rotaris_core.mcp` from shadowing the external `mcp` package.
-- `__init__.py` uses `__getattr__` to defer all heavy symbols. Never `from rotaris_core import X` at module scope in submodules.
-- `agents/factory.py::TOOL_NAME_MAP` is the single source of truth mapping config-friendly tool names to SDK class names. New tools must be registered here.
+- `mcp/` is an import redirector only — it prevents `rotaris_core.mcp` from shadowing the external `mcp` package. `__init__.py` defers heavy symbols via `__getattr__`.
 
 ---
 
@@ -155,9 +135,7 @@ If a configured MCP server is unreachable at startup, it is silently excluded fr
 
 | Extension                | Where                                                                                                                  |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| New tool                 | `tools/my_tool.py` → register in `TOOL_NAME_MAP` → re-export from `tools/__init__.py`                                  |
 | New persona              | Add to `agents.yaml` (workspace or global); system prompt in `agents/prompts/` or inline                               |
 | New auth provider        | Implement `AuthProvider` protocol in `auth/`; no core changes required                                                 |
 | Custom tool plugin       | Python file with decorated functions; declared per-persona in `agents.yaml` under `custom_tools`                       |
-| New `SessionState` field | Always add a default value (backward compat with v1 snapshots); bump `SESSION_SCHEMA_VERSION` only on breaking changes |
 | New model provider       | Add entry to `models.yml`; 30+ providers available through litellm                                                     |

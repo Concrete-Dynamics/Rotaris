@@ -606,18 +606,6 @@ from the product requirement that caused it. Full workflow:
 [docs/requirements/README.md](docs/requirements/README.md) and
 [docs/reference/reqtocode-playbook.md](docs/reference/reqtocode-playbook.md).
 
-### Git hooks
-
-One hook — install with `python .pre-commit-hook.py --install` (or `make install-hook`):
-
-| Hook | Runs | Speed | Skip |
-| --- | --- | --- | --- |
-| pre-commit | ReqToCode → ruff format → ruff check --fix | ~5–15 s | — |
-
-It stops at the first failure with the reproduce command, and auto-stages regenerated `swr.py`
-and reformatted files. Nothing slower runs in the commit or push path: mypy and the test suites
-belong to the pass that runs *after* the merge.
-
 ### Continuous integration
 
 | Workflow | Runs |

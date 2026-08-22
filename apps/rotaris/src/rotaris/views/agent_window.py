@@ -259,11 +259,9 @@ class _AgentTab(Themed, QScrollArea):
         events = filter_transcript_for_agent(self._store.transcript, self.agent_id)
         self.transcript_scroll.setVisible(bool(events))
         self.transcript_empty.setVisible(not events)
-        scrollbar = self.transcript_scroll.verticalScrollBar()
-        saved_scroll = scrollbar.value()
-        follow_tail = self.transcript_scroll.following_tail
-        if self.transcript_scroll.set_events(events):
-            self.transcript_scroll.restore_after_model_change(saved_scroll, follow_tail)
+        # The view keeps the reader's place itself, anchored on the row rather
+        # than on a pixel offset that rows above can invalidate (SWR-2452).
+        self.transcript_scroll.set_events(events)
 
 
 def _muted(text: str) -> QLabel:

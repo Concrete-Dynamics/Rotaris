@@ -7,6 +7,7 @@ import json
 import time
 from collections import OrderedDict
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast, override
 
 from PySide6.QtCore import (
@@ -531,6 +532,19 @@ def _is_live_event(event: TranscriptEvent) -> bool:
     return False
 
 
+@dataclass(frozen=True, slots=True)
+class _Anchor:
+    """Where the reader was, in terms that survive the rows moving (SWR-2452)."""
+
+    #: What the row *is*. Stable across a re-projection — and not unique, since
+    #: it is derived from content and transcripts repeat themselves.
+    identity: str
+    #: Where its top edge sat relative to the viewport's. Usually negative.
+    offset: int
+    #: Which row it was before the model moved. A hint, not an answer.
+    row: int
+
+
 @traces(SWR.SWR_2448, SWR.SWR_2432)
 def _event_identity(event: TranscriptEvent) -> str:
     """Stable per-event key for expansion state that survives row insertion."""
@@ -583,6 +597,7 @@ class TranscriptDelegate(QStyledItemDelegate):
         model = view.model()
         model.modelReset.connect(self._on_model_reset)
         model.rowsInserted.connect(self._invalidate_recent_tool_cache)
+        model.rowsRemoved.connect(self._invalidate_recent_tool_cache)
         model.dataChanged.connect(self._invalidate_recent_tool_cache)
 
     @traces(SWR.SWR_2428)
@@ -644,12 +659,19 @@ class TranscriptDelegate(QStyledItemDelegate):
         self._recent_tool_cache = None
 
     def _invalidate_recent_tool_cache(self) -> None:
-        """Recompute which tool rows are recent, and re-measure the ones that left.
+        """Recompute which tool rows are recent, and re-measure the ones that moved.
 
-        Under auto-collapse a row leaving the recent pair changes height. Saying
-        so here means the new height lands in the same layout pass as the
-        insertion that caused it, instead of surfacing later as a jump when some
-        unrelated relayout happens to run.
+        Under auto-collapse, whether a tool row is one of the two most recent
+        decides whether it renders open or shut — so its height changes when it
+        leaves that pair *and* when it joins. The symmetric difference, not the
+        rows that left: a row can join because a later tool row was removed, and
+        a row that silently stays collapsed after it should be open is the same
+        defect seen from the other side.
+
+        Saying so here means the new height lands in the same pass as the change
+        that caused it. Under `QListView` this hardly mattered — every insertion
+        re-measured the whole transcript anyway, which covered for anything this
+        method missed. It measures only what it is told to now (SWR-2452).
         """
         previous = self._recent_tool_cache
         self._recent_tool_cache = None
@@ -660,7 +682,7 @@ class TranscriptDelegate(QStyledItemDelegate):
         model = self._view.model()
         if model is None:
             return
-        for row in sorted(previous - self._recent_tool_indices()):
+        for row in sorted(previous ^ self._recent_tool_indices()):
             if 0 <= row < model.rowCount():
                 self.sizeHintChanged.emit(model.index(row, 0))
 
@@ -1062,6 +1084,11 @@ class TranscriptListView(Themed, QAbstractItemView):
         self._measured_width = -1
         #: Re-entry guard for `remeasure_all` — see its docstring.
         self._reflowing = False
+        #: A full re-measure is owed but not yet taken. Set from the places that
+        #: must not measure where they stand — see `_invalidate_geometry`.
+        self._geometry_dirty = False
+        #: Where the reader was, read before the model moved.
+        self._pending_anchor: _Anchor | None = None
         #: Row under the pointer, for `State_MouseOver`. `QListView` kept this
         #: privately and its own painter read it; a view that paints its own
         #: rows has to keep it itself.
@@ -1115,6 +1142,12 @@ class TranscriptListView(Themed, QAbstractItemView):
         # model's own signals rather than the `QAbstractItemView` slots of the
         # same name, so the order relative to the delegate's cache invalidation
         # is written down here rather than left to Qt.
+        # The anchor is read *before* the rows move, while the geometry and the
+        # model still describe the same transcript. Read afterwards, a row index
+        # from the old geometry names a different event in the new model.
+        model.rowsAboutToBeInserted.connect(self._remember_anchor)
+        model.rowsAboutToBeRemoved.connect(self._remember_anchor)
+        model.modelAboutToBeReset.connect(self._remember_anchor)
         model.rowsInserted.connect(self._rows_inserted)
         model.rowsRemoved.connect(self._rows_removed)
         model.dataChanged.connect(self._rows_changed)
@@ -1140,7 +1173,10 @@ class TranscriptListView(Themed, QAbstractItemView):
             f"border:{theme.size.hairline}px solid {theme.color.run};}}"
         )
         self._delegate.invalidate_rendered_caches()
-        self.remeasure_all()
+        # Owed, not taken: `apply_theme` runs inside the application-wide
+        # stylesheet swap, and measuring a row from there reads a palette that
+        # is halfway replaced.
+        self._invalidate_geometry()
 
     @property
     def transcript_model(self) -> TranscriptListModel:
@@ -1181,7 +1217,7 @@ class TranscriptListView(Themed, QAbstractItemView):
         return heights
 
     @traces(SWR.SWR_2452)
-    def remeasure_all(self, anchor: tuple[str, int] | None = None) -> None:
+    def remeasure_all(self, anchor: _Anchor | None = None) -> None:
         """Measure every row from scratch — a reset, a theme change, a new width.
 
         Once is usually enough and twice always is. A row is measured against
@@ -1210,8 +1246,30 @@ class TranscriptListView(Themed, QAbstractItemView):
         self._settle_position(anchor)
 
     @traces(SWR.SWR_2452)
+    def _invalidate_geometry(self) -> None:
+        """Owe a full re-measure, and take it the next time somebody looks.
+
+        Deferred rather than done on the spot, because the two things that
+        invalidate every row — a new theme and a new viewport width — both
+        arrive *inside* Qt's own style and layout walk. Re-entering that walk to
+        measure four hundred rows, each of which reads the palette being
+        replaced underneath it, is an access violation rather than an exception:
+        it took a crashed test worker to find, and left no traceback behind it.
+        """
+        self._geometry_dirty = True
+        self.viewport().update()
+
+    @traces(SWR.SWR_2452)
+    def _ensure_geometry(self) -> None:
+        """Take the re-measure that was owed. Safe to call from anywhere."""
+        if not self._geometry_dirty or self._reflowing:
+            return
+        self._geometry_dirty = False
+        self.remeasure_all(self._capture_anchor())
+
+    @traces(SWR.SWR_2452)
     def _reflow_if_width_changed(self) -> bool:
-        """Re-measure everything if the viewport is a different width than before.
+        """Note that the rows were measured at a width the viewport no longer has.
 
         The viewport can change width without the view being resized — a
         scrollbar appearing takes the space out of it — so this is asked at the
@@ -1219,7 +1277,7 @@ class TranscriptListView(Themed, QAbstractItemView):
         """
         if max(1, self.viewport().width()) == self._measured_width:
             return False
-        self.remeasure_all(self._capture_anchor())
+        self._invalidate_geometry()
         return True
 
     @traces(SWR.SWR_2452)
@@ -1250,8 +1308,16 @@ class TranscriptListView(Themed, QAbstractItemView):
     # ── the model moved ──────────────────────────────────────────────────
 
     @traces(SWR.SWR_2452)
+    def _remember_anchor(self, *_args: object) -> None:
+        self._pending_anchor = self._capture_anchor()
+
+    def _take_anchor(self) -> _Anchor | None:
+        anchor, self._pending_anchor = self._pending_anchor, None
+        return anchor
+
+    @traces(SWR.SWR_2452)
     def _rows_inserted(self, _parent: QModelIndex, first: int, last: int) -> None:
-        anchor = self._capture_anchor()
+        anchor = self._take_anchor()
         option = self._view_item_option()
         self._geometry.insert(first, self._measure(range(first, last + 1), option))
         self._remeasure(range(last + 1, last + 2))
@@ -1259,7 +1325,7 @@ class TranscriptListView(Themed, QAbstractItemView):
 
     @traces(SWR.SWR_2452)
     def _rows_removed(self, _parent: QModelIndex, first: int, last: int) -> None:
-        anchor = self._capture_anchor()
+        anchor = self._take_anchor()
         self._geometry.remove(first, last - first + 1)
         # The row that moved up into `first` now follows a different one.
         self._remeasure(range(first, first + 1))
@@ -1272,7 +1338,10 @@ class TranscriptListView(Themed, QAbstractItemView):
         bottom_right: QModelIndex,
         _roles: object = None,
     ) -> None:
-        anchor = self._capture_anchor()
+        # `dataChanged` has no "about to" twin, so no anchor is waiting — but
+        # row numbers do not shift for it, so reading one now is as good as
+        # reading one before.
+        anchor = self._take_anchor() or self._capture_anchor()
         if self._remeasure(self._with_successor(top_left.row(), bottom_right.row())):
             self._geometry_settled(anchor)
         else:
@@ -1282,7 +1351,12 @@ class TranscriptListView(Themed, QAbstractItemView):
 
     @traces(SWR.SWR_2452)
     def _model_reset(self) -> None:
-        self.remeasure_all()
+        """A reset re-derives every row — grouping toggled, or the agent scope did.
+
+        The reader keeps their place across it: the rows are re-projected, not
+        replaced, so the one they were looking at is usually still there.
+        """
+        self.remeasure_all(self._take_anchor())
 
     @traces(SWR.SWR_2452)
     def _row_size_hint_changed(self, index: QModelIndex) -> None:
@@ -1303,7 +1377,7 @@ class TranscriptListView(Themed, QAbstractItemView):
     # ── scrollbars, tail, anchor ─────────────────────────────────────────
 
     @traces(SWR.SWR_2452)
-    def _geometry_settled(self, anchor: tuple[str, int] | None = None) -> None:
+    def _geometry_settled(self, anchor: _Anchor | None = None) -> None:
         """Publish a geometry change: scrollbars, then where the reader was."""
         # Every row in the geometry was measured at the width the viewport has
         # now: a width change re-measures all of them before anything else is
@@ -1319,7 +1393,7 @@ class TranscriptListView(Themed, QAbstractItemView):
             return
         self._settle_position(anchor)
 
-    def _settle_position(self, anchor: tuple[str, int] | None) -> None:
+    def _settle_position(self, anchor: _Anchor | None) -> None:
         """Put the viewport back where the reader had it, and repaint."""
         if self._following_tail:
             self._pin_to_tail()
@@ -1344,42 +1418,54 @@ class TranscriptListView(Themed, QAbstractItemView):
             bar.setRange(0, max(0, self._geometry.total() - page))
 
     @traces(SWR.SWR_2452)
-    def _capture_anchor(self) -> tuple[str, int] | None:
+    def _capture_anchor(self) -> _Anchor | None:
         """The row the reader is looking at, and where on screen it sits.
 
         Identity rather than row number, and an offset rather than a raw scroll
         value: rows can be inserted above the viewport and rows above it can
         change height, and in both cases a pixel position restored verbatim
         moves the text under the reader's eyes.
+
+        The row number comes along as a hint. Identity is content, and content
+        repeats, so it says *which kind of row* this is — not which one.
         """
         if self._following_tail:
             return None
-        model = self.transcript_model
         row = self._geometry.row_at(self.verticalScrollBar().value())
-        event = model.event_at(row)
+        event = self.transcript_model.event_at(row)
         if event is None:
             return None
-        return (_event_identity(event), self._geometry.top(row) - self.verticalScrollBar().value())
+        offset = self._geometry.top(row) - self.verticalScrollBar().value()
+        return _Anchor(_event_identity(event), offset, row)
 
     @traces(SWR.SWR_2452)
-    def _restore_anchor(self, anchor: tuple[str, int]) -> None:
-        identity, offset = anchor
-        row = self._row_of_identity(identity)
+    def _restore_anchor(self, anchor: _Anchor) -> None:
+        row = self._row_of_identity(anchor.identity, anchor.row)
         if row < 0:
             return
         with self._adjusting_scroll():
-            self.verticalScrollBar().setValue(self._geometry.top(row) - offset)
+            self.verticalScrollBar().setValue(self._geometry.top(row) - anchor.offset)
 
-    def _row_of_identity(self, identity: str) -> int:
-        """Where the anchored row went. Usually nowhere, so look there first."""
+    @traces(SWR.SWR_2452)
+    def _row_of_identity(self, identity: str, hint: int) -> int:
+        """Where the anchored row went: the match nearest to where it was.
+
+        Nearest, not first. A transcript repeats itself — `ok`, the same file
+        read twice, two empty tool results — and every copy carries the same
+        identity, so the first match can be a thousand rows above the one the
+        reader was looking at. The hint is where the row was before the model
+        moved, and rows do not travel far.
+        """
         events = self.transcript_model.events
-        previous = self._geometry.row_at(self.verticalScrollBar().value())
-        if 0 <= previous < len(events) and _event_identity(events[previous]) == identity:
-            return previous
+        if 0 <= hint < len(events) and _event_identity(events[hint]) == identity:
+            return hint
+        best = -1
         for row, event in enumerate(events):
-            if _event_identity(event) == identity:
-                return row
-        return -1
+            if _event_identity(event) != identity:
+                continue
+            if best < 0 or abs(row - hint) < abs(best - hint):
+                best = row
+        return best
 
     @traces(SWR.SWR_2432)
     def set_events(self, events: list[TranscriptEvent]) -> bool:
@@ -1402,6 +1488,7 @@ class TranscriptListView(Themed, QAbstractItemView):
     @override
     @traces(SWR.SWR_2452)
     def visualRect(self, index: QModelIndex | QPersistentModelIndex) -> QRect:  # noqa: N802
+        self._ensure_geometry()
         if not index.isValid() or index.row() >= len(self._geometry):
             return QRect()
         return QRect(
@@ -1414,6 +1501,7 @@ class TranscriptListView(Themed, QAbstractItemView):
     @override
     @traces(SWR.SWR_2452)
     def indexAt(self, point: QPoint) -> QModelIndex:  # noqa: N802
+        self._ensure_geometry()
         row = self._geometry.row_at(point.y() + self.verticalOffset())
         if row < 0:
             return QModelIndex()
@@ -1426,6 +1514,7 @@ class TranscriptListView(Themed, QAbstractItemView):
         index: QModelIndex | QPersistentModelIndex,
         hint: QAbstractItemView.ScrollHint = QAbstractItemView.ScrollHint.EnsureVisible,
     ) -> None:
+        self._ensure_geometry()
         if not index.isValid() or index.row() >= len(self._geometry):
             return
         top = self._geometry.top(index.row())
@@ -1500,6 +1589,7 @@ class TranscriptListView(Themed, QAbstractItemView):
     def setSelection(  # noqa: N802
         self, rect: QRect, command: QItemSelectionModel.SelectionFlag
     ) -> None:
+        self._ensure_geometry()
         selection_model = self.selectionModel()
         if selection_model is None:
             return
@@ -1534,6 +1624,7 @@ class TranscriptListView(Themed, QAbstractItemView):
         it must cost the viewport rather than the conversation. Nothing here
         measures: the geometry is already current by the time a paint happens.
         """
+        self._ensure_geometry()
         painter = QPainter(self.viewport())
         model = self.transcript_model
         delegate = self.itemDelegate()
@@ -1595,13 +1686,18 @@ class TranscriptListView(Themed, QAbstractItemView):
 
         `force_layout` is for the changes that leave the rows themselves alone
         and only alter their heights — auto-collapse is the one that does that.
-        Everything else re-measures only what the model says moved, which the
-        geometry already handles as the sync runs.
+
+        Either way this re-measures everything, and it is the only path that
+        does. A re-projection changes which rows exist, which changes which tool
+        rows count as the two most recent, which changes the height of rows
+        anywhere in the transcript under auto-collapse — a `Read` call at the
+        top can open or close because a group at the bottom was expanded. There
+        is no incremental answer to that, and it is a click rather than a
+        keystroke, so paying for a full pass is honest.
         """
-        if self.transcript_model.sync(self._display_events()):
-            return
-        if force_layout:
-            self.remeasure_all()
+        anchor = self._capture_anchor()
+        if self.transcript_model.sync(self._display_events()) or force_layout:
+            self.remeasure_all(anchor)
 
     @traces(SWR.SWR_2447, SWR.SWR_2432)
     def _live_rows(self) -> list[int]:

@@ -44,6 +44,7 @@ Organized around 16 perspectives; see [`architecture.md`](architecture.md) for t
 | 15  | [`15-dev-prod-topology.md`](architecture/15-dev-prod-topology.md)           | Dev setup vs. end-user install                                       |
 | 16  | [`16-decision-record.md`](architecture/16-decision-record.md)               | Key architectural decisions with rationale                           |
 | —   | [`prompt-composition-matrix.md`](architecture/prompt-composition-matrix.md) | Which prompt sections are injected per persona × intent × model tier |
+| —   | [`NOTE-2026-08-22-desktop-host-boundary.md`](architecture/NOTE-2026-08-22-desktop-host-boundary.md) | How the desktop observes and controls a run today, what to preserve in a rewrite (SWR-2453, SWR-2454) |
 
 ---
 

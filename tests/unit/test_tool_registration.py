@@ -18,7 +18,9 @@ from rotaris_core.agents.tool_registration import (
     ROOT_BINDING_KEY,
     RuntimeToolBinding,
     _register_artifact_tool_factories,
+    _register_ask_questions_tool_factory,
     _register_delegate_tool_factory,
+    _register_fetch_tool_factory,
     _register_todo_tool_factory,
     _register_wait_for_tasks_tool_factory,
     build_binding_key,
@@ -27,7 +29,7 @@ from rotaris_core.agents.tool_registration import (
     register_runtime_binding,
     resolve_runtime_binding,
 )
-from rotaris_core.config.schema import RuntimePolicy
+from rotaris_core.config.schema import PersonaConfig, RotarisConfig, RuntimePolicy
 from rotaris_core.orchestrator.artifacts import SessionArtifactStore
 from rotaris_core.orchestrator.child_manager import ChildManager
 from rotaris_core.reqtocode import SWR, verifies
@@ -417,3 +419,138 @@ def test_parallel_runs_with_same_agent_names_resolve_their_own_manager() -> None
     executor_b = _resolve("background_output", params["run-b"]).executor
     assert executor_a.child_manager is managers["run-a"]
     assert executor_b.child_manager is managers["run-b"]
+
+
+# ---------------------------------------------------------------------------
+# per-run configuration and barriers
+
+
+def _run_config(session: str, **runtime: Any) -> RotarisConfig:
+    persona = PersonaConfig(name="coder", model="small_model")
+    config = RotarisConfig(personas={persona.name: persona}, default_persona=persona.name)
+    for field, value in runtime.items():
+        setattr(config.runtime, field, value)
+    config.runtime.tool_timeout = 11 if session == "run-a" else 22
+    return config
+
+
+@verifies(SWR.SWR_2426, SWR.SWR_2505)
+def test_fetch_enforces_the_calling_runs_egress_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: two runs share a process and one of them is not allowed on the web.
+
+    Expected outcome: the strict run's agent still cannot reach the host it was
+    told to stay off. The tool registry is keyed by name alone, so the run that
+    built an agent last used to own ``fetch`` for everyone — and a denied host
+    became reachable because another run happened to permit it."""
+    params = {}
+    for session, denied in (("run-a", ("blocked.example",)), ("run-b", ())):
+        config = _run_config(
+            session,
+            network_egress_policy="allow",
+            network_denied_hosts=list(denied),
+        )
+        runtime_kwargs = {"child_canonical_name": "coder-1", "session_id": session}
+        register_runtime_binding(
+            build_binding_key(runtime_kwargs, "coder"),
+            RuntimeToolBinding(config=config),
+        )
+        params[session] = identity_params("coder", runtime_kwargs)
+        # Registration order is the whole point: run-b registers last and would
+        # otherwise be the policy every run resolves.
+        monkeypatch.setattr(
+            "rotaris_core.agents.tool_registration._fetch_registered_config_id",
+            None,
+            raising=False,
+        )
+        _register_fetch_tool_factory(config)
+
+    strict = _resolve("fetch", params["run-a"]).executor
+    permissive = _resolve("fetch", params["run-b"]).executor
+
+    assert strict.egress_policy.denied_hosts == ("blocked.example",)
+    assert permissive.egress_policy.denied_hosts == ()
+    assert strict.timeout == 11.0, "the shell of one run must not time out by another's clock"
+
+
+class _RecordingBarrier:
+    """A stand-in for one run's user-prompt barrier."""
+
+    def __init__(self) -> None:
+        self.asked: list[object] = []
+
+    def create_prompt(self, conversation: object) -> str:
+        self.asked.append(conversation)
+        return "prompt-1"
+
+    def wait_for_response(self, conversation: object, prompt_id: str, timeout: float) -> Any:
+        from rotaris_core.orchestrator.user_prompt_barrier import PromptResponse, PromptWaitStatus
+
+        del conversation, prompt_id, timeout
+        return PromptResponse(
+            status=PromptWaitStatus.RESOLVED,
+            answers={"scope": {"freeform": "yes"}},
+        )
+
+    def discard(self, conversation: object) -> None:
+        del conversation
+
+
+@verifies(SWR.SWR_2426)
+def test_a_question_reaches_the_user_of_the_run_that_asked_it() -> None:
+    """Productive use: two runs are open and the older one asks the user something.
+
+    Expected outcome: the question lands in front of that run's user. A barrier
+    belongs to one run and one waiting person, so a question posted to the other
+    run's barrier is shown to the wrong user — and waits on nobody."""
+    from rotaris_core.tools.ask_questions import AskQuestionsAction, AskQuestionsStep
+
+    _register_ask_questions_tool_factory()
+    barriers = {}
+    params = {}
+    for session in ("run-a", "run-b"):
+        barrier = _RecordingBarrier()
+        runtime_kwargs = {"child_canonical_name": "orchestrator-task", "session_id": session}
+        register_runtime_binding(
+            build_binding_key(runtime_kwargs, "orchestrator"),
+            RuntimeToolBinding(user_prompt_barrier=barrier),
+        )
+        barriers[session] = barrier
+        params[session] = identity_params("orchestrator", runtime_kwargs)
+
+    tool = _resolve("ask_questions", params["run-a"])
+    action = AskQuestionsAction(steps=[AskQuestionsStep(id="scope", title="How far?")])
+    observation = tool.executor(action, conversation=object())
+
+    assert len(barriers["run-a"].asked) == 1
+    assert barriers["run-b"].asked == [], "the other run's user was never asked anything"
+    assert observation.answers == {"scope": {"freeform": "yes"}}
+
+
+@verifies(SWR.SWR_2426, SWR.SWR_2505)
+def test_a_stale_spec_keeps_its_own_factorys_policy_not_a_neighbours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a conversation is resumed after a restart, next to a live run.
+
+    Expected outcome: the resumed agent's fetch tool enforces the policy of the
+    run that built it, not whichever binding happens to be newest. A missing
+    binding is a lookup that failed; answering it with the most recent run's
+    allow-list would hand a resumed agent someone else's network."""
+    strict = _run_config("run-a", network_egress_policy="deny")
+    monkeypatch.setattr(
+        "rotaris_core.agents.tool_registration._fetch_registered_config_id",
+        None,
+        raising=False,
+    )
+    _register_fetch_tool_factory(strict)
+    # A live neighbour registers a binding; the resumed spec's key is not it.
+    register_runtime_binding(
+        "other-run/coder-1",
+        RuntimeToolBinding(config=_run_config("run-b", network_egress_policy="allow")),
+    )
+
+    executor = _resolve("fetch", {"binding_key": "gone-with-the-old-process/coder-1"}).executor
+
+    assert executor.egress_policy.disposition == "deny"

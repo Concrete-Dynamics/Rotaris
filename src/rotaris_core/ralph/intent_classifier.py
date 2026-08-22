@@ -56,6 +56,11 @@ class IntentClassificationResult(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     reason: str | None = None
     fallback: bool = False
+    #: The intent was inherited from the session's previous run rather than
+    #: classified from this prompt (SWR-176). Deliberately not ``fallback``:
+    #: nothing degraded, and the hosts warn the user about fallbacks only.
+    #: Defaults to ``False``, so every existing construction site is unchanged.
+    carried_over: bool = False
 
 
 _INTENT_RESPONSE_FORMAT: dict[str, Any] = {
@@ -223,8 +228,14 @@ def summarize_intent_fallback_reason(reason: str | None) -> str | None:
     return normalized
 
 
+@traces(SWR.SWR_176)
 def classification_status_text(classification: IntentClassificationResult) -> str:
     text = f"Intent classified: {classification.intent.value}"
+    if classification.carried_over:
+        # Said plainly rather than left to look like an ordinary classification:
+        # the user typed something this run could not classify, and the reason it
+        # proceeded anyway is the session it is continuing (SWR-176).
+        return f"{text} (continued from previous run)"
     if not classification.fallback:
         return text
 

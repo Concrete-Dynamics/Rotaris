@@ -170,6 +170,114 @@ async def test_classify_run_intent_uses_response_fallback_and_omits_unusable_his
     assert calls[1]["prior_orchestrator_response"] is None
 
 
+def make_todo_state(*statuses: str) -> dict[str, Any]:
+    """A one-phase todo carrying a task per status in *statuses*."""
+    return {
+        "phases": [
+            {
+                "id": "p1",
+                "name": "main",
+                "tasks": [
+                    {"id": f"t{index}", "name": f"task {index}", "status": status}
+                    for index, status in enumerate(statuses)
+                ],
+            }
+        ]
+    }
+
+
+@verifies(SWR.SWR_176)
+async def test_carry_over_run_intent_inherits_prior_intent_for_unfinished_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: user types "continue" into a session that crashed mid-task.
+    Expected outcome: the run resumes the session's own intent instead of a clarifying detour."""
+    from rotaris_core.ralph.intent_classifier import IntentCategory, IntentClassificationResult
+
+    async def ambiguous(config: Any, text: str, **kwargs: Any) -> Any:
+        return IntentClassificationResult(intent=IntentCategory.AMBIGUOUS, fallback=False)
+
+    monkeypatch.setattr("rotaris_core.ralph.intent_classifier.classify_initial_intent", ambiguous)
+
+    result = await bootstrap.classify_run_intent(
+        make_config(),
+        "continue",
+        entrypoint="background",
+        prior_intent="problem_resolution",
+        todo_state=make_todo_state("COMPLETED", "IN_PROGRESS"),
+    )
+
+    assert result.intent is IntentCategory.PROBLEM_RESOLUTION
+    assert result.carried_over is True
+    # Not a degradation, so the hosts must not warn the user about it.
+    assert result.fallback is False
+    assert "problem_resolution" in result.reason
+
+    # A crashed run can leave its work abandoned rather than in progress; that is
+    # still work to continue.
+    abandoned = bootstrap.carry_over_run_intent(
+        IntentClassificationResult(intent=IntentCategory.AMBIGUOUS),
+        prior_intent="large_feature",
+        todo_state=make_todo_state("ABANDONED"),
+    )
+    assert abandoned.intent is IntentCategory.LARGE_FEATURE
+    assert abandoned.carried_over is True
+
+    # A classifier that fell back is just as unusable as an ambiguous verdict.
+    fell_back = bootstrap.carry_over_run_intent(
+        IntentClassificationResult(intent=IntentCategory.MODERATE_FEATURE, fallback=True),
+        prior_intent="refactor",
+        todo_state=make_todo_state("PENDING"),
+    )
+    assert fell_back.intent is IntentCategory.REFACTOR
+    assert fell_back.carried_over is True
+
+
+@verifies(SWR.SWR_176)
+def test_carry_over_run_intent_leaves_usable_and_unusable_sessions_alone() -> None:
+    """Productive use: a user's real request is never overwritten by an old session's intent.
+    Expected outcome: carry-over applies only to an unusable verdict on a session with work left."""
+    from rotaris_core.ralph.intent_classifier import IntentCategory, IntentClassificationResult
+
+    unfinished = make_todo_state("IN_PROGRESS")
+
+    def carried(classification: IntentClassificationResult, **kwargs: Any) -> bool:
+        return bootstrap.carry_over_run_intent(classification, **kwargs).carried_over
+
+    # A usable classification wins, even with unfinished work waiting.
+    assert not carried(
+        IntentClassificationResult(intent=IntentCategory.SMALL_FEATURE),
+        prior_intent="architectural",
+        todo_state=unfinished,
+    )
+    # Nothing left to continue.
+    assert not carried(
+        IntentClassificationResult(intent=IntentCategory.AMBIGUOUS),
+        prior_intent="architectural",
+        todo_state=make_todo_state("COMPLETED", "COMPLETED"),
+    )
+    # A fresh session, a pre-``run_intent`` snapshot, and an unreadable value.
+    for prior in ("", "not_an_intent"):
+        assert not carried(
+            IntentClassificationResult(intent=IntentCategory.AMBIGUOUS),
+            prior_intent=prior,
+            todo_state=unfinished,
+        )
+    # Inheriting ambiguity would resolve nothing.
+    assert not carried(
+        IntentClassificationResult(intent=IntentCategory.AMBIGUOUS),
+        prior_intent="ambiguous",
+        todo_state=unfinished,
+    )
+    # No todo state at all, and an unreadable one.
+    for todo_state in (None, {}, {"phases": "broken"}):
+        assert not carried(
+            IntentClassificationResult(intent=IntentCategory.AMBIGUOUS),
+            prior_intent="architectural",
+            todo_state=todo_state,
+        )
+
+
 @verifies(SWR.SWR_2128, SWR.SWR_1512)
 def test_build_run_todo_creates_main_phase_when_no_prior_state(tmp_path: Path) -> None:
     state = make_state()

@@ -238,6 +238,22 @@ def test_classification_status_text_summarizes_response_format_fallback() -> Non
     )
 
 
+@verifies(SWR.SWR_176)
+def test_classification_status_text_reports_carried_over_intent() -> None:
+    """Productive use: user who typed "continue" reads why the run picked the intent it did.
+    Expected outcome: continuation is named as such, and never as a classifier fallback."""
+    carried = classification_status_text(
+        IntentClassificationResult(
+            intent=IntentCategory.PROBLEM_RESOLUTION,
+            reason="continued the session's previous intent (problem_resolution)",
+            carried_over=True,
+        ),
+    )
+
+    assert carried == "Intent classified: problem_resolution (continued from previous run)"
+    assert "fallback" not in carried
+
+
 def _write_mapping(tmp_path: Path, mapping_text: str) -> Path:
     mapping = tmp_path / "intents.yaml"
     mapping.write_text(mapping_text, encoding="utf-8")

@@ -56,6 +56,7 @@ class SnapshotModel(BaseModel):
     display_name: str | None = None
     capabilities: dict[str, Any] = Field(default_factory=dict)
     limits: dict[str, Any] = Field(default_factory=dict)
+    pricing: dict[str, float] = Field(default_factory=dict)
     discovered_at: str
 
     @field_validator("discovered_at", mode="before")
@@ -78,6 +79,7 @@ class SnapshotProvider(BaseModel):
     large_model: str | None = None
     medium_model: str | None = None
     small_model: str | None = None
+    fallback_model: str | None = None
 
     @field_validator("models", mode="after")
     @classmethod
@@ -197,7 +199,9 @@ def _assert_no_secrets(data: dict[str, Any], path_prefix: str = "") -> None:
         if isinstance(value, dict):
             for key, nested in value.items():
                 key_path = f"{current_path}.{key}" if current_path else str(key)
-                if _key_looks_like_secret(str(key)):
+                if _key_looks_like_secret(str(key)) and not _is_model_pricing_field(
+                    str(key), current_path
+                ):
                     raise ValueError(
                         f"Refusing to write snapshot: secret-like field detected: {key_path}",
                     )
@@ -250,6 +254,18 @@ def _key_looks_like_secret(key: str) -> bool:
 
     tokens = [token for token in re.split(r"[^a-z0-9]+", lowered) if token]
     return any(token in _SECRET_KEY_WORDS for token in tokens)
+
+
+def _is_model_pricing_field(key: str, parent_path: str) -> bool:
+    """Allow public per-token cost metadata through the secret-field guard.
+
+    ``input_cost_per_token`` is not a credential even though it includes the
+    word ``token``. Limit this exception to a model's public ``pricing`` block
+    so a similarly named field cannot relax secret persistence elsewhere.
+    """
+    return key in {"input_cost_per_token", "output_cost_per_token"} and parent_path.endswith(
+        ".pricing"
+    )
 
 
 def _validate_iso8601_utc(value: Any, field_name: str) -> None:

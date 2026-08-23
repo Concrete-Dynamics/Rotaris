@@ -127,6 +127,7 @@ def register_openai_compatible_provider(
         persisted = persist_discovered_models(
             provider_id,
             discovery.models,
+            suggestions=discovery.suggestions,
             display_name=label,
             provider_family=OPENAI_COMPATIBLE_PROVIDER_ID,
             base_url=normalized_url,
@@ -346,6 +347,7 @@ async def _update_api_key_async(
         persist_discovered_models(
             provider_id,
             discovery.models,
+            suggestions=discovery.suggestions,
             display_name=settings.display_name,
             provider_family=family,
             base_url=settings.base_url,
@@ -426,6 +428,7 @@ def update_base_url(
         persist_discovered_models(
             provider_id,
             discovery.models,
+            suggestions=discovery.suggestions,
             display_name=settings.display_name,
             provider_family=family,
             base_url=normalized,
@@ -477,6 +480,7 @@ def validate_provider(
     persist_discovered_models(
         provider_id,
         discovery.models,
+        suggestions=discovery.suggestions,
         display_name=settings.display_name,
         provider_family=family,
         base_url=settings.base_url,

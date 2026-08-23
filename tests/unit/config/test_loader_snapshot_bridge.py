@@ -119,6 +119,85 @@ def test_load_config_synthesizes_copilot_models_from_snapshot(
     assert config.models["copilot/gpt-5"].max_output_tokens == 128000
 
 
+@verifies(SWR.SWR_782)
+def test_load_config_applies_cloud_snapshot_pricing_and_suggestions(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Productive use: a Cloud completion receives configured customer pricing.
+    Expected outcome: the persisted catalog price and suggested fallback survive loading.
+    """
+    monkeypatch.setattr("rotaris_core.config.loader.GLOBAL_CONFIG_DIR", tmp_path)
+    write_snapshot(
+        ProjectSnapshot(
+            providers={
+                "concrete-cloud": _provider(
+                    "concrete-cloud",
+                    [
+                        SnapshotModel(
+                            id="concrete-cloud/openai/gpt-5-mini",
+                            display_name="GPT-5 Mini",
+                            pricing={
+                                "input_cost_per_token": 0.00000025,
+                                "output_cost_per_token": 0.000002,
+                            },
+                            discovered_at="2026-08-23T00:00:00+00:00",
+                        ),
+                    ],
+                    small_model="concrete-cloud/openai/gpt-5-mini",
+                ),
+            },
+        ),
+        base=tmp_path,
+    )
+
+    config = load_config(tmp_path)
+
+    model = config.models["concrete-cloud/openai/gpt-5-mini"]
+    assert model.input_cost_per_token == 0.00000025
+    assert model.output_cost_per_token == 0.000002
+    assert config.small_model == "concrete-cloud/openai/gpt-5-mini"
+
+
+@verifies(SWR.SWR_782)
+def test_load_cloud_model_forwards_snapshot_customer_pricing_to_litellm(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Productive use: a Cloud completion reports cost from the catalog rate.
+    Expected outcome: LiteLLM receives both public custom per-token rates.
+    """
+    monkeypatch.setattr("rotaris_core.config.loader.GLOBAL_CONFIG_DIR", tmp_path)
+    write_snapshot(
+        ProjectSnapshot(
+            providers={
+                "concrete-cloud": _provider(
+                    "concrete-cloud",
+                    [
+                        SnapshotModel(
+                            id="concrete-cloud/openai/gpt-5-mini",
+                            pricing={
+                                "input_cost_per_token": 0.00000025,
+                                "output_cost_per_token": 0.000002,
+                            },
+                            discovered_at="2026-08-23T00:00:00+00:00",
+                        ),
+                    ],
+                ),
+            },
+        ),
+        base=tmp_path,
+    )
+    monkeypatch.setattr(
+        "rotaris_core.config.loader._resolve_auth_provider_token", lambda *_args, **_kwargs: "token"
+    )
+
+    llm = load_llm_for_model(load_config(tmp_path), "concrete-cloud/openai/gpt-5-mini")
+
+    assert llm.input_cost_per_token == 0.00000025
+    assert llm.output_cost_per_token == 0.000002
+
+
 @verifies(SWR.SWR_1702)
 def test_load_config_synthesizes_model_token_limits_from_snapshot(
     tmp_path: Path,

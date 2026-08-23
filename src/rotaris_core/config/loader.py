@@ -975,6 +975,8 @@ def load_config(workspace_root: Path | None = None) -> RotarisConfig:
                 snapshot_scope["medium_model"] = provider.medium_model
             if provider.small_model is not None:
                 snapshot_scope["small_model"] = provider.small_model
+            if provider.fallback_model is not None:
+                snapshot_scope["fallback_model"] = provider.fallback_model
             if provider.default_summary_model is not None:
                 snapshot_scope["default_summary_model"] = provider.default_summary_model
 
@@ -1035,6 +1037,8 @@ def load_config(workspace_root: Path | None = None) -> RotarisConfig:
                     "api_key": None,
                     "api_key_env": None,
                     "api_mode": discovered_api_mode,
+                    "input_cost_per_token": model.pricing.get("input_cost_per_token"),
+                    "output_cost_per_token": model.pricing.get("output_cost_per_token"),
                 }
 
         merged_data = _merge_config_data(merged_data, snapshot_scope)

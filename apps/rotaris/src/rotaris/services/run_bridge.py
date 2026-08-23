@@ -2169,17 +2169,16 @@ class _SessionObserver:
 
     @staticmethod
     def _visible_text(items: Any) -> str:
-        from rotaris_core.sdk_text import content_is_internal_deliberation, sanitize_visible_text
+        """What the agent said, as the engine defines it.
 
-        parts: list[str] = []
-        for item in items:
-            raw_text = getattr(item, "text", None)
-            if not raw_text or content_is_internal_deliberation(raw_text):
-                continue
-            cleaned = sanitize_visible_text(raw_text).strip()
-            if cleaned:
-                parts.append(cleaned)
-        return "\n".join(parts).strip()
+        Deliberately not this module's own rule: the event stream puts the same
+        text on the wire (SWR-1829), and a foreign session is watched through
+        that while a local one is watched through this. Two answers to "what did
+        the agent say" would make the two views of one run disagree.
+        """
+        from rotaris_core.sdk_text import visible_message_text
+
+        return visible_message_text(items)
 
     def _apply_token_event(self, agent_name: str, persona: str, chunk: object) -> None:
         from rotaris_core.tui.streaming import extract_reasoning_text, extract_stream_text

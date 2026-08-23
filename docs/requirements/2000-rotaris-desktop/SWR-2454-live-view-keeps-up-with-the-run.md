@@ -65,14 +65,27 @@ the obligation, and a design that makes either gap structurally permanent has
 chosen wrongly.
 
 **A session executing in another process** is reached only through the
-filesystem, and the durable record it leaves is not a delta a reader can follow
-cheaply: the session state files are rewritten whole, and the one append-only
-log a run does leave — `evidence/events.jsonl` (SWR-2901) — carries no
-transcript content, so the view cannot be built from it. Following a foreign
-session at O(change) therefore depends on the wire schema (SWR-1829) gaining an
-event that carries what the transcript renders. Until it does, a foreign session
-is served by a whole-session read whose *frequency* is bounded but whose *cost
-per read* is not, and the latency ceiling in § Reach is what keeps that honest.
+filesystem. The two things that kept it off the bounded-cost path are now in
+place, and the third is not.
+
+*Was missing, and is not any more.* The append-only log a run leaves —
+`evidence/events.jsonl` (SWR-2901) — carried no transcript content, so a view
+could not be built from it at any cost. Since 2026-08-23 it carries what the
+agents said and reasoned (SWR-1829), emitted from below the host boundary so a
+CLI, headless or SDK run produces it exactly as the desktop does. That closed a
+gap wider than cost: a foreign run's `state/ui_transcript.json` is written near
+the end, so a headless run watched from the desktop showed almost nothing until
+it finished, however often it was read. And the store can now be read from a
+recorded position (SWR-2902), so following one costs what the run added.
+
+*Still missing.* Nothing in the desktop reads either of those yet. A foreign
+session is still served by a whole-session read whose *frequency* is bounded but
+whose *cost per read* is not, and the latency ceiling in § Reach is what keeps
+that honest. What remains is a consumer: the desktop following a foreign
+session's store and turning those events into the rows it already knows how to
+render. That work must not introduce a second answer to "what does this render
+as" — the local path derives rows one way, and a foreign path that derived them
+another would make two views of one run disagree.
 
 **Within this process, two channels carry two shapes of change.** The transcript
 is the only surface whose cost grew with the session, so it travels as a delta:
@@ -137,9 +150,12 @@ it narrows — that entry carries the scope note),
 and [SWR-2130 — Debounced session persistence](../1500-sessions-diagnostics/SWR-2130-debounced-session-persistence.md)
 (the durable record this requirement must stay consistent with),
 [SWR-1829 — Versioned event schema](../1800-cli-headless/SWR-1829-event-schema.md)
-(the prerequisite named in § Scope of the cost criterion: the wire stream carries
-no transcript content today, which is what keeps a foreign session off the
-bounded-cost path. Adding an event type is backward-compatible by that
-requirement's own rule and does not bump the schema version).
+(the prerequisite named in § Scope of the cost criterion, met on 2026-08-23: the
+wire stream now carries what the agents said. Adding an event type is
+backward-compatible by that requirement's own rule and did not bump the schema
+version),
+[SWR-2902 — Query and replay API](../2900-event-store/SWR-2902-query-and-replay.md)
+(the other half of that prerequisite: a store can be read from where a reader
+last got to, which is what makes following a running session cost what it added).
 
 Epic: [Rotaris Desktop](../2000-rotaris-desktop.md)

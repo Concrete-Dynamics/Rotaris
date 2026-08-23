@@ -1646,6 +1646,55 @@ async def test_run_child_streams_conversation_events_to_callback() -> None:
     assert isinstance(received[1][1], MockMessageEvent)
 
 
+@verifies(SWR.SWR_1829, SWR.SWR_2454)
+@pytest.mark.asyncio
+async def test_run_child_puts_what_the_agent_said_on_the_event_stream(tmp_path) -> None:
+    """Productive use: a run happening in another process — a CLI run, a headless
+    CI run — is watched from somewhere else. Expected outcome: what the agent
+    said is on the stream, so the watcher can show the conversation rather than
+    only the mechanics of it.
+
+    The emission sits here, below every host, on purpose: a host that installs
+    its own conversation callback replaces the one the runner set, so an emitter
+    hanging off that callback would emit for some hosts and not others."""
+    from rotaris_core.events import register_event_sink, reset_event_registry
+
+    reset_event_registry()
+    captured: list[object] = []
+    register_event_sink("s-1", captured.append)
+    try:
+        record = make_record()
+        streamed = [MockMessageEvent("agent", ["I fixed the failing assertion."])]
+        scheduler = Scheduler(
+            config=make_config(),
+            workspace_root=str(tmp_path / "workspace"),
+            summary_agent=MockSummaryAgent(),
+            conversation_persistence_dir=tmp_path
+            / "sessions"
+            / "s-1"
+            / "evidence"
+            / "conversations",
+            conversation_factory=lambda agent, callbacks=None: MockConversation(
+                events=[
+                    MockToolEvent("grep", "searching docs"),
+                    MockMessageEvent("agent", [FINAL_TEXT]),
+                ],
+                callbacks=callbacks,
+                run_events=streamed,
+            ),
+        )
+        assert scheduler.binding_session_id == "s-1", "the bus key is the session id"
+
+        await scheduler.run_child(record, agent=object())
+    finally:
+        reset_event_registry()
+
+    said = [event for event in captured if event.event == "agent.message"]
+    assert [event.text for event in said] == ["I fixed the failing assertion."]
+    assert said[0].agent_name == record.canonical_name
+    assert said[0].persona == record.persona
+
+
 @verifies(SWR.SWR_104, SWR.SWR_111)
 @pytest.mark.asyncio
 async def test_run_child_executes_delegated_children_and_resumes_parent() -> None:

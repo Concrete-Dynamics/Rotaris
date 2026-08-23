@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Any
 
 from rotaris_core.reqtocode import SWR, traces
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _TOOL_CALL_SUBSTRINGS: tuple[str, ...] = (
     "<tool_call|>",
@@ -146,3 +150,29 @@ def contains_tool_call_markup(content: object) -> bool:
     return any(marker in content for marker in _TOOL_CALL_MARKERS) or bool(
         _INTERNAL_SEGMENT_PATTERNS[-1].search(content),
     )
+
+
+@traces(SWR.SWR_647, SWR.SWR_1829)
+def visible_message_text(items: Iterable[Any] | None) -> str:
+    """Reduce one SDK message's content parts to the text a person should read.
+
+    Applies the two rules above part by part — drop leaked deliberation, strip
+    internal markup from what is left — and joins what survives.  ``""`` when
+    nothing does, which is a real answer: a message whose whole content was
+    tool-call markup is not a message anybody should be shown.
+
+    Lives here rather than in a host because two of them now need the same
+    answer: the desktop puts it in the transcript and the event stream puts it on
+    the wire (SWR-1829), and a foreign session is watched through the second
+    while a local one is watched through the first.  Two implementations of
+    "what did the agent say" would make those two views of one run disagree.
+    """
+    parts: list[str] = []
+    for item in items or ():
+        raw_text = getattr(item, "text", None)
+        if not raw_text or content_is_internal_deliberation(raw_text):
+            continue
+        cleaned = sanitize_visible_text(raw_text).strip()
+        if cleaned:
+            parts.append(cleaned)
+    return "\n".join(parts).strip()

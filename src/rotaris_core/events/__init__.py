@@ -28,6 +28,7 @@ from rotaris_core.events.bus import (
 )
 from rotaris_core.events.schema import (
     EVENT_SCHEMA_VERSION,
+    AgentMessageEvent,
     AnyEvent,
     ApprovalRequestedEvent,
     CheckpointCreatedEvent,
@@ -79,6 +80,7 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "EVENT_SCHEMA_VERSION",
+    "AgentMessageEvent",
     "AnyEvent",
     "ApprovalRequestedEvent",
     "CheckpointCreatedEvent",

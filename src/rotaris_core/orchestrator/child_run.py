@@ -12,6 +12,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from rotaris_core.events.transcript import publish_agent_message
 from rotaris_core.llm_errors import (
     extract_quota_exhausted_model,
     format_llm_runtime_error,
@@ -225,6 +226,17 @@ async def run_child_impl(
             nonlocal last_llm_event_type
             last_llm_event_type = event_type_name
         _log_tool_call_timing(event)
+        # Before the host callback, and guarded separately from it: what the
+        # agent said belongs on the stream whatever host is watching, and a host
+        # that raises must not take the record of the conversation with it
+        # (SWR-1829).
+        try:
+            publish_agent_message(self.binding_session_id, record, event)
+        except Exception:  # noqa: BLE001 - the stream never fails a run.
+            _log.exception(
+                "Publishing the agent message failed for child %s",
+                record.canonical_name,
+            )
         conversation = conversation_ref.get("conversation")
         if conversation is not None:
             try:

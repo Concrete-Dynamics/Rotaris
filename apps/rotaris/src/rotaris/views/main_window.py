@@ -2131,10 +2131,18 @@ class MainWindow(Themed, QMainWindow):
             return False
         return bool(run_bridge.start(self._last_prompt, self.store.session_name or None))
 
+    @traces(SWR.SWR_2454)
     def _store_updated(self) -> None:
+        """Tell every pop-out the store moved; each decides what that costs it.
+
+        ``request_refresh`` rather than ``refresh``: a closed pop-out is kept in
+        the cache rather than destroyed, and this fires on every publication of
+        a running session, so calling the rebuild directly here would defeat the
+        window's own reflow (SWR-2454).
+        """
         with self.diagnostics.span("main_window.store_refresh"):
             for window in self.agent_windows.values():
-                window.refresh()
+                window.request_refresh()
 
     # ── application actions and feedback ─────────────────────────────────
 

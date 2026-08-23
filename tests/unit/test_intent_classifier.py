@@ -9,6 +9,7 @@ import pytest
 from openhands.sdk.llm.message import Message, TextContent
 
 from rotaris_core.config.schema import ModelConfig, RotarisConfig
+from rotaris_core.llm_errors import reset_rejected_response_formats
 from rotaris_core.ralph.intent_classifier import (
     FALLBACK_INTENT,
     IntentCategory,
@@ -190,6 +191,23 @@ async def test_classifier_retries_with_json_object_when_json_schema_is_rejected(
 
 
 @verifies(SWR.SWR_152)
+async def test_classifier_maps_json_schema_to_json_object_for_a_deepseek_model() -> None:
+    """Productive use: the intent classifier runs on a DeepSeek model.
+
+    Expected outcome: the first classification is already under ``json_object``
+    — the strict schema is never offered, so no refusal round trip happens.
+    """
+    reset_rejected_response_formats()
+    llm = FakeLLM('{"intent":"small_feature","confidence":0.72,"reason":"clear scoped change"}')
+    llm.model = "deepseek/deepseek-v4-pro"
+
+    result = await IntentClassifier(llm, timeout=1).classify("add a focused change")
+
+    assert result.intent == IntentCategory.SMALL_FEATURE
+    assert llm.calls[0]["kwargs"]["response_format"] == {"type": "json_object"}
+
+
+@verifies(SWR.SWR_152, SWR.SWR_921)
 async def test_classify_initial_intent_uses_json_object_for_deepseek(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -87,10 +87,16 @@ class AgentWindow(Themed, QMainWindow):
         # Through a reflow, not straight to the rebuild (SWR-2454): every
         # ``agents_changed`` clears and rebuilds the tab strip, and a run moves
         # an agent's elapsed time and tool count on every publication.
+        # A pop-out is *closed*, not destroyed — it stays in the window's cache
+        # so reopening it is instant — so without the visibility half of this a
+        # user who opened one once keeps paying for it all session.
         self._reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
+        self._transcript_reflow = HiddenPanelReflow(
+            self, PANEL_REFLOW_MS, self._refresh_transcripts
+        )
         store.agents_changed.connect(self._reflow.request)
         store.artifacts_changed.connect(self._reflow.request)
-        store.transcript_changed.connect(self._refresh_transcripts)
+        store.transcript_changed.connect(self._transcript_reflow.request)
         # A live run reports its transcript through ``transcript_delta`` alone
         # (SWR-2454). This window rebuilds from the whole list either way — it
         # shows one agent's slice, which a source-row boundary does not
@@ -151,7 +157,18 @@ class AgentWindow(Themed, QMainWindow):
 
     @traces(SWR.SWR_2454)
     def _on_transcript_delta(self, _first: int, _rows: object) -> None:
-        self._refresh_transcripts()
+        self._transcript_reflow.request()
+
+    @traces(SWR.SWR_2454)
+    def request_refresh(self) -> None:
+        """Ask for a rebuild on the window's own terms.
+
+        The main window refreshes every pop-out it holds whenever the store is
+        replaced. Going through the reflow rather than straight to ``refresh``
+        is what keeps that from rebuilding a closed window's tab strip, and
+        from rebuilding an open one faster than it can be drawn.
+        """
+        self._reflow.request()
 
 
 @traces(SWR.SWR_2093, SWR.SWR_2421, SWR.SWR_2432, SWR.SWR_3010)

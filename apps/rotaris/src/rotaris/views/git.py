@@ -18,7 +18,16 @@ from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme.manager import Themed
 from rotaris.theme.phosphor import set_button_icon
-from rotaris.widgets import Card, PanelSplitter, Select, Tag, make_button, set_action_availability
+from rotaris.widgets import (
+    PANEL_REFLOW_MS,
+    Card,
+    HiddenPanelReflow,
+    PanelSplitter,
+    Select,
+    Tag,
+    make_button,
+    set_action_availability,
+)
 
 if TYPE_CHECKING:
     from rotaris.models.store import WorkspaceStore
@@ -123,9 +132,20 @@ class GitView(Themed, QWidget):
         policy.body.addWidget(self.policy_label)
         root.addWidget(policy)
 
-        store.git_changed.connect(self.refresh)
-        store.sessions_changed.connect(self._refresh_checkpoint_sessions)
-        store.checkpoints_changed.connect(lambda _payload: self.refresh_checkpoints())
+        # Through reflows, not straight to the rebuilds (SWR-2454). Each of the
+        # three clears a table and builds its rows again, and all three are
+        # driven by signals a run raises while it edits files and takes
+        # checkpoints — on a tab that is usually not the one on screen.
+        self._status_reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
+        self._sessions_reflow = HiddenPanelReflow(
+            self, PANEL_REFLOW_MS, self._refresh_checkpoint_sessions
+        )
+        self._checkpoints_reflow = HiddenPanelReflow(
+            self, PANEL_REFLOW_MS, self.refresh_checkpoints
+        )
+        store.git_changed.connect(self._status_reflow.request)
+        store.sessions_changed.connect(self._sessions_reflow.request)
+        store.checkpoints_changed.connect(lambda _payload: self._checkpoints_reflow.request())
         self.refresh()
         self._refresh_checkpoint_sessions()
         self.refresh_checkpoints()

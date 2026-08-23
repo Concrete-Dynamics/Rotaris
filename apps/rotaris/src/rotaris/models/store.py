@@ -246,7 +246,18 @@ class WorkspaceStore(QObject):
         self.run_summary = summary
         self.run_summary_changed.emit()
 
+    @traces(SWR.SWR_2454)
     def upsert_agent(self, agent: AgentNode) -> None:
+        """Insert or replace one agent, publishing only when it actually moved.
+
+        The identity check is what makes the equality one safe: a caller that
+        mutated the stored instance and handed it back is telling us something
+        changed, and comparing it against itself would swallow that. Only a
+        *different* record that happens to read the same is skipped.
+        """
+        existing = self.agents.get(agent.id)
+        if existing is not agent and existing == agent:
+            return
         if agent.id not in self.agents:
             self._agent_order.append(agent.id)
         self.agents[agent.id] = agent
@@ -339,6 +350,8 @@ class WorkspaceStore(QObject):
     # ── improvement proposals ────────────────────────────────────────────
 
     def set_improvement_proposals(self, proposals: list[ImprovementProposal]) -> None:
+        if proposals == self.improvement_proposals:
+            return
         self.improvement_proposals = proposals
         self.improvement_proposals_changed.emit()
 
@@ -655,8 +668,18 @@ class WorkspaceStore(QObject):
             for session in self.sessions
             if session.id not in known and session.status == "starting"
         ]
+        previous = self.sessions
         self.sessions = pending + sessions
+        # After the focus marks, not before: the stored rows carry them and the
+        # incoming ones do not, so comparing the two lists unmarked would report
+        # a change on every read that included the focused run.
         self._apply_focus_marks()
+        if self.sessions == previous:
+            # Every consumer of this signal clears a strip and builds its rows
+            # again (SWR-2454). One caveat, and it is why this guard is worth
+            # less than it looks: a row carries a relative duration label, so an
+            # unchanged session list still differs once a minute.
+            return
         self.sessions_changed.emit()
 
     @traces(SWR.SWR_2415)
@@ -668,6 +691,8 @@ class WorkspaceStore(QObject):
         """
         for index, existing in enumerate(self.sessions):
             if existing.id == session.id:
+                if existing is not session and existing == session:
+                    return
                 self.sessions[index] = session
                 break
         else:
@@ -793,10 +818,13 @@ class WorkspaceStore(QObject):
     def set_drawer_state(
         self, *, sidebar: bool | None = None, inspector: bool | None = None
     ) -> None:
+        before = (self.ui.sidebar_open, self.ui.inspector_open)
         if sidebar is not None:
             self.ui.sidebar_open = sidebar
         if inspector is not None:
             self.ui.inspector_open = inspector
+        if (self.ui.sidebar_open, self.ui.inspector_open) == before:
+            return
         self.ui_changed.emit()
 
     @traces(SWR.SWR_2090)
@@ -865,11 +893,15 @@ class WorkspaceStore(QObject):
 
     def set_session_persona(self, persona: str) -> None:
         """Entry persona for the next run, selected in the workspace composer."""
+        if persona == self.session_persona_override:
+            return
         self.session_persona_override = persona
         self.settings_changed.emit()
 
     def set_session_reasoning(self, level: str) -> None:
         """Reasoning override for the entry persona of the next run."""
+        if level == self.session_reasoning_override:
+            return
         self.session_reasoning_override = level
         self.settings_changed.emit()
 
@@ -934,10 +966,14 @@ class WorkspaceStore(QObject):
     # ── library ───────────────────────────────────────────────────────────
 
     def set_mcp_enabled(self, name: str, enabled: bool) -> None:
+        moved = False
         for server in self.mcp_servers:
-            if server.name == name:
+            if server.name == name and not (server.enabled == enabled and server.session_override):
                 server.enabled = enabled
                 server.session_override = True
+                moved = True
+        if not moved:
+            return
         self.library_changed.emit()
 
     @traces(SWR.SWR_2097)
@@ -949,11 +985,24 @@ class WorkspaceStore(QObject):
         detail: str = "",
         tool_count: int | None = None,
     ) -> None:
+        moved = False
         for server in self.mcp_servers:
-            if server.name == name:
-                server.health = health
-                server.health_detail = detail
-                server.tool_count = tool_count
+            if server.name != name:
+                continue
+            if (server.health, server.health_detail, server.tool_count) == (
+                health,
+                detail,
+                tool_count,
+            ):
+                continue
+            server.health = health
+            server.health_detail = detail
+            server.tool_count = tool_count
+            moved = True
+        if not moved:
+            # Health is re-reported on a schedule, and the Library tab rebuilds
+            # both its tables when it hears (SWR-2454).
+            return
         self.library_changed.emit()
 
     @traces(SWR.SWR_2098)

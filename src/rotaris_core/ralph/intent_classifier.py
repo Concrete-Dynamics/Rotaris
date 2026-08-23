@@ -16,9 +16,12 @@ from rotaris_core.llm_errors import (
     remember_rejected_response_format,
     response_format_rejected,
 )
+from rotaris_core.models.response_format_catalog import normalize_response_formats
 from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from openhands.sdk import LLM
 
     from rotaris_core.config.schema import RotarisConfig
@@ -125,7 +128,7 @@ def _load_classifier_prompt() -> str:
         )
 
 
-def _prompt_for_response_format(response_format: dict[str, Any] | None) -> str:
+def _prompt_for_response_format(response_format: Mapping[str, Any] | None) -> str:
     prompt = _load_classifier_prompt().strip()
     if response_format == _INTENT_RESPONSE_FORMAT:
         return prompt
@@ -135,7 +138,7 @@ def _prompt_for_response_format(response_format: dict[str, Any] | None) -> str:
 def _build_classifier_messages(
     user_payload: dict[str, object],
     *,
-    response_format: dict[str, Any] | None,
+    response_format: Mapping[str, Any] | None,
 ) -> list[Message]:
     return [
         Message(
@@ -253,7 +256,7 @@ class IntentClassifier:
         self,
         llm: LLM,
         timeout: float = DEFAULT_CLASSIFICATION_TIMEOUT,
-        response_formats: tuple[dict[str, Any] | None, ...] = (
+        response_formats: tuple[Mapping[str, Any] | None, ...] = (
             _INTENT_RESPONSE_FORMAT,
             _INTENT_JSON_OBJECT_RESPONSE_FORMAT,
             None,
@@ -261,11 +264,17 @@ class IntentClassifier:
     ) -> None:
         self.llm = llm
         self.timeout = timeout
-        deduped_formats: list[dict[str, Any] | None] = []
+        deduped_formats: list[Mapping[str, Any] | None] = []
         for item in response_formats:
             if item not in deduped_formats:
                 deduped_formats.append(item)
-        self.response_formats = tuple(deduped_formats)
+        # Mapped through per-model capabilities (SWR-921): a DeepSeek model's
+        # json_schema rung becomes json_object, and a model known to lack
+        # response_format keeps only the unconstrained rung.
+        self.response_formats = normalize_response_formats(
+            tuple(deduped_formats),
+            model=self._model,
+        )
 
     @property
     def _model(self) -> str:
@@ -274,8 +283,8 @@ class IntentClassifier:
 
     def _offerable(
         self,
-        ladder: tuple[dict[str, Any] | None, ...],
-    ) -> tuple[dict[str, Any] | None, ...]:
+        ladder: tuple[Mapping[str, Any] | None, ...],
+    ) -> tuple[Mapping[str, Any] | None, ...]:
         """*ladder* without the rungs this model has already refused (SWR-919).
 
         Filtered per call rather than in the constructor: a classifier outlives
@@ -451,15 +460,19 @@ async def classify_initial_intent(
         from rotaris_core.config.loader import build_llm_usage_id, load_llm_for_model
 
         model_cfg = config.models.get(model_key)
-        response_formats: tuple[dict[str, Any] | None, ...]
-        if model_cfg is not None and model_cfg.provider == "deepseek":
-            response_formats = (_INTENT_JSON_OBJECT_RESPONSE_FORMAT, None)
-        else:
-            response_formats = (
+        # The full ladder, mapped through per-model capabilities (SWR-921):
+        # a DeepSeek model's json_schema rung becomes json_object, and a
+        # model known to lack response_format keeps only the unconstrained
+        # rung.
+        response_formats = normalize_response_formats(
+            (
                 _INTENT_RESPONSE_FORMAT,
                 _INTENT_JSON_OBJECT_RESPONSE_FORMAT,
                 None,
-            )
+            ),
+            model=model_key,
+            provider=model_cfg.provider if model_cfg is not None else "",
+        )
 
         llm = load_llm_for_model(
             config,

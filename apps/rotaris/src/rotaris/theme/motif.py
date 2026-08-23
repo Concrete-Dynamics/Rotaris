@@ -31,14 +31,13 @@ from typing import TYPE_CHECKING, Final
 
 from PySide6.QtCore import (
     QAbstractAnimation,
-    QByteArray,
     QPointF,
-    QPropertyAnimation,
     QRect,
     Qt,
+    QVariantAnimation,
 )
 from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPen
-from PySide6.QtWidgets import QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QWidget
+from PySide6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 from rotaris_core.reqtocode import SWR, traces
 from shiboken6 import isValid
 
@@ -264,7 +263,7 @@ class GridBackground(QWidget):
         paint_grid(painter, self.rect(), tokens(), dots=self._dots)
 
 
-@traces(SWR.SWR_3704)
+@traces(SWR.SWR_3704, SWR.SWR_2454)
 class PulseAnimation:
     """The one recurring motion in the product, on a leash.
 
@@ -274,7 +273,14 @@ class PulseAnimation:
     worse than no pulse at all: it says "working" about something that finished,
     and it costs a repaint every frame for the life of the window.
 
-    The widget outranks this object: the effect and the animation are parented to
+    It does not apply itself. :attr:`opacity` is the value it animates and the
+    widget reads at paint time, which is what keeps a graphics effect out of the
+    picture entirely — an opacity effect makes Qt render its widget into an
+    offscreen pixmap on every paint, an unreasonable price for a six-pixel dot,
+    paid for the life of the run and multiplied by every dot on screen
+    (SWR-2454). A number the widget mixes into its own brush costs nothing.
+
+    The widget outranks this object: the value and the animation are parented to
     it, so Qt destroys both when the widget goes. A caller that keeps a pulse in
     order to stop it later is therefore holding a handle that Qt may already have
     emptied — a row rebuilt while its run finishes is exactly that order — so
@@ -285,10 +291,12 @@ class PulseAnimation:
 
     def __init__(self, widget: QWidget, theme: Theme) -> None:
         self._widget = widget
-        self._effect = QGraphicsOpacityEffect(widget)
-        self._effect.setOpacity(1.0)
-        widget.setGraphicsEffect(self._effect)
-        self._animation = QPropertyAnimation(self._effect, QByteArray(b"opacity"), widget)
+        self._opacity = 1.0
+        # A `QVariantAnimation` rather than a `QPropertyAnimation`, because there
+        # is no longer an object with an `opacity` property to drive: the value
+        # arrives on a signal and the widget is asked to repaint with it.
+        self._animation = QVariantAnimation(widget)
+        self._animation.valueChanged.connect(self._breathe)
         self._animation.setDuration(theme.motion.pulse)
         self._animation.setEasingCurve(theme.motion.ease.curve())
         # One duration is a whole breath, down and back. Animating only the dim
@@ -298,15 +306,26 @@ class PulseAnimation:
         self._animation.setEndValue(1.0)
         self._animation.setLoopCount(-1)
 
+    def _breathe(self, value: object) -> None:
+        """Take one frame of the breath and ask the widget to draw itself with it."""
+        self._opacity = float(value)  # type: ignore[arg-type]
+        if isValid(self._widget):
+            self._widget.update()
+
     @property
     def alive(self) -> bool:
         """Whether Qt still has the widget this pulse decorates."""
-        return isValid(self._widget) and isValid(self._animation) and isValid(self._effect)
+        return isValid(self._widget) and isValid(self._animation)
 
     @property
     def running(self) -> bool:
         """Whether the animation is currently breathing."""
         return self.alive and self._animation.state() == QAbstractAnimation.State.Running
+
+    @property
+    def opacity(self) -> float:
+        """Where the breath is now — what the widget multiplies its colour by."""
+        return self._opacity
 
     def start(self) -> None:
         """Begin breathing, or keep breathing if it already is.
@@ -316,10 +335,12 @@ class PulseAnimation:
         """
         from rotaris.theme.reduced_motion import reduced_motion
 
-        if reduced_motion():
-            self._effect.setOpacity(1.0)
+        if not self.alive:
             return
-        if self.alive and not self.running:
+        if reduced_motion():
+            self._rest()
+            return
+        if not self.running:
             self._animation.start()
 
     def stop(self) -> None:
@@ -331,7 +352,13 @@ class PulseAnimation:
         if not self.alive:
             return
         self._animation.stop()
-        self._effect.setOpacity(1.0)
+        self._rest()
+
+    def _rest(self) -> None:
+        """Back to full strength, and repainted so the dot shows it."""
+        self._opacity = 1.0
+        if isValid(self._widget):
+            self._widget.update()
 
     def set_running(self, running: bool) -> None:
         """Follow a state: breathe while it runs, rest the moment it does not."""

@@ -436,6 +436,10 @@ def test_git_actions_follow_repository_availability_and_refresh_lifecycle(qtbot)
     store = WorkspaceStore()
     view = GitView(store)
     qtbot.addWidget(view)
+    # Shown, because a tab behind the one on screen holds its rebuild until it
+    # is shown (SWR-2454) — and this panel is read by looking at it.
+    view.show()
+    qtbot.waitExposed(view)
     refreshed: list[bool] = []
     created: list[bool] = []
     view.refresh_requested.connect(lambda: refreshed.append(True))
@@ -446,6 +450,10 @@ def test_git_actions_follow_repository_availability_and_refresh_lifecycle(qtbot)
 
     store.branch = "main"
     store.git_changed.emit()
+    # Waited for rather than asserted outright: a change arriving inside the
+    # panel's coalescing interval lands on its trailing tick (SWR-2454), which
+    # is well inside the budget but is not the same instant.
+    qtbot.waitUntil(view.create_button.isEnabled, timeout=2_000)
     assert view.create_button.isEnabled() is True
     qtbot.mouseClick(view.create_button, Qt.MouseButton.LeftButton)
     assert created == [True]
@@ -456,6 +464,9 @@ def test_git_actions_follow_repository_availability_and_refresh_lifecycle(qtbot)
     assert view.refresh_button.text() == "Refreshing…"
 
     store.git_changed.emit()
+    # And again on the trailing tick: this one arrives inside the interval the
+    # refresh above just started, so it is held rather than run (SWR-2454).
+    qtbot.waitUntil(view.refresh_button.isEnabled, timeout=2_000)
     assert view.refresh_button.isEnabled() is True
     assert view.refresh_button.text() == "Refresh"
 
@@ -740,6 +751,7 @@ def test_settings_organizes_controls_into_scrollable_tabs(qtbot) -> None:
         "Plugins",
         "Tools",
         "Project",
+        "About",
     ]
     assert view.tabs.widget(0).isAncestorOf(view.model_grid.parentWidget())
     assert view.tabs.widget(1).isAncestorOf(view.persona_table)
@@ -2711,6 +2723,10 @@ def test_agent_tab_mirrors_only_its_agent_transcript_and_live_updates(qtbot) -> 
     store = sample_store()
     window = AgentWindow(store, "coding-agent")
     qtbot.addWidget(window)
+    # Shown, because a closed pop-out holds its rebuild rather than paying for
+    # one nobody can see (SWR-2454); this window is read by looking at it.
+    window.show()
+    qtbot.waitExposed(window)
     tab = window.tabs.widget(0)
     assert tab is not None
     assert tab.agent_id == "coding-agent-1"
@@ -2728,6 +2744,8 @@ def test_agent_tab_mirrors_only_its_agent_transcript_and_live_updates(qtbot) -> 
     assert model.rowCount() == initial_count
 
     store.append_event(TranscriptEvent("15:01", "coding-agent-1", "new target output"))
+    # Same reason as the Git panel above: a pop-out coalesces its rebuilds.
+    qtbot.waitUntil(lambda: model.rowCount() == initial_count + 1, timeout=2_000)
     assert model.rowCount() == initial_count + 1
     event = model.event_at(model.rowCount() - 1)
     assert event is not None

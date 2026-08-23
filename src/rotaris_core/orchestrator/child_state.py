@@ -14,6 +14,7 @@ from rotaris_core.reqtocode import SWR, traces
 
 class ChildTaskState(StrEnum):
     QUEUED = "queued"
+    STARTING = "starting"
     RUNNING = "running"
     WAITING_ON_DEPENDENCIES = "waiting_on_dependencies"
     WAITING_ON_MODEL_SLOT = "waiting_on_model_slot"
@@ -42,6 +43,7 @@ class ChildTaskState(StrEnum):
 
 VALID_TRANSITIONS: dict[ChildTaskState, set[ChildTaskState]] = {
     ChildTaskState.QUEUED: {
+        ChildTaskState.STARTING,
         ChildTaskState.RUNNING,
         ChildTaskState.WAITING_ON_DEPENDENCIES,
         ChildTaskState.WAITING_ON_MODEL_SLOT,
@@ -59,6 +61,12 @@ VALID_TRANSITIONS: dict[ChildTaskState, set[ChildTaskState]] = {
         ChildTaskState.BLOCKED,
         ChildTaskState.CANCELLED,
     },
+    ChildTaskState.STARTING: {
+        ChildTaskState.RUNNING,
+        ChildTaskState.FAILED,
+        ChildTaskState.CANCELLED,
+        ChildTaskState.BLOCKED,
+    },
     ChildTaskState.RUNNING: {
         ChildTaskState.SUCCEEDED,
         ChildTaskState.FAILED,
@@ -68,7 +76,7 @@ VALID_TRANSITIONS: dict[ChildTaskState, set[ChildTaskState]] = {
 }
 
 
-@traces(SWR.SWR_112, SWR.SWR_140, SWR.SWR_2433, SWR.SWR_3010)
+@traces(SWR.SWR_112, SWR.SWR_140, SWR.SWR_177, SWR.SWR_2433, SWR.SWR_3010)
 class ChildTaskRecord(BaseModel):
     """Tracks a single child task's lifecycle."""
 
@@ -88,6 +96,8 @@ class ChildTaskRecord(BaseModel):
     session_id: str | None = None
     run_in_background: bool = False
     task_id: str = ""
+    launch_generation: int = 0
+    """Monotonic launch-claim generation; zero for pre-SWR-177 snapshots."""
     produced_artifact_ids: list[str] = Field(default_factory=list)
     received_artifact_ids: list[str] = Field(default_factory=list)
     model_key: str | None = None
@@ -121,6 +131,21 @@ class ChildTaskRecord(BaseModel):
         self.state = new_state
         if new_state.is_terminal():
             self.completed_at = dt.datetime.now(dt.UTC)
+
+
+@traces(SWR.SWR_177)
+@dataclass(frozen=True, slots=True)
+class ChildLaunchClaim:
+    """Immutable ownership token for one child launch attempt."""
+
+    canonical_name: str
+    task_id: str
+    parent_agent_id: str
+    generation: int
+
+    @property
+    def claim_id(self) -> str:
+        return f"{self.task_id or self.canonical_name}:{self.generation}"
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -34,6 +34,7 @@ from rotaris_core.reqtocode import SWR, traces
 from shiboken6 import isValid
 
 from rotaris.models.state import (
+    HookAgentGroup,
     HookTrustSummary,
     ModelOption,
     ProviderInfo,
@@ -57,7 +58,7 @@ from rotaris.widgets import (
     populate_model_combo,
     set_action_availability,
 )
-from rotaris.widgets.hook_trust_dialog import hook_trust_summary
+from rotaris.widgets.hook_trust_dialog import hook_catalog_summary
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -499,6 +500,7 @@ class SettingsView(Themed, QWidget):
         # the Hooks tab keeps its own guard: rebuilding the table on every
         # provider-health tick would drop the user's scroll position for nothing.
         self._hook_summary: HookTrustSummary | None = None
+        self._hooks_updating = False
         self._provider_controls: dict[str, _ProviderRowControls] = {}
         self._health_check_task: Any | None = None
         root = QVBoxLayout(self)
@@ -1348,7 +1350,7 @@ class SettingsView(Themed, QWidget):
         if index >= 0:
             self.active_tab_changed.emit(self._TAB_IDS[index])
 
-    @traces(SWR.SWR_2701, SWR.SWR_2704)
+    @traces(SWR.SWR_2701, SWR.SWR_2704, SWR.SWR_3725)
     def _add_hooks_tab(self) -> None:
         """Build the Hooks tab: the effective hook set and its trust verdict.
 
@@ -1370,17 +1372,32 @@ class SettingsView(Themed, QWidget):
         self.review_hooks_button.setAccessibleName("Review workspace hooks")
         self.review_hooks_button.clicked.connect(self.hook_trust_review_requested.emit)
         card.add_header_widget(self.review_hooks_button)
+        self.refresh_hooks_button = make_button("Refresh hooks", "secondary")
+        self.refresh_hooks_button.setAccessibleName("Refresh external hooks")
+        self.refresh_hooks_button.clicked.connect(self.refresh_hooks)
+        card.add_header_widget(self.refresh_hooks_button)
+        self.show_hook_command_button = make_button("View hook commandâ€¦", "secondary")
+        self.show_hook_command_button.setAccessibleName("View selected hook command")
+        self.show_hook_command_button.clicked.connect(self._show_selected_hook_command)
+        card.add_header_widget(self.show_hook_command_button)
 
         self.hooks_table = QTreeWidget()
         self.hooks_table.setHeaderLabels(["Hook", "Event", "Matches", "Source", "Status"])
-        self.hooks_table.setRootIsDecorated(False)
+        self.hooks_table.setRootIsDecorated(True)
         self.hooks_table.setAccessibleName("Lifecycle hooks")
         self.hooks_table.setAccessibleDescription(
             "Every hook this workspace would run, with the scope that declared it "
             "and whether it is allowed"
         )
         self.hooks_table.header().setStretchLastSection(True)
+        self.hooks_table.itemChanged.connect(self._set_hook_catalog_item)
+        self.hooks_table.itemSelectionChanged.connect(self._refresh_hook_command_action)
         card.body.addWidget(self.hooks_table)
+        set_action_availability(
+            self.show_hook_command_button,
+            enabled=False,
+            reason="Select a hook to view its command.",
+        )
 
         self.hooks_empty = QLabel()
         self.hooks_empty.setObjectName("muted")
@@ -1398,13 +1415,13 @@ class SettingsView(Themed, QWidget):
             self.refresh_hooks()
         return self._hook_summary or HookTrustSummary()
 
-    @traces(SWR.SWR_2701, SWR.SWR_2704)
+    @traces(SWR.SWR_2701, SWR.SWR_2704, SWR.SWR_3725)
     def refresh_hooks(self) -> None:
         """Recompute the effective hook set and re-render the Hooks tab."""
         config = getattr(self._config_service, "config", None)
         workspace = getattr(self._config_service, "workspace", None)
         summary = (
-            hook_trust_summary(config, workspace)
+            hook_catalog_summary(config, workspace)
             if config is not None and workspace is not None
             else HookTrustSummary()
         )
@@ -1412,42 +1429,35 @@ class SettingsView(Themed, QWidget):
             return
         self._hook_summary = summary
 
-        self.hooks_table.clear()
-        for hook in summary.hooks:
-            status = "allowed" if hook.allowed else "blocked — not reviewed"
-            item = QTreeWidgetItem(
-                [
-                    hook.name,
-                    hook.event,
-                    hook.matcher or "every tool call",
-                    hook.scope_label,
-                    status,
-                ]
-            )
-            # Never the command: a blocked workspace hook's text is exactly what
-            # must not appear outside the review dialog.
-            item.setToolTip(
-                4,
-                (
-                    "Runs during this workspace's sessions."
-                    if hook.allowed
-                    else "Skipped until you review this workspace's hooks."
-                ),
-            )
-            self.hooks_table.addTopLevelItem(item)
-        for column in range(self.hooks_table.columnCount()):
-            self.hooks_table.resizeColumnToContents(column)
+        self._hooks_updating = True
+        try:
+            self.hooks_table.clear()
+            for group in summary.groups:
+                self._add_hook_agent_group(group)
+            self.hooks_table.expandAll()
+            for column in range(self.hooks_table.columnCount()):
+                self.hooks_table.resizeColumnToContents(column)
+        finally:
+            self._hooks_updating = False
 
         self.hooks_empty.setText(
-            "No lifecycle hooks are configured. Declare them under `hooks:` in "
-            "agents.yaml to run a command around agent activity."
+            "No compatible hooks are available. Add hooks to your global Claude Code "
+            "settings or declare Rotaris hooks in agents.yaml."
         )
-        self.hooks_empty.setVisible(not summary.hooks)
+        self.hooks_empty.setVisible(not any(group.hooks for group in summary.groups))
         self.hook_trust_label.setText(
             f"{summary.status_label} {summary.notice}".strip()
             if summary.notice
             else summary.status_label
         )
+        if (
+            summary.external_notice
+            and summary.external_notice
+            != "Claude Code global settings contain no hook declarations."
+        ):
+            self.hook_trust_label.setText(
+                f"{self.hook_trust_label.text()} {summary.external_notice}".strip()
+            )
         set_action_availability(
             self.review_hooks_button,
             enabled=bool(summary.pending),
@@ -1455,6 +1465,93 @@ class SettingsView(Themed, QWidget):
                 "" if summary.pending else "This workspace declares no hooks of its own to review."
             ),
         )
+
+    @traces(SWR.SWR_3725)
+    def _add_hook_agent_group(self, group: HookAgentGroup) -> None:
+        item = QTreeWidgetItem([group.label, "", "", "global runtime policy", ""])
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        item.setCheckState(0, Qt.CheckState.Checked if group.enabled else Qt.CheckState.Unchecked)
+        item.setData(0, Qt.ItemDataRole.UserRole, ("agent", group.agent_id, ""))
+        item.setToolTip(0, "Controls this agent's hooks for future Rotaris sessions.")
+        self.hooks_table.addTopLevelItem(item)
+        for hook in group.hooks:
+            status = self._hook_status(group, hook)
+            child = QTreeWidgetItem(
+                [
+                    hook.name,
+                    hook.event,
+                    hook.matcher or "every matching call",
+                    hook.scope_label,
+                    status,
+                ]
+            )
+            child.setData(0, Qt.ItemDataRole.UserRole, ("hook", group.agent_id, hook.record_id))
+            child.setData(0, Qt.ItemDataRole.UserRole + 1, hook.command)
+            if hook.compatible:
+                child.setFlags(child.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                child.setCheckState(
+                    0, Qt.CheckState.Checked if hook.enabled else Qt.CheckState.Unchecked
+                )
+            child.setToolTip(4, hook.compatibility_reason or "Runs during future Rotaris sessions.")
+            item.addChild(child)
+
+    def _refresh_hook_command_action(self) -> None:
+        selected = self.hooks_table.selectedItems()
+        command = selected[0].data(0, Qt.ItemDataRole.UserRole + 1) if len(selected) == 1 else ""
+        set_action_availability(
+            self.show_hook_command_button,
+            enabled=isinstance(command, str) and bool(command),
+            reason="Select a hook to view its command.",
+        )
+
+    @traces(SWR.SWR_3725)
+    def _show_selected_hook_command(self) -> None:
+        selected = self.hooks_table.selectedItems()
+        if len(selected) != 1:
+            return
+        command = selected[0].data(0, Qt.ItemDataRole.UserRole + 1)
+        if not isinstance(command, str) or not command:
+            return
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Hook command")
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(command)
+        dialog.exec()
+
+    @staticmethod
+    def _hook_status(group: HookAgentGroup, hook: Any) -> str:
+        if not hook.compatible:
+            return f"inactive — {hook.compatibility_reason}"
+        if not group.enabled:
+            return "disabled by agent"
+        if not hook.enabled:
+            return "disabled"
+        if not hook.allowed:
+            return "blocked — not reviewed"
+        return "active"
+
+    @traces(SWR.SWR_3725)
+    def _set_hook_catalog_item(self, item: QTreeWidgetItem, column: int) -> None:
+        if self._hooks_updating or column != 0:
+            return
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(data, tuple) or len(data) != 3:
+            return
+        kind, agent_id, record_id = data
+        from rotaris_core.hooks.external import ExternalHookPolicyStore
+
+        enabled = item.checkState(0) == Qt.CheckState.Checked
+        store = ExternalHookPolicyStore()
+        if kind == "agent":
+            store.set_agent_enabled(agent_id, enabled)
+        elif kind == "hook":
+            store.set_hook_enabled(record_id, enabled)
+        else:
+            return
+        self._hook_summary = None
+        # Rebuilding a QTreeWidget from itemChanged deletes the item currently
+        # completing its check-state transaction on Windows.  Queue the update.
+        QTimer.singleShot(0, self.refresh_hooks)
 
     @traces(SWR.SWR_2424)
     def _add_inventory_tab(self, tab_id: str, label: str, title: str) -> None:

@@ -32,6 +32,17 @@ is only paid for by a caller that actually wants to run one.
 
 from typing import TYPE_CHECKING, Any
 
+from rotaris_core.hooks.external import (
+    CLAUDE_CODE_AGENT_ID,
+    ROTARIS_AGENT_ID,
+    ExternalHookPolicy,
+    ExternalHookPolicyStore,
+    ExternalHookRecord,
+    claude_settings_path,
+    discover_claude_code_hooks,
+    enabled_external_hooks,
+    policy_path,
+)
 from rotaris_core.hooks.models import (
     DEFAULT_HOOK_TIMEOUT_SECONDS,
     HOOK_EVENTS,
@@ -95,12 +106,17 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "DEFAULT_HOOK_TIMEOUT_SECONDS",
+    "CLAUDE_CODE_AGENT_ID",
+    "ExternalHookPolicy",
+    "ExternalHookPolicyStore",
+    "ExternalHookRecord",
     "HOOK_EVENTS",
     "HOOK_FAILURE_DISABLE_THRESHOLD",
     "HOOK_SOURCES",
     "LIFECYCLE_HOOK_EVENTS",
     "MAX_HOOK_OUTPUT_BYTES",
     "RESERVED_LIFECYCLE_FIELDS",
+    "ROTARIS_AGENT_ID",
     "TOOL_HOOK_EVENTS",
     "TRUST_FILENAME",
     "HookLifecycleObserver",
@@ -113,12 +129,16 @@ __all__ = [
     "build_lifecycle_payload",
     "build_tool_payload",
     "clear_trust",
+    "claude_settings_path",
     "discard_hook_runner",
+    "discover_claude_code_hooks",
+    "enabled_external_hooks",
     "hooks_for_event",
     "load_trust",
     "matches_tool",
     "partition_hooks",
     "pending_trust_prompt",
+    "policy_path",
     "redact_payload",
     "register_hook_runner",
     "reset_hook_registry",

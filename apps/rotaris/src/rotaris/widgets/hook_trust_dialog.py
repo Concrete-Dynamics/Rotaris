@@ -21,6 +21,7 @@ Two rules shape it, and both are about the direction a mistake fails in:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, override
 
 from PySide6.QtCore import Signal
@@ -34,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 from rotaris_core.reqtocode import SWR, traces
 
-from rotaris.models.state import HookInfo, HookTrustSummary
+from rotaris.models.state import HookAgentGroup, HookInfo, HookTrustSummary
 from rotaris.theme import tokens
 from rotaris.theme.manager import Themed
 
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 
     from rotaris.theme.spec import Theme
 
-__all__ = ["HookTrustDialog", "hook_trust_summary"]
+__all__ = ["HookTrustDialog", "hook_catalog_summary", "hook_trust_summary"]
 
 
 @traces(SWR.SWR_2701, SWR.SWR_2704, SWR.SWR_2815)
@@ -102,6 +103,58 @@ def hook_trust_summary(config: Any, workspace: Path | str) -> HookTrustSummary:
     )
 
 
+@traces(SWR.SWR_3725)
+def hook_catalog_summary(config: Any, workspace: Path | str) -> HookTrustSummary:
+    """Extend trusted Rotaris hooks with the user-global external catalog."""
+    from rotaris_core.hooks.external import (
+        ROTARIS_AGENT_ID,
+        ExternalHookPolicyStore,
+        discover_claude_code_hooks,
+    )
+
+    summary = hook_trust_summary(config, workspace)
+    policy = ExternalHookPolicyStore().load()
+    rotaris_enabled = policy.agent_enabled(ROTARIS_AGENT_ID)
+    rotaris_rows = tuple(
+        replace(
+            hook,
+            agent_id=ROTARIS_AGENT_ID,
+            agent_label="Rotaris",
+            record_id=hook.record_id or _hook_record_id(hook),
+            enabled=policy.hook_enabled(hook.record_id or _hook_record_id(hook)),
+        )
+        for hook in summary.hooks
+    )
+    records, external_notice = discover_claude_code_hooks()
+    claude_enabled = policy.agent_enabled("claude-code")
+    claude_rows = tuple(
+        HookInfo(
+            name=record.label,
+            event=record.event,
+            matcher=record.matcher,
+            source="Claude Code global settings",
+            command=record.command,
+            allowed=record.compatible,
+            agent_id=record.agent_id,
+            agent_label=record.agent_label,
+            record_id=record.record_id,
+            compatible=record.compatible,
+            compatibility_reason=record.reason,
+            enabled=policy.hook_enabled(record.record_id),
+        )
+        for record in records
+    )
+    return replace(
+        summary,
+        hooks=rotaris_rows + claude_rows,
+        groups=(
+            HookAgentGroup(ROTARIS_AGENT_ID, "Rotaris", rotaris_enabled, rotaris_rows),
+            HookAgentGroup("claude-code", "Claude Code", claude_enabled, claude_rows),
+        ),
+        external_notice=external_notice,
+    )
+
+
 def _hook_info(hook: Any, *, allowed: bool) -> HookInfo:
     return HookInfo(
         name=str(hook.name),
@@ -112,7 +165,12 @@ def _hook_info(hook: Any, *, allowed: bool) -> HookInfo:
         allowed=allowed,
         required=bool(hook.required),
         timeout_seconds=float(hook.timeout_seconds),
+        record_id=str(hook.hook_id),
     )
+
+
+def _hook_record_id(hook: HookInfo) -> str:
+    return f"rotaris:{hook.source}:{hook.event}:{hook.name}"
 
 
 @traces(SWR.SWR_2701, SWR.SWR_2704, SWR.SWR_2815)

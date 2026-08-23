@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: f48f6a15d410afb5b27d7aad0bbf48eebce290b339ba65ece4be534b89044a00
+# GLOBAL-HASH: 8e67c2ca45be23d5c99404ef5c88fc60b7389841ef34a6b53c18dfaf1170836e
 
 from __future__ import annotations
 
@@ -4752,6 +4752,9 @@ class SWR(IntEnum):
     SWR_3724 = 3724
     """[approved] Standalone distributions carry the pinned Serena runtime - docs/requirements/3000-distribution-updates/SWR-3724-bundled-serena-runtime.md"""
 
+    SWR_3725 = 3725
+    """[approved] Global external-hook catalog - docs/requirements/2000-rotaris-desktop/SWR-3725-global-external-hook-catalog.md"""
+
 
 #: Members carrying the deprecation marker (blueprint §3/§5).
 DEPRECATED: frozenset[SWR] = frozenset({
@@ -6426,4 +6429,5 @@ META: dict[int, ReqMeta] = {
     3722: ReqMeta('SWR-3722', 3722, ReqStatus.DRAFT, 'The official download page discloses automatic network access without degrading the download UX', 'docs/requirements/3000-distribution-updates/SWR-3722-website-download-network-disclosure.md', True, True, '3cea9a561b365183', 'product', ()),
     3723: ReqMeta('SWR-3723', 3723, ReqStatus.APPROVED, 'Motion respects the reduced-motion preference', 'docs/requirements/2000-rotaris-desktop/SWR-3723-reduced-motion-gate.md', True, True, 'ddf1e57d2da7fc98', 'technical', (3704,)),
     3724: ReqMeta('SWR-3724', 3724, ReqStatus.APPROVED, 'Standalone distributions carry the pinned Serena runtime', 'docs/requirements/3000-distribution-updates/SWR-3724-bundled-serena-runtime.md', True, True, 'e5cc73f6df105a42', 'product', ()),
+    3725: ReqMeta('SWR-3725', 3725, ReqStatus.APPROVED, 'Global external-hook catalog', 'docs/requirements/2000-rotaris-desktop/SWR-3725-global-external-hook-catalog.md', True, True, '93d40c379217434d', 'product', ()),
 }

@@ -324,6 +324,74 @@ async def test_two_parallel_children_run_concurrently_and_both_succeed() -> None
     assert all(report.status == "succeeded" for _, report in collected)
 
 
+@verifies(SWR.SWR_177)
+@pytest.mark.asyncio
+async def test_three_background_children_launch_once_during_nested_drain_overlap() -> None:
+    """Productive use: three delegated probes finish while one factory call overlaps.
+
+    Expected outcome: the first child's nested drain cannot claim its two root-owned
+    siblings, and every probe reaches a single successful terminal result.
+    """
+    manager = make_manager()
+    conversations = [
+        MockConversation(
+            events=[MockToolEvent("bash"), MockMessageEvent("assistant", [CHILD_FINAL_TEXT])],
+        )
+        for _ in range(3)
+    ]
+    scheduler, _ = make_scheduler(conversations=conversations)
+    children = [
+        manager.spawn_child(
+            f"probe-{index}",
+            "tester",
+            f"probe {index}",
+            run_in_background=True,
+        )
+        for index in range(3)
+    ]
+    second_factory_entered = Event()
+    release_second_factory = Event()
+    factory_calls: list[str] = []
+    calls_lock = Lock()
+
+    def overlapping_factory(
+        persona: str,
+        runtime_kwargs: dict[str, object] | None = None,
+    ) -> AgentStub:
+        child_name = str((runtime_kwargs or {})["child_canonical_name"])
+        with calls_lock:
+            factory_calls.append(child_name)
+        if child_name == children[1].canonical_name:
+            second_factory_entered.set()
+            release_second_factory.wait(timeout=2)
+        return AgentStub(persona)
+
+    root_spawn = asyncio.create_task(
+        scheduler.spawn_children(
+            manager,
+            overlapping_factory,
+            parent_agent_id=manager.parent_agent_id,
+        ),
+    )
+    assert await asyncio.to_thread(second_factory_entered.wait, 1)
+
+    for _ in range(100):
+        if children[0].state.is_terminal():
+            break
+        await asyncio.sleep(0.01)
+    assert children[0].state == ChildTaskState.SUCCEEDED
+
+    release_second_factory.set()
+    spawned = await asyncio.wait_for(root_spawn, timeout=2)
+    while not manager.all_terminal:
+        await scheduler.wait_for_any_terminal(manager)
+
+    assert spawned == [child.canonical_name for child in children]
+    assert factory_calls == [child.canonical_name for child in children]
+    assert all(child.state == ChildTaskState.SUCCEEDED for child in children)
+    assert len(manager.results_by_task_id) == 3
+
+
 @verifies(SWR.SWR_104)
 @pytest.mark.asyncio
 async def test_dependency_chain_promotes_ready_child_after_parent_success() -> None:
@@ -1015,8 +1083,12 @@ async def test_drain_loop_terminates_when_spawn_makes_no_progress(
         ),
     )
 
-    async def _spawn_nothing(manager: object, agent_factory: object) -> list[str]:
-        del manager, agent_factory
+    async def _spawn_nothing(
+        manager: object,
+        agent_factory: object,
+        parent_agent_id: str | None = None,
+    ) -> list[str]:
+        del manager, agent_factory, parent_agent_id
         return []
 
     monkeypatch.setattr(scheduler, "spawn_children", _spawn_nothing)

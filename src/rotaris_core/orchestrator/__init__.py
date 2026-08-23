@@ -3,6 +3,7 @@ from __future__ import annotations
 from rotaris_core.orchestrator.child_manager import ChildManager
 from rotaris_core.orchestrator.child_state import (
     VALID_TRANSITIONS,
+    ChildLaunchClaim,
     ChildNotification,
     ChildTaskRecord,
     ChildTaskState,
@@ -24,6 +25,7 @@ __all__ = [
     "VALID_TRANSITIONS",
     "AgentFactory",
     "ChildManager",
+    "ChildLaunchClaim",
     "ChildNotification",
     "ChildReportArtifact",
     "ChildTaskRecord",

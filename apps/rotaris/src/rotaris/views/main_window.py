@@ -2219,6 +2219,7 @@ class MainWindow(Themed, QMainWindow):
         self.commands.register(
             "settings", "Open Settings", "Ctrl+,", lambda: self.show_view("settings")
         )
+        self.commands.register("about", "About & Legal", "", self._show_about_legal)
         self.commands.register(
             "transcript.search", "Search transcript", "Ctrl+F", self._search_transcript
         )
@@ -2244,6 +2245,12 @@ class MainWindow(Themed, QMainWindow):
     def _report_slash_error(self, message: str) -> None:
         """Surface a rejected command persistently — a toast outlives its use here."""
         self._report_error("Command not run", message)
+
+    @traces(SWR.SWR_3717)
+    def _show_about_legal(self) -> None:
+        """Open Settings on the About & Legal tab (SWR-3717 AC-001)."""
+        self.show_view("settings")
+        self.settings.set_active_tab("about")
 
     def _show_palette(self) -> None:
         CommandPaletteDialog(self.commands, self).exec()

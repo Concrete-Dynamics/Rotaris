@@ -1,6 +1,6 @@
 ---
 req-id: SWR-3721
-status: draft
+status: approved
 trace: required
 test: required
 title: "Provider settings state where model traffic is sent"

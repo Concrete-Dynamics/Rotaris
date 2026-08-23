@@ -45,7 +45,7 @@ def default_setup_manifest() -> SetupManifest:
             name="git",
             command="git",
             version_args=("--version",),
-            minimum_version="2.36.0",
+            minimum_version=None,
             provisioned_version="2.55.0",
             artifacts={
                 "windows-x64": _artifact(

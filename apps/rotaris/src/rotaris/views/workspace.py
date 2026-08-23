@@ -1228,10 +1228,6 @@ class WorkspaceView(Themed, QWidget):
 
         chips = QHBoxLayout()
         chips.setSpacing(8)
-        self.composer_mode_label = QLabel()
-        self.composer_mode_label.setObjectName("muted")
-        self.composer_mode_label.setAccessibleName("Composer mode")
-        chips.addWidget(self.composer_mode_label)
         self.persona_combo = _chip_combo([p.name for p in self._store.personas] or ["orchestrator"])
         self.persona_combo.setAccessibleName("Persona for the next prompt")
         if self._store.session_persona_override:
@@ -1595,12 +1591,11 @@ class WorkspaceView(Themed, QWidget):
         self.permission_combo.setEnabled(True)
         self.stash_button.setEnabled(True)
         if locked:
-            mode, button = "Run in progress", "Queue"
+            button = "Queue"
         elif self._store.session_name:
-            mode, button = "Continue session", "Continue run"
+            button = "Continue run"
         else:
-            mode, button = "New run", "Start run"
-        self.composer_mode_label.setText(mode)
+            button = "Start run"
         self.send_button.setText(button)
         self.send_button.setAccessibleName(button)
         self.composer.setPlaceholderText(

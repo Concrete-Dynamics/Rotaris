@@ -1,6 +1,6 @@
 ---
 req-id: SWR-3717
-status: draft
+status: approved
 trace: required
 test: required
 title: "Legal and product information is always reachable from the desktop app"
@@ -25,9 +25,9 @@ starting a run.
 
 ## Behaviour
 
-**The entry point is permanent.** Settings and the application menu expose an
-`About & Legal` action. It is available in every normal desktop state, including
-when no workspace or provider is configured.
+**The entry point is permanent.** Settings exposes an `About & Legal` tab, and
+the command palette offers the same action. Both are available in every normal
+desktop state, including when no workspace or provider is configured.
 
 **Product identity is explicit.** The surface shows at least the product name,
 running version, build or commit identifier when available, installation flavour
@@ -49,8 +49,8 @@ external legal-document link is the user action that may use the network.
 
 ## Acceptance criteria
 
-- **AC-001**: `About & Legal` is reachable from Settings and from the application
-  menu without authentication, provider configuration or an open workspace.
+- **AC-001**: `About & Legal` is reachable from Settings and from the command
+  palette without authentication, provider configuration or an open workspace.
 - **AC-002**: The surface displays the running Rotaris version and publisher
   identity and exposes the security contact.
 - **AC-003**: Privacy Policy, EULA, AGB/Terms, AUP and applicable withdrawal

@@ -585,6 +585,13 @@ class ProviderInfo:
     user_defined: bool = False
     has_credentials: bool | None = None
     quick_start_url: str | None = None
+    # SWR-3721: where model traffic goes, sourced from the runtime provider
+    # catalog (never a second hard-coded UI list). ``connection_mode`` carries
+    # ConnectionMode.value; empty means the catalog had no metadata.
+    connection_mode: str = ""
+    destination: str | None = None
+    operator_name: str | None = None
+    privacy_url: str | None = None
 
     def __post_init__(self) -> None:
         if self.has_credentials is None:

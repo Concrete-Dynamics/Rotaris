@@ -113,7 +113,10 @@ def test_workspace_large_size_keeps_primary_panes_visible(qtbot) -> None:
 
 
 @verifies(SWR.SWR_2026)
-def test_workspace_run_state_makes_composer_mode_explicit(qtbot) -> None:
+def test_workspace_run_state_speaks_through_the_send_action(qtbot) -> None:
+    """The primary action is the mode indicator: Queue while a run is active,
+    Continue run once a session exists. The former in-box mode label is gone —
+    it said what the action already says."""
     store = sample_store()
     bridge = FakeRunBridge()
     bridge.running = True
@@ -123,7 +126,6 @@ def test_workspace_run_state_makes_composer_mode_explicit(qtbot) -> None:
 
     assert view.composer.isReadOnly() is False
     assert view.send_button.text() == "Queue"
-    assert view.composer_mode_label.text() == "Run in progress"
     assert view.send_button.isEnabled() is True
 
     store.set_session_status("completed")

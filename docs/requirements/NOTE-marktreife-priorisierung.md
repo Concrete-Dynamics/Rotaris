@@ -74,6 +74,7 @@ Erste Requirement-Runde geschrieben (alle `draft`, Implementierung läuft):
 | --- | --- |
 | ReqToCode-Produktisierung, Schritt 1 | SWR-2335 (Layout als Datum), SWR-2336 (öffentliche Coverage-Abfrage), SWR-2337 (Annotations-Konventions-Seam); Backlog neu geschnitten: SWR-2303, 2311, 2315, 2316, 2317, 2318 ([Epic 2300](2300-traceability.md)) |
 | Event-Store, Replay, Trajektorien-Export | SWR-2901–2903 ([Epic 2900](2900-event-store.md)) |
+| Rotaris-Desktop Legal & Privacy — **implementiert (2026-08-23)** | SWR-3717 (About & Legal), SWR-3719 (Credential Protection), SWR-3720 (Third-Party Notices, [Epic 3000](3000-distribution-updates.md)), SWR-3721 (Provider Transparency) |
 | Event-Abdeckung der P1-Features | SWR-1831 ([Epic 1800](1800-cli-headless.md)) |
 | Auditierbares Lernen (Historie + Rollback) | SWR-1640–1642 ([Epic 1600](1600-improvement-loop.md)) |
 

@@ -297,6 +297,12 @@ legacy-id: FR-ROTARIS-UX-003
 date: 2026-07-13
 source: docs/requirement-log/done/requirements-20260713-rotaris-production-ux.md
 
+The composer states its mode through the primary action beside it — `Start
+run`, `Continue run`, or `Queue` while a run is active — and through the
+placeholder text. The separate in-box mode label was removed (2026-08-23) as
+redundant: the action and the placeholder already say it, and the label
+competed with the model and persona chips for the composer's front row.
+
 ## SWR-2027 — Provide transcript search, match navigation, new-output indication, collapsible reasoning, manual compression, and confirmed transcript clearing.
 
 legacy-id: FR-ROTARIS-UX-004
@@ -1170,6 +1176,39 @@ face; the branch fact carries its icon. The workspace sidebar's counted sections
 chrome adopt them.
 
 Full requirement: [SWR-3709 — Views compose in the design system's vocabulary](2000-rotaris-desktop/SWR-3709-design-language-composition.md)
+
+## SWR-3717 — Legal and product information is always reachable from the desktop app
+
+Settings gains an `About` tab — also reachable from the command palette — that renders the
+product identity (version, build/commit id when present, installation flavour, publisher,
+security contact), names and opens each canonical legal document (Privacy Policy, EULA,
+Terms/AGB, AUP, withdrawal information), and opens the Rotaris license and the bundled
+`THIRD-PARTY-LICENSES.txt` locally. Rendering performs no HTTP request; a failed
+browser launch reports inline and leaves the surface usable.
+
+Full requirement: [SWR-3717 — Legal and product information is always reachable from the desktop app](2000-rotaris-desktop/SWR-3717-about-legal-center.md)
+
+## SWR-3719 — Desktop credentials are protected with platform-appropriate user access controls
+
+Credential storage is stated as a security property rather than a Unix mode string: tokens
+live below the platform-specific per-user data directory (never the workspace), POSIX runs
+restrict the directory to `0700` and files to `0600`, and Windows relies on the user
+profile's inherited ACLs — `chmod` is not invoked there, so no POSIX-mode claim is made for
+Windows. Secret values are masked across logs, diagnostics, hook payloads and UI errors, and
+provider-scoped logout removes the stored credential so the next launch sees the provider
+unauthenticated.
+
+Full requirement: [SWR-3719 — Desktop credentials are protected with platform-appropriate user access controls](2000-rotaris-desktop/SWR-3719-platform-credential-protection.md)
+
+## SWR-3721 — Provider settings state where model traffic is sent
+
+Every built-in provider declares a connection mode (Rotaris-managed cloud, direct remote
+API, local SDK, custom endpoint) with operator and destination metadata in the runtime
+catalog — the one product source. Settings → Providers renders that metadata under each
+row, the add-provider dialog states the destination before configuration completes, and
+a provider without transparency metadata fails catalog validation.
+
+Full requirement: [SWR-3721 — Provider settings state where model traffic is sent](2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md)
 
 
 ## History

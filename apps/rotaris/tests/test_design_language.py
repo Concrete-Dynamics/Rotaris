@@ -240,6 +240,27 @@ def test_the_title_bar_chip_tells_place_from_session_by_face(qtbot) -> None:
 
 
 @verifies(SWR.SWR_3709)
+def test_the_title_bar_session_status_is_one_tag_chip(qtbot) -> None:
+    """The session status is its dot and its word inside one tag-styled pill,
+    and the pill's variant follows the state."""
+    from rotaris.models.store import WorkspaceStore
+    from rotaris.views.chrome import TitleBar
+
+    store = WorkspaceStore()
+    store.set_session_status("running")
+    bar = TitleBar(store)
+    qtbot.addWidget(bar)
+
+    assert bar.status_label.parent() is bar.session_chip
+    assert bar.status_dot.parent() is bar.session_chip
+    assert bar.status_label.text() == "session running"
+    assert str(tokens().color.fill_y) in bar.session_chip.styleSheet()
+
+    store.set_session_status("failed")
+    assert str(tokens().color.fill_danger) in bar.session_chip.styleSheet()
+
+
+@verifies(SWR.SWR_3709)
 def test_the_status_bar_branch_fact_carries_its_icon(qtbot) -> None:
     from rotaris.models.store import WorkspaceStore
     from rotaris.views.chrome import StatusBar

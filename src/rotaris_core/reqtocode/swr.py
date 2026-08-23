@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 364a30a92842e131bf29b9fae72a462e2a6facec78e9d5a9bed179d1124d602b
+# GLOBAL-HASH: e94c9c1a98b9e3bfe85419144ac0c23b946fdeab89b29f4e5f6e362eff284f4c
 
 from __future__ import annotations
 
@@ -6405,7 +6405,7 @@ META: dict[int, ReqMeta] = {
     3625: ReqMeta('SWR-3625', 3625, ReqStatus.APPROVED, 'A run waiting on a person says so where the requirement is shown', 'docs/requirements/3600-requirement-board-workflow/SWR-3625-a-run-waiting-on-a-person-says-so.md', True, True, '4c917a314b6c2bf6', 'product', ()),
     3700: ReqMeta('SWR-3700', 3700, ReqStatus.APPROVED, 'Themeable design-token layer', 'docs/requirements/2000-rotaris-desktop/SWR-3700-themeable-design-token-layer.md', True, True, '9967ed94fe077204', 'technical', (2093,)),
     3701: ReqMeta('SWR-3701', 3701, ReqStatus.APPROVED, 'A user can choose the Rotaris theme, and it applies without a relaunch', 'docs/requirements/2000-rotaris-desktop/SWR-3701-theme-selection.md', True, True, '0b0fd0d161a887ff', 'product', ()),
-    3702: ReqMeta('SWR-3702', 3702, ReqStatus.APPROVED, 'Design-system component library', 'docs/requirements/2000-rotaris-desktop/SWR-3702-design-system-components.md', True, True, '972d72d591e3b10c', 'technical', (3700,)),
+    3702: ReqMeta('SWR-3702', 3702, ReqStatus.APPROVED, 'Design-system component library', 'docs/requirements/2000-rotaris-desktop/SWR-3702-design-system-components.md', True, True, '137af69d91d68105', 'technical', (3700,)),
     3703: ReqMeta('SWR-3703', 3703, ReqStatus.APPROVED, 'Typography ships with the application', 'docs/requirements/2000-rotaris-desktop/SWR-3703-brand-typography.md', True, True, '71be703bb69502a6', 'technical', (3700,)),
     3704: ReqMeta('SWR-3704', 3704, ReqStatus.APPROVED, 'Brand motif and elevation in Qt', 'docs/requirements/2000-rotaris-desktop/SWR-3704-motif-and-elevation.md', True, True, 'a7e2997c3564a0f6', 'technical', (3700,)),
     3705: ReqMeta('SWR-3705', 3705, ReqStatus.APPROVED, 'Colour tokens are authored in OKLCH and resolved to sRGB', 'docs/requirements/2000-rotaris-desktop/SWR-3705-oklch-colour-resolution.md', True, True, '651d9893ba065aff', 'technical', (3700,)),

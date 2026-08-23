@@ -23031,12 +23031,6 @@ Source: https://github.com/git-for-windows/git/releases/download/v2.55.0.windows
 Licence: GPL-2.0-only
 
 ------------------------------------------------------------------------------
-node 24.19.0
-Provisioned after installation — not bundled in the installer
-Source: https://nodejs.org/download/release/v24.19.0/node-v24.19.0-win-x64.zip
-Licence: MIT
-
-------------------------------------------------------------------------------
 ripgrep 15.2.0
 Provisioned after installation — not bundled in the installer
 Source: https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip

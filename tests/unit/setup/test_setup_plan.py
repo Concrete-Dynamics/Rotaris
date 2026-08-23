@@ -34,7 +34,6 @@ def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
         (tool.name, tool.minimum_version, tool.provisioned_version) for tool in manifest.tools
     ] == [
         ("git", None, "2.55.0"),
-        ("node", "20.0.0", "24.19.0"),
         ("ripgrep", "14.1.0", "15.2.0"),
     ]
     assert manifest.mcp_pins == {"@playwright/mcp": PLAYWRIGHT_MCP_VERSION}
@@ -55,6 +54,25 @@ def test_default_mcp_configuration_derives_every_pinned_warmup() -> None:
     assert [step.id for step in derive_mcp_warmups(DEFAULT_MCP_SERVERS)] == [
         "warm:npx:@playwright/mcp@0.0.75"
     ]
+
+
+@verifies(SWR.SWR_3715)
+def test_default_playwright_is_available_only_when_npx_is_installed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a user without Node.js opens Rotaris after a bundled install.
+    Expected outcome: Playwright is withheld until the user's Node installation supplies npx."""
+    from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
+    from rotaris_core.config.mcp_resolution import mcp_server_is_available
+
+    monkeypatch.setattr("rotaris_core.config.mcp_resolution.shutil.which", lambda _command: None)
+    assert mcp_server_is_available("playwright", DEFAULT_MCP_SERVERS["playwright"]) is False
+
+    monkeypatch.setattr(
+        "rotaris_core.config.mcp_resolution.shutil.which",
+        lambda command: "/usr/bin/npx" if command == "npx" else None,
+    )
+    assert mcp_server_is_available("playwright", DEFAULT_MCP_SERVERS["playwright"]) is True
 
 
 @verifies(SWR.SWR_3715)
@@ -113,10 +131,14 @@ def test_plan_orders_missing_tools_then_deduplicated_exact_warmups(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Productive use: first launch explains work in a stable, dependency-safe order.
-    Expected outcome: Git, Node, ripgrep precede sorted exact cache warmups and recording."""
+    Expected outcome: Git and ripgrep precede sorted exact cache warmups and recording."""
     monkeypatch.setattr(
         "rotaris_core.setup.planner.probe_tool",
         lambda spec, **_kwargs: ToolProbe(spec.name, None, None, False),
+    )
+    monkeypatch.setattr(
+        "rotaris_core.setup.planner.shutil.which",
+        lambda command, **_kwargs: "/usr/bin/npx" if command == "npx" else None,
     )
     servers = {
         "serena": SimpleNamespace(
@@ -138,10 +160,36 @@ def test_plan_orders_missing_tools_then_deduplicated_exact_warmups(
     assert [step.id for step in plan.steps] == [
         "detect",
         "install:git",
-        "install:node",
         "install:ripgrep",
         "warm:npx:@playwright/mcp@0.0.75",
         "warm:uvx:serena-agent==1.7.0",
+        "record",
+    ]
+
+
+@verifies(SWR.SWR_3715)
+def test_plan_skips_node_and_playwright_warmup_without_system_npx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a user installs Rotaris without Node.js.
+    Expected outcome: setup reaches the app without downloading Node or Playwright."""
+    monkeypatch.setattr(
+        "rotaris_core.setup.planner.probe_tool",
+        lambda spec, **_kwargs: ToolProbe(spec.name, None, None, False),
+    )
+    monkeypatch.setattr("rotaris_core.setup.planner.shutil.which", lambda *_args, **_kwargs: None)
+    servers = {
+        "playwright": SimpleNamespace(
+            type="stdio", command="npx", args=["-y", "@playwright/mcp@0.0.75", "--headless"]
+        )
+    }
+
+    plan = build_setup_plan(default_setup_manifest(), mcp_servers=servers)
+
+    assert [step.id for step in plan.steps] == [
+        "detect",
+        "install:git",
+        "install:ripgrep",
         "record",
     ]
 
@@ -182,7 +230,6 @@ def test_manifest_change_creates_a_top_up_plan(monkeypatch: pytest.MonkeyPatch) 
     assert [step.id for step in plan.steps] == [
         "detect",
         "satisfied:git",
-        "satisfied:node",
         "satisfied:ripgrep",
         "record",
     ]

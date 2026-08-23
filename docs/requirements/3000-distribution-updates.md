@@ -28,9 +28,10 @@ and notifies users when one is available on GitHub Releases.
 ## SWR-3715 — A bundled install provisions the machine once, before the app opens
 
 SWR-3001 ships Python and its dependencies, and SWR-3724 adds Serena to that
-bundle. The remaining external programs are `git`, `npx`, and `rg`. The first
-launch after a bundled install provisions what is missing under the per-user data
-directory, warms the configured external MCP caches,
+bundle. The managed external programs are `git` and `rg`; `npx` is a
+user-provided prerequisite for optional JavaScript MCP servers. The first launch
+after a bundled install provisions missing managed tools under the per-user data
+directory and warms configured external MCP caches when their runner is present,
 shows an ordered step list with per-step timings and a details log, and then starts
 the application. Every later launch skips it; a failure degrades a feature rather
 than blocking the app.

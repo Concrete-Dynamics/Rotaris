@@ -12,11 +12,11 @@ date: 2026-08-22
 
 SWR-3001 freezes Python and the application dependency graph into the shipped
 bundle. SWR-3724 adds the pinned Serena runtime to that graph. The remaining
-external programs Rotaris shells out to are `git` for worktrees and checkpoints,
-`npx` for the Playwright MCP server in `DEFAULT_MCP_SERVERS`, and `rg` for the
-search tool. A user who installs from `Rotaris-<v>-windows-x64-setup.exe`, the
-DMG, or the AppImage therefore needs one visible setup run for those external
-tools and the Playwright package cache before productive use.
+managed external programs are `git` for worktrees and checkpoints and `rg` for
+the search tool. `npx` supports optional JavaScript MCP servers, including the
+default Playwright server, when the user has installed Node.js. A user who
+installs from `Rotaris-<v>-windows-x64-setup.exe`, the DMG, or the AppImage
+therefore needs one visible setup run for Git and ripgrep before productive use.
 
 Rotaris shall close that gap with a **setup run**: the first launch after a
 bundled install provisions what is missing, tells the user what it is doing
@@ -27,8 +27,8 @@ Every later launch skips it.
 
 - **In scope**: Windows, macOS and Linux bundled artifacts from SWR-3001 —
   installer, portable `.exe`, `.app`/DMG, AppImage. Detection and per-user
-  provisioning of `git`, Node/`npx` and `rg`; warming the JavaScript MCP package
-  caches those servers need; removal of the shipped Git MCP server in
+  provisioning of `git` and `rg`; warming JavaScript MCP package caches when
+  `npx` is already available; removal of the shipped Git MCP server in
   favour of terminal Git commands; the progress window; the completion record
   that makes the run once-only; a re-runnable repair; a non-interactive
   equivalent for `rotaris-cli` and `rotaris-headless`.
@@ -41,23 +41,26 @@ Every later launch skips it.
 ## The setup run
 
 **It only does what is missing.** Each step first asks whether the tool is
-already usable — a working Git executable on `PATH`, a satisfying Node or
-ripgrep version on `PATH`, or one Rotaris provisioned earlier — and when it is,
-the step reports `already installed` and costs nothing. A machine that already
-has git, Node and ripgrep sees a setup run that completes in seconds without
-downloading anything.
+already usable — a working Git executable on `PATH`, a satisfying ripgrep
+version on `PATH`, or one Rotaris provisioned earlier — and when it is, the
+step reports `already installed` and costs nothing. A machine that already has
+git and ripgrep sees a setup run that completes in seconds without downloading
+anything.
 
 Any installed Git whose version command starts successfully is reused. Rotaris
 records and displays the detected version when Git reports one. Git discovery
 has no version floor; a missing Git executable or one that cannot run triggers
 the pinned managed download.
 
-**Steps, in order.** Detect what is present; provision `git`; provision Node;
-provision `rg`; warm the `npx` cache for the Playwright MCP server;
-record what was provisioned; hand off to the application. The list is derived
-from the external tools Rotaris actually resolves, not hand-maintained in the
-window. A user-configured `uvx` entry uses a user-supplied executable and may
-contribute a warm-up when that executable is available.
+**Steps, in order.** Detect what is present; provision `git`; provision `rg`;
+warm the cache for an enabled exact JavaScript MCP package when `npx` is already
+on PATH; record what was provisioned; hand off to the application. Node is a
+user-installed prerequisite and the bundled installer never downloads it. The
+default Playwright MCP server is available when `npx` is present and unavailable
+when it is absent. The list is derived from the external tools Rotaris actually
+resolves, not hand-maintained in the window. A user-configured `uvx` entry uses
+a user-supplied executable and may contribute a warm-up when that executable is
+available.
 
 Rotaris ships no Git MCP server, pin, warm-up, persona grant, or server-specific
 initialization. Agents that need Git invoke the installed `git` command through
@@ -67,10 +70,7 @@ their terminal tool.
 tools live under the per-user data directory (`GLOBAL_DATA_DIR`/`tools`).
 Rotaris does not modify the machine's `PATH`, does not write to a system
 location, does not register anything with the OS package database, and never
-asks for administrator or `sudo` rights. Provisioned tools are put in front of
-the child-process environment Rotaris builds for its own subprocesses, so a
-Rotaris-provisioned Node can never shadow the user's own `node` in the user's
-own shell.
+asks for administrator or `sudo` rights.
 
 **Downloads are pinned and verified.** Every archive is fetched over HTTPS from
 the tool's official release location at a version pinned in the Rotaris source,
@@ -118,44 +118,47 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 
 ## Acceptance criteria
 
-- **AC-001**: The first launch of a bundled Rotaris on a machine with none of
-  `git`, Node or `rg` provisions all three, warms the required JavaScript MCP cache, and then
-  starts the desktop application without further user action.
-- **AC-002**: On a machine with any working Git executable and satisfying Node
-  and ripgrep versions, the run reports each as already installed, downloads
-  nothing, and reaches the application. The pinned Git version applies only to
-  Rotaris-managed downloads.
-- **AC-003**: The second launch starts the application directly — no setup
+- **AC-001**: The first launch of a bundled Rotaris on a machine with no `git`,
+  Node or `rg` provisions Git and ripgrep, omits Node and every `npx` cache
+  warm-up, and then starts the desktop application without further user action.
+- **AC-002**: The default Playwright MCP server is available when Node.js
+  supplies `npx` and unavailable otherwise. The bundled installer never
+  downloads Node.js to make Playwright available.
+- **AC-003**: On a machine with any working Git executable and satisfying
+  ripgrep version, the run reports each required tool as already installed,
+  downloads nothing, and reaches the application. The pinned Git version
+  applies only to Rotaris-managed downloads.
+- **AC-004**: The second launch starts the application directly — no setup
   window, no re-detection cost the user can perceive.
-- **AC-004**: The window shows the ordered step list, the completed count and
+- **AC-005**: The window shows the ordered step list, the completed count and
   percentage, per-step elapsed time on completion, the current step marked, and
   a details disclosure carrying the live command log as copyable text.
-- **AC-005**: A failing step reports the tool, command, exit status and reason,
+- **AC-006**: A failing step reports the tool, command, exit status and reason,
   offers `Retry` and `Continue without it`, and continuing opens the application
   with that feature degraded rather than the application refusing to start.
-- **AC-006**: Cancelling stops after the running step, leaves no partially
+- **AC-007**: Cancelling stops after the running step, leaves no partially
   unpacked tool, records the steps that did complete, and the next launch
   resumes at the first incomplete step.
-- **AC-007**: No step requires administrator or root rights, writes outside the
+- **AC-008**: No step requires administrator or root rights, writes outside the
   per-user data and config directories, or alters the machine's `PATH`.
-- **AC-008**: Every downloaded archive is verified against a pinned checksum
+- **AC-009**: Every downloaded archive is verified against a pinned checksum
   before use; a mismatch fails the step, reports both digests, and unpacks
   nothing.
-- **AC-009**: With no network reachable, the run completes by naming the
+- **AC-010**: With no network reachable, the run completes by naming the
   degraded features and opening the application.
-- **AC-010**: A Rotaris version that requires a tool the completion record does
+- **AC-011**: A Rotaris version that requires a tool the completion record does
   not cover runs a top-up for that tool alone and says so, rather than repeating
   the first-time run.
-- **AC-011**: `rotaris-cli setup` performs the same provisioning without a GUI,
+- **AC-012**: `rotaris-cli setup` performs the same provisioning without a GUI,
   reporting one line per step and exiting non-zero when a step fails.
-- **AC-012**: The shipped MCP server map, default persona grants, setup manifest,
+- **AC-013**: The shipped MCP server map, default persona grants, setup manifest,
   and warm-up plan contain no Git MCP entry; Git-capable agents use their terminal.
 
 ## Test portfolio
 
 | Level           | Productive scenario                                                                                                                             | Exercised boundary                                             | Planned/covering test                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Unit            | Detection reuses every working installed Git; the default setup plan excludes `uv`, derives the Playwright warm-up, and excludes Git MCP and Serena warm-ups | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
+| Unit            | Detection reuses every working installed Git; the default setup plan omits Node and skips the Playwright warm-up when `npx` is absent | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
 | Unit            | Default agents start without a Git MCP server or persona grant                                                                                 | Shipped persona and MCP configuration                            | `tests/unit/test_config_defaults.py::test_git_mcp_is_absent_from_the_shipped_configuration` |
 | Unit            | A pinned archive with a wrong digest is refused and nothing is unpacked; a matching one is unpacked into the per-user tool directory             | Download-and-verify step over a local HTTPS fixture             | `tests/unit/setup/test_tool_download.py`                     |
 | Integration     | A cancelled, then resumed, run completes the remaining steps only; a completion record makes a later run a no-op; a raised discovery floor triggers a top-up for tools that use one | Setup runner → completion record in the data dir                | `tests/integration/test_setup_resume_and_record.py`          |

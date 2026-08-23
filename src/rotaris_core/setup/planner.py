@@ -187,6 +187,11 @@ def build_setup_plan(
         record.steps if record is not None and record.manifest_fingerprint == fingerprint else {}
     )
     for warmup in derive_mcp_warmups(mcp_servers):
+        if (
+            warmup.kind == SetupStepKind.WARM_NPX
+            and shutil.which("npx", path=(env or os.environ).get("PATH")) is None
+        ):
+            continue
         state = completed.get(warmup.id)
         if manual or state is None or state.status != "complete":
             steps.append(warmup)

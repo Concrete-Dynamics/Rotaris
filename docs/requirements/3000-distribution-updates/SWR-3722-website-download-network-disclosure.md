@@ -44,7 +44,8 @@ that:
 
 1. on first launch, Rotaris may download missing tools and warm package caches
    required by the application, which can contact services such as GitHub,
-   Astral, Node.js and relevant package registries; and
+   Astral and relevant package registries when their user-provided runners are
+   available; and
 2. supported standalone desktop builds contact GitHub on every launch to check
    whether a newer Rotaris version exists.
 
@@ -63,8 +64,8 @@ Recommended copy:
 **English**
 
 > **Automatic network access.** On first launch, Rotaris may download missing
-> tools and warm package caches from services such as GitHub, Astral, Node.js and
-> relevant package registries. Standalone desktop builds also check GitHub for
+> tools and warm package caches from services such as GitHub, Astral and relevant
+> package registries when their user-provided runners are available. Standalone desktop builds also check GitHub for
 > updates on every launch. These requests may expose technical connection data
 > such as your IP address to the respective services. Project files, prompts and
 > provider credentials are not sent as part of these setup or update requests.
@@ -74,7 +75,8 @@ Recommended copy:
 
 > **Automatische Netzwerkzugriffe.** Beim ersten Start kann Rotaris fehlende
 > Werkzeuge herunterladen und benötigte Paket-Caches über Dienste wie GitHub,
-> Astral, Node.js und die jeweils erforderlichen Paketregistries aufwärmen.
+> Astral und die jeweils erforderlichen Paketregistries aufwärmen, sofern deren
+> vom Nutzer bereitgestellte Runner verfügbar sind.
 > Standalone-Desktop-Versionen prüfen außerdem bei jedem Start über GitHub, ob
 > eine neuere Rotaris-Version verfügbar ist. Dabei können technisch notwendige
 > Verbindungsdaten wie deine IP-Adresse an den jeweiligen Dienst übermittelt

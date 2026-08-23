@@ -25,7 +25,7 @@ SENTINEL = "--rotaris-run-bundled-serena"
 
 
 def _run_serena(arguments: Sequence[str]) -> int:
-    from serena.cli import top_level
+    from serena.cli import top_level  # type: ignore[import-untyped]
 
     argv_before = sys.argv
     sys.argv = [BUNDLED_SERENA_COMMAND, *arguments]

@@ -86,7 +86,7 @@ jobs:
 
       - name: macOS DMG
         if: runner.os == 'macOS'
-        run: packaging/macos/make_dmg.sh "${VERSION}"
+        run: bash packaging/macos/make_dmg.sh "${VERSION}"
 
       - name: Linux AppImage
         if: runner.os == 'Linux'
@@ -94,7 +94,7 @@ jobs:
           sudo curl -fsSL -o /usr/local/bin/appimagetool \
             https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           sudo chmod +x /usr/local/bin/appimagetool
-          packaging/linux/make_appimage.sh "${VERSION}"
+          bash packaging/linux/make_appimage.sh "${VERSION}"
 
       # The console entry points travel as one archive per platform: a onedir
       # build is a tree, not a file. Windows gets a zip because that is what

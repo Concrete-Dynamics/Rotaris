@@ -192,3 +192,20 @@ def test_appimage_recipe_carries_the_desktop_icon() -> None:
 def test_unknown_target_names_the_valid_ones() -> None:
     with pytest.raises(ValueError, match="rotaris-cli"):
         bundle_spec("rotaris-desktop")
+
+
+@verifies(SWR.SWR_3726)
+def test_build_icons_derive_from_the_brand_mark() -> None:
+    """Productive use: a maintainer builds an installer on Windows or Linux.
+    Expected outcome: every packaging icon is the brand mark — the SVG the recipes
+    copy, plus the PNG and ICO PyInstaller embeds — and the bundle spec resolves
+    one of them on this platform."""
+    from rotaris_core.packaging.pyinstaller import repo_root
+
+    assets = repo_root() / "packaging" / "assets"
+    assert (assets / "rotaris.svg").is_file()
+    png = assets / "rotaris.png"
+    ico = assets / "rotaris.ico"
+    assert png.is_file() and png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert ico.is_file() and ico.read_bytes().startswith(b"\x00\x00\x01\x00")
+    assert bundle_spec("rotaris").icon is not None

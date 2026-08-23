@@ -1210,6 +1210,15 @@ a provider without transparency metadata fails catalog validation.
 
 Full requirement: [SWR-3721 — Provider settings state where model traffic is sent](2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md)
 
+## SWR-3726 — Brand mark ships with the application
+
+Technical requirement derived from SWR-3700. The design system's logo ships as an asset and is
+rasterised by one module for the title-bar mark slot and the application window icon, and the
+packaging assets that PyInstaller and the AppImage recipe embed are the same mark — so a build
+and a running window stop showing the placeholder letter or a platform default.
+
+Full requirement: [SWR-3726 — Brand mark ships with the application](2000-rotaris-desktop/SWR-3726-brand-mark-ships-with-the-app.md)
+
 
 ## History
 

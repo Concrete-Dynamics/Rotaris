@@ -73,7 +73,7 @@ so the abstraction is proven by a second real palette), and **High Contrast**
 
 Derived from: [SWR-2093 — Design-system tokens and reusable UI primitives](SWR-2093-design-system-primitives.md)
 
-Derived requirements: [SWR-3702 — Design-system component library](SWR-3702-design-system-components.md), [SWR-3703 — Brand typography ships with the application](SWR-3703-brand-typography.md), [SWR-3704 — Brand motif and elevation in Qt](SWR-3704-motif-and-elevation.md), [SWR-3705 — Colour tokens are authored in OKLCH](SWR-3705-oklch-colour-resolution.md), [SWR-3706 — Every surface reads tokens at paint time](SWR-3706-tokens-read-at-paint-time.md)
+Derived requirements: [SWR-3702 — Design-system component library](SWR-3702-design-system-components.md), [SWR-3703 — Brand typography ships with the application](SWR-3703-brand-typography.md), [SWR-3704 — Brand motif and elevation in Qt](SWR-3704-motif-and-elevation.md), [SWR-3705 — Colour tokens are authored in OKLCH](SWR-3705-oklch-colour-resolution.md), [SWR-3706 — Every surface reads tokens at paint time](SWR-3706-tokens-read-at-paint-time.md), [SWR-3726 — Brand mark ships with the application](SWR-3726-brand-mark-ships-with-the-app.md)
 
 Related: [SWR-3701 — Choosing the Rotaris theme](SWR-3701-theme-selection.md)
 

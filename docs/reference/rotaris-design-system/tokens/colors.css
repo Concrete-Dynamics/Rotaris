@@ -3,17 +3,20 @@
    while the 5-point steps between levels keep panels, cards and hover states
    legibly apart, and bright text (94%) holds ~11:1 against it. ── */
 --rt-bg:oklch(21% 0 0);
---rt-surface:oklch(26.5% 0 0);
---rt-surface-2:oklch(30.5% 0 0);
---rt-chrome:oklch(23.5% 0 0);
---rt-hover:oklch(35% 0 0);
+--rt-surface:oklch(25% 0 0);
+--rt-surface-2:oklch(29% 0 0);
+--rt-chrome:oklch(23% 0 0);
+--rt-hover:oklch(30% 0 0);
 --rt-overlay:oklch(12% 0 0 / 0.72);
 
---rt-border:oklch(36% 0 0);
---rt-border-strong:oklch(48% 0 0);
---rt-border-panel:oklch(32% 0 0);
+/* ── edges — hairlines whisper. Borders sit close to the surface they bound so a
+   dense screen reads as planes and rules, not as a stack of boxed-in panels. ── */
+--rt-border:oklch(31% 0 0);
+--rt-border-strong:oklch(40% 0 0);
+--rt-border-panel:oklch(28% 0 0);
 --rt-focus:oklch(83% 0.10 292);
---rt-divider:color-mix(in oklch, var(--rt-text) 14%, transparent);
+/* the faintest rule in the system — row separators and internal dividers */
+--rt-divider:color-mix(in oklch, var(--rt-text) 9%, transparent);
 
 --rt-text:oklch(94% 0 0);
 --rt-text-secondary:oklch(80% 0 0);
@@ -100,12 +103,12 @@
 --rt-diff-meta:var(--rt-info-300);
 /* ── pill fills — a translucent wash of the hue's 500 stop, carrying light text of
    the same hue. Softer than the 800 block, without going pastel-bright. ── */
---rt-fill-accent:oklch(59% 0.160 292 / 0.24);
+--rt-fill-accent:oklch(59% 0.160 292 / 0.17);
 --rt-fill-accent-ink:var(--rt-accent-200);
---rt-fill-x:oklch(67% 0.190 86 / 0.22);
+--rt-fill-x:oklch(67% 0.190 86 / 0.16);
 --rt-fill-x-ink:var(--rt-axis-x-200);
---rt-fill-y:oklch(65% 0.188 165 / 0.22);
+--rt-fill-y:oklch(65% 0.188 165 / 0.16);
 --rt-fill-y-ink:var(--rt-axis-y-200);
---rt-fill-danger:oklch(64% 0.200 25 / 0.22);
+--rt-fill-danger:oklch(64% 0.200 25 / 0.16);
 --rt-fill-danger-ink:var(--rt-danger-300);
 }

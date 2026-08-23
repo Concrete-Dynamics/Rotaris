@@ -1,0 +1,13 @@
+<!-- @dsCard group="Colors" viewport="700x250" name="Diff colors" subtitle="Add rides axis Y, remove rides danger — translucent washes, colored op glyph only" -->
+<link rel="stylesheet" href="../styles.css">
+<div style="width:700px;padding:20px;background:var(--rt-bg);display:flex;flex-direction:column;gap:12px">
+<div style="background:var(--rt-bg);border:1px solid var(--rt-border);border-radius:var(--rt-radius-md);overflow:hidden;padding:6px 0">
+<div class="diff-line is-meta"><span class="diff-ln"></span><span class="diff-op">@</span><span>@@ -12,6 +12,8 @@ def resolve_strategy(cfg):</span></div>
+<div class="diff-line"><span class="diff-ln">12</span><span class="diff-op"> </span><span>    if cfg.mode == "swarm":</span></div>
+<div class="diff-line is-del"><span class="diff-ln">13</span><span class="diff-op">-</span><span>        return SwarmStrategy(cfg.agents)</span></div>
+<div class="diff-line is-add"><span class="diff-ln">13</span><span class="diff-op">+</span><span>        limit = cfg.max_agents or DEFAULT_LIMIT</span></div>
+<div class="diff-line is-add"><span class="diff-ln">14</span><span class="diff-op">+</span><span>        return SwarmStrategy(cfg.agents, limit=limit)</span></div>
+<div class="diff-line"><span class="diff-ln">15</span><span class="diff-op"> </span><span>    return SingleAgentStrategy()</span></div>
+</div>
+<div style="font-size:12px;color:var(--rt-text-secondary);line-height:1.55;max-width:640px">Tokens: <span class="mono">--rt-diff-add / --rt-diff-add-bg / --rt-diff-del / --rt-diff-del-bg / --rt-diff-meta</span>. Washes stay ≤10% opacity so code color survives; line numbers never get the wash color.</div>
+</div>

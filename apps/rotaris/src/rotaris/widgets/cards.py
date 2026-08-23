@@ -140,7 +140,9 @@ class Card(Themed, QFrame):
 
         t = tokens()
         self.body = QVBoxLayout(self)
-        self.body.setContentsMargins(t.space.lg, t.space.md, t.space.lg, t.space.md)
+        # `.card`: 16px 20px — `space-4` and `space-5` in the design system's
+        # own vocabulary.
+        self.body.setContentsMargins(t.space.lg, t.space[2.5], t.space.lg, t.space[2.5])
         self.body.setSpacing(t.space.sm)
         self.header_row = QHBoxLayout()
         self.header_row.setSpacing(t.space.md)
@@ -248,9 +250,10 @@ class Tag(Themed, QLabel):
             theme.color.readable_ground if fill is None else fill.over(theme.color.readable_ground)
         )
         type_ = theme.type
-        # 3px/10px is off the 8px module on purpose: a pill's inset follows the
-        # cap height of the word inside it, not the layout grid around it.
-        pad_y, pad_x = theme.space[0.375], theme.space[1.25]
+        # `.tag`: 2px 7px. Like the button's 7/13 these are the design system's
+        # own component literals — a pill's inset follows the word inside it,
+        # not the layout grid around it.
+        pad_y, pad_x = theme.space[0.25], theme.space[0.875]
         self.setStyleSheet(
             "QLabel {"
             f"background:{'transparent' if fill is None else fill};"
@@ -277,8 +280,8 @@ def _tag_variant(theme: Theme, kind: str) -> tuple[Color | None, Color, Color | 
     color = theme.color
     variants: dict[str, tuple[Color | None, Color, Color | None]] = {
         "accent": (color.fill_accent, color.fill_accent_ink, None),
-        "neutral": (color.hover, color.text, None),
-        "outline": (None, color.text_secondary, color.border_strong),
+        "neutral": (color.hover, color.text_secondary, None),
+        "outline": (None, color.text_secondary, color.border),
         "run": (color.fill_y, color.fill_y_ink, None),
         "wait": (color.fill_x, color.fill_x_ink, None),
         # `done` *is* the accent under its coordinate name, so it wears the
@@ -379,14 +382,17 @@ class KpiCard(Card):
         if not hasattr(self, "value_label"):
             return
         type_ = theme.type
-        font = type_.mono_font(type_.scale.h3)
+        # `.kpi-value`: 26px *light* mono with a faint tightening — a big number
+        # reads as data, not as emphasis, and only weight 300 says so.
+        font = type_.mono_font(type_.scale.kpi, weight=QFont.Weight.Light)
         font.setFeature(QFont.Tag("tnum"), 1)
+        font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100 - 1.5)
         self.value_label.setFont(font)
         self.value_label.setStyleSheet(
-            f"font-family:{type_.mono};font-size:{type_.scale.h3}px;color:{theme.color.text};"
+            f"font-family:{type_.mono};font-size:{type_.scale.kpi}px;color:{theme.color.text};"
         )
         self.unit_label.setStyleSheet(
-            f"font-size:{type_.scale.x2s}px;color:{theme.color.text_tertiary};"
+            f"font-size:{type_.scale.xs}px;color:{theme.color.text_tertiary};"
         )
 
 

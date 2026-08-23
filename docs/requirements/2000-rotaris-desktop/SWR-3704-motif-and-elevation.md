@@ -67,4 +67,6 @@ starts and stops with the state rather than running continuously.
 
 Derived from: [SWR-3700 — Themeable design-token layer](SWR-3700-themeable-design-token-layer.md)
 
+Derived requirements: [SWR-3722 — Motion respects the reduced-motion preference](SWR-3722-reduced-motion-gate.md)
+
 Epic: [Rotaris Desktop](../2000-rotaris-desktop.md)

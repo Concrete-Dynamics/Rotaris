@@ -1043,8 +1043,11 @@ class MainWindow(Themed, QMainWindow):
         self._toast_error = error
         self.apply_theme(tokens())
         self.toast.adjustSize()
-        margin = 18
-        self.toast.move(self.width() - self.toast.width() - margin, margin + 42)
+        t = tokens()
+        margin = t.space.lg
+        self.toast.move(
+            self.width() - self.toast.width() - margin, margin + t.size.title_bar_height
+        )
         self.toast.show()
         self.toast.raise_()
         self._toast_timer.start(4200)
@@ -1052,7 +1055,11 @@ class MainWindow(Themed, QMainWindow):
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
         if self.toast.isVisible():
-            self.toast.move(self.width() - self.toast.width() - 18, 60)
+            t = tokens()
+            self.toast.move(
+                self.width() - self.toast.width() - t.space.lg,
+                t.space.lg + t.size.title_bar_height,
+            )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         interactive_close = event.spontaneous()

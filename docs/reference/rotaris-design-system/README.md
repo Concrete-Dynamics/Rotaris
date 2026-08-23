@@ -17,6 +17,21 @@ OKLCH units — see `theme/palettes/rotaris_dim.py`.
 | `tokens/spacing.css` | the 8px module and the 32px grid unit |
 | `tokens/effects.css` | radii, elevation, motion |
 | `components.css` | every component's anatomy, variants and states |
+| `base.css` | focus ring, selection, scrollbars, reduced-motion, utility classes |
+| `motif.css` | the grid / dot-grid / fade-rule / axis-mark brand motifs |
+| `guidelines/` | one rule card per topic (colour, type, motion, spacing, icons, motif) |
+
+## Where the export contradicts itself — and which side wins
+
+The export was authored incrementally and a few surfaces lag the tokens:
+
+* `guidelines/motion-tokens.html` still shows the previous durations
+  (100/180/260ms, shift 4px). The tokens in `tokens/effects.css` (90/160/240ms,
+  shift 3px) are authoritative — the app transcribes those.
+* The React kit's `StatusDot` defaults to `size=7` while `components.css`
+  specifies 6px. The stylesheet wins.
+* `guidelines/brand-wordmark.html` calls the logo "interim" while `readme.md`
+  calls it final. Not the app's problem: the app draws no logo asset.
 
 ## What did not come across, and why
 
@@ -37,7 +52,7 @@ correct and change nothing.
 
 ## Where Rotaris deliberately differs
 
-The design system is a design system, not a Rotaris release. Three places where
+The design system is a design system, not a Rotaris release. The places where
 the app's own contract overrides it, all enforced by tests:
 
 1. **Contrast.** `apps/rotaris/AGENTS.md` requires 4.5:1 for text and 3:1 for
@@ -53,16 +68,20 @@ the app's own contract overrides it, all enforced by tests:
 2. **Font format.** The system self-hosts `woff2`, which Qt cannot read. The
    same faces are bundled as variable `.ttf` under
    `apps/rotaris/src/rotaris/assets/fonts/` with their OFL licences.
-3. **Which face.** Rotaris does not set its interface in the system's brand
-   display/body pair. Space Grotesk and Manrope were applied across the desktop
-   and rejected in review: at the sizes this interface actually uses — ten- and
-   eleven-pixel chips, dense table rows — they were not readable enough to work
-   in. A web design system is drawn at web sizes; a dense operator tool is not
-   a marketing page, and the host's own UI face is the one its platform hinted
-   for those sizes. What Rotaris takes from `typography.css` is the *system* —
-   the size ramp, the weight roles, the tracking, the tabular figures — which is
-   the part that survives a change of face. The weight numbers do not transfer
-   literally: the system's 500 body was drawn against Manrope, and against a
-   grotesque like Segoe UI that renders a step heavy, so `rotaris_dim` fills the
-   same role with 400. Both faces stay bundled (see `theme/fonts.py` for why),
-   and `test_theme_typography.py` asserts no palette re-adopts them by accident.
+3. **Which face — resolved.** Earlier revisions shipped the brand pair and
+   Rotaris rejected it as unreadable at ten- and eleven-pixel sizes. The current
+   export answers that objection in the type system itself: body weight drops
+   from 500 to 400, every weight caps at 500, and the scale no longer asks a
+   display face for 13px work. Rotaris now adopts the pair as specified —
+   Space Grotesk for display and section heads, Manrope for body, JetBrains
+   Mono for every number and path — with host faces (Inter, Segoe UI) kept
+   behind them as fallbacks, not alternatives. The weight roles stay the
+   system's: 400 resting, 500 emphasised. The one exception is the High
+   Contrast palette, which keeps its heavier weights (700/800): it exists for
+   readers AA does not serve, and weight is its contrast budget, not decoration.
+4. **Geometry is tokens, not pixels.** Every fixed dimension the design system
+   pins — control heights, icon buttons, the nav rail, dots, scrollbars, radii,
+   spacing — lives in the palette's `Sizing`/`Spacing`/`Radii` tokens and is
+   read at paint time (SWR-3706). Views never hardcode a pixel for something a
+   token names, which is what lets Qt's high-DPI scaling scale the whole
+   interface uniformly on any display size.

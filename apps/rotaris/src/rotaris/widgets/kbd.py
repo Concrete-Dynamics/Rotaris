@@ -80,25 +80,21 @@ class Kbd(Themed, QLabel):
         self.install_theme_hook()
 
     def apply_theme(self, theme: Theme) -> None:
-        # Two and a half steps of the 8px module — the design system's 20px cap.
-        # QSS sizes the *content* rectangle, so the edges come out of that 20:
-        # what the design system pins is the whole key, lip included.
-        box = theme.space[2.5]
+        # `.kbd`: an 18px cap, radius 4, a hairline edge, no bottom lip. QSS
+        # sizes the *content* rectangle, so the edge widths come out of the 18.
+        box = theme.space[2.25]
         edges = theme.size.hairline
         self.setStyleSheet(
             f"color:{theme.color.text_secondary};"
             f"background:{theme.color.surface_raised};"
-            f"border:{edges}px solid {theme.color.border_strong};"
-            # The one edge that is not a hairline. Doubling the bottom is the
-            # whole illusion: it reads as the lip of a key seen from above.
-            f"border-bottom-width:{edges * 2}px;"
+            f"border:{edges}px solid {theme.color.border};"
             f"border-radius:{max(theme.radius.sm - 1, 0)}px;"
             f"font-family:{theme.type.mono};"
             f"font-size:{theme.type.scale.x2s}px;"
             f"font-weight:{theme.type.weight_body};"
             f"padding:0 {theme.space.xs}px;"
             f"min-width:{box - edges * 2}px;"
-            f"min-height:{box - edges * 3}px;max-height:{box - edges * 3}px;"
+            f"min-height:{box - edges * 2}px;max-height:{box - edges * 2}px;"
         )
 
 

@@ -1,14 +1,15 @@
 :root{
---rt-radius-sm:6px;--rt-radius-md:10px;--rt-radius-lg:16px;--rt-radius-pill:999px;
+--rt-radius-sm:5px;--rt-radius-md:8px;--rt-radius-lg:14px;--rt-radius-pill:999px;
+/* Flat by default. A hairline defines an edge; a shadow only ever means "this floats". */
 --rt-shadow-sm:0 0 0 1px var(--rt-border);
---rt-shadow-md:0 0 0 1px var(--rt-border-strong),0 8px 22px oklch(10% 0.01 70 / 0.5);
---rt-shadow-lg:0 0 0 1px var(--rt-border-strong),0 22px 48px oklch(10% 0.01 70 / 0.6);
+--rt-shadow-md:0 0 0 1px var(--rt-border),0 6px 16px oklch(8% 0 0 / 0.44);
+--rt-shadow-lg:0 0 0 1px var(--rt-border),0 18px 40px oklch(8% 0 0 / 0.54);
 /* motion — calm & precise: short distances, decelerating ease-out, nothing springy */
 --rt-ease:cubic-bezier(.4,0,.2,1); /* @kind other */
 --rt-ease-out:cubic-bezier(0,0,.2,1); /* @kind other */
 --rt-ease-in:cubic-bezier(.4,0,1,1); /* @kind other */
---rt-duration-fast:100ms; /* @kind other */
---rt-duration:180ms; /* @kind other */
---rt-duration-slow:260ms; /* @kind other */
---rt-shift:4px; /* @kind other */
+--rt-duration-fast:90ms; /* @kind other */
+--rt-duration:160ms; /* @kind other */
+--rt-duration-slow:240ms; /* @kind other */
+--rt-shift:3px; /* @kind other */
 }

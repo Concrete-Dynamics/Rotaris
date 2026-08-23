@@ -309,7 +309,16 @@ class PulseAnimation:
         return self.alive and self._animation.state() == QAbstractAnimation.State.Running
 
     def start(self) -> None:
-        """Begin breathing, or keep breathing if it already is."""
+        """Begin breathing, or keep breathing if it already is.
+
+        Under reduced motion the running state renders statically: the dot
+        stays full-opacity and the state colour still says "running".
+        """
+        from rotaris.theme.reduced_motion import reduced_motion
+
+        if reduced_motion():
+            self._effect.setOpacity(1.0)
+            return
         if self.alive and not self.running:
             self._animation.start()
 

@@ -42,6 +42,7 @@ from rotaris.models.state import (
 )
 from rotaris.theme import available_themes, set_theme, tokens
 from rotaris.theme.manager import Themed
+from rotaris.theme.reduced_motion import reduced_motion, set_reduced_motion
 from rotaris.views.provider_auth import AddProviderDialog, ProviderAuthDialog, ProviderTask
 from rotaris.widgets import (
     Card,
@@ -616,6 +617,29 @@ class SettingsView(Themed, QWidget):
         theme_layout.addWidget(self.theme_select)
         interface.body.addWidget(theme_row)
         self._show_active_theme()
+
+        motion_row = QWidget()
+        motion_layout = QHBoxLayout(motion_row)
+        motion_layout.setContentsMargins(0, 2, 0, 2)
+        motion_copy = QVBoxLayout()
+        motion_label = QLabel("Reduce motion")
+        motion_hint = QLabel(
+            "Collapses every animation to instant — pulses, toasts and knobs reach "
+            "their end state directly. Defaults to your system's own setting."
+        )
+        motion_hint.setObjectName("muted")
+        motion_hint.setWordWrap(True)
+        motion_copy.addWidget(motion_label)
+        motion_copy.addWidget(motion_hint)
+        motion_layout.addLayout(motion_copy, 1)
+        self.reduce_motion_toggle = ToggleSwitch(reduced_motion())
+        self.reduce_motion_toggle.setAccessibleName("Reduce motion")
+        self.reduce_motion_toggle.setAccessibleDescription(
+            "When enabled, every animation completes instantly"
+        )
+        self.reduce_motion_toggle.toggled.connect(self._on_reduce_motion_toggled)
+        motion_layout.addWidget(self.reduce_motion_toggle)
+        interface.body.addWidget(motion_row)
 
         popout_row = QWidget()
         popout_layout = QHBoxLayout(popout_row)
@@ -1480,6 +1504,15 @@ class SettingsView(Themed, QWidget):
             return
         set_theme(name)
         self.theme_hint.setText(tokens().description)
+
+    @traces(SWR.SWR_3722)
+    def _on_reduce_motion_toggled(self, checked: bool) -> None:
+        """Persist the motion preference; the next animation honours it.
+
+        No relaunch and no repolish: every animated surface reads the gate at
+        the moment it starts, which is what makes this take effect immediately.
+        """
+        set_reduced_motion(checked)
 
     @staticmethod
     def _tab_page() -> tuple[QScrollArea, QVBoxLayout]:

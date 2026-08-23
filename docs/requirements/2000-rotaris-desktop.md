@@ -964,9 +964,9 @@ Every run the desktop starts must behave the same as one started from the CLI, t
 or the SDK for the same workspace, task and config, and no host may keep a private
 re-composition of run-lifecycle behaviour — session creation and resume, locking,
 worktree binding, event-store attach, session start/end, hook dispatch, per-iteration
-checkpointing, result derivation, and release on every exit path. The ordinary and
-requirement-driven runs already satisfy this; the worktree integration run does not,
-and is the remaining half of the exemption SWR-1830 recorded. States sameness, not
+checkpointing, result derivation, and release on every exit path. Satisfied on every
+desktop run path since 2026-08-23: the worktree integration run was the last holdout
+and the second half of the exemption SWR-1830 recorded. States sameness, not
 mechanism: the desktop keeps its own event loop, worker thread and session identity.
 
 Full requirement: [SWR-2453 — Every run the desktop starts is the same run as a CLI run](2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)

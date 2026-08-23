@@ -33,7 +33,7 @@ def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
     assert [
         (tool.name, tool.minimum_version, tool.provisioned_version) for tool in manifest.tools
     ] == [
-        ("git", "2.36.0", "2.55.0"),
+        ("git", None, "2.55.0"),
         ("node", "20.0.0", "24.19.0"),
         ("ripgrep", "14.1.0", "15.2.0"),
     ]
@@ -59,31 +59,36 @@ def test_default_mcp_configuration_derives_every_pinned_warmup() -> None:
 
 @verifies(SWR.SWR_3715)
 @pytest.mark.parametrize(
-    ("output", "satisfies"),
-    [("git version 2.41.0.windows.1", True), ("git version 2.35.9", False), ("broken", False)],
+    ("output", "returncode", "satisfies"),
+    [
+        ("git version 2.41.0.windows.1", 0, True),
+        ("git version 1.0.0", 0, True),
+        ("unparseable", 0, True),
+        ("git version 2.55.0", 1, False),
+    ],
 )
-def test_probe_accepts_only_a_satisfying_version(
-    monkeypatch: pytest.MonkeyPatch, output: str, satisfies: bool
+def test_probe_accepts_any_working_installed_git(
+    monkeypatch: pytest.MonkeyPatch, output: str, returncode: int, satisfies: bool
 ) -> None:
-    """Productive use: an existing system tool is reused when it meets Rotaris' floor.
-    Expected outcome: Git 2.41 is accepted and versions lacking required worktree output are rejected."""
+    """Productive use: a user keeps the working Git already installed on the machine.
+    Expected outcome: every successful Git probe is accepted, independent of reported version."""
     spec = next(tool for tool in default_setup_manifest().tools if tool.name == "git")
     monkeypatch.setattr(
         "rotaris_core.setup.planner.shutil.which", lambda *_args, **_kwargs: "/bin/git"
     )
     monkeypatch.setattr(
         "rotaris_core.setup.planner.subprocess.run",
-        lambda *_args, **_kwargs: subprocess.CompletedProcess([], 0, output, ""),
+        lambda *_args, **_kwargs: subprocess.CompletedProcess([], returncode, output, ""),
     )
 
     assert probe_tool(spec).satisfies is satisfies
 
 
 @verifies(SWR.SWR_3715)
-def test_setup_plan_reuses_system_git_2_41_without_an_install_step(
+def test_setup_plan_reuses_an_older_system_git_without_an_install_step(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Productive use: a Windows user launches Rotaris with Git 2.41 already installed.
+    """Productive use: a Windows user launches Rotaris with an older Git already installed.
     Expected outcome: setup reports Git as installed and schedules no Git download."""
     git = next(tool for tool in default_setup_manifest().tools if tool.name == "git")
     manifest = SetupManifest(schema_version=1, tools=(git,), mcp_pins={})
@@ -94,7 +99,7 @@ def test_setup_plan_reuses_system_git_2_41_without_an_install_step(
     monkeypatch.setattr(
         "rotaris_core.setup.planner.subprocess.run",
         lambda *_args, **_kwargs: subprocess.CompletedProcess(
-            [], 0, "git version 2.41.0.windows.1", ""
+            [], 0, "git version 1.0.0.windows.1", ""
         ),
     )
 
@@ -167,7 +172,7 @@ def test_manifest_change_creates_a_top_up_plan(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         "rotaris_core.setup.planner.probe_tool",
         lambda spec, **_kwargs: ToolProbe(
-            spec.name, Path(spec.command), spec.minimum_version, True
+            spec.name, Path(spec.command), spec.minimum_version or spec.provisioned_version, True
         ),
     )
 

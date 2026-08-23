@@ -12,7 +12,6 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from rotaris_core.events.transcript import publish_agent_message
 from rotaris_core.llm_errors import (
     extract_quota_exhausted_model,
     format_llm_runtime_error,
@@ -39,6 +38,7 @@ from rotaris_core.orchestrator.scheduler_diagnostics import (
 )
 from rotaris_core.orchestrator.scheduler_drain import _LLM_BAD_REQUEST_RECOVERY_LIMIT
 from rotaris_core.reqtocode import SWR, traces
+from rotaris_core.session.transcript import resolve_transcript_recorder
 from rotaris_core.tracking.tracker import GlobalTracker
 
 if TYPE_CHECKING:
@@ -218,6 +218,40 @@ async def run_child_impl(
             warnings=described.warnings,
         )
 
+    def _record_transcript(method: str, *args: object) -> None:
+        """Write one conversation event into the session's transcript.
+
+        Separate from the host callback, and before it, because the two are
+        different obligations: the transcript is the run's own record of what it
+        said, and it belongs to the session whatever host is watching — or none
+        (SWR-2454). A host that raises must not take that record with it.
+
+        A host installing its own conversation callback *replaces* the runner's,
+        which is why this cannot live there: the Rotaris desktop does exactly
+        that, so a recorder hanging off the callback would record for some hosts
+        and not others.
+
+        **Marshalled onto the run's own loop.** These callbacks fire on the
+        worker thread ``LocalConversation.run`` occupies, and the session record
+        belongs to the loop thread — the persister deep-copies it there. Writing
+        rows from here directly would race that copy.
+        """
+        recorder = resolve_transcript_recorder(self.binding_session_id)
+        loop = self._loop
+        if recorder is None or loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(getattr(recorder, method), *args)
+        except RuntimeError:
+            # The loop closed between the check and the call: the run is over,
+            # and a row it produced on the way out has nowhere to land.
+            return
+        except Exception:  # noqa: BLE001 - the record never fails the run.
+            _log.exception(
+                "Recording the transcript failed for child %s",
+                record.canonical_name,
+            )
+
     def _emit_event(event: object) -> None:
         _mark_activity()
         # Track last LLM event type for stall/timeout diagnostics.
@@ -226,17 +260,9 @@ async def run_child_impl(
             nonlocal last_llm_event_type
             last_llm_event_type = event_type_name
         _log_tool_call_timing(event)
-        # Before the host callback, and guarded separately from it: what the
-        # agent said belongs on the stream whatever host is watching, and a host
-        # that raises must not take the record of the conversation with it
-        # (SWR-1829).
-        try:
-            publish_agent_message(self.binding_session_id, record, event)
-        except Exception:  # noqa: BLE001 - the stream never fails a run.
-            _log.exception(
-                "Publishing the agent message failed for child %s",
-                record.canonical_name,
-            )
+        _record_transcript(
+            "record_conversation_event", record.canonical_name, record.persona, event
+        )
         conversation = conversation_ref.get("conversation")
         if conversation is not None:
             try:
@@ -266,6 +292,7 @@ async def run_child_impl(
 
     def _emit_token(chunk: object) -> None:
         _mark_activity()
+        _record_transcript("record_token_chunk", record.canonical_name, record.persona, chunk)
         if token_callback is not None:
             try:
                 token_callback(record, chunk)

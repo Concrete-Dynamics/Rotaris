@@ -43,6 +43,10 @@ from rotaris_core.run_host import (
     persist_session_state as _persist_session_state,
 )
 from rotaris_core.run_result import RunStatus
+from rotaris_core.session.transcript import (
+    discard_transcript_recorder,
+    ensure_transcript_recorder,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -389,12 +393,12 @@ async def _run_task(
                 message="Some provider credentials could not be resolved before the run.",
                 metadata={"providers": auth_report.unresolved},
             )
-        state.transcript_events.append(
-            {
-                "role": "user",
-                "content": task,
-            },
-        )
+        # From here the run keeps its own transcript, for every host and for no
+        # host (SWR-2454). It used to be the Rotaris desktop that built these
+        # rows, from callbacks the desktop installed, so a CLI or headless
+        # session recorded almost nothing until it ended.
+        recorder = ensure_transcript_recorder(state.session_id, state)
+        recorder.record_user(task)
         _persist_session_state(session_manager, state)
 
         classification = await bootstrap.classify_run_intent(
@@ -412,12 +416,7 @@ async def _run_task(
         state.run_intent = classification.intent.value
         classification_prompt_text = f"Intent classified: {classification.intent.value}"
         user_visible_classification_text = classification_status_text(classification)
-        state.transcript_events.append(
-            {
-                "role": "system",
-                "content": classification_prompt_text,
-            },
-        )
+        classification_row = recorder.record_system(classification_prompt_text)
         diag.timeline(
             "intent_classified",
             actor="background",
@@ -429,7 +428,7 @@ async def _run_task(
         todo, _top_level_task = bootstrap.build_run_todo(state, task, session_dir)
         state.todo_state = todo.model_dump(mode="json")
         if user_visible_classification_text != classification_prompt_text:
-            state.transcript_events[-1]["content"] = user_visible_classification_text
+            recorder.amend(classification_row, content=user_visible_classification_text)
         _persist_session_state(session_manager, state)
 
         def apply_conversation_event(record: Any, event: object) -> None:
@@ -556,21 +555,18 @@ async def _run_task(
 
             discard_session_mode_override(state.session_id)
 
-        # Hosts whose observer already streamed the live transcript (Rotaris) mark
-        # themselves with `persists_transcript`; re-appending per-iteration
-        # responses would duplicate every agent message in their chat view.
-        if not getattr(message_limit_observer, "persists_transcript", False):
+        # An iteration's outcome needs a row of its own only when the
+        # conversation left none. It normally does leave one — the recorder above
+        # writes every agent message as it is said — and appending these on top
+        # would post each answer twice. What still reaches here is the run whose
+        # conversation this process never saw: a summarised child whose report is
+        # the only answer there is.
+        if not recorder.has_agent_rows():
             for iteration in progress.iterations:
                 response_text = iteration.agent_response or iteration.report_summary
                 if not response_text:
                     continue
-                state.transcript_events.append(
-                    {
-                        "role": "agent",
-                        "name": iteration.task_id,
-                        "content": response_text,
-                    },
-                )
+                recorder.record_agent(iteration.task_id, response_text)
 
         from rotaris_core.tokens import TokenSnapshot
 
@@ -595,4 +591,9 @@ async def _run_task(
             )
         # Guaranteed final write before the event loop shuts down.
         await _flush_session_state(session_manager, state)
+        # The run is over, so nothing may still be writing its transcript. Late
+        # binding through the registry is what makes this final: an event that
+        # escapes a conversation's teardown finds no recorder rather than
+        # appending to a session that has ended.
+        discard_transcript_recorder(state.session_id)
         return progress

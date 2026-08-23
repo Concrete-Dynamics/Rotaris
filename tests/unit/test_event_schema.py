@@ -11,7 +11,6 @@ from pydantic import ValidationError
 import rotaris_core.events
 from rotaris_core.events import (
     EVENT_SCHEMA_VERSION,
-    AgentMessageEvent,
     AnyEvent,
     ApprovalRequestedEvent,
     CheckpointCreatedEvent,
@@ -33,6 +32,7 @@ from rotaris_core.events import (
     SessionStartEvent,
     ToolFinishEvent,
     ToolStartEvent,
+    TranscriptRowEvent,
     UsageUpdateEvent,
     VerifierProgressEvent,
     VerifierResultEvent,
@@ -124,11 +124,15 @@ def _sample(event_type: type[RotarisEvent]) -> RotarisEvent:
             "elapsed_s": 0.0,
             "deadline_s": 600.0,
         },
-        AgentMessageEvent: {
-            "agent_name": "implementer-2",
-            "persona": "coder",
-            "kind": "message",
-            "text": "I fixed the failing assertion in test_parser.",
+        TranscriptRowEvent: {
+            "index": 7,
+            "row": {
+                "role": "agent",
+                "name": "implementer-2",
+                "persona": "coder",
+                "content": "I fixed the failing assertion in test_parser.",
+                "ts": "12:00:00",
+            },
         },
         UsageUpdateEvent: {
             "tokens": {"prompt_tokens": 99},
@@ -226,7 +230,7 @@ def test_every_event_type_has_a_sample_payload() -> None:
         PermissionDecisionEvent,
         VerifierResultEvent,
         VerifierProgressEvent,
-        AgentMessageEvent,
+        TranscriptRowEvent,
         UsageUpdateEvent,
         ErrorEvent,
         ResultEvent,
@@ -269,7 +273,7 @@ def test_minimum_event_coverage_is_present() -> None:
         "permission.decision",
         "verifier.result",
         "verifier.progress",
-        "agent.message",
+        "transcript.row",
         "usage.update",
         "error",
         "result",
@@ -535,51 +539,78 @@ def test_hook_finish_output_is_redacted_and_cannot_be_bypassed_by_assignment() -
 
 
 @verifies(SWR.SWR_1829, SWR.SWR_2454)
-def test_an_agent_message_is_redacted_and_cannot_be_bypassed_by_assignment() -> None:
+def test_a_transcript_row_is_redacted_and_cannot_be_bypassed_by_assignment() -> None:
     """Productive use: an agent quotes the command output it just read, and that
     output printed a token. Expected outcome: the secret never reaches the wire,
     on construction or on mutation, and the sentence around it still reads."""
-    event = AgentMessageEvent(
+    event = TranscriptRowEvent(
         session_id="s-1",
-        agent_name="implementer-2",
-        kind="message",
-        text="The deploy script exports API_KEY=sk-livesecret, which is why it worked.",
+        index=3,
+        row={
+            "role": "agent",
+            "name": "implementer-2",
+            "content": "The deploy script exports API_KEY=sk-livesecret, which is why it worked.",
+        },
     )
     line = serialize_event(event)
     assert "sk-livesecret" not in line
     assert "deploy script" in line
 
-    event.text = "Re-checking: the password=hunter2 line is still there."
+    event.row = {"role": "agent", "content": "Re-checking: the password=hunter2 line is there."}
     line = serialize_event(event)
     assert "hunter2" not in line
     assert "Re-checking" in line
 
 
 @verifies(SWR.SWR_1829, SWR.SWR_2454)
-def test_a_very_long_agent_message_is_clipped_rather_than_left_unbounded() -> None:
-    """Productive use: a model pastes a whole file back into its reply.
-    Expected outcome: the line stays a line — bounded, marked as clipped, and
-    still one parseable event rather than a megabyte of history."""
-    event = AgentMessageEvent(session_id="s-1", text="a" * 40_000)
+def test_a_transcript_row_is_redacted_however_deep_the_secret_sits() -> None:
+    """Productive use: a tool row carries its output in a nested structure.
+    Expected outcome: the mask reaches it — a redaction rule that only knew the
+    row's top-level keys would leak the first time a row grew one."""
+    event = TranscriptRowEvent(
+        session_id="s-1",
+        row={
+            "role": "tool",
+            "tool": "bash",
+            "attempts": [{"output": "TOKEN=sk-livesecret"}],
+            "duration": 1.5,
+            "tool_terminal": True,
+        },
+    )
+    line = serialize_event(event)
 
-    assert len(event.text) == 16_000
-    assert event.text.endswith("…")
-    assert parse_event(json.loads(serialize_event(event))).text == event.text
+    assert "sk-livesecret" not in line
+    # Non-strings are left as they are: a duration is not text to mask.
+    assert event.row["duration"] == 1.5
+    assert event.row["tool_terminal"] is True
 
 
 @verifies(SWR.SWR_1829, SWR.SWR_2454)
-def test_reasoning_and_message_are_the_same_event_told_apart_by_kind() -> None:
-    """Productive use: a consumer shows the conversation and hides deliberation.
-    Expected outcome: one discriminator carries both, and ``kind`` separates them
-    — so a consumer that wants only one does not have to know two event types."""
-    said = AgentMessageEvent(session_id="s-1", kind="message", text="Done.")
-    thought = AgentMessageEvent(session_id="s-1", kind="reasoning", text="Let me check first.")
+def test_a_very_long_row_is_clipped_rather_than_left_unbounded() -> None:
+    """Productive use: a model pastes a whole file back into its reply.
+    Expected outcome: the line stays a line — bounded, marked as clipped, and
+    still one parseable event rather than a megabyte of history."""
+    event = TranscriptRowEvent(session_id="s-1", row={"role": "agent", "content": "a" * 40_000})
 
-    assert said.event == thought.event == "agent.message"
-    assert json.loads(serialize_event(said))["kind"] == "message"
-    assert json.loads(serialize_event(thought))["kind"] == "reasoning"
-    with pytest.raises(ValidationError):
-        AgentMessageEvent(session_id="s-1", kind="whispering")
+    assert len(event.row["content"]) == 16_000
+    assert event.row["content"].endswith("…")
+    assert parse_event(json.loads(serialize_event(event))).row == event.row
+
+
+@verifies(SWR.SWR_1829, SWR.SWR_2454)
+def test_a_row_says_where_it_goes_so_a_consumer_replaces_rather_than_appends() -> None:
+    """Productive use: a tool row is published when the call starts and again
+    when it ends. Expected outcome: both name the same position, so a consumer
+    that replaces at that index shows one row and not two."""
+    opened = TranscriptRowEvent(
+        session_id="s-1", index=4, row={"role": "tool", "status": "running"}
+    )
+    settled = TranscriptRowEvent(
+        session_id="s-1", index=4, row={"role": "tool", "status": "ok", "duration": 2.0}
+    )
+
+    assert opened.index == settled.index == 4
+    assert json.loads(serialize_event(settled))["row"]["status"] == "ok"
 
 
 @verifies(SWR.SWR_1831)

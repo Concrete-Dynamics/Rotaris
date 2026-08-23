@@ -1475,7 +1475,11 @@ async def test_session_observer_persists_live_child_and_todo_snapshots() -> None
         persister=FakePersister(),
     )
     state = SimpleNamespace(
-        child_states=[], todo_state=None, agent_todo_state=None, agent_metrics={}
+        child_states=[],
+        todo_state=None,
+        agent_todo_state=None,
+        agent_metrics={},
+        transcript_events=[],
     )
     observer = _SessionObserver(asyncio.get_running_loop(), manager, state)
     cancelled: list[tuple[object, str]] = []
@@ -1524,7 +1528,11 @@ async def test_session_observer_persists_terminal_child_state() -> None:
     )
     manager.persister = FakePersister()
     state = SimpleNamespace(
-        child_states=[], todo_state=None, agent_todo_state=None, agent_metrics={}
+        child_states=[],
+        todo_state=None,
+        agent_todo_state=None,
+        agent_metrics={},
+        transcript_events=[],
     )
     observer = _SessionObserver(asyncio.get_running_loop(), manager, state)
     observer_holder["observer"] = observer
@@ -1537,7 +1545,10 @@ async def test_session_observer_persists_terminal_child_state() -> None:
     manager.bump_version()
     observer.on_child_running(record, manager)
     await asyncio.sleep(0)
-    observer._active_tool_calls[record.canonical_name] = {"call-1": "haet_read"}
+    # A call the child never got to finish. The in-flight set belongs to the
+    # session's transcript recorder now (SWR-2454), which is what the observer
+    # asks when it writes an agent's chips into the child state.
+    observer._recorder._active_tool_calls[record.canonical_name] = {"call-1": "haet_read"}
 
     manager.mark_child_terminal(
         record.canonical_name,
@@ -1566,7 +1577,7 @@ def test_bind_scheduler_callbacks_wires_the_ralph_scheduler_not_the_child_manage
     # Regression guard for a crash that killed every run before the first
     # streamed token ever reached the UI.
     manager_without_scheduler_attr = SimpleNamespace()
-    state = SimpleNamespace()
+    state = SimpleNamespace(transcript_events=[])
     observer = _SessionObserver(SimpleNamespace(), SimpleNamespace(), state)
     scheduler = SimpleNamespace(
         _conversation_event_callback=None, _conversation_token_callback=None
@@ -1576,7 +1587,12 @@ def test_bind_scheduler_callbacks_wires_the_ralph_scheduler_not_the_child_manage
     observer.bind_scheduler_callbacks(manager_without_scheduler_attr)
 
     assert callable(scheduler._conversation_event_callback)
-    assert callable(scheduler._conversation_token_callback)
+    # No token callback any more: streamed tokens reach the session's transcript
+    # recorder from inside the engine (SWR-2454), so this host has nothing left
+    # to do with one. The event callback stays for what is still the host's —
+    # the token accounting and the agent tree.
+    assert scheduler._conversation_token_callback is None
+    assert callable(scheduler._spawn_notification_callback)
 
 
 @verifies(SWR.SWR_2007)

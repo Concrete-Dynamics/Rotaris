@@ -22,10 +22,12 @@ import pytest
 from PySide6.QtWidgets import QLabel
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
+from rotaris_core.session.transcript import TranscriptRecorder
 from run_wiring import (
     ObserverHarness,
     action_event,
     demo_config,
+    feed_conversation,
     message_event,
     observation_event,
     sdk_events,
@@ -309,7 +311,7 @@ def test_tool_result_full_detail_capped_with_ellipsis(tmp_path, qtbot) -> None:
 
     tool_rows = [e for e in store.transcript if e.kind == "tool"]
     assert len(tool_rows) == 1
-    assert len(tool_rows[0].full_detail) <= h.observer._TOOL_FULL_MAX + 10
+    assert len(tool_rows[0].full_detail) <= TranscriptRecorder.TOOL_FULL_MAX + 10
     assert tool_rows[0].full_detail.endswith("…")
 
 
@@ -699,9 +701,13 @@ def test_run_bridge_end_to_end_polls_events_into_store(tmp_path, qtbot, monkeypa
         iteration_observer.bind_scheduler_callbacks(SimpleNamespace(snapshot_children=list))
         record = SimpleNamespace(canonical_name="coder-1", persona="coder")
         action = action_event(sdk)
-        scheduler._conversation_event_callback(record, action)
-        scheduler._conversation_event_callback(record, observation_event(sdk, action))
-        scheduler._conversation_event_callback(record, message_event(sdk, "Task complete."))
+        feed_conversation(
+            state,
+            record,
+            action,
+            observation_event(sdk, action),
+            message_event(sdk, "Task complete."),
+        )
         await asyncio.sleep(0.05)
         return SimpleNamespace(iterations=[])
 

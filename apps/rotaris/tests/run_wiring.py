@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rotaris_core.config.schema import ModelConfig, PersonaConfig, RotarisConfig
 from rotaris_core.session.manager import SessionManager
@@ -31,11 +31,30 @@ __all__ = [
     "ObserverHarness",
     "action_event",
     "demo_config",
+    "feed_conversation",
     "message_event",
     "observation_event",
     "sdk_events",
     "token_chunk",
 ]
+
+
+def feed_conversation(state: Any, record: Any, *events: object) -> None:
+    """Record conversation events the way ``orchestrator/child_run`` does.
+
+    A fake ``_run_task`` stands in for the engine, so it has to do the engine's
+    half of the seam. The transcript is written by the session's own recorder
+    (SWR-2454), reached through the registry — *not* by whatever conversation
+    callback a host installed, because a host replaces that callback and would
+    then be the only host whose runs recorded anything.
+    """
+    from rotaris_core.session.transcript import resolve_transcript_recorder
+
+    recorder = resolve_transcript_recorder(state.session_id)
+    if recorder is None:
+        return
+    for event in events:
+        recorder.record_conversation_event(record.canonical_name, record.persona, event)
 
 
 def sdk_events():
@@ -186,11 +205,35 @@ class ObserverHarness:
         self.observer.bind_scheduler_callbacks(self.child_manager)
         self.record = SimpleNamespace(canonical_name="coder-1", persona="coder")
 
-    def event(self, event: object) -> None:
-        self.scheduler._conversation_event_callback(self.record, event)
+    def _recorder(self) -> Any:
+        """The run's transcript writer, found the way the engine finds it.
+
+        Through the registry rather than off the observer, because that is the
+        seam: ``orchestrator/child_run`` resolves the recorder for the session it
+        is running and hands it each event, and the desktop's observer is
+        whoever happened to register one first (SWR-2454).
+        """
+        from rotaris_core.session.transcript import resolve_transcript_recorder
+
+        recorder = resolve_transcript_recorder(self.state.session_id)
+        assert recorder is not None, "the observer registers one when it is built"
+        return recorder
+
+    def event(self, event: object, record: Any = None) -> None:
+        """One conversation event, attributed to *record* (this run's child by default).
+
+        Both halves, in the engine's order: the transcript is recorded first,
+        then the host callback runs for what it still owns — the token
+        accounting and the agent tree.
+        """
+        record = record if record is not None else self.record
+        self._recorder().record_conversation_event(record.canonical_name, record.persona, event)
+        callback = self.scheduler._conversation_event_callback
+        if callback is not None:
+            callback(record, event)
 
     def token(self, chunk: object) -> None:
-        self.scheduler._conversation_token_callback(self.record, chunk)
+        self._recorder().record_token_chunk(self.record.canonical_name, self.record.persona, chunk)
 
     def drain(self) -> None:
         self.loop.run_until_complete(asyncio.sleep(0))

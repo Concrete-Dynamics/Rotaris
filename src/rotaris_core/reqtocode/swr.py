@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 274c1e045536aad6e3e9c959b9a573c427e1b2dfd298255579efa0b32cc51da5
+# GLOBAL-HASH: ba8bd24ef50fcbea76ab894beffd8d015d7347cbe4141ef48d4473cf666179ea
 
 from __future__ import annotations
 
@@ -5879,7 +5879,7 @@ META: dict[int, ReqMeta] = {
     1826: ReqMeta('SWR-1826', 1826, ReqStatus.APPROVED, 'Rotaris - `--help` / `-h` flag', 'docs/requirements/1800-cli-headless.md', True, True, '22e41fd88befcf81', 'product', ()),
     1827: ReqMeta('SWR-1827', 1827, ReqStatus.APPROVED, 'CLI configuration-load error presentation', 'docs/requirements/1800-cli-headless/SWR-1827-cli-config-error-presentation.md', True, False, '285b97e115d4a173', 'technical', (1800,)),
     1828: ReqMeta('SWR-1828', 1828, ReqStatus.APPROVED, 'Structured JSON event stream for headless runs', 'docs/requirements/1800-cli-headless/SWR-1828-json-event-stream.md', True, True, '8569d11fe71bcb85', 'product', ()),
-    1829: ReqMeta('SWR-1829', 1829, ReqStatus.APPROVED, 'Versioned event schema & coverage', 'docs/requirements/1800-cli-headless/SWR-1829-event-schema.md', True, True, 'd2787db8664f826a', 'product', ()),
+    1829: ReqMeta('SWR-1829', 1829, ReqStatus.APPROVED, 'Versioned event schema & coverage', 'docs/requirements/1800-cli-headless/SWR-1829-event-schema.md', True, True, '5184ab9e8a66fdad', 'product', ()),
     1830: ReqMeta('SWR-1830', 1830, ReqStatus.APPROVED, 'Python SDK entry point over the same runtime', 'docs/requirements/1800-cli-headless/SWR-1830-python-sdk.md', True, True, 'fcd285433f79c713', 'product', ()),
     1831: ReqMeta('SWR-1831', 1831, ReqStatus.DRAFT, 'Event coverage for hooks, checkpoints, gate decisions and approval requests', 'docs/requirements/1800-cli-headless/SWR-1831-p1-feature-events.md', True, True, '6ca542046e0fc569', 'product', ()),
     1832: ReqMeta('SWR-1832', 1832, ReqStatus.DRAFT, 'Emission of the P1-feature events, and the terminal event on the bus', 'docs/requirements/1800-cli-headless/SWR-1832-p1-feature-event-emission.md', True, True, 'fc861b8c8c33812e', 'product', ()),
@@ -6148,7 +6148,7 @@ META: dict[int, ReqMeta] = {
     2451: ReqMeta('SWR-2451', 2451, ReqStatus.DRAFT, 'Create and delete personas from Settings UI', 'docs/requirements/2000-rotaris-desktop/SWR-2451-create-delete-personas.md', True, True, '9fc81747151a5977', 'product', ()),
     2452: ReqMeta('SWR-2452', 2452, ReqStatus.APPROVED, 'Transcript geometry is incremental and never partially laid out', 'docs/requirements/2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md', True, True, '50d30593bc23a2bf', 'technical', (2447,)),
     2453: ReqMeta('SWR-2453', 2453, ReqStatus.DRAFT, 'Every run the desktop starts is the same run as a CLI run', 'docs/requirements/2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md', True, True, '705a37bde1c00e2a', 'product', ()),
-    2454: ReqMeta('SWR-2454', 2454, ReqStatus.DRAFT, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'c247072dfebda21f', 'product', ()),
+    2454: ReqMeta('SWR-2454', 2454, ReqStatus.DRAFT, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, '0799a2becc0a52ee', 'product', ()),
     2500: ReqMeta('SWR-2500', 2500, ReqStatus.APPROVED, 'Secure Execution: Permissions & Sandbox', 'docs/requirements/2500-secure-execution.md', False, False, 'cd4969ecb18ee886', 'product', ()),
     2501: ReqMeta('SWR-2501', 2501, ReqStatus.APPROVED, 'Permission policy engine (allow/ask/deny)', 'docs/requirements/2500-secure-execution/SWR-2501-permission-policy-engine.md', True, True, 'c5bf13329aa7756f', 'product', ()),
     2502: ReqMeta('SWR-2502', 2502, ReqStatus.APPROVED, 'Terminal command permission patterns', 'docs/requirements/2500-secure-execution/SWR-2502-terminal-command-patterns.md', True, True, 'ebe1eb6ffa2a4609', 'product', ()),

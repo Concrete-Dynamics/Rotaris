@@ -257,6 +257,10 @@ def test_coordinator_mirrors_every_run_bridge_control_the_views_call() -> None:
     # Per-handle plumbing the coordinator consumes rather than exposes: it
     # decides projection ownership itself and aggregates these signals.
     handle_internals = {
+        # Which handle watches a session this process is not running is the
+        # coordinator's own decision, made from which handle is free — the same
+        # reason projection ownership is not exposed either (SWR-2454).
+        "follow_session",
         "improvement_active",
         "improvement_activity_changed",
         "session_summary",

@@ -369,8 +369,17 @@ def announce_effective_permission_mode(
     state.sandboxed = sandboxed
     state.sandbox_backend = sandbox_backend
     if effective.downgraded:
+        from rotaris_core.session.transcript import resolve_transcript_recorder
+
         _log.warning("%s (session %s)", effective.reason, state.session_id)
-        state.transcript_events.append({"role": "system", "content": effective.reason})
+        # Through the recorder when there is one, so the notice is indexed and
+        # reaches whoever is watching the run, not only whoever reloads it. A
+        # bare append is the fallback for a state with no run behind it.
+        recorder = resolve_transcript_recorder(state.session_id)
+        if recorder is not None:
+            recorder.record_system(effective.reason)
+        else:
+            state.transcript_events.append({"role": "system", "content": effective.reason})
         if diagnostics is not None:
             diagnostics.timeline(
                 "permission_mode_downgraded",

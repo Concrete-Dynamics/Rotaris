@@ -12,6 +12,11 @@ from typing import TYPE_CHECKING, Any, cast
 from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 from rotaris_core.reqtocode import SWR, traces
 from rotaris_core.runchannel import InProcessRunControl, RunControl
+from rotaris_core.session.transcript import (
+    TranscriptRecorder,
+    register_transcript_recorder,
+    wire_publisher,
+)
 
 from rotaris.models.state import TranscriptDelta
 
@@ -171,6 +176,27 @@ class RunBridge(QObject):
         self.projection_enabled = enabled
         if not enabled:
             self.config_service.release_transcript_delta_feed()
+
+    @traces(SWR.SWR_2454)
+    def follow_session(self, session_id: str) -> bool:
+        """Watch a session this process is not running.
+
+        A run in this process reports its transcript directly; a run in another
+        process cannot, so its rows are read from the session's event store
+        instead (SWR-2454 § Reach). Both end at the same delta and the same
+        projector — the store carries the run's own rows, so following one and
+        reopening it afterwards show the same conversation.
+
+        Refused while this handle has a run of its own: that run is the authority
+        on its transcript, and a second writer would fight it.
+        """
+        if self.running or self._shutting_down or not session_id:
+            return False
+        if not self.config_service.follow_session(session_id):
+            return False
+        self._session_id = session_id
+        self._poller.start()
+        return True
 
     @traces(SWR.SWR_2504)
     def resolve_approval(self, request_id: str, option: str) -> bool:
@@ -567,6 +593,12 @@ class RunBridge(QObject):
             self.sync_queued_prompts()
             if not self._session_id:
                 return
+            if self.projection_enabled:
+                # Cheap and first: a followed session's new rows come out of its
+                # store at a cost bounded by what it added (SWR-2454). Nothing
+                # happens here for a run in this process — that one reports its
+                # own transcript, and no follower was started for it.
+                self.config_service.poll_followed_session()
             self._request_refresh()
 
     def _ensure_refresh_worker(self) -> None:
@@ -1259,34 +1291,16 @@ def _gate_warning_for(result: Any) -> str:
 
 
 class _SessionObserver:
-    """Persist scheduler snapshots for the GUI poller without touching Qt."""
+    """Persist scheduler snapshots for the GUI poller without touching Qt.
 
-    #: Tells the shared backend runner (cli/background.py::_run_task) that this
-    #: observer already streamed the transcript live, so it must not re-append
-    #: per-iteration agent responses on top (they would duplicate in the chat).
-    persists_transcript = True
-
-    #: Caps for persisted chat payloads — snapshots rewrite every debounce tick.
-    _TOOL_DETAIL_MAX = 400
-    _TOOL_FULL_MAX = 2000
-    _THINKING_MAX = 4000
-
-    @staticmethod
-    def _cap_full_text(text: str, *, preserve_lines: bool = False) -> str:
-        """Truncate-with-ellipsis for the untruncated tool-row detail fields.
-
-        Collapsing whitespace is right for a one-line summary and wrong for
-        command output: a test run flattened into a single line is unreadable,
-        and it is the persisted fallback a reloaded session renders from
-        (SWR-2428).
-        """
-        if preserve_lines:
-            text = "\n".join(line.rstrip() for line in text.splitlines())
-        else:
-            text = " ".join(text.split())
-        if len(text) > _SessionObserver._TOOL_FULL_MAX:
-            return text[: _SessionObserver._TOOL_FULL_MAX - 1].rstrip() + "…"
-        return text
+    What this no longer does is build transcript rows. That moved into
+    ``rotaris_core.session.transcript.TranscriptRecorder`` (SWR-2454), so a run
+    started from a terminal keeps the same transcript a run started from this
+    window does, and there is one derivation of what a row says rather than one
+    per host. This observer owns the recorder for its run and turns what the
+    recorder reports into the two things a desktop needs: a durable save and a
+    delta for the view.
+    """
 
     def __init__(self, loop: asyncio.AbstractEventLoop, manager: Any, state: Any) -> None:
         self.loop = loop
@@ -1300,35 +1314,27 @@ class _SessionObserver:
         self.entry_reasoning_override: str | None = None
         self.ralph: Any | None = None
         self._child_managers: dict[str, Any] = {}
-        # Live row references (the dict objects inside state.transcript_events)
-        # so streamed deltas / tool results update rows in place.
-        self._stream_segments: dict[str, dict[str, Any]] = {}
-        self._thinking_segments: dict[str, dict[str, Any]] = {}
-        # Most recent thinking row per agent, kept past _finish_thinking so the
-        # action event's complete reasoning_content can be folded into the
-        # burst it repeats instead of duplicating it (SWR-2446).
-        self._last_thinking_rows: dict[str, dict[str, Any]] = {}
-        self._committed_message_segments: dict[str, dict[str, Any]] = {}
-        self._tool_rows: dict[str, dict[str, Any]] = {}
-        # Monotonic start per in-flight call (same key as _tool_rows) — kept
-        # out of the persisted rows because the value is process-local.
-        self._tool_started: dict[str, float] = {}
-        # In-flight tool calls per agent (call_id → tool name) — drives the
-        # inspector's "active tools" chips through the persisted child states.
-        self._active_tool_calls: dict[str, dict[str, str]] = {}
-        # SDK callbacks can replay an event while a conversation is being
-        # resumed. Count each stable call ID once in the live session metrics.
-        self._counted_tool_calls: set[str] = set()
-        # The SDK can likewise replay a committed message event on resume.
-        # Keep its stable event ID from creating a second transcript row.
-        self._persisted_message_events: set[str] = set()
+        # The engine writes the transcript; this observer watches it write
+        # (SWR-2454). Every row this desktop used to build — a streamed message,
+        # a reasoning burst, a tool call and its result — is built by
+        # ``TranscriptRecorder`` now, in ``rotaris_core``, so a run started from
+        # the CLI records exactly what a run started from here records. Reaching
+        # for it before the run begins is what makes that true: the runner takes
+        # the recorder that is already registered rather than making a plain one,
+        # so there is one recorder and one transcript, whoever is watching.
+        session_id = str(getattr(state, "session_id", "") or "")
+        self._recorder = TranscriptRecorder(
+            state,
+            on_change=self._on_transcript_change,
+            # A record with no session id belongs to no run, so there is no bus
+            # key to publish under and nothing outside this process to reach.
+            publish=wire_publisher(session_id) if session_id else None,
+        )
+        if session_id:
+            register_transcript_recorder(session_id, self._recorder)
         # TodoExecutor invokes on_todo_state with its mutable state object.
         # Keep that exact reference so desktop edits affect next iteration.
         self._live_todo: Any | None = None
-        # Live verifier rows keyed by "<iteration>:<index>", so a check that
-        # settles updates the row it started rather than appending a new one
-        # (SWR-2609). Same shape as ``_tool_rows``.
-        self._verifier_rows: dict[str, dict[str, Any]] = {}
         # The running suite's control handle (SWR-2610), held only while a suite
         # is in flight so the GUI's Skip can never address a finished run.
         self._verifier_control: Any | None = None
@@ -1345,13 +1351,20 @@ class _SessionObserver:
         #: it is bounded by how much is happening at once, so it travels whole
         #: rather than as a diff.
         self._facts_sink: Callable[[Any], None] | None = None
-        #: Raw index of each appended row, by object identity. Only appends go
-        #: in here, and ``_append_row`` is the only place a row is appended.
-        self._row_index: dict[int, int] = {}
         #: How many rows the view has been told about, and how many edit diffs.
         #: A delta carries what came after these.
         self._emitted_len = 0
         self._emitted_diff_len = 0
+
+    def _on_transcript_change(self, settled: tuple[dict[str, Any], ...]) -> None:
+        """The recorder changed the transcript: make it durable, then visible.
+
+        *settled* is the rows the recorder has let go of. It has to say so
+        explicitly, because a row it no longer holds is a row
+        :meth:`_held_rows` will not report — and the delta boundary is computed
+        from exactly those two answers.
+        """
+        self._touch(*settled)
 
     @traces(SWR.SWR_2454)
     def bind_delta_sink(self, sink: Callable[[TranscriptDelta], None] | None) -> None:
@@ -1364,25 +1377,16 @@ class _SessionObserver:
         self._delta_sink = sink
 
     def _held_rows(self) -> list[dict[str, Any]]:
-        """Every transcript row this observer may still mutate in place.
+        """Every transcript row the run may still mutate in place.
 
         The streamed tail, an open tool call, an unsettled check, a reasoning
         burst that may still be folded. Bounded by how much is happening at
         once — agents, in-flight calls, checks — and not by how long the session
         has been running, which is what makes the delta boundary cheap to
-        compute and cheap to send.
+        compute and cheap to send. The recorder owns the answer because it owns
+        the rows.
         """
-        held: list[dict[str, Any]] = []
-        for source in (
-            self._stream_segments,
-            self._thinking_segments,
-            self._last_thinking_rows,
-            self._committed_message_segments,
-            self._tool_rows,
-            self._verifier_rows,
-        ):
-            held.extend(source.values())
-        return held
+        return self._recorder.held_rows()
 
     def _save(self) -> None:
         """Make the session record current, then report it. The transcript did not change.
@@ -1488,8 +1492,6 @@ class _SessionObserver:
                 # over from this", which is also what makes a clear cost nothing
                 # to deliver.
                 self._reset_delta_tracking()
-                for index, row in enumerate(rows):
-                    self._row_index[id(row)] = index
                 self._emitted_len = total
                 self._emitted_diff_len = len(self.state.ui_edit_diffs)
                 sink(
@@ -1506,7 +1508,7 @@ class _SessionObserver:
                 + [
                     index
                     for index in (
-                        self._row_index.get(id(row)) for row in (*self._held_rows(), *extra_rows)
+                        self._recorder.index_of(row) for row in (*self._held_rows(), *extra_rows)
                     )
                     if index is not None
                 ]
@@ -1531,7 +1533,7 @@ class _SessionObserver:
 
     def _reset_delta_tracking(self) -> None:
         """Forget what the view was told; the next delta starts from nothing."""
-        self._row_index.clear()
+        self._recorder.reindex()
         self._emitted_len = 0
         self._emitted_diff_len = 0
 
@@ -1623,19 +1625,10 @@ class _SessionObserver:
         self.loop.call_soon_threadsafe(self._clear_transcript)
 
     def _clear_transcript(self) -> None:
-        self.state.transcript_events.clear()
-        self._stream_segments.clear()
-        self._thinking_segments.clear()
-        self._last_thinking_rows.clear()
-        self._committed_message_segments.clear()
-        self._tool_rows.clear()
-        self._tool_started.clear()
-        self._verifier_rows.clear()
-        self._touch()
+        self._recorder.clear()
 
     def _append_system_row(self, content: str) -> None:
-        self._append_row({"role": "system", "content": content})
-        self._touch()
+        self._recorder.record_system(content)
 
     # ── verification phase (SWR-2609 / SWR-2610) ──────────────────────────
     #
@@ -1682,24 +1675,7 @@ class _SessionObserver:
             "started_at": started,
             "deadline_s": float(deadline_s),
         }
-        row = self._append_row(
-            {
-                "role": "verifier",
-                "name": "verifier",
-                "persona": "verifier",
-                "tool": name,
-                "content": command,
-                "detail": "",
-                "full_text": self._cap_full_text(command),
-                "full_detail": "",
-                "tool_event_key": f"verify:{iteration_num}:{index}",
-                "tool_terminal": False,
-                "status": "running",
-                "started_at": started,
-            }
-        )
-        self._verifier_rows[f"{iteration_num}:{index}"] = row
-        self._touch()
+        self._recorder.record_verifier_check_started(iteration_num, check, index, started)
 
     @traces(SWR.SWR_2609, SWR.SWR_2610)
     def on_verifier_check_finished(
@@ -1711,36 +1687,7 @@ class _SessionObserver:
     ) -> None:
         """Settle the check's row on its own outcome, not on the suite's."""
         del total
-        row = self._verifier_rows.pop(f"{iteration_num}:{index}", None)
-        status = str(getattr(result, "status", "") or "")
-        detail = str(getattr(result, "skip_reason", "") or "") or str(
-            getattr(result, "output_excerpt", "") or ""
-        )
-        full_detail = self._cap_full_text(detail)
-        capped = full_detail
-        if len(capped) > self._TOOL_DETAIL_MAX:
-            capped = capped[: self._TOOL_DETAIL_MAX - 1].rstrip() + "…"
-        if row is None:
-            # A check that was never announced (permission denial, or a suite
-            # whose budget ran out before it started) still deserves a row.
-            row = self._append_row(
-                {
-                    "role": "verifier",
-                    "name": "verifier",
-                    "persona": "verifier",
-                    "tool": str(getattr(result, "name", "") or "check"),
-                    "content": str(getattr(result, "command", "") or ""),
-                    "tool_event_key": f"verify:{iteration_num}:{index}",
-                }
-            )
-        row["detail"] = capped
-        row["full_detail"] = full_detail
-        row["tool_terminal"] = True
-        row["status"] = _VERIFIER_ROW_STATUS.get(status, "failed")
-        row["duration"] = float(getattr(result, "duration_s", 0.0) or 0.0)
-        # Named explicitly: the row was popped from ``_verifier_rows`` above, so
-        # it is no longer among the rows ``_held_rows`` reports.
-        self._touch(row)
+        self._recorder.record_verifier_check_finished(iteration_num, result, index)
 
     @traces(SWR.SWR_2609)
     def on_verifier_run(self, iteration_num: int, result: Any) -> None:
@@ -1753,7 +1700,7 @@ class _SessionObserver:
         """
         del iteration_num
         self._verifier_control = None
-        self._verifier_rows.clear()
+        self._recorder.clear_verifier_rows()
         self.state.verifier_state = None
         self.state.gate_warning = _gate_warning_for(result)
         self._save()
@@ -1841,16 +1788,12 @@ class _SessionObserver:
         scheduler = self.ralph.scheduler
 
         def _conversation_event(record: Any, event: object) -> None:
-            self.loop.call_soon_threadsafe(
-                self._apply_conversation_event, record.canonical_name, record.persona, event
-            )
+            # The rows are not built here any more: ``child_run`` hands every
+            # conversation event to the session's recorder before this callback
+            # runs (SWR-2454). What is left is what belongs to this host — the
+            # token accounting and the agent-tree refresh.
             self._capture_live_prompt_tokens(record)
             self._schedule_manager(manager)
-
-        def _conversation_token(record: Any, chunk: object) -> None:
-            self.loop.call_soon_threadsafe(
-                self._apply_token_event, record.canonical_name, record.persona, chunk
-            )
 
         def _spawn_notification(_record: Any) -> None:
             # Fires when the scheduler flips a queued child to RUNNING (and on
@@ -1888,7 +1831,6 @@ class _SessionObserver:
             self._schedule_manager(manager)
 
         self.ralph.scheduler._conversation_event_callback = _conversation_event
-        self.ralph.scheduler._conversation_token_callback = _conversation_token
         self.ralph.scheduler._spawn_notification_callback = _spawn_notification
         self.ralph.scheduler._stall_callback = _stall
         self.ralph.scheduler.on_questions_stored = _questions_stored
@@ -1940,399 +1882,6 @@ class _SessionObserver:
         }
         self._save()
 
-    @staticmethod
-    def _timestamp() -> str:
-        return time.strftime("%H:%M:%S")
-
-    def _append_row(self, row: dict[str, Any]) -> dict[str, Any]:
-        row.setdefault("ts", self._timestamp())
-        # Recorded before the append so the index is the one the row lands at.
-        # This is the only place a transcript row is created, which is what
-        # makes ``_row_index`` complete rather than best-effort (SWR-2454).
-        self._row_index[id(row)] = len(self.state.transcript_events)
-        self.state.transcript_events.append(row)
-        return row
-
-    @traces(SWR.SWR_2421)
-    def _apply_conversation_event(self, agent_name: str, persona: str, event: object) -> None:
-        from openhands.sdk.event.condenser import Condensation
-        from openhands.sdk.event.llm_convertible.action import ActionEvent
-        from openhands.sdk.event.llm_convertible.message import MessageEvent
-        from openhands.sdk.event.llm_convertible.observation import (
-            AgentErrorEvent,
-            ObservationEvent,
-            UserRejectObservation,
-        )
-
-        changed = False
-        if isinstance(event, Condensation):
-            self._append_row(
-                {
-                    "role": "system",
-                    "content": (
-                        "Memory condensed: preserved facts and cleared history to save tokens."
-                    ),
-                }
-            )
-            changed = True
-        elif isinstance(event, ActionEvent):
-            changed = self._apply_action_event(agent_name, persona, event)
-        elif isinstance(event, ObservationEvent | UserRejectObservation | AgentErrorEvent):
-            changed = self._apply_tool_result_event(agent_name, event)
-        elif isinstance(event, MessageEvent) and str(getattr(event, "source", "")) == "agent":
-            changed = self._apply_agent_message_event(agent_name, persona, event)
-
-        if changed:
-            self._touch()
-
-    @traces(SWR.SWR_2417, SWR.SWR_2444, SWR.SWR_2432)
-    def _apply_action_event(self, agent_name: str, persona: str, event: Any) -> bool:
-        """Persist one tool call as a chat row; flush thought/reasoning first."""
-        from rotaris_core.tui.live_activity import describe_sdk_event
-
-        reasoning = getattr(event, "reasoning_content", None)
-        if isinstance(reasoning, str) and reasoning.strip():
-            self._append_thinking(agent_name, persona, reasoning)
-
-        thought_text = self._visible_text(getattr(event, "thought", None) or [])
-        if thought_text:
-            self._persist_visible_text(agent_name, persona, thought_text)
-
-        # Tool call starts: streamed/thinking segments belong to the turn before it.
-        self._close_segments(agent_name)
-
-        update = describe_sdk_event(event) or {}
-        summary = update.get("activity_text") or str(getattr(event, "tool_name", "tool"))
-        full_summary = self._cap_full_text(str(update.get("feed_text") or summary))
-        row = self._append_row(
-            {
-                "role": "tool",
-                "name": agent_name,
-                "persona": persona,
-                "tool": str(getattr(event, "tool_name", "")),
-                "content": summary,
-                "detail": "",
-                "full_text": full_summary,
-                "full_detail": "",
-                "tool_event_key": str(getattr(event, "tool_call_id", "") or ""),
-                "tool_terminal": False,
-                "status": "running",
-                # Wall-clock, unlike the monotonic stamp below: the UI has to
-                # count a running call upward across process boundaries, and a
-                # grouped run of calls times itself from the first one (SWR-2432).
-                "started_at": time.time(),
-            }
-        )
-        call_id = str(getattr(event, "tool_call_id", "") or "")
-        tool_name = str(getattr(event, "tool_name", "") or "")
-        if _is_terminal_tool(tool_name):
-            # The engine publishes this agent's foreground terminal under its
-            # canonical name, which is the same name this row is stamped with —
-            # so the preview can find the live screen (SWR-2428).
-            row["stream_id"] = f"fg:{agent_name}"
-        self._record_live_tool_call(agent_name, tool_name, call_id)
-        if call_id:
-            self._tool_rows[f"{agent_name}:{call_id}"] = row
-            self._tool_started[f"{agent_name}:{call_id}"] = time.monotonic()
-            if tool_name:
-                self._active_tool_calls.setdefault(agent_name, {})[call_id] = tool_name
-                self._sync_child_active_tools(agent_name)
-        return True
-
-    def _record_live_tool_call(self, agent_name: str, tool_name: str, call_id: str) -> None:
-        """Mirror a started call into session metrics before conversation end."""
-        if not tool_name:
-            return
-        stable_id = f"{agent_name}:{call_id}" if call_id else ""
-        if stable_id and stable_id in self._counted_tool_calls:
-            return
-        if stable_id:
-            self._counted_tool_calls.add(stable_id)
-
-        from rotaris_core.session.state import AgentMetrics
-
-        metrics = self.state.agent_metrics.setdefault(agent_name, AgentMetrics())
-        metrics.tool_calls[tool_name] = metrics.tool_calls.get(tool_name, 0) + 1
-        metrics.tool_call_count += 1
-        self.state.global_tool_call_count += 1
-
-    @traces(SWR.SWR_2417, SWR.SWR_2419, SWR.SWR_2444)
-    def _apply_tool_result_event(self, agent_name: str, event: Any) -> bool:
-        """Attach a tool result / failure to its originating tool row."""
-        from rotaris_core.tui.live_activity import describe_sdk_event
-
-        update = describe_sdk_event(event)
-        if update is None:
-            return False
-        icon = update.get("activity_icon", "")
-        status = {"completed": "ok", "failed": "failed", "blocked": "blocked"}.get(
-            str(update.get("activity_phase", "")), "ok"
-        )
-        full_detail_text = str(update.get("feed_text") or update.get("activity_text") or "")
-        call_id = str(getattr(event, "tool_call_id", "") or "")
-        row = self._tool_rows.pop(f"{agent_name}:{call_id}", None)
-        terminal_row = _is_terminal_tool(str((row or {}).get("tool") or ""))
-        full_detail_text = self._cap_full_text(full_detail_text, preserve_lines=terminal_row)
-        detail = " ".join(full_detail_text.split()) if terminal_row else full_detail_text
-        if len(detail) > self._TOOL_DETAIL_MAX:
-            detail = detail[: self._TOOL_DETAIL_MAX - 1].rstrip() + "…"
-        started_at = self._tool_started.pop(f"{agent_name}:{call_id}", None)
-        open_calls = self._active_tool_calls.get(agent_name)
-        tool_name = open_calls.get(call_id, "") if open_calls is not None else ""
-        if open_calls is not None and call_id in open_calls:
-            del open_calls[call_id]
-            self._sync_child_active_tools(agent_name)
-        if row is not None:
-            row["detail"] = detail
-            row["full_detail"] = full_detail_text
-            row["tool_terminal"] = True
-            row["status"] = status
-            if started_at is not None:
-                row["duration"] = round(time.monotonic() - started_at, 1)
-            self._persist_ui_edit_diff(agent_name, event, row)
-        else:
-            self._append_row({"role": "system", "content": f"{icon} {detail}".strip()})
-        pending = self.state.pending_questions
-        if (
-            tool_name == "ask_questions"
-            and isinstance(pending, dict)
-            and pending.get("agent_id") == agent_name
-        ):
-            self.state.pending_questions = None
-        return True
-
-    @traces(SWR.SWR_2419)
-    def _persist_ui_edit_diff(
-        self,
-        agent_name: str,
-        event: Any,
-        tool_row: dict[str, Any],
-    ) -> None:
-        """Persist one structured diff outside the model-visible transcript."""
-        observation = getattr(event, "observation", None)
-        raw_diff = getattr(observation, "ui_diff", None)
-        if not isinstance(raw_diff, dict):
-            return
-
-        from rotaris_core.edit_diff import EditDiffArtifact
-
-        tool_name = str(tool_row.get("tool") or getattr(event, "tool_name", "") or "")
-        tool_event_key = str(tool_row.get("tool_event_key") or "").strip() or None
-        diff_id = (
-            f"{agent_name}:{tool_event_key}"
-            if tool_event_key is not None
-            else f"{agent_name}:{tool_name}:{len(self.state.ui_edit_diffs)}"
-        )
-        try:
-            diff = EditDiffArtifact.model_validate(
-                {
-                    **raw_diff,
-                    "diff_id": diff_id,
-                    "agent_name": agent_name,
-                    "tool_name": tool_name,
-                    "tool_event_key": tool_event_key,
-                }
-            )
-        except Exception:  # noqa: BLE001 - invalid SDK UI metadata must not break the run
-            return
-
-        payload = diff.model_dump(mode="json")
-        for index, existing in enumerate(self.state.ui_edit_diffs):
-            if str(existing.get("diff_id") or "") != diff_id:
-                continue
-            self.state.ui_edit_diffs[index] = payload
-            return
-        self.state.ui_edit_diffs.append(payload)
-
-    def _active_tool_names(self, agent_name: str) -> list[str]:
-        return sorted(set(self._active_tool_calls.get(agent_name, {}).values()))
-
-    def _sync_child_active_tools(self, agent_name: str) -> None:
-        """Mirror the live tool set onto the persisted child state entry."""
-        tools = self._active_tool_names(agent_name)
-        for item in self.state.child_states:
-            if str(item.get("canonical_name") or item.get("name")) == agent_name:
-                item["active_tools"] = tools
-
-    def _apply_agent_message_event(self, agent_name: str, persona: str, event: Any) -> bool:
-        content = self._visible_text(getattr(event.llm_message, "content", []) or [])
-        if not content:
-            return False
-        event_id = str(getattr(event, "id", "") or "")
-        stable_id = f"{agent_name}:{event_id}" if event_id else ""
-        if stable_id and stable_id in self._persisted_message_events:
-            return False
-        self._persist_visible_text(agent_name, persona, content)
-        if stable_id:
-            self._persisted_message_events.add(stable_id)
-        return True
-
-    @staticmethod
-    def _visible_text(items: Any) -> str:
-        """What the agent said, as the engine defines it.
-
-        Deliberately not this module's own rule: the event stream puts the same
-        text on the wire (SWR-1829), and a foreign session is watched through
-        that while a local one is watched through this. Two answers to "what did
-        the agent say" would make the two views of one run disagree.
-        """
-        from rotaris_core.sdk_text import visible_message_text
-
-        return visible_message_text(items)
-
-    def _apply_token_event(self, agent_name: str, persona: str, chunk: object) -> None:
-        from rotaris_core.tui.streaming import extract_reasoning_text, extract_stream_text
-
-        changed = False
-        reasoning_delta = extract_reasoning_text(chunk)
-        if reasoning_delta:
-            self._append_thinking(agent_name, persona, reasoning_delta, streaming=True)
-            changed = True
-
-        text_delta, _has_reasoning = extract_stream_text(chunk)
-        if text_delta and not text_delta.strip() and agent_name not in self._stream_segments:
-            # A blank line ahead of the first visible token belongs to no
-            # message yet — opening a row for it would show an empty one. Once
-            # a segment is open the same whitespace is kept, because that is
-            # what separates the Markdown blocks inside it (SWR-1217).
-            text_delta = ""
-        if text_delta:
-            # Visible text ends the thinking burst.
-            self._finish_thinking(agent_name)
-            seg = self._stream_segments.get(agent_name)
-            if seg is None:
-                self._committed_message_segments.pop(agent_name, None)
-                seg = self._append_row(
-                    {
-                        "role": "agent",
-                        "name": agent_name,
-                        "persona": persona,
-                        "content": text_delta,
-                    }
-                )
-                self._stream_segments[agent_name] = seg
-            else:
-                seg["content"] = str(seg.get("content", "")) + text_delta
-            changed = True
-
-        if changed:
-            self._touch()
-
-    @traces(SWR.SWR_2446)
-    def _append_thinking(
-        self, agent_name: str, persona: str, text: str, *, streaming: bool = False
-    ) -> None:
-        if not streaming:
-            self._reconcile_thinking(agent_name, persona, text)
-            return
-        seg = self._thinking_segments.get(agent_name)
-        if seg is None:
-            seg = self._append_row(
-                {
-                    "role": "thinking",
-                    "name": agent_name,
-                    "persona": persona,
-                    "content": "",
-                    "started_at": time.time(),
-                    "chars": 0,
-                }
-            )
-            self._thinking_segments[agent_name] = seg
-            self._last_thinking_rows[agent_name] = seg
-        # Count every streamed character — the persisted content is capped, but
-        # the token estimate in the transcript keeps climbing past the cap.
-        seg["chars"] = int(seg.get("chars", 0) or 0) + len(text)
-        existing = str(seg.get("content", ""))
-        if len(existing) < self._THINKING_MAX:
-            seg["content"] = (existing + text)[: self._THINKING_MAX]
-
-    @traces(SWR.SWR_2446)
-    def _reconcile_thinking(self, agent_name: str, persona: str, text: str) -> None:
-        """Fold an action event's complete ``reasoning_content`` into its burst.
-
-        The SDK delivers reasoning twice: streamed as deltas, then whole on the
-        action event that ends the turn. The second copy must never become its
-        own row — it duplicated every burst, and with no duration ever stamped
-        it rendered as a perpetually counting "reasoning…" row.
-        """
-        seg = self._thinking_segments.get(agent_name)
-        if seg is not None:
-            # The open streamed burst is the turn this action ends; the event's
-            # reasoning is authoritative for it.
-            seg["chars"] = max(int(seg.get("chars", 0) or 0), len(text))
-            seg["content"] = text[: self._THINKING_MAX]
-            return
-        last = self._last_thinking_rows.get(agent_name)
-        if last is not None:
-            content = str(last.get("content", ""))
-            if content and (text.startswith(content) or content.startswith(text)):
-                # Burst already closed (visible text ended it) — same reasoning.
-                last["chars"] = max(int(last.get("chars", 0) or 0), len(text))
-                last["content"] = text[: self._THINKING_MAX]
-                return
-        # Reasoning the provider never streamed: it arrives whole with the
-        # action, so the row is complete on creation — no started_at, nothing
-        # for the live tick to count.
-        row = self._append_row(
-            {
-                "role": "thinking",
-                "name": agent_name,
-                "persona": persona,
-                "content": text[: self._THINKING_MAX],
-                "chars": len(text),
-            }
-        )
-        self._last_thinking_rows[agent_name] = row
-
-    @traces(SWR.SWR_2446)
-    def _finish_thinking(self, agent_name: str) -> None:
-        """Stamp the thinking duration when a streamed burst ends."""
-        seg = self._thinking_segments.pop(agent_name, None)
-        if seg is None or "duration" in seg:
-            return
-        started_at = float(seg.get("started_at", 0.0) or 0.0)
-        if started_at:
-            seg["duration"] = round(max(0.0, time.time() - started_at), 1)
-
-    def _close_segments(self, agent_name: str) -> None:
-        self._stream_segments.pop(agent_name, None)
-        self._finish_thinking(agent_name)
-        self._committed_message_segments.pop(agent_name, None)
-
-    @staticmethod
-    def _message_key(text: str) -> str:
-        """Whitespace-insensitive form of a message, for matching two copies of it.
-
-        A streamed segment is assembled delta by delta while the final message
-        arrives whole, so the two are sanitised at different boundaries and
-        their whitespace can differ by a space or a newline. Comparing the
-        words is what actually answers "is this the same message" — comparing
-        the characters answers it wrong and posts the message twice.
-        """
-        return " ".join(text.split())
-
-    def _persist_visible_text(self, agent_name: str, persona: str, content: str) -> None:
-        """Commit an agent message, replacing its own streamed segment if any."""
-        self._finish_thinking(agent_name)
-        message_key = self._message_key(content)
-        seg = self._stream_segments.pop(agent_name, None)
-        if seg is not None:
-            streamed = self._message_key(str(seg.get("content", "")))
-            if not streamed or message_key.startswith(streamed) or streamed.startswith(message_key):
-                seg["content"] = content
-                self._committed_message_segments[agent_name] = seg
-                return
-        committed = self._committed_message_segments.get(agent_name)
-        if committed is not None:
-            prior = self._message_key(str(committed.get("content", "")))
-            if prior and message_key.startswith(prior):
-                committed["content"] = content
-                return
-        row = self._append_row(
-            {"role": "agent", "name": agent_name, "persona": persona, "content": content}
-        )
-        self._committed_message_segments[agent_name] = row
-
     def on_last_prompt_tokens(self, record: Any, tokens: int) -> None:
         self.loop.call_soon_threadsafe(self._set_prompt_tokens, record.canonical_name, tokens)
 
@@ -2374,14 +1923,8 @@ class _SessionObserver:
         _outcome: Any,
     ) -> None:
         self._remember_manager(manager)
-        self.loop.call_soon_threadsafe(self._finish_all_thinking)
+        self.loop.call_soon_threadsafe(self._recorder.finish_all_thinking)
         self.loop.call_soon_threadsafe(self._apply, manager.snapshot_children(), todo)
-
-    @traces(SWR.SWR_2446)
-    def _finish_all_thinking(self) -> None:
-        """Stamp durations on any thinking burst still open at iteration end."""
-        for agent_name in list(self._thinking_segments):
-            self._finish_thinking(agent_name)
 
     def _schedule_manager(self, manager: Any) -> None:
         snapshots = manager.snapshot_children()
@@ -2405,8 +1948,8 @@ class _SessionObserver:
             name = str(payload.get("canonical_name") or payload.get("name"))
             if str(payload.get("state", "")).lower() in self._TERMINAL_CHILD_STATES:
                 # A child that ended mid-call must not keep stale active chips.
-                self._active_tool_calls.pop(name, None)
-            payload["active_tools"] = self._active_tool_names(name)
+                self._recorder.forget_active_tools(name)
+            payload["active_tools"] = self._recorder.active_tool_names(name)
             existing[name] = payload
         self.state.child_states = list(existing.values())
         if todo is not None:

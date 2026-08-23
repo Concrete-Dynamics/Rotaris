@@ -58,34 +58,48 @@ sessions that matter most are the ones served worst.
 - Idle costs nothing: a run producing no activity produces no repeated work
   beyond a bounded liveness check.
 
-#### Scope of the cost criterion, as of 2026-08-22
+#### Scope of the cost criterion, as of 2026-08-23
 
-Two limitations, both dated, and neither a permission: the criteria above are
-the obligation, and a design that makes either gap structurally permanent has
-chosen wrongly.
+One limitation, dated, and not a permission: the criteria above are the
+obligation, and a design that makes the gap structurally permanent has chosen
+wrongly.
 
 **A session executing in another process** is reached only through the
-filesystem. The two things that kept it off the bounded-cost path are now in
-place, and the third is not.
+filesystem, and is on the bounded-cost path for its transcript since 2026-08-23.
+Three things had to be true, and the order they were false in is worth keeping.
 
-*Was missing, and is not any more.* The append-only log a run leaves —
-`evidence/events.jsonl` (SWR-2901) — carried no transcript content, so a view
-could not be built from it at any cost. Since 2026-08-23 it carries what the
-agents said and reasoned (SWR-1829), emitted from below the host boundary so a
-CLI, headless or SDK run produces it exactly as the desktop does. That closed a
-gap wider than cost: a foreign run's `state/ui_transcript.json` is written near
-the end, so a headless run watched from the desktop showed almost nothing until
-it finished, however often it was read. And the store can now be read from a
-recorded position (SWR-2902), so following one costs what the run added.
+*The run had to write a transcript at all.* It did not. Only the desktop built
+transcript rows, from callbacks the desktop installed, so a CLI or headless
+session's `state/ui_transcript.json` stayed near-empty until the run ended —
+a **content** gap, not a cost one, which no amount of cheap reading would have
+fixed. `rotaris_core.session.transcript.TranscriptRecorder` is the one writer
+now, below every host, so every session records the same conversation.
 
-*Still missing.* Nothing in the desktop reads either of those yet. A foreign
-session is still served by a whole-session read whose *frequency* is bounded but
-whose *cost per read* is not, and the latency ceiling in § Reach is what keeps
-that honest. What remains is a consumer: the desktop following a foreign
-session's store and turning those events into the rows it already knows how to
-render. That work must not introduce a second answer to "what does this render
-as" — the local path derives rows one way, and a foreign path that derived them
-another would make two views of one run disagree.
+*The record had to be followable.* The state files are rewritten whole and offer
+no position. The append-only log a run leaves — `evidence/events.jsonl`
+(SWR-2901) — now carries each transcript row as it is written (SWR-1829), and can
+be read from a recorded position (SWR-2902), so following a run costs what it
+added.
+
+*And it had to stay one transcript.* The rows on the wire are the run's own rows,
+carried verbatim and put back at the index they came from, then projected by the
+same `TranscriptProjector` the local path uses. A session watched from outside
+and the same session reopened afterwards are two runs of one function over one
+set of rows; they cannot disagree about what was said.
+
+*What is still whole-read.* Everything that is **not** the transcript — todos,
+the agent tree, artifacts, token counts — still reaches a foreign session's
+viewer through a whole-state read, as does the reconciliation that repairs
+anything the store missed. Those surfaces are bounded by how much is happening at
+once rather than by session length, so the read is bounded too; the latency
+ceiling in § Reach is what keeps its *frequency* honest.
+
+*And what a foreign viewer sees less of.* A row reaches the store when it is
+created and again when it settles, not on every mutation — a streamed row changes
+once per token, and a store recording each of those would spend its whole cap on
+one message. So a foreign viewer sees a streaming row's first token and then its
+finished text, rather than the growth between. A local viewer still sees every
+character.
 
 **Within this process, two channels carry two shapes of change.** The transcript
 is the only surface whose cost grew with the session, so it travels as a delta:
@@ -134,7 +148,9 @@ default, the bounded path holds from the run to the painted row.
 | --- | --- | --- | --- |
 | Unit | Applying one update to a projected session touches work proportional to the change: asserted by counting the per-update work over sessions of 30, 300 and 3000 events and requiring the count not to grow with length | the desktop's session-update seam | `apps/rotaris/tests/test_live_update_cost.py` (new) |
 | Unit | A view consumer that raises, blocks or is absent leaves the run's own progress and terminal status untouched | the engine→view boundary | `apps/rotaris/tests/test_live_update_cost.py` (new) |
-| Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py` (new), `tests/integration/test_cross_process_session_observation.py` (new) |
+| Unit | The run's own transcript: which rows it reports as settled, what reaches the wire and when, and that a broken watcher leaves the record intact | the transcript recorder | `tests/unit/session/test_transcript_recorder.py` (new) |
+| Unit | Following a session in another process: only the addition is read, a settled row replaces the one it opened, a shortened store restarts the view, and a lost line does not misplace the tail | the foreign-session follower | `apps/rotaris/tests/test_session_follower.py` (new) |
+| Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py` (new), `apps/rotaris/tests/test_session_follower.py::test_what_the_follower_shows_is_what_the_session_recorded` |
 | User-flow E2E | A user watches a long-running task in the desktop: new transcript rows, todos and agent state appear promptly throughout, the transcript stays readable as it grows, and the session the user was watching resumes to exactly what was on screen | Public product boundary → user-observable result | `apps/rotaris/tests/test_long_session_liveness_e2e.py` (new) |
 
 Related: [SWR-2453 — Every run the desktop starts is the same run as a CLI run](SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)

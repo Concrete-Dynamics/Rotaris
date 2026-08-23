@@ -32,7 +32,7 @@ class ToolSpec:
     name: str
     command: str
     version_args: tuple[str, ...]
-    minimum_version: str
+    minimum_version: str | None
     provisioned_version: str
     artifacts: dict[str, PlatformArtifact]
     binary_dirs: tuple[str, ...]

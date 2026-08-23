@@ -41,14 +41,16 @@ Every later launch skips it.
 ## The setup run
 
 **It only does what is missing.** Each step first asks whether the tool is
-already usable — a satisfying version on `PATH`, or one Rotaris provisioned
-earlier — and when it is, the step reports `already installed` and costs
-nothing. A machine that already has git, Node and ripgrep sees a setup run
-that completes in seconds without downloading anything.
+already usable — a working Git executable on `PATH`, a satisfying Node or
+ripgrep version on `PATH`, or one Rotaris provisioned earlier — and when it is,
+the step reports `already installed` and costs nothing. A machine that already
+has git, Node and ripgrep sees a setup run that completes in seconds without
+downloading anything.
 
-Git 2.36.0 or newer is satisfying because it carries the NUL-delimited worktree
-listing Rotaris uses. A system Git at that floor is reused directly and never
-replaced by Rotaris-managed Git.
+Any installed Git whose version command starts successfully is reused. Rotaris
+records and displays the detected version when Git reports one. Git discovery
+has no version floor; a missing Git executable or one that cannot run triggers
+the pinned managed download.
 
 **Steps, in order.** Detect what is present; provision `git`; provision Node;
 provision `rg`; warm the `npx` cache for the Playwright MCP server;
@@ -102,7 +104,8 @@ disclosure that streams it live and can be copied. It carries a `Cancel`.
 **Once means once.** Completion is recorded in the per-user data directory with
 the tool set and versions it satisfied. A later launch reads that record and
 starts the application directly. When a Rotaris upgrade needs a tool the record
-does not cover — a new MCP server, a raised minimum version — the next launch
+does not cover — a new MCP server, or a raised minimum for a tool that uses a
+discovery floor — the next launch
 runs a short top-up for that difference only, described as such, rather than the
 full first-time run. A user can also start the run by hand from Settings to
 repair a machine whose tools were removed.
@@ -118,9 +121,10 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 - **AC-001**: The first launch of a bundled Rotaris on a machine with none of
   `git`, Node or `rg` provisions all three, warms the required JavaScript MCP cache, and then
   starts the desktop application without further user action.
-- **AC-002**: On a machine that already has satisfying versions of all three,
-  the run reports each as already installed, downloads nothing, and reaches the
-  application. Git 2.36.0 or newer satisfies the Git step.
+- **AC-002**: On a machine with any working Git executable and satisfying Node
+  and ripgrep versions, the run reports each as already installed, downloads
+  nothing, and reaches the application. The pinned Git version applies only to
+  Rotaris-managed downloads.
 - **AC-003**: The second launch starts the application directly — no setup
   window, no re-detection cost the user can perceive.
 - **AC-004**: The window shows the ordered step list, the completed count and
@@ -151,12 +155,12 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 
 | Level           | Productive scenario                                                                                                                             | Exercised boundary                                             | Planned/covering test                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Unit            | Detection reuses Git 2.36+; the default setup plan excludes `uv`, derives the Playwright warm-up, and excludes Git MCP and Serena warm-ups | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
+| Unit            | Detection reuses every working installed Git; the default setup plan excludes `uv`, derives the Playwright warm-up, and excludes Git MCP and Serena warm-ups | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
 | Unit            | Default agents start without a Git MCP server or persona grant                                                                                 | Shipped persona and MCP configuration                            | `tests/unit/test_config_defaults.py::test_git_mcp_is_absent_from_the_shipped_configuration` |
 | Unit            | A pinned archive with a wrong digest is refused and nothing is unpacked; a matching one is unpacked into the per-user tool directory             | Download-and-verify step over a local HTTPS fixture             | `tests/unit/setup/test_tool_download.py`                     |
-| Integration     | A cancelled, then resumed, run completes the remaining steps only; a completion record makes a later run a no-op; a raised minimum triggers a top-up | Setup runner → completion record in the data dir                | `tests/integration/test_setup_resume_and_record.py`          |
+| Integration     | A cancelled, then resumed, run completes the remaining steps only; a completion record makes a later run a no-op; a raised discovery floor triggers a top-up for tools that use one | Setup runner → completion record in the data dir                | `tests/integration/test_setup_resume_and_record.py`          |
 | Integration     | `rotaris-cli setup` provisions without a GUI, prints one line per step, and exits non-zero on a failing step                                     | CLI entry point → setup runner with the network faked           | `tests/integration/test_setup_cli.py`                        |
-| User-flow E2E   | A first-time user watches the run progress, opens the details log, hits a failing step, chooses `Continue without it`, and reaches a usable app  | Real setup window driven by accessible name, network faked      | `apps/rotaris/tests/test_first_run_setup_flow.py`            |
+| User-flow E2E   | A first-time user with an installed Git watches the run progress, opens the details log, hits a failing step, chooses `Continue without it`, and reaches a usable app | Real setup window driven by accessible name, network faked      | `apps/rotaris/tests/test_first_run_setup_flow.py`            |
 
 Depends on: [SWR-3001 — Cross-Platform Standalone Binaries](SWR-3001-cross-platform-standalone-binaries.md)
 

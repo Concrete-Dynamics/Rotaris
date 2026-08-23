@@ -156,34 +156,6 @@ mcp_servers:
   #   args: ["-y", "@theupsider/lsp-mcp@latest"]
   #   env: {}                                       # diagnostics, definitions, references
 
-  git:
-    command: npx
-    args: ["-y", "@cyanheads/git-mcp-server@latest"]
-    env: {}
-    disabled_tools:                                 # keep only read-only tools (status/diff/log/show/blame/reflog/changelog)
-      - git_init
-      - git_clone
-      - git_clean
-      - git_add
-      - git_commit
-      - git_checkout
-      - git_merge
-      - git_rebase
-      - git_cherry_pick
-      - git_branch
-      - git_remote
-      - git_tag
-      - git_fetch
-      - git_pull
-      - git_push
-      - git_stash
-      - git_reset
-      - git_worktree
-      - git_set_working_dir
-      - git_clear_working_dir
-      - git_wrapup_instructions
-
-
 # ---------------------------------------------------------------------------
 # Personas
 # Each persona maps to a role with its own model, tools, and system prompt.

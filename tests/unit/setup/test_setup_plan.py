@@ -11,6 +11,7 @@ import pytest
 
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.setup import (
+    SetupManifest,
     SetupOutcome,
     SetupRecord,
     build_setup_plan,
@@ -19,11 +20,7 @@ from rotaris_core.setup import (
     manifest_fingerprint,
     probe_tool,
 )
-from rotaris_core.setup.manifest import (
-    GIT_MCP_VERSION,
-    PLAYWRIGHT_MCP_VERSION,
-    SERENA_VERSION,
-)
+from rotaris_core.setup.manifest import PLAYWRIGHT_MCP_VERSION, SERENA_VERSION
 from rotaris_core.setup.models import ToolProbe
 
 
@@ -37,14 +34,13 @@ def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
         (tool.name, tool.minimum_version, tool.provisioned_version) for tool in manifest.tools
     ] == [
         ("uv", "0.12.0", "0.12.5"),
-        ("git", "2.43.0", "2.55.0"),
+        ("git", "2.36.0", "2.55.0"),
         ("node", "20.0.0", "24.19.0"),
         ("ripgrep", "14.1.0", "15.2.0"),
     ]
     assert manifest.mcp_pins == {
         "serena-agent": SERENA_VERSION,
         "@playwright/mcp": PLAYWRIGHT_MCP_VERSION,
-        "@cyanheads/git-mcp-server": GIT_MCP_VERSION,
     }
     for tool in manifest.tools:
         assert tool.license
@@ -61,7 +57,6 @@ def test_default_mcp_configuration_derives_every_pinned_warmup() -> None:
     from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
 
     assert [step.id for step in derive_mcp_warmups(DEFAULT_MCP_SERVERS)] == [
-        "warm:npx:@cyanheads/git-mcp-server@2.15.1",
         "warm:npx:@playwright/mcp@0.0.75",
         "warm:uvx:serena-agent==1.7.0",
     ]
@@ -70,13 +65,13 @@ def test_default_mcp_configuration_derives_every_pinned_warmup() -> None:
 @verifies(SWR.SWR_3715)
 @pytest.mark.parametrize(
     ("output", "satisfies"),
-    [("git version 2.43.0", True), ("git version 2.42.9", False), ("broken", False)],
+    [("git version 2.41.0.windows.1", True), ("git version 2.35.9", False), ("broken", False)],
 )
 def test_probe_accepts_only_a_satisfying_version(
     monkeypatch: pytest.MonkeyPatch, output: str, satisfies: bool
 ) -> None:
     """Productive use: an existing system tool is reused when it meets Rotaris' floor.
-    Expected outcome: version output is parsed and compared before any download is planned."""
+    Expected outcome: Git 2.41 is accepted and versions lacking required worktree output are rejected."""
     spec = next(tool for tool in default_setup_manifest().tools if tool.name == "git")
     monkeypatch.setattr(
         "rotaris_core.setup.planner.shutil.which", lambda *_args, **_kwargs: "/bin/git"
@@ -87,6 +82,30 @@ def test_probe_accepts_only_a_satisfying_version(
     )
 
     assert probe_tool(spec).satisfies is satisfies
+
+
+@verifies(SWR.SWR_3715)
+def test_setup_plan_reuses_system_git_2_41_without_an_install_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a Windows user launches Rotaris with Git 2.41 already installed.
+    Expected outcome: setup reports Git as installed and schedules no Git download."""
+    git = next(tool for tool in default_setup_manifest().tools if tool.name == "git")
+    manifest = SetupManifest(schema_version=1, tools=(git,), mcp_pins={})
+    monkeypatch.setattr(
+        "rotaris_core.setup.planner.shutil.which",
+        lambda *_args, **_kwargs: r"C:\Program Files\Git\cmd\git.exe",
+    )
+    monkeypatch.setattr(
+        "rotaris_core.setup.planner.subprocess.run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            [], 0, "git version 2.41.0.windows.1", ""
+        ),
+    )
+
+    plan = build_setup_plan(manifest, mcp_servers={})
+
+    assert [step.id for step in plan.steps] == ["detect", "satisfied:git", "record"]
 
 
 @verifies(SWR.SWR_3715)

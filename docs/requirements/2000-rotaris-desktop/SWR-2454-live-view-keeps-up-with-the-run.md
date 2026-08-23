@@ -1,6 +1,6 @@
 ---
 req-id: SWR-2454
-status: draft
+status: approved
 trace: required
 test: required
 title: "The live view keeps up with the run"
@@ -30,8 +30,8 @@ reason the obvious rewrite is not automatically the right one.
 
 A long session is the normal case for this product: a Ralph loop runs for
 hours. The user's experience of it should not degrade as the session earns its
-length. Today the per-update cost grows with accumulated session size, so the
-sessions that matter most are the ones served worst.
+length. When this was written the per-update cost grew with accumulated session
+size, so the sessions that mattered most were the ones served worst.
 
 ## Acceptance criteria
 
@@ -39,11 +39,39 @@ sessions that matter most are the ones served worst.
 
 - Run activity becomes visible on the focused session's live surfaces within
   **250 ms** of the engine producing it, at the 95th percentile, measured on a
-  session of any length. The current worst case is approximately 1.25 s; the
-  budget is the number to review, and a measured baseline must be recorded
+  session of any length. The worst case this replaced was approximately 1.25 s;
+  the budget is the number to review, and a measured baseline must be recorded
   alongside the first implementation.
 - The budget applies to the focused session. An unfocused or foreign session
   (§ Reach) may lag further, but must not lag unboundedly.
+
+#### The measured baseline, 2026-08-23
+
+Recorded because the criterion above asks for it, and written down with its
+machine because there is no CI on this platform to notice it drifting.
+
+`apps/rotaris/tests/test_live_view_latency.py::test_a_row_is_visible_within_the_budget_however_long_the_session_is`
+times the interval between the engine recording a row and that row reaching the
+view, over 150 rows, with the reconciling timer stopped so a measurement cannot
+be a poll that happened to land. Two runs, on Windows 11 (10.0.26200), an 8-core
+/ 16-thread Intel Comet Lake, Python 3.12.7, nothing else running:
+
+| Rows already held | Median | p95 | Max |
+| --- | --- | --- | --- |
+| 0 | 2.0 / 2.7 ms | 3.0 / 4.0 ms | 20.2 / 6.6 ms |
+| 2000 | 2.0 / 2.9 ms | 2.9 / 5.2 ms | 53.0 / 122.2 ms |
+
+Two things the numbers say. The budget has roughly two orders of magnitude of
+headroom — 250 ms was set against a ~1.25 s worst case, and the measurement is a
+few milliseconds — so it is a ceiling on the design rather than a description of
+it, and a future change eating that headroom would still pass. And the p95 does
+not move between an empty session and a 2000-row one, which is the § Cost claim
+showing up in the latency measurement rather than only in the operation counts.
+
+The maxima do move, and are the honest caveat: a single row occasionally takes
+tens of milliseconds, sometimes over a hundred, tracking garbage collection and
+OS scheduling rather than session length. That is why the criterion is written
+at the 95th percentile and the test asserts there.
 
 ### Cost
 
@@ -146,12 +174,12 @@ default, the bounded path holds from the run to the painted row.
 
 | Level | Productive scenario | Exercised boundary | Planned/covering test |
 | --- | --- | --- | --- |
-| Unit | Applying one update to a projected session touches work proportional to the change: asserted by counting the per-update work over sessions of 30, 300 and 3000 events and requiring the count not to grow with length | the desktop's session-update seam | `apps/rotaris/tests/test_live_update_cost.py` (new) |
-| Unit | A view consumer that raises, blocks or is absent leaves the run's own progress and terminal status untouched | the engine→view boundary | `apps/rotaris/tests/test_live_update_cost.py` (new) |
-| Unit | The run's own transcript: which rows it reports as settled, what reaches the wire and when, and that a broken watcher leaves the record intact | the transcript recorder | `tests/unit/session/test_transcript_recorder.py` (new) |
-| Unit | Following a session in another process: only the addition is read, a settled row replaces the one it opened, a shortened store restarts the view, and a lost line does not misplace the tail | the foreign-session follower | `apps/rotaris/tests/test_session_follower.py` (new) |
-| Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py` (new), `apps/rotaris/tests/test_session_follower.py::test_what_the_follower_shows_is_what_the_session_recorded` |
-| User-flow E2E | A user watches a long-running task in the desktop: new transcript rows, todos and agent state appear promptly throughout, the transcript stays readable as it grows, and the session the user was watching resumes to exactly what was on screen | Public product boundary → user-observable result | `apps/rotaris/tests/test_long_session_liveness_e2e.py` (new) |
+| Unit | Applying one update to a projected session touches work proportional to the change: asserted by counting the per-update work over sessions of 30, 300 and 3000 events and requiring the count not to grow with length | the desktop's session-update seam | `apps/rotaris/tests/test_live_update_cost.py` |
+| Unit | A view consumer that raises, blocks or is absent leaves the run's own progress and terminal status untouched | the engine→view boundary | `apps/rotaris/tests/test_live_update_cost.py` |
+| Unit | The run's own transcript: which rows it reports as settled, what reaches the wire and when, and that a broken watcher leaves the record intact | the transcript recorder | `tests/unit/session/test_transcript_recorder.py` |
+| Unit | Following a session in another process: only the addition is read, a settled row replaces the one it opened, a shortened store restarts the view, and a lost line does not misplace the tail | the foreign-session follower | `apps/rotaris/tests/test_session_follower.py` |
+| Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py`, `apps/rotaris/tests/test_session_follower.py::test_what_the_follower_shows_is_what_the_session_recorded` |
+| User-flow E2E | A user watches a long-running task in the desktop: new transcript rows, todos and agent state appear promptly throughout, the transcript stays readable as it grows, and the session the user was watching resumes to exactly what was on screen | Public product boundary → user-observable result | `apps/rotaris/tests/test_long_session_liveness_e2e.py` |
 
 Related: [SWR-2453 — Every run the desktop starts is the same run as a CLI run](SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
 (the lifecycle half of the same boundary; the two are independent — the main

@@ -101,6 +101,28 @@ job will re-render the body with the new artifact) or cut a patch release. Do no
 delete and re-push the tag — a tag that has already published to PyPI cannot
 publish the same version again.
 
+## Before promoting the release on the official website
+
+GitHub Releases remain the developer/distribution surface and do **not** need a
+separate consumer-facing network/privacy notice. The official Rotaris website is
+the disclosure surface defined by SWR-3722.
+
+Before a newly built standalone release is promoted through the website:
+
+1. compare the compact download disclosure with the current automatic client
+   behaviour in SWR-3715 and SWR-3003;
+2. if first-run provisioning destinations or launch-time update behaviour changed,
+   update the website disclosure before promoting the release; and
+3. verify that the disclosure stays visually secondary: a small information or
+   privacy control beside the download metadata/action, not a warning banner,
+   checkbox, blocking dialog, interstitial or large legal paragraph.
+
+The German download page carries German copy. The English download page may carry
+the equivalent English copy through the same compact control without adding visual
+weight. This check gates **website promotion**, not GitHub artifact generation.
+
+See [SWR-3722 — website download network disclosure](../requirements/3000-distribution-updates/SWR-3722-website-download-network-disclosure.md).
+
 ## Changing any of this
 
 The parts that can be wrong live in `src/rotaris_core/packaging/release.py`, not

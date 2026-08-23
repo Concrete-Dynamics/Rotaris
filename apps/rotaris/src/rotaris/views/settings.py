@@ -1505,7 +1505,7 @@ class SettingsView(Themed, QWidget):
         set_theme(name)
         self.theme_hint.setText(tokens().description)
 
-    @traces(SWR.SWR_3722)
+    @traces(SWR.SWR_3723)
     def _on_reduce_motion_toggled(self, checked: bool) -> None:
         """Persist the motion preference; the next animation honours it.
 

@@ -1,4 +1,4 @@
-"""The reduced-motion gate: one decision, read at the moment an animation starts (SWR-3722).
+"""The reduced-motion gate: one decision, read at the moment an animation starts (SWR-3723).
 
 The gate exists so that a reader who asked the operating system for reduced
 motion — or ticked the box in Settings — never sees a pulse, a rise or a knob
@@ -32,7 +32,7 @@ class _RecordingSettings:
         self.values[key] = value
 
 
-@verifies(SWR.SWR_3722)
+@verifies(SWR.SWR_3723)
 def test_the_gate_reads_the_platform_default_when_nothing_is_stored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -47,7 +47,7 @@ def test_the_gate_reads_the_platform_default_when_nothing_is_stored(
     assert reduced_motion.reduced_motion() is True
 
 
-@verifies(SWR.SWR_3722)
+@verifies(SWR.SWR_3723)
 def test_the_stored_preference_wins_over_the_platform(monkeypatch: pytest.MonkeyPatch) -> None:
     """Productive use: the user turns animations back on in Settings.
 
@@ -60,7 +60,7 @@ def test_the_stored_preference_wins_over_the_platform(monkeypatch: pytest.Monkey
     assert reduced_motion.reduced_motion() is False
 
 
-@verifies(SWR.SWR_3722)
+@verifies(SWR.SWR_3723)
 def test_setting_the_preference_persists_it(monkeypatch: pytest.MonkeyPatch) -> None:
     """Productive use: the choice survives a relaunch."""
     store = _RecordingSettings()
@@ -73,7 +73,7 @@ def test_setting_the_preference_persists_it(monkeypatch: pytest.MonkeyPatch) -> 
     assert reduced_motion.reduced_motion() is True
 
 
-@verifies(SWR.SWR_3722)
+@verifies(SWR.SWR_3723)
 def test_a_closed_gate_stops_the_pulse_and_leaves_the_dot_opaque(
     qtbot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -95,7 +95,7 @@ def test_a_closed_gate_stops_the_pulse_and_leaves_the_dot_opaque(
     assert pulse._effect.opacity() == 1.0
 
 
-@verifies(SWR.SWR_3722)
+@verifies(SWR.SWR_3723)
 def test_a_closed_gate_lands_the_toggle_knob_instantly(
     qtbot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -115,7 +115,7 @@ def test_a_closed_gate_lands_the_toggle_knob_instantly(
     assert switch._travel.state() != QAbstractAnimation.State.Running
 
 
-@verifies(SWR.SWR_3722)
+@verifies(SWR.SWR_3723)
 def test_a_closed_gate_keeps_the_spinner_still(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
     """Productive use: a view loads while reduced motion is on.
 

@@ -1,6 +1,6 @@
 ---
 req-id: SWR-2453
-status: draft
+status: approved
 trace: required
 test: required
 title: "Every run the desktop starts is the same run as a CLI run"
@@ -42,16 +42,23 @@ migration's own account of the cost is the evidence for finishing the job: while
 the second copy existed it had a gap the shared lifecycle did not, and a run that
 died during intent classification was stored without its `session.start`.
 
-At the time of writing the migration is incomplete. The desktop's **integration
-run** — the agent that merges selected session worktrees — still drives the
-runtime one layer below the lifecycle and hand-composes a subset of it, so it
-creates and persists its own session, and does not attach the event store,
-publish session start and end, or derive its terminal result the way every other
-run does. The hand-composition helper that path depends on remains in the code
-as the last consumer of the forked shape.
+When this was written the migration was incomplete. The desktop's **integration
+run** — the agent that merges selected session worktrees — drove the runtime one
+layer below the lifecycle and hand-composed a subset of it, so it created and
+persisted its own session, and did not attach the event store, publish session
+start and end, or derive its terminal result the way every other run does. A
+hand-composition helper survived in the code as that path's last dependency on
+the forked shape.
 
-That is the same defect SWR-1830 named, surviving in one path rather than all of
-them, and it is invisible precisely because the main path was fixed.
+That was the same defect SWR-1830 named, surviving in one path rather than all of
+them, and it was invisible precisely because the main path had been fixed.
+
+**Closed 2026-08-23.** The integration run calls the shared lifecycle, and the
+helper is gone rather than unused: `RunLifecycleExtras`,
+`install_run_lifecycle_extras` and `accepts_extra_observers` name nothing in the
+tree. The two seams that path genuinely needed became fields on the shared
+request (`run_type`, `internal`) rather than a host-side copy — which is what the
+"the lifecycle grows a seam, the host does not grow a copy" criterion asks for.
 
 ## Acceptance criteria
 
@@ -87,18 +94,17 @@ them, and it is invisible precisely because the main path was fixed.
 | Level | Productive scenario | Exercised boundary | Planned/covering test |
 | --- | --- | --- | --- |
 | Unit | Each desktop run path composes the lifecycle once and only through the shared one, asserted by driving it with a fake agent loop and checking each named behaviour fires once, in order, on both the success and the cancellation path | the host-neutral run lifecycle as each desktop path invokes it | `tests/unit/test_run_host.py` (extended), `apps/rotaris/tests/test_desktop_hook_wiring.py` (extended to the integration path) |
-| Integration | The same hermetic task run from each desktop run path and from the CLI yields equal session artifacts, equal lifecycle event sequences and equal terminal status; an integration run leaves the event-store history and session start/end an ordinary run leaves; a lifecycle behaviour registered only in the engine is observed in all of them | desktop run paths ↔ CLI host over one engine | `tests/integration/test_host_lifecycle_parity.py` (new), `apps/rotaris/tests/test_worktree_integration_e2e.py` (extended) |
+| Integration | The same hermetic task run from each desktop run path and from the CLI yields equal session artifacts, equal lifecycle event sequences and equal terminal status; an integration run leaves the event-store history and session start/end an ordinary run leaves; a lifecycle behaviour registered only in the engine is observed in all of them | desktop run paths ↔ CLI host over one engine | `apps/rotaris/tests/test_host_lifecycle_parity.py`, `apps/rotaris/tests/test_worktree_integration_e2e.py::test_an_integration_run_leaves_the_session_any_other_run_leaves` |
 | User-flow E2E | A user merges two session worktrees from the desktop; a lifecycle hook fires and a checkpoint is written, the integration session is afterwards resumable and inspectable exactly as any other session is, and its events are in the store | Public product boundary → user-observable result | `apps/rotaris/tests/test_worktree_integration_e2e.py` (extended) |
 
 Related: [SWR-1830 — Python SDK entry point over the same runtime](../1800-cli-headless/SWR-1830-python-sdk.md)
 (the requirement that established the single lifecycle and recorded the desktop
 exemption this one finishes closing),
 [SWR-2454 — The live view keeps up with the run](SWR-2454-live-view-keeps-up-with-the-run.md)
-(the observation half of the same boundary — still open on every path),
+(the observation half of the same boundary),
 [SWR-2436 — Per-iteration checkpoints](../2400-git-worktrees/SWR-2436-iteration-checkpoints.md)
 and [SWR-2701 — Hook configuration](../2700-lifecycle-hooks/SWR-2701-hook-configuration.md)
-(the two lifecycle behaviours the desktop had to re-compose by hand, and what the
-remaining path still re-composes),
+(the two lifecycle behaviours the desktop used to re-compose by hand),
 [SWR-2901 — Session event store](../2900-event-store/SWR-2901-session-event-store.md)
 (attached by the lifecycle, and therefore missing wherever the lifecycle is not
 used).

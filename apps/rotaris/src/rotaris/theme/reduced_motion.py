@@ -1,4 +1,4 @@
-"""The reduced-motion gate (SWR-3722).
+"""The reduced-motion gate (SWR-3723).
 
 The design system ships one rule for motion that Qt has no equivalent for:
 `prefers-reduced-motion` collapses every animation to instant. This module is
@@ -70,7 +70,7 @@ def _read_stored() -> bool:
     return _stored
 
 
-@traces(SWR.SWR_3722)
+@traces(SWR.SWR_3723)
 def reduced_motion() -> bool:
     """Whether animation should be withheld right now.
 
@@ -85,7 +85,7 @@ def reduced_motion() -> bool:
     return _platform
 
 
-@traces(SWR.SWR_3722)
+@traces(SWR.SWR_3723)
 def set_reduced_motion(reduced: bool) -> None:
     """Set the preference and persist it; `None` is not a state, only absence."""
     global _stored, _settings

@@ -33,11 +33,15 @@ using the same runtime as the CLI/TUI (no forked behavior).
   during intent classification was stored without its `session.start`. The
   desktop's ordinary and requirement-driven runs have since migrated onto
   `execute_run`.
-  One path has not. The worktree **integration run** still drives the runtime a
-  layer below the lifecycle and hand-composes a subset of it, so it remains a
+  One path held out longer: the worktree **integration run** drove the runtime a
+  layer below the lifecycle and hand-composed a subset of it, which made it a
   standing exception to "no forked behavior" — narrower than the original, and
-  harder to see because the main path was fixed. Closing it is scoped as
-  [SWR-2453 — Every run the desktop starts is the same run as a CLI run](../2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md).
+  harder to see because the main path had been fixed. It was closed on
+  2026-08-23 under
+  [SWR-2453 — Every run the desktop starts is the same run as a CLI run](../2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md):
+  the integration run calls `execute_run` like every other, and the hooks the
+  desktop used to install around it (`RunLifecycleExtras`) no longer exist. No
+  host now re-composes the lifecycle, so this rule holds without exception.
 - The API is exported from a dedicated public module with a documented
   stability contract; internal modules remain private.
 - Headless approval policy (SWR-2504) applies; the SDK may register a

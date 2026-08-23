@@ -964,9 +964,9 @@ Every run the desktop starts must behave the same as one started from the CLI, t
 or the SDK for the same workspace, task and config, and no host may keep a private
 re-composition of run-lifecycle behaviour — session creation and resume, locking,
 worktree binding, event-store attach, session start/end, hook dispatch, per-iteration
-checkpointing, result derivation, and release on every exit path. The ordinary and
-requirement-driven runs already satisfy this; the worktree integration run does not,
-and is the remaining half of the exemption SWR-1830 recorded. States sameness, not
+checkpointing, result derivation, and release on every exit path. Satisfied on every
+desktop run path since 2026-08-23: the worktree integration run was the last holdout
+and the second half of the exemption SWR-1830 recorded. States sameness, not
 mechanism: the desktop keeps its own event loop, worker thread and session identity.
 
 Full requirement: [SWR-2453 — Every run the desktop starts is the same run as a CLI run](2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md)
@@ -1124,14 +1124,14 @@ painters that read the active theme on the theme's own grid unit.
 
 Full requirement: [SWR-3704 — Brand motif and elevation in Qt](2000-rotaris-desktop/SWR-3704-motif-and-elevation.md)
 
-## SWR-3722 — Motion respects the reduced-motion preference
+## SWR-3723 — Motion respects the reduced-motion preference
 
 Technical requirement derived from SWR-3704. The design system's reduced-motion rule
 becomes a single motion gate: the platform preference and a Settings toggle, and every
 animation completes instantly behind a closed gate — the end state is reached, only the
 travel is gone.
 
-Full requirement: [SWR-3722 — Motion respects the reduced-motion preference](2000-rotaris-desktop/SWR-3722-reduced-motion-gate.md)
+Full requirement: [SWR-3723 — Motion respects the reduced-motion preference](2000-rotaris-desktop/SWR-3723-reduced-motion-gate.md)
 
 ## SWR-3705 — Colour tokens are authored in OKLCH and resolved to sRGB
 

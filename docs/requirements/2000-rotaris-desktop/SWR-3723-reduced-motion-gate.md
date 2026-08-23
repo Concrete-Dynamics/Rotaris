@@ -1,5 +1,5 @@
 ---
-req-id: SWR-3722
+req-id: SWR-3723
 status: approved
 trace: required
 test: required
@@ -10,7 +10,7 @@ epic: SWR-2000
 date: 2026-08-23
 ---
 
-# SWR-3722 — Motion respects the reduced-motion preference
+# SWR-3723 — Motion respects the reduced-motion preference
 
 The design system ships one rule for motion that has no Qt equivalent by
 default: `prefers-reduced-motion` collapses every animation and transition to

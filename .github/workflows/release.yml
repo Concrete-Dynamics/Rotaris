@@ -164,6 +164,7 @@ jobs:
     needs: [guard, release]
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       # Trusted publishing: PyPI verifies this workflow's identity, so no
       # long-lived API token is stored in the repository.
       id-token: write

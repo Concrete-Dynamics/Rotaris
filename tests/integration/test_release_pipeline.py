@@ -197,10 +197,12 @@ def test_a_version_mismatch_blocks_every_later_job(workflow: Mapping[str, Any]) 
 def test_publishing_uses_trusted_publishing_and_never_gates_the_release(
     workflow: Mapping[str, Any],
 ) -> None:
-    """AC-005: OIDC rather than a long-lived token, and a PyPI failure must not roll
-    back a GitHub Release that already exists — so publishing runs after it."""
+    """Productive use: a maintainer can publish both packages after a GitHub Release.
+    Expected outcome: checkout can read the private repo and PyPI auth uses OIDC.
+    """
     publish = workflow["jobs"]["publish-pypi"]
 
+    assert publish["permissions"]["contents"] == "read"
     assert publish["permissions"]["id-token"] == "write"
     assert "release" in publish["needs"]
     steps = _steps_text(publish)

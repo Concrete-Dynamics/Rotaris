@@ -100,16 +100,11 @@ and `sys.path`). Support modules import by bare name: `ui_query`, `a11y`, `fakes
 (unit <U-last> owns that).
 
 **Style:** line length 100, `py312`, ruff `E,F,I,N,W,UP,B,SIM,TCH`; mypy `strict = true`.
-Use `uv run` for every Python tool; never activate `.venv` or call bare `pytest`/`ruff`/`mypy`.
+Use `uv run` for every Python tool; never activate `.venv` or call bare `ruff`/`mypy`.
 
 <Include only the traps this unit can actually hit — see the table in SKILL.md.>
 
 # Gates
-
-While you are implementing, run **only the tests covering your unit** — the file,
-node id, or `-k` selection for your own requirement — and iterate there. A full
-suite per edit costs minutes and buries your one real failure in the standing
-environment failures listed below.
 
 Before you hand the unit over, run the **fast gate** — seconds, and it is all
 that stands between you and the epic branch:
@@ -120,26 +115,7 @@ uv run python -m rotaris_core.reqtocode check --fix && uv run python -m rotaris_
 uv run ruff format src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'
 uv run ruff check src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'
 uv run mypy src/rotaris_core/ && uv run mypy apps/rotaris/src/rotaris/
-# plus the focused selection covering your unit, and the suite your E2E lives in
 ```
-
-Do **not** run the two full suites as a private final pass. Integration runs them
-once per wave, on the merged tree, where cross-unit regressions can exist at all;
-running them here only delays your handover. If you have reason to think your
-unit reaches far outside itself, say so in your report instead:
-
-```bash
-uv run pytest apps/rotaris/tests -q --timeout=90 -p no:textual-snapshot -n auto
-uv run pytest tests/unit/ tests/integration/ -n auto -q --timeout=90
-```
-
-**Baseline on this branch: Rotaris <N> passed / 0 failed — must stay at zero. Root <N>
-passed with exactly <k> pre-existing environment failures** (<name them>). These are
-unrelated to the epic. Do not fix them; confirm you introduced no *new* failures. Occasional
-`-n auto` flakes pass on rerun with `--lf`.
-
-**Note:** the `rtk` wrapper truncates pytest output — a real failure can surface as "No
-tests collected". Use `rtk proxy uv run pytest ...` when inspecting failures.
 
 # E2E test recipe
 
@@ -155,7 +131,6 @@ tests collected". Use `rtk proxy uv run pytest ...` when inspecting failures.
    `apps/rotaris/tests/ui_query.py` helpers — reaching into a private method downgrades the
    test from E2E to integration.
 5. Assert the user-observable chain: <the specific chain>.
-6. Run the focused selection for your unit plus the suite your E2E lives in.
 
 <Backend-only units: say which steps to skip and give an equivalent real-seam check.>
 
@@ -166,9 +141,7 @@ tests collected". Use `rtk proxy uv run pytest ...` when inspecting failures.
    unresolved modal exit path, a gate that never lifts on the error path, resource leaks on
    the timeout path, store fields mutated without a guarded setter>. Fix what you find.
    Run the `code-review` skill on your own diff as part of this and act on what it reports.
-2. **Run tests** — focused selection for your unit while you iterate, then the
-   fast gate above once; fix anything you broke, debugging against a focused
-   re-run rather than the full suite.
+2. **Run the fast gate** — once, before handover; fix anything you broke.
 3. **Test end-to-end** — follow the recipe above.
 4. **Commit and push** — verify with `git show --stat HEAD` that your commit contains only
    your own files, then `gh pr create --base epic/swr-<n>`.

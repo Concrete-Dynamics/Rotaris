@@ -6,31 +6,8 @@ The canonical policy for productive intent, test levels, requirement
 portfolios, and hermetic user-flow E2E coverage is
 [docs/testing/test_strategy.md](../docs/testing/test_strategy.md). This file
 defines executable repository conventions: locations, fixtures, and annotations.
-Test commands live in [root AGENTS.md §Commands](../AGENTS.md#commands). Textual
-tests additionally follow
+Textual tests additionally follow
 [docs/testing/textualize_testing_guide.md](../docs/testing/textualize_testing_guide.md).
-
-While implementing a slice, run the focused selection for it and iterate there;
-the full suite is a single pass on the merged tree, after the branch lands on
-`master` and before the work is called done — policy in
-[test_strategy.md](../docs/testing/test_strategy.md#focused-during-development-full-suite-as-the-final-pass),
-selections below.
-
-## Selecting a focused run
-
-```bash
-uv run pytest tests/unit/test_module.py -q --timeout=30              # one file
-uv run pytest tests/unit/test_module.py::test_name -q --timeout=30   # one test
-uv run pytest tests/unit/agents/ -q --timeout=30                     # one package's tests
-uv run pytest tests/ -k "session and not tui" -q --timeout=30        # by name expression
-uv run pytest apps/rotaris/tests/test_views.py -q --timeout=30 -p no:textual-snapshot
-uv run pytest --lf -q --timeout=30                                   # rerun last failures
-```
-
-Pick the selection from the requirement you are implementing: the tests carrying
-its `@verifies(SWR.SWR_<n>)`, plus the modules whose behavior your change can
-move. `-n auto` is for full passes — on a handful of tests the worker startup
-costs more than it saves, and it reorders output.
 
 ## Layout
 
@@ -160,7 +137,6 @@ hook in `conftest.py` (never the only E2E coverage for a requirement).
 
 - Layout: `conftest.py` (shared fixtures), `harness.py` (`CapabilityResult` +
   `run_capability_task()`), one `test_<description>.py` per capability.
-- Run: `uv run pytest -m capability -x -v --timeout=600` (= `make test-capability`).
 - Fixtures: `capability_workspace` (tmp_path + `.rotaris/`), `capability_config`
   (`RotarisConfig` from the user's global `~/.config/rotaris/agents.yaml` — the default
   model must be reachable).

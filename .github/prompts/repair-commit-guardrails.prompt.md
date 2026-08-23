@@ -1,5 +1,5 @@
 ---
-description: "Use when: a commit, CI gate, test suite, lint, typecheck, or ReqToCode guardrail fails and the branch must be repaired and made push-ready."
+description: "Use when: a commit, CI gate, lint, typecheck, or ReqToCode guardrail fails and the branch must be repaired and made push-ready."
 name: "Repair Commit Guardrails"
 argument-hint: "Paste the failure output, name the failed gate, or give the commit SHA/range to investigate"
 ---
@@ -53,7 +53,7 @@ shorter path here.
 4. Immediately rerun the exact narrow reproduction. Repair again only within
    that slice until it passes.
 5. Run the applicable broader gate(s) in the order given by
-   [AGENTS.md §Workflow](../../AGENTS.md#workflow--worktree-merge-verify-fix-forward),
+   [AGENTS.md §Workflow](../../AGENTS.md#workflow--worktree-merge),
    using the exact invocations from [AGENTS.md §Commands](../../AGENTS.md#commands).
    Run the failed hook command or gate again last. Do not bypass hooks or omit
    their checks.

@@ -395,6 +395,7 @@ def test_the_new_controls_did_not_move_any_settings_tab(qtbot: QtBot) -> None:
         "plugins",
         "tools",
         "project",
+        "about",
     )
     assert view.set_active_tab("runtime") == "runtime"
     assert view.tabs.tabText(view.tabs.currentIndex()) == "Runtime"

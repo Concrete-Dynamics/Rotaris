@@ -61,11 +61,12 @@ def probe_tool(spec: ToolSpec, *, env: dict[str, str] | None = None) -> ToolProb
     except (OSError, subprocess.SubprocessError):
         return ToolProbe(spec.name, Path(executable), None, False)
     version = _read_version(f"{result.stdout}\n{result.stderr}")
+    meets_discovery_floor = spec.minimum_version is None or _meets(version, spec.minimum_version)
     return ToolProbe(
         spec.name,
         Path(executable),
         version,
-        result.returncode == 0 and _meets(version, spec.minimum_version),
+        result.returncode == 0 and meets_discovery_floor,
     )
 
 

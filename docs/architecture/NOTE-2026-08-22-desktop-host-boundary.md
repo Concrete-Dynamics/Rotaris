@@ -343,6 +343,12 @@ regression is covered by
 
    Filed as its own change rather than folded into SWR-2453/SWR-2454: it touches
    session persistence, which nothing else in that work does.
+
+   **Done on 2026-08-23.** The write is gone, the read stays, SWR-1550 says in
+   its own words that it governs the load path, and the epic's "for one release"
+   line is dated. `test_session_manager.py` now asserts the copy is *not* there,
+   and a legacy session that gets resumed and saved is pinned to read back from
+   `state/` while its old copy is left untouched on disk.
 6. **Migration order.** SWR-2453 and SWR-2454 are separable, and now that the
    main paths already call `execute_run`, SWR-2454 no longer waits on SWR-2453 —
    the `event_sink` parameter is there to be passed on the ordinary run path

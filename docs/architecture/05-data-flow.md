@@ -7,15 +7,17 @@
 
 Rotaris has no external state service. Durable session context travels through
 `SessionState` JSON on disk: the current layout writes split files under
-`state/`, `evidence/`, and `artifacts/`, while `snapshot.json` remains as a
-compatibility copy. `metadata.json` and `summary.md` are derived sidecars.
+`state/`, `evidence/`, and `artifacts/`. `metadata.json` and `summary.md` are
+derived sidecars. Sessions written before 2026-08-23 also hold a whole-state
+`snapshot.json`; it is read when `state/` is absent (SWR-1550) and written by
+nothing.
 In-process context flows via direct object references within the same asyncio
 event loop and worker threads.
 
 ```mermaid
 flowchart TD
     USER(["User submits task"])
-    SS["SessionState\n(.rotaris/sessions/<id>/state/resume.json\n+ state/ui_transcript.json\n+ compatibility snapshot.json)"]
+    SS["SessionState\n(.rotaris/sessions/<id>/state/resume.json\n+ state/ui_transcript.json)"]
     RALPH["RalphLoop\nreads todo list from SessionState"]
     CM["ChildManager\nmaintains ChildTaskRecord DAG\n+ per-model concurrency slot queue"]
     SLOT_Q["Per-model slot queue\n(model_key → WAITING_ON_MODEL_SLOT list)\nreleased via mark_child_terminal"]

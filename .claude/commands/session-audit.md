@@ -36,7 +36,7 @@ Read-only over these paths. Do not modify, delete, or rerun anything under
 
 ## Method
 
-1. **Never bulk-read the big blobs.** `snapshot.json`, `state/ui_transcript.json`,
+1. **Never bulk-read the big blobs.** `state/ui_transcript.json`,
    `state/run_config.json` and `evidence/tool-calls.jsonl` run to hundreds of KB
    or MB. Extract from them with a script, never with `Read`.
 2. Write throwaway analysis scripts into the session scratchpad directory and run

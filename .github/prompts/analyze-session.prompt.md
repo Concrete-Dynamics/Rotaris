@@ -19,7 +19,7 @@ Jeder Session-Ordner unter `<workspace>/.rotaris/sessions/<session_id>/` enthäl
 ├── metrics.json               ← Detaillierte Metriken (Tokens, Tool-Calls, …)
 ├── timeline.jsonl             ← Chronologische Ereignisse
 ├── lock                       ← PID-Lock (ignorieren)
-├── snapshot.json              ← Kompatibilitätskopie (ignorieren, state/ nutzen)
+├── snapshot.json              ← nur in Sessions vor 2026-08-23 (ignorieren, state/ nutzen)
 ├── state/
 │   ├── resume.json            ← SessionState (child_states, exhausted_models, run_type, …)
 │   ├── ui_transcript.json     ← Chat-Verlauf (User/Agent-Nachrichten)
@@ -144,6 +144,6 @@ Erstelle einen strukturierten Analysebericht:
 - Alle Pfade in Befunden **relativ zum Session-Ordner** angeben, mit Zeilennummern wo möglich.
 - `BLOCKED`-Kinder sind **Kaskadenopfer** — nicht als eigenständige Fehler werten, sondern beim auslösenden Kind dokumentieren.
 - Das Session-Logging-Level ist `WARNING` (mit `DEBUG` für bestimmte Subsysteme). Nicht wundern, wenn `debug.log` nicht jedes Detail enthält.
-- `snapshot.json` ist eine Kompatibilitätskopie von `state/resume.json` — `state/resume.json` hat Vorrang.
+- `snapshot.json` war bis 2026-08-23 eine Kompatibilitätskopie von `state/resume.json` und wird seitdem nicht mehr geschrieben. Wo sie noch liegt, ist sie veraltet — `state/resume.json` hat Vorrang.
 - Bei `execution_status: running` (abgestürzt ohne Cleanup) ist die Analyse der letzten Timeline-Events + debug.log-Einträge entscheidend.
 - Der Orchestrator (`persona: orchestrator`) steuert den gesamten Lauf. Sein Status und seine Fehler sind der wichtigste Einzelindikator.

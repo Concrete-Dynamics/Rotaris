@@ -39,10 +39,13 @@ class SessionPersistence:
 
         write_split_state(session_dir, state)
 
-        # Compatibility copy for tooling/tests that still inspect snapshot.json
-        # directly. New code loads state/resume.json first.
-        snapshot_path = session_dir / "snapshot.json"
-        _atomic_write(snapshot_path, state.model_dump_json(indent=2))
+        # No ``snapshot.json`` is written here any more. It was a whole-state
+        # duplicate of the split layout, kept for one release while tooling
+        # moved over; that release has passed and nothing writes to it or reads
+        # it back on a session this version created. ``load_snapshot`` still
+        # reads one when it finds it, which is what SWR-1550 requires — the
+        # obligation is that a session already on disk stays loadable, not that
+        # new ones keep the shape.
 
         metadata = {
             "session_id": state.session_id,
@@ -93,6 +96,10 @@ class SessionPersistence:
                 raise ValueError(f"Unsupported session schema version: {state.schema_version}")
             return state
 
+        # A session written before the split layout, or before this version
+        # stopped duplicating it (SWR-1550). Nothing produces this file now, so
+        # reaching here means the directory predates one of those two changes
+        # and is the user's own history — it loads, or their session is gone.
         snapshot_path = session_dir / "snapshot.json"
         if not snapshot_path.exists():
             raise FileNotFoundError(f"Session snapshot not found for {session_id}")

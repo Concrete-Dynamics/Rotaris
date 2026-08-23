@@ -15,6 +15,8 @@ skipped — a value assertion would pass just as well against a rebuild.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from conftest import dispose_window
 from PySide6.QtWidgets import QLabel, QWidget
@@ -536,3 +538,66 @@ def test_the_terminal_stops_rewriting_its_headers_when_it_is_put_away(qtbot, sho
         assert window._timer.isActive() is True
     finally:
         dispose_window(window)
+
+
+# ── the store's own guards ────────────────────────────────────────────────
+
+
+@verifies(SWR.SWR_2454)
+def test_a_setter_told_what_the_store_already_holds_publishes_nothing(qtbot) -> None:
+    """Every one of these signals costs a consumer a rebuilt strip or table."""
+    from rotaris.models.state import ImprovementProposal, SessionInfo
+
+    store = sample_store()
+    heard: dict[str, int] = {"agents": 0, "sessions": 0, "proposals": 0, "settings": 0, "ui": 0}
+    store.agents_changed.connect(lambda: heard.__setitem__("agents", heard["agents"] + 1))
+    store.sessions_changed.connect(lambda: heard.__setitem__("sessions", heard["sessions"] + 1))
+    store.improvement_proposals_changed.connect(
+        lambda: heard.__setitem__("proposals", heard["proposals"] + 1)
+    )
+    store.settings_changed.connect(lambda: heard.__setitem__("settings", heard["settings"] + 1))
+    store.ui_changed.connect(lambda: heard.__setitem__("ui", heard["ui"] + 1))
+
+    proposal = ImprovementProposal(
+        id="p1", artifact_id="art1", category="cost", summary="do less"
+    )
+
+    def say_everything() -> None:
+        store.upsert_agent(
+            AgentNode(id="a1", name="a1", persona="coder", state=AgentState.RUNNING)
+        )
+        store.upsert_session(SessionInfo(id="s1", name="one", status="idle"))
+        store.set_improvement_proposals([replace(proposal)])
+        store.set_session_persona("reviewer")
+        store.set_session_reasoning("high")
+        store.set_drawer_state(sidebar=not sidebar_was_open)
+
+    sidebar_was_open = store.ui.sidebar_open
+    say_everything()
+    first = dict(heard)
+    # Two settings: the entry persona and the reasoning level share one signal.
+    assert first == {"agents": 1, "sessions": 1, "proposals": 1, "settings": 2, "ui": 1}
+
+    # Said again, with equal records rather than the same objects.
+    say_everything()
+
+    assert heard == first, "nothing moved, so nothing was published"
+
+
+@verifies(SWR.SWR_2454)
+def test_an_agent_handed_back_after_being_edited_is_still_published(qtbot) -> None:
+    """Why the guard is an identity check and not equality alone.
+
+    A caller that mutated the stored record and handed it back is telling us
+    something changed; comparing it against itself would swallow exactly that.
+    """
+    store = sample_store()
+    published: list[int] = []
+    agent = AgentNode(id="a1", name="a1", persona="coder", state=AgentState.RUNNING)
+    store.upsert_agent(agent)
+    store.agents_changed.connect(lambda: published.append(1))
+
+    agent.elapsed = "1m 02s"
+    store.upsert_agent(agent)
+
+    assert published == [1]

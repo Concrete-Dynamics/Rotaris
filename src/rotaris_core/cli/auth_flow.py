@@ -1027,6 +1027,7 @@ async def _run_login_async(
     persisted = persist_discovered_models(
         provider.id,
         discovery_result.models,
+        suggestions=discovery_result.suggestions,
         base_url=_api_base,
     )
     return _build_login_success_result(

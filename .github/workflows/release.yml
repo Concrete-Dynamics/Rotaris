@@ -163,6 +163,7 @@ jobs:
   publish-pypi:
     needs: [guard, release]
     runs-on: ubuntu-24.04
+    continue-on-error: true
     permissions:
       contents: read
       # Trusted publishing: PyPI verifies this workflow's identity, so no

@@ -204,6 +204,7 @@ def test_publishing_uses_trusted_publishing_and_never_gates_the_release(
 
     assert publish["permissions"]["contents"] == "read"
     assert publish["permissions"]["id-token"] == "write"
+    assert publish["continue-on-error"] is True
     assert "release" in publish["needs"]
     steps = _steps_text(publish)
     assert "pypa/gh-action-pypi-publish" in steps

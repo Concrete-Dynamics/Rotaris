@@ -11,6 +11,7 @@ from typing import Any, cast
 from PySide6.QtWidgets import QApplication
 from rotaris_core.reqtocode import SWR, traces
 
+from rotaris import __version__
 from rotaris.models import WorkspaceStore, sample_store
 from rotaris.services.theme_preference import install_theme_persistence
 from rotaris.theme.fonts import register_bundled_fonts
@@ -21,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rotaris")
     parser.add_argument("workspace", nargs="?", default=".", help="workspace directory")
     parser.add_argument("--demo", action="store_true", help="open with representative data")
+    parser.add_argument("--version", action="store_true", help="show the Rotaris version and exit")
     parser.add_argument(
         "--diagnostics",
         nargs="?",
@@ -68,10 +70,13 @@ def create_window(
     )
 
 
-@traces(SWR.SWR_2001, SWR.SWR_3701, SWR.SWR_3703)
+@traces(SWR.SWR_2001, SWR.SWR_3701, SWR.SWR_3703, SWR.SWR_3715)
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.version:
+        print(f"Rotaris {__version__}")
+        return 0
     from rotaris.diagnostics import LiveDiagnostics, NoopDiagnostics, resolve_diagnostics_config
 
     try:
@@ -97,6 +102,12 @@ def main(argv: list[str] | None = None) -> int:
     # application name and organisation are set first because that is what
     # decides which ``QSettings`` file the preference is read from.
     install_theme_persistence()
+    from rotaris_core.setup import is_bundled_runtime
+
+    if is_bundled_runtime():
+        from rotaris.setup_coordinator import run_desktop_setup
+
+        run_desktop_setup(workspace=Path(args.workspace))
     workspace = Path(args.workspace)
     diagnostics = (
         LiveDiagnostics(diagnostics_config, workspace)

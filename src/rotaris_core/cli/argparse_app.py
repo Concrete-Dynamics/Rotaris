@@ -140,6 +140,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("version", help="Show version")
 
+    setup_parser = subparsers.add_parser("setup", help="Provision or repair machine tools")
+    setup_parser.add_argument(
+        "-w",
+        "--workspace",
+        type=Path,
+        default=None,
+        help="Workspace whose merged MCP config is warmed (default: current directory)",
+    )
+
     login_parser = subparsers.add_parser("login", help="Authenticate an AI provider")
     login_parser.add_argument(
         "provider",
@@ -1078,7 +1087,15 @@ def _cmd_requirements_report(
     return 0
 
 
-@traces(SWR.SWR_775, SWR.SWR_1817, SWR.SWR_1818, SWR.SWR_1819, SWR.SWR_1820, SWR.SWR_1826)
+@traces(
+    SWR.SWR_775,
+    SWR.SWR_1817,
+    SWR.SWR_1818,
+    SWR.SWR_1819,
+    SWR.SWR_1820,
+    SWR.SWR_1826,
+    SWR.SWR_3715,
+)
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -1086,6 +1103,36 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         parser.print_help()
         return 0
+
+    if args.command == "setup":
+        from rotaris_core.config import load_config
+        from rotaris_core.setup import SetupEvent, SetupEventKind, SetupOutcome, run_setup
+
+        workspace = (args.workspace or Path.cwd()).resolve()
+
+        def report(event: SetupEvent) -> None:
+            if event.kind in {
+                SetupEventKind.PROGRESS,
+                SetupEventKind.COMPLETE,
+                SetupEventKind.FAILURE,
+                SetupEventKind.CANCELLED,
+            }:
+                print(event.message, file=sys.stderr)
+            if event.detail:
+                print(event.detail, file=sys.stderr)
+
+        outcome = run_setup(
+            mcp_servers=load_config(workspace).mcp_servers,
+            emit=report,
+            manual=True,
+        )
+        print(outcome.value)
+        return 1 if outcome in {SetupOutcome.DEGRADED, SetupOutcome.CANCELLED} else 0
+
+    if args.command != "version":
+        from rotaris_core.setup import ensure_bundled_setup
+
+        ensure_bundled_setup(stream=sys.stderr)
 
     if args.command == "run":
         return _cmd_run(args)

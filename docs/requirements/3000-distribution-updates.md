@@ -20,7 +20,7 @@ is available on GitHub Releases.
 | SWR-3001 | Cross-Platform Standalone Binaries                               | approved |
 | SWR-3002 | Automated Release Pipeline                                       | approved |
 | SWR-3003 | In-App Update Notification                                       | approved |
-| SWR-3715 | A bundled install provisions the machine once, before the app opens | draft    |
+| SWR-3715 | A bundled install provisions the machine once, before the app opens | approved |
 
 ## SWR-3715 — A bundled install provisions the machine once, before the app opens
 

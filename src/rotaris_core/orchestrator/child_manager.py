@@ -12,6 +12,7 @@ import time
 from typing import TYPE_CHECKING
 
 from rotaris_core.orchestrator.child_state import (
+    ChildLaunchClaim,
     ChildNotification,
     ChildTaskRecord,
     ChildTaskState,
@@ -49,6 +50,7 @@ _log = logging.getLogger(__name__)
     SWR.SWR_128,
     SWR.SWR_139,
     SWR.SWR_140,
+    SWR.SWR_177,
     SWR.SWR_561,
     SWR.SWR_2433,
 )
@@ -102,6 +104,11 @@ class ChildManager:
     def artifact_store(self) -> SessionArtifactStore | None:
         """Session-scoped artifact store (shared across iterations) or None."""
         return self._artifact_store
+
+    @property
+    def parent_agent_id(self) -> str:
+        """Canonical identifier of the manager's root parent."""
+        return self._parent_id
 
     def _resolve_dep(self, dep: str) -> str:
         """Resolve a dependency identifier to its canonical name.
@@ -172,12 +179,22 @@ class ChildManager:
             if self.active_count >= self._policy.max_active_children:
                 raise ValueError(f"Max active children {self._policy.max_active_children} exceeded")
 
+            effective_parent_id = (
+                parent_agent_id if parent_agent_id is not None else self._parent_id
+            )
+
             # Normalise task_ids → canonical names before any further validation.
             depends_on = [self._resolve_dep(d) for d in (depends_on or [])]
             for dep in depends_on:
                 if dep not in self._children:
                     known = ", ".join(self._children.keys()) if self._children else "none"
                     raise ValueError(f"Unknown dependency: {dep!r}. Known task names: {known}")
+                dependency = self._children[dep]
+                if dependency.parent_agent_id != effective_parent_id:
+                    raise ValueError(
+                        f"Dependency {dep!r} belongs to parent "
+                        f"{dependency.parent_agent_id!r}; expected {effective_parent_id!r}",
+                    )
 
             canonical_base = self._canonicalize_name(name)
             canonical_name = self._deduplicate_name(canonical_base)
@@ -196,7 +213,7 @@ class ChildManager:
                 depends_on=depends_on,
                 inherited_context=list(inherited_context or []),
                 state=state,
-                parent_agent_id=parent_agent_id if parent_agent_id is not None else self._parent_id,
+                parent_agent_id=effective_parent_id,
                 depth=self._depth + 1,
                 spawned_at=dt.datetime.now(dt.UTC),
                 category=category,
@@ -308,38 +325,152 @@ class ChildManager:
         When a child becomes ready its task_payload is prefixed with a PRIOR AGENT CONTEXT
         block containing the summary and key findings of every succeeded dependency.
         """
-        ready = []
-        changed = False
-        for record in self._children.values():
-            if record.state == ChildTaskState.WAITING_ON_DEPENDENCIES:
-                all_succeeded = True
-                for dep in record.depends_on:
-                    if self._children[dep].state != ChildTaskState.SUCCEEDED:
-                        all_succeeded = False
-                        break
-                if all_succeeded:
-                    context_block = self._format_dependency_context(record.depends_on)
-                    if context_block:
-                        record.task_payload = context_block + record.task_payload
-                    record.transition(ChildTaskState.QUEUED)
-                    changed = True
-                    # Fall through to model-slot check (below) after transitioning to QUEUED.
-            if record.state == ChildTaskState.WAITING_ON_MODEL_SLOT:
-                model_key = record.model_key
-                if model_key:
-                    active = self._count_model_active_locked(model_key)
-                    max_parallel = self._model_max_parallel.get(model_key)
-                    if max_parallel is not None and active < max_parallel:
+        with self._lock:
+            ready = []
+            changed = False
+            for record in self._children.values():
+                if record.state == ChildTaskState.WAITING_ON_DEPENDENCIES:
+                    all_succeeded = all(
+                        self._children[dep].state == ChildTaskState.SUCCEEDED
+                        for dep in record.depends_on
+                    )
+                    if all_succeeded:
+                        context_block = self._format_dependency_context(record.depends_on)
+                        if context_block:
+                            record.task_payload = context_block + record.task_payload
                         record.transition(ChildTaskState.QUEUED)
                         changed = True
-                        ready.append(record)
-                        continue
-            if record.state == ChildTaskState.QUEUED:
-                ready.append(record)
+                if record.state == ChildTaskState.WAITING_ON_MODEL_SLOT:
+                    model_key = record.model_key
+                    if model_key:
+                        active = self._count_model_active_locked(model_key)
+                        max_parallel = self._model_max_parallel.get(model_key)
+                        if max_parallel is not None and active < max_parallel:
+                            record.transition(ChildTaskState.QUEUED)
+                            changed = True
+                            ready.append(record)
+                            continue
+                if record.state == ChildTaskState.QUEUED:
+                    ready.append(record)
 
-        if changed:
+            if changed:
+                self._bump_version()
+            return ready
+
+    @traces(SWR.SWR_177)
+    def claim_ready_children(self, parent_agent_id: str | None = None) -> list[ChildLaunchClaim]:
+        """Atomically reserve every ready direct child for one launcher.
+
+        The transition to ``STARTING`` happens while the manager lock is held.
+        This reserves both the child and its model slot before agent construction
+        yields control to another drain path.
+        """
+        owner = parent_agent_id if parent_agent_id is not None else self._parent_id
+        claims: list[ChildLaunchClaim] = []
+        changed = False
+        with self._lock:
+            for record in self._children.values():
+                if record.parent_agent_id != owner:
+                    continue
+
+                if record.state == ChildTaskState.WAITING_ON_DEPENDENCIES:
+                    all_succeeded = all(
+                        self._children[dep].state == ChildTaskState.SUCCEEDED
+                        for dep in record.depends_on
+                    )
+                    if all_succeeded:
+                        context_block = self._format_dependency_context(record.depends_on)
+                        if context_block:
+                            record.task_payload = context_block + record.task_payload
+                        record.transition(ChildTaskState.QUEUED)
+                        changed = True
+
+                if record.state == ChildTaskState.WAITING_ON_MODEL_SLOT:
+                    model_key = record.model_key
+                    max_parallel = self._model_max_parallel.get(model_key or "")
+                    if (
+                        model_key
+                        and max_parallel is not None
+                        and self._count_model_active_locked(model_key) < max_parallel
+                    ):
+                        record.transition(ChildTaskState.QUEUED)
+                        queue_for_model = self._model_slot_queues.get(model_key, [])
+                        if record.canonical_name in queue_for_model:
+                            queue_for_model.remove(record.canonical_name)
+                        changed = True
+
+                if record.state != ChildTaskState.QUEUED:
+                    continue
+
+                model_key = record.model_key
+                max_parallel = self._model_max_parallel.get(model_key or "")
+                if (
+                    model_key
+                    and max_parallel is not None
+                    and self._count_model_active_locked(model_key) >= max_parallel
+                ):
+                    record.transition(ChildTaskState.WAITING_ON_MODEL_SLOT)
+                    model_queue = self._model_slot_queues.setdefault(model_key, [])
+                    if record.canonical_name not in model_queue:
+                        model_queue.append(record.canonical_name)
+                    changed = True
+                    continue
+
+                record.launch_generation += 1
+                record.transition(ChildTaskState.STARTING)
+                claims.append(
+                    ChildLaunchClaim(
+                        canonical_name=record.canonical_name,
+                        task_id=record.task_id,
+                        parent_agent_id=owner,
+                        generation=record.launch_generation,
+                    ),
+                )
+                changed = True
+
+            if changed:
+                self._bump_version()
+        return claims
+
+    def _claim_matches_locked(self, claim: ChildLaunchClaim) -> ChildTaskRecord | None:
+        record = self._children.get(claim.canonical_name)
+        if record is None:
+            return None
+        if (
+            record.state != ChildTaskState.STARTING
+            or record.parent_agent_id != claim.parent_agent_id
+            or record.launch_generation != claim.generation
+            or record.task_id != claim.task_id
+        ):
+            return None
+        return record
+
+    @traces(SWR.SWR_177)
+    def record_for_launch_claim(self, claim: ChildLaunchClaim) -> ChildTaskRecord | None:
+        """Return the live record while *claim* still owns its STARTING state."""
+        with self._lock:
+            return self._claim_matches_locked(claim)
+
+    @traces(SWR.SWR_177)
+    def transition_launch_claim(
+        self,
+        claim: ChildLaunchClaim,
+        state: ChildTaskState,
+    ) -> ChildTaskRecord | None:
+        """Commit a current claim to a launched or terminal state."""
+        if state not in {
+            ChildTaskState.RUNNING,
+            ChildTaskState.FAILED,
+            ChildTaskState.CANCELLED,
+        }:
+            raise ValueError(f"Unsupported launch-claim target state: {state}")
+        with self._lock:
+            record = self._claim_matches_locked(claim)
+            if record is None:
+                return None
+            record.transition(state)
             self._bump_version()
-        return ready
+            return record
 
     def mark_child_terminal(
         self,
@@ -664,15 +795,16 @@ class ChildManager:
     def _count_model_active_locked(self, model_key: str) -> int:
         """Count children using *model_key* that are actively consuming an LLM slot.
 
-        Only counts RUNNING states. QUEUED and WAITING_ON_MODEL_SLOT
-        children are excluded — they haven't been assigned an LLM connection yet.
+        Counts STARTING and RUNNING states. A STARTING child owns its slot while
+        its agent is being constructed.
 
         Must be called while ``self._lock`` is held.
         """
         return sum(
             1
             for c in self._children.values()
-            if c.model_key == model_key and c.state == ChildTaskState.RUNNING
+            if c.model_key == model_key
+            and c.state in {ChildTaskState.STARTING, ChildTaskState.RUNNING}
         )
 
     def enqueue_model_slot(

@@ -676,7 +676,7 @@ orchestrator's summary as additional context via an optional
 
 ## SWR-168–175 — Plan-Mode / Auto-Mode Gate
 
-status: draft
+status: approved
 
 A persistent Plan/Auto mode toggle that gates execution after the planner produces
 a plan. In Plan mode the plan is surfaced, execution is blocked, and the user may
@@ -696,6 +696,16 @@ that session already recorded. Deterministic: no extra model call, no
 cross-session data.
 
 > See: [SWR-176 — A resumed run inherits its session's intent instead of asking what you meant](100-orchestration-core/SWR-176-resume-intent-carry-over.md)
+
+## SWR-177 — Atomic parent-scoped child launch
+
+status: draft
+
+Each direct delegated child is claimed and launched exactly once. Claims are
+scoped to the declaring parent and reserve runtime and model capacity before
+agent construction, so overlapping parent and nested drain paths remain safe.
+
+> See: [SWR-177 — Atomic parent-scoped child launch](100-orchestration-core/SWR-177-atomic-parent-scoped-child-launch.md)
 
 ## SWR-2912 — Every child record reaches a terminal state when its run ends
 

@@ -2099,25 +2099,34 @@ async def test_spawn_children_notifies_when_record_starts_running() -> None:
     await scheduler.cancel_children(manager)
 
 
-@verifies(SWR.SWR_112)
+@verifies(SWR.SWR_112, SWR.SWR_177)
 @pytest.mark.asyncio
 async def test_spawn_children_marks_agent_factory_failure_terminal() -> None:
+    """Productive use: one bad persona leaves an unrelated delegated child runnable."""
     manager = make_manager()
     child = manager.spawn_child("child", "missing-persona", "task")
+    healthy_child = manager.spawn_child("healthy", "builder", "task")
     scheduler, _ = make_scheduler()
 
     def agent_factory(persona):
-        raise ValueError(f"Unknown persona: {persona}")
+        if persona == "missing-persona":
+            raise ValueError(f"Unknown persona: {persona}")
+        return object()
 
     await scheduler.spawn_children(manager, agent_factory=agent_factory)
+    await asyncio.gather(*list(scheduler._active_tasks.values()))
 
     terminal = manager.get_newly_terminal()
-    assert len(terminal) == 1
-    record, report = terminal[0]
+    assert len(terminal) == 2
+    terminal_by_name = {record.canonical_name: (record, report) for record, report in terminal}
+    record, report = terminal_by_name[child.canonical_name]
     assert record.canonical_name == child.canonical_name
     assert record.state == ChildTaskState.FAILED
     assert report.status == "failed"
     assert "Unknown persona: missing-persona" in report.summary
+    healthy_record, healthy_report = terminal_by_name[healthy_child.canonical_name]
+    assert healthy_record.state == ChildTaskState.SUCCEEDED
+    assert healthy_report.status == "succeeded"
     assert scheduler._active_tasks == {}
 
 

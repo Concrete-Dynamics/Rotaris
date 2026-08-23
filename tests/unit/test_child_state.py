@@ -19,10 +19,11 @@ def _make_record() -> ChildTaskRecord:
     )
 
 
-@verifies(SWR.SWR_112)
+@verifies(SWR.SWR_112, SWR.SWR_177)
 def test_child_task_state_values_are_strings() -> None:
     assert [state.value for state in ChildTaskState] == [
         "queued",
+        "starting",
         "running",
         "waiting_on_dependencies",
         "waiting_on_model_slot",
@@ -43,6 +44,7 @@ def test_child_task_state_values_are_strings() -> None:
         (ChildTaskState.CANCELLED, True),
         (ChildTaskState.BLOCKED, True),
         (ChildTaskState.QUEUED, False),
+        (ChildTaskState.STARTING, False),
         (ChildTaskState.RUNNING, False),
         (ChildTaskState.WAITING_ON_DEPENDENCIES, False),
         (ChildTaskState.WAITING_ON_MODEL_SLOT, False),
@@ -52,12 +54,13 @@ def test_is_terminal(state: ChildTaskState, expected: bool) -> None:
     assert state.is_terminal() is expected
 
 
-@verifies(SWR.SWR_112)
+@verifies(SWR.SWR_112, SWR.SWR_177)
 def test_valid_transitions_cover_all_non_terminal_states() -> None:
     assert set(VALID_TRANSITIONS) == {
         ChildTaskState.QUEUED,
         ChildTaskState.WAITING_ON_DEPENDENCIES,
         ChildTaskState.WAITING_ON_MODEL_SLOT,
+        ChildTaskState.STARTING,
         ChildTaskState.RUNNING,
     }
 
@@ -73,10 +76,11 @@ def test_terminal_states_not_in_valid_transitions() -> None:
         assert state not in VALID_TRANSITIONS
 
 
-@verifies(SWR.SWR_112)
+@verifies(SWR.SWR_112, SWR.SWR_177)
 @pytest.mark.parametrize(
     ("start", "next_state"),
     [
+        (ChildTaskState.QUEUED, ChildTaskState.STARTING),
         (ChildTaskState.QUEUED, ChildTaskState.RUNNING),
         (ChildTaskState.QUEUED, ChildTaskState.WAITING_ON_DEPENDENCIES),
         (ChildTaskState.QUEUED, ChildTaskState.WAITING_ON_MODEL_SLOT),
@@ -89,6 +93,10 @@ def test_terminal_states_not_in_valid_transitions() -> None:
         (ChildTaskState.WAITING_ON_MODEL_SLOT, ChildTaskState.QUEUED),
         (ChildTaskState.WAITING_ON_MODEL_SLOT, ChildTaskState.BLOCKED),
         (ChildTaskState.WAITING_ON_MODEL_SLOT, ChildTaskState.CANCELLED),
+        (ChildTaskState.STARTING, ChildTaskState.RUNNING),
+        (ChildTaskState.STARTING, ChildTaskState.FAILED),
+        (ChildTaskState.STARTING, ChildTaskState.CANCELLED),
+        (ChildTaskState.STARTING, ChildTaskState.BLOCKED),
         (ChildTaskState.RUNNING, ChildTaskState.SUCCEEDED),
         (ChildTaskState.RUNNING, ChildTaskState.FAILED),
         (ChildTaskState.RUNNING, ChildTaskState.CANCELLED),
@@ -136,3 +144,4 @@ def test_default_state_and_model_dump() -> None:
     assert dumped["state"] == ChildTaskState.QUEUED
     assert dumped["depends_on"] == []
     assert dumped["depth"] == 1
+    assert dumped["launch_generation"] == 0

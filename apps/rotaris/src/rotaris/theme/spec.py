@@ -342,13 +342,17 @@ DISPLAY_FAMILIES: Final[tuple[str, ...]] = (
     "sans-serif",
 )
 
-#: The body face: Manrope leads. The design system pairs it with the display
-#: face and caps every weight at 500; against Manrope that ceiling is the whole
-#: story — hierarchy comes from size, colour and space, never from adding
-#: weight. Both brand faces are bundled (SWR-3703), so the first entry can
-#: never be missing, which is also what covers the `offscreen` platform's lack
-#: of host families in tests and screenshots.
+#: The body face: Roboto leads. The design system pairs Space Grotesk with
+#: Manrope for body, and this product keeps the display face but overrides the
+#: body face with Roboto — the face every platform hints for dense UI work,
+#: which is what an operator reads all day here. Manrope sits directly behind
+#: it as the fallback, then the host's own UI faces. Roboto and Manrope are
+#: both bundled (SWR-3703), so the stack can never run out before its
+#: fallbacks, and the `offscreen` platform's lack of host families still
+#: renders in tests and screenshots. Hierarchy comes from size, colour and
+#: space — never from adding weight — and nothing goes above 500.
 BODY_FAMILIES: Final[tuple[str, ...]] = (
+    "Roboto",
     "Manrope",
     "Segoe UI",
     "system-ui",

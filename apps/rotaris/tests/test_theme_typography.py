@@ -7,10 +7,10 @@ by the stylesheet parser and then discarded, so a tracked label looks correct in
 the source and renders untracked. Both are caught by measuring, which is the
 only way to tell the difference.
 
-One test guards a product decision rather than a Qt trap: the design system's
-brand display/body pair leads every shipped palette's type stacks, and swapping
-them away by editing one palette line should have to be a decision, not an
-accident.
+One test guards a product decision rather than a Qt trap: the product's faces
+lead every shipped palette's type stacks — Space Grotesk for display, Roboto
+for body — and swapping them away by editing one palette line should have to
+be a decision, not an accident.
 """
 
 from __future__ import annotations
@@ -29,18 +29,18 @@ from rotaris.theme.spec import TypeStyle, css_stack
 
 pytestmark = pytest.mark.unit
 
-BRAND_FACES = ("Space Grotesk", "Manrope", "JetBrains Mono")
+BRAND_FACES = ("Space Grotesk", "Manrope", "Roboto", "JetBrains Mono")
 
 
 @verifies(SWR.SWR_3703)
-def test_the_brand_faces_are_bundled_with_their_licences() -> None:
+def test_the_bundled_faces_are_shipped_with_their_licences() -> None:
     """They are OFL, so redistributing them means shipping the licence too."""
     assert FONT_DIR.is_dir(), f"no bundled fonts at {FONT_DIR}"
     faces = [path for path in FONT_DIR.iterdir() if path.suffix.lower() == ".ttf"]
     licences = [path for path in FONT_DIR.iterdir() if path.name.startswith("OFL")]
 
-    assert len(faces) >= 4, "display, body, mono and mono-italic"
-    assert len(licences) >= 3, "one licence per family"
+    assert len(faces) >= 5, "display, body, body-fallback, mono and mono-italic"
+    assert len(licences) >= 4, "one licence per family"
     for face in faces:
         assert face.stat().st_size > 10_000, f"{face.name} is too small to be a real font"
 
@@ -114,10 +114,10 @@ def test_the_mono_face_measures_on_a_fixed_grid(qtbot) -> None:
 
 
 @verifies(SWR.SWR_3703)
-def test_the_type_stacks_lead_with_the_brand_faces(qtbot) -> None:
-    """Space Grotesk speaks for display, Manrope for body, mono stays the host's.
+def test_the_type_stacks_lead_with_the_product_faces(qtbot) -> None:
+    """Space Grotesk speaks for display, Roboto for body, mono stays the host's.
 
-    The brand faces are bundled, so a stack that leads with them can never run
+    The named faces are bundled, so a stack that leads with them can never run
     out before its fallbacks; a host face behind them is the safety net for the
     one desktop that cannot render the variable font.
     """
@@ -125,8 +125,9 @@ def test_the_type_stacks_lead_with_the_brand_faces(qtbot) -> None:
     type_ = tokens().type
 
     assert type_.display_families[0] == "Space Grotesk"
-    assert type_.body_families[0] == "Manrope"
-    assert "Segoe UI" in type_.body_families, "a host face must sit behind the brand face"
+    assert type_.body_families[0] == "Roboto"
+    assert "Manrope" in type_.body_families, "the design system's body face is the first fallback"
+    assert "Segoe UI" in type_.body_families, "a host face must sit behind the bundled faces"
     assert type_.mono_families[0] == "Cascadia Mono"
     assert "JetBrains Mono" in type_.mono_families, "the bundled floor is missing"
     assert type_.mono_families.index("JetBrains Mono") > type_.mono_families.index("Consolas"), (
@@ -136,17 +137,17 @@ def test_the_type_stacks_lead_with_the_brand_faces(qtbot) -> None:
 
 @pytest.mark.parametrize("name", theme_names())
 @verifies(SWR.SWR_3703)
-def test_every_palette_leads_with_the_brand_pair(qtbot, name: str) -> None:
-    """The brand pair is the choice, not an accident to be re-made per palette.
+def test_every_palette_leads_with_the_product_faces(qtbot, name: str) -> None:
+    """The product's faces are the choice, not an accident to be re-made per palette.
 
-    A palette that dropped Space Grotesk or Manrope from the front of its stacks
-    would silently return the interface to a face the design system does not
-    name.
+    A palette that dropped Space Grotesk from the display stack or Roboto from
+    the body stack would silently return the interface to a face the product did
+    not choose.
     """
     type_ = theme_named(name).type
 
     assert type_.display_families[0] == "Space Grotesk", f"{name} lost its display face"
-    assert type_.body_families[0] == "Manrope", f"{name} lost its body face"
+    assert type_.body_families[0] == "Roboto", f"{name} lost its body face"
 
 
 @pytest.mark.parametrize("name", theme_names())

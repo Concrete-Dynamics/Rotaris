@@ -72,10 +72,11 @@ the app's own contract overrides it, all enforced by tests:
    Rotaris rejected it as unreadable at ten- and eleven-pixel sizes. The current
    export answers that objection in the type system itself: body weight drops
    from 500 to 400, every weight caps at 500, and the scale no longer asks a
-   display face for 13px work. Rotaris now adopts the pair as specified —
-   Space Grotesk for display and section heads, Manrope for body, JetBrains
-   Mono for every number and path — with host faces (Inter, Segoe UI) kept
-   behind them as fallbacks, not alternatives. The weight roles stay the
+   display face for 13px work. Rotaris keeps the display face and overrides the
+   body face: **Space Grotesk** for display and section heads, **Roboto** for
+   body and UI — the face every platform hints for dense work — with the
+   system's own Manrope sitting directly behind it as the first fallback, and
+   JetBrains Mono for every number and path. The weight roles stay the
    system's: 400 resting, 500 emphasised. The one exception is the High
    Contrast palette, which keeps its heavier weights (700/800): it exists for
    readers AA does not serve, and weight is its contrast budget, not decoration.

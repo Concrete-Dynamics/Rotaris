@@ -5,7 +5,7 @@ silently substitutes the closest thing it has, and the interface renders in a
 face nobody chose. Bundling is how a face stops being a property of the host's
 font directory.
 
-Three faces ship, and they do not all ship for the same reason.
+Four faces ship, and they do not all ship for the same reason.
 
 `JetBrains Mono` is load-bearing. The terminal (SWR-2429) paints on a fixed grid
 whose cell width comes from the mono font's advance; hand it a proportional
@@ -15,13 +15,13 @@ tears and a progress bar crawls sideways as it fills. It sits *last* in
 Menlo keeps the mono its user already knows — which makes it the floor rather
 than the choice.
 
-`Space Grotesk` and `Manrope` are the design system's brand pair, and no shipped
-palette names them: tried in the product, they were rejected as unreadable at
-the sizes an operator actually reads here. They stay bundled for two reasons.
-A future palette may want them, and naming a face is the cheapest thing a theme
-can do only if the face is guaranteed present. And under the `offscreen`
-platform Qt reports *no* host families at all, so without a registered face the
-test suite and the screenshot pipeline render windows with no text in them.
+`Space Grotesk`, `Roboto` and `Manrope` are the interface faces: Space Grotesk
+speaks for display and section heads, Roboto for body and UI, and Manrope — the
+design system's own body face — sits directly behind Roboto as the first
+fallback. All three are bundled, so the named faces are always present, and
+under the `offscreen` platform Qt reports *no* host families at all — without a
+registered face the test suite and the screenshot pipeline render windows with
+no text in them.
 
 Registration is deliberately not load-bearing for launch. A face that will not
 load is reported and skipped, the stacks fall through to the next family, and

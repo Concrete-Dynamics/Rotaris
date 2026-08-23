@@ -1105,13 +1105,13 @@ Full requirement: [SWR-3702 — Design-system component library](2000-rotaris-de
 
 ## SWR-3703 — Typography ships with the application
 
-Technical requirement derived from SWR-3700. Space Grotesk, Manrope and JetBrains Mono are
-bundled as variable faces and registered with Qt at startup, so no type stack depends on a face
-the machine might not have. Which face the interface is *set* in is a product decision: the brand
-display/body pair was rejected in review as unreadable at the sizes this interface uses, so the
-palettes name the host's own UI face and keep the design system's type system — ramp, weight
-roles, tracking. Registration never blocks launch, and the type properties QSS accepts and
-discards — tracking, tabular figures — are applied as font settings instead.
+Technical requirement derived from SWR-3700. Space Grotesk, Roboto, Manrope and JetBrains Mono
+are bundled as variable faces and registered with Qt at startup, so no type stack depends on a face
+the machine might not have. Which face the interface is *set* in is a product decision: the display
+keeps the design system's Space Grotesk, the body is set in Roboto — with Manrope as the first
+fallback — and the design system's type system — ramp, weight roles, tracking — carries over.
+Registration never blocks launch, and the type properties QSS accepts and discards — tracking,
+tabular figures — are applied as font settings instead.
 
 Full requirement: [SWR-3703 — Typography ships with the application](2000-rotaris-desktop/SWR-3703-brand-typography.md)
 

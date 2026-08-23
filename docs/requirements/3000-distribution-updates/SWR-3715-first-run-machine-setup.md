@@ -13,7 +13,7 @@ date: 2026-08-22
 SWR-3001 froze Python and every Python dependency into the shipped bundle, and
 said plainly what it does not carry: the external programs Rotaris shells out
 to. `git` drives worktrees and checkpoints, `uvx` starts the pinned
-`serena-agent` MCP server, `npx` starts the Playwright and git MCP servers in
+`serena-agent` MCP server, `npx` starts the Playwright MCP server in
 `DEFAULT_MCP_SERVERS`, and `rg` backs the search tool. A user who installs from
 `Rotaris-<v>-windows-x64-setup.exe`, the DMG, or the AppImage therefore lands in
 an application whose worktrees, semantic navigation and search are broken behind
@@ -31,7 +31,8 @@ Every later launch skips it.
 - **In scope**: Windows, macOS and Linux bundled artifacts from SWR-3001 —
   installer, portable `.exe`, `.app`/DMG, AppImage. Detection and per-user
   provisioning of `git`, `uv`/`uvx`, Node/`npx` and `rg`; warming the MCP
-  package caches those servers need; the progress window; the completion record
+  package caches those servers need; removal of the shipped Git MCP server in
+  favour of terminal Git commands; the progress window; the completion record
   that makes the run once-only; a re-runnable repair; a non-interactive
   equivalent for `rotaris-cli` and `rotaris-headless`.
 - **Out of scope**: provider credentials and model choice — that is the
@@ -48,13 +49,21 @@ earlier — and when it is, the step reports `already installed` and costs
 nothing. A machine that already has git, uv, Node and ripgrep sees a setup run
 that completes in seconds without downloading anything.
 
+Git 2.36.0 or newer is satisfying because it carries the NUL-delimited worktree
+listing Rotaris uses. A system Git at that floor is reused directly and never
+replaced by Rotaris-managed Git.
+
 **Steps, in order.** Detect what is present; provision `uv`; provision `git`;
 provision Node; provision `rg`; warm the `uvx` cache for the pinned
-`serena-agent` and the `npx` cache for the Playwright and git MCP servers;
+`serena-agent` and the `npx` cache for the Playwright MCP server;
 record what was provisioned; hand off to the application. The list is derived
 from the tools Rotaris actually resolves, not hand-maintained in the window:
 adding an MCP server that resolves through `uvx` or `npx` adds its warm-up step
 by construction.
+
+Rotaris ships no Git MCP server, pin, warm-up, persona grant, or server-specific
+initialization. Agents that need Git invoke the installed `git` command through
+their terminal tool.
 
 **Nothing outside the user's own directories, and no elevation.** Provisioned
 tools live under the per-user data directory (`GLOBAL_DATA_DIR`/`tools`).
@@ -111,11 +120,11 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 ## Acceptance criteria
 
 - **AC-001**: The first launch of a bundled Rotaris on a machine with none of
-  `git`, `uv`, Node or `rg` provisions all four, warms the MCP caches, and then
+  `git`, `uv`, Node or `rg` provisions all four, warms the required MCP caches, and then
   starts the desktop application without further user action.
 - **AC-002**: On a machine that already has satisfying versions of all four,
   the run reports each as already installed, downloads nothing, and reaches the
-  application.
+  application. Git 2.36.0 or newer satisfies the Git step.
 - **AC-003**: The second launch starts the application directly — no setup
   window, no re-detection cost the user can perceive.
 - **AC-004**: The window shows the ordered step list, the completed count and
@@ -139,12 +148,15 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
   the first-time run.
 - **AC-011**: `rotaris-cli setup` performs the same provisioning without a GUI,
   reporting one line per step and exiting non-zero when a step fails.
+- **AC-012**: The shipped MCP server map, default persona grants, setup manifest,
+  and warm-up plan contain no Git MCP entry; Git-capable agents use their terminal.
 
 ## Test portfolio
 
 | Level           | Productive scenario                                                                                                                             | Exercised boundary                                             | Planned/covering test                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Unit            | Detection reports each tool as satisfied, missing or too old; the step list is derived from the tools Rotaris resolves, not a hand-written list  | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
+| Unit            | Detection reuses Git 2.36+; the default setup plan derives only the MCP packages Rotaris ships and excludes Git MCP                       | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
+| Unit            | Default agents start without a Git MCP server or persona grant                                                                                 | Shipped persona and MCP configuration                            | `tests/unit/test_config_defaults.py::test_git_mcp_is_absent_from_the_shipped_configuration` |
 | Unit            | A pinned archive with a wrong digest is refused and nothing is unpacked; a matching one is unpacked into the per-user tool directory             | Download-and-verify step over a local HTTPS fixture             | `tests/unit/setup/test_tool_download.py`                     |
 | Integration     | A cancelled, then resumed, run completes the remaining steps only; a completion record makes a later run a no-op; a raised minimum triggers a top-up | Setup runner → completion record in the data dir                | `tests/integration/test_setup_resume_and_record.py`          |
 | Integration     | `rotaris-cli setup` provisions without a GUI, prints one line per step, and exits non-zero on a failing step                                     | CLI entry point → setup runner with the network faked           | `tests/integration/test_setup_cli.py`                        |

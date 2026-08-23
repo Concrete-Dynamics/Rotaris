@@ -1,0 +1,9 @@
+# Retired requirement ids (SWR-2318). APPEND-ONLY.
+#
+# A tombstone is the only record that a deleted requirement id ever existed.
+# Reusing a tombstoned id is rejected: ids are never reassigned.
+# Written by `python -m rotaris_core.reqtocode check --fix` (and `generate`)
+# when an id that the generated module carried is no longer in the store.
+#
+# <req-id>\t<retired-on, ISO 8601>\t<last known title>
+SWR-3718	2026-08-23	First-run provisioning makes automatic network activity explicit

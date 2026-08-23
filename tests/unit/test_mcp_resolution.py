@@ -390,10 +390,10 @@ def test_the_binding_is_matched_on_serenas_launch_not_on_the_server_name(tmp_pat
     _, unrelated = resolve_stdio_server_command_args(
         "serena",
         "npx",
-        ["-y", "@cyanheads/git-mcp-server@latest"],
+        ["-y", "@scope/other-mcp@1.2.3"],
         tmp_path,
     )
-    assert unrelated == ["-y", "@cyanheads/git-mcp-server@latest"]
+    assert unrelated == ["-y", "@scope/other-mcp@1.2.3"]
 
 
 @verifies(SWR.SWR_1715)

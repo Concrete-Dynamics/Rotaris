@@ -115,10 +115,10 @@ def _candidate_tool_names(server_name: str, tool_name: str) -> set[str]:
     servers in one FastMCP config, which prefixes them with the server name, and
     grants are written against the unprefixed names.
 
-    The unprefixed candidate is *added*, never substituted: the ``git`` server's
-    own tools are named ``git_status``, ``git_push`` and so on, and stripping the
-    server-name prefix outright would turn every one of them into something no
-    grant or ``disabled_tools`` entry mentions.
+    The unprefixed candidate is *added*, never substituted: a server may already
+    report tool names carrying the same prefix as its configured name, and stripping
+    that prefix outright could produce a name no grant or ``disabled_tools`` entry
+    mentions.
     """
     candidates = {tool_name}
     for prefix in (f"{server_name}_", f"mcp-{server_name}-", f"mcp__{server_name}__"):

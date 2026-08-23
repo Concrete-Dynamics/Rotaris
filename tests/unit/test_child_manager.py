@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from rotaris_core.config.schema import RuntimePolicy
@@ -27,6 +29,57 @@ def make_report(summary="test summary"):
         final_response=summary,
         last_response=summary,
     )
+
+
+@verifies(SWR.SWR_177)
+def test_launch_claims_are_atomic_exactly_once_and_parent_scoped(manager) -> None:
+    """Productive use: overlapping drains launch each direct delegated task once."""
+    direct = [
+        manager.spawn_child(f"probe-{index}", "tester", f"probe {index}") for index in range(3)
+    ]
+    nested = manager.spawn_child(
+        "nested-probe",
+        "tester",
+        "nested probe",
+        parent_agent_id=direct[0].canonical_name,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        batches = list(pool.map(lambda _: manager.claim_ready_children("parent_1"), range(2)))
+
+    direct_claims = [claim for batch in batches for claim in batch]
+    assert {claim.canonical_name for claim in direct_claims} == {
+        record.canonical_name for record in direct
+    }
+    assert len(direct_claims) == len(direct)
+    assert all(record.state == ChildTaskState.STARTING for record in direct)
+    assert nested.state == ChildTaskState.QUEUED
+
+    nested_claims = manager.claim_ready_children(direct[0].canonical_name)
+    assert [claim.canonical_name for claim in nested_claims] == [nested.canonical_name]
+    assert manager.claim_ready_children("parent_1") == []
+
+
+@verifies(SWR.SWR_177)
+def test_starting_claim_reserves_model_capacity_until_terminal(manager) -> None:
+    """Productive use: a model cap remains honored while an agent is being built."""
+    first = manager.spawn_child("first", "tester", "first", model_key="shared-model")
+    second = manager.spawn_child("second", "tester", "second", model_key="shared-model")
+    manager.enqueue_model_slot(first.canonical_name, "shared-model", max_parallel=1)
+    manager.enqueue_model_slot(second.canonical_name, "shared-model", max_parallel=1)
+
+    claims = manager.claim_ready_children("parent_1")
+
+    assert [claim.canonical_name for claim in claims] == [first.canonical_name]
+    assert first.state == ChildTaskState.STARTING
+    assert second.state == ChildTaskState.WAITING_ON_MODEL_SLOT
+
+    running = manager.transition_launch_claim(claims[0], ChildTaskState.RUNNING)
+    assert running is first
+    manager.mark_child_terminal(first.canonical_name, ChildTaskState.SUCCEEDED, make_report())
+
+    next_claims = manager.claim_ready_children("parent_1")
+    assert [claim.canonical_name for claim in next_claims] == [second.canonical_name]
 
 
 @verifies(SWR.SWR_101, SWR.SWR_102, SWR.SWR_1113)

@@ -83,7 +83,7 @@ class AgentFactory(Protocol):
     def __call__(self, persona: str, runtime_kwargs: dict[str, Any] | None = None) -> Agent: ...
 
 
-@traces(SWR.SWR_104, SWR.SWR_110, SWR.SWR_111, SWR.SWR_131, SWR.SWR_162)
+@traces(SWR.SWR_104, SWR.SWR_110, SWR.SWR_111, SWR.SWR_131, SWR.SWR_162, SWR.SWR_177)
 class Scheduler(
     ReportBuilderMixin,
     TranscriptProgressMixin,
@@ -581,25 +581,24 @@ class Scheduler(
             open_todo_items_provider=open_todo_items_provider,
         )
 
-    async def spawn_children(self, manager: ChildManager, agent_factory: AgentFactory) -> list[str]:
-        """Spawn all ready children as asyncio tasks."""
+    async def spawn_children(
+        self,
+        manager: ChildManager,
+        agent_factory: AgentFactory,
+        parent_agent_id: str | None = None,
+    ) -> list[str]:
+        """Claim and spawn ready direct children as asyncio tasks."""
         from rotaris_core.agents.tool_registration import (
             build_binding_key,
             discard_runtime_binding,
         )
 
         spawned_names: list[str] = []
-        for record in manager.resolve_ready_children():
-            record.transition(ChildTaskState.RUNNING)
-            manager.bump_version()
-            if self._spawn_notification_callback is not None:
-                try:
-                    self._spawn_notification_callback(record)
-                except Exception:  # noqa: BLE001
-                    _log.exception(
-                        "Spawn notification callback failed for child %s",
-                        record.canonical_name,
-                    )
+        for claim in manager.claim_ready_children(parent_agent_id):
+            record = manager.record_for_launch_claim(claim)
+            if record is None:
+                self._record_stale_launch_claim(claim, "before agent construction")
+                continue
             _capture_todo_state, open_todo_items_provider = self._make_open_todo_tracker()
 
             def _per_child_todo_callback(
@@ -637,10 +636,28 @@ class Scheduler(
                     )
                 except TypeError:
                     agent = await asyncio.to_thread(agent_factory, record.persona)
+            except asyncio.CancelledError:
+                discard_runtime_binding(binding_key)
+                report = ChildReportArtifact(
+                    agent_name=record.canonical_name,
+                    persona=record.persona,
+                    status="cancelled",
+                    summary="Child launch was cancelled during agent construction",
+                )
+                cancelled = manager.transition_launch_claim(claim, ChildTaskState.CANCELLED)
+                if cancelled is not None:
+                    manager.mark_child_terminal(
+                        record.canonical_name,
+                        ChildTaskState.CANCELLED,
+                        report,
+                    )
+                raise
             except Exception as exc:  # noqa: BLE001
                 discard_runtime_binding(binding_key)
-                if record.state != ChildTaskState.FAILED:
-                    record.transition(ChildTaskState.FAILED)
+                failed = manager.transition_launch_claim(claim, ChildTaskState.FAILED)
+                if failed is None:
+                    self._record_stale_launch_claim(claim, "after agent-construction failure")
+                    continue
                 report = ChildReportArtifact(
                     agent_name=record.canonical_name,
                     persona=record.persona,
@@ -653,6 +670,21 @@ class Scheduler(
                     record.canonical_name,
                 )
                 continue
+
+            running_record = manager.transition_launch_claim(claim, ChildTaskState.RUNNING)
+            if running_record is None:
+                discard_runtime_binding(binding_key)
+                self._record_stale_launch_claim(claim, "after agent construction")
+                continue
+            record = running_record
+            if self._spawn_notification_callback is not None:
+                try:
+                    self._spawn_notification_callback(record)
+                except Exception:  # noqa: BLE001
+                    _log.exception(
+                        "Spawn notification callback failed for child %s",
+                        record.canonical_name,
+                    )
             task = asyncio.create_task(
                 self._run_child_and_mark_terminal(
                     record,
@@ -675,6 +707,28 @@ class Scheduler(
             self._active_tasks[record.canonical_name] = task
             spawned_names.append(record.canonical_name)
         return spawned_names
+
+    def _record_stale_launch_claim(self, claim: Any, phase: str) -> None:
+        """Persist enough identity to diagnose a suppressed launch attempt."""
+        metadata = {
+            "task_id": claim.task_id,
+            "parent_agent_id": claim.parent_agent_id,
+            "claim_id": claim.claim_id,
+            "phase": phase,
+        }
+        self._diag.timeline(
+            "child_launch_suppressed",
+            actor=claim.canonical_name,
+            message=f"Suppressed stale launch claim {claim.claim_id} during {phase}",
+            metadata=metadata,
+        )
+        self._diag.issue(
+            kind="stale_child_launch_claim",
+            severity="warning",
+            actor=claim.canonical_name,
+            message=f"Child launch claim {claim.claim_id} became stale during {phase}.",
+            metadata=metadata,
+        )
 
     async def _run_child_and_mark_terminal(
         self,
@@ -734,7 +788,11 @@ class Scheduler(
             if record.run_in_background:
                 self._pause_parent_for_background_notification(manager)
 
-            await self.spawn_children(manager, agent_factory)
+            await self.spawn_children(
+                manager,
+                agent_factory,
+                parent_agent_id=record.parent_agent_id or manager.parent_agent_id,
+            )
             return report
         finally:
             self._active_tasks.pop(record.canonical_name, None)

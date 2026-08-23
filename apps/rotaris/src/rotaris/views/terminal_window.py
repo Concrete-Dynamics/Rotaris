@@ -38,6 +38,7 @@ from rotaris.theme.manager import Themed
 from rotaris.widgets import (
     ConfirmImpactDialog,
     EmptyState,
+    HiddenPanelReflow,
     InlineBanner,
     StatusDot,
     TerminalView,
@@ -47,6 +48,8 @@ from rotaris.widgets import (
 )
 
 if TYPE_CHECKING:
+    from PySide6.QtGui import QHideEvent, QShowEvent
+
     from rotaris.services.terminal_stream_bridge import TerminalStreamBridge
     from rotaris.theme.spec import Theme
 
@@ -143,7 +146,12 @@ class TerminalWindow(QMainWindow):
         self._timer.timeout.connect(self._tick)
         self._timer.start()
 
-        bridge.stream_changed.connect(lambda _s: self.refresh())
+        # Through a reflow, not straight to the rebuild (SWR-2454). A stream
+        # reports every chunk it receives, and this re-labels every open tab and
+        # refreshes every header — work that a closed window must not do at all,
+        # and an open one must not do faster than the grid beside it repaints.
+        self._reflow = HiddenPanelReflow(self, _REFRESH_MS, self.refresh)
+        bridge.stream_changed.connect(self._reflow.request)
         self.refresh()
 
     # ── chrome ───────────────────────────────────────────────────────────
@@ -190,6 +198,24 @@ class TerminalWindow(QMainWindow):
     def current_stream_id(self) -> str:
         page = self.tabs.currentWidget()
         return page.stream_id if isinstance(page, _TerminalTab) else ""
+
+    @traces(SWR.SWR_2454)
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt's spelling
+        """Resume the header tick, and catch up on anything held while hidden."""
+        super().showEvent(event)
+        if not self._timer.isActive():
+            self._timer.start()
+
+    @traces(SWR.SWR_2454)
+    def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802 — Qt's spelling
+        """Stop ticking where nobody can read the headers it rewrites.
+
+        The tick was started in the constructor and never stopped, so a window
+        left open behind another one rewrote every tab header eight times a
+        second for as long as it lived (SWR-2454).
+        """
+        super().hideEvent(event)
+        self._timer.stop()
 
     def _tab_for(self, stream_id: str) -> _TerminalTab | None:
         for index in range(self.tabs.count()):

@@ -191,6 +191,50 @@ cached shape, because these rows carry their colours inline and a comparison
 would leave them in the old theme. And an agent switch rebuilds the tool strip,
 because a different agent holds different tools.
 
+**And the surfaces behind the one on screen.** The same rule reaches the pop-outs
+and the tabs, because neither is destroyed when the user looks away. An agent
+pop-out is *closed*, not deleted — it stays in the main window's cache so
+reopening it is instant — so it went on rebuilding its tab strip on every
+publication for the rest of the session; the main window's own sweep over every
+pop-out now asks each window rather than calling its rebuild. The terminal
+pop-out re-labelled every open tab on every chunk a stream reported, on top of
+the 120 ms tick that already repaints the visible grid. And the Git and Library
+tabs each clear a table and build its rows again, driven by a run editing files,
+taking checkpoints and publishing artifacts while the user is watching the
+workspace.
+
+Settings is deliberately left alone: `settings_changed` is raised only by a
+person picking a persona, a reasoning level or a model, so there is no stream to
+hold back — and holding a rebuild until the tab is shown could land it on top of
+an edit in progress.
+
+**And the one animation.** A status dot breathes while its state runs (SWR-3704),
+and nothing about that was visibility-aware: Qt keeps a looping animation running
+for a hidden widget, writing its value every frame for as long as the window
+lives. Counted on the demo workspace with the dashboard and mission tabs behind
+the workspace, **21 of 21** looping animations were running with two live agents,
+and **40 of 41** with twenty — most of them on tabs nobody could see. A dot now
+stops on `hideEvent` and resumes on `showEvent`, keeping `pulsing` as the state's
+intent rather than the animation's; the same count is 5 of 21 and 22 of 41.
+
+The breath also stopped applying itself. It was a `QGraphicsOpacityEffect`, which
+makes Qt render its widget into an offscreen pixmap on every paint — an
+unreasonable price for a six-pixel dot, paid for the life of the run and
+multiplied by every dot on screen. The animated value is now a number the dot
+mixes into its own brush in `paintEvent`, and no status dot carries a graphics
+effect at all.
+
+Two smaller ones alongside. `StatusDot.set_state` repainted on every call, which
+a reconciled panel makes on every refresh with the state unchanged; it compares
+first now. And the terminal pop-out's header tick was started in its constructor
+and never stopped, rewriting every tab label eight times a second for the life of
+the window.
+
+*What is not claimed here.* The count is measured; the wall-clock saving is not.
+Offscreen has no compositor, so an opacity effect never actually composites and
+the platform cannot answer what it cost — the number would have to come from a
+run on the user's own machine.
+
 Grouping is no longer one of them, as of 2026-08-23. A row that is not a
 groupable tool call is a barrier — grouping emits it verbatim and starts a fresh
 run after it — so re-projecting from the start of the run containing the
@@ -237,6 +281,8 @@ row.
 | Unit | Applying one update to a projected session touches work proportional to the change: asserted by counting the per-update work over sessions of 30, 300 and 3000 events and requiring the count not to grow with length | the desktop's session-update seam | `apps/rotaris/tests/test_live_update_cost.py` |
 | Unit | A view consumer that raises, blocks or is absent leaves the run's own progress and terminal status untouched | the engine→view boundary | `apps/rotaris/tests/test_live_update_cost.py` |
 | Unit | A run reporting an agent's progress leaves the panels drawing it standing: the agent tree keeps its row objects, the tool strip is re-dressed rather than rebuilt, the task plan is untouched — and a hidden panel does no work at all until it is shown | the store-signal→panel boundary | `apps/rotaris/tests/test_panel_reconcile.py` |
+| Unit | The surfaces the user is not looking at cost nothing: a closed agent pop-out rebuilds no tabs and is current when it reopens, a streaming command does not re-label the terminal tabs per chunk, and a tab behind the one on screen rebuilds its tables once, when it is shown | pop-outs and background tabs | `apps/rotaris/tests/test_panel_reconcile.py` |
+| Unit | The one looping animation runs only where it can be seen: a dot on the tab behind this one holds its breath and resumes when that tab is shown, the breath is painted rather than applied by a graphics effect, a dot told what it already says schedules no repaint, and a session list that did not move is not republished | the animation and the store's own guards | `apps/rotaris/tests/test_panel_reconcile.py` |
 | Unit | The run's own transcript: which rows it reports as settled, what reaches the wire and when, and that a broken watcher leaves the record intact | the transcript recorder | `tests/unit/session/test_transcript_recorder.py` |
 | Unit | Following a session in another process: only the addition is read, a settled row replaces the one it opened, a shortened store restarts the view, and a lost line does not misplace the tail | the foreign-session follower | `apps/rotaris/tests/test_session_follower.py` |
 | Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py`, `apps/rotaris/tests/test_session_follower.py::test_what_the_follower_shows_is_what_the_session_recorded` |

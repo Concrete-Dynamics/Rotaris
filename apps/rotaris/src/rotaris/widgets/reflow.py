@@ -102,13 +102,29 @@ class HiddenPanelReflow(Coalescer):
 
     @Slot()
     def request(self) -> None:
-        if not self._widget.isVisible():
+        widget = self._watched()
+        if widget is None or not widget.isVisible():
             # Not dropped — held. ``flush`` on the next Show is what pays it back.
             self._pending = True
             return
         super().request()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if watched is self._widget and event.type() == QEvent.Type.Show:
+        if event.type() == QEvent.Type.Show and watched is self._watched():
             self.flush()
         return False
+
+    def _watched(self) -> QWidget | None:
+        """The panel, or ``None`` once this object is no longer usable.
+
+        A filter is installed on a widget that outlives this object's Python
+        wrapper: Qt keeps calling ``eventFilter`` in the window between the
+        wrapper being collected and the C++ object being destroyed, and by then
+        the attributes it would read are gone. Reading through here is what makes
+        that a no-op rather than an AttributeError raised inside the event loop,
+        where it surfaces as an unrelated test failing.
+        """
+        try:
+            return self._widget
+        except AttributeError:
+            return None

@@ -309,3 +309,90 @@ def _todo_rows(view: WorkspaceView) -> list[QWidget]:
         for index in range(view.todo_rows.count())
         if (widget := view.todo_rows.itemAt(index).widget()) is not None
     ]
+
+
+# ── pop-outs and the tabs behind the one on screen ────────────────────────
+
+
+@verifies(SWR.SWR_2454, SWR.SWR_2090)
+def test_a_closed_pop_out_costs_nothing_and_is_current_when_it_reopens(qtbot) -> None:
+    """A pop-out is closed, not destroyed — it stays in the main window's cache.
+
+    So without the visibility gate a user who opened one once keeps paying for
+    its tab strip on every publication for the rest of the session.
+    """
+    from rotaris.views.agent_window import AgentWindow
+
+    store = sample_store()
+    window = AgentWindow(store, "coding-agent")
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitExposed(window)
+    window.refresh()
+    before = window.tabs.count()
+    assert before, "the persona has instances"
+
+    window.close()
+    store.upsert_agent(
+        AgentNode(
+            id="coding-agent-9",
+            name="coding-agent-9",
+            persona="coding-agent",
+            parent_id="coding-agent-1",
+            state=AgentState.RUNNING,
+        )
+    )
+    window.request_refresh()
+
+    assert window.tabs.count() == before, "a closed window rebuilt nothing"
+
+    window.show()
+    qtbot.waitExposed(window)
+
+    assert window.tabs.count() == before + 1, "and reopening it shows the new agent"
+
+
+@verifies(SWR.SWR_2454, SWR.SWR_2428)
+def test_a_streaming_command_does_not_relabel_the_terminal_tabs_per_chunk(qtbot) -> None:
+    from rotaris_core.terminal_stream.hub import TerminalStreamHub
+
+    from rotaris.services.terminal_stream_bridge import TerminalStreamBridge
+    from rotaris.views.terminal_window import TerminalWindow
+
+    hub = TerminalStreamHub(buffer_bytes=32 * 1024)
+    bridge = TerminalStreamBridge()
+    hub.open_stream("sess", "fg:coder", command="pytest -q")
+    bridge.attach(hub, "sess")
+
+    window = TerminalWindow(bridge)
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitExposed(window)
+    calls: list[int] = []
+    window._reflow._target = lambda: calls.append(1)
+
+    for index in range(100):
+        hub.publish("sess", "fg:coder", "delta", f"line {index}\r\n")
+
+    assert len(calls) <= 2, f"a chunk must not cost a relabel of every tab, got {len(calls)}"
+
+
+@verifies(SWR.SWR_2454)
+def test_a_tab_nobody_is_on_does_not_rebuild_its_tables(qtbot) -> None:
+    """Artifacts and proposals arrive while the user is watching the run."""
+    from rotaris.views.library import LibraryView
+
+    store = sample_store()
+    view = LibraryView(store)
+    qtbot.addWidget(view)
+    calls: list[int] = []
+    view._artifacts_reflow._target = lambda: calls.append(1)
+
+    store.set_artifacts([])
+
+    assert calls == [], "the tab is not on screen, so nothing was rebuilt"
+
+    view.show()
+    qtbot.waitExposed(view)
+
+    assert calls == [1], "and switching to it costs exactly one rebuild"

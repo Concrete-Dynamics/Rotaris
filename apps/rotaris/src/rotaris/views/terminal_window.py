@@ -38,6 +38,7 @@ from rotaris.theme.manager import Themed
 from rotaris.widgets import (
     ConfirmImpactDialog,
     EmptyState,
+    HiddenPanelReflow,
     InlineBanner,
     StatusDot,
     TerminalView,
@@ -143,7 +144,12 @@ class TerminalWindow(QMainWindow):
         self._timer.timeout.connect(self._tick)
         self._timer.start()
 
-        bridge.stream_changed.connect(lambda _s: self.refresh())
+        # Through a reflow, not straight to the rebuild (SWR-2454). A stream
+        # reports every chunk it receives, and this re-labels every open tab and
+        # refreshes every header — work that a closed window must not do at all,
+        # and an open one must not do faster than the grid beside it repaints.
+        self._reflow = HiddenPanelReflow(self, _REFRESH_MS, self.refresh)
+        bridge.stream_changed.connect(self._reflow.request)
         self.refresh()
 
     # ── chrome ───────────────────────────────────────────────────────────

@@ -25,7 +25,13 @@ from PySide6.QtWidgets import (
 from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme.manager import Themed
-from rotaris.widgets import Card, PanelSplitter, make_button
+from rotaris.widgets import (
+    PANEL_REFLOW_MS,
+    Card,
+    HiddenPanelReflow,
+    PanelSplitter,
+    make_button,
+)
 
 if TYPE_CHECKING:
     from rotaris.models.state import ImprovementProposal
@@ -81,9 +87,19 @@ class LibraryView(QWidget):
         self.tabs.addTab(self._build_artifacts(), "Artifacts")
         self.tabs.addTab(self._build_proposals(), "Improvement proposals")
         root.addWidget(self.tabs, 1)
-        store.library_changed.connect(self.refresh)
-        store.artifacts_changed.connect(self._refresh_artifacts)
-        store.improvement_proposals_changed.connect(self._refresh_proposals)
+        # Through reflows, not straight to the rebuilds (SWR-2454): each clears
+        # a table and builds every row again, and a run publishes artifacts and
+        # improvement proposals while the user is looking at another tab.
+        self._reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
+        self._artifacts_reflow = HiddenPanelReflow(
+            self, PANEL_REFLOW_MS, self._refresh_artifacts
+        )
+        self._proposals_reflow = HiddenPanelReflow(
+            self, PANEL_REFLOW_MS, self._refresh_proposals
+        )
+        store.library_changed.connect(self._reflow.request)
+        store.artifacts_changed.connect(self._artifacts_reflow.request)
+        store.improvement_proposals_changed.connect(self._proposals_reflow.request)
         self.refresh()
 
     def set_active_tab(self, tab_id: str) -> None:

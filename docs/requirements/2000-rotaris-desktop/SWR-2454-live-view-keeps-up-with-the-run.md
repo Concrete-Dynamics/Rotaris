@@ -191,6 +191,23 @@ cached shape, because these rows carry their colours inline and a comparison
 would leave them in the old theme. And an agent switch rebuilds the tool strip,
 because a different agent holds different tools.
 
+**And the surfaces behind the one on screen.** The same rule reaches the pop-outs
+and the tabs, because neither is destroyed when the user looks away. An agent
+pop-out is *closed*, not deleted — it stays in the main window's cache so
+reopening it is instant — so it went on rebuilding its tab strip on every
+publication for the rest of the session; the main window's own sweep over every
+pop-out now asks each window rather than calling its rebuild. The terminal
+pop-out re-labelled every open tab on every chunk a stream reported, on top of
+the 120 ms tick that already repaints the visible grid. And the Git and Library
+tabs each clear a table and build its rows again, driven by a run editing files,
+taking checkpoints and publishing artifacts while the user is watching the
+workspace.
+
+Settings is deliberately left alone: `settings_changed` is raised only by a
+person picking a persona, a reasoning level or a model, so there is no stream to
+hold back — and holding a rebuild until the tab is shown could land it on top of
+an edit in progress.
+
 Grouping is no longer one of them, as of 2026-08-23. A row that is not a
 groupable tool call is a barrier — grouping emits it verbatim and starts a fresh
 run after it — so re-projecting from the start of the run containing the
@@ -237,6 +254,7 @@ row.
 | Unit | Applying one update to a projected session touches work proportional to the change: asserted by counting the per-update work over sessions of 30, 300 and 3000 events and requiring the count not to grow with length | the desktop's session-update seam | `apps/rotaris/tests/test_live_update_cost.py` |
 | Unit | A view consumer that raises, blocks or is absent leaves the run's own progress and terminal status untouched | the engine→view boundary | `apps/rotaris/tests/test_live_update_cost.py` |
 | Unit | A run reporting an agent's progress leaves the panels drawing it standing: the agent tree keeps its row objects, the tool strip is re-dressed rather than rebuilt, the task plan is untouched — and a hidden panel does no work at all until it is shown | the store-signal→panel boundary | `apps/rotaris/tests/test_panel_reconcile.py` |
+| Unit | The surfaces the user is not looking at cost nothing: a closed agent pop-out rebuilds no tabs and is current when it reopens, a streaming command does not re-label the terminal tabs per chunk, and a tab behind the one on screen rebuilds its tables once, when it is shown | pop-outs and background tabs | `apps/rotaris/tests/test_panel_reconcile.py` |
 | Unit | The run's own transcript: which rows it reports as settled, what reaches the wire and when, and that a broken watcher leaves the record intact | the transcript recorder | `tests/unit/session/test_transcript_recorder.py` |
 | Unit | Following a session in another process: only the addition is read, a settled row replaces the one it opened, a shortened store restarts the view, and a lost line does not misplace the tail | the foreign-session follower | `apps/rotaris/tests/test_session_follower.py` |
 | Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py`, `apps/rotaris/tests/test_session_follower.py::test_what_the_follower_shows_is_what_the_session_recorded` |

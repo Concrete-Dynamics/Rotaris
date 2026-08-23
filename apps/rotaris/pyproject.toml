@@ -2,7 +2,7 @@
 name = "rotaris"
 # One product version (SWR-3002 AC-006): `rotaris` and `rotaris-core` release
 # together under one tag, so this must stay in step with the root pyproject.
-version = "0.120.11"
+version = "0.120.12"
 description = "Rotaris — desktop workspace for the Rotaris multi-agent orchestration framework"
 requires-python = ">=3.12"
 license = "MIT"

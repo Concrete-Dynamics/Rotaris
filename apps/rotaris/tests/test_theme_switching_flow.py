@@ -9,6 +9,7 @@ own.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,6 +24,8 @@ from rotaris.views.main_window import MainWindow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from rotaris.theme.spec import ColorTokens
 
 pytestmark = pytest.mark.e2e
 
@@ -130,19 +133,45 @@ def test_no_surface_in_any_primary_view_is_left_in_the_previous_palette(qtbot, w
         "accent": str(previous.color.accent[500]),
         "text": str(previous.color.text),
     }
+    # One old hex can legitimately appear in the new palette after 8-bit sRGB
+    # quantisation — `rotaris-dim`'s `surface` (oklch 25%) and High Contrast's
+    # `surface_raised` both resolve to #222222 — so a probe that could be either
+    # palette proves nothing. Keep only the probes that can *only* be the old
+    # palette; a widget still showing one of those is stale for sure.
+    new_values = _resolved_hexes(theme_manager().current.color)
+    probes = {role: value for role, value in stale_tokens.items() if value not in new_values}
 
     survivors: dict[str, list[str]] = {}
     for widget in (window, *window.findChildren(QWidget)):
         sheet = widget.styleSheet()
         if not sheet:
             continue
-        for role, value in stale_tokens.items():
+        for role, value in probes.items():
             if value in sheet:
                 survivors.setdefault(role, []).append(
                     f"{type(widget).__name__}#{widget.objectName() or '-'}"
                 )
 
     assert not survivors, f"widgets still painted in the previous theme: {survivors}"
+
+
+def _resolved_hexes(color: ColorTokens) -> set[str]:
+    """Every hex the *color* group of a theme can paint, for probe disambiguation."""
+    from rotaris.theme.color import Color
+    from rotaris.theme.spec import Ramp
+
+    hexes: set[str] = set()
+    for field in dataclasses.fields(color):
+        value = getattr(color, field.name)
+        if isinstance(value, Color):
+            hexes.add(str(value))
+        elif isinstance(value, Ramp):
+            hexes.update(str(step) for step in value.steps())
+        elif isinstance(value, tuple):
+            hexes.update(str(item) for item in value if isinstance(item, Color))
+        elif isinstance(value, dict):
+            hexes.update(str(item) for item in value.values() if isinstance(item, Color))
+    return hexes
 
 
 @verifies(SWR.SWR_3701)

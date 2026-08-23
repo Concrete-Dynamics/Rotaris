@@ -88,6 +88,32 @@ def test_bundled_cli_and_headless_version_smoke() -> None:
         assert _version() in result.stdout
 
 
+@verifies(SWR.SWR_3724)
+def test_bundled_desktop_serena_entry_smoke() -> None:
+    """Productive use: a standalone user starts a default Serena-backed agent.
+    Expected outcome: the desktop artifact's internal Serena CLI starts from bundled bytes."""
+    root = _artifact_dir()
+    suffix = ".exe" if platform.system() == "Windows" else ""
+    executable = _required(root / "rotaris" / f"rotaris{suffix}")
+
+    subprocess.run(
+        [
+            str(executable),
+            "--rotaris-run-bundled-serena",
+            "start-mcp-server",
+            "--help",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    )
+    license_files = list(
+        (root / "rotaris" / "_internal").glob("serena_agent-*.dist-info/licenses/LICENSE")
+    )
+    assert len(license_files) == 1
+
+
 @verifies(SWR.SWR_3001, SWR.SWR_3715)
 @pytest.mark.skipif(platform.system() != "Windows", reason="NSIS acceptance is Windows-specific")
 def test_windows_silent_install_and_uninstall(tmp_path: Path) -> None:

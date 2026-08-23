@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib.metadata import version
+
 from rotaris_core.config.schema import (
     CircuitBreakerConfig,
     CompressorConfig,
@@ -11,6 +13,7 @@ from rotaris_core.config.schema import (
     RotarisConfig,
     RuntimePolicy,
 )
+from rotaris_core.mcp.bundled_serena import BUNDLED_SERENA_COMMAND
 from rotaris_core.reqtocode import SWR, traces
 
 DEFAULT_RUNTIME_POLICY = RuntimePolicy()
@@ -104,16 +107,10 @@ ARTIFACT_READ_TOOLS = ["artifact_read", "artifact_list"]
 ARTIFACT_ALL_TOOLS = [*ARTIFACT_READ_TOOLS, "artifact_write"]
 LEGACY_PERSONA_ALIASES = {"oracle": "codebase-analyst"}
 
-SERENA_PINNED_VERSION = "1.7.0"
-PLAYWRIGHT_MCP_PINNED_VERSION = "0.0.75"
-"""The one place the Serena release is named (SWR-2819).
+SERENA_PINNED_VERSION = version("serena-agent")
+"""Exact Serena runtime installed from the direct pin in ``pyproject.toml`` (SWR-2819)."""
 
-Upgrading Serena is a single edit here with the whole suite behind it, which is
-the point: this server is the only semantic code intelligence Rotaris ships
-(SWR-2818), so an unpinned launch would let an upstream push rename tools,
-withhold one a persona prompt tells an agent to call, or fail to build — on some
-machines and not others, depending only on whose `uvx` cache was cold.
-"""
+PLAYWRIGHT_MCP_PINNED_VERSION = "0.0.75"
 
 SERENA_READ_TOOLS = [
     "find_symbol",
@@ -554,10 +551,10 @@ DEFAULT_MCP_SERVERS = {
     # Serena answers them bound to the run's own tree. `lsp` is still
     # configurable by a user who wants it, it is simply no longer a default.
     #
-    # Launched through `uvx`, so no separate install step is required. When
-    # `uvx` is not on PATH the factory drops this server and personas keep
-    # working with their remaining toolset (grep/glob/read_file/haet_read —
-    # see agents/factory.py::_mcp_server_is_available).
+    # `rotaris-serena` resolves to the installed Python runtime from source and
+    # to the current executable's internal Serena dispatch in a frozen build.
+    # The exact `serena-agent` dependency is carried with both distributions
+    # (SWR-3724), so this default has no machine-level Python launcher.
     #
     # `--project <workspace_root>` is deliberately absent here: it is filled in
     # per run by `mcp_resolution._bind_serena_to_workspace`, because the directory
@@ -569,18 +566,13 @@ DEFAULT_MCP_SERVERS = {
     # Serena remaps to its `claude-code` context, whose prompt is written for
     # another product's built-in tools and which withholds `search_for_pattern`.
     #
-    # The published `serena-agent` release, pinned (SWR-2819) — not
-    # `git+https://github.com/oraios/serena`, which resolves to whatever the
-    # upstream default branch holds the moment a machine's `uvx` cache is cold.
-    # Serena is the harness's only semantic navigator; it does not get to change
-    # underneath a run.
+    # The published `serena-agent` release is pinned as a direct runtime
+    # dependency (SWR-2819). Serena is the harness's only semantic navigator;
+    # its installed version stays fixed underneath a run.
     "serena": MCPServerConfig(
         type="stdio",
-        command="uvx",
+        command=BUNDLED_SERENA_COMMAND,
         args=[
-            "--from",
-            f"serena-agent=={SERENA_PINNED_VERSION}",
-            "serena",
             "start-mcp-server",
             "--context",
             "ide",

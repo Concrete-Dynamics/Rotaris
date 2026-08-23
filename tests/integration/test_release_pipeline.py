@@ -167,6 +167,25 @@ def test_native_packagers_run_from_a_fresh_checkout(workflow: Mapping[str, Any])
     assert 'bash packaging/linux/make_appimage.sh "${VERSION}"' in steps["Linux AppImage"]["run"]
 
 
+@verifies(SWR.SWR_3724)
+def test_every_native_release_smokes_the_bundled_serena_entry(
+    workflow: Mapping[str, Any],
+) -> None:
+    """Productive use: release users receive artifacts whose Serena runtime starts.
+    Expected outcome: the native matrix runs the internal Serena help command before packaging."""
+    steps = {
+        step.get("name"): step
+        for step in workflow["jobs"]["build"]["steps"]
+        if isinstance(step, dict)
+    }
+
+    smoke = steps["Bundled Serena smoke"]
+    assert smoke["shell"] == "bash"
+    assert "--rotaris-run-bundled-serena start-mcp-server --help" in smoke["run"]
+    assert "dist/rotaris/rotaris.exe" in smoke["run"]
+    assert "dist/rotaris/rotaris" in smoke["run"]
+
+
 @verifies(SWR.SWR_3002)
 def test_one_failing_platform_still_publishes_the_others(workflow: Mapping[str, Any]) -> None:
     """AC-003: ``fail-fast: false`` keeps the sibling builds alive, and the release job

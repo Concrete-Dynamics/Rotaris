@@ -4,7 +4,7 @@
     python -m rotaris_core.packaging build rotaris-headless --mode onedir
 """
 
-from PyInstaller.utils.hooks import copy_metadata
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 from rotaris_core.packaging import bundle_mode, bundle_spec
 
@@ -12,15 +12,22 @@ spec = bundle_spec("rotaris-headless")
 mode = bundle_mode()
 
 datas = list(spec.datas)
+binaries = []
+hiddenimports = list(spec.hidden_imports)
 for distribution in spec.metadata_packages:
     datas += copy_metadata(distribution)
+for package in spec.collect_all_packages:
+    package_datas, package_binaries, package_imports = collect_all(package)
+    datas += package_datas
+    binaries += package_binaries
+    hiddenimports += package_imports
 
 a = Analysis(
     [str(spec.entry_script)],
     pathex=[],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
-    hiddenimports=list(spec.hidden_imports),
+    hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
     excludes=["tkinter"],

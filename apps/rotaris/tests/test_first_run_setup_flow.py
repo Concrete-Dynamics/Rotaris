@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QLabel, QPushButton
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.setup import SetupEvent, SetupEventKind, SetupOutcome
 from ui_query import find_by_accessible_name
@@ -36,7 +36,7 @@ def _click_when_ready(dialog: SetupCoordinatorDialog, name: str) -> None:
     QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
-@verifies(SWR.SWR_3715)
+@verifies(SWR.SWR_3715, SWR.SWR_3724)
 def test_failure_details_continue_into_usable_main_window(
     qtbot, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -67,6 +67,9 @@ def test_failure_details_continue_into_usable_main_window(
     monkeypatch.setattr("rotaris.setup_coordinator.activate_managed_tool_environment", lambda: {})
     dialog = SetupCoordinatorDialog(mcp_servers=expected_servers)
     qtbot.addWidget(dialog)
+    setup_copy = " ".join(label.text().lower() for label in dialog.findChildren(QLabel))
+    assert "uv" not in setup_copy
+    assert "serena" not in setup_copy
     QTimer.singleShot(0, lambda: _click_when_ready(dialog, "Continue without tool"))
 
     assert dialog.start() == SetupOutcome.DEGRADED

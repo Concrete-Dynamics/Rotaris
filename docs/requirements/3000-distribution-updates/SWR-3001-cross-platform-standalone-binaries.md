@@ -32,12 +32,12 @@ user-observable behavior as the pip-installed equivalent.
   the desktop app cannot be frozen for that target without building Qt from
   source. Windows ARM64 users run the x64 build under emulation. Revisit when
   PySide6 ships a native wheel.
-- **Prerequisites the binary does not remove.** The bundle removes the Python
-  and dependency install; it does not vendor the external programs Rotaris shells
-  out to. `git` is required for worktrees and checkpoints, and MCP servers still
-  resolve through `uvx`/`npx` (`config/mcp_resolution.py`), including the pinned
-  `serena-agent`. Their absence degrades those features with the existing
-  warnings; it does not stop the application from launching.
+- **External prerequisites.** The bundle carries Python, its runtime
+  dependencies, and the pinned Serena runtime defined by SWR-3724. `git` remains
+  required for worktrees and checkpoints, `npx` launches the default Playwright
+  MCP server, and `rg` backs textual search. User-configured `uvx` MCP servers
+  use a user-supplied `uvx` executable. Missing external tools degrade their
+  dependent features with the existing warnings while the application launches.
 
 ## Acceptance criteria
 
@@ -85,3 +85,5 @@ the built artifact, and producing it takes minutes. The hermetic half of that
 flow — the build command's own contract — is the integration row above it.
 
 Epic: [Distribution & Updates](../3000-distribution-updates.md)
+
+Extended by: [SWR-3724 — Standalone distributions carry the pinned Serena runtime](SWR-3724-bundled-serena-runtime.md)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import shutil
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
@@ -66,6 +65,8 @@ if TYPE_CHECKING:
     SWR.SWR_2402,
     SWR.SWR_2403,
     SWR.SWR_2406,
+    SWR.SWR_2807,
+    SWR.SWR_3724,
 )
 class ConfigService:
     def __init__(self, workspace: Path, store: WorkspaceStore) -> None:
@@ -146,7 +147,7 @@ class ConfigService:
                 type=server.type,
                 description=server.url or " ".join([server.command or "", *server.args]).strip(),
                 source=self.config.mcp_server_sources.get(name, "yaml"),
-                available=self._mcp_available(server),
+                available=self._mcp_available(name, server),
             )
             for name, server in self.config.mcp_servers.items()
         ]
@@ -1505,10 +1506,10 @@ class ConfigService:
         return bool(task is not None and task.requires_consent)
 
     @staticmethod
-    def _mcp_available(server: Any) -> bool:
-        return (
-            server.type != "stdio" or not server.command or shutil.which(server.command) is not None
-        )
+    def _mcp_available(name: str, server: Any) -> bool:
+        from rotaris_core.config.mcp_resolution import mcp_server_is_available
+
+        return mcp_server_is_available(name, server)
 
 
 def _unavailable_subscription_limits(provider_id: str) -> list[SubscriptionLimit]:

@@ -11,9 +11,6 @@ from dataclasses import asdict
 from rotaris_core.config.defaults import (
     PLAYWRIGHT_MCP_PINNED_VERSION as PLAYWRIGHT_MCP_VERSION,
 )
-from rotaris_core.config.defaults import (
-    SERENA_PINNED_VERSION as SERENA_VERSION,
-)
 from rotaris_core.reqtocode import SWR, traces
 
 from .models import PlatformArtifact, SetupManifest, ToolSpec
@@ -44,40 +41,6 @@ def _artifact(
 def default_setup_manifest() -> SetupManifest:
     """Return the release-pinned tool contract in deterministic setup order."""
     tools = (
-        ToolSpec(
-            name="uv",
-            command="uv",
-            version_args=("--version",),
-            minimum_version="0.12.0",
-            provisioned_version="0.12.5",
-            artifacts={
-                "windows-x64": _artifact(
-                    "https://releases.astral.sh/github/uv/releases/download/0.12.5/uv-x86_64-pc-windows-msvc.zip",
-                    "4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a",
-                    "zip",
-                    "uv.exe",
-                    "uvx.exe",
-                    strip_components=1,
-                ),
-                "macos-arm64": _artifact(
-                    "https://releases.astral.sh/github/uv/releases/download/0.12.5/uv-aarch64-apple-darwin.tar.gz",
-                    "5bb0e5fe008a773c3dbcb97ff79cd89e1241464fe9d2f986d52ad8f1b037bd62",
-                    "tar.gz",
-                    "uv",
-                    "uvx",
-                ),
-                "linux-x86_64": _artifact(
-                    "https://releases.astral.sh/github/uv/releases/download/0.12.5/uv-x86_64-unknown-linux-gnu.tar.gz",
-                    "68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2",
-                    "tar.gz",
-                    "uv",
-                    "uvx",
-                ),
-            },
-            binary_dirs=(".",),
-            license="Apache-2.0 OR MIT",
-            capabilities=("Python MCP servers",),
-        ),
         ToolSpec(
             name="git",
             command="git",
@@ -165,7 +128,6 @@ def default_setup_manifest() -> SetupManifest:
         schema_version=1,
         tools=tools,
         mcp_pins={
-            "serena-agent": SERENA_VERSION,
             "@playwright/mcp": PLAYWRIGHT_MCP_VERSION,
         },
     )

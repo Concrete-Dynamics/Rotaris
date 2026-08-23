@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +19,7 @@ from rotaris_core.config.defaults import (
     SERENA_READ_TOOLS,
 )
 from rotaris_core.config.validation import validate_config
+from rotaris_core.mcp.bundled_serena import BUNDLED_SERENA_COMMAND
 from rotaris_core.reqtocode import SWR, verifies
 
 pytestmark = pytest.mark.unit
@@ -220,34 +223,37 @@ def test_serena_default_server_keeps_default_config_valid() -> None:
     assert unknown_server_errors == []
 
 
-@verifies(SWR.SWR_2801, SWR.SWR_2819)
-def test_serena_default_server_launches_via_uvx_over_stdio() -> None:
-    """Productive use: a user with ``uv`` installed gets Serena without a separate install step.
-    Expected outcome: the default ``serena`` entry is a stdio server launched through ``uvx``
-    from the published ``serena-agent`` distribution."""
+@verifies(SWR.SWR_2801, SWR.SWR_2819, SWR.SWR_3724)
+def test_serena_default_server_launches_the_bundled_runtime_over_stdio() -> None:
+    """Productive use: a user gets Serena directly from their Rotaris installation.
+    Expected outcome: the default stdio entry uses the Rotaris-owned launcher."""
     serena = DEFAULT_MCP_SERVERS["serena"]
 
     assert serena.type == "stdio"
-    assert serena.command == "uvx"
-    assert f"serena-agent=={SERENA_PINNED_VERSION}" in serena.args
+    assert serena.command == BUNDLED_SERENA_COMMAND
     assert "start-mcp-server" in serena.args
 
 
-@verifies(SWR.SWR_2819)
+@verifies(SWR.SWR_2819, SWR.SWR_3724)
 def test_serena_default_names_an_exact_release_not_a_moving_ref() -> None:
     """Productive use: two developers on two machines run the same Serena, and a bug
     report filed against one of them can be reproduced on the other.
     Expected outcome: the launch names an exact ``serena-agent`` release. A ``git+`` ref
     would resolve to whatever upstream's default branch held when the ``uvx`` cache was
     last cold, which is not a version anyone can cite."""
-    args = DEFAULT_MCP_SERVERS["serena"].args
+    dependencies = tomllib.loads(
+        (Path(__file__).parents[2] / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["dependencies"]
+    serena_dependency = next(
+        dependency for dependency in dependencies if dependency.startswith("serena-agent")
+    )
 
     assert re.fullmatch(r"\d+\.\d+\.\d+", SERENA_PINNED_VERSION), (
         f"SERENA_PINNED_VERSION must be an exact release, got {SERENA_PINNED_VERSION!r}"
     )
-    assert args[args.index("--from") + 1] == f"serena-agent=={SERENA_PINNED_VERSION}"
-    assert not [argument for argument in args if "git+" in argument]
-    assert not [argument for argument in args if "@latest" in argument]
+    assert serena_dependency == f"serena-agent=={SERENA_PINNED_VERSION}"
+    assert "git+" not in serena_dependency
+    assert "@latest" not in serena_dependency
 
 
 @verifies(SWR.SWR_2818)

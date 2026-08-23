@@ -86,3 +86,7 @@ the app's own contract overrides it, all enforced by tests:
    read at paint time (SWR-3706). Views never hardcode a pixel for something a
    token names, which is what lets Qt's high-DPI scaling scale the whole
    interface uniformly on any display size.
+5. **Dropdown height.** The CSS gives `.input` and `.select` the same
+   `min-height:32px`. Rotaris gives dropdowns the compact control height
+   (26px) instead: a picker is denser than a text field, and inputs keep the
+   full 32px typing target. The QSS sweep enforces the split.

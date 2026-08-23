@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QSpinBox,
@@ -26,6 +25,7 @@ from rotaris.widgets import (
     Card,
     PanelSplitter,
     SectionLabel,
+    Select,
     make_availability_help,
     make_button,
     set_action_availability,
@@ -64,7 +64,7 @@ class MissionView(Themed, QWidget):
         header.addWidget(title)
         header.addStretch(1)
         header.addWidget(SectionLabel("Strategy"))
-        self.strategy = QComboBox()
+        self.strategy = Select()
         self.strategy.setAccessibleName("Delegation strategy")
         self.strategy.addItem("Orchestrator", "orchestrator")
         self.strategy.addItem("Swarm", "swarm")

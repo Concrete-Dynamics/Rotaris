@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QLabel,
@@ -21,6 +20,7 @@ from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme import tokens
 from rotaris.theme.manager import Themed
+from rotaris.widgets.forms import Select
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -173,9 +173,9 @@ class AddProviderDialog(Themed, QDialog):
         self.setMinimumWidth(520)
         layout = QVBoxLayout(self)
 
-        self.provider_combo: QComboBox | None = None
+        self.provider_combo: Select | None = None
         if builtin_providers:
-            self.provider_combo = QComboBox()
+            self.provider_combo = Select()
             self.provider_combo.setAccessibleName("Provider type")
             self.provider_combo.addItem(
                 "OpenAI-compatible endpoint (custom URL)", self._CUSTOM_ENDPOINT

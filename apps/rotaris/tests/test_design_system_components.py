@@ -198,6 +198,71 @@ def test_no_component_paints_from_a_value_it_captured_at_import(qtbot, name: str
 
 
 @verifies(SWR.SWR_3702)
+def test_a_select_fits_its_selected_entry_not_its_longest(qtbot) -> None:
+    """Productive use: a user picks a short model name, then shrinks the window.
+
+    Expected outcome: the closed box asks to be as wide as the selected value —
+    the longest entry in the list never sets the width, so the box never eats
+    the layout beside it.
+    """
+    from rotaris.widgets.forms import SELECT_MAX_WIDTH
+
+    combo = widgets.Select()
+    combo.addItems(["gpt-mini", "a-model-with-a-very-long-name-indeed"])
+    combo.setCurrentText("gpt-mini")
+    qtbot.addWidget(combo)
+    combo.show()
+    qtbot.waitExposed(combo)
+
+    assert combo.displayed_text() == "gpt-mini", "the selected value is not shown whole"
+    assert combo.sizeHint().width() <= SELECT_MAX_WIDTH
+    assert combo.sizeHint().width() < SELECT_MAX_WIDTH, "the longest entry set the width"
+
+
+@verifies(SWR.SWR_3702)
+def test_a_select_elides_past_its_ceiling_and_states_the_whole_value(qtbot) -> None:
+    """Productive use: the selected value is longer than the box's budget.
+
+    Expected outcome: an ellipsis marks the cut, and the whole value rides the
+    tooltip and the accessible description — nothing is swallowed silently.
+    """
+    long_name = "a-model-name-far-too-long-for-a-narrow-dropdown"
+    combo = widgets.Select(ceiling=110)
+    combo.addItem(long_name)
+    combo.setAccessibleName("Model")
+    qtbot.addWidget(combo)
+    combo.show()
+    qtbot.waitExposed(combo)
+
+    shown = combo.displayed_text()
+    assert shown != long_name
+    assert shown.endswith("…"), f"the value was cut without an ellipsis: {shown!r}"
+    assert long_name in combo.toolTip()
+    assert long_name in combo.accessibleDescription()
+
+
+@verifies(SWR.SWR_3702)
+def test_a_select_keeps_its_callers_description_and_purpose_across_a_change(qtbot) -> None:
+    """Productive use: a field explains what its box is for; a user changes it.
+
+    Expected outcome: the explanation and the purpose survive the restatement an
+    index change triggers — only the elided copy is the Select's own to write.
+    """
+    combo = widgets.Select()
+    combo.addItems(["swarm", "single"])
+    combo.setAccessibleDescription("Which delegation strategy this run uses")
+    combo.set_purpose("How the agents cooperate")
+    qtbot.addWidget(combo)
+    combo.show()
+    qtbot.waitExposed(combo)
+
+    combo.setCurrentText("single")
+
+    assert "Which delegation strategy" in combo.accessibleDescription()
+    assert combo.toolTip() == combo.purpose
+
+
+@verifies(SWR.SWR_3702)
 def test_a_tag_is_readable_on_its_own_fill_in_every_theme(qtbot) -> None:
     """Productive use: a user reads a `running` badge on any theme.
 

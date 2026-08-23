@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, cast, override
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -55,6 +54,7 @@ from rotaris.widgets import (
     SectionHeader,
     SectionLabel,
     SegmentedControl,
+    Select,
     SlashCommandPopup,
     SlashHighlighter,
     StatusDot,
@@ -2005,10 +2005,9 @@ class WorkspaceView(Themed, QWidget):
         layout.addWidget(self.context_scope_note)
 
         layout.addWidget(self._field_label("Model"))
-        self.inspector_model = QComboBox()
+        self.inspector_model = Select(mono=True)
         self.inspector_model.setAccessibleName("Model for the selected agent")
         self.inspector_model.setMinimumWidth(0)
-        self.inspector_model.setProperty("mono", "true")
         populate_model_combo(
             self.inspector_model, self._store.model_options, placeholder=_PLACEHOLDER_MODEL
         )
@@ -2354,11 +2353,9 @@ def _init_labels(task_ids: Sequence[str]) -> list[str]:
     return [init_task_label(task) for task in task_ids]
 
 
-def _chip_combo(items: list[str], mono: bool = False) -> QComboBox:
-    combo = QComboBox()
+def _chip_combo(items: list[str], mono: bool = False) -> Select:
+    combo = Select(mono=mono)
     combo.addItems(items)
-    if mono:
-        combo.setProperty("mono", "true")
     return combo
 
 

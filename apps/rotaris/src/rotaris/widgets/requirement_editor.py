@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -57,6 +56,7 @@ from rotaris.theme import tokens
 from rotaris.theme.manager import Themed
 from rotaris.widgets.cards import Card, SectionLabel, make_button, set_action_availability
 from rotaris.widgets.feedback import InlineBanner
+from rotaris.widgets.forms import Select
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -416,7 +416,7 @@ class RequirementCreationForm(Themed, QWidget):
         self.description_field.setMinimumHeight(90)
         self.description_field.textChanged.connect(self._changed)
         fields.addRow(SectionLabel("Description"), self.description_field)
-        self.source_combo = QComboBox()
+        self.source_combo = Select()
         self.source_combo.setAccessibleName("Requirement source")
         self.source_combo.currentIndexChanged.connect(self._changed)
         fields.addRow(SectionLabel("Source"), self.source_combo)
@@ -425,7 +425,7 @@ class RequirementCreationForm(Themed, QWidget):
         self.parent_field.setPlaceholderText("SWR-3600")
         self.parent_field.textChanged.connect(self._changed)
         fields.addRow(SectionLabel("Epic"), self.parent_field)
-        self.kind_combo = QComboBox()
+        self.kind_combo = Select()
         self.kind_combo.setAccessibleName("Requirement classification")
         self.kind_combo.addItem("Product requirement", userData=False)
         self.kind_combo.addItem("Technical requirement", userData=True)

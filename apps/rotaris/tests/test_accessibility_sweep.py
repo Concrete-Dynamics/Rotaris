@@ -121,6 +121,31 @@ def test_no_text_in_a_primary_view_falls_below_its_readable_threshold(
     )
 
 
+@pytest.mark.parametrize("view_name", PRIMARY_VIEWS)
+@verifies(SWR.SWR_3702)
+def test_every_dropdown_in_a_primary_view_is_the_fitted_select(window, qtbot, view_name) -> None:
+    """Productive use: a user shrinks the window and reads a dropdown.
+
+    Expected outcome: every dropdown in the view is the fitted `Select` — its
+    width follows the selected entry and an over-long value is elided and stated
+    whole. A raw `QComboBox` is the one that swallows its selected value when
+    space gets tight.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from rotaris.widgets import Select
+
+    view = _shown(window, qtbot, view_name)
+    tabs = view.findChildren(QTabWidget)
+    for index in _tab_pages(view):
+        if tabs:
+            tabs[0].setCurrentIndex(index)
+            settle(qtbot)
+
+    raw = [combo for combo in view.findChildren(QComboBox) if not isinstance(combo, Select)]
+    assert not raw, f"{view_name} has dropdowns that can swallow their value: {raw}"
+
+
 @verifies(SWR.SWR_2093)
 def test_secondary_text_tokens_stay_readable_on_every_ground() -> None:
     """Productive use: a designer reuses a muted token for a caption on any surface.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import ssl
 import stat
 import tarfile
 import tempfile
@@ -12,6 +13,8 @@ import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
+
+import certifi
 
 from rotaris_core.reqtocode import SWR, traces
 
@@ -21,6 +24,25 @@ if TYPE_CHECKING:
 
 class SetupSupplyError(RuntimeError):
     pass
+
+
+@traces(SWR.SWR_3715)
+def setup_tls_context() -> ssl.SSLContext:
+    """Trust the host's configured roots and the bundled public CA bundle.
+
+    PyInstaller's Linux runtime can lose OpenSSL's compiled-in CA path. Loading
+    certifi explicitly keeps public release downloads available from an AppImage,
+    while the default context retains system-installed organisation roots.
+    """
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    return context
+
+
+@traces(SWR.SWR_3715)
+def setup_url_opener() -> urllib.request.OpenerDirector:
+    """Create the HTTPS client used for verified setup downloads."""
+    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=setup_tls_context()))
 
 
 def _safe_relative(name: str, strip_components: int) -> Path | None:
@@ -68,7 +90,7 @@ def download_archive(
             **({"Range": f"bytes={offset}-"} if offset else {}),
         },
     )
-    client = opener or urllib.request.build_opener()
+    client = opener or setup_url_opener()
     try:
         response = client.open(request, timeout=30)
     except OSError as exc:

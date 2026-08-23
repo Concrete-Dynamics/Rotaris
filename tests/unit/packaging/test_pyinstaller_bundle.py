@@ -63,6 +63,7 @@ def test_dependency_data_files_travel_with_the_bundle() -> None:
     bundled = {Path(source).name for source, _dest in collect_datas()}
     assert "model_prices_and_context_window_backup.json" in bundled
     assert any(name.endswith(".j2") for name in bundled)
+    assert "cacert.pem" in bundled
 
 
 @verifies(SWR.SWR_3001)

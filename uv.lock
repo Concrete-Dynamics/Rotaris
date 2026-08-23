@@ -6572,7 +6572,7 @@ wheels = [
 
 [[package]]
 name = "rotaris"
-version = "0.120.12"
+version = "0.120.13"
 source = { editable = "apps/rotaris" }
 dependencies = [
     { name = "mistune" },
@@ -6622,9 +6622,10 @@ dev = [
 
 [[package]]
 name = "rotaris-core"
-version = "0.120.12"
+version = "0.120.13"
 source = { editable = "." }
 dependencies = [
+    { name = "certifi" },
     { name = "claude-agent-sdk" },
     { name = "httpx" },
     { name = "litellm" },
@@ -6668,6 +6669,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "certifi", specifier = ">=2026.4.22" },
     { name = "claude-agent-sdk", specifier = ">=0.2.128" },
     { name = "claude-agent-sdk", marker = "extra == 'claude-code'", specifier = ">=0.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },

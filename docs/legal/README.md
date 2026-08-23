@@ -34,5 +34,11 @@ Ebenfalls hier im Repository, aber an ihrem eigenen Platz:
 
 - **[SECURITY.md](../../SECURITY.md)** in der Wurzel — die öffentliche
   Sicherheitsrichtlinie muss dort liegen, wo Sicherheitsforscher sie suchen.
-- **`packaging/third_party_licences.py`** — erzeugt `THIRD-PARTY-LICENSES.txt` für jedes
-  Release und bricht ab, wenn ein Paket keine Lizenz deklariert.
+- **`packaging/third_party_licences.py`** — erzeugt für jedes Release
+  `THIRD-PARTY-LICENSES.txt` (unter `apps/rotaris/src/rotaris/assets/`, so dass es in
+  jedes Installationsartefakt gebündelt und aus „About & Legal" geöffnet wird). Das
+  Inventar umfasst Python-Laufzeitpakete, die gebündelten Fonts/Icons samt Lizenztext
+  und die nach der Installation heruntergeladenen Werkzeuge (SWR-3715) mit
+  Name/Version/Quelle/Lizenz. Der Generator bricht ab, wenn ein Paket keine Lizenz
+  deklariert, ein gebündeltes Asset keinen Lizenztext hat oder ein Paket nicht über die
+  dokumentierte Prüftabelle (`_REVIEWED_LICENCES`) klassifiziert ist.

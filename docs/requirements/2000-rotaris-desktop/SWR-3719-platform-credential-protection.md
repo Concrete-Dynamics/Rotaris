@@ -1,6 +1,6 @@
 ---
 req-id: SWR-3719
-status: draft
+status: approved
 trace: required
 test: required
 title: "Desktop credentials are protected with platform-appropriate user access controls"

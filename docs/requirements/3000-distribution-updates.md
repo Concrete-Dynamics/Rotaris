@@ -21,7 +21,7 @@ and notifies users when one is available on GitHub Releases.
 | SWR-3002 | Automated Release Pipeline                                          | approved |
 | SWR-3003 | In-App Update Notification                                          | approved |
 | SWR-3715 | A bundled install provisions the machine once, before the app opens | approved |
-| SWR-3720 | Release artifacts carry complete third-party notices                | draft    |
+| SWR-3720 | Release artifacts carry complete third-party notices                | approved |
 | SWR-3722 | Official download page discloses automatic network access           | draft    |
 | SWR-3724 | Standalone distributions carry the pinned Serena runtime             | approved |
 

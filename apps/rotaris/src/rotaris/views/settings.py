@@ -929,7 +929,7 @@ class SettingsView(Themed, QWidget):
         machine.body.addWidget(self.machine_setup_versions)
         self.repair_machine_tools_button = make_button("Repair machine tools", "secondary")
         self.repair_machine_tools_button.setAccessibleDescription(
-            "Re-probe Git, uv, Node, ripgrep, and configured MCP package caches"
+            "Re-probe Git, Node, ripgrep, and configured MCP package caches"
         )
         self.repair_machine_tools_button.clicked.connect(self.machine_setup_repair_requested.emit)
         machine.body.addWidget(self.repair_machine_tools_button)

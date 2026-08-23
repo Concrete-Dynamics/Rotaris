@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rotaris_core.mcp.bundled_serena import BUNDLED_SERENA_COMMAND, resolved_command
 from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
@@ -70,7 +71,7 @@ def is_uvx_package(command: str) -> bool:
     return command.startswith("uvx:")
 
 
-@traces(SWR.SWR_1715, SWR.SWR_1716)
+@traces(SWR.SWR_1715, SWR.SWR_1716, SWR.SWR_3724)
 def resolve_command(command: str, args: list[str]) -> tuple[str, list[str]]:
     """Resolve an MCP command + args, expanding npm/uvx package shorthands."""
     if not command:
@@ -78,6 +79,9 @@ def resolve_command(command: str, args: list[str]) -> tuple[str, list[str]]:
 
     if _is_path(command):
         return command, list(args)
+
+    if command == BUNDLED_SERENA_COMMAND:
+        return resolved_command(args)
 
     if command in _KNOWN_EXECUTABLES:
         return command, list(args)

@@ -7,6 +7,7 @@ Serena is resolvable, and the persona keeps working when it is not.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from rotaris_core.config.defaults import (
 )
 from rotaris_core.config.loader import load_config
 from rotaris_core.config.mcp_tool_discovery import clear_mcp_tool_discovery_cache
-from rotaris_core.config.schema import MCPToolInfo
+from rotaris_core.config.schema import MCPServerConfig, MCPToolInfo
 from rotaris_core.reqtocode import SWR, verifies
 
 pytestmark = pytest.mark.integration
@@ -64,18 +65,18 @@ def _mcp_config_for(persona_name: str, workspace: Path) -> dict[str, Any]:
     return dict(agent.mcp_config or {})
 
 
-@verifies(SWR.SWR_2801)
+@verifies(SWR.SWR_2801, SWR.SWR_3724)
 def test_serena_tools_available_to_orchestrator(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Productive use: a developer with ``uv`` on PATH opens a workspace and the orchestrator can
+    """Productive use: a developer opens a workspace and the orchestrator can
     reach Serena's symbolic code-intelligence tools without any configuration.
     Expected outcome: the built orchestrator agent carries a stdio ``serena`` MCP entry launched
-    through ``uvx``."""
+    from the installed Rotaris runtime."""
     monkeypatch.setattr(
         "rotaris_core.config.mcp_resolution.shutil.which",
-        lambda cmd: "/usr/bin/uvx" if cmd == "uvx" else None,
+        lambda cmd: cmd,
     )
 
     mcp_servers = _mcp_config_for("orchestrator", workspace)
@@ -83,7 +84,8 @@ def test_serena_tools_available_to_orchestrator(
     assert "serena" in mcp_servers
     entry = mcp_servers["serena"]
     assert entry.transport == "stdio"
-    assert entry.command == "uvx"
+    assert entry.command == sys.executable
+    assert list(entry.args)[:2] == ["-m", "rotaris_core.mcp.bundled_serena"]
     assert "start-mcp-server" in entry.args
 
 
@@ -98,7 +100,7 @@ def test_serena_is_bound_to_the_run_workspace(
     Serena in single-project mode and removes its activation tools from the schema."""
     monkeypatch.setattr(
         "rotaris_core.config.mcp_resolution.shutil.which",
-        lambda cmd: "/usr/bin/uvx" if cmd == "uvx" else None,
+        lambda cmd: cmd,
     )
 
     entry = _mcp_config_for("orchestrator", workspace)["serena"]
@@ -118,7 +120,7 @@ def test_serena_binding_follows_an_isolated_worktree(
     the run executes in — the one `config_for_session_worktree` rewrote."""
     monkeypatch.setattr(
         "rotaris_core.config.mcp_resolution.shutil.which",
-        lambda cmd: "/usr/bin/uvx" if cmd == "uvx" else None,
+        lambda cmd: cmd,
     )
     worktree = tmp_path / "worktrees" / "session-1"
     worktree.mkdir(parents=True)
@@ -143,7 +145,7 @@ def test_developer_persona_gets_serena_and_no_lsp_server(
     ``lsp`` entry — the removal reaches the agent, not just the defaults dict."""
     monkeypatch.setattr(
         "rotaris_core.config.mcp_resolution.shutil.which",
-        lambda cmd: "/usr/bin/uvx" if cmd == "uvx" else None,
+        lambda cmd: cmd,
     )
 
     for persona_name in ("orchestrator", "coding-agent", "codebase-analyst", "verifier"):
@@ -153,7 +155,7 @@ def test_developer_persona_gets_serena_and_no_lsp_server(
         assert "lsp" not in mcp_servers, persona_name
 
 
-@verifies(SWR.SWR_2819)
+@verifies(SWR.SWR_2819, SWR.SWR_3724)
 def test_the_pinned_serena_release_survives_command_resolution(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -164,14 +166,15 @@ def test_the_pinned_serena_release_survives_command_resolution(
     ``--project`` binding — the two fill-ins do not displace each other."""
     monkeypatch.setattr(
         "rotaris_core.config.mcp_resolution.shutil.which",
-        lambda cmd: "/usr/bin/uvx" if cmd == "uvx" else None,
+        lambda cmd: cmd,
     )
 
     entry = _mcp_config_for("coding-agent", workspace)["serena"]
     args = list(entry.args)
 
-    assert args[args.index("--from") + 1] == f"serena-agent=={SERENA_PINNED_VERSION}"
-    assert not [argument for argument in args if "git+" in argument]
+    assert entry.command == sys.executable
+    assert args[:2] == ["-m", "rotaris_core.mcp.bundled_serena"]
+    assert SERENA_PINNED_VERSION == "1.7.0"
     assert args[-2:] == ["--project", str(workspace)]
 
 
@@ -233,7 +236,7 @@ def test_persona_grants_narrow_the_pinned_serena_surface(
     )
     monkeypatch.setattr(
         "rotaris_core.config.mcp_resolution.shutil.which",
-        lambda cmd: "/usr/bin/uvx" if cmd == "uvx" else None,
+        lambda cmd: cmd,
     )
     clear_mcp_tool_discovery_cache()
     config = load_config(workspace)
@@ -261,17 +264,23 @@ def test_persona_grants_narrow_the_pinned_serena_surface(
     assert not unknown, f"grant sets name tools the pinned build does not ship: {sorted(unknown)}"
 
 
-@verifies(SWR.SWR_2801)
+@verifies(SWR.SWR_2801, SWR.SWR_3724)
 def test_persona_works_without_serena(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Productive use: a developer without ``uv`` installed still gets a working orchestrator.
-    Expected outcome: the agent builds, ``serena`` is silently absent from its MCP config, and the
-    rest of the persona's toolset (HTTP MCP servers and built-in tools) is unchanged."""
+    """Productive use: a developer points Serena at a local launcher that is currently absent.
+    Expected outcome: the agent builds, Serena is filtered, and the remaining tools stay intact."""
     monkeypatch.setattr("rotaris_core.config.mcp_resolution.shutil.which", lambda _cmd: None)
 
     config = load_config(workspace)
+    servers = dict(config.mcp_servers)
+    servers["serena"] = MCPServerConfig(
+        type="stdio",
+        command="missing-custom-serena",
+        args=["start-mcp-server"],
+    )
+    config = config.model_copy(update={"mcp_servers": servers})
     persona = config.personas["orchestrator"]
     agent = create_agent_for_persona(persona, config)(_make_llm())
 

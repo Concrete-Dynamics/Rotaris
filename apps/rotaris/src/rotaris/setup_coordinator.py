@@ -92,7 +92,7 @@ class SetupCoordinatorDialog(QDialog):
         title.setObjectName("pageTitle")
         layout.addWidget(title)
         explanation = QLabel(
-            "Rotaris is checking Git, uv, Node, ripgrep, and the package caches used by MCP servers."
+            "Rotaris is checking Git, Node, ripgrep, and the package caches used by MCP servers."
         )
         explanation.setWordWrap(True)
         layout.addWidget(explanation)

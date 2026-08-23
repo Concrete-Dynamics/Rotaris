@@ -8,15 +8,16 @@ stubbed out, because those talk to external LLM providers over the network.
 from __future__ import annotations
 
 import shutil
+import sys
 
 import pytest
 import yaml
+from rotaris_core.config import mcp_resolution
 from rotaris_core.config.project_init_state import mark_task
 from rotaris_core.reqtocode import SWR, verifies
 
 from rotaris.models.state import SERENA_INIT_TASK, ProjectInitState
 from rotaris.models.store import WorkspaceStore
-from rotaris.services import config_service as config_service_module
 from rotaris.services.config_service import ConfigService
 
 pytestmark = pytest.mark.integration
@@ -38,11 +39,11 @@ def _service(tmp_path, monkeypatch, *, serena_installed: bool = True) -> ConfigS
     real_which = shutil.which
 
     def fake_which(cmd, *args, **kwargs):
-        if cmd == "uvx":
-            return "/usr/bin/uvx" if serena_installed else None
+        if cmd == sys.executable:
+            return sys.executable if serena_installed else None
         return real_which(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(config_service_module.shutil, "which", fake_which)
+    monkeypatch.setattr(mcp_resolution.shutil, "which", fake_which)
     service = ConfigService(_workspace(tmp_path), WorkspaceStore())
     monkeypatch.setattr(ConfigService, "_providers", lambda self: [])
     monkeypatch.setattr(ConfigService, "_subscription_limits", lambda self: [])
@@ -209,9 +210,9 @@ def test_skipped_task_is_resolved_but_stays_re_runnable(tmp_path, monkeypatch) -
     assert state.never_initialized is False
 
 
-@verifies(SWR.SWR_2802)
+@verifies(SWR.SWR_2802, SWR.SWR_3724)
 def test_no_pending_task_when_serena_prerequisite_is_unmet(tmp_path, monkeypatch) -> None:
-    """Productive use: a machine without the Serena launcher opens a fresh workspace.
+    """Productive use: a machine whose installed Serena launcher is unavailable opens a workspace.
 
     Expected outcome: nothing is pending, so no prompt offers an initialization that
     could not run.

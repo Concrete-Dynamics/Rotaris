@@ -62,6 +62,7 @@ class AgentFactory(Protocol):
     SWR.SWR_140,
     SWR.SWR_143,
     SWR.SWR_163,
+    SWR.SWR_177,
     SWR.SWR_2132,
 )
 class SchedulerDrainMixin:
@@ -73,7 +74,12 @@ class SchedulerDrainMixin:
     _active_tasks: dict[str, asyncio.Task[Any]]
     _tool_activity: ToolActivityRegistry
 
-    async def spawn_children(self, manager: ChildManager, agent_factory: AgentFactory) -> list[str]:
+    async def spawn_children(
+        self,
+        manager: ChildManager,
+        agent_factory: AgentFactory,
+        parent_agent_id: str | None = None,
+    ) -> list[str]:
         raise NotImplementedError
 
     async def wait_for_any_terminal(
@@ -140,12 +146,19 @@ class SchedulerDrainMixin:
             pending_names = {
                 record.canonical_name
                 for record in manager.snapshot_children()
-                if record.state in {ChildTaskState.QUEUED, ChildTaskState.WAITING_ON_DEPENDENCIES}
-                or (
-                    record.state == ChildTaskState.RUNNING
-                    and record.run_in_background
-                    and record.canonical_name != parent_record.canonical_name
-                    and record.canonical_name not in attempted_spawn_names
+                if record.parent_agent_id == parent_record.canonical_name
+                and (
+                    record.state
+                    in {
+                        ChildTaskState.QUEUED,
+                        ChildTaskState.WAITING_ON_DEPENDENCIES,
+                    }
+                    or (
+                        record.state in {ChildTaskState.STARTING, ChildTaskState.RUNNING}
+                        and record.run_in_background
+                        and record.canonical_name != parent_record.canonical_name
+                        and record.canonical_name not in attempted_spawn_names
+                    )
                 )
             }
             if not pending_names or pending_names <= attempted_spawn_names:
@@ -193,7 +206,11 @@ class SchedulerDrainMixin:
         fresh: set[str] = set()
         while True:
             prior_names = set(self._active_tasks.keys())
-            await self.spawn_children(manager, agent_factory)
+            await self.spawn_children(
+                manager,
+                agent_factory,
+                parent_agent_id=parent_record.canonical_name,
+            )
             # Track only tasks spawned by *this* drain — not the outer task.
             new_fresh = {name for name in self._active_tasks if name not in prior_names}
             fresh |= new_fresh
@@ -232,7 +249,11 @@ class SchedulerDrainMixin:
         open_todo_items_provider: Callable[[], list[str]] | None = None,
     ) -> None:
         """Non-blocking drain: spawn ready background children and resume parent."""
-        await self.spawn_children(manager, agent_factory)
+        await self.spawn_children(
+            manager,
+            agent_factory,
+            parent_agent_id=parent_record.canonical_name,
+        )
         resume_message = self._build_background_spawn_resume_message(
             manager,
             parent_record,
@@ -274,7 +295,11 @@ class SchedulerDrainMixin:
         self._tool_activity.clear(parent_record.canonical_name)
 
         while True:
-            await self.spawn_children(manager, agent_factory)
+            await self.spawn_children(
+                manager,
+                agent_factory,
+                parent_agent_id=parent_record.canonical_name,
+            )
             waited_pairs = self._collect_reports_for_task_ids(manager, waited_set)
             completed_ids = {record.task_id for record, _ in waited_pairs if record.task_id}
             if waited_set <= completed_ids:
@@ -304,7 +329,7 @@ class SchedulerDrainMixin:
                 requested_child_still_running = any(
                     record.task_id in waited_set
                     and record.task_id not in completed_ids
-                    and record.state == ChildTaskState.RUNNING
+                    and record.state in {ChildTaskState.STARTING, ChildTaskState.RUNNING}
                     for record in manager.snapshot_children()
                 )
                 if requested_child_still_running:

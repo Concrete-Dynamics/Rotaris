@@ -92,7 +92,10 @@ def test_a_closed_gate_stops_the_pulse_and_leaves_the_dot_opaque(
     pulse.start()
 
     assert pulse.running is False
-    assert pulse._effect.opacity() == 1.0
+    # The value the dot paints with, not a graphics effect's: the pulse stopped
+    # applying itself when the offscreen render an effect forces became the
+    # dominant cost of a live run (SWR-2454).
+    assert pulse.opacity == 1.0
 
 
 @verifies(SWR.SWR_3723)

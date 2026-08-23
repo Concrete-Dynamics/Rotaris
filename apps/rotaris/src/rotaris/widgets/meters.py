@@ -41,7 +41,7 @@ from rotaris.theme.manager import Themed
 from rotaris.theme.motif import PulseAnimation
 
 if TYPE_CHECKING:
-    from PySide6.QtGui import QPaintEvent
+    from PySide6.QtGui import QHideEvent, QPaintEvent, QShowEvent
 
     from rotaris.theme.spec import Theme
 
@@ -636,29 +636,63 @@ class StatusDot(Themed, QWidget):
         colour many times; a dot that never receives one is relying on the text
         beside it to carry the state.
         """
-        self._color = color or None
         if label is not None:
             self.setAccessibleName(label)
+        colour = color or None
+        moved = colour != self._color
+        self._color = colour
         self.set_pulsing(pulse)
-        self.update()
+        # Only when something actually changed. A panel reconciled rather than
+        # rebuilt calls this on every refresh with the same state, and an
+        # unconditional repaint would put the dot back on the hot path the
+        # rebuild was taken off (SWR-2454). Stopping the pulse repaints on its
+        # own, so a state that only stopped breathing is covered.
+        if moved:
+            self.update()
 
+    @traces(SWR.SWR_3704, SWR.SWR_2454)
     def set_pulsing(self, pulsing: bool) -> None:
         """Breathe while a state is actively running, and rest the moment it is not.
 
         The design system allows exactly one looping animation and this is it,
         which is why it is built to be stopped: a dot still breathing after the
         run ended says "working" about something that finished.
+
+        Breathing also needs somebody to be watching. Three agent trees are alive
+        at once and only one is on screen, so *visibility* decides whether the
+        animation actually runs while ``pulsing`` records what the state asked
+        for; :meth:`showEvent` starts what was asked for once the dot is on
+        screen again.
         """
         self._pulsing = pulsing
         if pulsing and self._pulse is None:
             self._pulse = PulseAnimation(self, tokens())
         if self._pulse is not None:
-            self._pulse.set_running(pulsing)
+            self._pulse.set_running(pulsing and self.isVisible())
 
     @property
     def pulsing(self) -> bool:
         """Whether this dot is currently breathing."""
         return self._pulsing
+
+    @traces(SWR.SWR_2454)
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt's spelling
+        """Resume the breath the state asked for while this dot was off screen."""
+        super().showEvent(event)
+        if self._pulse is not None:
+            self._pulse.set_running(self._pulsing)
+
+    @traces(SWR.SWR_2454)
+    def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802 — Qt's spelling
+        """Stop breathing where nobody can see it.
+
+        Qt keeps a looping animation running for a hidden widget, writing its
+        property on every frame for as long as the window lives. A tab behind
+        this one holds a whole agent tree of these.
+        """
+        super().hideEvent(event)
+        if self._pulse is not None:
+            self._pulse.stop()
 
     def apply_theme(self, theme: Theme) -> None:
         """Re-take the dot's size, and rebuild the pulse the new theme times."""
@@ -672,17 +706,27 @@ class StatusDot(Themed, QWidget):
             # is built, so a theme change replaces it rather than retunes it.
             self._pulse.stop()
             self._pulse = PulseAnimation(self, theme)
-            self._pulse.set_running(self._pulsing)
+            self._pulse.set_running(self._pulsing and self.isVisible())
 
     def _diameter(self, theme: Theme) -> int:
         return self._size if self._size is not None else theme.size.status_dot
 
+    @traces(SWR.SWR_3704, SWR.SWR_2454)
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 — Qt's spelling
         del event
         t = tokens()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(_qcolor(self._color if self._color is not None else t.color.idle))
+        # Copied, because a token hands out its own `QColor` and the alpha below
+        # would otherwise dim every other widget painted from that token.
+        colour = QColor(_qcolor(self._color if self._color is not None else t.color.idle))
+        if self._pulse is not None:
+            # The breath is mixed in here rather than applied by a graphics
+            # effect. An effect would make Qt render this dot into an offscreen
+            # pixmap on every paint, which is what a dozen live agents were
+            # paying for across three agent trees (SWR-2454).
+            colour.setAlphaF(colour.alphaF() * self._pulse.opacity)
+        painter.setBrush(colour)
         inset = float(t.size.hairline)
         painter.drawEllipse(QRectF(inset, inset, self._diameter(t), self._diameter(t)))

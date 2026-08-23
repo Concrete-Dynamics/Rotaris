@@ -288,13 +288,15 @@ def _format_type(value: object) -> str:
     return str(value.get("type", "")) if isinstance(value, dict) else "none"
 
 
-@verifies(SWR.SWR_919, SWR.SWR_3503)
+@verifies(SWR.SWR_919, SWR.SWR_921, SWR.SWR_3503)
 async def test_a_format_the_provider_refused_is_not_offered_to_it_again() -> None:
     """Productive use: a board evaluation asks the same DeepSeek model several questions.
 
-    Expected outcome: the first one discovers that ``json_schema`` is refused and pays
-    the wasted round trip; every one after it starts at ``json_object``, so the console
-    carries one rejection line rather than one per judgement.
+    Expected outcome: the strict schema is never offered to DeepSeek — it maps
+    to ``json_object`` (SWR-921). When the provider refuses even that, the
+    refusal is remembered, and the next judgement starts where the ladder
+    landed, so the console carries one rejection line rather than one per
+    judgement.
     """
     reset_rejected_response_formats()
     schema = enum_schema("verdict", choice_key="outcome", choices=["a", "b"])
@@ -311,18 +313,39 @@ async def test_a_format_the_provider_refused_is_not_offered_to_it_again() -> Non
         user="the diff",
     )
 
-    # The first judge climbed the ladder; the second started where it landed.
-    assert [_format_type(item) for item in first.formats] == ["json_schema", "json_object"]
-    assert [_format_type(item) for item in second.formats] == ["json_object"]
+    # The first judge offered the mapped rung and fell to the unconstrained
+    # one; the second started where the ladder landed.
+    assert [_format_type(item) for item in first.formats] == ["json_object", "none"]
+    assert [_format_type(item) for item in second.formats] == ["none"]
 
 
-@verifies(SWR.SWR_919, SWR.SWR_3503)
+@verifies(SWR.SWR_921, SWR.SWR_3503)
+async def test_a_deepseek_judge_never_offers_the_strict_schema_it_cannot_honour() -> None:
+    """Productive use: a board evaluation judges on a DeepSeek model.
+
+    Expected outcome: the strict ``json_schema`` is never sent — the first
+    question is already asked under ``json_object``, so the evaluation costs no
+    refused round trip.
+    """
+    reset_rejected_response_formats()
+    schema = enum_schema("verdict", choice_key="outcome", choices=["a", "b"])
+    provider = ScriptedProvider('{"outcome": "a", "reasoning": "because"}')
+
+    await _judge(provider, schema=schema, model="deepseek/deepseek-v4-pro").judge(
+        system="classify",
+        user="the diff",
+    )
+
+    assert provider.calls[0][1]["response_format"] == {"type": "json_object"}
+
+
+@verifies(SWR.SWR_919, SWR.SWR_921, SWR.SWR_3503)
 async def test_one_model_refusal_does_not_speak_for_another_model() -> None:
     """Productive use: a workspace judges with one provider and verifies with another.
 
-    Expected outcome: DeepSeek refusing the strict schema costs the other model nothing —
-    it is still offered the constrained contract, because the closed set the schema
-    enforces is worth a round trip.
+    Expected outcome: DeepSeek's refusal of the mapped ``json_object`` rung costs
+    the other model nothing — it is still offered the constrained contract,
+    because the closed set the schema enforces is worth a round trip.
     """
     reset_rejected_response_formats()
     schema = enum_schema("verdict", choice_key="outcome", choices=["a", "b"])
@@ -342,7 +365,7 @@ async def test_one_model_refusal_does_not_speak_for_another_model() -> None:
     assert _format_type(other.formats[0]) == "json_schema"
 
 
-@verifies(SWR.SWR_919, SWR.SWR_3503)
+@verifies(SWR.SWR_919, SWR.SWR_921, SWR.SWR_3503)
 async def test_an_unnamed_judge_never_inherits_a_refusal_it_cannot_own() -> None:
     """Productive use: a composition drives the judge through an injected completion that
     never said which model is behind it.

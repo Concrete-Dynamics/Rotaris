@@ -54,6 +54,8 @@ round trip on every call.
 | Unit | Each error category is classified from an exception and from an error string, and the extractors return the detail or nothing | The classifier | `tests/unit/test_llm_errors.py` |
 | Unit | A model that refuses `json_schema` is offered `json_object` on the next question; another model and an unnamed caller are unaffected | Classifier + the structured-output ladder | `tests/unit/requirements/test_analysis_judge.py::test_a_format_the_provider_refused_is_not_offered_to_it_again`, `::test_one_model_refusal_does_not_speak_for_another_model`, `::test_an_unnamed_judge_never_inherits_a_refusal_it_cannot_own` |
 
+Derived requirements: [SWR-921 — Per-model response-format capability resolution](SWR-921-response-format-capabilities.md)
+
 Derived from: [SWR-900 — Runtime Safeguards](../900-runtime-safeguards.md)
 
 Epic: [Runtime Safeguards](../900-runtime-safeguards.md)

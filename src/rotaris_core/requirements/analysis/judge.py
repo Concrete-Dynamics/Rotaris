@@ -27,10 +27,14 @@ rather than invented:
 - the response-format ladder ``json_schema -> json_object -> none`` with
   provider rejection detected on the error text, from
   ``ralph.intent_classifier``, because not every provider honours strict
-  schemas and losing the whole judgement over that would be absurd — and the
-  refusal is *remembered* (``rotaris_core.llm_errors``), because a provider that
-  refused a format once refuses it every time and a board evaluation makes many
-  of these calls;
+  schemas and losing the whole judgement over that would be absurd — the
+  ladder is first mapped through per-model capability metadata
+  (``models.response_format_catalog``, SWR-921), so a model known to lack
+  ``response_format``, or one whose refusal is known ahead of time like
+  DeepSeek, is never offered a rung it can only refuse, and the refusal is
+  *remembered* (``rotaris_core.llm_errors``), because a provider that refused
+  a format once refuses it every time and a board evaluation makes many of
+  these calls;
 - one repair retry that hands the parse error back, from
   ``improvement.collector``.
 """
@@ -48,6 +52,7 @@ from rotaris_core.llm_errors import (
     response_format_rejected,
 )
 from rotaris_core.llm_threads import call_llm_detached
+from rotaris_core.models.response_format_catalog import normalize_response_formats
 from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
@@ -166,13 +171,18 @@ class StructuredJudge:
         # one; an unnamed judge simply never consults the cache, which costs a
         # round trip rather than risking one model inheriting another's refusal.
         self._model = model or getattr(llm, "model", "") or ""
-        # json_schema first, then plain JSON mode, then nothing but the prompt.
+        # json_schema first, then plain JSON mode, then nothing but the prompt —
+        # mapped first through per-model capabilities (SWR-921), so a model
+        # that cannot honour a rung never sees it, and then filtered for
+        # formats this process already learned are refused (SWR-919).
         ladder: tuple[Mapping[str, Any] | None, ...] = (
             (schema, {"type": "json_object"}, None)
             if schema is not None
             else ({"type": "json_object"}, None)
         )
-        self._formats = self._offerable(ladder)
+        self._formats = self._offerable(
+            normalize_response_formats(ladder, model=self._model),
+        )
 
     def _offerable(
         self,

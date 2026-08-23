@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 8e67c2ca45be23d5c99404ef5c88fc60b7389841ef34a6b53c18dfaf1170836e
+# GLOBAL-HASH: b23c5d7c7e2056b56aa929c8831d70c648aa2268f02c941743e07f81fb91fa66
 
 from __future__ import annotations
 
@@ -1694,6 +1694,9 @@ class SWR(IntEnum):
 
     SWR_920 = 920
     """[approved] Per-model concurrency cap - docs/requirements/900-runtime-safeguards/SWR-920-per-model-concurrency-cap.md"""
+
+    SWR_921 = 921
+    """[approved] Per-model response-format capability resolution - docs/requirements/900-runtime-safeguards/SWR-921-response-format-capabilities.md"""
 
     SWR_1000 = 1000
     """[approved] TUI Core Layout & Chrome - docs/requirements/1000-tui-core.md"""
@@ -5408,8 +5411,9 @@ META: dict[int, ReqMeta] = {
     916: ReqMeta('SWR-916', 916, ReqStatus.APPROVED, 'Reattach awareness** — When reattaching to a background session whose `execution_status` is `\\"paused_message_limit\\"`, the TUI shall immediately display the `MessageLimitConfirmScreen` after restoring the session state. The user shall not need to manually navigate to trigger the dialog.', 'docs/requirements/900-runtime-safeguards.md', True, True, '2c0e3cde3e99f59e', 'product', ()),
     917: ReqMeta('SWR-917', 917, ReqStatus.APPROVED, 'Command palette entry** — The command palette shall include a \\"Continue paused session\\" entry that is only active when the session is in `\\"paused_message_limit\\"` state. This provides an alternative keyboard/mouse path to the same confirm dialog.', 'docs/requirements/900-runtime-safeguards.md', True, True, '2c0e3cde3e99f59e', 'product', ()),
     918: ReqMeta('SWR-918', 918, ReqStatus.APPROVED, 'Session state durability** — The `message_count` and the active `message_limit` (including any user-adjustment via \\"Double Limit\\") shall be persisted in `SessionState` and written to disk via the existing snapshot mechanism. After a crash and restart, the session restores the counter and limit so the user is not prompted again for iterations already counted.', 'docs/requirements/900-runtime-safeguards.md', True, True, '2c0e3cde3e99f59e', 'product', ()),
-    919: ReqMeta('SWR-919', 919, ReqStatus.APPROVED, 'LLM runtime error classification', 'docs/requirements/900-runtime-safeguards/SWR-919-llm-error-classification.md', True, True, '9407f8d47d3ced13', 'technical', (900,)),
+    919: ReqMeta('SWR-919', 919, ReqStatus.APPROVED, 'LLM runtime error classification', 'docs/requirements/900-runtime-safeguards/SWR-919-llm-error-classification.md', True, True, '65a36fc90c777dd0', 'technical', (900,)),
     920: ReqMeta('SWR-920', 920, ReqStatus.APPROVED, 'Per-model concurrency cap', 'docs/requirements/900-runtime-safeguards/SWR-920-per-model-concurrency-cap.md', True, True, '394dac4d8ad0edb0', 'technical', (900,)),
+    921: ReqMeta('SWR-921', 921, ReqStatus.APPROVED, 'Per-model response-format capability resolution', 'docs/requirements/900-runtime-safeguards/SWR-921-response-format-capabilities.md', True, True, '8035f346b73f9f19', 'technical', (919,)),
     1000: ReqMeta('SWR-1000', 1000, ReqStatus.APPROVED, 'TUI Core Layout & Chrome', 'docs/requirements/1000-tui-core.md', False, False, 'cfb84d6903b7cc64', 'product', ()),
     1001: ReqMeta('SWR-1001', 1001, ReqStatus.APPROVED, 'Framework', 'docs/requirements/1000-tui-core.md', True, True, 'cfb84d6903b7cc64', 'product', ()),
     1002: ReqMeta('SWR-1002', 1002, ReqStatus.APPROVED, 'Chat/Transcript Panel', 'docs/requirements/1000-tui-core.md', True, True, 'cfb84d6903b7cc64', 'product', ()),

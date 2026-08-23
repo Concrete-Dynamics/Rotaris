@@ -422,6 +422,7 @@ class _ProviderRowControls:
     SWR.SWR_2094,
     SWR.SWR_2095,
     SWR.SWR_2096,
+    SWR.SWR_2098,
     SWR.SWR_2420,
     SWR.SWR_2424,
     SWR.SWR_2432,
@@ -831,7 +832,11 @@ class SettingsView(Themed, QWidget):
         self.skill_table.setHeaderLabels(["Skill", "Source", "Trigger", "Load", "Description"])
         self.skill_table.setRootIsDecorated(False)
         self.skill_table.setAccessibleName("Portable skill injection settings")
-        self.skill_table.header().setStretchLastSection(True)
+        skills_header = self.skill_table.header()
+        skills_header.setMinimumSectionSize(72)
+        for column in range(4):
+            skills_header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        skills_header.setStretchLastSection(True)
         skills.body.addWidget(self.skill_table)
         self.skills_empty = QLabel("No portable skills were discovered.")
         self.skills_empty.setObjectName("muted")
@@ -2046,6 +2051,8 @@ class SettingsView(Themed, QWidget):
                 )
             )
             self.skill_table.setItemWidget(item, 3, load)
+        for column in range(4):
+            self.skill_table.resizeColumnToContents(column)
         self.skills_empty.setVisible(self.skill_table.topLevelItemCount() == 0)
 
         _clear(self.mcp_rows)

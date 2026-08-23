@@ -57,6 +57,7 @@ from rotaris.views.workspace import (
     _QueuedPromptRow,
     _session_row_text_width,
 )
+from rotaris.widgets import Select
 from rotaris.widgets.question_stepper import QuestionStepper, _OptionCard
 from rotaris.widgets.tree import AgentTreeList
 
@@ -185,6 +186,32 @@ def test_settings_skill_controls_update_the_injection_policy(qtbot) -> None:
     assert store.skills[0].load_mode == "on"
     assert store.skills_enabled is False
     assert store.ui.settings_dirty is True
+
+
+@verifies(SWR.SWR_2098)
+def test_settings_skill_dropdowns_keep_the_selected_policy_visible(qtbot) -> None:
+    """Productive use: a user can read each portable skill policy before changing it."""
+    store = sample_store()
+    store.skills = [
+        SkillInfo("Review", "project", "Review changes.", path="/tmp/review/SKILL.md"),
+    ]
+    view = SettingsView(store)
+    qtbot.addWidget(view)
+    view.resize(1000, 680)
+    view.tabs.setCurrentIndex(5)
+    view.show()
+    qtbot.wait(10)
+
+    row = view.skill_table.topLevelItem(0)
+    trigger = view.skill_table.itemWidget(row, 2)
+    load = view.skill_table.itemWidget(row, 3)
+    assert isinstance(trigger, Select)
+    assert isinstance(load, Select)
+
+    assert view.skill_table.header().sectionSize(2) >= trigger.sizeHint().width()
+    assert view.skill_table.header().sectionSize(3) >= load.sizeHint().width()
+    assert trigger.displayed_text() == trigger.currentText()
+    assert load.displayed_text() == load.currentText()
 
 
 @verifies(SWR.SWR_2097)

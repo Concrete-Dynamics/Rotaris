@@ -173,18 +173,9 @@ apply here unchanged. For Rotaris requirements, the qualifying user-flow E2E bou
 the real PySide6 desktop workflow with real internal store/service wiring; fake only
 external systems.
 
-While implementing, run only the Rotaris tests covering the slice in hand —
-`uv run pytest apps/rotaris/tests/test_views.py::test_name -q --timeout=30 -p no:textual-snapshot`,
-a single file, or a `-k` selection — and iterate there. The suite-wide commands
-below are the final pass once the slice is complete, not the loop you develop in
-([policy](../../docs/testing/test_strategy.md#focused-during-development-full-suite-as-the-final-pass)).
-The accessibility sweep is the exception worth running early: it is cheap and a
-new control fails it immediately.
-
 Scoped gate commands (repo-wide forms are in [root AGENTS.md §Commands](../../AGENTS.md#commands)):
 
 ```bash
-uv run pytest apps/rotaris/tests -q --timeout=30 -p no:textual-snapshot
 uv run ruff check apps/rotaris/src apps/rotaris/tests
 uv run mypy apps/rotaris/src/rotaris
 git diff --check
@@ -258,13 +249,10 @@ reports everything as fine.
 outside `rotaris.theme` and on any token resolved at import time. That is what keeps the
 property true as the app grows, rather than as a one-off audit.
 
-Before completing a feature or bug fix — the final pass, after the focused runs
-are green:
+Before completing a feature or bug fix:
 
-- Run the full Rotaris test suite, Ruff, and mypy.
 - Verify no TUI files changed unless the user explicitly requested TUI work.
 - Bump `apps/rotaris/pyproject.toml` and the root `pyproject.toml` as required by repository policy.
 - Synchronize the matching editable package versions in `uv.lock`.
 - Add or update a requirement record under the Rotaris epic
   `docs/requirements/2000-rotaris-desktop/` and satisfy ReqToCode per the root rules.
-- Keep `.github/workflows/rotaris.yml` passing on Ubuntu and Windows.

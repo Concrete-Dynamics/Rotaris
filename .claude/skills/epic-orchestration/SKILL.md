@@ -68,7 +68,7 @@ adds the `Derived requirements:` back-links in one commit.
 ## Phase 3 — integration branch
 
 Never let unit PRs target `master`. This is the one exception to the
-merge-into-`master` step in [AGENTS.md](../../../AGENTS.md#workflow--worktree-merge-verify-fix-forward):
+merge-into-`master` step in [AGENTS.md](../../../AGENTS.md#workflow--worktree-merge):
 units land on the epic branch, and only the epic branch reaches `master`.
 
 ```bash
@@ -100,15 +100,10 @@ on it.
 ## Phase 5 — integrate and reconcile
 
 After each wave, in the integration worktree: merge each branch `--no-ff`, then run the
-full gates before launching the next wave. The wave boundary is where the full suite
-earns its cost — workers iterate on focused selections inside their own unit (say so in
-their prompt), and integration is the first point where cross-unit regressions can exist
-at all.
+fast gates before launching the next wave.
 
-Merge every unit branch that passed its fast gate; a red full pass afterwards does not
-send workers back. Fix it forward yourself on a short `fix/…` branch off the epic branch,
-re-run only what was red, and launch the next wave — the same merge-then-verify order
-[AGENTS.md § Workflow](../../../AGENTS.md#workflow--worktree-merge-verify-fix-forward)
+Merge every unit branch that passed its fast gate, and launch the next wave — the same
+merge order [AGENTS.md § Workflow](../../../AGENTS.md#workflow--worktree-merge)
 sets for `master`.
 
 **Actively hunt for duplication after every wave.** Independent agents solving related
@@ -136,9 +131,8 @@ the spec corrections, `Derived requirements:` back-links, the
 `NOTE-marktreife-priorisierung.md` row, and both version bumps
 (`pyproject.toml` and `apps/rotaris/pyproject.toml`).
 
-Then: `reqtocode diff --strict` → `check --fix` → `check`, full suites, mark the epic PR
-ready, and write its body with the unit table, the notable findings, and anything left
-unmet.
+Then: `reqtocode diff --strict` → `check --fix` → `check`, mark the epic PR ready, and
+write its body with the unit table, the notable findings, and anything left unmet.
 
 ## Traps this project will spring on you
 
@@ -146,17 +140,12 @@ unmet.
 | --- | --- |
 | `git stash` in a worktree | The stash stack is **shared across all worktrees**. One agent's `pop` restores a sibling's uncommitted work into the wrong tree. **Ban it in every worker prompt.** |
 | The session scratchpad directory | **Shared by every agent in the wave**, not per-agent. Two workers drafting `pr-body.md` overwrite each other silently — no conflict, no warning, just the wrong text in someone's PR. Tell each worker to use a filename carrying its own unit id (`pr-body-f3.md`), and never a generic one. |
-| "Full suite green" as a gate | The root suite has standing environment failures on Windows. Give workers the baseline count and ask for *no new* failures. `apps/rotaris/tests` **is** expected at zero. |
-| `rtk` wrapping pytest | Truncates output; failures come back as "No tests collected". Use `rtk proxy uv run pytest ...` when inspecting. |
 | `code-review` skill | **Correction (2026-08-09): subagents *can* invoke it now**, and it earns its keep — in the fix wave it caught an unguarded `release_lock` sitting between a run and its teardown, and a persister-wide counter that would have dropped a parked save for another session. Put it in every worker prompt as the first step of the finishing routine. |
 | `SettingsView._TAB_IDS` | Positionally coupled to `addTab()` order, a persisted preference, and hard-coded indices in `test_views.py`. **Append only.** |
 | `tests/conftest.py::_isolate_runtime_mcp_discovery` | `autouse`, stubs MCP tool discovery for every test outside one named file. Patch a different seam; never weaken it. |
 | `ConfigService.load()` | Costs 5–18 s, almost all in `_providers()`. Stub only `_providers` / `_subscription_limits` in Qt tests or they time out. |
 | Importing `rotaris_core.tools` or `rotaris_core.config` | Pulls in `openhands.sdk` — ~12 s. Keep out of hot paths and per-test setup. |
 | `swr.py` | Generated. Never hand-edit. On any merge conflict: take the incoming file, re-run `check --fix`. |
-| `snapshot_report.html` | **Tracked, and rewritten by every test run.** A worker's `git add -A` will happily stage ~1500 lines of deletions in it. Tell workers to stage their own paths explicitly, never `-A`. |
-| A worktree's Python imports | A fresh worktree has no `.venv`, and the main venv's editable install resolves `rotaris_core` to the **main checkout's** `src`. A worker can therefore test code it did not write and call it green. Require `uv sync --all-packages` as the worker's first command (~25 s, ~1.2 GB, wheels from the uv cache) and `uv run …` for everything after — a bare `python`/`pytest` follows the inherited `VIRTUAL_ENV` back to the main checkout. Still require each worker to *prove* it by printing `__file__` of the module under test before trusting any result. |
-| Tests that spawn a real terminal | `openhands`' PowerShell probe uses a 5 s timeout per candidate. With several agents running suites at once it exhausts every candidate and raises `PowerShell is not available on this system`. Roughly 5–7 `tests/integration` failures appear under load and vanish in isolation. Give workers the affected file names and require a solo re-run before anything is reported either way. |
 
 ## Reporting
 

@@ -2073,6 +2073,7 @@ async def test_runtime_model_selection_is_session_only(
     tmp_path,
 ) -> None:
     from rotaris_core.config.loader import load_config
+    from rotaris_core.config.project_snapshot import SnapshotProvider, update_provider
     from rotaris_core.providers.discovery import DiscoveredModel, DiscoveryResult
 
     async def fake_discover(provider_id: str, **_kwargs: object) -> DiscoveryResult:
@@ -2094,6 +2095,26 @@ async def test_runtime_model_selection_is_session_only(
     monkeypatch.setattr(  # type: ignore[attr-defined]
         "rotaris_core.cli.model_refresh.discover_authenticated_models",
         fake_discover,
+    )
+
+    # The runtime model picker only lists providers with an authenticated
+    # entry in the project snapshot written by `rotaris-cli login`. Seed one
+    # so the test does not depend on the developer's logged-in state, which a
+    # CI checkout does not have.
+    global_dir = tmp_path / "global-config"
+    global_dir.mkdir()
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        "rotaris_core.config.project_snapshot._GLOBAL_CONFIG_DIR",
+        global_dir,
+    )
+    update_provider(
+        SnapshotProvider(
+            id="copilot",
+            display_name="GitHub Copilot",
+            authenticated=True,
+            discovered_at="2026-01-01T00:00:00+00:00",
+        ),
+        base=global_dir,
     )
 
     config = load_config(tmp_path)

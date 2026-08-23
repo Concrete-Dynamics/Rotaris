@@ -108,11 +108,17 @@ class ResolvedHook:
     #: Position within its own source's entry list, counted before disabled
     #: entries are dropped so toggling ``enabled`` never renumbers its siblings.
     index: int
+    #: Explicit tool identities imported from another coding agent. An empty
+    #: set retains the native hook matcher's broad behavior.
+    tool_names: frozenset[str] = frozenset()
+    #: An imported adapter's stable record identity. Native hooks derive their
+    #: identity from source, index and event as they always have.
+    identity: str = ""
 
     @property
     def hook_id(self) -> str:
         """A stable identifier, unique within one loaded config."""
-        return _hook_id(self.source, self.index, self.event)
+        return self.identity or _hook_id(self.source, self.index, self.event)
 
 
 @traces(SWR.SWR_2701)
@@ -198,6 +204,8 @@ def matches_tool(hook: ResolvedHook, *, tool_name: str, command: str = "") -> bo
     a matcher that somehow reaches here uncompilable simply matches nothing
     rather than taking down a tool call.
     """
+    if hook.tool_names:
+        return tool_name in hook.tool_names
     matcher = hook.matcher
     if not matcher:
         return True

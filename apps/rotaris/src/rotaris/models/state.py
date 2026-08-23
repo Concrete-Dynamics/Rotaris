@@ -826,6 +826,12 @@ class HookInfo:
     allowed: bool = False
     required: bool = False
     timeout_seconds: float = 0.0
+    agent_id: str = "rotaris"
+    agent_label: str = "Rotaris"
+    record_id: str = ""
+    compatible: bool = True
+    compatibility_reason: str = ""
+    enabled: bool = True
 
     @property
     def scope_label(self) -> str:
@@ -835,6 +841,17 @@ class HookInfo:
             "global": "your global config",
             "default": "built-in",
         }.get(self.source, self.source or "unknown")
+
+
+@traces(SWR.SWR_3725)
+@dataclass(frozen=True)
+class HookAgentGroup:
+    """One coding agent's hook records and global runtime selection state."""
+
+    agent_id: str
+    label: str
+    enabled: bool
+    hooks: tuple[HookInfo, ...] = ()
 
 
 @traces(SWR.SWR_2701, SWR.SWR_2704)
@@ -852,6 +869,8 @@ class HookTrustSummary:
     pending: tuple[HookInfo, ...] = ()
     #: The engine's own sentence about hooks that did not run, or "".
     notice: str = ""
+    groups: tuple[HookAgentGroup, ...] = ()
+    external_notice: str = ""
 
     @property
     def review_due(self) -> bool:

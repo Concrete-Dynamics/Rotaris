@@ -443,7 +443,7 @@ def config_for_session_worktree(
     return runtime
 
 
-@traces(SWR.SWR_2701, SWR.SWR_2703, SWR.SWR_2815, SWR.SWR_2816)
+@traces(SWR.SWR_2701, SWR.SWR_2703, SWR.SWR_2815, SWR.SWR_2816, SWR.SWR_3725)
 def _build_hook_runner(
     config: RotarisConfig,
     session_id: str,
@@ -471,6 +471,12 @@ def _build_hook_runner(
     when the host offered one, to its text channel: a user whose hooks were
     silently skipped cannot tell a broken hook from a blocked one.
     """
+    from rotaris_core.hooks.external import (
+        ROTARIS_AGENT_ID,
+        ExternalHookPolicyStore,
+        discover_claude_code_hooks,
+        enabled_external_hooks,
+    )
     from rotaris_core.hooks.runner import HookRunner
     from rotaris_core.hooks.trust import TrustedHookSet, trusted_hooks_for_config
 
@@ -498,10 +504,21 @@ def _build_hook_runner(
                 notice(trusted.notice)
             except Exception:  # noqa: BLE001 - a host's printer must not fail the run.
                 _log.warning("Could not surface the hook trust notice.", exc_info=True)
+    policy = ExternalHookPolicyStore().load()
+    external_records, external_notice = discover_claude_code_hooks()
+    if (
+        external_notice
+        and "not found" not in external_notice
+        and "no hook declarations" not in external_notice
+    ):
+        _log.warning("%s", external_notice)
+    selected = tuple(
+        hook for hook in trusted.allowed if policy.enabled(ROTARIS_AGENT_ID, hook.hook_id)
+    ) + enabled_external_hooks(external_records, policy)
     return HookRunner(
         session_id=session_id,
         workspace=config.workspace_root,
-        hooks=trusted.allowed,
+        hooks=selected,
         diagnostics=diagnostics,
         # Hooks the SWR-2815 trust gate refused still belong on the wire
         # (SWR-1832): a consumer comparing a run against the repository's

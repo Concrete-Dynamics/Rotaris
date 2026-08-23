@@ -473,8 +473,13 @@ class DashboardView(Themed, QScrollArea):
 def _clear(layout: QLayout) -> None:
     while layout.count():
         item = layout.takeAt(0)
-        if item.widget():
-            item.widget().deleteLater()
+        widget = item.widget()
+        if widget is not None:
+            # Hide and unparent before posting the deletion: see the same
+            # sequence, and why it matters, in `views/workspace.py::_clear`.
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
 
 
 def _chip(text: str) -> QLabel:

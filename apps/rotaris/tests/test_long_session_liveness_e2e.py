@@ -23,12 +23,19 @@ import pytest
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
 from rotaris_core.session.transcript import resolve_transcript_recorder
-from run_wiring import demo_config, feed_conversation, message_event, sdk_events
+from run_wiring import (
+    action_event,
+    demo_config,
+    feed_conversation,
+    message_event,
+    observation_event,
+    sdk_events,
+)
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
 from rotaris.services.run_bridge import RunBridge
-from rotaris.views.transcript import TranscriptListModel
+from rotaris.views.transcript import TranscriptListView, group_tool_runs
 
 pytestmark = pytest.mark.e2e
 
@@ -36,6 +43,10 @@ pytestmark = pytest.mark.e2e
 #: in the runtime, short enough to stay a test. The unit tests carry the 3000-row
 #: ladder; this one is about the flow, not the curve.
 ROWS = 400
+
+#: The last index that produces a *message* rather than a tool call — what the
+#: "the run has got this far" wait looks for.
+_LAST_MESSAGE = (ROWS - 1) - (ROWS - 1) % 5
 
 
 def _todo(completed: int) -> SimpleNamespace:
@@ -101,7 +112,14 @@ def _long_run_task(sdk, released: asyncio.Event):
         iteration_observer.on_child_created(record, child_manager, _todo(completed=0))
 
         for index in range(ROWS):
-            feed_conversation(state, record, message_event(sdk, f"step {index}"))
+            if index % 5:
+                # Runs of same-family tool calls, so the grouping the view has
+                # switched on has something to group. Four in a row, then a
+                # message to end the run — the shape a real agent produces.
+                action = action_event(sdk, call_id=f"call-{index}", command=f"read {index}")
+                feed_conversation(state, record, action, observation_event(sdk, action))
+            else:
+                feed_conversation(state, record, message_event(sdk, f"step {index}"))
             if index == ROWS // 2:
                 iteration_observer.on_todo_state(_todo(completed=2))
             # Yield so the callbacks queued above run, and so a watcher gets its
@@ -139,11 +157,21 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
         lambda progress: ("completed", "Run finished.", "info"),
     )
 
-    # The real view wiring: the whole-list path and the delta path, both ending
-    # at one model, exactly as `views/workspace.py` connects them.
-    model = TranscriptListModel()
-    store.transcript_changed.connect(lambda: model.sync(list(store.transcript)))
-    store.transcript_delta.connect(lambda first, rows: model.apply_delta(first, list(rows)))
+    # The real view, and the real wiring: the whole-list path and the delta
+    # path, both ending at one model, exactly as `views/workspace.py` connects
+    # them — and with **tool grouping on**, which is what ships
+    # (`main_window.py`, `display/groupToolCalls` defaults to True) and what
+    # every other SWR-2454 test left off.
+    view = TranscriptListView()
+    qtbot.addWidget(view)
+    view.set_group_tools_getter(lambda: True)
+    model = view.transcript_model
+    store.transcript_changed.connect(lambda: view.set_events(list(store.transcript)))
+    store.transcript_delta.connect(
+        lambda first, rows: (
+            view.apply_events_delta(first, list(rows)) or view.set_events(list(store.transcript))
+        )
+    )
 
     session_ids: list[str] = []
     bridge = RunBridge(tmp_path, store, service)
@@ -159,7 +187,7 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
 
         # Late: the last thing the run said is on screen, and the run is still going.
         qtbot.waitUntil(
-            lambda: any(f"step {ROWS - 1}" in event.text for event in store.transcript),
+            lambda: any(f"step {_LAST_MESSAGE}" in event.text for event in store.transcript),
             timeout=60_000,
         )
 
@@ -168,9 +196,16 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
         # The other live surfaces, on their own channel and equally current.
         assert [agent.id for agent in store.agent_list()] == ["coder-1"]
         assert [todo.status for todo in store.todos] == ["done", "done", "open"]
+        # Grouping is on, so the view holds fewer rows than the session does —
+        # and exactly the ones grouping says it should. Checked against
+        # `group_tool_runs` rather than a number, so this cannot drift from it.
+        assert model.rowCount() < len(store.transcript), "grouping never folded anything"
+        assert [event.text for event in model.events] == [
+            event.text
+            for event in group_tool_runs(store.transcript, view.transcript_delegate.expanded_groups)
+        ]
         # Readable throughout: rows were inserted, not rebuilt, and none of the
         # deltas was refused — a refusal is correct but costs a whole-list read.
-        assert model.rowCount() == len(store.transcript)
         assert model.operation_counts["refused"] == 0
         assert model.operation_counts["reset"] == early_ops["reset"]
         watched = [(event.role, event.text) for event in store.transcript]

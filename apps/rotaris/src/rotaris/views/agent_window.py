@@ -116,8 +116,15 @@ class AgentWindow(Themed, QMainWindow):
             self.tabs.setCurrentIndex(target)
         while self.persona_artifact_rows.count():
             item = self.persona_artifact_rows.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                # Hidden and unparented before the deletion is posted: a widget
+                # taken out of a layout keeps painting until the event loop
+                # destroys it, and a loop behind on work leaves it on screen
+                # under its replacement (SWR-2454).
+                widget.hide()
+                widget.setParent(None)
+                widget.deleteLater()
         infos = self._store.artifacts_for_persona(self.persona)
         if not infos:
             self.persona_artifact_rows.addWidget(_muted("No artifacts published yet."))

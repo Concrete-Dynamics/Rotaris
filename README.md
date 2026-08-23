@@ -1,7 +1,7 @@
 # Rotaris
 
-[![Rotaris desktop](https://github.com/theUpsider/geraet-ai/actions/workflows/rotaris.yml/badge.svg)](https://github.com/theUpsider/geraet-ai/actions/workflows/rotaris.yml)
-[![ReqToCode traceability](https://github.com/theUpsider/geraet-ai/actions/workflows/reqtocode.yml/badge.svg)](https://github.com/theUpsider/geraet-ai/actions/workflows/reqtocode.yml)
+[![Rotaris desktop](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/rotaris.yml/badge.svg)](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/rotaris.yml)
+[![ReqToCode traceability](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/reqtocode.yml/badge.svg)](https://github.com/Concrete-Dynamics/Rotaris/actions/workflows/reqtocode.yml)
 
 A multi-agent orchestration framework for software work, built on the
 [OpenHands SDK](https://github.com/All-Hands-AI/openhands-sdk). You give it a goal; an
@@ -56,8 +56,8 @@ the harness to survive the failure modes that make unattended agents expensive:
 Requires **Python ≥ 3.12** and [`uv`](https://docs.astral.sh/uv/) on `PATH`.
 
 ```bash
-git clone https://github.com/theUpsider/geraet-ai.git
-cd geraet-ai
+git clone https://github.com/Concrete-Dynamics/Rotaris.git
+cd Rotaris
 uv sync --all-packages
 ```
 
@@ -681,4 +681,4 @@ lifecycle hooks, and the remote access / support platform.
 
 ## License
 
-[MIT](LICENSE)
+[GNU General Public License v3.0 only (GPL-3.0-only)](LICENSE)

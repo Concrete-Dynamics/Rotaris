@@ -1,9 +1,5 @@
 # AGENTS.md — Rotaris
 
-Agent orientation for this repo, and the index of every other instruction file.
-Keep this file short and operational; anything stated here is not restated
-elsewhere.
-
 Scoped instructions — each owns its area and is not duplicated here:
 
 | File | Owns |
@@ -23,8 +19,7 @@ especially [02-code-topology.md](docs/architecture/02-code-topology.md) and
 
 ## Naming
 
-The product is **Rotaris**. There is no other product name; `geraet-ai` is the
-retired one and must not appear in new code, docs, or user-visible strings.
+The product is **Rotaris**.
 Three surfaces share the name, and each has exactly one spelling:
 
 | Surface | Distribution | Import package | Entry point |
@@ -37,11 +32,6 @@ State and identifiers follow from that: `<workspace>/.rotaris/`,
 `~/.config/rotaris/`, `~/.local/share/rotaris/`, session worktree branches
 `rotaris/session/<id>`, prompt placeholders `[[ROTARIS:TOKEN]]`, and classes
 prefixed `Rotaris…` (`RotarisConfig`, `RotarisTuiApp`, `RotarisDelegateTool`).
-
-Four pre-rename strings are deliberately frozen because they are wire or
-identity values owned by systems outside this repo: the OAuth `CLIENT_ID`
-`"geraet-ai"`, the `"geraet-cloud"` provider alias, `feedback.geraet.ai`, and
-the `github.com/theUpsider/geraet-ai` remote. Do not "fix" them.
 
 ## Architecture map
 

@@ -14,6 +14,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DIST_DIR="${REPO_ROOT}/dist/rotaris"
 APPDIR="${REPO_ROOT}/dist/Rotaris.AppDir"
 OUTPUT="${REPO_ROOT}/dist/Rotaris-${VERSION}-linux-x86_64.AppImage"
+ICON="${REPO_ROOT}/packaging/assets/rotaris.svg"
 
 [ -d "${DIST_DIR}" ] || {
   echo "missing ${DIST_DIR} — run the onedir build on Linux first" >&2
@@ -26,9 +27,11 @@ cp -R "${DIST_DIR}/." "${APPDIR}/usr/bin/"
 cp "${REPO_ROOT}/packaging/linux/rotaris.desktop" "${APPDIR}/rotaris.desktop"
 cp "${REPO_ROOT}/packaging/linux/rotaris.desktop" "${APPDIR}/usr/share/applications/"
 
-if [ -f "${REPO_ROOT}/packaging/assets/rotaris.png" ]; then
-  cp "${REPO_ROOT}/packaging/assets/rotaris.png" "${APPDIR}/rotaris.png"
-fi
+[ -f "${ICON}" ] || {
+  echo "missing AppImage icon ${ICON}" >&2
+  exit 1
+}
+cp "${ICON}" "${APPDIR}/rotaris.svg"
 
 cat > "${APPDIR}/AppRun" <<'APPRUN'
 #!/bin/sh

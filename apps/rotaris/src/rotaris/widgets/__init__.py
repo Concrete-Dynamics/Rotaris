@@ -88,6 +88,7 @@ from rotaris.widgets.patterns import (
     SectionHeader,
     TableCard,
 )
+from rotaris.widgets.reflow import PANEL_REFLOW_MS, Coalescer, HiddenPanelReflow
 from rotaris.widgets.requirement_card import (
     DELIVERY_ACTION_AREA,
     EpicCard,
@@ -159,7 +160,10 @@ __all__ = [
     "SectionHeader",
     "TableCard",
     # ── product-specific composites ───────────────────────────────────────
+    "PANEL_REFLOW_MS",
     "AgentTreeList",
+    "Coalescer",
+    "HiddenPanelReflow",
     "CheckpointRestoreDialog",
     "CloudCreditCard",
     "ConfirmImpactDialog",

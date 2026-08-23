@@ -21,8 +21,10 @@ from rotaris import theme
 from rotaris.theme.manager import Themed
 from rotaris.theme.phosphor import set_button_icon
 from rotaris.widgets import (
+    PANEL_REFLOW_MS,
     AgentTreeList,
     Card,
+    HiddenPanelReflow,
     PanelSplitter,
     SectionLabel,
     Select,
@@ -147,9 +149,12 @@ class MissionView(Themed, QWidget):
         body.name_handles(["Resize the delegation tree and activity table"])
         root.addWidget(body, 1)
 
-        store.agents_changed.connect(self.refresh)
+        # Through a reflow, not straight to the rebuild (SWR-2454): this view
+        # rebuilds its activity table row by row and is alive from startup.
+        self._reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
+        store.agents_changed.connect(self._reflow.request)
         store.selection_changed.connect(lambda _agent_id: self._sync_selection())
-        store.settings_changed.connect(self.refresh)
+        store.settings_changed.connect(self._reflow.request)
         self.refresh()
         self.install_theme_hook()
 

@@ -17,13 +17,12 @@ import os
 import stat
 import tempfile
 from contextlib import suppress
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rotaris_core.reqtocode import SWR, traces
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from rotaris_core.auth.provider import TokenSet
 
 _log = logging.getLogger(__name__)
@@ -121,7 +120,7 @@ class TokenStorage:
         try:
             os.write(fd, content.encode("utf-8"))
             os.close(fd)
-            _restrict_token_file(tmp_path)
+            _restrict_token_file(Path(tmp_path))
             os.replace(tmp_path, str(self._path_for(provider_id)))
         except BaseException:
             with suppress(OSError):

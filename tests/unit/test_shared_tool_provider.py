@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import Mock
 
-from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
 from rotaris_core.config.schema import MCPServerConfig, PersonaConfig, RotarisConfig
 from rotaris_core.mcp.scoped_tool_provider import scope_tool_provider_for_persona
 from rotaris_core.mcp.session_manager import SessionMCPManager
@@ -116,72 +115,6 @@ def test_create_tools_discards_failed_lsp_client_and_recovers_on_retry(monkeypat
     assert len(second_tools.tools) == 1
     assert healthy_client.calls == [("lsp_init", {"root": _EXPECTED_ROOT})]
     assert manager.get_or_create("lsp") is not None
-
-
-@verifies(SWR.SWR_1731)
-def test_create_tools_auto_inits_git_working_directory(monkeypatch) -> None:
-    """Productive use: an agent can use the shared Git MCP server in its workspace.
-
-    Expected outcome: the server receives its working directory before any agent invokes
-    a Git command.
-    """
-    fake_client = FakeMCPClient([FakeMCPTool(name="git_set_working_dir")])
-    monkeypatch.setattr(
-        "rotaris_core.mcp.shared_tool_provider._create_real_mcp_client",
-        lambda single_config, *, timeout, on_tools_changed=None: fake_client,
-    )
-
-    provider = SharedMCPToolProvider(
-        SessionMCPManager(),
-        workspace_root=_WORKSPACE_ROOT,
-    )
-
-    provider.create_tools({"git": object()})  # type: ignore[dict-item]
-    provider.create_tools({"git": object()})  # type: ignore[dict-item]
-
-    assert fake_client.calls == [
-        ("git_set_working_dir", {"path": _EXPECTED_ROOT}),
-    ]
-
-
-@verifies(SWR.SWR_1731)
-def test_create_tools_keeps_git_available_when_working_directory_init_fails(
-    monkeypatch,
-    caplog,
-) -> None:
-    """Productive use: an agent can start even when Git MCP setup rejects its workspace.
-
-    Expected outcome: the initialization error is reported without crashing shared MCP
-    startup.
-    """
-    fake_client = FakeMCPClient([FakeMCPTool(name="git_set_working_dir")])
-
-    async def fail_working_directory(*_args, **_kwargs) -> None:
-        raise RuntimeError("workspace rejected")
-
-    monkeypatch.setattr(fake_client, "call_tool_mcp", fail_working_directory)
-    monkeypatch.setattr(
-        "rotaris_core.mcp.shared_tool_provider._create_real_mcp_client",
-        lambda single_config, *, timeout, on_tools_changed=None: fake_client,
-    )
-    manager = SessionMCPManager()
-    provider = SharedMCPToolProvider(manager, workspace_root=_WORKSPACE_ROOT)
-
-    with caplog.at_level(logging.ERROR):
-        provider.create_tools({"git": object()})  # type: ignore[dict-item]
-
-    assert manager.get_or_create("git") is not None
-    assert "git_set_working_dir call failed" in caplog.text
-
-
-@verifies(SWR.SWR_1731)
-def test_default_git_server_hides_working_directory_initialization_from_agents() -> None:
-    """Productive use: an agent can start Git MCP in its selected workspace.
-
-    Expected outcome: shared startup owns the workspace setup while agents cannot change
-    it mid-conversation.
-    """
-    assert "git_set_working_dir" in DEFAULT_MCP_SERVERS["git"].disabled_tools
 
 
 @verifies(SWR.SWR_2905)
@@ -325,13 +258,13 @@ def _grant_config(mcp_tools: dict[str, list[str]] | None) -> tuple[PersonaConfig
     persona = PersonaConfig(
         name="codebase-analyst",
         model="small_model",
-        mcp_servers=["serena", "git"],
+        mcp_servers=["serena", "reference"],
         mcp_tools=mcp_tools,
     )
     config = RotarisConfig(
         mcp_servers={
             "serena": MCPServerConfig(command="uvx"),
-            "git": MCPServerConfig(command="npx", disabled_tools=["git_set_working_dir"]),
+            "reference": MCPServerConfig(command="npx", disabled_tools=["reference_admin"]),
         },
     )
     return persona, config
@@ -361,45 +294,45 @@ def test_a_scoped_provider_hands_the_model_only_the_granted_tools(monkeypatch) -
 
 
 @verifies(SWR.SWR_3009)
-def test_the_shared_client_keeps_its_whole_tool_list_so_probes_still_work(monkeypatch) -> None:
-    """Productive use: Git is told its working directory even though that tool is disabled.
+def test_the_shared_client_keeps_its_whole_tool_list_while_persona_view_is_scoped(
+    monkeypatch,
+) -> None:
+    """Productive use: two personas share one server while receiving different tool grants.
 
-    Expected outcome: scoping filters only what the SDK is handed; the per-server
-    client the post-connect probes read keeps every tool the server reported.
+    Expected outcome: scoping filters the SDK view while the cached server retains its tools.
     """
-    git = FakeMCPClient(
-        [FakeMCPTool(name="git_set_working_dir"), FakeMCPTool(name="git_status")],
+    reference = FakeMCPClient(
+        [FakeMCPTool(name="reference_read"), FakeMCPTool(name="reference_admin")],
     )
     monkeypatch.setattr(
         "rotaris_core.mcp.shared_tool_provider._create_real_mcp_client",
-        lambda single_config, *, timeout, on_tools_changed=None: git,
+        lambda single_config, *, timeout, on_tools_changed=None: reference,
     )
     persona, config = _grant_config(None)
     manager = SessionMCPManager()
     shared = SharedMCPToolProvider(manager, workspace_root=_WORKSPACE_ROOT)
 
     scoped = shared.for_persona(persona, config)
-    client = scoped.create_tools({"git": object()})  # type: ignore[dict-item]
+    client = scoped.create_tools({"reference": object()})  # type: ignore[dict-item]
 
-    assert git.calls == [("git_set_working_dir", {"path": _EXPECTED_ROOT})]
-    assert [tool.name for tool in client.tools] == ["git_status"]
-    cached = manager.get_or_create("git")
+    assert [tool.name for tool in client.tools] == ["reference_read"]
+    cached = manager.get_or_create("reference")
     assert cached is not None
-    assert {tool.name for tool in cached.tools} == {"git_set_working_dir", "git_status"}
+    assert {tool.name for tool in cached.tools} == {"reference_read", "reference_admin"}
 
 
 @verifies(SWR.SWR_3009)
 def test_one_servers_open_grant_does_not_leak_anothers_withheld_tool(monkeypatch) -> None:
-    """Productive use: `codebase-analyst` carries both `git` and `serena`.
+    """Productive use: a persona carries both a reference server and Serena.
 
-    Expected outcome: `git` having no grant does not let Serena's editing tools
+    Expected outcome: the reference server's open grant does not let Serena's editing tools
     through — the filter attributes every tool to the server that served it.
     """
     clients = {
         "serena": FakeMCPClient(
             [FakeMCPTool(name="find_symbol"), FakeMCPTool(name="rename_symbol")],
         ),
-        "git": FakeMCPClient([FakeMCPTool(name="git_status")]),
+        "reference": FakeMCPClient([FakeMCPTool(name="reference_read")]),
     }
     monkeypatch.setattr(
         "rotaris_core.mcp.shared_tool_provider._create_real_mcp_client",
@@ -409,9 +342,11 @@ def test_one_servers_open_grant_does_not_leak_anothers_withheld_tool(monkeypatch
     shared = SharedMCPToolProvider(SessionMCPManager(), workspace_root=_WORKSPACE_ROOT)
 
     scoped = shared.for_persona(persona, config)
-    client = scoped.create_tools({"serena": object(), "git": object()})  # type: ignore[dict-item]
+    client = scoped.create_tools(  # type: ignore[dict-item]
+        {"serena": object(), "reference": object()}
+    )
 
-    assert {tool.name for tool in client.tools} == {"find_symbol", "git_status"}
+    assert {tool.name for tool in client.tools} == {"find_symbol", "reference_read"}
 
 
 @verifies(SWR.SWR_3009)

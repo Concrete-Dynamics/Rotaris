@@ -5,7 +5,7 @@ name = "rotaris"
 version = "0.120.14"
 description = "Rotaris — desktop workspace for the Rotaris multi-agent orchestration framework"
 requires-python = ">=3.12"
-license = "MIT"
+license = "GPL-3.0-only"
 dependencies = [
     "mistune>=3.1,<4",
     "PySide6>=6.8,<6.9",

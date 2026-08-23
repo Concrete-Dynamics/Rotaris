@@ -67,6 +67,13 @@ jobs:
 
       - run: uv sync --all-packages
 
+      # SWR-3720: complete the third-party notice inventory before anything is
+      # frozen. The generator writes into the desktop assets, from where the
+      # PyInstaller data walk bundles it into every artifact; a component whose
+      # licence is missing or unreviewed fails the platform.
+      - name: Third-party licence inventory
+        run: uv run python packaging/third_party_licences.py
+
       # The desktop app and the two console entry points (SWR-3001).
       - run: uv run python -m rotaris_core.packaging build rotaris --mode onedir
       - run: uv run python -m rotaris_core.packaging build rotaris-cli --mode onedir

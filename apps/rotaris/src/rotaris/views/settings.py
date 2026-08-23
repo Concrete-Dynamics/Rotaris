@@ -43,6 +43,7 @@ from rotaris.models.state import (
 from rotaris.theme import available_themes, set_theme, tokens
 from rotaris.theme.manager import Themed
 from rotaris.theme.reduced_motion import reduced_motion, set_reduced_motion
+from rotaris.views.about_legal import AboutLegalPage
 from rotaris.views.provider_auth import AddProviderDialog, ProviderAuthDialog, ProviderTask
 from rotaris.widgets import (
     Card,
@@ -115,6 +116,27 @@ class _StyledLabel(Themed, QLabel):
 
     def apply_theme(self, theme: Theme) -> None:
         self.setStyleSheet(self._style(theme))
+
+
+@traces(SWR.SWR_3721)
+def _provider_destination_text(provider: ProviderInfo) -> str:
+    """The one-line statement of where this provider's model traffic goes.
+
+    Rendered from ``ProviderInfo`` fields that ``ConfigService`` filled from the
+    runtime catalog — there is no second, hand-written provider list here.
+    """
+    if provider.connection_mode == "local-sdk":
+        return (
+            "Rotaris invokes the Claude Agent SDK installed locally; traffic goes through that SDK."
+        )
+    if provider.connection_mode == "rotaris-cloud":
+        return "Rotaris-managed cloud service — destination: rotaris.ai."
+    if provider.connection_mode == "direct":
+        operator = f"{provider.operator_name} — " if provider.operator_name else ""
+        return f"Direct provider API — {operator}destination: {provider.destination}."
+    if provider.connection_mode == "custom":
+        return f"Custom endpoint — destination: {provider.destination or 'the base URL you configured'}."
+    return ""
 
 
 # Both vocabularies are spelled out here rather than imported from
@@ -407,6 +429,7 @@ class _ProviderRowControls:
     SWR.SWR_2804,
     SWR.SWR_2805,
     SWR.SWR_3715,
+    SWR.SWR_3717,
 )
 class SettingsView(Themed, QWidget):
     save_requested = Signal()
@@ -449,6 +472,7 @@ class SettingsView(Themed, QWidget):
         "plugins",
         "tools",
         "project",
+        "about",
     )
 
     def __init__(
@@ -835,6 +859,14 @@ class SettingsView(Themed, QWidget):
         self._add_inventory_tab("plugins", "Plugins", "Discovered tool plugins")
         self._add_inventory_tab("tools", "Tools", "Available agent tools")
         self._add_project_tab()
+
+        # About & Legal (SWR-3717): permanent product identity, legal links and
+        # the bundled licence notices. Local data only — no provider, workspace
+        # or authentication is needed to render it.
+        about_page, about_layout = self._tab_page()
+        about_layout.addWidget(AboutLegalPage(self._store.app_version))
+        about_layout.addStretch(1)
+        self.tabs.addTab(about_page, "About")
 
         store.settings_changed.connect(self.refresh)
         store.library_changed.connect(self.refresh)
@@ -1620,6 +1652,15 @@ class SettingsView(Themed, QWidget):
             )
             status_layout.addWidget(detail, 1)
             row_layout.addLayout(status_layout)
+            destination = _provider_destination_text(provider)
+            if destination:
+                dest_label = _StyledLabel(
+                    destination,
+                    lambda t: f"font-size:{t.type.scale.x2s}px;color:{t.color.text_tertiary};",
+                )
+                dest_label.setWordWrap(True)
+                dest_label.setAccessibleName(f"{provider.label} destination")
+                row_layout.addWidget(dest_label)
             actions = QHBoxLayout()
             actions.addStretch(1)
             busy = provider.id in self._active_provider_operations

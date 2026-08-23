@@ -128,6 +128,7 @@ class FakeAgent:
 
         gate = self._gate(state.session_id)
         if interrupt_handler is not None:
+
             def release() -> None:
                 self.release(state.session_id)
 

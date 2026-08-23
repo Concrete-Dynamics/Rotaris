@@ -23,6 +23,7 @@ from rotaris.models.state import (
     SkillInfo,
     SubscriptionLimit,
     TodoItem,
+    TranscriptDelta,
     TranscriptEvent,
 )
 
@@ -68,11 +69,18 @@ if TYPE_CHECKING:
 )
 class ConfigService:
     def __init__(self, workspace: Path, store: WorkspaceStore) -> None:
+        from rotaris.services.session_projection import TranscriptProjector
+
         self.workspace = workspace
         self.store = store
         self.config: Any | None = None
         self.session_manager: Any | None = None
         self.diagnostics: Any | None = None
+        # The transcript's incremental half (SWR-2454). ``_transcript_is_live``
+        # says which of the two paths currently owns the transcript, so the
+        # reconciling read and the delta feed never write it in the same breath.
+        self._transcript_projector = TranscriptProjector()
+        self._transcript_is_live = False
         # Hydrated SessionArtifactStore cache, keyed by (session_id, index mtime)
         # so the 750ms poll tick only re-reads artifact files when they changed.
         self._artifact_store: Any | None = None
@@ -993,6 +1001,50 @@ class ConfigService:
             self._artifact_infos(state.session_id) if artifacts is None else artifacts,
         )
 
+    @traces(SWR.SWR_2454)
+    def apply_transcript_delta(self, delta: TranscriptDelta) -> None:
+        """Apply what a live run changed in its transcript. Qt/UI thread only.
+
+        The counterpart of :meth:`apply_session_projection` for the one surface
+        whose cost grows with the session. A delta from row zero re-seats the
+        projector — that is a run reporting its transcript for the first time,
+        or a cleared transcript — and anything else is folded into what is
+        already on screen.
+
+        A delta the projector cannot place answers ``None``; nothing is applied
+        and the reconciling read repairs it. That path is why a missed or
+        malformed delta costs latency and never content.
+        """
+        rows = list(delta.rows)
+        if delta.first == 0:
+            events = self._transcript_projector.seed(rows, list(delta.new_diffs), delta.personas)
+            self._transcript_is_live = True
+            self.store.set_transcript(list(events))
+            return
+        applied = self._transcript_projector.apply(
+            delta.first,
+            rows,
+            list(delta.new_diffs),
+            delta.personas,
+        )
+        if applied is None:
+            self._transcript_is_live = False
+            return
+        first, tail = applied
+        self._transcript_is_live = True
+        self.store.apply_transcript_delta(first, list(tail))
+
+    @traces(SWR.SWR_2454)
+    def release_transcript_delta_feed(self) -> None:
+        """Hand the transcript back to the reconciling read.
+
+        Called when the run this handle was watching ends, and when the user
+        looks at a different session: in both cases the next whole-state read is
+        the authority again, and it has to be allowed to write the transcript.
+        """
+        self._transcript_is_live = False
+        self._transcript_projector.reset()
+
     def apply_session_projection(self, projection: SessionProjection) -> None:
         """Apply a prebuilt projection; must run on the Qt/UI thread."""
         s = self.store
@@ -1002,7 +1054,13 @@ class ConfigService:
         if projection.active_model:
             s.active_model = projection.active_model
             s.session_model_override = projection.active_model
-        s.set_transcript(list(projection.transcript))
+        if not self._transcript_is_live:
+            # While a live run is feeding deltas, this read is the *reconciler*
+            # for every other surface and must not fight it for the transcript:
+            # rewriting the whole list here is the O(session) work SWR-2454
+            # exists to remove, and it would do it behind a view that is already
+            # current.
+            s.set_transcript(list(projection.transcript))
         s.set_run_summary(projection.run)
         s.set_agents(list(projection.agents))
         s.set_artifacts(list(projection.artifacts))

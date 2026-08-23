@@ -1,4 +1,4 @@
-"""Everything a host may ask of a run, as values (SWR-2426).
+"""Everything a host may ask of a run, as values (SWR-2453).
 
 One frozen dataclass per operation, carrying scalars and plain containers of
 scalars. That restriction is the whole design: a run in another process is
@@ -46,7 +46,7 @@ __all__ = [
 ]
 
 
-@traces(SWR.SWR_2426)
+@traces(SWR.SWR_2453)
 @dataclass(frozen=True, slots=True)
 class ControlResult:
     """What a run says back.

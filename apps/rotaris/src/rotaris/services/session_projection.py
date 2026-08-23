@@ -24,6 +24,7 @@ from rotaris.models.state import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from rotaris_core.edit_diff import EditDiffArtifact
@@ -67,6 +68,108 @@ class SessionProjectionRead:
     projection_ms: float
 
 
+@dataclass(slots=True)
+class _DiffIndex:
+    """The user-only edit diffs, arranged the way a tool row asks for them."""
+
+    by_key: dict[tuple[str, str], list[EditDiffArtifact]]
+    unkeyed_by_agent: dict[str, list[EditDiffArtifact]]
+
+
+def _build_diff_index(ui_edit_diffs: Sequence[dict[str, Any]]) -> _DiffIndex:
+    """Validate and bucket the diffs once, so a row lookup is a dict hit."""
+    index = _DiffIndex(by_key={}, unkeyed_by_agent={})
+    for raw_diff in ui_edit_diffs:
+        _index_diff(index, raw_diff)
+    return index
+
+
+@dataclass(slots=True)
+class _TranscriptCarry:
+    """Everything projecting one row needs to know about the rows before it.
+
+    Two values, and both are small: the last thinking row *per agent* and the
+    ids of the diffs already placed. That they are this small is what makes an
+    incremental projection possible at all — a projector resuming mid-transcript
+    has to carry only this across the boundary, not the transcript.
+    """
+
+    #: Last thinking row seen per agent — sessions recorded before the
+    #: reasoning-fold fix carry an unstamped duplicate of every streamed burst
+    #: (SWR-2446); those are dropped on projection.
+    last_thinking: dict[str, dict[str, Any]]
+    #: Diff artifacts already emitted, so a diff is placed beside exactly one
+    #: tool row even when several could claim it.
+    emitted_ids: set[str]
+
+    @classmethod
+    def empty(cls) -> _TranscriptCarry:
+        return cls(last_thinking={}, emitted_ids=set())
+
+    def copy(self) -> _TranscriptCarry:
+        return _TranscriptCarry(
+            last_thinking=dict(self.last_thinking),
+            emitted_ids=set(self.emitted_ids),
+        )
+
+
+@traces(SWR.SWR_2419, SWR.SWR_2421, SWR.SWR_2446, SWR.SWR_2432, SWR.SWR_2454)
+def _project_row(
+    raw_event: dict[str, Any],
+    carry: _TranscriptCarry,
+    diffs: _DiffIndex,
+    persona_map: dict[str, str],
+    session_live: bool,
+) -> tuple[TranscriptEvent, ...]:
+    """Project one raw row into the view rows it stands for.
+
+    Zero rows for a dropped duplicate burst, one for an ordinary row, more when
+    a tool row carries user-only edit diffs beside it. *carry* is advanced in
+    place; it is the only thing this depends on from the rows before it.
+    """
+    from rotaris.services.config_service import _event_from_dict
+
+    agent_name = str(raw_event.get("name") or "").strip()
+    if raw_event.get("role") == "thinking":
+        previous = carry.last_thinking.get(agent_name)
+        carry.last_thinking[agent_name] = raw_event
+        content = str(raw_event.get("content") or "")
+        if (
+            previous is not None
+            and not raw_event.get("duration")
+            and content
+            and content == str(previous.get("content") or "")
+        ):
+            return ()
+        if not session_live and not raw_event.get("duration") and raw_event.get("started_at"):
+            # A session that is not running streams nothing: an unstamped
+            # burst (killed run, legacy duplicate) must not tick "live".
+            raw_event = {k: v for k, v in raw_event.items() if k != "started_at"}
+    if (
+        raw_event.get("role") == "tool"
+        and not session_live
+        and str(raw_event.get("status") or "") == "running"
+    ):
+        # A session that is not running is not calling a tool. The call's
+        # real outcome died with the process, so the row states no outcome
+        # rather than counting upward forever (SWR-2432).
+        raw_event = {k: v for k, v in raw_event.items() if k != "started_at"} | {"status": ""}
+    event_persona = str(raw_event.get("persona") or "").strip() or persona_map.get(agent_name, "")
+    projected: list[TranscriptEvent] = [_event_from_dict(raw_event, persona=event_persona)]
+    if raw_event.get("role") != "tool" or not agent_name:
+        return tuple(projected)
+    tool_event_key = str(raw_event.get("tool_event_key") or "").strip()
+    matched = list(diffs.by_key.get((agent_name, tool_event_key), ()))
+    if not matched and bool(raw_event.get("tool_terminal")):
+        matched = diffs.unkeyed_by_agent.get(agent_name, [])
+    for diff in matched:
+        if diff.diff_id in carry.emitted_ids:
+            continue
+        projected.append(_diff_transcript_event(diff, persona=event_persona))
+        carry.emitted_ids.add(diff.diff_id)
+    return tuple(projected)
+
+
 @traces(SWR.SWR_2419, SWR.SWR_2421, SWR.SWR_2446, SWR.SWR_2432)
 def _project_transcript(
     transcript_events: list[dict[str, Any]],
@@ -75,77 +178,147 @@ def _project_transcript(
     session_live: bool = True,
 ) -> tuple[TranscriptEvent, ...]:
     """Merge user-only diff artifacts beside their model-visible tool rows."""
+    carry = _TranscriptCarry.empty()
+    diffs = _build_diff_index(ui_edit_diffs)
+    persona_map = persona_map or {}
+    projected: list[TranscriptEvent] = []
+    for raw_event in transcript_events:
+        projected.extend(_project_row(raw_event, carry, diffs, persona_map, session_live))
+    return tuple(projected)
+
+
+@traces(SWR.SWR_2454)
+class TranscriptProjector:
+    """Project a live session's transcript at a cost bounded by what changed.
+
+    The same :func:`_project_row` the whole-list path uses, driven from a
+    retained :class:`_TranscriptCarry` instead of from an empty one. That
+    sameness is the point: a view fed by deltas and a view rebuilt from the
+    session record are two runs of one function over one set of rows, so they
+    cannot disagree about what a row renders as.
+
+    **The boundary.** A live run mutates rows in place — the streaming tail, an
+    open tool call, an unsettled check — so a delta is not always an append. The
+    producer says how far back it reached; this class keeps one carry snapshot
+    at exactly that index and re-projects forward from it. The snapshot is
+    advanced, never accumulated: there is one, not one per row.
+
+    A delta that reaches *behind* the retained boundary cannot be applied — the
+    carry for that point is gone — and :meth:`apply` answers ``None`` so the
+    caller re-reads the session instead. That is a correctness valve, not an
+    error: it costs a whole-state read and changes nothing about what is shown.
+    """
+
+    __slots__ = ("_boundary", "_carry", "_diffs", "_prefix_len", "_rows")
+
+    def __init__(self) -> None:
+        self._boundary = 0
+        self._prefix_len = 0
+        self._carry = _TranscriptCarry.empty()
+        self._diffs = _DiffIndex(by_key={}, unkeyed_by_agent={})
+        #: Raw rows from :attr:`_boundary` onward, as last seen. Retained so a
+        #: delta that starts further along can still be projected from the
+        #: boundary — its own payload begins too late to do that alone.
+        self._rows: list[dict[str, Any]] = []
+
+    def reset(self) -> None:
+        """Forget everything. The next delta has to start from row zero."""
+        self._boundary = 0
+        self._prefix_len = 0
+        self._carry = _TranscriptCarry.empty()
+        self._diffs = _DiffIndex(by_key={}, unkeyed_by_agent={})
+        self._rows = []
+
+    def seed(
+        self,
+        transcript_events: Sequence[dict[str, Any]],
+        ui_edit_diffs: Sequence[dict[str, Any]],
+        persona_map: dict[str, str] | None = None,
+        session_live: bool = True,
+    ) -> tuple[TranscriptEvent, ...]:
+        """Project the whole transcript and seat the incremental boundary at 0.
+
+        Called for a bootstrap, a focus change and the final refresh — the three
+        moments that are whole-state anyway. The first delta after a seed pays
+        one pass to move the boundary to the live tail; every delta after that
+        is bounded by the change.
+        """
+        self._boundary = 0
+        self._prefix_len = 0
+        self._carry = _TranscriptCarry.empty()
+        self._diffs = _build_diff_index(ui_edit_diffs)
+        self._rows = list(transcript_events)
+        names = persona_map or {}
+        projected: list[TranscriptEvent] = []
+        carry = self._carry.copy()
+        for raw_event in self._rows:
+            projected.extend(_project_row(raw_event, carry, self._diffs, names, session_live))
+        return tuple(projected)
+
+    def apply(
+        self,
+        first: int,
+        rows: Sequence[dict[str, Any]],
+        new_diffs: Sequence[dict[str, Any]] = (),
+        persona_map: dict[str, str] | None = None,
+        session_live: bool = True,
+    ) -> tuple[int, tuple[TranscriptEvent, ...]] | None:
+        """Project raw rows ``[first:]`` onto the view.
+
+        Args:
+            first: Raw index the producer reached back to. Every row from here
+                on may have changed; nothing before it did.
+            rows: The raw rows from *first* onward, already copied by the
+                producer — this class never holds a row a run can still mutate.
+            new_diffs: Edit-diff artifacts recorded since the last delta, folded
+                into the retained index. Only the new ones, for the same reason
+                only the changed rows are sent.
+            persona_map: Agent name → persona, for rows that carry no persona.
+            session_live: Whether the run is still executing.
+
+        Returns:
+            ``(first projected row, the projected rows from there on)``, or
+            ``None`` when *first* reaches behind the retained boundary and the
+            caller must re-seed.
+        """
+        if first < self._boundary:
+            return None
+        for raw_diff in new_diffs:
+            _index_diff(self._diffs, raw_diff)
+        names = persona_map or {}
+        # Everything from the boundary: the head comes from what the previous
+        # delta left behind, the tail is what arrived now.
+        head = self._rows[: first - self._boundary]
+        # Advance the retained carry across the head, counting the view rows it
+        # accounts for — that count is what makes the returned index absolute.
+        for raw_event in head:
+            self._prefix_len += len(
+                _project_row(raw_event, self._carry, self._diffs, names, session_live)
+            )
+        self._boundary = first
+        self._rows = list(rows)
+        carry = self._carry.copy()
+        projected: list[TranscriptEvent] = []
+        for raw_event in self._rows:
+            projected.extend(_project_row(raw_event, carry, self._diffs, names, session_live))
+        return self._prefix_len, tuple(projected)
+
+
+def _index_diff(index: _DiffIndex, raw_diff: dict[str, Any]) -> None:
+    """Fold one raw edit-diff record into *index*, ignoring an unusable one."""
     from rotaris_core.edit_diff import EditDiffArtifact
 
-    from rotaris.services.config_service import _event_from_dict
-
-    persona_map = persona_map or {}
-
-    diffs_by_key: dict[tuple[str, str], list[EditDiffArtifact]] = {}
-    unkeyed_by_agent: dict[str, list[EditDiffArtifact]] = {}
-    for raw_diff in ui_edit_diffs:
-        try:
-            diff = EditDiffArtifact.model_validate(raw_diff)
-        except Exception:  # noqa: BLE001 - old or malformed UI metadata is non-fatal
-            continue
-        agent_name = diff.agent_name.strip()
-        if not agent_name:
-            continue
-        if diff.tool_event_key:
-            diffs_by_key.setdefault((agent_name, diff.tool_event_key), []).append(diff)
-        else:
-            unkeyed_by_agent.setdefault(agent_name, []).append(diff)
-
-    projected: list[TranscriptEvent] = []
-    emitted_ids: set[str] = set()
-    # Last thinking row seen per agent — sessions recorded before the
-    # reasoning-fold fix carry an unstamped duplicate of every streamed burst
-    # (SWR-2446); those are dropped on projection.
-    last_thinking: dict[str, dict[str, Any]] = {}
-    for raw_event in transcript_events:
-        agent_name = str(raw_event.get("name") or "").strip()
-        if raw_event.get("role") == "thinking":
-            previous = last_thinking.get(agent_name)
-            last_thinking[agent_name] = raw_event
-            content = str(raw_event.get("content") or "")
-            if (
-                previous is not None
-                and not raw_event.get("duration")
-                and content
-                and content == str(previous.get("content") or "")
-            ):
-                continue
-            if not session_live and not raw_event.get("duration") and raw_event.get("started_at"):
-                # A session that is not running streams nothing: an unstamped
-                # burst (killed run, legacy duplicate) must not tick "live".
-                raw_event = {k: v for k, v in raw_event.items() if k != "started_at"}
-        if (
-            raw_event.get("role") == "tool"
-            and not session_live
-            and str(raw_event.get("status") or "") == "running"
-        ):
-            # A session that is not running is not calling a tool. The call's
-            # real outcome died with the process, so the row states no outcome
-            # rather than counting upward forever (SWR-2432).
-            raw_event = {k: v for k, v in raw_event.items() if k != "started_at"} | {"status": ""}
-        event_persona = str(raw_event.get("persona") or "").strip() or persona_map.get(
-            agent_name, ""
-        )
-        projected.append(_event_from_dict(raw_event, persona=event_persona))
-        if raw_event.get("role") != "tool":
-            continue
-        if not agent_name:
-            continue
-        tool_event_key = str(raw_event.get("tool_event_key") or "").strip()
-        matched = list(diffs_by_key.get((agent_name, tool_event_key), ()))
-        if not matched and bool(raw_event.get("tool_terminal")):
-            matched = unkeyed_by_agent.get(agent_name, [])
-        for diff in matched:
-            if diff.diff_id in emitted_ids:
-                continue
-            projected.append(_diff_transcript_event(diff, persona=event_persona))
-            emitted_ids.add(diff.diff_id)
-    return tuple(projected)
+    try:
+        diff = EditDiffArtifact.model_validate(raw_diff)
+    except Exception:  # noqa: BLE001 - old or malformed UI metadata is non-fatal
+        return
+    agent_name = diff.agent_name.strip()
+    if not agent_name:
+        return
+    if diff.tool_event_key:
+        index.by_key.setdefault((agent_name, diff.tool_event_key), []).append(diff)
+    else:
+        index.unkeyed_by_agent.setdefault(agent_name, []).append(diff)
 
 
 @traces(SWR.SWR_2419, SWR.SWR_2421)

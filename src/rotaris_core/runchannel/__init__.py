@@ -1,4 +1,4 @@
-"""The one way a host reaches into a run it is not executing (SWR-2426).
+"""The one way a host reaches into a run it is not executing (SWR-2453).
 
 A host watches a run through state it already reads from disk — the session
 snapshot the desktop polls, the ``events.jsonl`` every run persists. What it

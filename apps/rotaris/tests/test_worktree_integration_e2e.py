@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -9,6 +10,8 @@ from typing import TYPE_CHECKING
 import pytest
 from PySide6.QtWidgets import QCheckBox, QLineEdit, QPushButton
 from rotaris_core.config.schema import RotarisConfig
+from rotaris_core.events.bus import reset_event_registry
+from rotaris_core.eventstore import event_store_path, reset_event_store_registry
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
 from rotaris_core.session.worktrees import GitWorktreeService
@@ -26,6 +29,16 @@ if TYPE_CHECKING:
     from rotaris_core.session.state import SessionState
 
 pytestmark = pytest.mark.e2e
+
+
+@pytest.fixture(autouse=True)
+def _clean_run_registries() -> object:
+    """No sink or store may survive into — or out of — one of these tests."""
+    reset_event_registry()
+    reset_event_store_registry()
+    yield
+    reset_event_registry()
+    reset_event_store_registry()
 
 
 @verifies(SWR.SWR_2404)
@@ -216,6 +229,66 @@ def test_failed_integration_names_retained_worktree_and_keeps_base(
         snapshot = manager.read_session_snapshot(state.session_id)
         assert snapshot.worktree is not None
         assert snapshot.worktree.merge_status == "merge_failed"
+
+
+@verifies(SWR.SWR_2413, SWR.SWR_2453, SWR.SWR_2901)
+def test_an_integration_run_leaves_the_session_any_other_run_leaves(
+    tmp_path, qtbot, monkeypatch
+) -> None:
+    """Productive use: a user merges two worktrees and later wants to see what the
+    hidden agent did — replay it, export it, resume it — exactly as for a session
+    they started themselves.
+    Expected outcome: the integration session has the event store, the lifecycle
+    events and the released lock every other run leaves behind."""
+    base = _repository(tmp_path)
+    config = RotarisConfig(workspace_root=base)
+    manager = SessionManager(base)
+    sessions = _completed_sessions(base, manager, config)
+
+    _patch_integration_agent(monkeypatch, [], status="completed")
+    bridge = WorktreeIntegrationBridge(base, SimpleNamespace(build_run_config=lambda: config))
+    started: list[str] = []
+    bridge.started.connect(started.append)
+    with qtbot.waitSignal(bridge.succeeded, timeout=30_000):
+        assert bridge.start([state.session_id for state in sessions]) is True
+    qtbot.waitUntil(lambda: not bridge.running, timeout=10_000)
+
+    assert len(started) == 1
+    session_id = started[0]
+
+    # The store, which this path had none of while it drove the runtime directly.
+    events = _stored_events(manager, session_id)
+    kinds = [event["event"] for event in events]
+    assert kinds[0] == "session.start", kinds
+    assert kinds[-1] == "result", kinds
+    assert "session.end" in kinds, kinds
+
+    # …and the session itself, indistinguishable from any other completed run.
+    snapshot = manager.read_session_snapshot(session_id)
+    assert snapshot.execution_status == "completed"
+    assert snapshot.internal is True
+    assert str(snapshot.run_type).endswith("integration_run")
+    assert snapshot.worktree is not None
+    assert snapshot.worktree.merge_status == "merged"
+    assert snapshot.worktree.integration_session_id == session_id
+    # Released by the lifecycle's own ``finally``; a lock still held here would
+    # mean the session could never be resumed or re-integrated.
+    assert manager.acquire_lock(session_id) is True
+    manager.release_lock(session_id)
+
+
+def _stored_events(manager: SessionManager, session_id: str) -> list[dict]:
+    """Every line of the session's store, parsed one line at a time.
+
+    Line by line on purpose: the store's promise is that each line is one
+    complete wire event, and reading the file whole would hide a line that is
+    not.
+    """
+    path = event_store_path(manager.session_dir(session_id))
+    assert path.exists(), f"no event store at {path}"
+    return [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
 
 
 def _git(cwd: Path, *args: str) -> str:

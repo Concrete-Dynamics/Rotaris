@@ -1,18 +1,24 @@
-"""Hidden agent-backed integration of accepted session worktrees."""
+"""Hidden agent-backed integration of accepted session worktrees.
+
+The integration run is a run like any other (SWR-2453): it goes through
+:func:`rotaris_core.run_host.execute_run`, so it gets the event store, the
+``session.start``/``session.end`` pair, the lifecycle hooks, the per-iteration
+checkpoints and a terminal result derived the one way — none of which it had
+while it drove the runtime a layer below and hand-composed a subset by hand.
+
+What stays here is the part that is genuinely this agent's and not any run's:
+reserving the source worktrees, preparing the merged tree to work in, and
+deciding afterwards whether the base branch may move.
+"""
 
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from rotaris_core.reqtocode import SWR, traces
-
-from rotaris.services.run_bridge import (
-    RunLifecycleExtras,
-    accepts_extra_observers,
-    install_run_lifecycle_extras,
-)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -96,22 +102,25 @@ class _WorktreeIntegrationWorker(QObject):
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(str(exc))
 
+    @traces(SWR.SWR_2453)
     async def _execute(self) -> None:
-        from rotaris_core.cli.background import _run_task, config_for_session_worktree
         from rotaris_core.improvement import RunType
+        from rotaris_core.run_host import RunRequest, execute_run
         from rotaris_core.session.manager import SessionManager
-        from rotaris_core.session.state import SessionWorktree
         from rotaris_core.session.worktrees import GitWorktreeService
 
-        manager = SessionManager(self.workspace, persist_debounce_seconds=0.5)
+        manager = SessionManager(self.workspace)
         source_states = [
             manager.read_session_snapshot(session_id) for session_id in self.session_ids
         ]
-        integration_state = manager.create_session(self.config, internal=True)
-        integration_state.run_type = RunType.INTEGRATION_RUN
-        await manager.persister.flush(integration_state)
-        self.started.emit(integration_state.session_id)
-        extras = RunLifecycleExtras(session_id="", observers=(), notice="", runner=None)
+        # The id is minted rather than the session created. ``prepare_integration``
+        # needs a *name* to build its branch and worktree path from — the locks it
+        # takes are the source sessions' — and creating the session here would take
+        # this session's lock too, which ``execute_run`` then could not acquire:
+        # the lock is an O_EXCL file behind a stale-pid reaper, so a live holder is
+        # refused even when the live holder is us.
+        session_id = manager.new_session_id()
+        self.started.emit(session_id)
         service = GitWorktreeService(
             self.workspace,
             storage_subpath=self.config.worktree_storage_subpath,
@@ -119,62 +128,44 @@ class _WorktreeIntegrationWorker(QObject):
         plan = None
         try:
             self.progress.emit("Preparing isolated integration workspace…")
-            plan = service.prepare_integration(manager, source_states, integration_state.session_id)
-            integration_state.worktree = SessionWorktree(
-                path=str(plan.integration_path),
-                branch=plan.integration_branch,
-                base_branch=plan.base_branch,
-                base_revision=plan.base_revision,
-                created_by_session=True,
-                merge_status="integrating",
-                integration_session_id=integration_state.session_id,
-            )
-            run_config = config_for_session_worktree(self.config, manager, integration_state)
-            integration_state.config_snapshot = run_config.model_dump(mode="json")
-            integration_state.execution_status = "running"
-            await manager.persister.flush(integration_state)
+            plan = service.prepare_integration(manager, source_states, session_id)
             self.progress.emit("Integration agent is merging selected worktrees…")
-            # Same composition as an ordinary desktop run: the integration agent
-            # edits a real tree with real tools, so the user's lifecycle hooks
-            # and per-iteration checkpoints apply to it too. Registered here and
-            # discarded in this method's ``finally``.
-            extras = install_run_lifecycle_extras(
-                config=run_config,
-                session_manager=manager,
-                state=integration_state,
-            )
-            if extras.notice:
-                self.notice.emit(extras.notice)
-            run_kwargs: dict[str, Any] = {
-                "delegation_strategy": "single",
-                "run_type": RunType.INTEGRATION_RUN,
-            }
-            if extras.observers and accepts_extra_observers(_run_task):
-                run_kwargs["extra_observers"] = extras.observers
-            result = await _run_task(
-                service.integration_prompt(plan),
-                run_config,
+            result = await execute_run(
+                RunRequest(
+                    task=service.integration_prompt(plan),
+                    config=self.config,
+                    max_iterations=self.config.runtime.max_iterations,
+                    new_session_id=session_id,
+                    # Attached, not created: the merged tree already exists, and
+                    # binding it here is what roots the run's config in it.
+                    worktree_path=plan.integration_path,
+                    delegation_strategy="single",
+                    run_type=RunType.INTEGRATION_RUN,
+                    internal=True,
+                ),
                 manager,
-                integration_state,
-                run_config.runtime.max_iterations,
-                **run_kwargs,
+                on_session_ready=partial(_stamp_integration_binding, manager, session_id),
+                notice=self.notice.emit,
             )
-            from rotaris_core.ralph.state import summarize_run_progress
-
-            status, summary, _severity = summarize_run_progress(result)
-            integration_state.execution_status = status
-            integration_state.transcript_events.append({"role": "system", "content": summary})
-            if status != "completed":
-                raise RuntimeError(summary or "Integration agent did not complete the merge.")
+            if not _completed(result):
+                raise RuntimeError(
+                    result.error
+                    or result.summary
+                    or "Integration agent did not complete the merge."
+                )
             self.progress.emit("Verifying integration and updating base branch…")
             service.finalize_integration(manager, plan)
             plan = None
-            integration_state.worktree.merge_status = "merged"
-            await manager.persister.flush(integration_state)
+            state = manager.read_session_snapshot(session_id)
+            if state.worktree is not None:
+                state.worktree.merge_status = "merged"
+                manager.flush_session(state)
             self.succeeded.emit("Selected worktree changes are now on the base branch.")
         except Exception as exc:
-            integration_state.execution_status = "failed"
-            await manager.persister.flush(integration_state)
+            # The lifecycle already released this session's lock and recorded its
+            # terminal status. What is left is the *integration's* own undo: the
+            # source worktrees this run reserved, and the base branch it must not
+            # have moved.
             if plan is not None:
                 service.release_failed_integration(manager, plan)
                 raise RuntimeError(
@@ -182,9 +173,38 @@ class _WorktreeIntegrationWorker(QObject):
                     f"{plan.integration_path} (branch {plan.integration_branch})."
                 ) from exc
             raise
-        finally:
-            finish_notice = extras.finish_notice()
-            extras.discard()
-            if finish_notice:
-                self.notice.emit(finish_notice)
-            manager.release_lock(integration_state.session_id)
+
+
+def _completed(result: Any) -> bool:
+    """Whether the run reached a successful terminal state.
+
+    Read off the lifecycle's own :class:`~rotaris_core.run_result.RunResult`
+    rather than re-derived from the progress file: two answers to "how did this
+    run end" is the defect SWR-1828 exists to remove, and the integration path
+    used to hold the second one.
+    """
+    from rotaris_core.run_result import RunStatus
+
+    return bool(getattr(result, "status", None) is RunStatus.COMPLETED)
+
+
+@traces(SWR.SWR_2413, SWR.SWR_2453)
+def _stamp_integration_binding(manager: Any, session_id: str, state: Any) -> None:
+    """Record what makes this session's worktree an *integration* worktree.
+
+    ``execute_run`` binds the tree and writes the config rooted in it; what it
+    cannot know is why the tree exists. These three fields are what the merge
+    surfaces read, and they are written here — on the lifecycle's own
+    "the session now exists" callback — because the lifecycle's last persist
+    happens just before it, so nothing else would write them until the first
+    save of the run.
+    """
+    from rotaris_core.run_host import persist_session_state
+
+    binding = getattr(state, "worktree", None)
+    if binding is None:  # pragma: no cover - a bind failure ends the run first
+        return
+    binding.created_by_session = True
+    binding.merge_status = "integrating"
+    binding.integration_session_id = session_id
+    persist_session_state(manager, state)

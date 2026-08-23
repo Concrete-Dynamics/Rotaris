@@ -77,7 +77,7 @@ def _control(surface: _Surface | None, session_id: str = "sess-a") -> InProcessR
     return InProcessRunControl(lambda: session_id, lambda: surface)
 
 
-@verifies(SWR.SWR_2426)
+@verifies(SWR.SWR_2453)
 def test_nothing_a_host_can_ask_carries_more_than_a_value() -> None:
     """Productive use: the run moves into its own process later.
 
@@ -96,7 +96,7 @@ def test_nothing_a_host_can_ask_carries_more_than_a_value() -> None:
     assert not offenders, f"these arguments cannot cross a process boundary: {offenders}"
 
 
-@verifies(SWR.SWR_2426)
+@verifies(SWR.SWR_2453)
 def test_a_run_that_has_ended_refuses_instead_of_raising() -> None:
     """Productive use: someone clicks Pause as the run finishes.
 
@@ -111,7 +111,7 @@ def test_a_run_that_has_ended_refuses_instead_of_raising() -> None:
     assert not control.resolve_questions("agent-a", "prompt-1", {})
 
 
-@verifies(SWR.SWR_2426)
+@verifies(SWR.SWR_2453)
 def test_each_request_reaches_the_run_it_names() -> None:
     surface = _Surface()
     control = _control(surface)
@@ -131,7 +131,7 @@ def test_each_request_reaches_the_run_it_names() -> None:
     ]
 
 
-@verifies(SWR.SWR_2426)
+@verifies(SWR.SWR_2453)
 def test_cancelling_releases_what_is_blocked_on_a_person_first() -> None:
     """Productive use: a user cancels a run that is waiting on their approval.
 
@@ -149,7 +149,7 @@ def test_cancelling_releases_what_is_blocked_on_a_person_first() -> None:
     ]
 
 
-@verifies(SWR.SWR_2426)
+@verifies(SWR.SWR_2453)
 def test_an_empty_request_is_refused_before_it_reaches_the_run() -> None:
     surface = _Surface()
     control = _control(surface)
@@ -160,7 +160,7 @@ def test_an_empty_request_is_refused_before_it_reaches_the_run() -> None:
     assert surface.calls == []
 
 
-@verifies(SWR.SWR_2426, SWR.SWR_2504)
+@verifies(SWR.SWR_2453, SWR.SWR_2504)
 def test_an_approval_reaches_the_run_that_asked_for_it() -> None:
     """Productive use: two runs are open and one of them is waiting on a decision.
 
@@ -194,7 +194,7 @@ def test_an_approval_reaches_the_run_that_asked_for_it() -> None:
     assert resolved == [("sess-a", "request-1")]
 
 
-@verifies(SWR.SWR_2426)
+@verifies(SWR.SWR_2453)
 def test_the_run_worker_is_the_surface_the_control_expects() -> None:
     """Productive use: the desktop's worker is what an in-process control drives.
 

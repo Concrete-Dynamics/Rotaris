@@ -1,11 +1,16 @@
 """A desktop run leaves the same event store behind as a headless one (SWR-2901).
 
-Rotaris does not go through ``rotaris_core.run_host.execute_run``; its run
-workers drive ``cli.background._run_task`` directly, one layer below where the
-event store is attached. That shortcut used to skip the store entirely, so the
-CLI and the Python SDK persisted their runs while the *primary* interface — the
-one whose sessions a user actually wants to replay and export — persisted
-nothing.
+Rotaris' run workers used to drive ``cli.background._run_task`` directly, one
+layer below where the event store is attached, so the CLI and the Python SDK
+persisted their runs while the *primary* interface — the one whose sessions a
+user actually wants to replay and export — persisted nothing. Every desktop run
+path now goes through ``rotaris_core.run_host.execute_run``, which attaches the
+store for every run that reaches it.
+
+The fake runtime is still installed by patching
+``rotaris_core.cli.background._run_task``: ``execute_run`` imports it inside its
+own body, so the patch reaches the run through the lifecycle — which is exactly
+what makes the assertions below about the store meaningful.
 
 These tests prove the wiring through its user-observable effect: the file a
 replay or a trajectory export reads afterwards. Only the agent runtime is faked,

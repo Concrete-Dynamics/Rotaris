@@ -1858,6 +1858,8 @@ def test_transcript_operation_counts_are_deterministic() -> None:
         "remove": 0,
         "update": 1,
         "reset": 0,
+        # The delta path's own counter (SWR-2454); ``sync`` never refuses.
+        "refused": 0,
     }
 
 

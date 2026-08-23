@@ -4,7 +4,7 @@ agent inspector."""
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QTextCursor
@@ -636,10 +636,12 @@ class WorkspaceView(Themed, QWidget):
         self._followed_agent_id = ""
 
         store.transcript_changed.connect(self._refresh_transcript)
+        store.transcript_delta.connect(self._apply_transcript_delta)
         # A new row can move the followed agent (SWR-2910); the guard keeps the
         # inspector off the hot path of a streaming run, where most rows come
         # from the agent the panel is already showing.
         store.transcript_changed.connect(self._refresh_inspector_follow)
+        store.transcript_delta.connect(self._on_transcript_delta_follow)
         store.todos_changed.connect(self._refresh_sidebar)
         store.agents_changed.connect(self._refresh_sidebar)
         store.agents_changed.connect(self._refresh_inspector)
@@ -1657,6 +1659,33 @@ class WorkspaceView(Themed, QWidget):
         with self._diagnostics.span("workspace.transcript_refresh"):
             self._refresh_transcript_content()
 
+    @traces(SWR.SWR_2454)
+    def _apply_transcript_delta(self, first: int, rows: object) -> None:
+        """Apply a live run's transcript change without rebuilding the transcript.
+
+        Two things upstream of the model still read the whole list, and both are
+        refused here rather than approximated: an agent filter (SWR-2099) makes
+        a source-row boundary meaningless, and tool grouping (SWR-2432) changes
+        which rows exist. In either case this falls through to the whole-list
+        refresh, which is correct and merely costs what it always did.
+        """
+        with self._diagnostics.span("workspace.transcript_delta"):
+            if self._store.selected_agent_id:
+                self._refresh_transcript_content()
+                return
+            events = cast("list[TranscriptEvent]", rows)
+            old_count = self.transcript_scroll.transcript_model.rowCount()
+            follow_tail = self.transcript_scroll.following_tail
+            if not self.transcript_scroll.apply_events_delta(first, events):
+                if first > self.transcript_scroll.transcript_model.rowCount():
+                    self._refresh_transcript_content()
+                return
+            self._after_transcript_rows_changed(old_count, follow_tail=follow_tail)
+
+    def _on_transcript_delta_follow(self, _first: int, _rows: object) -> None:
+        """The inspector's follow check, on the delta signal as well (SWR-2910)."""
+        self._refresh_inspector_follow()
+
     def _display_settings(self) -> tuple[bool, bool]:
         """The only two UI settings the transcript's projection depends on."""
         return (self._store.ui.auto_collapse_tools, self._store.ui.group_tool_calls)
@@ -1700,10 +1729,21 @@ class WorkspaceView(Themed, QWidget):
         if not self.transcript_scroll.set_events(events):
             return
 
+        self._after_transcript_rows_changed(old_count, follow_tail=follow_tail)
+
+    def _after_transcript_rows_changed(self, old_count: int, *, follow_tail: bool) -> None:
+        """What both transcript paths owe the surrounding chrome once rows move."""
+        self.transcript_stack.setCurrentWidget(
+            self.transcript_scroll
+            if self.transcript_scroll.transcript_model.rowCount()
+            else self.transcript_empty
+        )
+        self.clear_button.setEnabled(bool(self._store.transcript))
+        self._refresh_terminals_button()
         # Counted in displayed rows, not source events: with grouping on, ten
         # new calls that join one group are one new row, and the badge must
         # match what scrolling down would actually reveal.
-        new_count = model.rowCount()
+        new_count = self.transcript_scroll.transcript_model.rowCount()
         if follow_tail:
             self.new_output_button.hide()
         elif new_count > old_count:

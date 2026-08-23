@@ -36,12 +36,13 @@ still ends a run the way it always did: request a graceful stop, and if the
 loop does not honour it within :data:`CANCEL_GRACE_SECONDS`, cancel it.
 
 **``_run_task`` deliberately stays in ``rotaris_core.cli.background``.**  It is
-the agent-runtime wiring, not the lifecycle, and three consumers already bind
-to it at that path (the Rotaris desktop run bridge, its worktree integration,
-and the headless stream tests, which install their fake run by patching that
-module attribute).  It is therefore imported lazily, at call time, so those
-seams keep working; moving it is a refactor with a blast radius outside this
-module.
+the agent-runtime wiring, not the lifecycle.  No production caller reaches it
+directly any more — since SWR-2453 every host comes through here — but it is
+still imported **lazily, at call time**, and that is load-bearing rather than
+leftover: eight test modules install their fake runtime by patching that module
+attribute, and a module-level import would bind the real function before they
+could.  The late import is what lets a test drive the whole lifecycle with a
+stand-in loop.
 """
 
 from __future__ import annotations
@@ -116,6 +117,15 @@ class RunRequest:
     #: Which delegation strategy the run's orchestrator uses. ``None`` leaves
     #: the loop's own default in place.
     delegation_strategy: str | None = None
+    #: What kind of run this is, as ``rotaris_core.improvement.RunType``.
+    #: ``None`` leaves the runtime's own default. Typed loosely for the same
+    #: reason the rest of this module imports late: naming the enum here would
+    #: pull the improvement package into every importer of ``run_host``.
+    run_type: Any | None = None
+    #: Whether the session this run creates is machinery rather than a person's
+    #: work — the worktree integration run is the case (SWR-2453). Ignored when
+    #: resuming, because a resumed session already is what it is.
+    internal: bool = False
 
 
 #: Prefix every "the run never started" diagnostic carries.  It is part of the
@@ -597,10 +607,19 @@ async def execute_run(
     else:
         state = session_manager.create_session(
             config,
+            internal=request.internal,
             session_id=request.new_session_id,
             requirement_id=request.requirement_id,
             unit_id=request.unit_id,
         )
+        if request.run_type is not None:
+            # On the session, not only on the loop.  The loop reads ``run_type``
+            # to decide what to do at the end of the run; the *record* needs it
+            # so that anything reading the session back — a browser, a report,
+            # the improvement surfaces — can still say what kind of run this
+            # was. Only for a session this call created: a resumed one keeps
+            # the kind it was created as.
+            state.run_type = request.run_type
         try:
             config = _bind_worktree(request, config, session_manager, state)
         except Exception as exc:
@@ -733,10 +752,12 @@ async def execute_run(
     # longer decides *whether* a sink exists, only what the store's tee forwards
     # to — ``None`` means "persist, stream nowhere".
     #
-    # Scope, stated so it is not over-read: this covers the hosts that call
-    # ``execute_run`` — the CLI and the Python SDK.  Rotaris' desktop run bridge
-    # drives ``cli.background._run_task`` directly and is not wired here; giving
-    # it the same attach/detach pair is its own change.
+    # Scope, stated so it is not over-read: this covers every host that calls
+    # ``execute_run``, which since SWR-2453 is all of them — the CLI, the Python
+    # SDK, and each of Rotaris' desktop run paths.  A host that reached the
+    # runtime below this function would still get no store, which is why "no
+    # host carries a private re-composition of the lifecycle" is a requirement
+    # rather than a convention.
     # A store that cannot be opened — a read-only session directory, an
     # exhausted disk — costs this session its replay (SWR-2902) and its
     # trajectory export (SWR-2903). It must not also cost the user the run, so
@@ -790,6 +811,7 @@ async def execute_run(
                 interrupt_handler=bridge,
                 iteration_observer=iteration_observer,
                 delegation_strategy=request.delegation_strategy,
+                run_type=request.run_type,
                 post_run_improvement_job_sink=_capture_post_run_improvement_job,
                 # Unconditional since SWR-2901: the loop's events are what the
                 # store persists, so switching them off for a run without a

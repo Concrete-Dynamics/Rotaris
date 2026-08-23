@@ -38,8 +38,14 @@ the trap is still armed for the next reader:
 - The stale claim is repeated in the module docstrings of
   `apps/rotaris/tests/test_desktop_hook_wiring.py` and
   `test_desktop_event_store.py`.
+- **And once in the engine.** A comment *inside `execute_run` itself*, above the
+  event-store attach, scoped SWR-2901 to "the CLI and the Python SDK" and said
+  "Rotaris' desktop run bridge drives `cli.background._run_task` directly and is
+  not wired here". That is the worst of the four: it is in the function the
+  desktop calls, and it tells a reader the store is not attached for a desktop
+  run when it is.
 
-Three statements of an obsolete fact, one statement of the current one, and the
+Four statements of an obsolete fact, one statement of the current one, and the
 obsolete ones are the ones you meet first. Worth fixing as part of the work.
 
 ## What is actually there
@@ -145,11 +151,13 @@ mention a control surface. The id appears to have been stretched to cover the
 runchannel during the change that landed both.
 
 This is spec drift of the quieter kind: the trace resolves, the build is green,
-and the requirement does not describe the code. Not fixed here, because
-re-homing traces is implementation work and this change is scoped to
-requirements. The natural home is SWR-2453 — the runchannel *is* the host/run
-boundary that requirement owns — and the implementation plan should re-point it
-rather than widen SWR-2426 to fit.
+and the requirement does not describe the code. Not fixed *in the requirements
+change*, because re-homing traces is implementation work. **Fixed in the
+implementation**: the four `@traces` sites and the seven `@verifies` sites in
+`tests/unit/test_run_control.py` now name SWR-2453 — the runchannel *is* the
+host/run boundary that requirement owns. SWR-2426 keeps its real traces in
+`agents/tool_registration.py` and `agents/factory.py`, which is what its text
+actually describes.
 
 Worth noting the runchannel is otherwise the healthiest thing at this boundary:
 flat, scalar, no live objects in or out, and explicitly built so that "a second
@@ -172,6 +180,93 @@ existing pieces point at. It is not the only one, and this note is not an
 endorsement. Recorded only so the plan starts from something concrete to argue
 with.
 
+## The design that was chosen, and the two readings it corrected
+
+Written after a second pass over the same code, on the same day. Two things the
+first pass got wrong are what shaped the answer.
+
+**The push channel is not the event bus. It is `_SessionObserver`.** The bus
+(`events/bus.py`) is a module-level dict with no IPC, and the wire schema's 22
+event types carry no assistant text or reasoning — so a live view cannot be
+folded from the stream even in this process. But `_SessionObserver`
+(`services/run_bridge.py`) *already* receives every delta the run produces:
+streamed text, thinking bursts, tool rows, verifier rows, todos. It holds live
+references into `state.transcript_events`, mutates rows in place, and calls
+`persister.request_save` at each change. It deliberately never touches Qt, which
+is why its deltas go to disk and are read back. **Nothing was missing; nothing
+subscribed.** So the design connects that observer to Qt rather than inventing a
+channel — and passing an `EventSink` to `execute_run`, the shape the section
+above points at, would not have carried the transcript at all.
+
+**The cost is one surface, not all of them.** Per update there are four O(N)
+stages, N = accumulated transcript rows: `read_session_snapshot` parses
+`resume.json` + `ui_transcript.json` whole; `_project_transcript` walks every
+row; `WorkspaceStore.set_transcript` compares the whole list;
+`TranscriptListModel.sync` prefix-scans it. Everything else the refresh derives —
+agents, todos, KPIs, verifier, approvals — is bounded by *concurrency*, not by
+session length, and was never the problem.
+
+The design, then:
+
+| | |
+| --- | --- |
+| Local session | observer → deep-copied delta → queued Qt signal → incremental projector → `TranscriptListModel.apply_delta`. O(change). |
+| Foreign / finished session | whole-state read, slower cadence. O(N) per read, deferred (see § Scope in SWR-2454). |
+| Bootstrap, focus change, run end | one whole-state read, always. This is also where `session_live` flipping rewrites rows retroactively. |
+| The poll | survives, demoted: it serves foreign sessions *and* is the correctness backstop — a delta the push path misses is repaired on the next reconcile, so a missed emit costs latency, never content. |
+
+One derivation is preserved by construction rather than by test: the incremental
+path runs the *same* `_project_transcript` logic, as a stateful projector, over
+the *same* rows the persister writes. `_project_transcript`'s cross-row carry is
+only three values — `last_thinking` per agent, `emitted_ids` for diff dedup, and
+the diff index — which is what makes an incremental form possible at all.
+
+**And SWR-2453 turned out smaller than its own note.** `prepare_integration`
+needs the session **id**, not the session — the locks it takes are the *source*
+sessions'. So the host mints an id, prepares the worktree, and passes
+`new_session_id` + `worktree_path`; `_bind_worktree` already handles the latter
+through `attach_existing`. No worktree seam is needed. What *is* needed is two
+scalar fields on `RunRequest`: `run_type` and `internal`.
+
+Recorded because a plausible alternative is a trap: passing the pre-created
+session as `RunRequest.session_id` deadlocks. `create_session` acquires the lock,
+and `persistence.acquire_lock` is `O_CREAT|O_EXCL` behind a stale-pid reaper, so
+a lock held by a *live* pid — our own — returns `False`.
+
+### What the implementation landed, and what it left standing
+
+Both requirements are satisfied for the case they were written about, and three
+things are left standing on purpose. Written down here because the second is
+easy to mistake for an oversight.
+
+Landed: every desktop run path goes through `execute_run`, the integration run
+included; the transcript reaches the view through `_SessionObserver`'s delta
+sink rather than through a snapshot read, at a cost bounded by the change from
+the run's own thread all the way to `TranscriptListModel.apply_delta`. The poll
+is now that surface's *reconciler* — the backstop for a delta the projector
+refuses — rather than its source. `apps/rotaris/tests/test_live_view_latency.py`
+pins that by stopping the timer: with no poll running, the rows still arrive.
+
+Left standing:
+
+1. **A foreign session is still whole-state per read** — the SWR-1829
+   prerequisite above.
+2. **Only the transcript is on the live channel.** Child states, todos,
+   approvals, verifier progress and token counts still reach the view through
+   the reconciling read, because their cost is bounded by concurrency and never
+   grew with the session. The thing to keep in view is not their cost but their
+   *latency*: they hold the reconciler's, and the desktop still shortens the
+   persistence debounce for them — exactly the SWR-2130 coupling that
+   requirement's scope note wants gone. The transcript no longer needs it; they
+   do.
+3. **Two stages inside the view still read the whole list.** An agent filter
+   (SWR-2099) and tool grouping (SWR-2432) each rewrite which rows exist, so a
+   boundary in source rows is not a boundary in displayed rows. Both are
+   *refused* by `TranscriptScrollArea.apply_events_delta` rather than
+   approximated, and the whole-list refresh runs instead — correct, and merely
+   as expensive as it always was. With neither on, which is the default, the
+   cheap path holds end to end.
+
 ## Open questions for the implementation plan
 
 1. **The 250 ms budget in SWR-2454 is a proposal, not a measurement.** It comes
@@ -183,17 +278,46 @@ with.
    worktree via `GitWorktreeService.prepare_integration` — so the question is
    which of those the lifecycle can host and which need a seam. This is the whole
    of SWR-2453's remaining work and it is smaller than the original migration was.
-3. **`_run_task` is still a patch point for three test modules** — the worktree
-   integration tests, the desktop hook-wiring tests and the desktop event-store
-   tests all install their fake run by patching that module attribute. Retiring
-   the last production consumer means giving those tests a different seam. Plan
-   it before the move.
+3. ~~**`_run_task` is still a patch point for three test modules.**~~
+   **Answered, and the premise was wrong.** `execute_run` imports `_run_task`
+   *inside its own function body* — a deliberate late import — so
+   `monkeypatch.setattr("rotaris_core.cli.background._run_task", …)` intercepts
+   runs that go through the shared lifecycle just as well as runs that drive the
+   runtime directly. That is why the desktop tests pass today despite the
+   migration having already happened. Moving the integration run onto
+   `execute_run` retires no patch point: `execute_run` is itself a production
+   consumer of `_run_task`.
+
+   It is also not three modules. Eight files patch or call it —
+   `test_worktree_integration_e2e.py`, `test_sandbox_toggle.py`,
+   `test_run_wiring_e2e.py`, `test_parallel_runs_e2e.py`,
+   `test_desktop_hook_wiring.py`, `test_desktop_event_store.py`,
+   `tests/integration/test_stale_session_repair.py`, and (as direct callers)
+   `tests/capability/harness.py` and `test_resume_intent_carry_over.py`.
+
+   The one real consequence: `test_worktree_integration_e2e.py` asserts on the
+   `extra_observers` kwarg the *host* passes today. After the move those
+   observers come from the lifecycle, so that assertion belongs there instead.
 4. **Which surfaces beyond the transcript need the latency budget?** Todos, agent
    tree, KPIs, artifacts, verifier progress and pending approvals all ride the
    same refresh today. They do not obviously all need the same freshness, and
    treating them uniformly is what makes the update whole-state.
-5. **Does the `snapshot.json` compatibility copy still have readers?** If it is
-   only tests, retiring it is cheap and unrelated to the rest.
+5. ~~**Does the `snapshot.json` compatibility copy still have readers?**~~
+   **Answered: the *write* has none, the *read* is a requirement.** It is
+   written at `session/persistence.py:42-44` and read back at `:96`. Outside
+   that load path nothing in production reads it; four tests do
+   (`test_session_manager.py` asserts it exists, and
+   `test_session_diagnostics.py`, `test_search_tools.py`,
+   `test_session_recovery.py` each write one as a fixture).
+
+   But SWR-1550 is approved and requires legacy `snapshot.json` sessions to
+   remain **loadable**, which governs the read, not the write. So: stop writing
+   it, keep reading it. That halves the persistence fan-out and keeps SWR-1550.
+   It also needs the 1500 epic's line saying the copy is written "for one
+   release" updated — that release has passed.
+
+   Filed as its own change rather than folded into SWR-2453/SWR-2454: it touches
+   session persistence, which nothing else in that work does.
 6. **Migration order.** SWR-2453 and SWR-2454 are separable, and now that the
    main paths already call `execute_run`, SWR-2454 no longer waits on SWR-2453 —
    the `event_sink` parameter is there to be passed on the ordinary run path

@@ -80,6 +80,13 @@ class WorkspaceStore(QObject):
     run_summary_changed = Signal()
     selection_changed = Signal(str)  # agent id ("" for none)
     transcript_changed = Signal()
+    #: First changed row, and the projected rows from there on (SWR-2454).
+    #: The narrow counterpart of ``transcript_changed``, and deliberately *not*
+    #: accompanied by it: a consumer that answered this signal by rebuilding the
+    #: whole transcript would put the O(session) work straight back, so every
+    #: transcript consumer connects to this one and decides for itself whether
+    #: the boundary is useful to it.
+    transcript_delta = Signal(int, object)
     todos_changed = Signal()
     sessions_changed = Signal()
     artifacts_changed = Signal()
@@ -508,6 +515,22 @@ class WorkspaceStore(QObject):
     def append_event(self, event: TranscriptEvent) -> None:
         self.transcript.append(event)
         self.transcript_changed.emit()
+
+    @traces(SWR.SWR_2454)
+    def apply_transcript_delta(self, first: int, rows: list[TranscriptEvent]) -> None:
+        """Replace the transcript from *first* on, without touching what precedes it.
+
+        The cheap path: no whole-list comparison, because the producer already
+        said where the change begins.
+        """
+        if first < 0 or first > len(self.transcript):
+            # A boundary past the end would silently drop rows. Refuse it: the
+            # reconciling read will put the transcript right.
+            return
+        if first == len(self.transcript) and not rows:
+            return
+        self.transcript[first:] = rows
+        self.transcript_delta.emit(first, rows)
 
     def set_pending_questions(self, pending: dict[str, object] | None) -> None:
         if pending == self.pending_questions:

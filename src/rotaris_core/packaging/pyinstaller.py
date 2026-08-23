@@ -53,6 +53,9 @@ _DEPENDENCY_DATA: dict[str, frozenset[str]] = {
     "binaryornot": frozenset({".csv"}),
     # textual/tree-sitter/highlights/*.scm — syntax highlighting in the TUI.
     "textual": frozenset({".scm"}),
+    # certifi/cacert.pem keeps verified setup downloads available from frozen
+    # Linux AppImages where OpenSSL lacks its compiled-in CA path.
+    "certifi": frozenset({".pem"}),
 }
 
 #: Imported by string, so PyInstaller's import graph never reaches them.

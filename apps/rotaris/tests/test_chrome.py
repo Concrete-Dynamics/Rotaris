@@ -396,3 +396,96 @@ def test_the_rail_carries_seven_primary_views_with_requirements_between_mission_
         rail.select("requirements", emit=True)
     assert caught.args == ["requirements"]
     assert rail.current() == "requirements"
+
+
+# ---------------------------------------------------------------------------
+# Brand mark — the title bar and the window icon paint the shipped logo
+# ---------------------------------------------------------------------------
+
+
+def _brand_pixels(image) -> dict[str, bool]:
+    """Whether the rendered mark paints each brand hue, by channel ordering.
+
+    The mark is three fills over transparency: amber (r>g>b), teal (g>r>b) and
+    the violet ring (b>r>g). Ordering survives premultiplication, so the check
+    holds whether Qt hands back premultiplied or straight-alpha reads.
+    """
+    found = {"amber": False, "teal": False, "violet": False}
+    for y in range(image.height()):
+        for x in range(image.width()):
+            color = image.pixelColor(x, y)
+            if color.alpha() == 0:
+                continue
+            r, g, b = color.red(), color.green(), color.blue()
+            if r >= 100 and r > g > b:
+                found["amber"] = True
+            elif g >= 80 and g > r and g > b:
+                found["teal"] = True
+            elif b >= 90 and b > r > g:
+                found["violet"] = True
+    return found
+
+
+@verifies(SWR.SWR_3726)
+def test_mark_pixmap_paints_the_three_brand_hues(qtbot) -> None:
+    """Productive use: the title bar shows the Rotaris mark.
+    Expected outcome: `mark_pixmap` rasterises the shipped SVG — amber, teal and
+    violet pixels are all present, so it is the logo and not the placeholder letter."""
+    from rotaris.theme.brand import mark_pixmap
+
+    pm = mark_pixmap(64)
+    assert not pm.isNull()
+    found = _brand_pixels(pm.toImage())
+    assert found == {"amber": True, "teal": True, "violet": True}
+
+
+@verifies(SWR.SWR_3726)
+def test_mark_icon_carries_the_mark(qtbot) -> None:
+    """Productive use: the taskbar icon for a running Rotaris window.
+    Expected outcome: `mark_icon()` is a non-null icon whose pixmap paints the mark."""
+    from rotaris.theme.brand import mark_icon
+
+    icon = mark_icon()
+    assert not icon.isNull()
+    pm = icon.pixmap(64, 64)
+    assert not pm.isNull()
+    found = _brand_pixels(pm.toImage())
+    assert found["violet"] and found["amber"] and found["teal"]
+
+
+@verifies(SWR.SWR_3726)
+def test_title_bar_mark_is_the_logo_not_a_letter(qtbot) -> None:
+    """Productive use: opening the app, the top-left mark is the Rotaris logo.
+    Expected outcome: the mark slot holds a pixmap at the UI kit's 22px — not the
+    placeholder text — and announces itself as the product name."""
+    from rotaris.models import sample_store
+    from rotaris.views.chrome import TitleBar
+
+    bar = TitleBar(sample_store())
+    qtbot.addWidget(bar)
+
+    mark = bar._mark
+    assert mark.text() == ""
+    pixmap = mark.pixmap()
+    assert not pixmap.isNull()
+    assert pixmap.width() > 0
+    assert mark.accessibleName() == "Rotaris"
+
+
+@verifies(SWR.SWR_3726)
+def test_mark_pixmap_degrades_to_the_placeholder_without_asset(qtbot, monkeypatch) -> None:
+    """Productive use: a bundle whose logo asset did not survive freezing.
+    Expected outcome: `mark_pixmap` returns a null pixmap and the title bar keeps
+    the letter placeholder — no crash and no unpainted mark."""
+    from rotaris.models import sample_store
+    from rotaris.theme import brand
+    from rotaris.views.chrome import TitleBar
+
+    monkeypatch.setattr(brand, "MARK_PATH", brand.MARK_PATH.parent / "__no_such_logo__.svg")
+    monkeypatch.setattr(brand, "_renderer_cache_for", None)
+
+    assert brand.mark_pixmap(22).isNull()
+
+    bar = TitleBar(sample_store())
+    qtbot.addWidget(bar)
+    assert bar._mark.text() == "R"

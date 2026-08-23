@@ -14,6 +14,7 @@ from rotaris_core.reqtocode import SWR, traces
 from rotaris import __version__
 from rotaris.models import WorkspaceStore, sample_store
 from rotaris.services.theme_preference import install_theme_persistence
+from rotaris.theme.brand import mark_icon
 from rotaris.theme.fonts import register_bundled_fonts
 from rotaris.views import MainWindow
 
@@ -70,7 +71,7 @@ def create_window(
     )
 
 
-@traces(SWR.SWR_2001, SWR.SWR_3701, SWR.SWR_3703, SWR.SWR_3715)
+@traces(SWR.SWR_2001, SWR.SWR_3701, SWR.SWR_3703, SWR.SWR_3715, SWR.SWR_3726)
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -89,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(sys.argv[:1]) if instance is None else cast("QApplication", instance)
     app.setApplicationName("Rotaris")
     app.setOrganizationName("Rotaris")
+    # The taskbar, alt-tab strip and window chrome carry the same mark the
+    # title bar paints (SWR-3726), never a platform default.
+    app.setWindowIcon(mark_icon())
     # Before the first window, because Qt substitutes an unregistered family
     # silently at paint time rather than reporting it (SWR-3703). What it managed
     # to load is not checked: the stacks fall through to the host's faces, and an

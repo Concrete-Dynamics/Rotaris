@@ -26,6 +26,7 @@ from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme import phosphor, tokens
 from rotaris.theme.a11y import raise_on
+from rotaris.theme.brand import mark_pixmap
 from rotaris.theme.manager import Themed
 from rotaris.widgets.cards import _tag_variant
 from rotaris.widgets.meters import StatusDot
@@ -135,7 +136,7 @@ def _glyph_icon(glyph: str, size: int = 17) -> QIcon:
     return icon
 
 
-@traces(SWR.SWR_2033, SWR.SWR_2414)
+@traces(SWR.SWR_2033, SWR.SWR_2414, SWR.SWR_3726)
 class TitleBar(Themed, QWidget):
     """Brand strip: mark + name + version, workspace chip, session status."""
 
@@ -150,10 +151,19 @@ class TitleBar(Themed, QWidget):
         layout.setContentsMargins(space.md, 0, space.md, 0)
         layout.setSpacing(space.md)
 
-        self._mark = QLabel("R")
-        # The UI kit pins the title-bar mark at 22px.
+        # The UI kit pins the title-bar mark at 22px; the mark itself is the
+        # design system's logo (SWR-3726), and the letter placeholder survives
+        # only as the degradation when the asset is missing or unrenderable.
+        self._mark = QLabel()
         self._mark.setFixedSize(22, 22)
         self._mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._mark.setAccessibleName("Rotaris")
+        mark = mark_pixmap(22)
+        self._mark_is_logo = not mark.isNull()
+        if self._mark_is_logo:
+            self._mark.setPixmap(mark)
+        else:
+            self._mark.setText("R")
         layout.addWidget(self._mark)
 
         self._brand = QLabel("Rotaris")
@@ -208,11 +218,16 @@ class TitleBar(Themed, QWidget):
         self.setStyleSheet(
             f"QWidget#chrome{{border-bottom:{size.hairline}px solid {color.border};}}"
         )
-        self._mark.setStyleSheet(
-            f"border:{size.hairline}px dashed {color.accent[700]};"
-            f"border-radius:{theme.radius.sm}px;color:{color.accent[400]};"
-            f"font-size:{type_.scale.sm}px;font-weight:{type_.weight_display};"
-        )
+        # The placeholder letter carries the dashed accent frame; the logo
+        # paints itself and needs none.
+        if not self._mark_is_logo:
+            self._mark.setStyleSheet(
+                f"border:{size.hairline}px dashed {color.accent[700]};"
+                f"border-radius:{theme.radius.sm}px;color:{color.accent[400]};"
+                f"font-size:{type_.scale.sm}px;font-weight:{type_.weight_display};"
+            )
+        else:
+            self._mark.setStyleSheet("")
         # No `letter-spacing` on the wordmark: QSS parses the declaration and
         # then discards it, so carrying one here would only look like tracking.
         self._brand.setStyleSheet(

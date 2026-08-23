@@ -5,14 +5,21 @@ from __future__ import annotations
 
 import hashlib
 import io
+import ssl
 import tarfile
 import zipfile
 from typing import TYPE_CHECKING
+from unittest.mock import Mock
 
 import pytest
 
 from rotaris_core.reqtocode import SWR, verifies
-from rotaris_core.setup.download import SetupSupplyError, extract_and_promote, verify_sha256
+from rotaris_core.setup.download import (
+    SetupSupplyError,
+    extract_and_promote,
+    setup_tls_context,
+    verify_sha256,
+)
 from rotaris_core.setup.models import PlatformArtifact, ToolSpec
 
 if TYPE_CHECKING:
@@ -31,6 +38,18 @@ def _spec(artifact: PlatformArtifact) -> ToolSpec:
         "MIT",
         ("demo",),
     )
+
+
+@verifies(SWR.SWR_3715)
+def test_setup_download_trusts_system_and_bundled_ca_roots(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Productive use: an AppImage user downloads a pinned tool over HTTPS.
+    Expected outcome: public CAs travel with the AppImage and organisation CAs stay trusted."""
+    context = Mock(spec=ssl.SSLContext)
+    monkeypatch.setattr("rotaris_core.setup.download.ssl.create_default_context", lambda: context)
+    monkeypatch.setattr("rotaris_core.setup.download.certifi.where", lambda: "/bundle/cacert.pem")
+
+    assert setup_tls_context() is context
+    context.load_verify_locations.assert_called_once_with(cafile="/bundle/cacert.pem")
 
 
 @verifies(SWR.SWR_3715)

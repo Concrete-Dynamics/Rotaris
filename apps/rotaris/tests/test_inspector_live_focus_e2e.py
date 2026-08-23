@@ -19,7 +19,13 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QWidget
 from rotaris_core.reqtocode import SWR, verifies
-from run_wiring import ObserverHarness, action_event, message_event, observation_event, sdk_events
+from run_wiring import (
+    ObserverHarness,
+    action_event,
+    message_event,
+    observation_event,
+    sdk_events,
+)
 
 from rotaris.views.main_window import MainWindow
 
@@ -114,9 +120,7 @@ def test_the_panel_follows_the_agent_that_takes_over_the_run(qtbot: QtBot, tmp_p
     try:
         harness.event(message_event(sdk, "Handing the checks over."))
         reviewer = _second_agent(harness, "reviewer-1", "coder")
-        harness.scheduler._conversation_event_callback(  # noqa: SLF001 - the real bind point
-            reviewer, message_event(sdk, "Reading the diff now.")
-        )
+        harness.event(message_event(sdk, "Reading the diff now."), reviewer)
         harness.drain()
         store = harness.reload_into_store(tmp_path)
     finally:

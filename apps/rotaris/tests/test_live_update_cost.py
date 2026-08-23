@@ -65,7 +65,7 @@ def test_one_new_row_sends_one_new_row_whatever_the_session_holds(length: int) -
     """Productive use: the agent says one more thing.
     Expected outcome: the desktop is handed one row, not the conversation."""
     observer, seen = _observer(length)
-    observer._append_row({"role": "assistant", "name": "coder", "content": "and one more"})  # noqa: SLF001
+    observer._recorder._append({"role": "assistant", "name": "coder", "content": "and one more"})  # noqa: SLF001
     observer._touch()  # noqa: SLF001
 
     assert len(seen) == 1
@@ -79,8 +79,8 @@ def test_a_streaming_row_costs_that_row_and_what_follows_it() -> None:
     screen. Expected outcome: the delta reaches back to that row and no further,
     however much came before it."""
     observer, seen = _observer(3000)
-    streamed = observer._append_row({"role": "agent", "name": "coder", "content": "thin"})  # noqa: SLF001
-    observer._stream_segments["coder"] = streamed  # noqa: SLF001
+    streamed = observer._recorder._append({"role": "agent", "name": "coder", "content": "thin"})  # noqa: SLF001
+    observer._recorder._stream_segments["coder"] = streamed  # noqa: SLF001
     observer._touch()  # noqa: SLF001
     seen.clear()
 
@@ -98,8 +98,8 @@ def test_the_view_is_handed_copies_not_the_rows_the_run_is_writing() -> None:
     """Productive use: the run keeps streaming while the UI thread reads what it
     was handed. Expected outcome: the two never share a row."""
     observer, seen = _observer(0)
-    streamed = observer._append_row({"role": "agent", "name": "coder", "content": "one"})  # noqa: SLF001
-    observer._stream_segments["coder"] = streamed  # noqa: SLF001
+    streamed = observer._recorder._append({"role": "agent", "name": "coder", "content": "one"})  # noqa: SLF001
+    observer._recorder._stream_segments["coder"] = streamed  # noqa: SLF001
     observer._touch()  # noqa: SLF001
 
     delivered = seen[0].rows[0]
@@ -121,7 +121,7 @@ def test_a_broken_view_costs_the_view_and_not_the_run() -> None:
 
     observer.bind_delta_sink(explode)
     before = observer.manager.persister.saves
-    observer._append_row({"role": "assistant", "name": "coder", "content": "still fine"})  # noqa: SLF001
+    observer._recorder._append({"role": "assistant", "name": "coder", "content": "still fine"})  # noqa: SLF001
     observer._touch()  # noqa: SLF001
 
     assert observer.manager.persister.saves == before + 1
@@ -135,7 +135,7 @@ def test_no_consumer_at_all_is_not_a_special_case() -> None:
     observer, _seen = _observer(5)
     observer.bind_delta_sink(None)
     before = observer.manager.persister.saves
-    observer._append_row({"role": "assistant", "name": "coder", "content": "unwatched"})  # noqa: SLF001
+    observer._recorder._append({"role": "assistant", "name": "coder", "content": "unwatched"})  # noqa: SLF001
     observer._touch()  # noqa: SLF001
 
     assert observer.manager.persister.saves == before + 1

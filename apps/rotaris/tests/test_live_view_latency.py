@@ -17,9 +17,11 @@ from types import SimpleNamespace
 import pytest
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
+from rotaris_core.session.transcript import resolve_transcript_recorder
 from run_wiring import (
     action_event,
     demo_config,
+    feed_conversation,
     message_event,
     observation_event,
     sdk_events,
@@ -53,7 +55,6 @@ def _streaming_run_task(sdk, released: asyncio.Event | None = None):
         delegation_strategy=None,
         **_lifecycle_kwargs,
     ):
-        state.transcript_events.append({"role": "user", "content": prompt})
         scheduler = SimpleNamespace(
             _conversation_event_callback=None,
             _conversation_token_callback=None,
@@ -64,9 +65,17 @@ def _streaming_run_task(sdk, released: asyncio.Event | None = None):
         iteration_observer.bind_scheduler_callbacks(SimpleNamespace(snapshot_children=list))
         record = SimpleNamespace(canonical_name="coder-1", persona="coder")
         action = action_event(sdk)
-        scheduler._conversation_event_callback(record, action)
-        scheduler._conversation_event_callback(record, observation_event(sdk, action))
-        scheduler._conversation_event_callback(record, message_event(sdk, "Task complete."))
+        # Everything a run records goes through the session's recorder, prompt
+        # included: this fake stands in for the engine, so it does the engine's
+        # half of the seam (SWR-2454).
+        resolve_transcript_recorder(state.session_id).record_user(prompt)
+        feed_conversation(
+            state,
+            record,
+            action,
+            observation_event(sdk, action),
+            message_event(sdk, "Task complete."),
+        )
         if released is not None:
             # Held open on purpose: the assertion is about what the user can see
             # *during* a run, and a run that has ended has had its final

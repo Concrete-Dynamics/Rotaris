@@ -85,6 +85,10 @@ class ConfigService:
         #: rest are the trailer, which always sits after them.
         self._projected_len = 0
         self._trailer: tuple[TranscriptEvent, ...] = ()
+        #: Set while the focused session is executing in *another* process, where
+        #: there is no run to report its transcript and the event store is the
+        #: only channel across the boundary (SWR-2454 § Reach).
+        self._follower: Any | None = None
         # Hydrated SessionArtifactStore cache, keyed by (session_id, index mtime)
         # so the 750ms poll tick only re-reads artifact files when they changed.
         self._artifact_store: Any | None = None
@@ -1022,7 +1026,7 @@ class ConfigService:
         rows = list(delta.rows)
         if delta.first == 0:
             events = list(
-                self._transcript_projector.seed(rows, list(delta.new_diffs), delta.personas)
+                self._transcript_projector.reseat(rows, list(delta.new_diffs), delta.personas)
             )
             self._transcript_is_live = True
             self._projected_len = len(events)
@@ -1117,6 +1121,45 @@ class ConfigService:
         self._projected_len = 0
         self._trailer = ()
         self._transcript_projector.reset()
+        self._follower = None
+
+    @traces(SWR.SWR_2454)
+    def follow_session(self, session_id: str) -> bool:
+        """Start following a session this process is not running.
+
+        Its rows come from its event store rather than from a run reporting them
+        (SWR-2454 § Reach), which is the only channel there is across a process
+        boundary. Answers ``False`` when there is no session manager to resolve
+        the directory with — the caller then has the whole-state read it always
+        had, which is correct and merely slower.
+        """
+        self._follower = None
+        if self.session_manager is None or not session_id:
+            return False
+        session_dir = getattr(self.session_manager, "session_dir", None)
+        if session_dir is None:
+            return False
+        from rotaris.services.session_follower import SessionFollower
+
+        self._follower = SessionFollower(session_dir(session_id))
+        return True
+
+    @traces(SWR.SWR_2454)
+    def poll_followed_session(self) -> bool:
+        """Apply whatever the followed session added. ``True`` when something did.
+
+        Costs what the run wrote since the last look, not what it has written in
+        total — which is the property that makes watching a long foreign session
+        no worse than watching a short one.
+        """
+        follower = self._follower
+        if follower is None:
+            return False
+        delta = follower.poll()
+        if delta is None:
+            return False
+        self.apply_transcript_delta(delta)
+        return True
 
     def apply_session_projection(self, projection: SessionProjection) -> None:
         """Apply a prebuilt projection; must run on the Qt/UI thread."""

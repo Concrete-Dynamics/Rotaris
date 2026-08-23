@@ -28,6 +28,7 @@ from rotaris_core.events.bus import reset_event_registry, resolve_event_sink
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.sdk import RotarisClient, RunOptions, RunStatus
 from rotaris_core.session import SessionManager
+from rotaris_core.session.transcript import resolve_transcript_recorder
 from tests.integration.scripted_llm import ScriptedLLM, say
 
 if TYPE_CHECKING:
@@ -146,12 +147,18 @@ async def test_an_sdk_run_streams_its_events_and_leaves_an_ordinary_session(
     assert [summary["session_id"] for summary in manager.list_sessions()] == [session_id]
     state = manager.load_session(session_id)
     assert state.execution_status == "completed"
-    assert state.transcript_events[0] == {"role": "user", "content": "write the release notes"}
-    assert state.transcript_events[-1] == {"role": "system", "content": "Run completed."}
+    first = state.transcript_events[0]
+    assert first["role"] == "user"
+    assert first["content"] == "write the release notes"
+    # Stamped, because the engine records every row now — an SDK session's
+    # transcript is the same transcript a desktop session leaves (SWR-2454).
+    assert first["ts"]
+    assert state.transcript_events[-1]["content"] == "Run completed."
     assert (manager.session_dir(session_id) / "run.log").exists()
 
     # And the run left nothing registered behind it.
     assert resolve_event_sink(session_id) is None
+    assert resolve_transcript_recorder(session_id) is None
     assert manager.acquire_lock(session_id), "the finished run kept its session lock"
     manager.release_lock(session_id)
 

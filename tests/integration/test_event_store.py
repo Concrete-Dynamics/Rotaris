@@ -28,13 +28,13 @@ from rotaris_core.cli import argparse_app, background
 from rotaris_core.config.schema import RotarisConfig
 from rotaris_core.events.bus import reset_event_registry, resolve_event_sink
 from rotaris_core.events.schema import (
-    AgentMessageEvent,
     ErrorEvent,
     IterationEndEvent,
     IterationStartEvent,
     PermissionDecisionEvent,
     ToolFinishEvent,
     ToolStartEvent,
+    TranscriptRowEvent,
     VerifierResultEvent,
 )
 from rotaris_core.eventstore import (
@@ -136,21 +136,28 @@ def _install_scripted_run(monkeypatch: pytest.MonkeyPatch) -> None:
         publish(session_id, IterationStartEvent(session_id=session_id, iteration=1, task=task))
         publish(
             session_id,
-            AgentMessageEvent(
+            TranscriptRowEvent(
                 session_id=session_id,
-                agent_name="implementer-1",
-                persona="coder",
-                kind="reasoning",
-                text="The parser probably mishandles the trailing comma.",
+                index=0,
+                row={
+                    "role": "thinking",
+                    "name": "implementer-1",
+                    "persona": "coder",
+                    "content": "The parser probably mishandles the trailing comma.",
+                },
             ),
         )
         publish(
             session_id,
-            AgentMessageEvent(
+            TranscriptRowEvent(
                 session_id=session_id,
-                agent_name="implementer-1",
-                persona="coder",
-                text="Checking the tokenizer first.",
+                index=1,
+                row={
+                    "role": "agent",
+                    "name": "implementer-1",
+                    "persona": "coder",
+                    "content": "Checking the tokenizer first.",
+                },
             ),
         )
         publish(
@@ -497,10 +504,13 @@ def test_a_run_in_another_process_can_be_followed_without_re_reading_it(
     assert len(stopped_early.events) + len(rest.events) == len(whole)
     assert rest.restarted is False
 
-    said = [event for event in whole if event.event_type == "agent.message"]
-    assert [event.payload["kind"] for event in said] == ["reasoning", "message"]
-    assert said[1].payload["text"] == "Checking the tokenizer first."
-    assert said[1].payload["agent_name"] == "implementer-1"
+    said = [event for event in whole if event.event_type == "transcript.row"]
+    assert [event.payload["row"]["role"] for event in said] == ["thinking", "agent"]
+    assert said[1].payload["row"]["content"] == "Checking the tokenizer first."
+    assert said[1].payload["row"]["name"] == "implementer-1"
+    # Each row says where it goes, which is what lets a follower replace rather
+    # than append when the run republishes a row it settled.
+    assert [event.payload["index"] for event in said] == [0, 1]
 
     # And the last look, once the run is over, gains nothing and re-reads nothing.
     assert tail_session_events(session_dir, rest.offset).events == ()

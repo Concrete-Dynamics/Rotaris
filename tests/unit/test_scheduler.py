@@ -1648,20 +1648,38 @@ async def test_run_child_streams_conversation_events_to_callback() -> None:
 
 @verifies(SWR.SWR_1829, SWR.SWR_2454)
 @pytest.mark.asyncio
-async def test_run_child_puts_what_the_agent_said_on_the_event_stream(tmp_path) -> None:
+async def test_run_child_records_what_the_agent_said_into_the_session(tmp_path) -> None:
     """Productive use: a run happening in another process — a CLI run, a headless
     CI run — is watched from somewhere else. Expected outcome: what the agent
-    said is on the stream, so the watcher can show the conversation rather than
-    only the mechanics of it.
+    said is in the session's own transcript and on its event stream, so the
+    watcher can show the conversation rather than only the mechanics of it.
 
-    The emission sits here, below every host, on purpose: a host that installs
-    its own conversation callback replaces the one the runner set, so an emitter
-    hanging off that callback would emit for some hosts and not others."""
-    from rotaris_core.events import register_event_sink, reset_event_registry
+    The recording sits here, below every host, on purpose: a host that installs
+    its own conversation callback replaces the one the runner set, so a recorder
+    hanging off that callback would record for some hosts and not others."""
+    from rotaris_core.session.transcript import (
+        register_transcript_recorder,
+        reset_transcript_recorders,
+    )
 
-    reset_event_registry()
-    captured: list[object] = []
-    register_event_sink("s-1", captured.append)
+    class _Recorder:
+        """Stands in for the real one: this is about *reaching* it, not about
+        which rows it builds — that is the recorder's own contract, exercised
+        against real SDK events where those are available."""
+
+        def __init__(self) -> None:
+            self.events: list[tuple[str, str, object]] = []
+            self.chunks: list[object] = []
+
+        def record_conversation_event(self, agent: str, persona: str, event: object) -> None:
+            self.events.append((agent, persona, event))
+
+        def record_token_chunk(self, _agent: str, _persona: str, chunk: object) -> None:
+            self.chunks.append(chunk)
+
+    reset_transcript_recorders()
+    recorder = _Recorder()
+    register_transcript_recorder("s-1", recorder)
     try:
         record = make_record()
         streamed = [MockMessageEvent("agent", ["I fixed the failing assertion."])]
@@ -1683,16 +1701,19 @@ async def test_run_child_puts_what_the_agent_said_on_the_event_stream(tmp_path) 
                 run_events=streamed,
             ),
         )
-        assert scheduler.binding_session_id == "s-1", "the bus key is the session id"
+        assert scheduler.binding_session_id == "s-1", "the registry key is the session id"
 
         await scheduler.run_child(record, agent=object())
+        # The recording is marshalled onto the run's own loop, which is this
+        # one: the session record belongs to the loop thread while these
+        # callbacks fire on the worker thread the conversation occupies.
+        await asyncio.sleep(0)
     finally:
-        reset_event_registry()
+        reset_transcript_recorders()
 
-    said = [event for event in captured if event.event == "agent.message"]
-    assert [event.text for event in said] == ["I fixed the failing assertion."]
-    assert said[0].agent_name == record.canonical_name
-    assert said[0].persona == record.persona
+    assert [event for _agent, _persona, event in recorder.events] == streamed
+    assert {agent for agent, _persona, _event in recorder.events} == {record.canonical_name}
+    assert {persona for _agent, persona, _event in recorder.events} == {record.persona}
 
 
 @verifies(SWR.SWR_104, SWR.SWR_111)

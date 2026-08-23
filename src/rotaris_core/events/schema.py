@@ -22,9 +22,9 @@ Redaction is the schema's job, not the caller's.  Every field that can carry a
 command line, an approval summary, raw process output or model text —
 ``tool.start.arguments``, ``permission.decision.summary``,
 ``hook.start.command``, ``hook.finish.output``,
-``approval.requested.summary`` and ``agent.message.text`` — is masked by a
-validator, so a caller cannot leak a credential by constructing (or mutating) a
-model directly.
+``approval.requested.summary`` and every string inside ``transcript.row.row`` —
+is masked by a validator, so a caller cannot leak a credential by constructing
+(or mutating) a model directly.
 """
 
 from __future__ import annotations
@@ -48,14 +48,33 @@ from rotaris_core.reqtocode import SWR, traces
 #: a field or a new ``event`` type is backward-compatible and keeps the version.
 EVENT_SCHEMA_VERSION: int = 1
 
-#: How much of one agent message the wire carries.  A stream line is a line, and
-#: an event whose size follows the model's output is the one way a single event
-#: can make a whole session's history unreadable — the store caps *lines*
-#: (``eventstore.writer.DEFAULT_MAX_EVENTS``), not bytes, so nothing else bounds
-#: it.  The limit is far above any real reply; text that reaches it is clipped
-#: with an ellipsis, so a consumer can see that it happened rather than having to
-#: infer it.
+#: How much of one transcript row's text the wire carries.  A stream line is a
+#: line, and an event whose size follows the model's output is the one way a
+#: single event can make a whole session's history unreadable — the store caps
+#: *lines* (``eventstore.writer.DEFAULT_MAX_EVENTS``), not bytes, so nothing
+#: else bounds it.  The limit is far above any real reply; text that reaches it
+#: is clipped with an ellipsis, so a consumer can see that it happened rather
+#: than having to infer it.
 _MESSAGE_TEXT_LIMIT = 16_000
+
+
+def _redact_row_value(value: Any) -> Any:
+    """Mask and bound one value out of a transcript row, at any depth.
+
+    Strings are masked then clipped — in that order, because clipping first
+    could cut a credential in half and leave a half that matches nothing.
+    Containers are walked; everything else is left alone.
+    """
+    if isinstance(value, str):
+        masked = redact_text(value)
+        if len(masked) > _MESSAGE_TEXT_LIMIT:
+            return masked[: _MESSAGE_TEXT_LIMIT - 1] + "…"
+        return masked
+    if isinstance(value, Mapping):
+        return {str(key): _redact_row_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_redact_row_value(item) for item in value]
+    return value
 
 
 def _utc_now_iso() -> str:
@@ -304,55 +323,66 @@ class VerifierProgressEvent(RotarisEvent):
 
 
 @traces(SWR.SWR_1829, SWR.SWR_2454)
-class AgentMessageEvent(RotarisEvent):
-    """What an agent said, and what it reasoned before saying it.
+class TranscriptRowEvent(RotarisEvent):
+    """One row of the run's own transcript, as the run recorded it.
 
     The stream reported everything a run *did* — iterations, children, tools,
     permissions, verdicts — and nothing it *said*.  A consumer could therefore
     reconstruct a run's mechanics but not its conversation, which is the half a
     person actually reads.  A session executing in another process was the case
-    where that mattered: its transcript is written to ``state/ui_transcript.json``
-    whole, so a reader either re-reads the entire session or sees nothing, and
-    for a headless run the file stays near-empty until the run ends (SWR-2454).
+    where that mattered: the durable transcript lives in
+    ``state/ui_transcript.json``, which is rewritten whole, so a reader either
+    re-read the entire session or saw nothing (SWR-2454).
 
-    ``kind`` separates the two contents that arrive through the same seam and
-    render differently: ``"message"`` is text meant for the reader, ``"reasoning"``
-    the model's own deliberation.  A consumer showing only the conversation keeps
-    the first and drops the second; one drawing a live view wants both, because a
-    long silence with reasoning flowing is a working agent and a long silence
-    without one is not.
+    ``row`` is **not a shape invented for the wire**.  It is the dict
+    ``rotaris_core.session.transcript.TranscriptRecorder`` puts into
+    ``SessionState.transcript_events``, carried verbatim.  That is the whole
+    point: a consumer building a view from these events and a consumer reading
+    the session record afterwards are looking at the same rows, so they cannot
+    disagree about what the run said.  Its keys are that recorder's contract —
+    ``role`` (``user``/``agent``/``thinking``/``tool``/``verifier``/``system``),
+    ``name``, ``persona``, ``content``, and role-specific extras — and a consumer
+    should read the ones it knows and ignore the rest, exactly as it does for the
+    envelope.
 
-    ``text`` is redacted like every other free-text field on the wire and clipped
-    to :data:`_MESSAGE_TEXT_LIMIT`.  Both are the schema's job: an agent quotes
-    what a tool printed, and a credential in a command's output reaches this
-    field by exactly the route it reaches ``hook.finish.output``.
+    ``index`` is the row's position in that list, which makes this event an
+    **upsert rather than an append**.  A row is published when it is created and
+    again when it settles: a tool row is opened on the call and closed on the
+    result, a streamed message starts as its first token and ends as its finished
+    text.  A consumer therefore replaces position *index* rather than appending,
+    and a row it has never seen at an index beyond what it holds means it missed
+    something and should re-read.
+
+    What is deliberately *not* published is every intermediate mutation.  A
+    streamed row changes once per token, and a store recording each of those
+    would spend its whole cap (SWR-2901) on one message.  The cost lands on a
+    foreign viewer, which sees a streaming row's first token and then its
+    finished text at the end of the turn, rather than the growth between.
+
+    Every string in ``row`` is redacted and bounded by the validator below.  A
+    transcript quotes what tools printed, so a credential reaches this event by
+    exactly the route it reaches ``hook.finish.output``.
     """
 
-    event: Literal["agent.message"] = "agent.message"
-    #: Canonical name of the agent that produced it — the same string
-    #: ``child.spawn`` reports as ``agent_name``, so the two join and a message
-    #: reaches the work it belongs to.  A run's entry agent has no delegation
-    #: identity and carries its persona name here instead, so a failed join means
-    #: "not a child", not a dropped event.
-    agent_name: str = ""
-    #: Persona the agent runs under.
-    persona: str = ""
-    #: ``"message"`` for reader-facing text, ``"reasoning"`` for deliberation.
-    kind: Literal["message", "reasoning"] = "message"
-    #: The content, secrets masked and length bounded by the validator below.
-    text: str = ""
+    event: Literal["transcript.row"] = "transcript.row"
+    #: Position in ``SessionState.transcript_events``.  Stable for the life of a
+    #: session unless the transcript is cleared, which restarts it at zero.
+    index: int = 0
+    #: The recorder's row, verbatim but for masking.
+    row: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("text", mode="before")
+    @field_validator("row", mode="before")
     @classmethod
     def _redact(cls, value: Any) -> Any:
-        """Mask, then bound.  In that order — clipping first could cut a
-        credential in half and leave the half that still matches nothing."""
-        if not isinstance(value, str):
-            return value
-        masked = redact_text(value)
-        if len(masked) > _MESSAGE_TEXT_LIMIT:
-            return masked[: _MESSAGE_TEXT_LIMIT - 1] + "…"
-        return masked
+        """Mask and bound every string in the row, however deeply it sits.
+
+        Applied to the whole mapping rather than to a list of known keys: the
+        recorder owns which keys a row has, and a redaction rule that named them
+        would leak the first time it grew one.
+        """
+        if isinstance(value, Mapping):
+            return {str(key): _redact_row_value(item) for key, item in value.items()}
+        return value
 
 
 @traces(SWR.SWR_1829)
@@ -643,7 +673,7 @@ AnyEvent = Annotated[
     | PermissionDecisionEvent
     | VerifierResultEvent
     | VerifierProgressEvent
-    | AgentMessageEvent
+    | TranscriptRowEvent
     | UsageUpdateEvent
     | ErrorEvent
     | ResultEvent

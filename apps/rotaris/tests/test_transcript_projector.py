@@ -65,7 +65,7 @@ def test_a_delta_projects_what_a_whole_pass_would_have() -> None:
     session. Expected outcome: seed-then-deltas equals one whole projection."""
     rows = _transcript(20)
     projector = TranscriptProjector()
-    view = list(projector.seed(rows, []))
+    view = list(projector.reseat(rows, []))
 
     # Two rows arrive, then the last one is mutated in place — the shape a
     # streaming tail actually produces.
@@ -89,7 +89,7 @@ def test_applying_one_change_does_not_grow_with_the_session() -> None:
     for length in (30, 300, 3000):
         rows = _transcript(length)
         projector = TranscriptProjector()
-        projector.seed(rows, [])
+        projector.reseat(rows, [])
         # Move the boundary to the tail the way the first live delta does, then
         # measure the steady state that follows it.
         rows.append(_message(length))
@@ -112,7 +112,7 @@ def test_a_mutated_row_costs_the_rows_from_it_onward_and_no_more() -> None:
     3000 before them."""
     rows = _transcript(3000)
     projector = TranscriptProjector()
-    projector.seed(rows, [])
+    projector.reseat(rows, [])
     rows.append(_tool(3000, status="running"))
     projector.apply(3000, rows[3000:])
     rows.extend(_message(i) for i in range(3001, 3005))
@@ -133,7 +133,7 @@ def test_a_delta_reaching_behind_the_boundary_asks_to_be_re_seeded() -> None:
     carry for. Expected outcome: it says so instead of guessing."""
     rows = _transcript(10)
     projector = TranscriptProjector()
-    projector.seed(rows, [])
+    projector.reseat(rows, [])
     assert projector.apply(8, rows[8:]) is not None
     assert projector.apply(4, rows[4:]) is None
 
@@ -146,7 +146,7 @@ def test_the_carry_survives_the_boundary_it_is_taken_at() -> None:
     first row of a delta and its original is behind the boundary."""
     rows: list[dict[str, Any]] = [_message(0), _thinking("a plan", duration=1.2)]
     projector = TranscriptProjector()
-    view = list(projector.seed(rows, []))
+    view = list(projector.reseat(rows, []))
     rows.append(_thinking("a plan"))  # the unstamped duplicate
     first, tail = projector.apply(2, rows[2:])  # type: ignore[misc]
     view[first:] = tail
@@ -162,7 +162,7 @@ def test_a_diff_recorded_after_the_seed_lands_beside_its_tool_row() -> None:
     delta is placed exactly where a whole projection would place it."""
     rows: list[dict[str, Any]] = [_message(0)]
     projector = TranscriptProjector()
-    view = list(projector.seed(rows, []))
+    view = list(projector.reseat(rows, []))
     diff = {
         "diff_id": "d1",
         "agent_name": "coder",

@@ -124,6 +124,15 @@ runner = CliRunner()
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
+def _said(row: dict[str, Any]) -> dict[str, Any]:
+    """One transcript row minus its clock stamp.
+
+    Every row a run records carries one now that the engine records them all
+    (SWR-2454), and what these assertions are about is what was said, not when.
+    """
+    return {key: value for key, value in row.items() if key != "ts"}
+
+
 @verifies(SWR.SWR_2101)
 def test_version_command_outputs_package_version() -> None:
     result = runner.invoke(app, ["version"])
@@ -269,17 +278,20 @@ def test_background_run_creates_completed_session(
 
     state = manager.load_session(sessions[0]["session_id"])
     assert state.execution_status == "completed"
-    assert state.transcript_events[0] == {"role": "user", "content": "test task"}
-    assert state.transcript_events[1] == {
+    assert _said(state.transcript_events[0]) == {"role": "user", "content": "test task"}
+    assert _said(state.transcript_events[1]) == {
         "role": "system",
         "content": "Intent classified: moderate_feature",
     }
-    assert state.transcript_events[2] == {
+    assert _said(state.transcript_events[2]) == {
         "role": "agent",
         "name": state.transcript_events[2]["name"],
         "content": "Actual user-facing answer",
     }
-    assert state.transcript_events[-1] == {"role": "system", "content": "Run completed."}
+    assert _said(state.transcript_events[-1]) == {"role": "system", "content": "Run completed."}
+    # Every row a run records is stamped now that the engine records them all
+    # (SWR-2454) — a CLI session's transcript renders the same as a desktop one.
+    assert all(row.get("ts") for row in state.transcript_events[:3])
     assert (manager.session_dir(sessions[0]["session_id"]) / "run.log").exists()
 
 
@@ -314,13 +326,13 @@ def test_background_run_resumes_existing_session(
 
     loaded = manager.load_session(state.session_id)
     assert loaded.execution_status == "completed"
-    assert loaded.transcript_events[-4] == {"role": "user", "content": "resumed task"}
-    assert loaded.transcript_events[-3] == {
+    assert _said(loaded.transcript_events[-4]) == {"role": "user", "content": "resumed task"}
+    assert _said(loaded.transcript_events[-3]) == {
         "role": "system",
         "content": "Intent classified: moderate_feature",
     }
     assert loaded.transcript_events[-2]["content"] == "Actual user-facing answer"
-    assert loaded.transcript_events[-1] == {"role": "system", "content": "Run completed."}
+    assert _said(loaded.transcript_events[-1]) == {"role": "system", "content": "Run completed."}
 
 
 @verifies(SWR.SWR_1009)
@@ -381,7 +393,7 @@ def test_background_run_continues_when_intent_classifier_raises(
             "Intent classified: moderate_feature "
             "(fallback: classification pre-flight error: classifier down)"
         ),
-    } in state.transcript_events
+    } in [_said(row) for row in state.transcript_events]
 
 
 @verifies(SWR.SWR_1009)

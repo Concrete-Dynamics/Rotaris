@@ -422,7 +422,7 @@ def test_workspace_todo_rows_rename_remove_and_add_inline(qtbot) -> None:
 @verifies(SWR.SWR_2028)
 def test_session_observer_edits_same_live_todo_instance() -> None:
     saves: list[object] = []
-    state = SimpleNamespace(agent_todo_state=None)
+    state = SimpleNamespace(agent_todo_state=None, transcript_events=[])
     manager = SimpleNamespace(
         persister=SimpleNamespace(request_save=lambda saved: saves.append(saved))
     )
@@ -552,12 +552,14 @@ def test_session_observer_clears_live_transcript_on_run_loop() -> None:
     )
     loop = SimpleNamespace(call_soon_threadsafe=lambda callback, *args: callback(*args))
     observer = _SessionObserver(loop, manager, state)
-    observer._stream_segments["agent"] = state.transcript_events[0]
+    # A row the run is still streaming into. Clearing has to let go of it too,
+    # or the next token would be appended to a row the transcript no longer has.
+    observer._recorder._stream_segments["agent"] = state.transcript_events[0]
 
     observer.clear_transcript()
 
     assert state.transcript_events == []
-    assert observer._stream_segments == {}
+    assert observer._recorder.held_rows() == []
     assert saves == [state]
 
 

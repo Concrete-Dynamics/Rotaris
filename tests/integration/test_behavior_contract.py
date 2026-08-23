@@ -89,6 +89,15 @@ def cli_backend(request: pytest.FixtureRequest) -> CliBackend:
     return request.param
 
 
+def _said(row: dict[str, Any]) -> dict[str, Any]:
+    """One transcript row minus its clock stamp.
+
+    Every row a run records carries one now that the engine records them all
+    (SWR-2454), and what these assertions are about is what was said, not when.
+    """
+    return {key: value for key, value in row.items() if key != "ts"}
+
+
 @verifies(SWR.SWR_1817, SWR.SWR_2101, SWR.SWR_2104)
 def test_version_command_outputs_package_version(
     cli_backend: CliBackend,
@@ -145,17 +154,17 @@ def test_background_run_creates_completed_session(
 
     state = manager.load_session(sessions[0]["session_id"])
     assert state.execution_status == "completed"
-    assert state.transcript_events[0] == {"role": "user", "content": "test task"}
-    assert state.transcript_events[1] == {
+    assert _said(state.transcript_events[0]) == {"role": "user", "content": "test task"}
+    assert _said(state.transcript_events[1]) == {
         "role": "system",
         "content": "Intent classified: moderate_feature",
     }
-    assert state.transcript_events[2] == {
+    assert _said(state.transcript_events[2]) == {
         "role": "agent",
         "name": state.transcript_events[2]["name"],
         "content": "Actual user-facing answer",
     }
-    assert state.transcript_events[-1] == {"role": "system", "content": "Run completed."}
+    assert _said(state.transcript_events[-1]) == {"role": "system", "content": "Run completed."}
     session_dir = manager.session_dir(sessions[0]["session_id"])
     assert (session_dir / "run.log").exists()
     assert (session_dir / "evidence" / "debug.log").exists()
@@ -196,13 +205,13 @@ def test_background_run_resumes_existing_session(
 
     loaded = manager.load_session(state.session_id)
     assert loaded.execution_status == "completed"
-    assert loaded.transcript_events[-4] == {"role": "user", "content": "resumed task"}
-    assert loaded.transcript_events[-3] == {
+    assert _said(loaded.transcript_events[-4]) == {"role": "user", "content": "resumed task"}
+    assert _said(loaded.transcript_events[-3]) == {
         "role": "system",
         "content": "Intent classified: moderate_feature",
     }
     assert loaded.transcript_events[-2]["content"] == "Actual user-facing answer"
-    assert loaded.transcript_events[-1] == {"role": "system", "content": "Run completed."}
+    assert _said(loaded.transcript_events[-1]) == {"role": "system", "content": "Run completed."}
 
 
 @verifies(SWR.SWR_314)

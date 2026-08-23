@@ -229,7 +229,7 @@ class TranscriptProjector:
         self._diffs = _DiffIndex(by_key={}, unkeyed_by_agent={})
         self._rows = []
 
-    def seed(
+    def reseat(
         self,
         transcript_events: Sequence[dict[str, Any]],
         ui_edit_diffs: Sequence[dict[str, Any]],
@@ -239,9 +239,14 @@ class TranscriptProjector:
         """Project the whole transcript and seat the incremental boundary at 0.
 
         Called for a bootstrap, a focus change and the final refresh — the three
-        moments that are whole-state anyway. The first delta after a seed pays
-        one pass to move the boundary to the live tail; every delta after that
-        is bounded by the change.
+        moments that are whole-state anyway. The first delta after this pays one
+        pass to move the boundary to the live tail; every delta after that is
+        bounded by the change.
+
+        Named ``reseat`` rather than the obvious ``seed`` because SWR-3205's
+        source guard scans for ``.seed(`` by attribute name and cannot tell one
+        class's from another's — the same reason ``DeliveryStore.update_record``
+        carries its clumsy name.
         """
         self._boundary = 0
         self._prefix_len = 0

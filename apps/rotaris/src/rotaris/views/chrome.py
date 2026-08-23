@@ -25,7 +25,9 @@ from PySide6.QtWidgets import (
 from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme import phosphor, tokens
+from rotaris.theme.a11y import raise_on
 from rotaris.theme.manager import Themed
+from rotaris.widgets.cards import _tag_variant
 from rotaris.widgets.meters import StatusDot
 
 if TYPE_CHECKING:
@@ -52,6 +54,21 @@ NAV_ITEMS: list[tuple[str, str, str]] = [
 #: the button's 7/13. One pixel under `x2s`, because a rail label is a caption
 #: under an icon, not a word in a sentence.
 _NAV_LABEL_SIZE: Final = 9
+
+#: The `.tag` variant each session status wears in the title-bar chip — the
+#: same fills a state tag uses anywhere else, so a chip and a tag never
+#: disagree on what a colour means (SWR-3709).
+_SESSION_TAG_VARIANT: Final = {
+    "starting": "run",
+    "running": "run",
+    "pausing": "wait",
+    "paused": "wait",
+    "cancelling": "wait",
+    "completed": "done",
+    "failed": "fail",
+    "cancelled": "fail",
+    "idle": "neutral",
+}
 
 
 @traces(SWR.SWR_2092, SWR.SWR_3708)
@@ -151,11 +168,18 @@ class TitleBar(Themed, QWidget):
         layout.addWidget(self.workspace_chip)
         layout.addStretch(1)
 
+        # One chip, not a dot floating beside a word: the session status is a
+        # tag-styled pill carrying both (SWR-3709).
+        self.session_chip = QFrame()
+        self.session_chip.setObjectName("sessionChip")
+        self.session_chip.setAccessibleName("Session status")
+        self._session_chip_layout = QHBoxLayout(self.session_chip)
+        self._session_chip_layout.setContentsMargins(0, 0, 0, 0)
         self.status_dot = StatusDot(size=tokens().size.status_dot)
-        layout.addWidget(self.status_dot)
+        self._session_chip_layout.addWidget(self.status_dot)
         self.status_label = QLabel()
-        self.status_label.setAccessibleName("Session status")
-        layout.addWidget(self.status_label)
+        self._session_chip_layout.addWidget(self.status_label)
+        layout.addWidget(self.session_chip)
 
         # One step under the session dot: a background review is subordinate to
         # the run it is reviewing, and the two must not compete for the eye.
@@ -205,7 +229,6 @@ class TitleBar(Themed, QWidget):
             f"color:{color.text_secondary};}}"
         )
         status_style = f"font-size:{type_.scale.xs}px;color:{color.text_secondary};"
-        self.status_label.setStyleSheet(status_style)
         self.improvement_label.setStyleSheet(status_style)
         # Both dots hold the colour they were last handed, so the states have to
         # be pushed again or they keep painting the palette the user just left.
@@ -244,8 +267,28 @@ class TitleBar(Themed, QWidget):
             "completed": color.done,
         }.get(s.session_status, color.idle)
         self.status_dot.set_state(dot, pulse=s.session_status in {"running", "starting"})
+        # The chip is a `.tag` in every way but one: the word shares the pill
+        # with the dot. The variant follows the state, the fill and ink are the
+        # tag pair for it, and contrast is resolved against the chrome the chip
+        # actually sits on (SWR-3709).
+        kind = _SESSION_TAG_VARIANT.get(s.session_status, "neutral")
+        fill, ink, border = _tag_variant(t, kind)
+        ground = fill.over(color.chrome) if fill is not None else color.chrome
+        ink = raise_on(ink, ground, t.min_text_contrast)
+        # `.tag`'s own insets and gap: 2px 7px padding, 5px between dot and word.
+        pad_y, pad_x = t.space[0.25], t.space[0.875]
+        self._session_chip_layout.setContentsMargins(pad_x, pad_y, pad_x, pad_y)
+        self._session_chip_layout.setSpacing(t.space[0.625])
+        self.session_chip.setStyleSheet(
+            f"QFrame#sessionChip{{background:{'transparent' if fill is None else fill};"
+            f"border:{t.size.hairline}px solid {'transparent' if border is None else border};"
+            f"border-radius:{t.radius.sm}px;}}"
+        )
         self.status_label.setText(f"session {s.session_status}")
-        self.status_label.setAccessibleDescription(f"Session is {s.session_status}")
+        self.status_label.setStyleSheet(
+            f"font-size:{t.type.scale.x2s}px;font-weight:{t.type.weight_strong};color:{ink};"
+        )
+        self.session_chip.setAccessibleDescription(f"Session is {s.session_status}")
         collecting = s.improvement_collection_active
         self.improvement_dot.setVisible(collecting)
         self.improvement_label.setVisible(collecting)

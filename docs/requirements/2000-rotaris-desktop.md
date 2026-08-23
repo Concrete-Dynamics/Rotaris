@@ -297,6 +297,12 @@ legacy-id: FR-ROTARIS-UX-003
 date: 2026-07-13
 source: docs/requirement-log/done/requirements-20260713-rotaris-production-ux.md
 
+The composer states its mode through the primary action beside it — `Start
+run`, `Continue run`, or `Queue` while a run is active — and through the
+placeholder text. The separate in-box mode label was removed (2026-08-23) as
+redundant: the action and the placeholder already say it, and the label
+competed with the model and persona chips for the composer's front row.
+
 ## SWR-2027 — Provide transcript search, match navigation, new-output indication, collapsible reasoning, manual compression, and confirmed transcript clearing.
 
 legacy-id: FR-ROTARIS-UX-004

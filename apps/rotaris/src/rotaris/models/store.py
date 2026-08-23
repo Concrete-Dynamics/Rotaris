@@ -655,8 +655,18 @@ class WorkspaceStore(QObject):
             for session in self.sessions
             if session.id not in known and session.status == "starting"
         ]
+        previous = self.sessions
         self.sessions = pending + sessions
+        # After the focus marks, not before: the stored rows carry them and the
+        # incoming ones do not, so comparing the two lists unmarked would report
+        # a change on every read that included the focused run.
         self._apply_focus_marks()
+        if self.sessions == previous:
+            # Every consumer of this signal clears a strip and builds its rows
+            # again (SWR-2454). One caveat, and it is why this guard is worth
+            # less than it looks: a row carries a relative duration label, so an
+            # unchanged session list still differs once a minute.
+            return
         self.sessions_changed.emit()
 
     @traces(SWR.SWR_2415)

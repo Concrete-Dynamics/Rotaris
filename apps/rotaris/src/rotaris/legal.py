@@ -23,7 +23,7 @@ PUBLISHER = "Concrete Dynamics UG (haftungsbeschränkt)"
 SECURITY_CONTACT = "security@concrete-dynamics.com"
 
 #: The product's own licence (``apps/rotaris/pyproject.toml`` ``license`` field).
-PRODUCT_LICENSE = "MIT"
+PRODUCT_LICENSE = "GPL-3.0-only"
 
 #: Canonical home of the published legal documents (SWR-3717 AC-003).
 LEGAL_BASE_URL = "https://rotaris.ai"

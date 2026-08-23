@@ -1,4 +1,4 @@
-.PHONY: install install-dev install-rotaris rotaris rotaris-demo test test-parallel test-rotaris test-capability reqtocode reqtocode-fix lint format typecheck clean
+.PHONY: install install-dev install-rotaris rotaris rotaris-demo test test-parallel test-rotaris test-capability test-live reqtocode reqtocode-fix lint format typecheck clean
 
 install:
 	uv sync --all-packages
@@ -49,6 +49,12 @@ test-rotaris:
 
 test-capability:
 	uv run pytest -m capability -x -v --timeout=600
+
+# The one test that spends money: a real model, delegating once and reading one
+# file. Never part of `make test` -- collection skips it unless it is asked for
+# by name, and again unless a key is readable (see tests/live/conftest.py).
+test-live:
+	uv run pytest tests/live -m live -q --timeout=900
 
 test-cov:
 	uv run pytest --cov=rotaris_core --cov-report=term-missing

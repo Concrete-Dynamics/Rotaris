@@ -161,7 +161,9 @@ def test_default_layout_reproduces_the_historical_constants() -> None:
     assert DEFAULT_LAYOUT.generated_path == Path("src/rotaris_core/reqtocode/swr.py")
     assert DEFAULT_LAYOUT.impl_roots == (Path("src/rotaris_core"), Path("apps/rotaris/src"))
     assert DEFAULT_LAYOUT.test_roots == (Path("tests"), Path("apps/rotaris/tests"))
-    assert DEFAULT_LAYOUT.excused_test_roots == (Path("tests/capability"),)
+    # Both live-provider roots, excused on the same grounds: they exercise the
+    # framework rather than a requirement, and they only run when asked for.
+    assert DEFAULT_LAYOUT.excused_test_roots == (Path("tests/capability"), Path("tests/live"))
     assert DEFAULT_LAYOUT.exempt_marker == "# reqtocode: exempt"
     assert DEFAULT_LAYOUT.skip_parts == frozenset({"__pycache__", ".venv", "fixtures"})
     # The pre-SWR-2335 module constants are kept as aliases for existing callers.

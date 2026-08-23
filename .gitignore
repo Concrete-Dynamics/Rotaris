@@ -28,3 +28,7 @@ lsp-mcp/
 .tmp_wt/
 # Session-managed git worktrees (EnterWorktree)
 .claude/worktrees/
+
+# Live-provider end-to-end test credentials (tests/live). Never committed:
+# it holds a real API key. `.env.live.example` is the tracked template.
+.env.live

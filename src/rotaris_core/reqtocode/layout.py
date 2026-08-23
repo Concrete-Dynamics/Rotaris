@@ -56,7 +56,13 @@ class RepoLayout:
     #: Roots whose files may carry test-coverage references.
     test_roots: tuple[Path, ...] = (Path("tests"), Path("apps") / "rotaris" / "tests")
     #: Test roots excused from the reverse (test -> requirement) check.
-    excused_test_roots: tuple[Path, ...] = (Path("tests") / "capability",)
+    #: Both hold live-provider tests, which exercise general framework
+    #: capability rather than one requirement — and, being skipped unless
+    #: asked for by name, would be evidence no ordinary pass ever produces.
+    excused_test_roots: tuple[Path, ...] = (
+        Path("tests") / "capability",
+        Path("tests") / "live",
+    )
     #: Shrink-only trace/test debt baseline.
     baseline_path: Path = _DEFAULT_REQ_DIR / _BASELINE_NAME
     #: Shrink-only orphan-module baseline.

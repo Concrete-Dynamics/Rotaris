@@ -401,7 +401,23 @@ uv run ruff format src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude '
 uv run mypy src/rotaris_core/ && uv run mypy apps/rotaris/src/rotaris/          # typecheck strict (= make typecheck)
 uv run python -m rotaris_core.reqtocode check --fix                             # reqtocode fix (= make reqtocode-fix)
 uv run python -m rotaris .            # run desktop app (--demo for demo data)
+# ── The one test that talks to a real provider — never part of a pass above ──
+uv run pytest tests/live -m live -q --timeout=900   # ~40s, costs money (= make test-live)
 ```
+
+### The live run (`tests/live`)
+
+One test, one real model, one real run: the orchestrator delegates to the
+codebase-analyst, which reads a file and reports a token that exists nowhere but
+in that file. It is the only check in this repository that a real model actually
+drives a Rotaris run — every other test fakes the provider, and a fake answers
+the way its author assumed it would.
+
+It never joins a normal pass. Collection skips it unless the run **asked for it
+by name** (`tests/live` in the arguments, `-m live`, or `-k live`), and skips it
+again if no key is readable from the environment or from `.env.live`
+(gitignored — copy `.env.live.example`). A key that is present but *rejected*
+fails rather than skips.
 
 ### What a full pass actually costs
 

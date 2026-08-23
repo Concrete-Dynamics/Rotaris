@@ -81,6 +81,7 @@ testpaths = ["tests"]
 addopts = "--snapshot-warn-unused --dist loadfile"
 markers = [
     "capability: end-to-end capability tests against a real LLM (slow, requires model endpoint)",
+    "live: the one run that talks to a real provider (tests/live). Costs money and needs a key, so it is skipped unless it is asked for by name — see tests/live/conftest.py",
     "unit: a focused unit in isolation; collaborators replaced where isolation is the point",
     "integration: real collaboration across modules, persistence, or a UI/service seam",
     "e2e: a productive flow driven through the real public product boundary, faking only external systems",

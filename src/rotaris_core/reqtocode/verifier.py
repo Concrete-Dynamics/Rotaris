@@ -53,6 +53,8 @@ TEST_ROOTS = DEFAULT_LAYOUT.test_roots
 
 #: Live-provider confidence tests (test strategy: optional, never sole E2E
 #: coverage) exercise general framework capability, not one requirement.
+#: The name is historical: `tests/live` is excused on the same grounds, so read
+#: `excused_test_roots` rather than this when you want all of them.
 CAPABILITY_TEST_ROOT = DEFAULT_LAYOUT.excused_test_roots[0]
 
 _SWR_ID_RE = re.compile(r"^SWR-(\d+)$")

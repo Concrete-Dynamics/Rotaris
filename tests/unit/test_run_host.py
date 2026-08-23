@@ -14,7 +14,9 @@ which every LLM call lives). The session store, the lock, the event bus and the
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -34,7 +36,6 @@ from rotaris_core.session import SessionManager
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from pathlib import Path
 
     from rotaris_core.events.schema import RotarisEvent
 
@@ -69,6 +70,25 @@ def _request(workspace: Path, **overrides: Any) -> RunRequest:
         config=RotarisConfig(workspace_root=workspace),
         **overrides,
     )
+
+
+def _git(cwd: Path, *args: str) -> None:
+    result = subprocess.run(
+        ["git", *args], cwd=cwd, text=True, encoding="utf-8", capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def _repository(tmp_path: Path) -> Path:
+    """A real repository, because attaching a worktree is a real git operation."""
+    _git(tmp_path, "init", "-b", "main")
+    _git(tmp_path, "config", "user.name", "Test User")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    (tmp_path / ".gitignore").write_text(".rotaris/\n", encoding="utf-8")
+    (tmp_path / "base.txt").write_text("base\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "initial")
+    return tmp_path
 
 
 def _completed_progress(session_id: str) -> RalphProgressFile:
@@ -303,3 +323,79 @@ async def test_a_session_locked_elsewhere_is_refused_without_stealing_the_lock(
     assert failed_before_start(result)
     assert result.session_id == state.session_id
     manager.release_lock(state.session_id)
+
+
+@verifies(SWR.SWR_2453)
+async def test_a_run_declares_its_kind_and_whether_it_is_machinery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: the desktop merges two session worktrees — a run the product
+    performs on the user's behalf rather than one the user typed.
+    Expected outcome: the runtime is told what kind of run it is, the session
+    records the same thing, and the session stays out of the list the user
+    browses. These are the two seams the integration run needed; they are on the
+    shared request so no host has to keep its own lifecycle to get them."""
+    from rotaris_core.improvement.types import RunType
+
+    seen: dict[str, Any] = {}
+
+    async def _capture(*_args: Any, **kwargs: Any) -> RalphProgressFile:
+        seen.update(kwargs)
+        return _completed_progress("unused")
+
+    monkeypatch.setattr(background, "_run_task", _capture)
+    manager = SessionManager(tmp_path)
+
+    result = await execute_run(
+        _request(tmp_path, run_type=RunType.INTEGRATION_RUN, internal=True),
+        manager,
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert seen["run_type"] is RunType.INTEGRATION_RUN
+    # On the session too, not only on the loop: a resumed run has to know what it
+    # is, and the loop is gone by then.
+    assert manager.load_session(result.session_id).run_type is RunType.INTEGRATION_RUN
+    assert manager.list_sessions() == []
+    listed = manager.list_sessions(include_internal=True)
+    assert [item["session_id"] for item in listed] == [result.session_id]
+
+
+@verifies(SWR.SWR_2453, SWR.SWR_2409)
+async def test_a_host_may_name_the_session_and_prepare_the_tree_it_runs_in(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a host mints the session id so it can show the run in its
+    own lists before the worker reports back, prepares the merged tree the run
+    has to work in, and hands the lifecycle both.
+    Expected outcome: the run adopts the id and executes in that tree, instead of
+    the host having to create the session itself to get either."""
+    from rotaris_core.session.worktrees import GitWorktreeService
+
+    base = _repository(tmp_path)
+    prepared = Path(GitWorktreeService(base).create_for_session("prepared-tree").path)
+    manager = SessionManager(base)
+    chosen = manager.new_session_id()
+    roots: list[Any] = []
+
+    async def _capture(_prompt: Any, config: Any, *_args: Any, **_kwargs: Any) -> RalphProgressFile:
+        roots.append(config.workspace_root)
+        return _completed_progress("unused")
+
+    monkeypatch.setattr(background, "_run_task", _capture)
+
+    result = await execute_run(
+        _request(base, new_session_id=chosen, worktree_path=prepared),
+        manager,
+    )
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.session_id == chosen
+    assert roots == [prepared]
+    # Attached, not created: releasing the session must not delete a tree the
+    # host prepared and still owns.
+    binding = manager.load_session(chosen).worktree
+    assert binding is not None
+    assert binding.created_by_session is False

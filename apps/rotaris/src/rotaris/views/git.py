@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QTreeWidget,
@@ -19,7 +18,7 @@ from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme.manager import Themed
 from rotaris.theme.phosphor import set_button_icon
-from rotaris.widgets import Card, PanelSplitter, Tag, make_button, set_action_availability
+from rotaris.widgets import Card, PanelSplitter, Select, Tag, make_button, set_action_availability
 
 if TYPE_CHECKING:
     from rotaris.models.store import WorkspaceStore
@@ -152,7 +151,7 @@ class GitView(Themed, QWidget):
         """
         card = Card("Session checkpoints", accented=True)
 
-        self.checkpoint_session_combo = QComboBox()
+        self.checkpoint_session_combo = Select()
         self.checkpoint_session_combo.setAccessibleName("Checkpoint session")
         self.checkpoint_session_combo.setAccessibleDescription(
             "Which session's recorded checkpoints are listed below"

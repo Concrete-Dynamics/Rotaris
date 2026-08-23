@@ -49,6 +49,30 @@ _VERIFIER_ROW_STATUS: dict[str, str] = {
     "skipped": "blocked",
 }
 
+#: How long a row the view already holds may go on growing before the view is
+#: told (SWR-2454). A streamed row changes once per token; at 20 Hz the view
+#: sees the growth as growth, and SWR-2454's 250 ms budget has five times this
+#: to spare.
+_GROWTH_PUBLISH_MS = 50.0
+
+#: A row the view has never seen is published at once, with no floor under it.
+#: A floor was tried and removed: rows are appended at the rate the run produces
+#: messages and tool results, which is nothing like the rate it produces tokens,
+#: so there is no burst worth protecting against — and on Windows, whose timers
+#: land on a ~15.6 ms tick, even a 16 ms floor cost a tick per row and pushed
+#: the measured p95 from 3 ms to 1581 ms. Growth is where the throttling belongs.
+
+#: How often a session this process is *not* running is read. Its rows arrive
+#: only through ``poll_followed_session``, so this is that session's latency.
+_FOLLOW_POLL_MS = 750
+
+#: How often a session this process *is* running is reconciled (SWR-2454). The
+#: run reports its own changes, so this read is no longer how the view learns
+#: anything — it is the backstop that repairs whatever the push channel missed.
+#: Left at the old 750 ms it was pure addition: the whole-state read and the
+#: whole projection it feeds, at the old rate, on top of the new channel.
+_RECONCILE_POLL_MS = 2000
+
 
 @traces(
     SWR.SWR_2007,
@@ -131,7 +155,7 @@ class RunBridge(QObject):
         self._final_refresh_attempts = 0
         self._shutting_down = False
         self._poller = QTimer(self)
-        self._poller.setInterval(750)
+        self._poller.setInterval(_FOLLOW_POLL_MS)
         self._poller.timeout.connect(self._poll)
 
     @property
@@ -195,6 +219,8 @@ class RunBridge(QObject):
         if not self.config_service.follow_session(session_id):
             return False
         self._session_id = session_id
+        # A foreign session has no push channel: this read *is* its latency.
+        self._poller.setInterval(_FOLLOW_POLL_MS)
         self._poller.start()
         return True
 
@@ -527,6 +553,9 @@ class RunBridge(QObject):
     def _on_started(self, session_id: str) -> None:
         self._session_id = session_id
         self._ensure_refresh_worker()
+        # This run reports its own changes, so the read becomes the reconciler
+        # rather than the channel (SWR-2454, SWR-2130).
+        self._poller.setInterval(_RECONCILE_POLL_MS)
         self._poller.start()
         self.run_started.emit(session_id)
 
@@ -1037,6 +1066,10 @@ class _RunWorker(QObject):
         finally:
             from rotaris_core.permissions import discard_approval_host
 
+            if self._observer is not None:
+                # Anything the rate limiter is still holding, before the loop
+                # this run owns goes away with it (SWR-2454).
+                self._observer.flush_publications()
             discard_approval_host(self._approval_session_id)
             self._approval_session_id = ""
             self._task = None
@@ -1355,6 +1388,16 @@ class _SessionObserver:
         #: A delta carries what came after these.
         self._emitted_len = 0
         self._emitted_diff_len = 0
+        #: The publication rate limiter (SWR-2454). The run reports a change per
+        #: streamed token; the view cannot consume one per token, and does not
+        #: need to. See :meth:`_request_publish`.
+        self._publish_handle: asyncio.TimerHandle | None = None
+        self._last_published_at = 0.0
+        #: Rows the recorder let go of since the last publication. They have to
+        #: be remembered rather than used immediately: the delta boundary is
+        #: computed from the held rows *plus* these, and coalescing means a row
+        #: may settle in a window that publishes nothing.
+        self._pending_settled: list[dict[str, Any]] = []
 
     def _on_transcript_change(self, settled: tuple[dict[str, Any], ...]) -> None:
         """The recorder changed the transcript: make it durable, then visible.
@@ -1402,7 +1445,7 @@ class _SessionObserver:
         is what lets that window go back to being about durability.
         """
         self.manager.persister.request_save(self.state)
-        self._publish_facts()
+        self._request_publish()
 
     @traces(SWR.SWR_2130, SWR.SWR_2454)
     def _publish_facts(self) -> None:
@@ -1461,12 +1504,91 @@ class _SessionObserver:
         SWR-2454 forbids outright.
         """
         self.manager.persister.request_save(self.state)
-        self._publish_delta(rows)
+        self._pending_settled.extend(rows)
+        self._request_publish()
+
+    @traces(SWR.SWR_2454)
+    def _request_publish(self) -> None:
+        """Report this change to the view, at a rate the view can consume.
+
+        The run reports a change *per streamed token*. Publishing each one puts
+        a transcript delta and a whole session projection on the Qt thread per
+        token, which is what the 750 ms poll used to coalesce and what nothing
+        replaced when the push channel took over: the event loop stops draining
+        and the window stops responding.
+
+        So publication is rate-limited with a trailing emit — but only for the
+        change that needs it, because the two kinds do not read the same to a
+        person:
+
+        * A row the view has **not seen at all** is what is read as latency. It
+          goes out at once, with nothing in front of it.
+        * A row the view **already has**, growing in place as it streams, goes
+          out on the tick. Well inside SWR-2454's 250 ms budget, and an order of
+          magnitude fewer projections per second than one per token.
+
+        The payload is built when it is sent, not when the change happened,
+        which is the point of limiting here rather than on the Qt side: the deep
+        copies in :meth:`_publish_facts` and :meth:`_publish_delta` leave the
+        per-token path entirely, so the run loop gets the saving too.
+
+        Coalescing loses nothing. A pending publication reads the state as it is
+        when it fires, so it carries every change that arrived while it waited.
+        """
+        if len(self.state.transcript_events) > self._emitted_len:
+            # A row the view has never seen. Any pending tick is subsumed: this
+            # publication carries everything, growth included.
+            self._cancel_pending_publish()
+            self._publish_now()
+            return
+        if self._publish_handle is not None:
+            # Already scheduled; it will read this change when it fires.
+            return
+        waited_ms = (time.monotonic() - self._last_published_at) * 1000.0
+        if waited_ms >= _GROWTH_PUBLISH_MS:
+            self._publish_now()
+            return
+        # A loop that cannot schedule — closing with the run, or a stand-in a
+        # test handed us — leaves no later to wait for, so send it now.
+        call_later = getattr(self.loop, "call_later", None)
+        if call_later is None:
+            self._publish_now()
+            return
+        try:
+            self._publish_handle = call_later(
+                (_GROWTH_PUBLISH_MS - waited_ms) / 1000.0, self._publish_now
+            )
+        except RuntimeError:
+            self._publish_now()
+
+    def _cancel_pending_publish(self) -> None:
+        handle, self._publish_handle = self._publish_handle, None
+        if handle is not None:
+            handle.cancel()
+
+    def _publish_now(self) -> None:
+        """Send both channels and reset the window. The timer's whole body."""
+        self._publish_handle = None
+        self._last_published_at = time.monotonic()
+        settled = tuple(self._pending_settled)
+        self._pending_settled.clear()
+        self._publish_delta(settled)
         # A transcript change almost always rides with one elsewhere — the tool
         # row and the agent's active-tool chips are one event seen twice — and
         # the facts payload is bounded, so reporting both is cheaper than
         # working out whether this particular change needed it.
         self._publish_facts()
+
+    @traces(SWR.SWR_2454)
+    def flush_publications(self) -> None:
+        """Send whatever the limiter is still holding. Called as the run ends.
+
+        Not strictly required — the final whole-state read is the backstop for
+        anything the push channel misses — but a run whose last row arrives a
+        refresh late looks like a run that lost it.
+        """
+        self._cancel_pending_publish()
+        self._publish_now()
 
     @traces(SWR.SWR_2454)
     def _publish_delta(self, extra_rows: tuple[dict[str, Any], ...] = ()) -> None:

@@ -83,6 +83,25 @@ def test_every_button_variant_is_styled_in_every_state(qtbot) -> None:
     assert "QAbstractSpinBox:disabled" in qss
 
 
+@verifies(SWR.SWR_3702)
+def test_dropdowns_resolve_the_compact_height_and_inputs_the_full_one(qtbot) -> None:
+    """Productive use: a settings card stacks pickers beside text fields.
+
+    Expected outcome: the QSS pins each control's height to its token — the
+    compact one for dropdowns, the full typing target for inputs — so a denser
+    picker never shrinks the text field beside it and vice versa.
+    """
+    active = tokens()
+    qss = theme.build_qss(active)
+
+    def _rule(selector: str) -> str:
+        start = qss.index(f"{selector} {{")
+        return qss[start : qss.index("}", start) + 1]
+
+    assert f"min-height: {active.size.control_height_compact}px" in _rule("QComboBox")
+    assert f"min-height: {active.size.control_height}px" in _rule("QLineEdit")
+
+
 @verifies(SWR.SWR_2124)
 def test_action_availability_exposes_disabled_reason_with_enabled_help(qtbot) -> None:
     from rotaris.widgets import make_availability_help, set_action_availability

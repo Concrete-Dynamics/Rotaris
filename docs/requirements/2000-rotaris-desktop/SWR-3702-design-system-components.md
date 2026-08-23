@@ -46,6 +46,15 @@ state, the monospace run log, and the destructive confirm.
   that paint themselves rather than carrying a stylesheet.
 - Variants and states are **declared, not duplicated**: one `Button` with
   variants, not six button constructors.
+- `Select` **fits the entry it is showing, never its longest one**. The width
+  follows the selected value, bounded by a ceiling the surface hands it
+  (`fit_within`, default `SELECT_MAX_WIDTH`). Past the ceiling the value is
+  elided with an ellipsis — a visible sign that there is more — and the whole
+  value rides the tooltip and the accessible description, so a squeezed window
+  cuts nothing silently. A caller's own accessible description survives every
+  index change.
+- Dropdowns take the **compact control height** (`Sizing.control_height_compact`);
+  text fields keep the full `control_height` typing target.
 - Components carry the app's own accessibility contract — an accessible name on
   every icon-only or custom control, state conveyed by more than colour, and a
   visible focus indicator.
@@ -61,6 +70,12 @@ state, the monospace run log, and the destructive confirm.
   not come from the active theme.
 - Each component with variants renders every variant it declares, and each
   component with states renders every state it declares.
+- Every dropdown in a view is a `Select`: its width follows the selected entry
+  up to its ceiling, and a value too long for the box is elided and stated whole
+  by the tooltip and the accessible description — never cut mid-word without the
+  ellipsis.
+- Dropdowns resolve their height from `Sizing.control_height_compact` and text
+  fields from `Sizing.control_height`, whatever the active theme.
 - After a theme change, every component instance reports the new theme's
   values — including self-painting ones.
 - Every interactive component exposes an accessible name, and no component
@@ -71,7 +86,11 @@ state, the monospace run log, and the destructive confirm.
 ## Test coverage
 
 Unit tests construct each component directly and assert its variants, states,
-accessible names and token resolution. A parametrised sweep over the whole
+accessible names and token resolution. `Select` tests pin the fitting contract —
+width follows the selected entry, the ceiling caps it, an over-long value is
+elided and carried whole by tooltip and description, and a caller's description
+survives an index change. The QSS sweep asserts dropdowns resolve the compact
+control height and inputs the full one. A parametrised sweep over the whole
 inventory asserts that no component holds a literal presentation value and that
 every instance follows a theme change. Integration coverage comes from the views
 that compose them, and from the accessibility sweep, which walks the live widget

@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 from rotaris_core.reqtocode import SWR, traces
 
 from rotaris.theme.manager import Themed
+from rotaris.widgets.forms import Select
 
 if TYPE_CHECKING:
     from rotaris.theme.spec import Theme
@@ -66,7 +66,7 @@ class AuthRecoveryDialog(Themed, QDialog):
 
         # ── switch to a model from another provider ──────────────────────
         layout.addWidget(QLabel("Retry with a model from another provider:"))
-        self.model_combo = QComboBox()
+        self.model_combo = Select()
         for key in _alternative_models(model_providers, provider_id, failed_model):
             self.model_combo.addItem(f"{key}   ({model_providers.get(key, '?')})", key)
         row = QHBoxLayout()

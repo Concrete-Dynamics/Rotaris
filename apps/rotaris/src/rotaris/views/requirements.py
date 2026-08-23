@@ -70,14 +70,12 @@ from PySide6.QtGui import (
     QHideEvent,
     QMouseEvent,
     QPainter,
-    QPalette,
     QPen,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -86,9 +84,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
-    QStyle,
-    QStyleOptionComboBox,
-    QStylePainter,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -120,6 +115,7 @@ from rotaris.widgets.cards import make_button, set_action_availability
 from rotaris.widgets.evidence_ring import EvidenceView
 from rotaris.widgets.feedback import EmptyState, InlineBanner
 from rotaris.widgets.flow import FlowLayout
+from rotaris.widgets.forms import Select
 from rotaris.widgets.hold_reason import HoldReasonBar
 from rotaris.widgets.requirement_card import (
     EpicCard,
@@ -141,7 +137,6 @@ if TYPE_CHECKING:
         QEnterEvent,
         QKeyEvent,
         QPaintEvent,
-        QResizeEvent,
     )
 
     from rotaris.models.requirements_state import (
@@ -784,149 +779,19 @@ def pipeline_unused(models: tuple[BoardColumnModel, ...]) -> bool:
 
 
 @traces(SWR.SWR_3302, SWR.SWR_3309)
-class _FittedComboBox(QComboBox):
-    """A drop-down that fits the entry it is *showing*, and states the rest.
+class _FittedComboBox(Select):
+    """A drop-down fitted with the board's own width budget.
 
-    The filter bar needs two things a plain :class:`QComboBox` will not do at
-    once. It must not size itself to its longest entry — the epic and source
-    filters are keyed by requirement ids the project chooses, so a bar as wide as
-    the longest one stops fitting the supported 1000×680 window the day somebody
-    writes a longer id (SWR-3302). And it must not cut the entry it is showing
-    mid-word: ``Priority, then ic`` is not a value anybody can read, and a
-    hard-capped box carried no second copy of what it had cut off.
-
-    So the width follows the *selected* entry rather than the longest one,
-    bounded by the ceiling :func:`_compact` gives it. Past that ceiling the text
-    is elided with an ellipsis — a visible sign that there is more — and the
-    whole value moves onto the tooltip and the accessible description, which is
-    where both a sighted user and a screen reader then find it.
+    Everything the design system's :class:`~rotaris.widgets.forms.Select` gives
+    every dropdown — the width follows the *selected* entry, and past the
+    ceiling the value is elided with an ellipsis and carried whole by the
+    tooltip and the accessible description — with the board's own numbers: the
+    default ceiling is the open column width, and :func:`_compact` hands each
+    picker the tighter budget its vocabulary deserves (SWR-3302).
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._ceiling = OPEN_COLUMN_MAX_WIDTH
-        self._purpose = ""
-        #: What :meth:`_chrome` last measured; ``None`` until the style or the
-        #: layout has given an answer.
-        self._room: int | None = None
-        self.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.setMinimumContentsLength(8)
-        self.currentIndexChanged.connect(self.restate)
-
-    def fit_within(self, ceiling: int) -> None:
-        """Never ask for more than *ceiling* points, whatever the entries say."""
-        self._ceiling = ceiling
-        self.setMaximumWidth(ceiling)
-        self.updateGeometry()
-        self.restate()
-
-    def set_purpose(self, text: str) -> None:
-        """What this box is *for* — the sentence its tooltip keeps when it fits."""
-        self._purpose = text
-        self.restate()
-
-    @property
-    def purpose(self) -> str:
-        """The sentence :meth:`set_purpose` was given."""
-        return self._purpose
-
-    def displayed_text(self) -> str:
-        """What the box can actually show of its current entry, ellipsis and all."""
-        return QFontMetrics(self.font()).elidedText(
-            self.currentText(),
-            Qt.TextElideMode.ElideRight,
-            self._label_width(),
-        )
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt's spelling
-        """As wide as the selected entry needs, and never wider than the ceiling."""
-        hint = super().sizeHint()
-        return QSize(min(self._ceiling, max(hint.width(), self._wanted())), hint.height())
-
-    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 — Qt's spelling
-        """A narrower box elides more of the same value, and has to say so.
-
-        And the first real geometry is also the first honest measurement of the
-        chrome, which the width this box asks for is computed from — so a hint
-        made against the style's estimate is withdrawn and made again.
-        """
-        super().resizeEvent(event)
-        estimated = self._room
-        if self._chrome() != estimated:
-            self.updateGeometry()
-        self.restate()
-
-    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 — Qt's spelling
-        """The frame and arrow the style draws, with the label elided into it."""
-        del event  # there is one entry on this control and it is repainted whole
-        painter = QStylePainter(self)
-        painter.setPen(self.palette().color(QPalette.ColorRole.Text))
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, option)
-        # `currentText` is a real attribute of the option at run time; the
-        # bundled PySide6 stubs simply do not declare it.
-        option.currentText = self.displayed_text()  # type: ignore[attr-defined]
-        painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, option)
-
-    def restate(self) -> None:
-        """Put whatever the box had to cut off where a user can still read it.
-
-        Public because an entry's *text* can change under a box that never
-        changed index — the move picker relabels its columns whenever the
-        selection does (SWR-3602) — and the tooltip then has to follow.
-        """
-        whole = self.currentText()
-        cut = bool(whole) and self.displayed_text() != whole
-        self.setToolTip(f"{whole}\n{self._purpose}".strip() if cut else self._purpose)
-        self.setAccessibleDescription(whole if cut else "")
-
-    def _label_width(self) -> int:
-        """The room the style leaves for text, once the arrow has taken its own."""
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        return (
-            self.style()
-            .subControlRect(
-                QStyle.ComplexControl.CC_ComboBox,
-                option,
-                QStyle.SubControl.SC_ComboBoxEditField,
-                self,
-            )
-            .width()
-        )
-
-    def _wanted(self) -> int:
-        """How wide this box would have to be to show its current entry whole."""
-        return QFontMetrics(self.font()).horizontalAdvance(self.currentText()) + self._chrome() + 2
-
-    def _chrome(self) -> int:
-        """How much of the box is frame, padding and arrow rather than text.
-
-        Measured against the box's own laid-out geometry wherever there is one,
-        because that is the number :meth:`_label_width` will answer with when the
-        text is elided — and a width asked for against a different arithmetic
-        than the width the text is cut to is how a control ends up exactly wide
-        enough to clip. The style's own answer for an empty entry seeds it, for
-        the first layout, before there is a geometry to measure.
-        """
-        room = self._label_width()
-        if room > 0 and self.width() > room:
-            self._room = self.width() - room
-        elif self._room is None:
-            option = QStyleOptionComboBox()
-            self.initStyleOption(option)
-            self._room = (
-                self.style()
-                .sizeFromContents(
-                    QStyle.ContentsType.CT_ComboBox,
-                    option,
-                    QSize(0, QFontMetrics(self.font()).height()),
-                    self,
-                )
-                .width()
-            )
-        return self._room
+        super().__init__(ceiling=OPEN_COLUMN_MAX_WIDTH, parent=parent)
 
 
 #: How wide a drop-down over a **closed** vocabulary may get. The sort, grouping

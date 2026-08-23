@@ -6,10 +6,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, cast, override
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -55,6 +54,7 @@ from rotaris.widgets import (
     SectionHeader,
     SectionLabel,
     SegmentedControl,
+    Select,
     SlashCommandPopup,
     SlashHighlighter,
     StatusDot,
@@ -94,6 +94,64 @@ _TRANSCRIPT_MIN_HEIGHT = 180
 #: What a model chip reads before a catalog has loaded — a run always has some
 #: model, so an empty chip would be the wrong answer.
 _PLACEHOLDER_MODEL = "copilot/gpt-5"
+
+#: How often the sidebar and the inspector may rebuild (SWR-2454). Both tear
+#: down and rebuild every child they hold, so what drives them has to be a
+#: settled answer rather than each step towards one — a splitter drag, and,
+#: since the run reports its agent tree as it changes rather than every 750 ms,
+#: a streaming run too.
+_PANEL_REFLOW_MS = 120
+
+
+@traces(SWR.SWR_2454)
+class _Coalescer(QObject):
+    """Run *target* at most once per interval, and always once more at the end.
+
+    Leading edge on purpose. A single change — an agent going idle, a todo
+    ticked, the user dragging the splitter one pixel — should be on screen at
+    once; it is only a *stream* of them that has to be held back. A plain
+    trailing timer would make every interaction feel an interval late to buy
+    something only a streaming run needs.
+    """
+
+    def __init__(self, parent: QObject, interval_ms: int, target: Callable[[], None]) -> None:
+        super().__init__(parent)
+        self._target = target
+        self._interval_ms = interval_ms
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._on_timeout)
+        self._last_run = 0.0
+        self._pending = False
+
+    @Slot()
+    def request(self) -> None:
+        """Ask for a run. Immediate if the rate allows, else on the trailing tick."""
+        if self._timer.isActive():
+            self._pending = True
+            return
+        waited_ms = (time.monotonic() - self._last_run) * 1000.0
+        if waited_ms >= self._interval_ms:
+            self._run()
+            return
+        self._pending = True
+        self._timer.start(int(self._interval_ms - waited_ms))
+
+    def flush(self) -> None:
+        """Run now if anything is waiting — for a caller that needs it current."""
+        self._timer.stop()
+        if self._pending:
+            self._run()
+
+    @Slot()
+    def _on_timeout(self) -> None:
+        if self._pending:
+            self._run()
+
+    def _run(self) -> None:
+        self._pending = False
+        self._last_run = time.monotonic()
+        self._target()
 
 
 @traces(SWR.SWR_2609)
@@ -624,11 +682,11 @@ class WorkspaceView(Themed, QWidget):
         # Sidebar rows elide against the panel's width, so a drag changes what
         # they can say. Rebuilding them once the drag settles, rather than per
         # pixel, keeps a resize off the row-construction path.
-        self._sidebar_reflow = QTimer(self)
-        self._sidebar_reflow.setSingleShot(True)
-        self._sidebar_reflow.setInterval(120)
-        self._sidebar_reflow.timeout.connect(self._refresh_sidebar)
-        self.panes.splitterMoved.connect(lambda _pos, _index: self._sidebar_reflow.start())
+        self._sidebar_reflow = _Coalescer(self, _PANEL_REFLOW_MS, self._refresh_sidebar)
+        #: The inspector's own, on the same interval and for the same reason:
+        #: it too tears down and rebuilds every child it holds (SWR-2454).
+        self._inspector_reflow = _Coalescer(self, _PANEL_REFLOW_MS, self._refresh_inspector)
+        self.panes.splitterMoved.connect(lambda _pos, _index: self._sidebar_reflow.request())
         self._panels_docked = True
         self._compact_layout = False
         #: Agent the inspector is following, so a transcript tick that does not
@@ -642,9 +700,15 @@ class WorkspaceView(Themed, QWidget):
         # from the agent the panel is already showing.
         store.transcript_changed.connect(self._refresh_inspector_follow)
         store.transcript_delta.connect(self._on_transcript_delta_follow)
-        store.todos_changed.connect(self._refresh_sidebar)
-        store.agents_changed.connect(self._refresh_sidebar)
-        store.agents_changed.connect(self._refresh_inspector)
+        # Through the reflow timer, not straight to the rebuild (SWR-2454). Both
+        # panels tear down and rebuild every child they hold, and the run now
+        # reports its agent tree and todos as they change rather than every
+        # 750 ms — so a streaming run would otherwise rebuild both panels far
+        # faster than they can be laid out. 120 ms is imperceptible for a status
+        # chip and is already this view's coalescing interval.
+        store.todos_changed.connect(self._sidebar_reflow.request)
+        store.agents_changed.connect(self._sidebar_reflow.request)
+        store.agents_changed.connect(self._inspector_reflow.request)
         store.run_summary_changed.connect(self._refresh_run_state)
         store.selection_changed.connect(self._on_agent_selection_changed)
         store.artifacts_changed.connect(self._refresh_inspector)
@@ -1663,11 +1727,15 @@ class WorkspaceView(Themed, QWidget):
     def _apply_transcript_delta(self, first: int, rows: object) -> None:
         """Apply a live run's transcript change without rebuilding the transcript.
 
-        Two things upstream of the model still read the whole list, and both are
-        refused here rather than approximated: an agent filter (SWR-2099) makes
-        a source-row boundary meaningless, and tool grouping (SWR-2432) changes
-        which rows exist. In either case this falls through to the whole-list
-        refresh, which is correct and merely costs what it always did.
+        An agent filter (SWR-2099) makes a source-row boundary meaningless, so
+        it is refused rather than approximated and the whole-list refresh runs
+        instead. Tool grouping is handled incrementally (SWR-2432).
+
+        A refusal *must* fall through to that refresh. It used to do so only
+        when the boundary sat past the end of the model, which meant a delta
+        that mutated a row already on screen — which is what a streaming row is
+        — was dropped outright, and the transcript went stale until some later
+        change happened to land past the end.
         """
         with self._diagnostics.span("workspace.transcript_delta"):
             if self._store.selected_agent_id:
@@ -1677,8 +1745,7 @@ class WorkspaceView(Themed, QWidget):
             old_count = self.transcript_scroll.transcript_model.rowCount()
             follow_tail = self.transcript_scroll.following_tail
             if not self.transcript_scroll.apply_events_delta(first, events):
-                if first > self.transcript_scroll.transcript_model.rowCount():
-                    self._refresh_transcript_content()
+                self._refresh_transcript_content()
                 return
             self._after_transcript_rows_changed(old_count, follow_tail=follow_tail)
 
@@ -1938,10 +2005,9 @@ class WorkspaceView(Themed, QWidget):
         layout.addWidget(self.context_scope_note)
 
         layout.addWidget(self._field_label("Model"))
-        self.inspector_model = QComboBox()
+        self.inspector_model = Select(mono=True)
         self.inspector_model.setAccessibleName("Model for the selected agent")
         self.inspector_model.setMinimumWidth(0)
-        self.inspector_model.setProperty("mono", "true")
         populate_model_combo(
             self.inspector_model, self._store.model_options, placeholder=_PLACEHOLDER_MODEL
         )
@@ -2215,11 +2281,29 @@ class WorkspaceView(Themed, QWidget):
 # ── row builders ──────────────────────────────────────────────────────────
 
 
+@traces(SWR.SWR_2454)
 def _clear(layout: QLayout) -> None:
+    """Empty a layout, leaving nothing of it on screen.
+
+    ``takeAt`` removes a widget from the *layout* only, and ``deleteLater``
+    merely posts the deletion. In between, the widget is still parented, still
+    visible and still holding its old geometry — so it goes on painting until
+    the event loop gets round to destroying it. One event-loop pass, normally,
+    and invisible.
+
+    Under a busy loop it is not invisible: the rebuilds outrun the deletions and
+    the orphans pile up at the same coordinates, all painting, which is what
+    drew the sidebar's run label through the todo text and stacked the
+    inspector's ring labels on top of each other. Hiding and unparenting first
+    makes that impossible however far behind the loop falls.
+    """
     while layout.count():
         item = layout.takeAt(0)
-        if item.widget():
-            item.widget().deleteLater()
+        widget = item.widget()
+        if widget is not None:
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
         elif item.layout():
             _clear(item.layout())
 
@@ -2269,11 +2353,9 @@ def _init_labels(task_ids: Sequence[str]) -> list[str]:
     return [init_task_label(task) for task in task_ids]
 
 
-def _chip_combo(items: list[str], mono: bool = False) -> QComboBox:
-    combo = QComboBox()
+def _chip_combo(items: list[str], mono: bool = False) -> Select:
+    combo = Select(mono=mono)
     combo.addItems(items)
-    if mono:
-        combo.setProperty("mono", "true")
     return combo
 
 

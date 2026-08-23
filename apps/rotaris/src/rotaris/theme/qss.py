@@ -358,13 +358,15 @@ def _inputs(theme: Theme) -> str:
     }}
     QLineEdit[mono="true"], QPlainTextEdit[mono="true"] {{ font-family: {type_.mono}; }}
 
+    /* Dropdowns ride the compact control height: a picker is denser than a
+       text field, and the shorter box still clears the 12px label it shows. */
     QComboBox {{
         background: {color.bg};
         border: {size.hairline}px solid {color.border_strong};
         border-radius: {radius.control}px;
-        padding: 5px 30px 5px 11px;
+        padding: 4px 30px 4px 11px;
         font-size: {type_.scale.sm}px;
-        min-height: {size.control_height}px;
+        min-height: {size.control_height_compact}px;
     }}
     QComboBox:hover {{ border-color: {color.border_strong}; }}
     QComboBox:focus, QComboBox:on {{ border: {size.focus_ring}px solid {color.focus}; }}

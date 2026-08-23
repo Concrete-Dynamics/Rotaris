@@ -22,6 +22,7 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMessageBox, QPlainTextEdit, QPushButton
 from rotaris_core.init import registry
+from rotaris_core.init.serena_setup import SERENA_SETUP_TASK_ID
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
 from ui_query import (
@@ -120,11 +121,21 @@ class FakeAgent:
         manager: Any,
         state: Any,
         _max_iterations: int,
+        interrupt_handler: Any | None = None,
         **_kwargs: Any,
     ) -> Any:
         from rotaris_core.ralph.state import RalphProgressFile
 
         gate = self._gate(state.session_id)
+        if interrupt_handler is not None:
+
+            def release() -> None:
+                self.release(state.session_id)
+
+            interrupt_handler.set_callbacks(
+                on_first_interrupt=release,
+                on_second_interrupt=release,
+            )
         self.prompts[state.session_id] = prompt
         state.transcript_events.append({"role": "assistant", "content": f"working on {prompt}"})
         await manager.persister.flush(state)
@@ -153,6 +164,7 @@ def _window(repository: Path, qtbot) -> tuple[MainWindow, RunCoordinator, Worksp
     # agent dispatch until the user answers. These tests are about parallel runs,
     # so the workspace starts where a returning user's does — already answered.
     registry.mark_initialized(repository)
+    registry.record_skipped(repository, [SERENA_SETUP_TASK_ID])
     config = ConfigService(repository, store)
     config.load()
     # Provider authentication is an external system. Pin one connected provider so

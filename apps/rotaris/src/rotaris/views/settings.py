@@ -49,6 +49,7 @@ from rotaris.widgets import (
     Card,
     EmptyState,
     SegmentedControl,
+    Select,
     StatusDot,
     ToggleSwitch,
     make_availability_help,
@@ -630,7 +631,7 @@ class SettingsView(Themed, QWidget):
         self.theme_hint.setWordWrap(True)
         theme_copy.addWidget(self.theme_hint)
         theme_layout.addLayout(theme_copy, 1)
-        self.theme_select = QComboBox()
+        self.theme_select = Select()
         self.theme_select.setAccessibleName("Theme")
         self.theme_select.setAccessibleDescription(
             "The palette Rotaris paints itself in. Applies immediately."
@@ -1088,7 +1089,7 @@ class SettingsView(Themed, QWidget):
         mode_row.setContentsMargins(0, space.xs, 0, 0)
         mode_row.addWidget(QLabel("Sandbox mode"))
         mode_row.addStretch(1)
-        self.sandbox_mode_combo = QComboBox()
+        self.sandbox_mode_combo = Select()
         self.sandbox_mode_combo.setAccessibleName("Sandbox mode")
         self.sandbox_mode_combo.setAccessibleDescription(_SANDBOX_MODE_HINT)
         self.sandbox_mode_combo.addItems(SANDBOX_MODES)
@@ -1150,7 +1151,7 @@ class SettingsView(Themed, QWidget):
         egress_row.setContentsMargins(0, space.sm, 0, 0)
         egress_row.addWidget(QLabel("Network egress policy"))
         egress_row.addStretch(1)
-        self.network_policy_combo = QComboBox()
+        self.network_policy_combo = Select()
         self.network_policy_combo.setAccessibleName("Network egress policy")
         self.network_policy_combo.setAccessibleDescription(_EGRESS_POLICY_HINT)
         self.network_policy_combo.addItems(NETWORK_EGRESS_POLICIES)
@@ -1581,7 +1582,7 @@ class SettingsView(Themed, QWidget):
         catalog = self._store.model_options
         for grid_row, (slot, model) in enumerate(self._store.model_slots):
             self.model_grid.addWidget(_label(slot), grid_row, 0)
-            combo = QComboBox()
+            combo = Select()
             combo.setAccessibleName(f"Model for {slot}")
             populate_model_combo(combo, catalog, current=model)
             combo.currentTextChanged.connect(
@@ -1589,7 +1590,7 @@ class SettingsView(Themed, QWidget):
             )
             self.model_grid.addWidget(combo, grid_row, 1)
 
-            thinking = QComboBox()
+            thinking = Select()
             thinking.setAccessibleName(f"Thinking strength for {slot}")
             thinking.setAccessibleDescription(
                 f"Reasoning or thinking strength used by the model in {slot}"
@@ -1773,7 +1774,7 @@ class SettingsView(Themed, QWidget):
         mode_layout.setContentsMargins(0, 2, 0, 2)
         mode_layout.addWidget(QLabel("Permission mode"))
         mode_layout.addStretch(1)
-        permission_combo = QComboBox()
+        permission_combo = Select()
         permission_combo.setAccessibleName("Permission mode")
         permission_combo.setAccessibleDescription(
             "How much agents may do without asking: restricted, ask, or autonomous"
@@ -1833,7 +1834,7 @@ class SettingsView(Themed, QWidget):
             )
             self.persona_table.addTopLevelItem(item)
 
-            persona_model_combo = QComboBox()
+            persona_model_combo = Select()
             persona_model_combo.setAccessibleName(f"Model for persona {persona.name}")
             populate_model_combo(persona_model_combo, model_options, current=displayed_model)
             persona_model_combo.currentTextChanged.connect(
@@ -1841,7 +1842,7 @@ class SettingsView(Themed, QWidget):
             )
             self.persona_table.setItemWidget(item, 2, persona_model_combo)
 
-            reasoning = QComboBox()
+            reasoning = Select()
             reasoning.setAccessibleName(f"Reasoning for persona {persona.name}")
             reasoning_model = dict(self._store.model_slots).get(displayed_model, displayed_model)
             model_choices = self._store.model_thinking_choices.get(reasoning_model, [None])
@@ -1926,7 +1927,7 @@ class SettingsView(Themed, QWidget):
                     + "\n".join(skill.shadowed_paths),
                 )
             self.skill_table.addTopLevelItem(item)
-            trigger = QComboBox()
+            trigger = Select()
             trigger.setAccessibleName(f"Invocation policy for {skill.name}")
             for label, value in _TRIGGER_CHOICES:
                 trigger.addItem(label, value)
@@ -1937,7 +1938,7 @@ class SettingsView(Themed, QWidget):
                 )
             )
             self.skill_table.setItemWidget(item, 2, trigger)
-            load = QComboBox()
+            load = Select()
             load.setAccessibleName(f"Load policy for {skill.name}")
             for label, value in _LOAD_CHOICES:
                 load.addItem(label, value)

@@ -353,6 +353,17 @@ def group_tool_runs(
     return display
 
 
+@traces(SWR.SWR_2432, SWR.SWR_2454)
+def is_group_barrier(event: TranscriptEvent) -> bool:
+    """True when *event* can never be folded into a neighbour's group.
+
+    The property that makes grouping incremental. :func:`group_tool_runs` emits
+    such a row verbatim and starts a fresh run after it, so no change at or
+    after a barrier can move a displayed row before it.
+    """
+    return event.kind != "tool" or is_ungroupable_tool(event)
+
+
 @traces(SWR.SWR_2432)
 def group_summary_text(event: TranscriptEvent) -> str:
     """Plain-text form of a group header, for copy and accessible text.
@@ -1545,21 +1556,68 @@ class TranscriptListView(Themed, QAbstractItemView):
         self._source_events = list(events)
         return self.transcript_model.sync(self._display_events())
 
-    @traces(SWR.SWR_2454)
+    @traces(SWR.SWR_2454, SWR.SWR_2432)
     def apply_events_delta(self, first: int, rows: list[TranscriptEvent]) -> bool:
         """Feed the transcript a suffix, told where it begins.
 
-        Refuses — and answers ``False`` — while tool grouping is on: grouping
-        rewrites which rows exist, so a boundary in source events is not a
-        boundary in displayed rows. The caller falls back to
-        :meth:`set_events`, which is correct and merely not cheap.
+        Grouping used to make this refuse outright, because it rewrites which
+        rows exist and so a boundary in source events is not a boundary in
+        displayed ones. That left the shipped default — grouping is on — off the
+        incremental path entirely. It need not be: see
+        :meth:`_apply_grouped_delta`.
+
+        Answers ``False`` when the delta cannot be placed. The caller owes the
+        whole-list refresh then; a stale transcript is the one outcome that is
+        not acceptable.
         """
         if first < 0 or first > len(self._source_events):
             return False
-        if self._group_tools_getter is not None and self._group_tools_getter():
+        if self._group_tools_getter is None or not self._group_tools_getter():
+            self._source_events[first:] = rows
+            return self.transcript_model.apply_delta(first, rows)
+        return self._apply_grouped_delta(first, rows)
+
+    @traces(SWR.SWR_2432, SWR.SWR_2454)
+    def _apply_grouped_delta(self, first: int, rows: list[TranscriptEvent]) -> bool:
+        """Regroup only the tail the change can reach, and place it by row.
+
+        A row that is not a groupable tool call is a barrier
+        (:func:`is_group_barrier`): grouping emits it verbatim and begins a new
+        run after it. So a change at *first* can only move displayed rows from
+        the start of the run *containing* ``first`` onward, and the displayed
+        prefix before that is untouched. Regrouping from there gives both a
+        correct projection and the displayed boundary the model needs, at a cost
+        bounded by the tail rather than the session.
+
+        The common case costs nothing extra: a streaming message or reasoning
+        row is itself a barrier, so there is nothing to back up over.
+        """
+        source = self._source_events
+        old_at_first = source[first] if first < len(source) else None
+        new_at_first = rows[0] if rows else None
+        start = first
+        if not (
+            (old_at_first is None or is_group_barrier(old_at_first))
+            and (new_at_first is None or is_group_barrier(new_at_first))
+        ):
+            # A tool row at the boundary may join or leave the run in front of
+            # it, so that run has to be re-projected with it.
+            while start > 0 and not is_group_barrier(source[start - 1]):
+                start -= 1
+        expanded = self._delegate.expanded_groups
+        # Measured against the *old* source, before it is overwritten: the
+        # unchanged displayed prefix is everything the old tail did not occupy.
+        display_first = self.transcript_model.rowCount() - len(
+            group_tool_runs(source[start:], expanded)
+        )
+        if display_first < 0:
+            # The model holds fewer rows than this projection accounts for, so
+            # the two are describing different transcripts. Refuse.
             return False
-        self._source_events[first:] = rows
-        return self.transcript_model.apply_delta(first, rows)
+        source[first:] = rows
+        return self.transcript_model.apply_delta(
+            display_first, group_tool_runs(source[start:], expanded)
+        )
 
     @traces(SWR.SWR_2432)
     def _display_events(self) -> list[TranscriptEvent]:

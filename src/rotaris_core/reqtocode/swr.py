@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: e573a4b163cde78a2fdcbface9ce78700696bedfa8375ef3ab2ef77746938bed
+# GLOBAL-HASH: 60b453e09f98ee136dd286c1b6c3b69c186146cdfd7de076c0a439eed7a47a77
 
 from __future__ import annotations
 
@@ -6173,7 +6173,7 @@ META: dict[int, ReqMeta] = {
     2451: ReqMeta('SWR-2451', 2451, ReqStatus.DRAFT, 'Create and delete personas from Settings UI', 'docs/requirements/2000-rotaris-desktop/SWR-2451-create-delete-personas.md', True, True, '9fc81747151a5977', 'product', ()),
     2452: ReqMeta('SWR-2452', 2452, ReqStatus.APPROVED, 'Transcript geometry is incremental and never partially laid out', 'docs/requirements/2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md', True, True, '50d30593bc23a2bf', 'technical', (2447,)),
     2453: ReqMeta('SWR-2453', 2453, ReqStatus.APPROVED, 'Every run the desktop starts is the same run as a CLI run', 'docs/requirements/2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md', True, True, '9189e7259cc0b6d3', 'product', ()),
-    2454: ReqMeta('SWR-2454', 2454, ReqStatus.APPROVED, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'f784db00c89a4784', 'product', ()),
+    2454: ReqMeta('SWR-2454', 2454, ReqStatus.APPROVED, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'f59fe96ffd1d01a4', 'product', ()),
     2500: ReqMeta('SWR-2500', 2500, ReqStatus.APPROVED, 'Secure Execution: Permissions & Sandbox', 'docs/requirements/2500-secure-execution.md', False, False, 'cd4969ecb18ee886', 'product', ()),
     2501: ReqMeta('SWR-2501', 2501, ReqStatus.APPROVED, 'Permission policy engine (allow/ask/deny)', 'docs/requirements/2500-secure-execution/SWR-2501-permission-policy-engine.md', True, True, 'c5bf13329aa7756f', 'product', ()),
     2502: ReqMeta('SWR-2502', 2502, ReqStatus.APPROVED, 'Terminal command permission patterns', 'docs/requirements/2500-secure-execution/SWR-2502-terminal-command-patterns.md', True, True, 'ebe1eb6ffa2a4609', 'product', ()),
@@ -6405,7 +6405,7 @@ META: dict[int, ReqMeta] = {
     3625: ReqMeta('SWR-3625', 3625, ReqStatus.APPROVED, 'A run waiting on a person says so where the requirement is shown', 'docs/requirements/3600-requirement-board-workflow/SWR-3625-a-run-waiting-on-a-person-says-so.md', True, True, '4c917a314b6c2bf6', 'product', ()),
     3700: ReqMeta('SWR-3700', 3700, ReqStatus.APPROVED, 'Themeable design-token layer', 'docs/requirements/2000-rotaris-desktop/SWR-3700-themeable-design-token-layer.md', True, True, '9967ed94fe077204', 'technical', (2093,)),
     3701: ReqMeta('SWR-3701', 3701, ReqStatus.APPROVED, 'A user can choose the Rotaris theme, and it applies without a relaunch', 'docs/requirements/2000-rotaris-desktop/SWR-3701-theme-selection.md', True, True, '0b0fd0d161a887ff', 'product', ()),
-    3702: ReqMeta('SWR-3702', 3702, ReqStatus.APPROVED, 'Design-system component library', 'docs/requirements/2000-rotaris-desktop/SWR-3702-design-system-components.md', True, True, '972d72d591e3b10c', 'technical', (3700,)),
+    3702: ReqMeta('SWR-3702', 3702, ReqStatus.APPROVED, 'Design-system component library', 'docs/requirements/2000-rotaris-desktop/SWR-3702-design-system-components.md', True, True, '137af69d91d68105', 'technical', (3700,)),
     3703: ReqMeta('SWR-3703', 3703, ReqStatus.APPROVED, 'Typography ships with the application', 'docs/requirements/2000-rotaris-desktop/SWR-3703-brand-typography.md', True, True, '71be703bb69502a6', 'technical', (3700,)),
     3704: ReqMeta('SWR-3704', 3704, ReqStatus.APPROVED, 'Brand motif and elevation in Qt', 'docs/requirements/2000-rotaris-desktop/SWR-3704-motif-and-elevation.md', True, True, 'a7e2997c3564a0f6', 'technical', (3700,)),
     3705: ReqMeta('SWR-3705', 3705, ReqStatus.APPROVED, 'Colour tokens are authored in OKLCH and resolved to sRGB', 'docs/requirements/2000-rotaris-desktop/SWR-3705-oklch-colour-resolution.md', True, True, '651d9893ba065aff', 'technical', (3700,)),

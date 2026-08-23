@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: f08a569f88378f352d54880bdd20b05d0c1214d83af7d643d651760608d91c8f
+# GLOBAL-HASH: e46b18424adfa4d44cad1e6786fa01f190292018248f765fca44195839718fd5
 
 from __future__ import annotations
 
@@ -4731,9 +4731,6 @@ class SWR(IntEnum):
     SWR_3717 = 3717
     """[draft] Legal and product information is always reachable from the desktop app - docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md"""
 
-    SWR_3718 = 3718
-    """[draft] First-run provisioning makes automatic network activity explicit - docs/requirements/2000-rotaris-desktop/SWR-3718-first-run-network-transparency.md"""
-
     SWR_3719 = 3719
     """[draft] Desktop credentials are protected with platform-appropriate user access controls - docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md"""
 
@@ -4742,6 +4739,9 @@ class SWR(IntEnum):
 
     SWR_3721 = 3721
     """[draft] Provider settings state where model traffic is sent - docs/requirements/2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md"""
+
+    SWR_3722 = 3722
+    """[draft] The official download page discloses automatic network access without degrading the download UX - docs/requirements/3000-distribution-updates/SWR-3722-website-download-network-disclosure.md"""
 
 
 #: Members carrying the deprecation marker (blueprint §3/§5).
@@ -6241,7 +6241,7 @@ META: dict[int, ReqMeta] = {
     2911: ReqMeta('SWR-2911', 2911, ReqStatus.APPROVED, 'Tool outcome histogram covers every recorded tool call', 'docs/requirements/1500-sessions-diagnostics/SWR-2911-tool-outcome-classification-coverage.md', True, True, '78b907ace3046ca7', 'technical', (1546,)),
     2912: ReqMeta('SWR-2912', 2912, ReqStatus.APPROVED, 'Every child record reaches a terminal state when its run ends', 'docs/requirements/100-orchestration-core/SWR-2912-terminal-child-records-on-run-end.md', True, True, 'c9dcd4ddb4c8b9df', 'product', ()),
     2913: ReqMeta('SWR-2913', 2913, ReqStatus.APPROVED, 'A session that is not running shows no live agent', 'docs/requirements/2000-rotaris-desktop/SWR-2913-no-live-agent-in-a-finished-session.md', True, True, '19c81bdbc89938ab', 'product', ()),
-    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, 'e4c0a3018b872d68', 'product', ()),
+    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, 'f06a0573c4d9ad39', 'product', ()),
     3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, 'd0d8389da8ef101e', 'product', ()),
     3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '96963c37c5f0bda9', 'product', ()),
     3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '8913133f024266bf', 'product', ()),
@@ -6410,8 +6410,8 @@ META: dict[int, ReqMeta] = {
     3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, 'c644b65fb6610360', 'product', ()),
     3716: ReqMeta('SWR-3716', 3716, ReqStatus.DRAFT, 'The first launch offers Rotaris Cloud and lets the user in without it', 'docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md', True, True, 'eeffef4c8eae9cc7', 'product', ()),
     3717: ReqMeta('SWR-3717', 3717, ReqStatus.DRAFT, 'Legal and product information is always reachable from the desktop app', 'docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md', True, True, 'ef38e5f34f7858a2', 'product', ()),
-    3718: ReqMeta('SWR-3718', 3718, ReqStatus.DRAFT, 'First-run provisioning makes automatic network activity explicit', 'docs/requirements/2000-rotaris-desktop/SWR-3718-first-run-network-transparency.md', True, True, 'e5daa4d1ddd7c807', 'product', ()),
     3719: ReqMeta('SWR-3719', 3719, ReqStatus.DRAFT, 'Desktop credentials are protected with platform-appropriate user access controls', 'docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md', True, True, 'f8899c1096cccf92', 'product', ()),
     3720: ReqMeta('SWR-3720', 3720, ReqStatus.DRAFT, 'Release artifacts carry complete third-party notices', 'docs/requirements/3000-distribution-updates/SWR-3720-complete-third-party-notices.md', True, True, '92dd64e32c97cac3', 'product', ()),
     3721: ReqMeta('SWR-3721', 3721, ReqStatus.DRAFT, 'Provider settings state where model traffic is sent', 'docs/requirements/2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md', True, True, '656b8155c7daa024', 'product', ()),
+    3722: ReqMeta('SWR-3722', 3722, ReqStatus.DRAFT, 'The official download page discloses automatic network access without degrading the download UX', 'docs/requirements/3000-distribution-updates/SWR-3722-website-download-network-disclosure.md', True, True, '3cea9a561b365183', 'product', ()),
 }

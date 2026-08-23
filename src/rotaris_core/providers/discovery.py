@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import urlparse, urlunparse
 
@@ -30,6 +31,7 @@ class DiscoveredModel(BaseModel):
     display_name: str | None = None
     capabilities: dict[str, Any] = Field(default_factory=dict)
     limits: dict[str, Any] = Field(default_factory=dict)
+    pricing: dict[str, float] = Field(default_factory=dict)
     raw: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -43,6 +45,7 @@ class DiscoveryResult(NamedTuple):
     models: list[DiscoveredModel]
     error: str | None
     http_status: int | None
+    suggestions: dict[str, str | None] | None = None
 
 
 def _override_endpoint_host(endpoint: str, api_base: str) -> str:
@@ -136,7 +139,60 @@ def build_models_endpoint(api_base: str) -> str:
     return f"{normalized_base}/models"
 
 
-@traces(SWR.SWR_740, SWR.SWR_751, SWR.SWR_777, SWR.SWR_2810, SWR.SWR_2811, SWR.SWR_2813)
+def _customer_pricing(item: Mapping[str, Any]) -> dict[str, float]:
+    raw_pricing = item.get("pricing")
+    if not isinstance(raw_pricing, dict):
+        return {}
+    pricing: dict[str, float] = {}
+    for source, target in (
+        ("prompt_usd_per_token", "input_cost_per_token"),
+        ("completion_usd_per_token", "output_cost_per_token"),
+    ):
+        value = raw_pricing.get(source)
+        if not isinstance(value, str):
+            continue
+        try:
+            decimal = Decimal(value)
+        except InvalidOperation:
+            continue
+        if decimal.is_finite() and decimal >= 0:
+            pricing[target] = float(decimal)
+    return pricing
+
+
+def _cloud_suggestions(
+    client: httpx.Client,
+    *,
+    endpoint: str,
+    headers: Mapping[str, str],
+    qualified_prefix: str,
+    model_ids: set[str],
+) -> dict[str, str | None] | None:
+    try:
+        response = client.get(f"{normalize_api_base(endpoint)}/model-suggestions", headers=headers)
+        payload = response.json() if response.is_success else None
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        return None
+    suggestions: dict[str, str | None] = {}
+    for role in ("small", "medium", "large", "fallback"):
+        value = payload["data"].get(role)
+        model_id = value.get("id") if isinstance(value, dict) else None
+        qualified_id = f"{qualified_prefix}/{model_id}" if isinstance(model_id, str) else None
+        suggestions[role] = qualified_id if qualified_id in model_ids else None
+    return suggestions
+
+
+@traces(
+    SWR.SWR_740,
+    SWR.SWR_751,
+    SWR.SWR_777,
+    SWR.SWR_782,
+    SWR.SWR_2810,
+    SWR.SWR_2811,
+    SWR.SWR_2813,
+)
 def discover_models(
     provider_id: str,
     *,
@@ -281,6 +337,9 @@ def discover_models(
 
         model_qualified_id = f"{qualified_prefix}/{item['id']}"
         limits = apply_known_token_limits(model_qualified_id, limits)
+        display_name = item.get("display_name", item.get("name"))
+        if isinstance(item.get("context_length"), int):
+            limits.setdefault("context_window", item["context_length"])
         if provider.id == "copilot":
             # Copilot's /models lists everything the account can *see*, which is
             # more than it can call. Only one kind is dropped outright:
@@ -318,13 +377,11 @@ def discover_models(
             if endpoints:
                 capabilities["supported_endpoints"] = endpoints
 
-            name = item.get("name")
-            model_display_name = name if isinstance(name, str) else None
             models.append(
                 DiscoveredModel(
                     id=str(item["id"]),
                     qualified_id=model_qualified_id,
-                    display_name=model_display_name,
+                    display_name=display_name if isinstance(display_name, str) else None,
                     capabilities=capabilities,
                     limits=limits,
                     raw=item,
@@ -335,13 +392,24 @@ def discover_models(
                 DiscoveredModel(
                     id=str(item["id"]),
                     qualified_id=model_qualified_id,
+                    display_name=display_name if isinstance(display_name, str) else None,
                     capabilities=capabilities,
                     limits=limits,
+                    pricing=_customer_pricing(item) if provider.id == "concrete-cloud" else {},
                     raw=item,
                 ),
             )
-
-    return DiscoveryResult(models=models, error=None, http_status=status)
+    suggestions = None
+    if provider.id == "concrete-cloud":
+        with httpx.Client(timeout=timeout) as client:
+            suggestions = _cloud_suggestions(
+                client,
+                endpoint=endpoint,
+                headers=headers,
+                qualified_prefix=qualified_prefix,
+                model_ids={model.qualified_id for model in models},
+            )
+    return DiscoveryResult(models=models, error=None, http_status=status, suggestions=suggestions)
 
 
 @traces(SWR.SWR_702, SWR.SWR_727)

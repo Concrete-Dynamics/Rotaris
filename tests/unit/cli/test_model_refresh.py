@@ -163,6 +163,48 @@ def test_run_refresh_models_single_provider_updates_snapshot(
     assert any("Refreshed GitHub Copilot; discovered 1 model." in msg for msg in ui.infos)
 
 
+@verifies(SWR.SWR_782)
+def test_refresh_cloud_models_persists_eligible_suggested_startup_slots(
+    monkeypatch: Any,
+    tmp_path: Any,
+) -> None:
+    """Productive use: Cloud refresh keeps administrator-selected startup roles.
+    Expected outcome: eligible server roles win, while a stale fallback falls back locally.
+    """
+    global_dir = tmp_path / "global-config"
+    _install_fakes(
+        monkeypatch,
+        global_config_dir=global_dir,
+        discoveries={
+            "concrete-cloud": DiscoveryResult(
+                [
+                    _model("gpt-5-mini", provider_id="concrete-cloud"),
+                    _model("gpt-5", provider_id="concrete-cloud"),
+                ],
+                None,
+                200,
+                {
+                    "small": "concrete-cloud/gpt-5-mini",
+                    "medium": "concrete-cloud/gpt-5",
+                    "large": None,
+                    "fallback": None,
+                },
+            ),
+        },
+        states={"concrete-cloud": ProviderState()},
+    )
+
+    result = run_refresh_models("concrete-cloud", workspace_root=tmp_path, ui=FakeUI())
+
+    assert result.success is True
+    snapshot = read_snapshot(global_dir)
+    assert snapshot is not None
+    provider = snapshot.providers["concrete-cloud"]
+    assert provider.small_model == "concrete-cloud/gpt-5-mini"
+    assert provider.medium_model == "concrete-cloud/gpt-5"
+    assert provider.fallback_model == "concrete-cloud/gpt-5-mini"
+
+
 @verifies(SWR.SWR_727, SWR.SWR_822)
 def test_run_refresh_models_preserves_previous_models_missing_from_response(
     monkeypatch: Any,

@@ -1,6 +1,6 @@
 ---
 req-id: SWR-3720
-status: draft
+status: approved
 trace: required
 test: required
 title: "Release artifacts carry complete third-party notices"

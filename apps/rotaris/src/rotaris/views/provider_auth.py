@@ -185,6 +185,13 @@ class AddProviderDialog(Themed, QDialog):
             self.provider_combo.currentIndexChanged.connect(self._sync_mode)
             layout.addWidget(self.provider_combo)
 
+        self.destination_hint = QLabel("")
+        self.destination_hint.setObjectName("muted")
+        self.destination_hint.setWordWrap(True)
+        self.destination_hint.setAccessibleName("Provider destination")
+        self.destination_hint.setVisible(bool(builtin_providers))
+        layout.addWidget(self.destination_hint)
+
         self.instructions = QLabel(
             "Add a user-wide endpoint. Rotaris validates its model catalog before saving it."
         )
@@ -214,6 +221,7 @@ class AddProviderDialog(Themed, QDialog):
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
         self.install_theme_hook()
+        self._refresh_destination_hint()
 
     def apply_theme(self, theme: Theme) -> None:
         # Until something fails this line inherits the dialog's own text style;
@@ -236,7 +244,46 @@ class AddProviderDialog(Themed, QDialog):
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(
             "Authenticate" if builtin else "Add endpoint"
         )
+        self._refresh_destination_hint()
         self.status.setText("")
+
+    @traces(SWR.SWR_3721)
+    def _refresh_destination_hint(self) -> None:
+        """State where the selected provider sends model traffic (SWR-3721).
+
+        Read from the runtime provider catalog — the same source the settings
+        rows use — so the dialog cannot drift into its own provider table.
+        """
+        provider_id = self._selected_builtin_id()
+        if not provider_id:
+            self.destination_hint.setText(
+                "Custom endpoint — model traffic is sent to the base URL you enter below."
+            )
+            return
+        from rotaris_core.providers import get_provider
+        from rotaris_core.providers.types import ConnectionMode
+
+        try:
+            descriptor = get_provider(provider_id)
+        except KeyError:
+            self.destination_hint.setText("")
+            return
+        if descriptor.connection_mode is ConnectionMode.LOCAL_SDK:
+            self.destination_hint.setText(
+                "Rotaris invokes the Claude Agent SDK installed locally; "
+                "traffic goes through that SDK."
+            )
+        elif descriptor.connection_mode is ConnectionMode.ROTARIS_CLOUD:
+            self.destination_hint.setText(
+                "Rotaris-managed cloud service — destination: rotaris.ai."
+            )
+        elif descriptor.connection_mode is ConnectionMode.DIRECT:
+            operator = descriptor.operator_name or "the provider"
+            self.destination_hint.setText(
+                f"Direct provider API — {operator}, destination: {descriptor.destination_host()}."
+            )
+        else:
+            self.destination_hint.setText("")
 
     def _submit(self) -> None:
         builtin_id = self._selected_builtin_id()

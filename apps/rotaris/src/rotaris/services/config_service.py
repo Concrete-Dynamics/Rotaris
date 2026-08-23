@@ -1256,7 +1256,34 @@ class ConfigService:
         self._artifact_cache_key = None
         self.store.set_artifacts(self._artifact_infos(self.store.session_name))
 
-    @traces(SWR.SWR_2125)
+    @traces(SWR.SWR_3721)
+    def _transparency_for(
+        self, provider_id: str, settings: Any
+    ) -> tuple[str, str | None, str | None, str | None]:
+        """Connection mode, destination, operator and privacy URL from the runtime
+        catalog (SWR-3721). User-defined endpoints take their configured base URL."""
+        from rotaris_core.providers import get_provider
+        from rotaris_core.providers.types import ConnectionMode
+
+        try:
+            descriptor = get_provider(provider_id)
+        except KeyError:
+            if provider_id.startswith("openai-compatible--"):
+                return (
+                    ConnectionMode.CUSTOM.value,
+                    getattr(settings, "base_url", None),
+                    None,
+                    None,
+                )
+            return "", None, None, None
+        return (
+            descriptor.connection_mode.value,
+            descriptor.destination_host(),
+            descriptor.operator_name,
+            descriptor.privacy_url,
+        )
+
+    @traces(SWR.SWR_2125, SWR.SWR_3721)
     def _providers(self) -> list[ProviderInfo]:
         from rotaris_core.auth.provider_settings import (
             get_provider_settings,
@@ -1264,6 +1291,9 @@ class ConfigService:
         )
 
         cloud_settings = get_provider_settings(ROTARIS_CLOUD_PROVIDER_ID)
+        connection_mode, destination, operator_name, privacy_url = self._transparency_for(
+            ROTARIS_CLOUD_PROVIDER_ID, cloud_settings
+        )
         providers: dict[str, ProviderInfo] = {
             ROTARIS_CLOUD_PROVIDER_ID: ProviderInfo(
                 ROTARIS_CLOUD_PROVIDER_ID,
@@ -1275,6 +1305,10 @@ class ConfigService:
                 user_defined=False,
                 has_credentials=cloud_settings.authenticated,
                 quick_start_url=ROTARIS_CLOUD_QUICK_START_URL,
+                connection_mode=connection_mode,
+                destination=destination,
+                operator_name=operator_name,
+                privacy_url=privacy_url,
             )
         }
         if self.config is None:
@@ -1288,6 +1322,9 @@ class ConfigService:
                 continue
             provider_id = settings.provider_id
             flow = self.provider_flow_type(provider_id)
+            connection_mode, destination, operator_name, privacy_url = self._transparency_for(
+                provider_id, settings
+            )
             providers.setdefault(
                 provider_id,
                 ProviderInfo(
@@ -1299,6 +1336,10 @@ class ConfigService:
                     flow,
                     user_defined=provider_id.startswith("openai-compatible--"),
                     has_credentials=settings.authenticated,
+                    connection_mode=connection_mode,
+                    destination=destination,
+                    operator_name=operator_name,
+                    privacy_url=privacy_url,
                 ),
             )
         return list(providers.values())

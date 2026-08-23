@@ -4,9 +4,10 @@ agent inspector."""
 from __future__ import annotations
 
 import time
+from dataclasses import astuple
 from typing import TYPE_CHECKING, Any, cast, override
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QDialog,
@@ -47,9 +48,11 @@ from rotaris.views.transcript import (
     search_haystack,
 )
 from rotaris.widgets import (
+    PANEL_REFLOW_MS,
     AgentTreeList,
     ContextRing,
     EmptyState,
+    HiddenPanelReflow,
     PanelSplitter,
     SectionHeader,
     SectionLabel,
@@ -94,64 +97,6 @@ _TRANSCRIPT_MIN_HEIGHT = 180
 #: What a model chip reads before a catalog has loaded — a run always has some
 #: model, so an empty chip would be the wrong answer.
 _PLACEHOLDER_MODEL = "copilot/gpt-5"
-
-#: How often the sidebar and the inspector may rebuild (SWR-2454). Both tear
-#: down and rebuild every child they hold, so what drives them has to be a
-#: settled answer rather than each step towards one — a splitter drag, and,
-#: since the run reports its agent tree as it changes rather than every 750 ms,
-#: a streaming run too.
-_PANEL_REFLOW_MS = 120
-
-
-@traces(SWR.SWR_2454)
-class _Coalescer(QObject):
-    """Run *target* at most once per interval, and always once more at the end.
-
-    Leading edge on purpose. A single change — an agent going idle, a todo
-    ticked, the user dragging the splitter one pixel — should be on screen at
-    once; it is only a *stream* of them that has to be held back. A plain
-    trailing timer would make every interaction feel an interval late to buy
-    something only a streaming run needs.
-    """
-
-    def __init__(self, parent: QObject, interval_ms: int, target: Callable[[], None]) -> None:
-        super().__init__(parent)
-        self._target = target
-        self._interval_ms = interval_ms
-        self._timer = QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self._on_timeout)
-        self._last_run = 0.0
-        self._pending = False
-
-    @Slot()
-    def request(self) -> None:
-        """Ask for a run. Immediate if the rate allows, else on the trailing tick."""
-        if self._timer.isActive():
-            self._pending = True
-            return
-        waited_ms = (time.monotonic() - self._last_run) * 1000.0
-        if waited_ms >= self._interval_ms:
-            self._run()
-            return
-        self._pending = True
-        self._timer.start(int(self._interval_ms - waited_ms))
-
-    def flush(self) -> None:
-        """Run now if anything is waiting — for a caller that needs it current."""
-        self._timer.stop()
-        if self._pending:
-            self._run()
-
-    @Slot()
-    def _on_timeout(self) -> None:
-        if self._pending:
-            self._run()
-
-    def _run(self) -> None:
-        self._pending = False
-        self._last_run = time.monotonic()
-        self._target()
 
 
 @traces(SWR.SWR_2609)
@@ -682,16 +627,32 @@ class WorkspaceView(Themed, QWidget):
         # Sidebar rows elide against the panel's width, so a drag changes what
         # they can say. Rebuilding them once the drag settles, rather than per
         # pixel, keeps a resize off the row-construction path.
-        self._sidebar_reflow = _Coalescer(self, _PANEL_REFLOW_MS, self._refresh_sidebar)
+        self._sidebar_reflow = HiddenPanelReflow(
+            self.sidebar_panel, PANEL_REFLOW_MS, self._refresh_sidebar
+        )
         #: The inspector's own, on the same interval and for the same reason:
         #: it too tears down and rebuilds every child it holds (SWR-2454).
-        self._inspector_reflow = _Coalescer(self, _PANEL_REFLOW_MS, self._refresh_inspector)
+        self._inspector_reflow = HiddenPanelReflow(
+            self.inspector_panel, PANEL_REFLOW_MS, self._refresh_inspector
+        )
         self.panes.splitterMoved.connect(lambda _pos, _index: self._sidebar_reflow.request())
         self._panels_docked = True
         self._compact_layout = False
         #: Agent the inspector is following, so a transcript tick that does not
         #: move it costs a comparison rather than a rebuild (SWR-2910).
         self._followed_agent_id = ""
+        #: What the tool strip and the artifact list currently show, so a
+        #: refresh that changes neither costs a comparison (SWR-2454).
+        self._tool_strip_shape: list[tuple[str, str]] = []
+        self._tool_chips: list[tuple[tuple[str, str], str, QLabel]] = []
+        self._tool_call_state: tuple[str, tuple[str, ...], tuple[str, ...]] = ("", (), ())
+        self._artifact_strip_shape: list[tuple[Any, ...]] = []
+        #: And the same for the sidebar's two row strips. Each is the whole
+        #: record as a tuple rather than the fields the row happens to draw:
+        #: a hand-picked list would silently freeze whatever it left out, and
+        #: a session row carries a token count and a duration that both tick.
+        self._session_strip_shape: list[tuple[int, tuple[Any, ...]]] = []
+        self._todo_strip_shape: list[tuple[Any, ...]] = []
 
         store.transcript_changed.connect(self._refresh_transcript)
         store.transcript_delta.connect(self._apply_transcript_delta)
@@ -700,19 +661,18 @@ class WorkspaceView(Themed, QWidget):
         # from the agent the panel is already showing.
         store.transcript_changed.connect(self._refresh_inspector_follow)
         store.transcript_delta.connect(self._on_transcript_delta_follow)
-        # Through the reflow timer, not straight to the rebuild (SWR-2454). Both
-        # panels tear down and rebuild every child they hold, and the run now
+        # Through the reflow, not straight to the rebuild (SWR-2454). The run
         # reports its agent tree and todos as they change rather than every
-        # 750 ms — so a streaming run would otherwise rebuild both panels far
-        # faster than they can be laid out. 120 ms is imperceptible for a status
-        # chip and is already this view's coalescing interval.
+        # 750 ms, so a streaming run would otherwise drive these panels far
+        # faster than they can be laid out — and a panel the user has toggled
+        # shut would pay for updates nobody can see.
         store.todos_changed.connect(self._sidebar_reflow.request)
         store.agents_changed.connect(self._sidebar_reflow.request)
         store.agents_changed.connect(self._inspector_reflow.request)
         store.run_summary_changed.connect(self._refresh_run_state)
         store.selection_changed.connect(self._on_agent_selection_changed)
-        store.artifacts_changed.connect(self._refresh_inspector)
-        store.sessions_changed.connect(self._refresh_sidebar)
+        store.artifacts_changed.connect(self._inspector_reflow.request)
+        store.sessions_changed.connect(self._sidebar_reflow.request)
         store.library_changed.connect(self._refresh_stash_button)
         store.queued_prompts_changed.connect(self._refresh_queued_prompts)
         store.run_state_changed.connect(lambda _state: self._refresh_run_state())
@@ -774,6 +734,15 @@ class WorkspaceView(Themed, QWidget):
         caption = f"font-size:{scale.x2s}px;color:{color.text_tertiary};"
         for label in self._micro_labels:
             label.setStyleSheet(caption)
+        # Discarded, not compared: the tool chips and artifact links carry their
+        # colours inline, so the refresh below has to build them rather than
+        # find them unchanged and leave them in the old theme (SWR-2454).
+        self._tool_strip_shape = []
+        self._tool_chips = []
+        self._artifact_strip_shape = []
+        self._tool_call_state = ("", (), ())
+        self._session_strip_shape = []
+        self._todo_strip_shape = []
         self._refresh_sidebar()
         self._refresh_inspector()
 
@@ -858,9 +827,16 @@ class WorkspaceView(Themed, QWidget):
         with self._diagnostics.span("workspace.sidebar_refresh"):
             self._refresh_sidebar_content()
 
+    @traces(SWR.SWR_2454)
     def _refresh_sidebar_content(self) -> None:
+        """Redraw the sidebar, rebuilding only the strips whose contents moved.
+
+        The headers are cheap and always written. The two row strips are not:
+        they tear down and rebuild a widget per row, and ``agents_changed``
+        fires on every publication of a running agent's elapsed time — which
+        moves neither the session list nor the task plan.
+        """
         s = self._store
-        _clear(self.session_rows)
         switchable = [session for session in s.sessions if _is_switchable(session)]
         running = sum(1 for session in switchable if RunUiState.from_backend(session.status).busy)
         self.sessions_header.set_datum(
@@ -869,20 +845,25 @@ class WorkspaceView(Themed, QWidget):
         )
         # Measured, not assumed: the sidebar is the user's to widen (SWR-3011),
         # and a row elided against the old fixed width would leave the space
-        # they just made empty.
+        # they just made empty. It is part of the shape for that reason: a drag
+        # changes what a row can say without changing which rows there are.
         text_width = _session_row_text_width(self.sidebar_panel.width())
-        for session in switchable:
-            self.session_rows.addWidget(
-                _session_row(session, self.session_focus_requested.emit, text_width)
-            )
-        if not switchable:
-            self.session_rows.addWidget(
-                EmptyState(
-                    "No active runs",
-                    "Start a run to switch between sessions here.",
-                    compact=True,
+        session_shape = [(text_width, astuple(session)) for session in switchable]
+        if session_shape != self._session_strip_shape:
+            self._session_strip_shape = session_shape
+            _clear(self.session_rows)
+            for session in switchable:
+                self.session_rows.addWidget(
+                    _session_row(session, self.session_focus_requested.emit, text_width)
                 )
-            )
+            if not switchable:
+                self.session_rows.addWidget(
+                    EmptyState(
+                        "No active runs",
+                        "Start a run to switch between sessions here.",
+                        compact=True,
+                    )
+                )
         live = sum(1 for a in s.agents.values() if a.is_live)
         self.agents_header.set_datum(f"{live} live", tone="live" if live else "neutral")
         self.agents_empty.setVisible(not s.agents)
@@ -890,6 +871,10 @@ class WorkspaceView(Themed, QWidget):
         # The count sits beside the kicker as a datum, never inside its
         # uppercased text (SWR-3709).
         self.todos_header.set_datum(f"{done}/{len(s.todos)}" if s.todos else "")
+        todo_shape = [astuple(todo) for todo in s.todos]
+        if todo_shape == self._todo_strip_shape:
+            return
+        self._todo_strip_shape = todo_shape
         _clear(self.todo_rows)
         phases: dict[str, list[TodoItem]] = {}
         for todo in s.todos:
@@ -2169,6 +2154,10 @@ class WorkspaceView(Themed, QWidget):
             self.inspector_model.setEnabled(False)
             self.inspector_reasoning.setEnabled(False)
             self.scope_note.setText("takes effect from the next iteration")
+            self._tool_strip_shape = []
+            self._tool_chips = []
+            self._artifact_strip_shape = []
+            self._tool_call_state = ("", (), ())
             _clear(self.tools_layout)
             _clear(self.artifacts_layout)
             self.steer_button.setEnabled(False)
@@ -2215,32 +2204,8 @@ class WorkspaceView(Themed, QWidget):
             )
         self.inspector_reasoning.set_value(agent.reasoning)
 
-        _clear(self.tools_layout)
-        for tool in agent.tools:
-            self.tools_layout.addWidget(_tool_chip(tool, agent))
-        # MCP tools are the other half of what this agent can call, and the panel
-        # showed none of them (SWR-3010). Grouped per server, because "serena" and
-        # "git" answer different questions and a flat list hides which is which.
-        t = tokens()
-        for server, mcp_tools in agent.mcp_tools.items():
-            if not mcp_tools:
-                continue
-            heading = QLabel(server)
-            # No `text-transform` or `letter-spacing`: QSS accepts both and
-            # implements neither, so the kicker treatment this heading was
-            # written for never reached the screen and is not restated here.
-            heading.setStyleSheet(
-                f"font-size:{t.type.scale.x2s}px;color:{t.color.text_tertiary};"
-                f"padding-top:{t.space.xs}px;"
-            )
-            heading.setAccessibleName(f"MCP server {server}")
-            self.tools_layout.addWidget(heading)
-            for tool in mcp_tools:
-                self.tools_layout.addWidget(_tool_chip(tool, agent, server=server))
-
-        _clear(self.artifacts_layout)
-        for info in self._store.artifacts_for_agent(agent.id):
-            self.artifacts_layout.addWidget(artifact_link(info, self.artifact_open_requested.emit))
+        self._sync_tool_chips(agent)
+        self._sync_inspector_artifacts(agent)
 
         descendants = [
             d
@@ -2250,6 +2215,81 @@ class WorkspaceView(Themed, QWidget):
         self.cascade_note.setText(
             f"cancel cascades to {len(descendants)} descendants" if descendants else ""
         )
+
+    @traces(SWR.SWR_3010, SWR.SWR_2454)
+    def _sync_tool_chips(self, agent: AgentNode) -> None:
+        """Show *agent*'s tools, rebuilding the strip only when the strip changes.
+
+        Which tools an agent holds is settled when it starts; what moves during
+        a run is only whether each one is being called. So the shape of the
+        strip is compared first, and a match means every chip is updated in
+        place — 44 chips cost about 53 ms to build and a fraction of a
+        millisecond to re-dress (SWR-2454).
+
+        MCP tools are the other half of what this agent can call, and the panel
+        showed none of them (SWR-3010). Grouped per server, because "serena" and
+        "git" answer different questions and a flat list hides which is which.
+        """
+        shape: list[tuple[str, str]] = [("tool", tool) for tool in agent.tools]
+        for server, mcp_tools in agent.mcp_tools.items():
+            if not mcp_tools:
+                continue
+            shape.append(("server", server))
+            shape.extend(("tool", tool) for tool in mcp_tools)
+        calls = (agent.id, tuple(agent.active_tools), tuple(agent.called_tools))
+        if shape == self._tool_strip_shape:
+            # What a chip says depends on these two lists and nothing else, so
+            # an agent whose elapsed time ticked has not moved a single chip.
+            if calls == self._tool_call_state:
+                return
+            self._tool_call_state = calls
+            for (kind, name), server, chip in self._tool_chips:
+                if kind != "tool":
+                    continue
+                state = _tool_chip_state(name, agent)
+                if chip.property("chipState") != state:
+                    _dress_tool_chip(chip, name, state, server)
+            return
+
+        self._tool_strip_shape = shape
+        self._tool_call_state = calls
+        self._tool_chips = []
+        _clear(self.tools_layout)
+        t = tokens()
+        server = ""
+        for kind, name in shape:
+            if kind == "server":
+                server = name
+                heading = QLabel(name)
+                # No `text-transform` or `letter-spacing`: QSS accepts both and
+                # implements neither, so the kicker treatment this heading was
+                # written for never reached the screen and is not restated here.
+                heading.setStyleSheet(
+                    f"font-size:{t.type.scale.x2s}px;color:{t.color.text_tertiary};"
+                    f"padding-top:{t.space.xs}px;"
+                )
+                heading.setAccessibleName(f"MCP server {name}")
+                self.tools_layout.addWidget(heading)
+                continue
+            chip = _tool_chip(name, agent, server=server)
+            self.tools_layout.addWidget(chip)
+            self._tool_chips.append(((kind, name), server, chip))
+
+    @traces(SWR.SWR_2454)
+    def _sync_inspector_artifacts(self, agent: AgentNode) -> None:
+        """Rebuild the artifact links only when which artifacts exist changed.
+
+        They are read from disk behind an mtime cache and change on their own
+        schedule, so an agent's elapsed time ticking must not cost a rebuild.
+        """
+        infos = self._store.artifacts_for_agent(agent.id)
+        shape = [astuple(info) for info in infos]
+        if shape == self._artifact_strip_shape:
+            return
+        self._artifact_strip_shape = shape
+        _clear(self.artifacts_layout)
+        for info in infos:
+            self.artifacts_layout.addWidget(artifact_link(info, self.artifact_open_requested.emit))
 
     def _cancel_selected(self) -> None:
         agent_id = self._inspected_agent_id()
@@ -2304,20 +2344,32 @@ def _clear(layout: QLayout) -> None:
 
 
 @traces(SWR.SWR_3010)
-def _tool_chip(tool: str, agent: AgentNode, *, server: str = "") -> QLabel:
-    """One tool chip, carrying whether the agent is calling it, has, or has not."""
+def _tool_chip_state(tool: str, agent: AgentNode) -> str:
+    """What the chip says about this tool: calling it, has called it, or not."""
+    if _tool_was_called(tool, agent.active_tools):
+        return "active"
+    if _tool_was_called(tool, agent.called_tools):
+        return "used"
+    return "not used"
+
+
+@traces(SWR.SWR_3010, SWR.SWR_2454)
+def _dress_tool_chip(chip: QLabel, tool: str, state_label: str, server: str) -> None:
+    """Write *state_label* onto *chip*.
+
+    Split out from building the chip so a refresh can leave one alone. Applying
+    a stylesheet makes Qt resolve the widget against the whole application
+    cascade again, so it is the expensive half and only worth paying when the
+    state it encodes has actually moved.
+    """
     t = tokens()
-    active = _tool_was_called(tool, agent.active_tools)
-    called = _tool_was_called(tool, agent.called_tools)
-    state_label = "active" if active else "used" if called else "not used"
-    chip = QLabel(f"{tool} · {state_label}")
-    chip.setWordWrap(True)
-    if active:
+    if state_label == "active":
         border, color = t.color.accent[800], t.color.accent[300]
-    elif called:
+    elif state_label == "used":
         border, color = t.color.accent[400], t.color.text
     else:
         border, color = t.color.neutral[700], t.color.text_tertiary
+    chip.setText(f"{tool} · {state_label}")
     chip.setStyleSheet(
         f"padding:2px {t.space.sm}px;border:{t.size.hairline}px solid {border};"
         f"border-radius:{t.radius.sm}px;"
@@ -2325,6 +2377,15 @@ def _tool_chip(tool: str, agent: AgentNode, *, server: str = "") -> QLabel:
     )
     where = f"{server} tool" if server else "Tool"
     chip.setAccessibleName(f"{where} {tool}, {state_label}")
+    chip.setProperty("chipState", state_label)
+
+
+@traces(SWR.SWR_3010)
+def _tool_chip(tool: str, agent: AgentNode, *, server: str = "") -> QLabel:
+    """One tool chip, carrying whether the agent is calling it, has, or has not."""
+    chip = QLabel()
+    chip.setWordWrap(True)
+    _dress_tool_chip(chip, tool, _tool_chip_state(tool, agent), server)
     return chip
 
 

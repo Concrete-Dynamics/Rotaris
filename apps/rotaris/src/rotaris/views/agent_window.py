@@ -22,8 +22,10 @@ from rotaris.theme import persona_color, state_color
 from rotaris.theme.manager import Themed
 from rotaris.views.transcript import TranscriptListView, filter_transcript_for_agent
 from rotaris.widgets import (
+    PANEL_REFLOW_MS,
     Card,
     ContextRing,
+    HiddenPanelReflow,
     StatusDot,
     artifact_link,
     make_button,
@@ -82,8 +84,12 @@ class AgentWindow(Themed, QMainWindow):
         self.persona_artifact_rows.setSpacing(2)
         self.persona_artifacts.body.addLayout(self.persona_artifact_rows)
         layout.addWidget(self.persona_artifacts)
-        store.agents_changed.connect(self.refresh)
-        store.artifacts_changed.connect(self.refresh)
+        # Through a reflow, not straight to the rebuild (SWR-2454): every
+        # ``agents_changed`` clears and rebuilds the tab strip, and a run moves
+        # an agent's elapsed time and tool count on every publication.
+        self._reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
+        store.agents_changed.connect(self._reflow.request)
+        store.artifacts_changed.connect(self._reflow.request)
         store.transcript_changed.connect(self._refresh_transcripts)
         # A live run reports its transcript through ``transcript_delta`` alone
         # (SWR-2454). This window rebuilds from the whole list either way — it

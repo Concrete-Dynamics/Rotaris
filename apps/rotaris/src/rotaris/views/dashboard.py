@@ -23,11 +23,13 @@ from rotaris.theme import tokens
 from rotaris.theme.manager import Themed
 from rotaris.theme.phosphor import set_button_icon
 from rotaris.widgets import (
+    PANEL_REFLOW_MS,
     AgentTreeList,
     Card,
     CloudCreditCard,
     ContextBar,
     EmptyState,
+    HiddenPanelReflow,
     KpiCard,
     PanelSplitter,
     ProgressBarThin,
@@ -299,12 +301,17 @@ class DashboardView(Themed, QScrollArea):
         root.addWidget(self.columns)
         root.addStretch(1)
 
-        store.agents_changed.connect(self.refresh)
-        store.sessions_changed.connect(self.refresh)
-        store.status_changed.connect(self.refresh)
-        store.git_changed.connect(self.refresh)
-        store.improvement_proposals_changed.connect(self.refresh)
-        store.settings_changed.connect(self.refresh)
+        # Through a reflow, not straight to the rebuild (SWR-2454). This screen
+        # rebuilds every row it holds, and it is built at startup and never
+        # destroyed — so without this it pays for a streaming run's agent
+        # updates while the user is looking at the workspace tab.
+        self._reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
+        store.agents_changed.connect(self._reflow.request)
+        store.sessions_changed.connect(self._reflow.request)
+        store.status_changed.connect(self._reflow.request)
+        store.git_changed.connect(self._reflow.request)
+        store.improvement_proposals_changed.connect(self._reflow.request)
+        store.settings_changed.connect(self._reflow.request)
         store.cloud_credit_changed.connect(self._refresh_cloud_credit)
         self._refresh_cloud_credit()
         self.refresh()

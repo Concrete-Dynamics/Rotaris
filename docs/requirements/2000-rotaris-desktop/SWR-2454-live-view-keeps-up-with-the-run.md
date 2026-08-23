@@ -159,6 +159,38 @@ rewrite which rows exist, so a boundary in recorded rows is not a boundary in
 displayed ones: filtering the transcript to one agent (SWR-2099) and grouping
 consecutive tool calls (SWR-2432).
 
+**The panels beside the transcript, as of 2026-08-23.** The criterion above names
+agents and todos, and until this date the surfaces that draw them did not meet
+it. `agents_changed` carries no payload, so every consumer answered "something
+about some agent moved" by tearing its rows down and building them again — and a
+running agent's elapsed time, context use and tool count move on every
+publication. Six consumers were connected, three of them separate `AgentTreeList`
+instances, all built at startup and never destroyed, none rate-limited, none
+aware of whether anyone was looking at them.
+
+Measured on the machine in the baseline above, before and after:
+
+| Work | Before | After |
+| --- | --- | --- |
+| `AgentTreeList.refresh`, 10 agents | median 31.9 ms | median 0.57 ms |
+| `AgentTreeList.refresh`, 30 agents | median 100.3 ms, max 1070.3 ms | median 1.65 ms, max 2.73 ms |
+| `WorkspaceView._refresh_inspector`, 44 tool chips | 53.4 ms of chip rebuilding alone | 0.5 ms |
+
+Three changes, in the order they matter. Rows are **reconciled** rather than
+rebuilt: an agent tree keeps the row widgets it has and writes the fields that
+moved, which was measured at roughly 3 ms to build a row against 0.02 ms to
+update one. Strips whose *contents* have not changed — the session switcher, the
+task plan, the tool chips, the artifact links — compare a snapshot of the whole
+record rather than a hand-picked field list, so a forgotten field cannot silently
+freeze a row. And a panel that is **not visible** holds its rebuild and catches
+up on its next `Show`, which is what stops the dashboard and the mission view
+from paying for a run the user is watching in the workspace.
+
+Two things are deliberately still whole rebuilds. A theme change discards every
+cached shape, because these rows carry their colours inline and a comparison
+would leave them in the old theme. And an agent switch rebuilds the tool strip,
+because a different agent holds different tools.
+
 Grouping is no longer one of them, as of 2026-08-23. A row that is not a
 groupable tool call is a barrier — grouping emits it verbatim and starts a fresh
 run after it — so re-projecting from the start of the run containing the
@@ -204,6 +236,7 @@ row.
 | --- | --- | --- | --- |
 | Unit | Applying one update to a projected session touches work proportional to the change: asserted by counting the per-update work over sessions of 30, 300 and 3000 events and requiring the count not to grow with length | the desktop's session-update seam | `apps/rotaris/tests/test_live_update_cost.py` |
 | Unit | A view consumer that raises, blocks or is absent leaves the run's own progress and terminal status untouched | the engine→view boundary | `apps/rotaris/tests/test_live_update_cost.py` |
+| Unit | A run reporting an agent's progress leaves the panels drawing it standing: the agent tree keeps its row objects, the tool strip is re-dressed rather than rebuilt, the task plan is untouched — and a hidden panel does no work at all until it is shown | the store-signal→panel boundary | `apps/rotaris/tests/test_panel_reconcile.py` |
 | Unit | The run's own transcript: which rows it reports as settled, what reaches the wire and when, and that a broken watcher leaves the record intact | the transcript recorder | `tests/unit/session/test_transcript_recorder.py` |
 | Unit | Following a session in another process: only the addition is read, a settled row replaces the one it opened, a shortened store restarts the view, and a lost line does not misplace the tail | the foreign-session follower | `apps/rotaris/tests/test_session_follower.py` |
 | Integration | A run emitting activity has it visible on the focused session within the latency budget on both a fresh and a long session; a session driven by a second process is observed with the same content; a session whose producer died is still inspectable | desktop host ↔ a live run, and ↔ a foreign run | `apps/rotaris/tests/test_live_view_latency.py`, `apps/rotaris/tests/test_session_follower.py::test_what_the_follower_shows_is_what_the_session_recorded` |

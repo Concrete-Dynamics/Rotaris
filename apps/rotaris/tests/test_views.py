@@ -805,6 +805,11 @@ def test_settings_delegation_changes_refresh_other_views(qtbot) -> None:
     settings.depth_spin.setValue(7)
     settings.fanout.setValue(13)
 
+    # Shown, because a hidden view holds its rebuild rather than paying for one
+    # nobody can see (SWR-2454) — and a user reads this panel by looking at it.
+    mission.show()
+    qtbot.waitExposed(mission)
+
     assert mission.depth_spin.value() == 7
     assert mission.fanout.value() == 13
 
@@ -905,6 +910,10 @@ def test_dashboard_session_label_tracks_status_while_switching_stays_available(q
     store = sample_store()
     view = DashboardView(store)
     qtbot.addWidget(view)
+    # Shown, because a hidden panel holds its rebuild rather than paying for
+    # one nobody can see (SWR-2454); this screen is read by looking at it.
+    view.show()
+    qtbot.waitExposed(view)
 
     assert "running" in view.session_label.text()
     assert view.new_session_button.isEnabled() is True

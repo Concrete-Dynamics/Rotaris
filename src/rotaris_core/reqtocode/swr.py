@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: ad48f057230c4be4ae4c05209120f4dcd33a272c119c06f65271bd9b0a92c479
+# GLOBAL-HASH: f48f6a15d410afb5b27d7aad0bbf48eebce290b339ba65ece4be534b89044a00
 
 from __future__ import annotations
 
@@ -6173,7 +6173,7 @@ META: dict[int, ReqMeta] = {
     2451: ReqMeta('SWR-2451', 2451, ReqStatus.DRAFT, 'Create and delete personas from Settings UI', 'docs/requirements/2000-rotaris-desktop/SWR-2451-create-delete-personas.md', True, True, '9fc81747151a5977', 'product', ()),
     2452: ReqMeta('SWR-2452', 2452, ReqStatus.APPROVED, 'Transcript geometry is incremental and never partially laid out', 'docs/requirements/2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md', True, True, '50d30593bc23a2bf', 'technical', (2447,)),
     2453: ReqMeta('SWR-2453', 2453, ReqStatus.APPROVED, 'Every run the desktop starts is the same run as a CLI run', 'docs/requirements/2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md', True, True, '9189e7259cc0b6d3', 'product', ()),
-    2454: ReqMeta('SWR-2454', 2454, ReqStatus.APPROVED, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'f59fe96ffd1d01a4', 'product', ()),
+    2454: ReqMeta('SWR-2454', 2454, ReqStatus.APPROVED, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'fbac02672ba4539b', 'product', ()),
     2500: ReqMeta('SWR-2500', 2500, ReqStatus.APPROVED, 'Secure Execution: Permissions & Sandbox', 'docs/requirements/2500-secure-execution.md', False, False, 'cd4969ecb18ee886', 'product', ()),
     2501: ReqMeta('SWR-2501', 2501, ReqStatus.APPROVED, 'Permission policy engine (allow/ask/deny)', 'docs/requirements/2500-secure-execution/SWR-2501-permission-policy-engine.md', True, True, 'c5bf13329aa7756f', 'product', ()),
     2502: ReqMeta('SWR-2502', 2502, ReqStatus.APPROVED, 'Terminal command permission patterns', 'docs/requirements/2500-secure-execution/SWR-2502-terminal-command-patterns.md', True, True, 'ebe1eb6ffa2a4609', 'product', ()),

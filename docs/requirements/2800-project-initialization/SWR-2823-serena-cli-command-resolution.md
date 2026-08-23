@@ -28,7 +28,7 @@ different launcher would have its index built by the default build regardless.
 A resolver MUST derive the CLI invocation from the workspace's configured `serena` MCP server
 entry:
 
-- It reuses the existing command expansion (`resolve_command`, SWR-1715/SWR-1716/SWR-3723),
+- It reuses the existing command expansion (`resolve_command`, SWR-1715/SWR-1716/SWR-3724),
   so the Rotaris-owned launcher and an `npm:`/`uvx:` prefixed command resolve the same way they
   do for a server launch.
 - It takes the configured argument list up to Serena's launch verb — identified by the

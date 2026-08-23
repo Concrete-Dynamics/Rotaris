@@ -33,7 +33,7 @@ user-observable behavior as the pip-installed equivalent.
   source. Windows ARM64 users run the x64 build under emulation. Revisit when
   PySide6 ships a native wheel.
 - **External prerequisites.** The bundle carries Python, its runtime
-  dependencies, and the pinned Serena runtime defined by SWR-3723. `git` remains
+  dependencies, and the pinned Serena runtime defined by SWR-3724. `git` remains
   required for worktrees and checkpoints, `npx` launches the default Playwright
   MCP server, and `rg` backs textual search. User-configured `uvx` MCP servers
   use a user-supplied `uvx` executable. Missing external tools degrade their
@@ -86,4 +86,4 @@ flow — the build command's own contract — is the integration row above it.
 
 Epic: [Distribution & Updates](../3000-distribution-updates.md)
 
-Extended by: [SWR-3723 — Standalone distributions carry the pinned Serena runtime](SWR-3723-bundled-serena-runtime.md)
+Extended by: [SWR-3724 — Standalone distributions carry the pinned Serena runtime](SWR-3724-bundled-serena-runtime.md)

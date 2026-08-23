@@ -115,9 +115,11 @@ class EmptyState(Themed, QFrame):
         block = space.md if self._compact else space.x2l
         side = space.md if self._compact else space.xl
         self._layout.setContentsMargins(side, block, side, block)
-        self._layout.setSpacing(space.sm)
+        # `.empty-state` sits its title 6px off the body — tighter than the
+        # module, because both lines belong to one thought.
+        self._layout.setSpacing(space[0.75])
         self.title_label.setStyleSheet(
-            f"font-size:{type_.scale.base}px;font-weight:{type_.weight_display};"
+            f"font-size:{type_.scale.base}px;font-weight:{type_.weight_strong};"
         )
         self.description_label.setStyleSheet(f"font-size:{type_.scale.xs}px;")
 

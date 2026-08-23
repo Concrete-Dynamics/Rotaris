@@ -1124,6 +1124,15 @@ painters that read the active theme on the theme's own grid unit.
 
 Full requirement: [SWR-3704 — Brand motif and elevation in Qt](2000-rotaris-desktop/SWR-3704-motif-and-elevation.md)
 
+## SWR-3723 — Motion respects the reduced-motion preference
+
+Technical requirement derived from SWR-3704. The design system's reduced-motion rule
+becomes a single motion gate: the platform preference and a Settings toggle, and every
+animation completes instantly behind a closed gate — the end state is reached, only the
+travel is gone.
+
+Full requirement: [SWR-3723 — Motion respects the reduced-motion preference](2000-rotaris-desktop/SWR-3723-reduced-motion-gate.md)
+
 ## SWR-3705 — Colour tokens are authored in OKLCH and resolved to sRGB
 
 Technical requirement derived from SWR-3700. Palettes stay written in the design system's own

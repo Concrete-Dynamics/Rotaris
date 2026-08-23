@@ -210,7 +210,7 @@ def test_skipped_task_is_resolved_but_stays_re_runnable(tmp_path, monkeypatch) -
     assert state.never_initialized is False
 
 
-@verifies(SWR.SWR_2802, SWR.SWR_3723)
+@verifies(SWR.SWR_2802, SWR.SWR_3724)
 def test_no_pending_task_when_serena_prerequisite_is_unmet(tmp_path, monkeypatch) -> None:
     """Productive use: a machine whose installed Serena launcher is unavailable opens a workspace.
 

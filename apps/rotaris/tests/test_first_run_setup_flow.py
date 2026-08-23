@@ -36,7 +36,7 @@ def _click_when_ready(dialog: SetupCoordinatorDialog, name: str) -> None:
     QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
-@verifies(SWR.SWR_3715, SWR.SWR_3723)
+@verifies(SWR.SWR_3715, SWR.SWR_3724)
 def test_failure_details_continue_into_usable_main_window(
     qtbot, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

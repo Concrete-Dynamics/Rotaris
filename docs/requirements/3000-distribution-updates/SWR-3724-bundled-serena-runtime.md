@@ -1,5 +1,5 @@
 ---
-req-id: SWR-3723
+req-id: SWR-3724
 status: approved
 trace: required
 test: required
@@ -8,7 +8,7 @@ epic: SWR-3000
 date: 2026-08-23
 ---
 
-# SWR-3723 — Standalone distributions carry the pinned Serena runtime
+# SWR-3724 — Standalone distributions carry the pinned Serena runtime
 
 Every Rotaris standalone distribution shall carry the exact `serena-agent`
 release used by its default MCP configuration and launch that copy directly.

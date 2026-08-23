@@ -88,7 +88,7 @@ def test_bundled_cli_and_headless_version_smoke() -> None:
         assert _version() in result.stdout
 
 
-@verifies(SWR.SWR_3723)
+@verifies(SWR.SWR_3724)
 def test_bundled_desktop_serena_entry_smoke() -> None:
     """Productive use: a standalone user starts a default Serena-backed agent.
     Expected outcome: the desktop artifact's internal Serena CLI starts from bundled bytes."""

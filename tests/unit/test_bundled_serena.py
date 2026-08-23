@@ -12,7 +12,7 @@ from rotaris_core.reqtocode import SWR, verifies
 pytestmark = pytest.mark.unit
 
 
-@verifies(SWR.SWR_3723)
+@verifies(SWR.SWR_3724)
 def test_installed_runtime_launches_serena_from_the_active_interpreter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -30,7 +30,7 @@ def test_installed_runtime_launches_serena_from_the_active_interpreter(
     ]
 
 
-@verifies(SWR.SWR_3723)
+@verifies(SWR.SWR_3724)
 def test_frozen_runtime_reenters_the_current_executable(monkeypatch: pytest.MonkeyPatch) -> None:
     """Productive use: a standalone Rotaris user starts Serena from the installed artifact.
     Expected outcome: the frozen executable receives the internal Serena marker and server args."""
@@ -49,7 +49,7 @@ def test_frozen_runtime_reenters_the_current_executable(monkeypatch: pytest.Monk
     ]
 
 
-@verifies(SWR.SWR_3723)
+@verifies(SWR.SWR_3724)
 def test_frozen_launcher_intercepts_only_the_serena_marker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

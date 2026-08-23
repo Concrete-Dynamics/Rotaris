@@ -95,7 +95,7 @@ def test_distribution_metadata_is_carried() -> None:
     assert {"rotaris-core", "rotaris"} <= carried
 
 
-@verifies(SWR.SWR_3001, SWR.SWR_3723)
+@verifies(SWR.SWR_3001, SWR.SWR_3724)
 def test_metadata_closure_covers_dependencies_that_read_their_own_version() -> None:
     """Found by running the frozen binary: ``fastmcp/__init__.py`` calls
     ``importlib.metadata.version("fastmcp")`` at import time, so a bundle carrying
@@ -104,7 +104,7 @@ def test_metadata_closure_covers_dependencies_that_read_their_own_version() -> N
     assert {"fastmcp", "openhands-sdk", "litellm", "serena-agent"} <= carried
 
 
-@verifies(SWR.SWR_3723)
+@verifies(SWR.SWR_3724)
 def test_every_bundle_collects_serenas_dynamic_package_surface() -> None:
     """Productive use: a standalone user calls any Serena language backend.
     Expected outcome: every shipped entry point asks PyInstaller to collect Serena's full package."""

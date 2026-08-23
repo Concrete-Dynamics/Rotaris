@@ -65,7 +65,7 @@ def _mcp_config_for(persona_name: str, workspace: Path) -> dict[str, Any]:
     return dict(agent.mcp_config or {})
 
 
-@verifies(SWR.SWR_2801, SWR.SWR_3723)
+@verifies(SWR.SWR_2801, SWR.SWR_3724)
 def test_serena_tools_available_to_orchestrator(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -155,7 +155,7 @@ def test_developer_persona_gets_serena_and_no_lsp_server(
         assert "lsp" not in mcp_servers, persona_name
 
 
-@verifies(SWR.SWR_2819, SWR.SWR_3723)
+@verifies(SWR.SWR_2819, SWR.SWR_3724)
 def test_the_pinned_serena_release_survives_command_resolution(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -264,7 +264,7 @@ def test_persona_grants_narrow_the_pinned_serena_surface(
     assert not unknown, f"grant sets name tools the pinned build does not ship: {sorted(unknown)}"
 
 
-@verifies(SWR.SWR_2801, SWR.SWR_3723)
+@verifies(SWR.SWR_2801, SWR.SWR_3724)
 def test_persona_works_without_serena(
     workspace: Path,
     monkeypatch: pytest.MonkeyPatch,

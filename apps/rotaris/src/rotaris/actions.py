@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 from rotaris_core.reqtocode import SWR, traces
 
+from rotaris.theme import tokens
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -82,11 +84,12 @@ class CommandPaletteDialog(QDialog):
         self._registry = registry
         self.setWindowTitle("Rotaris commands")
         self.setModal(True)
-        self.resize(520, 420)
+        self.resize(560, 420)
         self.setAccessibleName("Rotaris command palette")
         layout = QVBoxLayout(self)
         title = QLabel("Commands")
-        title.setStyleSheet("font-size:17px;font-weight:600;")
+        t = tokens()
+        title.setStyleSheet(f"font-size:{t.type.scale.h5}px;font-weight:{t.type.weight_display};")
         layout.addWidget(title)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Type an action…")

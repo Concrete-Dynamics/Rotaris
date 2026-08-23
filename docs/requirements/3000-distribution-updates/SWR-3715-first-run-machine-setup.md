@@ -11,7 +11,7 @@ date: 2026-08-22
 # SWR-3715 — A bundled install provisions the machine once, before the app opens
 
 SWR-3001 freezes Python and the application dependency graph into the shipped
-bundle. SWR-3723 adds the pinned Serena runtime to that graph. The remaining
+bundle. SWR-3724 adds the pinned Serena runtime to that graph. The remaining
 external programs Rotaris shells out to are `git` for worktrees and checkpoints,
 `npx` for the Playwright MCP server in `DEFAULT_MCP_SERVERS`, and `rg` for the
 search tool. A user who installs from `Rotaris-<v>-windows-x64-setup.exe`, the
@@ -160,7 +160,7 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 
 Depends on: [SWR-3001 — Cross-Platform Standalone Binaries](SWR-3001-cross-platform-standalone-binaries.md)
 
-Related: [SWR-3723 — Standalone distributions carry the pinned Serena runtime](SWR-3723-bundled-serena-runtime.md)
+Related: [SWR-3724 — Standalone distributions carry the pinned Serena runtime](SWR-3724-bundled-serena-runtime.md)
 
 Serves: [SWR-3716 — The first launch offers Rotaris Cloud and lets the user in without it](../2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md)
 

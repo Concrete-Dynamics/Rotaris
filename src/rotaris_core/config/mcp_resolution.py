@@ -71,7 +71,7 @@ def is_uvx_package(command: str) -> bool:
     return command.startswith("uvx:")
 
 
-@traces(SWR.SWR_1715, SWR.SWR_1716, SWR.SWR_3723)
+@traces(SWR.SWR_1715, SWR.SWR_1716, SWR.SWR_3724)
 def resolve_command(command: str, args: list[str]) -> tuple[str, list[str]]:
     """Resolve an MCP command + args, expanding npm/uvx package shorthands."""
     if not command:

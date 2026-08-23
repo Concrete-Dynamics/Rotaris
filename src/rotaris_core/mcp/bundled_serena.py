@@ -1,4 +1,4 @@
-"""Launch the Serena runtime carried by Rotaris distributions (SWR-3723).
+"""Launch the Serena runtime carried by Rotaris distributions (SWR-3724).
 
 Installed Python builds spawn this module under their active interpreter.
 Frozen builds re-exec the current Rotaris executable with :data:`SENTINEL`;
@@ -38,7 +38,7 @@ def _run_serena(arguments: Sequence[str]) -> int:
     return int(result or 0)
 
 
-@traces(SWR.SWR_3723)
+@traces(SWR.SWR_3724)
 def intercept(argv: Sequence[str]) -> int | None:
     """Run bundled Serena when a frozen launcher receives its sentinel."""
     if len(argv) < 2 or argv[1] != SENTINEL:
@@ -46,7 +46,7 @@ def intercept(argv: Sequence[str]) -> int | None:
     return _run_serena(argv[2:])
 
 
-@traces(SWR.SWR_3723)
+@traces(SWR.SWR_3724)
 def resolved_command(arguments: Sequence[str]) -> tuple[str, list[str]]:
     """Return the direct Serena invocation for this installed runtime."""
     if getattr(sys, "frozen", False):
@@ -54,7 +54,7 @@ def resolved_command(arguments: Sequence[str]) -> tuple[str, list[str]]:
     return sys.executable, ["-m", __name__, *arguments]
 
 
-@traces(SWR.SWR_3723)
+@traces(SWR.SWR_3724)
 def main(argv: Sequence[str] | None = None) -> int:
     """``python -m`` entry for installed Python distributions."""
     arguments = list(sys.argv if argv is None else argv)

@@ -554,7 +554,7 @@ DEFAULT_MCP_SERVERS = {
     # `rotaris-serena` resolves to the installed Python runtime from source and
     # to the current executable's internal Serena dispatch in a frozen build.
     # The exact `serena-agent` dependency is carried with both distributions
-    # (SWR-3723), so this default has no machine-level Python launcher.
+    # (SWR-3724), so this default has no machine-level Python launcher.
     #
     # `--project <workspace_root>` is deliberately absent here: it is filled in
     # per run by `mcp_resolution._bind_serena_to_workspace`, because the directory

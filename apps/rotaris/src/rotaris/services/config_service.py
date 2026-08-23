@@ -66,7 +66,7 @@ if TYPE_CHECKING:
     SWR.SWR_2403,
     SWR.SWR_2406,
     SWR.SWR_2807,
-    SWR.SWR_3723,
+    SWR.SWR_3724,
 )
 class ConfigService:
     def __init__(self, workspace: Path, store: WorkspaceStore) -> None:

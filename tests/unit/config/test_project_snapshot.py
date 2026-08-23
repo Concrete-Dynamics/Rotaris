@@ -100,6 +100,38 @@ def test_write_and_read_snapshot_roundtrip(tmp_path: Path) -> None:
     assert loaded == snapshot
 
 
+@verifies(SWR.SWR_782)
+def test_snapshot_allows_public_model_token_price_metadata(tmp_path: Path) -> None:
+    """Productive use: an authenticated Cloud model retains its public token prices.
+    Expected outcome: price metadata survives the secret guard without allowing credentials.
+    """
+    snapshot = ProjectSnapshot(
+        providers={
+            "concrete-cloud": SnapshotProvider(
+                id="concrete-cloud",
+                display_name="Rotaris Cloud",
+                authenticated=True,
+                discovered_at="2026-08-23T00:00:00+00:00",
+                models=[
+                    SnapshotModel(
+                        id="concrete-cloud/openai/gpt-5-mini",
+                        pricing={"input_cost_per_token": 0.00000025},
+                        discovered_at="2026-08-23T00:00:00+00:00",
+                    ),
+                ],
+            ),
+        },
+    )
+
+    write_snapshot(snapshot, base=tmp_path)
+
+    loaded = read_snapshot(tmp_path)
+    assert loaded is not None
+    assert loaded.providers["concrete-cloud"].models[0].pricing == {
+        "input_cost_per_token": 0.00000025
+    }
+
+
 @verifies(SWR.SWR_1702)
 def test_read_snapshot_defaults_missing_tier_aliases_to_none(tmp_path: Path) -> None:
     path = snapshot_path(tmp_path)

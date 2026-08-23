@@ -265,6 +265,11 @@ class Sizing:
     scrollbar: int
     focus_ring: int
     hairline: int
+    #: The window chrome the UI kit's recreation pins: title strip and status
+    #: strip. Named tokens rather than literals in the chrome module, so a
+    #: display-scale change re-measures them instead of re-finding them.
+    title_bar_height: int
+    status_bar_height: int
 
 
 @dataclass(frozen=True)
@@ -306,7 +311,12 @@ class TypeStyle:
 
 @dataclass(frozen=True)
 class TypeScale:
-    """Sizes in pixels, named as the design system names them."""
+    """Sizes in pixels, named as the design system names them.
+
+    `kpi` is the one size the design system names only inside `components.css`
+    (`.kpi-value` is 26px light mono) rather than in the type scale — kept as a
+    token because the KPI value is a component several surfaces reuse.
+    """
 
     x2s: int
     xs: int
@@ -319,31 +329,30 @@ class TypeScale:
     h3: int
     h2: int
     h1: int
+    kpi: int
 
 
-#: The interface face, as Rotaris has always named it. The design system pairs a
-#: brand display/body duo, and this application deliberately does not use it: the
-#: faces were tried in the product and rejected as unreadable at the sizes an
-#: operator actually reads here — ten- and eleven-pixel chips, dense table rows.
-#: A design system decides what a face *has to do* (a display voice, a body
-#: voice, a fixed grid); which face does it is the consuming product's call.
-#:
-#: Host-first on purpose. `Inter` if the machine has it, otherwise whatever the
-#: platform calls its own UI face — the one it has hinted for small sizes.
-#:
-#: `Manrope` is the floor, not a choice. It sits *after* the generic
-#: `sans-serif`, which every desktop with any fonts at all resolves, so a real
-#: machine never reaches it. What it covers is the case with no host fonts
-#: whatsoever: under Qt's `offscreen` platform `QFontDatabase` reports nothing,
-#: and a stack that runs out there renders in whichever single face happens to
-#: be registered — in practice the mono one, which is how a test suite and a
-#: screenshot pipeline end up measuring and painting a monospaced interface.
-UI_FAMILIES: Final[tuple[str, ...]] = (
-    "Inter",
+#: The display face: the design system's brand display — Space Grotesk — leads,
+#: with the host's own UI faces behind it as fallbacks, not alternatives. It is
+#: for display and section heads only; body copy never names it.
+DISPLAY_FAMILIES: Final[tuple[str, ...]] = (
+    "Space Grotesk",
     "Segoe UI",
     "system-ui",
     "sans-serif",
+)
+
+#: The body face: Manrope leads. The design system pairs it with the display
+#: face and caps every weight at 500; against Manrope that ceiling is the whole
+#: story — hierarchy comes from size, colour and space, never from adding
+#: weight. Both brand faces are bundled (SWR-3703), so the first entry can
+#: never be missing, which is also what covers the `offscreen` platform's lack
+#: of host families in tests and screenshots.
+BODY_FAMILIES: Final[tuple[str, ...]] = (
     "Manrope",
+    "Segoe UI",
+    "system-ui",
+    "sans-serif",
 )
 
 #: The fixed-pitch face. The tail past `Consolas` is not thoroughness: Linux

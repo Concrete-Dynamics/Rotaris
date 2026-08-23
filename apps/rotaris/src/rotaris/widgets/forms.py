@@ -226,10 +226,10 @@ class TextArea(Themed, _StyleFlags, QPlainTextEdit):
         self.install_theme_hook()
 
     def apply_theme(self, theme: Theme) -> None:
-        # Eleven steps of the 8px module: the design system's 88px textarea. An
+        # Ten steps of the 8px module: the design system's 80px textarea. An
         # empty box has to read as somewhere to write a paragraph, not as a line
         # edit that happens to wrap.
-        self.setMinimumHeight(self._min_height or theme.space[11])
+        self.setMinimumHeight(self._min_height or theme.space[10])
 
 
 @traces(SWR.SWR_3702)

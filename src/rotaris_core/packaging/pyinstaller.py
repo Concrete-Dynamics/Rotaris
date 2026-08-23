@@ -258,7 +258,7 @@ def repo_root() -> Path:
     return find_repo_root()
 
 
-@traces(SWR.SWR_3001, SWR.SWR_3723)
+@traces(SWR.SWR_3001, SWR.SWR_3724)
 def bundle_spec(name: str, *, root: Path | None = None) -> BundleSpec:
     """Resolve one entry point into a complete, buildable bundle description."""
     try:

@@ -223,7 +223,7 @@ def test_serena_default_server_keeps_default_config_valid() -> None:
     assert unknown_server_errors == []
 
 
-@verifies(SWR.SWR_2801, SWR.SWR_2819, SWR.SWR_3723)
+@verifies(SWR.SWR_2801, SWR.SWR_2819, SWR.SWR_3724)
 def test_serena_default_server_launches_the_bundled_runtime_over_stdio() -> None:
     """Productive use: a user gets Serena directly from their Rotaris installation.
     Expected outcome: the default stdio entry uses the Rotaris-owned launcher."""
@@ -234,7 +234,7 @@ def test_serena_default_server_launches_the_bundled_runtime_over_stdio() -> None
     assert "start-mcp-server" in serena.args
 
 
-@verifies(SWR.SWR_2819, SWR.SWR_3723)
+@verifies(SWR.SWR_2819, SWR.SWR_3724)
 def test_serena_default_names_an_exact_release_not_a_moving_ref() -> None:
     """Productive use: two developers on two machines run the same Serena, and a bug
     report filed against one of them can be reproduced on the other.

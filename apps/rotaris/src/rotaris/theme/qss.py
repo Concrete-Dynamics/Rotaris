@@ -143,9 +143,7 @@ def _surfaces(theme: Theme) -> str:
         border: {size.hairline}px solid {color.border};
         border-radius: {radius.md}px;
     }}
-    QFrame#card[accented="true"], QFrame[surface="card"][accented="true"] {{
-        border-left: 2px solid {color.accent[600]};
-    }}
+    QFrame#card[accented="true"], QFrame[surface="card"][accented="true"] {{}}
     /* `.card-accented .card-kicker` from the design system. It lives here and
        not in SectionLabel because the rule is about the *card*, not the label:
        a kicker takes the accent only when the card it sits in is accented, and a
@@ -156,15 +154,14 @@ def _surfaces(theme: Theme) -> str:
     }}
     QFrame#card[selected="true"], QFrame[surface="card"][selected="true"] {{
         background: {color.accent_tint_soft};
-        border: {size.hairline}px solid {color.accent[700]};
     }}
     QFrame#emptyState {{
-        border: {size.hairline}px dashed {color.border_strong};
+        border: {size.hairline}px dashed {color.border};
         border-radius: {radius.md}px;
     }}
     QFrame#dialogSurface {{
-        background: {color.surface_raised};
-        border: {size.hairline}px solid {color.border_strong};
+        background: {color.surface};
+        border: {size.hairline}px solid {color.border};
         border-radius: {radius.lg}px;
     }}
     QFrame[role="divider"] {{ background: {color.divider}; border: none; max-height: 1px; }}
@@ -174,12 +171,13 @@ def _surfaces(theme: Theme) -> str:
 def primary_button_fills(theme: Theme) -> dict[str, Color]:
     """The three fills the primary action is painted in, and why they stop where they do.
 
-    The design system lightens the primary button on hover — `color-mix(accent-500
-    55%, accent-600)`. On this palette that carries the near-white label down to
-    3.68:1, because lightening a fill under light text costs contrast rather than
-    gaining it. The direction is right and the distance is not, so the hover
-    travels as far towards the lighter step as it can while the label still
-    clears the body floor.
+    The design system paints the primary button's hover in `accent-500` and its
+    pressed in `accent-700`. On this palette `accent-500` carries the near-white
+    label below the body floor, because lightening a fill under light text costs
+    contrast rather than gaining it. The direction is right and the distance is
+    not, so the hover travels as far towards the lighter step as it can while
+    the label still clears the floor — pressed goes darker, which only ever
+    helps a light label.
 
     Exported rather than inlined because the accessibility sweep has to check
     these exact fills. A sweep that recomputed them from ramp steps would be
@@ -196,8 +194,7 @@ def primary_button_fills(theme: Theme) -> dict[str, Color]:
     return {
         "rest": accent[600],
         "hover": hover,
-        # Pressed goes darker, which only ever helps a light label.
-        "pressed": accent[700].mix(accent[600], 0.60),
+        "pressed": accent[700],
     }
 
 
@@ -205,14 +202,14 @@ def _buttons(theme: Theme) -> str:
     color, radius, size, type_ = theme.color, theme.radius, theme.size, theme.type
     accent, danger, warn = color.accent, color.danger, color.axis_x
     primary = primary_button_fills(theme)
-    # The design system specifies `8px 15px`, drawn for its web kit where a
-    # button sits in a page. Rotaris' toolbars are denser than that — the
-    # workspace run row carries six of them beside a status line — and the extra
-    # three pixels a side is enough to push labels into elision at 1440px. The
-    # vertical rhythm and the radius are the system's; the horizontal padding is
-    # the module's own `md`, which is what the app had room for.
-    pad_y, pad_x = theme.space.sm, theme.space.md
+    # The design system's `.btn`: 7px 13px, radius `--rt-radius-md`, `--rt-weight-medium`
+    # (500), text `--rt-text-sm`. The horizontal padding is the design system's own
+    # literal, kept rather than forced onto the 8px module — it is the system's number,
+    # not the app's.
+    pad_y, pad_x = 7, 13
     focus_pad_y, focus_pad_x = pad_y - size.focus_ring, pad_x - size.focus_ring
+    # `opacity: .42` for a disabled control is CSS; QSS parses `opacity` and discards
+    # it. The disabled recolour below is the same intent in Qt's own vocabulary.
     return f"""
     QPushButton {{
         background: transparent;
@@ -220,49 +217,53 @@ def _buttons(theme: Theme) -> str:
         border-radius: {radius.control}px;
         padding: {pad_y}px {pad_x}px;
         font-size: {type_.scale.sm}px;
-        font-weight: {type_.weight_display};
-        min-height: {size.control_height - 16}px;
+        font-weight: {type_.weight_strong};
     }}
     QPushButton[variant="primary"] {{
         color: {accent[100]};
         background: {primary["rest"]};
-        border-color: {accent[500].mix(accent[600], 0.20)};
     }}
     QPushButton[variant="primary"]:hover {{ background: {primary["hover"]}; }}
     QPushButton[variant="primary"]:pressed {{ background: {primary["pressed"]}; }}
     QPushButton[variant="secondary"] {{
         color: {color.text};
-        background: {color.surface_raised};
+        background: transparent;
         border-color: {color.border_strong};
     }}
     QPushButton[variant="secondary"]:hover {{
-        background: {color.hover};
-        border-color: {color.border_strong.mix(color.text, 0.15)};
+        background: {color.text.with_opacity(0.07)};
+        border-color: {color.border_strong};
     }}
-    QPushButton[variant="secondary"]:pressed {{ background: {color.surface}; }}
+    QPushButton[variant="secondary"]:pressed {{
+        background: {color.text.with_opacity(0.04)};
+    }}
     QPushButton[variant="ghost"] {{ color: {accent[300]}; }}
     QPushButton[variant="ghost"]:hover {{ background: {color.accent_tint}; }}
     QPushButton[variant="ghost"]:pressed {{ background: {color.accent_tint_strong}; }}
     QPushButton[variant="danger"] {{
         color: {danger[300]};
-        background: {color.surface_raised};
+        background: transparent;
         border-color: {danger[700]};
     }}
     QPushButton[variant="danger"]:hover {{
-        background: {danger[800]};
+        background: {danger[500].with_opacity(0.12)};
         border-color: {danger[600]};
     }}
-    QPushButton[variant="danger"]:pressed {{ background: {danger[900]}; }}
+    QPushButton[variant="danger"]:pressed {{
+        background: {danger[500].with_opacity(0.08)};
+    }}
     QPushButton[variant="warning"] {{
         color: {warn[300]};
-        background: {color.surface_raised};
+        background: transparent;
         border-color: {warn[700]};
     }}
     QPushButton[variant="warning"]:hover {{
-        background: {warn[800]};
+        background: {warn[500].with_opacity(0.12)};
         border-color: {warn[600]};
     }}
-    QPushButton[variant="warning"]:pressed {{ background: {warn[900]}; }}
+    QPushButton[variant="warning"]:pressed {{
+        background: {warn[500].with_opacity(0.08)};
+    }}
     QPushButton[variant="link"] {{
         color: {accent[300]};
         background: transparent;
@@ -272,6 +273,14 @@ def _buttons(theme: Theme) -> str:
         min-height: 0;
     }}
     QPushButton[variant="link"]:hover {{ color: {accent[200]}; }}
+    QPushButton[variant="link"]:pressed {{ color: {accent[100]}; }}
+    QPushButton[variant="icon"] {{
+        min-width: {size.icon_button}px;
+        max-width: {size.icon_button}px;
+        min-height: {size.icon_button}px;
+        max-height: {size.icon_button}px;
+        padding: 0;
+    }}
     QPushButton[variant="secondary"]:checked,
     QPushButton[variant="ghost"]:checked,
     QPushButton[variant="danger"]:checked,
@@ -282,9 +291,8 @@ def _buttons(theme: Theme) -> str:
     }}
     QPushButton[compact="true"] {{
         border-radius: {radius.sm}px;
-        padding: {theme.space.xs}px {theme.space.sm}px;
+        padding: {theme.space.xs}px {theme.space[1.125]}px;
         font-size: {type_.scale.xs}px;
-        min-height: {size.control_height_compact - 12}px;
     }}
     QPushButton:disabled, QToolButton:disabled, QAbstractSpinBox:disabled {{
         color: {color.text_disabled};
@@ -331,13 +339,14 @@ def _inputs(theme: Theme) -> str:
         color: {color.text};
         border: {size.hairline}px solid {color.border_strong};
         border-radius: {radius.control}px;
-        padding: 7px 11px;
-        font-size: {type_.scale.base}px;
-        selection-background-color: {color.accent[700]};
-        selection-color: {color.accent[100]};
+        padding: 6px 10px;
+        font-size: {type_.scale.sm}px;
+        selection-background-color: {color.accent[500].with_opacity(0.30)};
+        selection-color: {color.text};
     }}
+    QLineEdit {{ min-height: {size.control_height}px; }}
     QPlainTextEdit:hover, QLineEdit:hover, QTextEdit:hover {{
-        border-color: {color.border_strong.mix(color.text, 0.25)};
+        border-color: {color.border_strong};
     }}
     QPlainTextEdit:focus, QLineEdit:focus, QTextEdit:focus {{
         border: {size.focus_ring}px solid {color.focus};
@@ -353,11 +362,11 @@ def _inputs(theme: Theme) -> str:
         background: {color.bg};
         border: {size.hairline}px solid {color.border_strong};
         border-radius: {radius.control}px;
-        padding: 5px 11px;
+        padding: 5px 30px 5px 11px;
         font-size: {type_.scale.sm}px;
-        min-height: {size.control_height - 14}px;
+        min-height: {size.control_height}px;
     }}
-    QComboBox:hover {{ border-color: {color.accent[600]}; }}
+    QComboBox:hover {{ border-color: {color.border_strong}; }}
     QComboBox:focus, QComboBox:on {{ border: {size.focus_ring}px solid {color.focus}; }}
     QComboBox:disabled {{
         color: {color.text_disabled};
@@ -424,11 +433,13 @@ def _collections(theme: Theme) -> str:
     }}
     QTreeWidget::item, QListWidget::item, QListView::item,
     QTableView::item, QTreeView::item {{
-        padding: 5px 7px;
+        padding: 7px 8px;
         border-radius: {radius.sm}px;
     }}
     QTreeWidget::item:hover, QListWidget::item:hover, QListView::item:hover,
-    QTableView::item:hover, QTreeView::item:hover {{ background: {color.hover}; }}
+    QTableView::item:hover, QTreeView::item:hover {{
+        background: {color.text.with_opacity(0.04)};
+    }}
     QTreeWidget::item:selected, QListWidget::item:selected, QListView::item:selected,
     QTableView::item:selected, QTreeView::item:selected {{
         background: {color.accent_tint};
@@ -452,12 +463,12 @@ def _collections(theme: Theme) -> str:
         background: transparent;
         color: {color.text_tertiary};
         border: none;
-        border-bottom: {size.hairline}px solid {color.border};
-        padding: 6px 8px;
+        border-bottom: {size.hairline}px solid {color.divider};
+        padding: 7px 8px;
         font-size: {type_.scale.x2s}px;
         font-weight: {type_.weight_strong};
     }}
-    QTableView {{ gridline-color: {color.border}; }}
+    QTableView {{ gridline-color: {color.divider}; }}
     """
 
 
@@ -467,28 +478,28 @@ def _chrome(theme: Theme) -> str:
     QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{ background: transparent; width: {size.scrollbar}px; margin: 0; }}
     QScrollBar::handle:vertical {{
-        background: {color.neutral[800]};
+        background: {color.border_strong};
         border-radius: {size.scrollbar // 2}px;
         min-height: 28px;
     }}
-    QScrollBar::handle:vertical:hover {{ background: {color.neutral[700]}; }}
+    QScrollBar::handle:vertical:hover {{ background: {color.neutral[600]}; }}
     QScrollBar:horizontal {{ background: transparent; height: {size.scrollbar}px; margin: 0; }}
     QScrollBar::handle:horizontal {{
-        background: {color.neutral[800]};
+        background: {color.border_strong};
         border-radius: {size.scrollbar // 2}px;
         min-width: 28px;
     }}
-    QScrollBar::handle:horizontal:hover {{ background: {color.neutral[700]}; }}
+    QScrollBar::handle:horizontal:hover {{ background: {color.neutral[600]}; }}
     QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
     QTabBar::tab {{
         background: transparent;
         color: {color.text_tertiary};
-        padding: 9px 14px;
+        padding: 8px 8px;
         border-bottom: 2px solid transparent;
         font-size: {type_.scale.sm}px;
-        font-weight: {type_.weight_display};
+        font-weight: {type_.weight_strong};
     }}
     QTabBar::tab:hover {{ color: {color.text_secondary}; }}
     QTabBar::tab:selected {{
@@ -499,11 +510,11 @@ def _chrome(theme: Theme) -> str:
     QTabWidget::pane {{ border: none; }}
 
     QToolTip {{
-        background: {color.surface.mix(color.bg, 0.55)};
+        background: {color.surface_raised};
         color: {color.text};
-        border: {size.hairline}px solid {color.border_strong};
+        border: {size.hairline}px solid {color.border};
         border-radius: {radius.sm}px;
-        padding: 5px 9px;
+        padding: 4px 8px;
         font-size: {type_.scale.xs}px;
     }}
 

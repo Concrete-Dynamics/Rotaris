@@ -23,23 +23,24 @@ Rotaris shall ship the faces its type tokens depend on, and shall not depend on
 a face it did not ship.
 
 **Which faces the interface is set in is a product decision, not a token
-decision.** The brand display/body pair was applied across the desktop and
-rejected in review: at the sizes this interface actually uses — ten- and
-eleven-pixel chips, dense table rows, a nav rail — it was not readable enough to
-work in. The shipped palettes therefore name the host's own UI face, which is
-the one the platform hinted for those sizes. What the design system contributes
-to type here is the *system* — the size ramp, the weight roles, the tracking,
-the tabular figures — which is the part that outlives any one face. A weight
-token names a role, and the number filling it belongs to the face in use: 500
-against Manrope and 500 against a grotesque like Segoe UI are not the same
-colour of text on the page.
+decision.** The brand display/body pair was once rejected in review at the
+sizes this interface uses — ten- and eleven-pixel chips, dense table rows, a
+nav rail. The design system's own revision answers that objection: body weight
+drops from 500 to 400, every weight caps at 500, and the scale no longer asks a
+display face for chip-sized work. Rotaris therefore **adopts the pair as
+specified**: Space Grotesk for display and section heads, Manrope for body and
+UI, JetBrains Mono for every number, path and line of code. Host faces (Inter,
+Segoe UI) sit behind the brand faces as fallbacks, not alternatives. A weight
+token names a role — 400 resting, 500 emphasised — and nothing in the system
+goes above 500; the one exception is the High Contrast palette, whose heavier
+weights (700/800) are its contrast budget for readers AA does not serve, not
+decoration.
 
 - The faces are **bundled as application assets** and registered with Qt at
   startup, before the first window is constructed. All three stay bundled: the
-  brand pair so a future palette can name it without gambling on the host, and
-  because under Qt's `offscreen` platform there are **no** host families at all,
-  so an unregistered face means test and screenshot renders with no text in
-  them.
+  brand pair because the interface is now set in it, and because under Qt's
+  `offscreen` platform there are **no** host families at all, so an unregistered
+  face means test and screenshot renders with no text in them.
 - Registration is **not load-bearing for launch**: a face that fails to
   register is reported and the interface falls back down its stack. Rotaris
   starts either way.
@@ -56,18 +57,23 @@ colour of text on the page.
 - The bundled faces are **carried into the frozen build**, so a packaged Rotaris
   looks like a run-from-source Rotaris.
 - Each bundled face ships with its licence.
-- A type stack is **host-first, and cannot run out**: it asks for the faces the
-  user's platform knows, and behind all of them names one that is bundled, so no
-  stack can exhaust its options and let Qt resolve to a face nobody chose. A
-  generic (`sans-serif`, `monospace`) sits alongside that floor for a desktop
-  that maps generics well, but a generic is a request rather than a guarantee,
-  and the terminal grid depends on the answer.
+- A type stack is **brand-first, and cannot run out**: it leads with the
+  design system's face, then names the host's own UI face for machines that
+  cannot render the brand one, and behind both names one that is bundled — the
+  stack's floor — so no stack can exhaust its options and let Qt resolve to a
+  face nobody chose. A generic (`sans-serif`, `monospace`) sits alongside that
+  floor for a desktop that maps generics well, but a generic is a request rather
+  than a guarantee, and the terminal grid depends on the answer.
 
 ## Acceptance criteria
 
 - The three faces are present as application assets with their licences.
-- No shipped palette sets the interface in the rejected brand display/body pair;
-  re-adopting it is a decision, not an accidental edit to one palette line.
+- Every shipped palette leads its display stack with Space Grotesk and its body
+  stack with Manrope; switching away from the brand pair is a decision, not an
+  accidental edit to one palette line.
+- Weight tokens honour the design system's ceiling: 400 resting, 500 emphasised,
+  nothing above 500 — except the High Contrast palette, whose heavier weights
+  are a documented accessibility measure.
 - Font registration runs before the first window is built, and reports which
   families it registered.
 - A registration failure leaves the application running with the fallback stack.
@@ -85,8 +91,10 @@ colour of text on the page.
 
 Unit tests assert the asset files exist with their licences, that the registrar
 reports the expected families, and that a failed registration degrades instead of
-raising. One test per shipped palette asserts none of them names the rejected
-brand pair, and one asserts every stylesheet stack is derived from the same
+raising. One test per shipped palette asserts each leads with the brand pair —
+Space Grotesk on the display stack, Manrope on the body stack, with the bundled
+face as the stack's floor — and that only High Contrast exceeds the 500 weight
+ceiling. One test asserts every stylesheet stack is derived from the same
 family list the code measures with. A font-metrics test asserts that a tracked label and a tabular number
 differ measurably from the untracked default, which is the only way to catch the
 QSS properties Qt accepts and discards. The packaging test asserts the assets are

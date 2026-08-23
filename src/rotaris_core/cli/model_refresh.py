@@ -214,11 +214,12 @@ def _resolve_refresh_target(provider_id: str) -> ProviderRefreshTarget:
         )
 
 
-@traces(SWR.SWR_2813)
+@traces(SWR.SWR_782, SWR.SWR_2813)
 def persist_discovered_models(
     provider_id: str,
     models: list[DiscoveredModel],
     *,
+    suggestions: dict[str, str | None] | None = None,
     display_name: str | None = None,
     provider_family: str | None = None,
     base_url: str | None = None,
@@ -257,6 +258,11 @@ def persist_discovered_models(
     medium_model = medium_model or first_model_id
     small_model = small_model or first_model_id
     default_summary_model = picked_models.medium_model or small_model or medium_model or large_model
+    eligible_suggestions = suggestions or {}
+    small_model = eligible_suggestions.get("small") or small_model
+    medium_model = eligible_suggestions.get("medium") or medium_model
+    large_model = eligible_suggestions.get("large") or large_model
+    fallback_model = eligible_suggestions.get("fallback") or small_model
     picked_ids = {
         model_id for model_id in (small_model, medium_model, large_model) if model_id is not None
     }
@@ -272,6 +278,7 @@ def persist_discovered_models(
             display_name=model.display_name,
             capabilities=model.capabilities,
             limits=model.limits,
+            pricing=model.pricing,
             discovered_at=discovered_at,
         )
         for model in ordered_models
@@ -301,6 +308,7 @@ def persist_discovered_models(
             large_model=large_model,
             medium_model=medium_model,
             small_model=small_model,
+            fallback_model=fallback_model,
             discovered_at=discovered_at,
         ),
     )
@@ -445,6 +453,7 @@ async def _refresh_provider_models(
     persisted = persist_discovered_models(
         target_provider_id,
         discovery.models,
+        suggestions=discovery.suggestions,
         display_name=provider.display_name,
         provider_family=provider.catalog_id,
         base_url=provider.base_url,

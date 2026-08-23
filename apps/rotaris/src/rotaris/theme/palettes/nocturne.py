@@ -24,8 +24,9 @@ from rotaris.theme.a11y import raise_on
 from rotaris.theme.color import Color, hex_color
 from rotaris.theme.palettes._scale import AA_BOUNDARY, AA_TEXT, ramp_from_seed
 from rotaris.theme.spec import (
+    BODY_FAMILIES,
+    DISPLAY_FAMILIES,
     MONO_FAMILIES,
-    UI_FAMILIES,
     ColorTokens,
     Elevation,
     Motion,
@@ -209,39 +210,55 @@ def build() -> Theme:
             readable_ground=_SURFACE,
         ),
         space=Spacing(xs=4, sm=8, md=12, lg=16, xl=24, x2l=32, x3l=48, x4l=64, grid_unit=32),
-        # Nocturne's own radii — tighter than the design system's 6/10/16.
-        radius=Radii(sm=4, md=8, lg=14, pill=999, control=6),
+        # Geometry is shared with every palette — the design system's radii
+        # and sizings — so a theme switch never reflows a window. What stays
+        # Nocturne's own is its colour record.
+        radius=Radii(sm=5, md=8, lg=14, pill=999, control=8),
         size=Sizing(
             control_height=32,
-            control_height_compact=24,
-            icon_button=32,
-            nav_rail_width=76,
-            nav_item_width=60,
-            status_dot=7,
+            control_height_compact=26,
+            icon_button=30,
+            nav_rail_width=68,
+            nav_item_width=54,
+            status_dot=6,
             toggle_width=32,
             toggle_height=18,
             ring_size=20,
             ring_thickness=3,
-            scrollbar=8,
+            scrollbar=6,
             focus_ring=2,
             hairline=1,
+            title_bar_height=44,
+            status_bar_height=26,
         ),
         type=Typography(
-            # `UI_FAMILIES` is exactly the stack Nocturne has always named; it
-            # now says so once, in `spec`, so three palettes cannot drift into
-            # three slightly different spellings of the same intent.
-            display=css_stack(UI_FAMILIES),
-            body=css_stack(UI_FAMILIES),
+            # The brand faces lead in every palette (SWR-3703); what keeps
+            # Nocturne Nocturne is its colours, not its typeface.
+            display=css_stack(DISPLAY_FAMILIES),
+            body=css_stack(BODY_FAMILIES),
             mono=css_stack(MONO_FAMILIES),
-            display_families=UI_FAMILIES,
-            body_families=UI_FAMILIES,
+            display_families=DISPLAY_FAMILIES,
+            body_families=BODY_FAMILIES,
             mono_families=MONO_FAMILIES,
             scale=TypeScale(
-                x2s=10, xs=11, sm=12, base=13, md=15, h6=13, h5=15, h4=19, h3=24, h2=31, h1=42
+                x2s=10,
+                xs=11,
+                sm=12,
+                base=13,
+                md=15,
+                h6=13,
+                h5=15,
+                h4=19,
+                h3=24,
+                h2=31,
+                h1=42,
+                kpi=26,
             ),
-            weight_display=600,
+            weight_display=500,
             weight_body=400,
-            weight_strong=600,
+            # The design system's ceiling, shared by every palette but High
+            # Contrast: nothing above 500, hierarchy comes from size and space.
+            weight_strong=500,
             tracking_tight=-1.0,
             tracking_wide=5.0,
             tracking_label=8.0,
@@ -249,10 +266,10 @@ def build() -> Theme:
             leading_body=1.55,
         ),
         motion=MotionTokens(
-            fast=100,
-            normal=180,
-            slow=260,
-            shift=4,
+            fast=90,
+            normal=160,
+            slow=240,
+            shift=3,
             pulse=1600,
             ease=Motion(0.4, 0.0, 0.2, 1.0),
             ease_out=Motion(0.0, 0.0, 0.2, 1.0),
@@ -263,14 +280,14 @@ def build() -> Theme:
         ),
         elevation_md=Elevation(
             border=hex_color("#6e7388"),
-            blur=20,
-            offset_y=8,
-            shadow=hex_color("#05060c").with_opacity(0.55),
+            blur=16,
+            offset_y=6,
+            shadow=hex_color("#05060c").with_opacity(0.44),
         ),
         elevation_lg=Elevation(
             border=hex_color("#6e7388"),
-            blur=44,
-            offset_y=20,
-            shadow=hex_color("#05060c").with_opacity(0.65),
+            blur=40,
+            offset_y=18,
+            shadow=hex_color("#05060c").with_opacity(0.54),
         ),
     )

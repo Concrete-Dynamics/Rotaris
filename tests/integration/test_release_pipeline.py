@@ -167,7 +167,7 @@ def test_native_packagers_run_from_a_fresh_checkout(workflow: Mapping[str, Any])
     assert 'bash packaging/linux/make_appimage.sh "${VERSION}"' in steps["Linux AppImage"]["run"]
 
 
-@verifies(SWR.SWR_3723)
+@verifies(SWR.SWR_3724)
 def test_every_native_release_smokes_the_bundled_serena_entry(
     workflow: Mapping[str, Any],
 ) -> None:

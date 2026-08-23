@@ -8,6 +8,86 @@ from rotaris_core.providers.discovery import discover_models
 from rotaris_core.reqtocode import SWR, verifies
 
 
+@verifies(SWR.SWR_782)
+@respx.mock
+def test_discover_models_reads_cloud_pricing_and_valid_suggestions() -> None:
+    """Productive use: a Cloud user receives priced models and curated roles.
+    Expected outcome: valid catalog prices and eligible role ids reach discovery.
+    """
+    catalog = respx.get("https://rotaris.ai/v1/models").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "openai/gpt-5-mini",
+                        "display_name": "GPT-5 Mini",
+                        "context_length": 128000,
+                        "capabilities": {"input_modalities": ["text"]},
+                        "pricing": {
+                            "prompt_usd_per_token": "0.00000025",
+                            "completion_usd_per_token": "0.000002",
+                        },
+                    },
+                    {"id": "openai/gpt-5", "pricing": {"prompt_usd_per_token": "invalid"}},
+                ],
+            },
+        ),
+    )
+    suggestions = respx.get("https://rotaris.ai/v1/model-suggestions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "small": {"id": "openai/gpt-5-mini"},
+                    "medium": {"id": "openai/gpt-5"},
+                    "large": None,
+                    "fallback": {"id": "missing/model"},
+                },
+            },
+        ),
+    )
+
+    result = discover_models("concrete-cloud", token="cloud-token")
+
+    assert result.error is None
+    assert result.models[0].display_name == "GPT-5 Mini"
+    assert result.models[0].limits == {"context_window": 128000}
+    assert result.models[0].pricing == {
+        "input_cost_per_token": 0.00000025,
+        "output_cost_per_token": 0.000002,
+    }
+    assert result.models[1].pricing == {}
+    assert result.suggestions == {
+        "small": "concrete-cloud/openai/gpt-5-mini",
+        "medium": "concrete-cloud/openai/gpt-5",
+        "large": None,
+        "fallback": None,
+    }
+    assert catalog.called
+    assert suggestions.called
+
+
+@verifies(SWR.SWR_782)
+@respx.mock
+def test_discover_models_keeps_cloud_catalog_when_suggestions_fail() -> None:
+    """Productive use: a Cloud user can refresh models during suggestion outage.
+    Expected outcome: catalog discovery succeeds and callers receive no curated roles.
+    """
+    respx.get("https://rotaris.ai/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": [{"id": "openai/gpt-5-mini"}]}),
+    )
+    respx.get("https://rotaris.ai/v1/model-suggestions").mock(
+        return_value=httpx.Response(503, json={"error": {}}),
+    )
+
+    result = discover_models("concrete-cloud", token="cloud-token")
+
+    assert result.error is None
+    assert [model.qualified_id for model in result.models] == ["concrete-cloud/openai/gpt-5-mini"]
+    assert result.suggestions is None
+
+
 @verifies(SWR.SWR_727)
 @respx.mock
 def test_discover_models_parses_copilot_models() -> None:

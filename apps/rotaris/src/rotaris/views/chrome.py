@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import html
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import (
@@ -48,9 +48,14 @@ NAV_ITEMS: list[tuple[str, str, str]] = [
     ("settings", "gear", "Settings"),
 ]
 
+#: `.nav-item` labels are 9px — the design system's own component literal, like
+#: the button's 7/13. One pixel under `x2s`, because a rail label is a caption
+#: under an icon, not a word in a sentence.
+_NAV_LABEL_SIZE: Final = 9
+
 
 @traces(SWR.SWR_2092, SWR.SWR_3708)
-def _glyph_icon(glyph: str, size: int = 24) -> QIcon:
+def _glyph_icon(glyph: str, size: int = 17) -> QIcon:
     """Rasterize a nav-rail symbol as a QIcon at the primary screen DPR.
 
     *glyph* is preferably a Phosphor icon name (SWR-3708); a raw character
@@ -122,14 +127,15 @@ class TitleBar(Themed, QWidget):
         self._store = store
         self.setObjectName("chrome")
         self.setAutoFillBackground(True)
-        self.setFixedHeight(42)
+        self.setFixedHeight(tokens().size.title_bar_height)
         space = tokens().space
         layout = QHBoxLayout(self)
         layout.setContentsMargins(space.md, 0, space.md, 0)
         layout.setSpacing(space.md)
 
         self._mark = QLabel("R")
-        self._mark.setFixedSize(24, 24)
+        # The UI kit pins the title-bar mark at 22px.
+        self._mark.setFixedSize(22, 22)
         self._mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._mark)
 
@@ -260,14 +266,15 @@ class NavRail(Themed, QWidget):
         t = tokens()
         self.setFixedWidth(t.size.nav_rail_width)
         layout = QVBoxLayout(self)
-        # The horizontal margin is what centres a nav item in the rail: the two
-        # widths are specified together and only agree at this gutter.
+        # `.nav-rail`: 12px of air at the ends and the item centred in the 68px
+        # column; 4px between items. The two widths are tokens, so the gutter
+        # between them is derived rather than pinned.
         layout.setContentsMargins(t.space.sm, t.space.md, t.space.sm, t.space.md)
-        layout.setSpacing(t.space.sm)
+        layout.setSpacing(t.space.xs)
         self._buttons: dict[str, QToolButton] = {}
         for view_id, _glyph, label in NAV_ITEMS:
             button = QToolButton()
-            button.setIconSize(QSize(24, 24))
+            button.setIconSize(QSize(17, 17))
             button.setText(label)
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -298,7 +305,7 @@ class NavRail(Themed, QWidget):
         board) and for whatever the eighth view ends up being called.
         """
         metrics = QFontMetricsF(
-            theme.type.body_font(theme.type.scale.x2s, weight=theme.type.weight_strong)
+            theme.type.body_font(_NAV_LABEL_SIZE, weight=theme.type.weight_strong)
         )
         widest = max(metrics.horizontalAdvance(label) for _, _, label in NAV_ITEMS)
         return max(theme.size.nav_item_width, round(widest) + 2 * theme.space.xs)
@@ -314,16 +321,17 @@ class NavRail(Themed, QWidget):
             QWidget#chrome{{border-right:{theme.size.hairline}px solid {color.border};}}
             QToolButton{{
                 color:{color.text_tertiary}; border:none;
-                border-radius:{theme.radius.control}px;
-                padding:{theme.space[1.25]}px 0 {theme.space.sm}px 0;
-                font-size:{type_.scale.x2s}px;
+                border-radius:{theme.radius.sm}px;
+                padding:{theme.space.sm}px 0 {theme.space[0.75]}px 0;
+                font-size:{_NAV_LABEL_SIZE}px;
                 font-weight:{type_.weight_strong};
                 width:{item_width}px;
             }}
-            QToolButton:hover{{ color:{color.accent[300]}; }}
+            QToolButton:hover{{
+                color:{color.text_secondary}; background:{color.text.with_opacity(0.05)};
+            }}
             QToolButton:checked{{
-                color:{color.accent[300]}; background:{color.accent_tint};
-                border-left:2px solid {color.accent.base};
+                color:{color.accent[300]}; background:{color.accent_tint_soft};
             }}
             """
         )
@@ -443,7 +451,7 @@ class StatusBar(Themed, QFrame):
         self._store = store
         self.setObjectName("chrome")
         self.setAutoFillBackground(True)
-        self.setFixedHeight(27)
+        self.setFixedHeight(tokens().size.status_bar_height)
         space = tokens().space
         layout = QHBoxLayout(self)
         layout.setContentsMargins(space.md, 0, space.md, 0)

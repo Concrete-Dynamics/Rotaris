@@ -27,8 +27,9 @@ from rotaris_core.reqtocode import SWR, traces
 from rotaris.theme.color import Color, oklch
 from rotaris.theme.palettes._scale import ramp_of_hue
 from rotaris.theme.spec import (
+    BODY_FAMILIES,
+    DISPLAY_FAMILIES,
     MONO_FAMILIES,
-    UI_FAMILIES,
     ColorTokens,
     Elevation,
     Motion,
@@ -192,39 +193,53 @@ def build() -> Theme:
             readable_ground=oklch(0.25, 0, 0),
         ),
         space=Spacing(xs=4, sm=8, md=12, lg=16, xl=24, x2l=32, x3l=48, x4l=64, grid_unit=32),
-        radius=Radii(sm=6, md=10, lg=16, pill=999, control=8),
+        radius=Radii(sm=5, md=8, lg=14, pill=999, control=8),
         size=Sizing(
-            control_height=36,
-            control_height_compact=28,
-            icon_button=36,
-            nav_rail_width=76,
-            nav_item_width=60,
-            # A larger dot: a 7px indicator is a cue only if you can see 7px.
+            # Geometry is shared with every palette so a theme switch never
+            # reflows a window. Three tokens keep their accessibility delta —
+            # a larger dot, a wider scrollbar and a thicker focus ring — for
+            # the same reason the weights stay heavy: they are this palette's
+            # contrast budget, not decoration.
+            control_height=32,
+            control_height_compact=26,
+            icon_button=30,
+            nav_rail_width=68,
+            nav_item_width=54,
             status_dot=9,
-            toggle_width=34,
-            toggle_height=20,
-            ring_size=22,
-            ring_thickness=4,
+            toggle_width=32,
+            toggle_height=18,
+            ring_size=20,
+            ring_thickness=3,
             scrollbar=12,
-            # Focus is the cue that must survive everything else.
             focus_ring=3,
             hairline=1,
+            title_bar_height=44,
+            status_bar_height=28,
         ),
         type=Typography(
-            # Same faces as every other palette (see `UI_FAMILIES`); this theme
-            # separates itself by weight and contrast, not by typeface. A user
-            # who needs high contrast needs the face their platform hinted for
-            # small sizes, not a second unfamiliar variable.
-            display=css_stack(UI_FAMILIES),
-            body=css_stack(UI_FAMILIES),
+            # The brand faces lead in every palette; this theme separates
+            # itself by weight and contrast, not by typeface.
+            display=css_stack(DISPLAY_FAMILIES),
+            body=css_stack(BODY_FAMILIES),
             mono=css_stack(MONO_FAMILIES),
-            display_families=UI_FAMILIES,
-            body_families=UI_FAMILIES,
+            display_families=DISPLAY_FAMILIES,
+            body_families=BODY_FAMILIES,
             mono_families=MONO_FAMILIES,
             # One step up across the scale. Size is the cheapest legibility gain
             # there is, and the layouts already hold at 1000×680 with it.
             scale=TypeScale(
-                x2s=11, xs=12, sm=14, base=15, md=17, h6=14, h5=17, h4=21, h3=26, h2=34, h1=47
+                x2s=11,
+                xs=12,
+                sm=14,
+                base=15,
+                md=17,
+                h6=14,
+                h5=17,
+                h4=21,
+                h3=26,
+                h2=34,
+                h1=47,
+                kpi=27,
             ),
             weight_display=700,
             weight_body=600,
@@ -236,10 +251,10 @@ def build() -> Theme:
             leading_body=1.65,
         ),
         motion=MotionTokens(
-            fast=100,
-            normal=180,
-            slow=260,
-            shift=4,
+            fast=90,
+            normal=160,
+            slow=240,
+            shift=3,
             pulse=1600,
             ease=Motion(0.4, 0.0, 0.2, 1.0),
             ease_out=Motion(0.0, 0.0, 0.2, 1.0),
@@ -247,9 +262,9 @@ def build() -> Theme:
         ),
         elevation_sm=Elevation(border=oklch(0.52, 0, 0), blur=0, offset_y=0, shadow=_TEXT),
         elevation_md=Elevation(
-            border=oklch(0.72, 0, 0), blur=24, offset_y=8, shadow=oklch(0.02, 0, 0, 0.75)
+            border=oklch(0.72, 0, 0), blur=16, offset_y=6, shadow=oklch(0.02, 0, 0, 0.75)
         ),
         elevation_lg=Elevation(
-            border=oklch(0.72, 0, 0), blur=52, offset_y=22, shadow=oklch(0.02, 0, 0, 0.85)
+            border=oklch(0.72, 0, 0), blur=40, offset_y=18, shadow=oklch(0.02, 0, 0, 0.85)
         ),
     )

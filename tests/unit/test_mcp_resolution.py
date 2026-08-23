@@ -419,7 +419,7 @@ def test_is_uvx_package_truth_table() -> None:
 # The CLI the deterministic setup runs (SWR-2823)
 
 
-@verifies(SWR.SWR_2823, SWR.SWR_3723)
+@verifies(SWR.SWR_2823, SWR.SWR_3724)
 def test_serena_cli_command_uses_the_pinned_default() -> None:
     """Productive use: the Serena that indexes a project is the Serena that answers
     questions about it afterwards.

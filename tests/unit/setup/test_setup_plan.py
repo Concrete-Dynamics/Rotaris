@@ -24,7 +24,7 @@ from rotaris_core.setup.manifest import PLAYWRIGHT_MCP_VERSION
 from rotaris_core.setup.models import ToolProbe
 
 
-@verifies(SWR.SWR_3715, SWR.SWR_3723)
+@verifies(SWR.SWR_3715, SWR.SWR_3724)
 def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
     """Productive use: a user can reproduce the exact toolchain another install received.
     Expected outcome: each archive has an HTTPS URL, literal digest, version, and license."""
@@ -46,7 +46,7 @@ def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
             int(artifact.sha256, 16)
 
 
-@verifies(SWR.SWR_3715, SWR.SWR_3723)
+@verifies(SWR.SWR_3715, SWR.SWR_3724)
 def test_default_mcp_configuration_derives_every_pinned_warmup() -> None:
     """Productive use: a bundled install warms every package its default agents can launch.
     Expected outcome: the setup plan follows the authoritative MCP configuration and shared pins."""
@@ -103,7 +103,7 @@ def test_setup_plan_reuses_system_git_2_41_without_an_install_step(
     assert [step.id for step in plan.steps] == ["detect", "satisfied:git", "record"]
 
 
-@verifies(SWR.SWR_3715, SWR.SWR_3723)
+@verifies(SWR.SWR_3715, SWR.SWR_3724)
 def test_plan_orders_missing_tools_then_deduplicated_exact_warmups(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

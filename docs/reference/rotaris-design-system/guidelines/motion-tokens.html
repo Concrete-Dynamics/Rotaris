@@ -1,0 +1,17 @@
+<!-- @dsCard group="Motion" viewport="700x280" name="Motion tokens" subtitle="Three durations, three easings, one distance — everything animates from these seven values" -->
+<link rel="stylesheet" href="../styles.css">
+<div style="width:700px;padding:20px;background:var(--rt-bg);display:flex;flex-direction:column;gap:14px">
+<table class="table" style="max-width:640px">
+<thead><tr><th>Token</th><th>Value</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td class="mono">--rt-duration-fast</td><td class="mono">100ms</td><td>hover, press — background &amp; border only</td></tr>
+<tr><td class="mono">--rt-duration</td><td class="mono">180ms</td><td>state changes — tab switch, toggle, opacity</td></tr>
+<tr><td class="mono">--rt-duration-slow</td><td class="mono">260ms</td><td>enter/exit — dialogs, toasts, palette</td></tr>
+<tr><td class="mono">--rt-ease-out</td><td class="mono">cubic-bezier(0,0,.2,1)</td><td>entrances (decelerate in)</td></tr>
+<tr><td class="mono">--rt-ease</td><td class="mono">cubic-bezier(.4,0,.2,1)</td><td>in-place state changes</td></tr>
+<tr><td class="mono">--rt-ease-in</td><td class="mono">cubic-bezier(.4,0,1,1)</td><td>exits (accelerate away)</td></tr>
+<tr><td class="mono">--rt-shift</td><td class="mono">4px</td><td>max travel — the only entrance distance</td></tr>
+</tbody>
+</table>
+<div style="font-size:12px;color:var(--rt-text-secondary);line-height:1.55;max-width:640px"><span class="mono">prefers-reduced-motion</span> collapses all animation/transition to instant (rule ships in <span class="mono">base.css</span>). The only infinite animations allowed: <span class="mono">.status-dot.is-pulsing</span> (1.6s) and <span class="mono">.spinner</span> (0.8s).</div>
+</div>

@@ -23,11 +23,11 @@ and notifies users when one is available on GitHub Releases.
 | SWR-3715 | A bundled install provisions the machine once, before the app opens | approved |
 | SWR-3720 | Release artifacts carry complete third-party notices                | draft    |
 | SWR-3722 | Official download page discloses automatic network access           | draft    |
-| SWR-3723 | Standalone distributions carry the pinned Serena runtime             | approved |
+| SWR-3724 | Standalone distributions carry the pinned Serena runtime             | approved |
 
 ## SWR-3715 — A bundled install provisions the machine once, before the app opens
 
-SWR-3001 ships Python and its dependencies, and SWR-3723 adds Serena to that
+SWR-3001 ships Python and its dependencies, and SWR-3724 adds Serena to that
 bundle. The remaining external programs are `git`, `npx`, and `rg`. The first
 launch after a bundled install provisions what is missing under the per-user data
 directory, warms the configured external MCP caches,
@@ -55,13 +55,13 @@ not part of this consumer-facing disclosure requirement.
 
 Full requirement: [SWR-3722 — The official download page discloses automatic network access without degrading the download UX](3000-distribution-updates/SWR-3722-website-download-network-disclosure.md)
 
-## SWR-3723 — Standalone distributions carry the pinned Serena runtime
+## SWR-3724 — Standalone distributions carry the pinned Serena runtime
 
 Standalone artifacts carry the exact Serena release used by the default MCP
 configuration. Serena launches from the installed artifact, and first-run
 machine setup no longer installs `uv` or warms a Serena package cache.
 
-Full requirement: [SWR-3723 — Standalone distributions carry the pinned Serena runtime](3000-distribution-updates/SWR-3723-bundled-serena-runtime.md)
+Full requirement: [SWR-3724 — Standalone distributions carry the pinned Serena runtime](3000-distribution-updates/SWR-3724-bundled-serena-runtime.md)
 
 Building the artifacts: [`docs/reference/building-standalone.md`](../reference/building-standalone.md).
 Cutting a release: [`docs/reference/releasing.md`](../reference/releasing.md).

@@ -58,8 +58,8 @@ be a poll that happened to land. Two runs, on Windows 11 (10.0.26200), an 8-core
 
 | Rows already held | Median | p95 | Max |
 | --- | --- | --- | --- |
-| 0 | 2.0 / 2.7 ms | 3.0 / 4.0 ms | 20.2 / 6.6 ms |
-| 2000 | 2.0 / 2.9 ms | 2.9 / 5.2 ms | 53.0 / 122.2 ms |
+| 0 | 2.0 / 2.7 / 2.2 ms | 3.0 / 4.0 / 2.8 ms | 20.2 / 6.6 / 5.2 ms |
+| 2000 | 2.0 / 2.9 / 1.9 ms | 2.9 / 5.2 / 2.5 ms | 53.0 / 122.2 / 49.2 ms |
 
 Two things the numbers say. The budget has roughly two orders of magnitude of
 headroom — 250 ms was set against a ~1.25 s worst case, and the measurement is a
@@ -72,6 +72,22 @@ The maxima do move, and are the honest caveat: a single row occasionally takes
 tens of milliseconds, sometimes over a hundred, tracking garbage collection and
 OS scheduling rather than session length. That is why the criterion is written
 at the 95th percentile and the test asserts there.
+
+**The measurement is `serial`, and that is load-bearing.** Run after a few
+hundred other Qt tests in one process the same code reports a p95 in the
+hundreds of milliseconds: it is timing the widgets they left alive and the
+garbage they left to collect. The budget belongs to the product, so it is
+measured where the product's conditions hold rather than relaxed to survive a
+crowded process.
+
+**What is *not* measured here, and why the budget survives it.** Latency is
+measured on rows, because a row the reader has not seen is what reads as
+lateness. Growth inside a row they already have — a message or a reasoning
+burst extending token by token — is deliberately coalesced to a 50 ms tick
+instead (`run_bridge.py::_request_publish`), well inside this budget. Publishing
+that growth per token instead was what made the window stop responding on
+2026-08-23: each publication costs the Qt thread a delta *and* a whole session
+projection, and a provider emits tokens far faster than either can be drawn.
 
 ### Cost
 
@@ -141,10 +157,22 @@ debounce, which is what SWR-2130's scope note asks for.
 **What the view layer still reads whole.** Two stages downstream of the store
 rewrite which rows exist, so a boundary in recorded rows is not a boundary in
 displayed ones: filtering the transcript to one agent (SWR-2099) and grouping
-consecutive tool calls (SWR-2432). Both are refused by the incremental path
-rather than approximated, and the whole-list refresh runs instead — correct, and
-no more expensive than it was before. With neither in effect, which is the
-default, the bounded path holds from the run to the painted row.
+consecutive tool calls (SWR-2432).
+
+Grouping is no longer one of them, as of 2026-08-23. A row that is not a
+groupable tool call is a barrier — grouping emits it verbatim and starts a fresh
+run after it — so re-projecting from the start of the run containing the
+boundary is both correct and bounded by the tail. This mattered more than it
+looks: grouping is **on** by default, so until then the shipped configuration
+was the one off the incremental path, and the whole-list fallback it was
+supposed to take was written as a condition that a mutated row never met. The
+transcript went stale instead. Everything measured before that date was measured
+with grouping off.
+
+The agent filter still refuses rather than approximating, and the whole-list
+refresh runs instead — correct, and no more expensive than it was before. It is
+off by default. With it off, the bounded path holds from the run to the painted
+row.
 
 ### Reach — what must keep working
 

@@ -86,6 +86,10 @@ def test_a_streaming_row_costs_that_row_and_what_follows_it() -> None:
 
     streamed["content"] = "thinking about it"
     observer._touch()  # noqa: SLF001
+    # Growth inside a row the view already has is coalesced, so the assertion
+    # about the *boundary* has to flush the limiter first. That the growth did
+    # not go out on its own is its own test, below.
+    observer.flush_publications()
 
     assert len(seen) == 1
     assert seen[0].first == 3000
@@ -282,3 +286,89 @@ def test_a_delta_that_does_not_fit_is_refused_rather_than_guessed_at() -> None:
 
     assert received == []
     assert len(store.transcript) == 1
+
+
+@verifies(SWR.SWR_2454)
+def test_a_streaming_row_does_not_report_once_per_token() -> None:
+    """Productive use: the model streams a paragraph into a row already on screen.
+    Expected outcome: the view hears about it at a rate it can draw, not at the
+    rate the provider emits tokens.
+
+    This is the freeze, stated as a property. Each publication costs the Qt
+    thread a transcript delta *and* a whole session projection, so one per token
+    is what stops the event loop from draining.
+    """
+    observer, seen = _observer(0)
+    streamed = observer._recorder._append({"role": "agent", "name": "coder", "content": ""})  # noqa: SLF001
+    observer._recorder._stream_segments["coder"] = streamed  # noqa: SLF001
+    observer._touch()  # noqa: SLF001 - opens the row; that one goes out at once
+    seen.clear()
+
+    for index in range(1000):
+        streamed["content"] = f"{streamed['content']}{index} "
+        observer._touch()  # noqa: SLF001
+
+    # The loop is not running, so nothing the limiter deferred has fired: what
+    # is left is exactly what it declined to send eagerly.
+    assert seen == []
+
+    observer.flush_publications()
+
+    # And nothing was lost by waiting — the payload is built when it is sent.
+    assert len(seen) == 1
+    assert seen[0].rows[-1]["content"] == streamed["content"]
+    assert "999" in seen[0].rows[-1]["content"]
+
+
+@verifies(SWR.SWR_2454)
+def test_a_new_row_does_not_wait_for_the_growth_tick() -> None:
+    """Productive use: a tool call finishes while another agent is streaming.
+    Expected outcome: the row appears now. Latency is about rows the reader has
+    not seen; coalescing is about rows they have."""
+    observer, seen = _observer(5)
+    streamed = observer._recorder._append({"role": "agent", "name": "coder", "content": "a"})  # noqa: SLF001
+    observer._recorder._stream_segments["coder"] = streamed  # noqa: SLF001
+    observer._touch()  # noqa: SLF001
+    seen.clear()
+
+    # Growth alone: held back.
+    streamed["content"] = "ab"
+    observer._touch()  # noqa: SLF001
+    assert seen == []
+
+    # A row the view has never seen: sent at once, with nothing in front of it,
+    # and it carries the growth that was waiting.
+    observer._recorder._append({"role": "assistant", "name": "coder", "content": "done"})  # noqa: SLF001
+    observer._touch()  # noqa: SLF001
+
+    assert len(seen) == 1
+    assert seen[0].rows[-1]["content"] == "done"
+    assert any(row["content"] == "ab" for row in seen[0].rows)
+
+
+@verifies(SWR.SWR_2454)
+def test_a_row_that_settles_while_coalesced_still_widens_the_boundary() -> None:
+    """Productive use: a tool call opens and closes inside one publication window.
+    Expected outcome: the delta still reaches back to the row that closed.
+
+    The boundary is the rows the recorder still holds *plus* the ones it just
+    let go of. Coalescing means a row can settle in a window that publishes
+    nothing, so those have to be remembered rather than used at once — losing
+    them would leave a settled row on screen in the state it opened in.
+    """
+    observer, seen = _observer(0)
+    first_row = observer._recorder._append({"role": "assistant", "content": "one"})  # noqa: SLF001
+    observer._touch()  # noqa: SLF001
+    seen.clear()
+
+    # Settles with nothing held, so the recorder reports it and nothing else:
+    # without the pending list the boundary would say nothing changed.
+    first_row["content"] = "one, settled"
+    observer._touch(first_row)  # noqa: SLF001
+    assert seen == []
+
+    observer.flush_publications()
+
+    assert len(seen) == 1
+    assert seen[0].first == 0
+    assert seen[0].rows[0]["content"] == "one, settled"

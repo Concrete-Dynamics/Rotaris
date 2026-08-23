@@ -163,6 +163,7 @@ def _measuring_run_task(sdk, released: asyncio.Event, sent: dict[int, float], pr
 
 
 @verifies(SWR.SWR_2454)
+@pytest.mark.serial
 @pytest.mark.parametrize("preloaded", PRELOADED_LENGTHS)
 def test_a_row_is_visible_within_the_budget_however_long_the_session_is(
     tmp_path, qtbot, monkeypatch, preloaded: int, record_property
@@ -173,7 +174,16 @@ def test_a_row_is_visible_within_the_budget_however_long_the_session_is(
 
     This is the requirement's measured baseline. It prints and records the
     numbers rather than only gating on them: the budget is a ceiling to review,
-    and there is no CI on this platform to notice it drifting."""
+    and there is no CI on this platform to notice it drifting.
+
+    Marked ``serial`` because it is a *measurement*. Run after a few hundred
+    other Qt tests in one process it reports a p95 of some hundreds of
+    milliseconds against the same code that reports three on its own — the
+    widgets they leave alive, and the garbage they leave to collect, are what
+    it ends up timing. The budget belongs to the product, so it is measured
+    where the product's conditions hold rather than loosened to survive a
+    crowded process.
+    """
     sdk = sdk_events()
     store = WorkspaceStore()
     service = _service(tmp_path, store)

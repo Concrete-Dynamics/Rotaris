@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -17,6 +18,7 @@ from rotaris_core.cli.commands.models import register as _register_models
 from rotaris_core.cli.commands.providers import register as _register_providers
 from rotaris_core.cli.commands.requirements import register as _register_requirements
 from rotaris_core.cli.commands.secrets import register as _register_secrets
+from rotaris_core.cli.commands.setup import register as _register_setup
 from rotaris_core.events.stream import (
     OUTPUT_FORMAT_STREAM_JSON,
     OUTPUT_FORMAT_TEXT,
@@ -39,6 +41,7 @@ _register_checkpoints(app)
 _register_improvements(app)
 _register_events(app)
 _register_requirements(app)
+_register_setup(app)
 
 
 def _load_cli_config(workspace_root: Path, config_path: Path | None) -> RotarisConfig:
@@ -470,6 +473,11 @@ def logout(
     _run_logout(resolved_provider_id)
 
 
-@traces(SWR.SWR_1800)
+@traces(SWR.SWR_1800, SWR.SWR_3715)
 def main() -> None:
+    command = next((arg for arg in sys.argv[1:] if not arg.startswith("-")), "")
+    if command not in {"setup", "version", "--version"}:
+        from rotaris_core.setup import ensure_bundled_setup
+
+        ensure_bundled_setup(stream=sys.stderr)
     app()

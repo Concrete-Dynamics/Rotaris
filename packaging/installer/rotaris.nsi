@@ -31,6 +31,10 @@ InstallDirRegKey HKCU "Software\${APP_NAME}" "InstallDir"
 RequestExecutionLevel user
 
 !define MUI_ABORTWARNING
+; Checked by default and user-selectable on the finish page. Silent installs
+; keep their unattended behavior because NSIS does not show this page for /S.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch Rotaris"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES

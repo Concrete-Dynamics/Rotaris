@@ -153,6 +153,21 @@ def test_the_matrix_matches_the_platforms_the_code_declares(workflow: Mapping[st
 
 
 @verifies(SWR.SWR_3002)
+def test_native_packagers_run_from_a_fresh_checkout(workflow: Mapping[str, Any]) -> None:
+    """Productive use: a maintainer can publish native bundles from GitHub's checkout.
+    Expected outcome: shell packagers run even when Git records them as regular files.
+    """
+    steps = {
+        step.get("name"): step
+        for step in workflow["jobs"]["build"]["steps"]
+        if isinstance(step, dict)
+    }
+
+    assert 'bash packaging/macos/make_dmg.sh "${VERSION}"' in steps["macOS DMG"]["run"]
+    assert 'bash packaging/linux/make_appimage.sh "${VERSION}"' in steps["Linux AppImage"]["run"]
+
+
+@verifies(SWR.SWR_3002)
 def test_one_failing_platform_still_publishes_the_others(workflow: Mapping[str, Any]) -> None:
     """AC-003: ``fail-fast: false`` keeps the sibling builds alive, and the release job
     runs even when a leg failed — otherwise a single broken runner takes the whole

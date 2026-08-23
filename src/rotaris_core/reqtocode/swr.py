@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: ba8bd24ef50fcbea76ab894beffd8d015d7347cbe4141ef48d4473cf666179ea
+# GLOBAL-HASH: 84bc431066106d3199d25b121fd21496f1d2c82a56ab3011e86ae096c471e6d9
 
 from __future__ import annotations
 
@@ -4723,7 +4723,7 @@ class SWR(IntEnum):
     """[approved] Continuing a session settles the children its previous run left running - docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md"""
 
     SWR_3715 = 3715
-    """[draft] A bundled install provisions the machine once, before the app opens - docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md"""
+    """[approved] A bundled install provisions the machine once, before the app opens - docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md"""
 
     SWR_3716 = 3716
     """[draft] The first launch offers Rotaris Cloud and lets the user in without it - docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md"""
@@ -6226,7 +6226,7 @@ META: dict[int, ReqMeta] = {
     2911: ReqMeta('SWR-2911', 2911, ReqStatus.APPROVED, 'Tool outcome histogram covers every recorded tool call', 'docs/requirements/1500-sessions-diagnostics/SWR-2911-tool-outcome-classification-coverage.md', True, True, '78b907ace3046ca7', 'technical', (1546,)),
     2912: ReqMeta('SWR-2912', 2912, ReqStatus.APPROVED, 'Every child record reaches a terminal state when its run ends', 'docs/requirements/100-orchestration-core/SWR-2912-terminal-child-records-on-run-end.md', True, True, 'c9dcd4ddb4c8b9df', 'product', ()),
     2913: ReqMeta('SWR-2913', 2913, ReqStatus.APPROVED, 'A session that is not running shows no live agent', 'docs/requirements/2000-rotaris-desktop/SWR-2913-no-live-agent-in-a-finished-session.md', True, True, '19c81bdbc89938ab', 'product', ()),
-    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, '139f5a04cb7ad7d9', 'product', ()),
+    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, 'a46bcd01d0e0fa2f', 'product', ()),
     3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, 'd0d8389da8ef101e', 'product', ()),
     3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '96963c37c5f0bda9', 'product', ()),
     3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '8282dfc4bb003c14', 'product', ()),
@@ -6392,6 +6392,6 @@ META: dict[int, ReqMeta] = {
     3711: ReqMeta('SWR-3711', 3711, ReqStatus.APPROVED, 'Credential status is classified without an event loop', 'docs/requirements/700-providers-auth/SWR-3711-credential-status-without-event-loop.md', True, True, 'd1405012d7dfd798', 'technical', (700,)),
     3712: ReqMeta('SWR-3712', 3712, ReqStatus.APPROVED, 'A run resolves its provider credentials up front and keeps them staged', 'docs/requirements/700-providers-auth/SWR-3712-run-primes-provider-credentials.md', True, True, 'a7401f11d05e5f46', 'technical', (700,)),
     3714: ReqMeta('SWR-3714', 3714, ReqStatus.APPROVED, 'Continuing a session settles the children its previous run left running', 'docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md', True, True, '6791d8bf47ff793b', 'product', ()),
-    3715: ReqMeta('SWR-3715', 3715, ReqStatus.DRAFT, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, '769409b6aa2d84cc', 'product', ()),
+    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, '85652f41457a85ae', 'product', ()),
     3716: ReqMeta('SWR-3716', 3716, ReqStatus.DRAFT, 'The first launch offers Rotaris Cloud and lets the user in without it', 'docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md', True, True, 'eeffef4c8eae9cc7', 'product', ()),
 }

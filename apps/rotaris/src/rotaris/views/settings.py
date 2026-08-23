@@ -404,6 +404,7 @@ class _ProviderRowControls:
     SWR.SWR_2507,
     SWR.SWR_2804,
     SWR.SWR_2805,
+    SWR.SWR_3715,
 )
 class SettingsView(Themed, QWidget):
     save_requested = Signal()
@@ -427,6 +428,8 @@ class SettingsView(Themed, QWidget):
     hook_trust_review_requested = Signal()
     #: A Rotaris Cloud sign-in changed the account, so its balance is stale (SWR-3013).
     cloud_credit_refresh_requested = Signal()
+    #: Re-open the first-launch coordinator in explicit repair mode (SWR-3715).
+    machine_setup_repair_requested = Signal()
 
     # Positionally aligned with the addTab() call order below, and persisted as
     # the "interface/settingsTab" preference. New ids append to the end: an
@@ -815,6 +818,7 @@ class SettingsView(Themed, QWidget):
         store.initialization_changed.connect(lambda _state: self._refresh_project_init())
         self.refresh()
         self._refresh_project_init()
+        self.refresh_machine_setup()
         if provider_service is not None:
             self.refresh_provider_health()
         self.install_theme_hook()
@@ -833,7 +837,7 @@ class SettingsView(Themed, QWidget):
         self._security_signature_cache = None
         self.refresh()
 
-    @traces(SWR.SWR_2804, SWR.SWR_2805)
+    @traces(SWR.SWR_2804, SWR.SWR_2805, SWR.SWR_3715)
     def _add_project_tab(self) -> None:
         """Build the Project tab: initialization status plus its one action.
 
@@ -885,8 +889,52 @@ class SettingsView(Themed, QWidget):
         card.body.addLayout(action_row)
 
         layout.addWidget(card)
+
+        machine = Card("Machine setup")
+        self.machine_setup_status = QLabel()
+        self.machine_setup_status.setWordWrap(True)
+        self.machine_setup_status.setAccessibleName("Machine setup status")
+        machine.body.addWidget(self.machine_setup_status)
+        self.machine_setup_versions = QLabel()
+        self.machine_setup_versions.setObjectName("muted")
+        self.machine_setup_versions.setWordWrap(True)
+        self.machine_setup_versions.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.machine_setup_versions.setAccessibleName("Managed machine tool versions")
+        machine.body.addWidget(self.machine_setup_versions)
+        self.repair_machine_tools_button = make_button("Repair machine tools", "secondary")
+        self.repair_machine_tools_button.setAccessibleDescription(
+            "Re-probe Git, uv, Node, ripgrep, and configured MCP package caches"
+        )
+        self.repair_machine_tools_button.clicked.connect(self.machine_setup_repair_requested.emit)
+        machine.body.addWidget(self.repair_machine_tools_button)
+        layout.addWidget(machine)
         layout.addStretch(1)
         self.tabs.addTab(page, "Project")
+
+    @traces(SWR.SWR_3715)
+    def refresh_machine_setup(self) -> None:
+        """Render the durable machine setup result and verified tool versions."""
+        from rotaris_core.config.paths import GLOBAL_DATA_DIR
+        from rotaris_core.setup import load_setup_record
+
+        record = load_setup_record(GLOBAL_DATA_DIR / "setup" / "state.json")
+        if record is None:
+            self.machine_setup_status.setText("Machine setup has not run yet.")
+            self.machine_setup_versions.setText("No managed tool versions are recorded.")
+            return
+        label = {
+            "complete": "Machine setup completed successfully.",
+            "degraded": "Rotaris is open with reduced machine-tool capabilities.",
+            "cancelled": "Machine setup is paused and can be resumed.",
+            "running": "Machine setup is running in another Rotaris process.",
+        }.get(record.outcome, f"Last machine setup result: {record.outcome or 'unknown'}.")
+        self.machine_setup_status.setText(label)
+        versions = ", ".join(
+            f"{name} {version}" for name, version in sorted(record.actual_versions.items())
+        )
+        self.machine_setup_versions.setText(versions or "No satisfying versions are recorded.")
 
     @traces(SWR.SWR_2804, SWR.SWR_2805)
     def _refresh_project_init(self) -> None:

@@ -61,7 +61,7 @@ sequenceDiagram
             Note over RALPH: same-task counter +1<br/>abandon after 3 consecutive PENDING
         end
 
-        SCH->>SESS: persist updated SessionState<br/>(state/resume.json, ui_transcript,<br/>evidence/tool-calls.jsonl,<br/>issues.json, run_config.json,<br/>metadata, summary, snapshot.json)
+        SCH->>SESS: persist updated SessionState<br/>(state/resume.json, ui_transcript,<br/>evidence/tool-calls.jsonl,<br/>issues.json, run_config.json,<br/>metadata, summary)
     end
 
     RALPH->>TUI: post_message(IterationComplete)

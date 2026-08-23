@@ -29,6 +29,8 @@ from rotaris_core.eventstore.reader import (
     read_event_models,
     read_events,
     read_session_events,
+    tail_events,
+    tail_session_events,
 )
 from rotaris_core.eventstore.writer import open_session_store
 from rotaris_core.reqtocode import SWR, verifies
@@ -297,3 +299,160 @@ def test_a_stored_event_classifies_itself_from_its_payload() -> None:
     assert odd.schema_version is None, "a bool must not be read as a schema version"
     assert odd.iteration is None
     assert str(StoreReadWarning(3, "not valid JSON")) == "line 3: not valid JSON"
+
+
+# ---------------------------------------------------------------------------
+# Following a store that is still being written (SWR-2454).  Everything above
+# reads a finished session; these read one that is not finished yet, which is a
+# different problem: the file grows under the reader, and the cost of looking
+# again must be the cost of what arrived rather than of what is there.
+# ---------------------------------------------------------------------------
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_following_a_growing_store_reads_only_what_arrived(tmp_path: Path) -> None:
+    """Productive use: a user watches a run happening in another process.
+    Expected outcome: each look returns the events since the last one, not the
+    session so far — which is what stops a long session costing more to watch
+    than a short one."""
+    path = tmp_path / "events.jsonl"
+    _write_store(path, [_line({"event": "session.start", "session_id": "s"})])
+
+    first = tail_events(path)
+    assert [event.event_type for event in first.events] == ["session.start"]
+    assert first.offset == path.stat().st_size
+
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(_line({"event": "agent.message", "session_id": "s", "text": "on it"}) + "\n")
+        handle.write(_line({"event": "tool.start", "session_id": "s"}) + "\n")
+
+    second = tail_events(path, first.offset)
+
+    assert [event.event_type for event in second.events] == ["agent.message", "tool.start"]
+    assert second.offset == path.stat().st_size
+    assert second.restarted is False
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_a_store_that_gained_nothing_answers_nothing(tmp_path: Path) -> None:
+    """Productive use: the watched run is thinking and has said nothing yet.
+    Expected outcome: an empty answer at the same position — idle costs nothing
+    and re-reads no history."""
+    path = _write_store(tmp_path / "events.jsonl", [_line({"event": "session.start"})])
+    first = tail_events(path)
+
+    again = tail_events(path, first.offset)
+
+    assert again.events == ()
+    assert again.offset == first.offset
+    assert again.restarted is False
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_a_line_still_being_written_is_read_once_it_is_whole(tmp_path: Path) -> None:
+    """Productive use: the look lands in the middle of an append.
+    Expected outcome: the half-written line is left for next time and arrives
+    intact, rather than being read as damage and lost — a live run is mid-write
+    all the time, and that is not the same as a killed one."""
+    path = tmp_path / "events.jsonl"
+    path.write_text(
+        _line({"event": "session.start", "session_id": "s"}) + "\n" + '{"event":"agent.mess',
+        encoding="utf-8",
+    )
+    warnings: list[StoreReadWarning] = []
+
+    first = tail_events(path, on_warning=warnings.append)
+
+    assert [event.event_type for event in first.events] == ["session.start"]
+    assert warnings == [], "a partial trailing line is a live writer, not a corrupt store"
+
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write('age","session_id":"s","text":"done"}\n')
+
+    second = tail_events(path, first.offset)
+
+    assert [event.event_type for event in second.events] == ["agent.message"]
+    assert second.events[0].payload["text"] == "done"
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454, SWR.SWR_2901)
+def test_a_store_the_cap_shortened_is_read_again_and_flagged(tmp_path: Path) -> None:
+    """Productive use: a long run hits the store's cap, so its oldest events are
+    dropped and the file gets shorter under a viewer that was following it.
+    Expected outcome: the follow does not resume into the middle of a line — the
+    store is read whole and reported as restarted, so a reader discards what it
+    derived instead of appending to a history that no longer exists."""
+    path = _write_store(
+        tmp_path / "events.jsonl",
+        [_line({"event": "session.start", "session_id": "s"})] * 4,
+    )
+    ahead = tail_events(path).offset
+
+    _write_store(path, [_line({"event": "result", "session_id": "s"})])
+    restarted = tail_events(path, ahead)
+
+    assert restarted.restarted is True
+    assert [event.event_type for event in restarted.events] == ["result"]
+    assert restarted.offset == path.stat().st_size
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_a_position_that_is_no_longer_a_line_boundary_restarts(tmp_path: Path) -> None:
+    """Productive use: the file a viewer was following was replaced by a longer
+    one, so its size proves nothing. Expected outcome: the position is checked
+    against the line break it was placed after, and a position that no longer
+    sits on one is treated as belonging to a file that is gone."""
+    path = _write_store(tmp_path / "events.jsonl", [_line({"event": "session.start"})])
+    ahead = tail_events(path).offset
+
+    path.write_text("x" * (ahead * 3) + "\n", encoding="utf-8")
+    tail = tail_events(path, ahead)
+
+    assert tail.restarted is True
+    assert tail.events == (), "the replacement holds no events, and none were invented"
+    assert tail.offset == path.stat().st_size
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_a_store_that_does_not_exist_yet_is_an_empty_answer(tmp_path: Path) -> None:
+    """Productive use: a session is watched before its run has emitted anything.
+    Expected outcome: no events and no exception, exactly as a whole read of a
+    missing store gives."""
+    missing = tmp_path / "never" / "events.jsonl"
+
+    assert tail_events(missing).events == ()
+    assert tail_events(missing).offset == 0
+    assert tail_session_events(tmp_path / "session").events == ()
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_a_corrupt_line_in_a_tail_is_skipped_and_reported(tmp_path: Path) -> None:
+    """Productive use: one appended line is garbage.
+    Expected outcome: the events around it still arrive, the caller is told, and
+    the position still advances past it — a bad line must not stall the follow."""
+    path = _write_store(tmp_path / "events.jsonl", [_line({"event": "session.start"})])
+    start = tail_events(path).offset
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("{ not json\n")
+        handle.write(_line({"event": "result"}) + "\n")
+    warnings: list[StoreReadWarning] = []
+
+    tail = tail_events(path, start, on_warning=warnings.append)
+
+    assert [event.event_type for event in tail.events] == ["result"]
+    assert len(warnings) == 1
+    assert tail.offset == path.stat().st_size
+
+
+@verifies(SWR.SWR_2902, SWR.SWR_2454)
+def test_following_a_session_directory_finds_its_store(tmp_path: Path) -> None:
+    """Productive use: a caller has a session directory, not a file path.
+    Expected outcome: the same answer, resolved through the store's own layout."""
+    session_dir = tmp_path / "sessions" / "s-1"
+    store = open_session_store(session_dir, session_id="s-1")
+    store.append(SessionStartEvent(session_id="s-1", task="ship it"))
+
+    tail = tail_session_events(session_dir)
+
+    assert [event.event_type for event in tail.events] == ["session.start"]
+    assert tail.offset > 0

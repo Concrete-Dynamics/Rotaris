@@ -235,6 +235,46 @@ def test_legacy_snapshot_load_still_works_without_split_state(tmp_path) -> None:
     assert loaded.workspace_root == str(tmp_path)
 
 
+@verifies(SWR.SWR_1550)
+def test_a_resumed_legacy_session_stops_reading_the_copy_it_came_from(tmp_path) -> None:
+    """Productive use: a user picks up a session from an older version and keeps
+    working in it. Expected outcome: what they do next is written to `state/` and
+    read back from there — the copy they arrived on is left where it is, stale,
+    and is never preferred over the work that came after it."""
+    sessions_dir = tmp_path / ".rotaris" / "sessions"
+    session_dir = sessions_dir / "legacy"
+    session_dir.mkdir(parents=True)
+    now = dt.datetime.now(dt.UTC)
+    (session_dir / "snapshot.json").write_text(
+        json.dumps(
+            {
+                "session_id": "legacy",
+                "workspace_root": str(tmp_path),
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+                "transcript_events": [{"role": "user", "content": "before the upgrade"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manager = SessionManager(tmp_path)
+    state = manager.load_session("legacy")
+    state.transcript_events.append({"role": "assistant", "content": "after the upgrade"})
+    manager.save_session(state)
+
+    assert (session_dir / "state" / "resume.json").exists()
+    assert manager.load_session("legacy").transcript_events == [
+        {"role": "user", "content": "before the upgrade"},
+        {"role": "assistant", "content": "after the upgrade"},
+    ]
+    # Untouched: this is the user's file, and rewriting or deleting it is not
+    # what SWR-1550 asks for. It is simply no longer the answer.
+    assert json.loads((session_dir / "snapshot.json").read_text(encoding="utf-8"))[
+        "transcript_events"
+    ] == [{"role": "user", "content": "before the upgrade"}]
+
+
 @verifies(SWR.SWR_1546, SWR.SWR_1547, SWR.SWR_1548)
 def test_timeline_tool_calls_and_issues_are_structured(tmp_path) -> None:
     manager = SessionManager(tmp_path)

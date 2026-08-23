@@ -1,7 +1,7 @@
 """Async-interface session persistence.
 
 ``SessionPersister`` is the single debounce layer in front of
-``SessionPersistence.save_snapshot`` (which fans out to seven atomic file
+``SessionPersistence.save_snapshot`` (which fans out to several atomic file
 writes). Debounced writes run via ``asyncio.to_thread`` on a deep copy of
 the state, so the event loop never blocks on file I/O and the writer never
 sees a half-mutated live state. Saves for non-running execution statuses

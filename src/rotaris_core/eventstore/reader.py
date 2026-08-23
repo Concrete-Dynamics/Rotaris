@@ -15,6 +15,11 @@ Three guarantees shape every function here:
 * **Read-only.**  Nothing here rewrites, compacts or repairs the store.  A
   corrupt or truncated final line — a run killed mid-write — is skipped with a
   warning and leaves the file exactly as it was.
+* **Resumable.**  :func:`tail_events` reads only what was appended after a
+  recorded byte position, so following a session still being written costs what
+  it wrote rather than what it has written in total (SWR-2454).  It is the one
+  path that treats a partial trailing line as ordinary rather than as damage:
+  a live run is mid-``write``, and that line is read once it is whole.
 
 The set of known event types is derived from the schema's discriminated union
 at import time rather than hard-coded, so a new event class becomes "known"
@@ -262,6 +267,140 @@ def read_session_events(
 ) -> Iterator[StoredEvent]:
     """Stream the store of one session directory in emission order."""
     return read_events(event_store_path(Path(session_dir)), on_warning=on_warning)
+
+
+@traces(SWR.SWR_2902, SWR.SWR_2454)
+@dataclass(frozen=True, slots=True)
+class StoreTail:
+    """What a store gained since a caller last looked, and where it now ends.
+
+    ``offset`` is what the *next* call passes back in.  It is a byte position and
+    it is only ever placed after a completed line, which is the whole reason this
+    type exists rather than a plain list: a store is appended to by a live run, so
+    a read can land mid-line, and a caller that remembered the end of the file
+    would resume in the middle of an event and lose it.
+    """
+
+    events: tuple[StoredEvent, ...]
+    offset: int
+    #: The file no longer contains what was read before — it shrank, or a new
+    #: session reused the path.  ``events`` then holds the file read from the
+    #: beginning, and a caller holding derived state must discard it rather than
+    #: append to it.
+    restarted: bool = False
+
+
+@traces(SWR.SWR_2902, SWR.SWR_2454)
+def tail_events(
+    path: Path | str,
+    offset: int = 0,
+    *,
+    on_warning: Callable[[StoreReadWarning], None] | None = None,
+) -> StoreTail:
+    """Read only what was appended to a store after *offset*.
+
+    The incremental counterpart to :func:`read_events`: following a session that
+    is still being written costs what the session wrote, not what it has written
+    in total.  That is what lets a viewer watch a run in another process without
+    re-reading its whole history on every look (SWR-2454) — the session state
+    files are rewritten whole and offer no such position.
+
+    Three cases, and each is a normal answer rather than an error:
+
+    * **Nothing new.**  Empty events, the same offset back.
+    * **A partial trailing line.**  A run mid-``write``.  The complete lines are
+      returned and the offset stops before the fragment, so the next call reads
+      that line once it is whole.  A partial line is never warned about — it is
+      not damage, it is a file being written — which is what distinguishes this
+      from :func:`read_events`, whose truncated tail really is a killed run.
+    * **The store no longer contains what was read.**  The cap dropped its
+      oldest lines (SWR-2901), or the file was replaced.  Read from the
+      beginning and answer ``restarted=True``.
+
+    Detecting that third case is not free of assumptions, and the assumption is
+    worth stating.  Two cheap checks are made: the file is now shorter than the
+    position, and the byte before the position is not the line break a position
+    is only ever placed after.  Together they catch a truncation and almost every
+    replacement.  What neither catches is a file replaced by different content of
+    the *same* length whose boundary happens to fall in the same place — for
+    which a size is simply not evidence.  That case is out of reach here rather
+    than handled: a store path is
+    ``<session_dir>/evidence/events.jsonl`` and a session id is never reused, so
+    two different histories do not share one path.  A caller that does not have
+    that guarantee needs a stronger identity than an offset.
+
+    Bytes, not characters: the offset has to survive multi-byte content, and a
+    text-mode position is not addable.  Decoding happens per line, and an
+    undecodable line is warned about and skipped like any other bad line.
+    """
+    resolved = Path(path)
+    try:
+        size = resolved.stat().st_size
+    except OSError:
+        # Missing is empty, exactly as it is for ``read_events``: a session
+        # inspected before its first event has nothing to add, not a failure.
+        return StoreTail(events=(), offset=0, restarted=offset > 0)
+
+    start = max(0, int(offset))
+    restarted = start > size
+    if restarted:
+        start = 0
+
+    try:
+        with resolved.open("rb") as handle:
+            if start > 0 and not restarted:
+                handle.seek(start - 1)
+                if handle.read(1) != b"\n":
+                    # The position is not on a line boundary any more, so it is
+                    # not this file's position.
+                    restarted = True
+                    start = 0
+            if start == size:
+                return StoreTail(events=(), offset=size, restarted=restarted)
+            handle.seek(start)
+            chunk = handle.read()
+    except OSError:
+        _log.warning("Could not read the event store at %s.", resolved, exc_info=True)
+        return StoreTail(events=(), offset=start, restarted=restarted)
+
+    consumed = chunk.rfind(b"\n")
+    if consumed < 0:
+        # Not one complete line yet.  Hold the position: the fragment is read
+        # again next time, when it has its newline.
+        return StoreTail(events=(), offset=start, restarted=restarted)
+    complete = chunk[: consumed + 1]
+
+    events: list[StoredEvent] = []
+    # Line numbers are relative to the read, not to the file: the caller asked
+    # for what is new, and counting from the start of the file would mean
+    # scanning it — which is the cost this function exists to avoid.
+    for number, raw in enumerate(complete.split(b"\n"), start=1):
+        if not raw:
+            continue
+        try:
+            line = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            _emit_warning(
+                StoreReadWarning(number, f"not valid UTF-8 ({exc})", repr(raw[:_EXCERPT_LIMIT])),
+                on_warning,
+            )
+            continue
+        stored = _decode_line(line, number, on_warning)
+        if stored is not None:
+            events.append(stored)
+
+    return StoreTail(events=tuple(events), offset=start + consumed + 1, restarted=restarted)
+
+
+@traces(SWR.SWR_2902, SWR.SWR_2454)
+def tail_session_events(
+    session_dir: Path | str,
+    offset: int = 0,
+    *,
+    on_warning: Callable[[StoreReadWarning], None] | None = None,
+) -> StoreTail:
+    """Read what one session's store gained after *offset*."""
+    return tail_events(event_store_path(Path(session_dir)), offset, on_warning=on_warning)
 
 
 @traces(SWR.SWR_2902)

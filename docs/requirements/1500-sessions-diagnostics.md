@@ -487,6 +487,13 @@ date: 2026-05-27
 source: docs/requirement-log/done/requirements-20260527-session-diagnostics.md
 priority: High
 
+This is an obligation on the **load** path, and only on it. Since 2026-08-23 no
+`snapshot.json` is written: `state/` is the record a session leaves, and the
+whole-state copy beside it duplicated every write for readers that no longer
+exist. A directory that already holds one still loads from it, which is what
+this requirement protects — a user's own history, written by a version that is
+now behind them.
+
 ## SWR-1551 — New diagnostics behavior must have unit and integration coverage for split state, JSONL timeline records, tool-call evidence, issues, and background sessions.
 
 trace: optional
@@ -800,7 +807,7 @@ Implemented as an additive, backward-compatible session layout.
 
 **Notes:**
 
-- `snapshot.json` is still written as a compatibility copy for one release, but `state/resume.json` is the preferred load source when present.
+- `snapshot.json` was written as a compatibility copy for one release, with `state/resume.json` as the preferred load source when present. That release has passed: since 2026-08-23 no copy is written, and `state/` is the record. The load path still reads a `snapshot.json` it finds, which is what SWR-1550 requires — a session already on a user's disk stays loadable, and that says nothing about the shape new ones are written in.
 
 - Full SDK event logs remain available under `evidence/conversations/event_logs/`; the new timeline and issues files are the intended first inspection surface.
 

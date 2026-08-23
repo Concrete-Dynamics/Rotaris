@@ -36,9 +36,28 @@ def test_create_session_saves_snapshot_and_acquires_lock(tmp_path) -> None:
     state = manager.create_session(_make_config(tmp_path))
 
     session_dir = manager.sessions_dir / state.session_id
-    assert (session_dir / "snapshot.json").exists()
+    assert (session_dir / "state" / "resume.json").exists()
     assert (session_dir / "metadata.json").exists()
     assert (session_dir / "lock").exists()
+
+
+@verifies(SWR.SWR_1024, SWR.SWR_1545)
+def test_a_saved_session_is_not_written_twice(tmp_path) -> None:
+    """Productive use: a run saves its state over and over for hours.
+    Expected outcome: each save writes the split layout once, and not a
+    whole-state copy of it as well."""
+    manager = SessionManager(tmp_path)
+    state = manager.create_session(_make_config(tmp_path))
+    state.transcript_events.append({"role": "user", "content": "hello"})
+    manager.save_session(state)
+
+    session_dir = manager.sessions_dir / state.session_id
+
+    assert not (session_dir / "snapshot.json").exists()
+    # And the state it replaced is all still there to be loaded back.
+    assert manager.load_session(state.session_id).transcript_events == [
+        {"role": "user", "content": "hello"}
+    ]
 
 
 @verifies(SWR.SWR_1024)

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 import rotaris_core.events
 from rotaris_core.events import (
     EVENT_SCHEMA_VERSION,
+    AgentMessageEvent,
     AnyEvent,
     ApprovalRequestedEvent,
     CheckpointCreatedEvent,
@@ -123,6 +124,12 @@ def _sample(event_type: type[RotarisEvent]) -> RotarisEvent:
             "elapsed_s": 0.0,
             "deadline_s": 600.0,
         },
+        AgentMessageEvent: {
+            "agent_name": "implementer-2",
+            "persona": "coder",
+            "kind": "message",
+            "text": "I fixed the failing assertion in test_parser.",
+        },
         UsageUpdateEvent: {
             "tokens": {"prompt_tokens": 99},
             "cost": {"total_cost": 0.5},
@@ -219,6 +226,7 @@ def test_every_event_type_has_a_sample_payload() -> None:
         PermissionDecisionEvent,
         VerifierResultEvent,
         VerifierProgressEvent,
+        AgentMessageEvent,
         UsageUpdateEvent,
         ErrorEvent,
         ResultEvent,
@@ -261,6 +269,7 @@ def test_minimum_event_coverage_is_present() -> None:
         "permission.decision",
         "verifier.result",
         "verifier.progress",
+        "agent.message",
         "usage.update",
         "error",
         "result",
@@ -523,6 +532,54 @@ def test_hook_finish_output_is_redacted_and_cannot_be_bypassed_by_assignment() -
     line = serialize_event(event)
     assert "hunter2" not in line
     assert "second run" in line
+
+
+@verifies(SWR.SWR_1829, SWR.SWR_2454)
+def test_an_agent_message_is_redacted_and_cannot_be_bypassed_by_assignment() -> None:
+    """Productive use: an agent quotes the command output it just read, and that
+    output printed a token. Expected outcome: the secret never reaches the wire,
+    on construction or on mutation, and the sentence around it still reads."""
+    event = AgentMessageEvent(
+        session_id="s-1",
+        agent_name="implementer-2",
+        kind="message",
+        text="The deploy script exports API_KEY=sk-livesecret, which is why it worked.",
+    )
+    line = serialize_event(event)
+    assert "sk-livesecret" not in line
+    assert "deploy script" in line
+
+    event.text = "Re-checking: the password=hunter2 line is still there."
+    line = serialize_event(event)
+    assert "hunter2" not in line
+    assert "Re-checking" in line
+
+
+@verifies(SWR.SWR_1829, SWR.SWR_2454)
+def test_a_very_long_agent_message_is_clipped_rather_than_left_unbounded() -> None:
+    """Productive use: a model pastes a whole file back into its reply.
+    Expected outcome: the line stays a line — bounded, marked as clipped, and
+    still one parseable event rather than a megabyte of history."""
+    event = AgentMessageEvent(session_id="s-1", text="a" * 40_000)
+
+    assert len(event.text) == 16_000
+    assert event.text.endswith("…")
+    assert parse_event(json.loads(serialize_event(event))).text == event.text
+
+
+@verifies(SWR.SWR_1829, SWR.SWR_2454)
+def test_reasoning_and_message_are_the_same_event_told_apart_by_kind() -> None:
+    """Productive use: a consumer shows the conversation and hides deliberation.
+    Expected outcome: one discriminator carries both, and ``kind`` separates them
+    — so a consumer that wants only one does not have to know two event types."""
+    said = AgentMessageEvent(session_id="s-1", kind="message", text="Done.")
+    thought = AgentMessageEvent(session_id="s-1", kind="reasoning", text="Let me check first.")
+
+    assert said.event == thought.event == "agent.message"
+    assert json.loads(serialize_event(said))["kind"] == "message"
+    assert json.loads(serialize_event(thought))["kind"] == "reasoning"
+    with pytest.raises(ValidationError):
+        AgentMessageEvent(session_id="s-1", kind="whispering")
 
 
 @verifies(SWR.SWR_1831)

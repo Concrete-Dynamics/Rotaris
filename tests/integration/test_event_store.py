@@ -28,6 +28,7 @@ from rotaris_core.cli import argparse_app, background
 from rotaris_core.config.schema import RotarisConfig
 from rotaris_core.events.bus import reset_event_registry, resolve_event_sink
 from rotaris_core.events.schema import (
+    AgentMessageEvent,
     ErrorEvent,
     IterationEndEvent,
     IterationStartEvent,
@@ -46,6 +47,7 @@ from rotaris_core.eventstore import (
     read_session_events,
     replay_session,
     reset_event_store_registry,
+    tail_session_events,
     trajectory_document,
     write_trajectory,
 )
@@ -116,7 +118,8 @@ def _install_scripted_run(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Two iterations, two tool calls (one carrying a credential, one failing), a
     permission denial and a failing verifier — the exact mix SWR-2903's
-    acceptance criteria name.
+    acceptance criteria name — plus what the agent said while doing it, which is
+    the half of a run a person actually reads (SWR-1829).
     """
 
     async def _fake_run_task(
@@ -131,6 +134,25 @@ def _install_scripted_run(monkeypatch: pytest.MonkeyPatch) -> None:
 
         session_id = state.session_id
         publish(session_id, IterationStartEvent(session_id=session_id, iteration=1, task=task))
+        publish(
+            session_id,
+            AgentMessageEvent(
+                session_id=session_id,
+                agent_name="implementer-1",
+                persona="coder",
+                kind="reasoning",
+                text="The parser probably mishandles the trailing comma.",
+            ),
+        )
+        publish(
+            session_id,
+            AgentMessageEvent(
+                session_id=session_id,
+                agent_name="implementer-1",
+                persona="coder",
+                text="Checking the tokenizer first.",
+            ),
+        )
         publish(
             session_id,
             ToolStartEvent(
@@ -438,6 +460,50 @@ def test_a_users_run_history_is_retrievable_after_the_run_ended(
     assert "session.start" not in [e.event_type for e in second_iteration]
     # An empty answer is an answer, not an error.
     assert list(replay_session(session_dir, EventQuery.build(event_types=["child.spawn"]))) == []
+
+
+@verifies(SWR.SWR_1829, SWR.SWR_2902, SWR.SWR_2454)
+def test_a_run_in_another_process_can_be_followed_without_re_reading_it(
+    headless_workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Productive use: a headless run is going, and something else — a desktop
+    window, a dashboard — wants to show what it is doing while it does it.
+    Expected outcome: the conversation is on disk in the store, and following it
+    costs what the run added rather than what it has produced in total.
+
+    The two halves are one requirement. A cheap read of a store that carried no
+    conversation would have nothing to show, and a store with the conversation
+    that had to be re-read whole would get slower for exactly the long sessions
+    worth watching."""
+    _install_scripted_run(monkeypatch)
+
+    assert _run(headless_workspace) == 0
+    capsys.readouterr()
+    session_dir = _session_dir(headless_workspace, _only_session(headless_workspace))
+
+    # What a follower reads: the store from wherever it last got to. Read here in
+    # two passes over a finished run, which is the same arithmetic a live one
+    # produces and is deterministic.
+    whole = list(read_session_events(session_dir))
+    boundary = tail_session_events(session_dir).offset
+    stopped_early = tail_session_events(session_dir, boundary // 2)
+    rest = tail_session_events(session_dir, stopped_early.offset)
+
+    assert [event.payload for event in stopped_early.events] + [
+        event.payload for event in rest.events
+    ] == [event.payload for event in whole[: len(stopped_early.events) + len(rest.events)]]
+    assert len(stopped_early.events) + len(rest.events) == len(whole)
+    assert rest.restarted is False
+
+    said = [event for event in whole if event.event_type == "agent.message"]
+    assert [event.payload["kind"] for event in said] == ["reasoning", "message"]
+    assert said[1].payload["text"] == "Checking the tokenizer first."
+    assert said[1].payload["agent_name"] == "implementer-1"
+
+    # And the last look, once the run is over, gains nothing and re-reads nothing.
+    assert tail_session_events(session_dir, rest.offset).events == ()
 
 
 @verifies(SWR.SWR_2902)

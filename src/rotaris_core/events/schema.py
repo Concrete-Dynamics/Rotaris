@@ -19,11 +19,12 @@ keeps this package import-light: a stream consumer must not drag in the agent
 SDK just to parse a line.
 
 Redaction is the schema's job, not the caller's.  Every field that can carry a
-command line, an approval summary or raw process output —
+command line, an approval summary, raw process output or model text —
 ``tool.start.arguments``, ``permission.decision.summary``,
-``hook.start.command``, ``hook.finish.output`` and
-``approval.requested.summary`` — is masked by a validator, so a caller cannot
-leak a credential by constructing (or mutating) a model directly.
+``hook.start.command``, ``hook.finish.output``,
+``approval.requested.summary`` and ``agent.message.text`` — is masked by a
+validator, so a caller cannot leak a credential by constructing (or mutating) a
+model directly.
 """
 
 from __future__ import annotations
@@ -46,6 +47,15 @@ from rotaris_core.reqtocode import SWR, traces
 #: Version of the event wire format.  Bumped only on a breaking change; adding
 #: a field or a new ``event`` type is backward-compatible and keeps the version.
 EVENT_SCHEMA_VERSION: int = 1
+
+#: How much of one agent message the wire carries.  A stream line is a line, and
+#: an event whose size follows the model's output is the one way a single event
+#: can make a whole session's history unreadable — the store caps *lines*
+#: (``eventstore.writer.DEFAULT_MAX_EVENTS``), not bytes, so nothing else bounds
+#: it.  The limit is far above any real reply; text that reaches it is clipped
+#: with an ellipsis, so a consumer can see that it happened rather than having to
+#: infer it.
+_MESSAGE_TEXT_LIMIT = 16_000
 
 
 def _utc_now_iso() -> str:
@@ -291,6 +301,58 @@ class VerifierProgressEvent(RotarisEvent):
     #: The deadline the starting check runs against, after the suite budget has
     #: been applied — what a countdown should be drawn from.
     deadline_s: float = 0.0
+
+
+@traces(SWR.SWR_1829, SWR.SWR_2454)
+class AgentMessageEvent(RotarisEvent):
+    """What an agent said, and what it reasoned before saying it.
+
+    The stream reported everything a run *did* — iterations, children, tools,
+    permissions, verdicts — and nothing it *said*.  A consumer could therefore
+    reconstruct a run's mechanics but not its conversation, which is the half a
+    person actually reads.  A session executing in another process was the case
+    where that mattered: its transcript is written to ``state/ui_transcript.json``
+    whole, so a reader either re-reads the entire session or sees nothing, and
+    for a headless run the file stays near-empty until the run ends (SWR-2454).
+
+    ``kind`` separates the two contents that arrive through the same seam and
+    render differently: ``"message"`` is text meant for the reader, ``"reasoning"``
+    the model's own deliberation.  A consumer showing only the conversation keeps
+    the first and drops the second; one drawing a live view wants both, because a
+    long silence with reasoning flowing is a working agent and a long silence
+    without one is not.
+
+    ``text`` is redacted like every other free-text field on the wire and clipped
+    to :data:`_MESSAGE_TEXT_LIMIT`.  Both are the schema's job: an agent quotes
+    what a tool printed, and a credential in a command's output reaches this
+    field by exactly the route it reaches ``hook.finish.output``.
+    """
+
+    event: Literal["agent.message"] = "agent.message"
+    #: Canonical name of the agent that produced it — the same string
+    #: ``child.spawn`` reports as ``agent_name``, so the two join and a message
+    #: reaches the work it belongs to.  A run's entry agent has no delegation
+    #: identity and carries its persona name here instead, so a failed join means
+    #: "not a child", not a dropped event.
+    agent_name: str = ""
+    #: Persona the agent runs under.
+    persona: str = ""
+    #: ``"message"`` for reader-facing text, ``"reasoning"`` for deliberation.
+    kind: Literal["message", "reasoning"] = "message"
+    #: The content, secrets masked and length bounded by the validator below.
+    text: str = ""
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _redact(cls, value: Any) -> Any:
+        """Mask, then bound.  In that order — clipping first could cut a
+        credential in half and leave the half that still matches nothing."""
+        if not isinstance(value, str):
+            return value
+        masked = redact_text(value)
+        if len(masked) > _MESSAGE_TEXT_LIMIT:
+            return masked[: _MESSAGE_TEXT_LIMIT - 1] + "…"
+        return masked
 
 
 @traces(SWR.SWR_1829)
@@ -581,6 +643,7 @@ AnyEvent = Annotated[
     | PermissionDecisionEvent
     | VerifierResultEvent
     | VerifierProgressEvent
+    | AgentMessageEvent
     | UsageUpdateEvent
     | ErrorEvent
     | ResultEvent

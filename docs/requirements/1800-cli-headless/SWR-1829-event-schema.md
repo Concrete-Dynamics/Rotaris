@@ -24,6 +24,19 @@ The event stream (SWR-1828) MUST follow a versioned, documented schema.
   arguments, outcome classification), permission decisions (SWR-2506), verifier
   results (SWR-2602/SWR-2604 gate decisions), token/cost updates, errors, and
   the terminal `result`.
+- **What the agents said**, not only what they did: the text an agent addresses
+  to the reader, and the reasoning it produced on the way there, distinguished
+  from each other so a consumer can show one without the other. A stream that
+  describes a run's mechanics and omits its conversation cannot be rendered as a
+  run — which is what kept a session executing in another process off any
+  bounded-cost view of it (SWR-2454). Emitted from below the host boundary, so
+  every entry point produces it and none can replace it: a headless run, a CLI
+  run, an SDK run and the desktop leave the same account of what was said.
+- Message text is **bounded as well as redacted**. A field whose size follows
+  the model's output is the one way a single event can make a session's history
+  unreadable, since the store caps lines rather than bytes (SWR-2901). Text that
+  exceeds the bound is clipped visibly, so a consumer can tell a clipped message
+  from a short one.
 - Payloads reuse the existing structured models (`ChildReportArtifact`,
   terminal outcomes, `TokenSnapshot`, `CostSnapshot`) rather than inventing
   parallel shapes, carried as already-serialized dicts so a consumer does not
@@ -48,15 +61,19 @@ and is not covered here.
 
 - Each of the covered event types validates against the published schema and
   round-trips through `parse_event`.
-- A credential in a tool argument does not appear in any serialized event.
+- A credential in a tool argument does not appear in any serialized event, nor
+  in message text an agent quoted it into.
 - An event carrying an unknown extra field still parses under version 1.
+- A run reports what its agents said, whatever host started it, and a consumer
+  can tell reader-facing text from the model's own deliberation.
 
 ## Test portfolio
 
 | Level | Productive scenario | Exercised boundary | Planned/covering test |
 | --- | --- | --- | --- |
-| Unit | Schema validation per event type; version stamping; redaction on construction and on assignment; one-line serialization | Event model definitions | `tests/unit/test_event_schema.py` |
-| Integration | A run touching delegation, tools, permissions and completion emits the covered event types with valid payloads | Event emission seams (diagnostics writers, Ralph loop, stream observer) | `tests/integration/test_event_emission.py`, `tests/unit/test_event_observer.py` |
+| Unit | Schema validation per event type; version stamping; redaction on construction and on assignment; message-text bounding; one-line serialization | Event model definitions | `tests/unit/test_event_schema.py` |
+| Unit | Which SDK events say something, what is said, and that a broken consumer or a changed SDK shape leaves the conversation running | The message-emission seam | `tests/unit/test_agent_message_events.py` |
+| Integration | A run touching delegation, tools, permissions and completion emits the covered event types with valid payloads; a child conversation's messages reach the stream from below every host | Event emission seams (diagnostics writers, Ralph loop, stream observer, child conversation) | `tests/integration/test_event_emission.py`, `tests/unit/test_event_observer.py`, `tests/unit/test_scheduler.py` |
 | User-flow E2E | Covered by the SWR-1828 E2E flow — the stream parses against the published schema and carries no credential | Public product boundary → user-observable result | `tests/integration/test_headless_stream.py::test_a_headless_stream_json_run_is_consumable_end_to_end` (shared with SWR-1828) |
 
 Epic: [CLI & Headless Mode](../1800-cli-headless.md)

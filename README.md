@@ -190,7 +190,7 @@ and MCP server list; all of it is overridable per workspace.
 | `planner` | Turns research into ordered execution plans | Can delegate and publish artifacts |
 | `requirements-engineer` | Goals → traceable requirements and acceptance criteria | |
 | `librarian` | **External** reference: library docs, RFCs, vendor APIs, web | Tavily MCP |
-| `codebase-analyst` | **Internal** analyst: call graphs, symbol usage, diagnostics | Read-only; Serena + git MCP |
+| `codebase-analyst` | **Internal** analyst: call graphs, symbol usage, diagnostics | Read-only; Serena |
 | `verifier` | Final acceptance gate against the original request | Read-only; runs tests and lints |
 | `ui-verifier` | Browser-driven UI verification with screenshot evidence | Read-only; Playwright MCP |
 | `project-initializer` | First-run Serena activation and onboarding | System-only; not reachable via `delegate` |

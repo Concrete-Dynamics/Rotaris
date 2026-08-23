@@ -106,7 +106,6 @@ LEGACY_PERSONA_ALIASES = {"oracle": "codebase-analyst"}
 
 SERENA_PINNED_VERSION = "1.7.0"
 PLAYWRIGHT_MCP_PINNED_VERSION = "0.0.75"
-GIT_MCP_PINNED_VERSION = "2.15.1"
 """The one place the Serena release is named (SWR-2819).
 
 Upgrading Serena is a single edit here with the whole suite behind it, which is
@@ -433,8 +432,7 @@ DEFAULT_PERSONAS = {
         can_publish_artifacts=True,
         read_only=True,
         delegates_to=[],
-        mcp_servers=["git", "serena"],
-        # `read_only=True` — the declaration the whole-server grant used to contradict.
+        mcp_servers=["serena"],
         mcp_tools={"serena": [*SERENA_READ_TOOLS, *SERENA_MEMORY_WRITE_TOOLS]},
         system_prompt_file="prompts/oracle.md",
     ),
@@ -590,33 +588,6 @@ DEFAULT_MCP_SERVERS = {
             "stdio",
         ],
     ),
-    "git": MCPServerConfig(
-        command="npx",
-        args=["-y", f"@cyanheads/git-mcp-server@{GIT_MCP_PINNED_VERSION}"],
-        disabled_tools=[
-            "git_init",
-            "git_clone",
-            "git_clean",
-            "git_add",
-            "git_commit",
-            "git_checkout",
-            "git_merge",
-            "git_rebase",
-            "git_cherry_pick",
-            "git_branch",
-            "git_remote",
-            "git_tag",
-            "git_fetch",
-            "git_pull",
-            "git_push",
-            "git_stash",
-            "git_reset",
-            "git_worktree",
-            "git_set_working_dir",
-            "git_clear_working_dir",
-            "git_wrapup_instructions",
-        ],
-    ),
 }
 
 DEFAULT_CONFIG = RotarisConfig(
@@ -657,7 +628,7 @@ traces(
 # The server map carries its own trace: SWR-2818 removed the `lsp` entry from it
 # and SWR-2819 pins the Serena entry that remains — neither is a statement about
 # the persona roster above.
-traces(SWR.SWR_2818, SWR.SWR_2819)(DEFAULT_MCP_SERVERS)
+traces(SWR.SWR_2818, SWR.SWR_2819, SWR.SWR_3715)(DEFAULT_MCP_SERVERS)
 
 # The requirements block's defaults, including which persona reads a repository
 # to propose a source mapping (SWR-3106). Later slices change values here; the

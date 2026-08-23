@@ -61,24 +61,24 @@ def test_a_grant_withholds_every_tool_it_does_not_name() -> None:
 
 @verifies(SWR.SWR_3009)
 def test_a_grant_for_one_server_does_not_reach_another() -> None:
-    """Productive use: `codebase-analyst` carries both `git` and `serena`.
+    """Productive use: a persona carries both a reference server and Serena.
 
-    Expected outcome: `git`'s open grant does not smuggle in a Serena tool that
+    Expected outcome: the reference server's open grant does not smuggle in a Serena tool that
     Serena's own grant withheld.
     """
     config = _config(
         serena=MCPServerConfig(command="uvx"),
-        git=MCPServerConfig(command="npx"),
+        reference=MCPServerConfig(command="npx"),
     )
     persona = _persona(
-        mcp_servers=["serena", "git"],
+        mcp_servers=["serena", "reference"],
         mcp_tools={"serena": ["find_symbol"]},
     )
 
     grants = resolve_mcp_tool_grants(persona, config)
 
-    assert grants["git"] is None
-    assert tool_is_granted("git", "git_status", grants) is True
+    assert grants["reference"] is None
+    assert tool_is_granted("reference", "reference_read", grants) is True
     assert tool_is_granted("serena", "rename_symbol", grants) is False
 
 
@@ -87,28 +87,31 @@ def test_disabled_tools_deny_a_name_the_grant_allows() -> None:
     """Productive use: `disabled_tools` finally means the model cannot call it.
 
     Expected outcome: the server's denial wins over the persona's grant, so the
-    `git` server's read-only list stops being a prompt-only courtesy.
+    server's restricted list is enforced by the runtime.
     """
-    server = MCPServerConfig(command="npx", disabled_tools=["git_push"])
-    config = _config(git=server)
-    persona = _persona(mcp_servers=["git"], mcp_tools={"git": ["git_status", "git_push"]})
+    server = MCPServerConfig(command="npx", disabled_tools=["reference_admin"])
+    config = _config(reference=server)
+    persona = _persona(
+        mcp_servers=["reference"],
+        mcp_tools={"reference": ["reference_read", "reference_admin"]},
+    )
 
     grants = resolve_mcp_tool_grants(persona, config)
 
-    assert tool_is_granted("git", "git_status", grants, server) is True
-    assert tool_is_granted("git", "git_push", grants, server) is False
+    assert tool_is_granted("reference", "reference_read", grants, server) is True
+    assert tool_is_granted("reference", "reference_admin", grants, server) is False
 
 
 @verifies(SWR.SWR_3009)
 def test_disabled_tools_deny_even_without_a_persona_grant() -> None:
-    server = MCPServerConfig(command="npx", disabled_tools=["git_reset"])
-    config = _config(git=server)
-    persona = _persona(mcp_servers=["git"])
+    server = MCPServerConfig(command="npx", disabled_tools=["reference_admin"])
+    config = _config(reference=server)
+    persona = _persona(mcp_servers=["reference"])
 
     grants = resolve_mcp_tool_grants(persona, config)
 
-    assert tool_is_granted("git", "git_reset", grants, server) is False
-    assert tool_is_granted("git", "git_log", grants, server) is True
+    assert tool_is_granted("reference", "reference_admin", grants, server) is False
+    assert tool_is_granted("reference", "reference_read", grants, server) is True
 
 
 @verifies(SWR.SWR_3009)

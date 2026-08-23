@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 84bc431066106d3199d25b121fd21496f1d2c82a56ab3011e86ae096c471e6d9
+# GLOBAL-HASH: f08a569f88378f352d54880bdd20b05d0c1214d83af7d643d651760608d91c8f
 
 from __future__ import annotations
 
@@ -4728,6 +4728,21 @@ class SWR(IntEnum):
     SWR_3716 = 3716
     """[draft] The first launch offers Rotaris Cloud and lets the user in without it - docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md"""
 
+    SWR_3717 = 3717
+    """[draft] Legal and product information is always reachable from the desktop app - docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md"""
+
+    SWR_3718 = 3718
+    """[draft] First-run provisioning makes automatic network activity explicit - docs/requirements/2000-rotaris-desktop/SWR-3718-first-run-network-transparency.md"""
+
+    SWR_3719 = 3719
+    """[draft] Desktop credentials are protected with platform-appropriate user access controls - docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md"""
+
+    SWR_3720 = 3720
+    """[draft] Release artifacts carry complete third-party notices - docs/requirements/3000-distribution-updates/SWR-3720-complete-third-party-notices.md"""
+
+    SWR_3721 = 3721
+    """[draft] Provider settings state where model traffic is sent - docs/requirements/2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md"""
+
 
 #: Members carrying the deprecation marker (blueprint §3/§5).
 DEPRECATED: frozenset[SWR] = frozenset({
@@ -6226,16 +6241,16 @@ META: dict[int, ReqMeta] = {
     2911: ReqMeta('SWR-2911', 2911, ReqStatus.APPROVED, 'Tool outcome histogram covers every recorded tool call', 'docs/requirements/1500-sessions-diagnostics/SWR-2911-tool-outcome-classification-coverage.md', True, True, '78b907ace3046ca7', 'technical', (1546,)),
     2912: ReqMeta('SWR-2912', 2912, ReqStatus.APPROVED, 'Every child record reaches a terminal state when its run ends', 'docs/requirements/100-orchestration-core/SWR-2912-terminal-child-records-on-run-end.md', True, True, 'c9dcd4ddb4c8b9df', 'product', ()),
     2913: ReqMeta('SWR-2913', 2913, ReqStatus.APPROVED, 'A session that is not running shows no live agent', 'docs/requirements/2000-rotaris-desktop/SWR-2913-no-live-agent-in-a-finished-session.md', True, True, '19c81bdbc89938ab', 'product', ()),
-    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, 'a46bcd01d0e0fa2f', 'product', ()),
+    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, 'e4c0a3018b872d68', 'product', ()),
     3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, 'd0d8389da8ef101e', 'product', ()),
     3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '96963c37c5f0bda9', 'product', ()),
-    3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '8282dfc4bb003c14', 'product', ()),
+    3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '8913133f024266bf', 'product', ()),
     3004: ReqMeta('SWR-3004', 3004, ReqStatus.APPROVED, 'A final assistant message is the completion signal', 'docs/requirements/500-tool-platform/SWR-3004-no-terminal-completion-tool.md', True, True, '28e0403b57eab347', 'technical', (2132, 2808)),
     3005: ReqMeta('SWR-3005', 3005, ReqStatus.DRAFT, 'Persona-published artifacts in the chat transcript', 'docs/requirements/2000-rotaris-desktop/SWR-3005-published-artifacts-in-transcript.md', True, True, 'c0d5c1f8b8aa547a', 'product', ()),
     3006: ReqMeta('SWR-3006', 3006, ReqStatus.DRAFT, 'Sticky prompt header in the chat transcript', 'docs/requirements/2000-rotaris-desktop/SWR-3006-sticky-prompt-header.md', True, True, '49bc5ba8a0956b53', 'product', ()),
     3007: ReqMeta('SWR-3007', 3007, ReqStatus.DRAFT, 'Instruction file toggles in Settings', 'docs/requirements/2000-rotaris-desktop/SWR-3007-instruction-file-toggles.md', True, True, 'c4dba32ae5374c60', 'product', ()),
     3008: ReqMeta('SWR-3008', 3008, ReqStatus.APPROVED, 'Per-persona Serena tool grants', 'docs/requirements/2800-project-initialization/SWR-3008-persona-serena-tool-grants.md', True, True, '7c7899e264a9513c', 'product', ()),
-    3009: ReqMeta('SWR-3009', 3009, ReqStatus.APPROVED, 'MCP tool grants are enforced at tool creation', 'docs/requirements/1700-config-mcp/SWR-3009-mcp-tool-grant-enforcement.md', True, True, '74442a16af6cd5a6', 'technical', (3008,)),
+    3009: ReqMeta('SWR-3009', 3009, ReqStatus.APPROVED, 'MCP tool grants are enforced at tool creation', 'docs/requirements/1700-config-mcp/SWR-3009-mcp-tool-grant-enforcement.md', True, True, '737ebfc6e450bbe7', 'technical', (3008,)),
     3010: ReqMeta('SWR-3010', 3010, ReqStatus.APPROVED, 'The agent inspector lists the tools the agent actually has', 'docs/requirements/2000-rotaris-desktop/SWR-3010-inspector-shows-the-real-tool-set.md', True, True, '1732341d2babc5b6', 'product', ()),
     3011: ReqMeta('SWR-3011', 3011, ReqStatus.APPROVED, 'Every content pane is drag-resizable and remembers its size', 'docs/requirements/2000-rotaris-desktop/SWR-3011-resizable-persistent-panels.md', True, True, 'e7c3ab862c686ce4', 'product', ()),
     3012: ReqMeta('SWR-3012', 3012, ReqStatus.APPROVED, 'Panel sizes can be reset to their defaults from Settings', 'docs/requirements/2000-rotaris-desktop/SWR-3012-reset-panel-sizes.md', True, True, '7f4656d48c449820', 'product', ()),
@@ -6392,6 +6407,11 @@ META: dict[int, ReqMeta] = {
     3711: ReqMeta('SWR-3711', 3711, ReqStatus.APPROVED, 'Credential status is classified without an event loop', 'docs/requirements/700-providers-auth/SWR-3711-credential-status-without-event-loop.md', True, True, 'd1405012d7dfd798', 'technical', (700,)),
     3712: ReqMeta('SWR-3712', 3712, ReqStatus.APPROVED, 'A run resolves its provider credentials up front and keeps them staged', 'docs/requirements/700-providers-auth/SWR-3712-run-primes-provider-credentials.md', True, True, 'a7401f11d05e5f46', 'technical', (700,)),
     3714: ReqMeta('SWR-3714', 3714, ReqStatus.APPROVED, 'Continuing a session settles the children its previous run left running', 'docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md', True, True, '6791d8bf47ff793b', 'product', ()),
-    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, '85652f41457a85ae', 'product', ()),
+    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, 'c644b65fb6610360', 'product', ()),
     3716: ReqMeta('SWR-3716', 3716, ReqStatus.DRAFT, 'The first launch offers Rotaris Cloud and lets the user in without it', 'docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md', True, True, 'eeffef4c8eae9cc7', 'product', ()),
+    3717: ReqMeta('SWR-3717', 3717, ReqStatus.DRAFT, 'Legal and product information is always reachable from the desktop app', 'docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md', True, True, 'ef38e5f34f7858a2', 'product', ()),
+    3718: ReqMeta('SWR-3718', 3718, ReqStatus.DRAFT, 'First-run provisioning makes automatic network activity explicit', 'docs/requirements/2000-rotaris-desktop/SWR-3718-first-run-network-transparency.md', True, True, 'e5daa4d1ddd7c807', 'product', ()),
+    3719: ReqMeta('SWR-3719', 3719, ReqStatus.DRAFT, 'Desktop credentials are protected with platform-appropriate user access controls', 'docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md', True, True, 'f8899c1096cccf92', 'product', ()),
+    3720: ReqMeta('SWR-3720', 3720, ReqStatus.DRAFT, 'Release artifacts carry complete third-party notices', 'docs/requirements/3000-distribution-updates/SWR-3720-complete-third-party-notices.md', True, True, '92dd64e32c97cac3', 'product', ()),
+    3721: ReqMeta('SWR-3721', 3721, ReqStatus.DRAFT, 'Provider settings state where model traffic is sent', 'docs/requirements/2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md', True, True, '656b8155c7daa024', 'product', ()),
 }

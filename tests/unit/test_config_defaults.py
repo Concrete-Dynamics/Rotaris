@@ -274,6 +274,16 @@ def test_lsp_is_not_a_default_mcp_server() -> None:
     assert [error for error in errors if "unknown MCP server" in error] == []
 
 
+@verifies(SWR.SWR_3715)
+def test_git_mcp_is_absent_from_the_shipped_configuration() -> None:
+    """Productive use: an installed user starts agents without a redundant Git MCP process.
+    Expected outcome: Git is absent from default MCP servers and every default persona grant."""
+    assert "git" not in DEFAULT_MCP_SERVERS
+    assert [
+        name for name, persona in DEFAULT_PERSONAS.items() if "git" in persona.mcp_servers
+    ] == []
+
+
 @verifies(SWR.SWR_2818)
 def test_code_personas_keep_serena_and_their_textual_fallback() -> None:
     """Productive use: when Serena cannot answer — a string in a comment, a config key, a

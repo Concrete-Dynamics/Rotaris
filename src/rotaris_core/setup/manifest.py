@@ -9,9 +9,6 @@ import sys
 from dataclasses import asdict
 
 from rotaris_core.config.defaults import (
-    GIT_MCP_PINNED_VERSION as GIT_MCP_VERSION,
-)
-from rotaris_core.config.defaults import (
     PLAYWRIGHT_MCP_PINNED_VERSION as PLAYWRIGHT_MCP_VERSION,
 )
 from rotaris_core.config.defaults import (
@@ -85,7 +82,7 @@ def default_setup_manifest() -> SetupManifest:
             name="git",
             command="git",
             version_args=("--version",),
-            minimum_version="2.43.0",
+            minimum_version="2.36.0",
             provisioned_version="2.55.0",
             artifacts={
                 "windows-x64": _artifact(
@@ -98,7 +95,7 @@ def default_setup_manifest() -> SetupManifest:
             },
             binary_dirs=("cmd",),
             license="GPL-2.0-only",
-            capabilities=("worktrees", "checkpoints", "Git MCP"),
+            capabilities=("worktrees", "checkpoints"),
         ),
         ToolSpec(
             name="node",
@@ -170,7 +167,6 @@ def default_setup_manifest() -> SetupManifest:
         mcp_pins={
             "serena-agent": SERENA_VERSION,
             "@playwright/mcp": PLAYWRIGHT_MCP_VERSION,
-            "@cyanheads/git-mcp-server": GIT_MCP_VERSION,
         },
     )
 

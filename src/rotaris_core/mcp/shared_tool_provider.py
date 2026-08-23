@@ -95,8 +95,6 @@ class SharedMCPToolProvider:
             ):
                 self._manager.discard_client(server_name, shared)
                 continue
-            elif server_name == "git" and self._workspace_root is not None:
-                _init_git_server(shared, self._workspace_root)
             elif server_name == "serena" and self._workspace_root is not None:
                 _probe_serena_binding(shared, self._workspace_root)
             all_tools.extend(shared.tools)
@@ -140,28 +138,6 @@ def _init_lsp_server(shared: Any, workspace_root: Path) -> bool:
         return False
 
     return True
-
-
-def _init_git_server(shared: Any, workspace_root: Path) -> None:
-    """Set git-mcp's workspace before agents can invoke Git tools."""
-    init_tool = next(
-        (tool for tool in shared.tools if tool.name.endswith("git_set_working_dir")),
-        None,
-    )
-    if init_tool is None:
-        return
-    try:
-        shared.call_async_from_sync(
-            shared.call_tool_mcp,
-            init_tool.name,
-            {"path": str(workspace_root)},
-            timeout=_LSP_INIT_TIMEOUT_SECONDS,
-        )
-    except Exception:
-        _log.exception(
-            "git_set_working_dir call failed for workspace '%s'",
-            workspace_root,
-        )
 
 
 @traces(SWR.SWR_2905)

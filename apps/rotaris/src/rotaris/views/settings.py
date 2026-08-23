@@ -1664,6 +1664,7 @@ class SettingsView(Themed, QWidget):
         page.setWidget(content)
         return page, layout
 
+    @traces(SWR.SWR_783)
     def refresh(self) -> None:
         self._refresh_dirty_state()
         # Ahead of the content-signature short circuit: the six sandbox and
@@ -1766,6 +1767,7 @@ class SettingsView(Themed, QWidget):
             actions = QHBoxLayout()
             actions.addStretch(1)
             busy = provider.id in self._active_provider_operations
+            actionable = provider.available and not busy
             if provider.quick_start_url:
                 quick_start = _provider_button("Quick Start", "warning")
                 quick_start.setAccessibleName(f"{provider.label} quick start")
@@ -1775,8 +1777,14 @@ class SettingsView(Themed, QWidget):
                 )
                 actions.addWidget(quick_start)
             check = _provider_button("Check")
-            check.setToolTip("Provider operation in progress" if busy else "Check provider health")
-            check.setEnabled(self._provider_service is not None and not busy)
+            check.setToolTip(
+                provider.detail
+                if not provider.available
+                else "Provider operation in progress"
+                if busy
+                else "Check provider health"
+            )
+            check.setEnabled(self._provider_service is not None and actionable)
             check.setAccessibleName(f"Check {provider.label} health")
             check.clicked.connect(lambda _checked=False, pid=provider.id: self._check_provider(pid))
             actions.addWidget(check)
@@ -1786,8 +1794,10 @@ class SettingsView(Themed, QWidget):
             authenticate.setToolTip(
                 "Re-authenticate provider" if provider.connected else "Authenticate provider"
             )
-            authenticate.setEnabled(bool(provider.auth_flow) and not busy)
-            if not provider.auth_flow:
+            authenticate.setEnabled(bool(provider.auth_flow) and actionable)
+            if not provider.available:
+                authenticate.setToolTip(provider.detail)
+            elif not provider.auth_flow:
                 authenticate.setToolTip("This provider has no supported authentication flow")
             elif busy:
                 authenticate.setToolTip("Provider operation in progress")
@@ -2182,6 +2192,7 @@ class SettingsView(Themed, QWidget):
             ),
         )
 
+    @traces(SWR.SWR_783)
     def _refresh_provider_controls(self) -> None:
         self.add_provider_button.setEnabled(
             self._provider_service is not None
@@ -2197,18 +2208,25 @@ class SettingsView(Themed, QWidget):
             controls.status.setStyleSheet(_provider_status_style(provider.status))
             controls.detail.setText(provider.detail)
             busy = provider.id in self._active_provider_operations
+            actionable = provider.available and not busy
             controls.check.setToolTip(
-                "Provider operation in progress" if busy else "Check provider health"
+                provider.detail
+                if not provider.available
+                else "Provider operation in progress"
+                if busy
+                else "Check provider health"
             )
-            controls.check.setEnabled(self._provider_service is not None and not busy)
+            controls.check.setEnabled(self._provider_service is not None and actionable)
             controls.authenticate.setText(
                 "Re-authenticate" if provider.has_credentials else "Authenticate"
             )
             controls.authenticate.setAccessibleName(
                 f"{'Re-authenticate' if provider.connected else 'Authenticate'} {provider.label}"
             )
-            controls.authenticate.setEnabled(bool(provider.auth_flow) and not busy)
-            if not provider.auth_flow:
+            controls.authenticate.setEnabled(bool(provider.auth_flow) and actionable)
+            if not provider.available:
+                controls.authenticate.setToolTip(provider.detail)
+            elif not provider.auth_flow:
                 controls.authenticate.setToolTip(
                     "This provider has no supported authentication flow"
                 )

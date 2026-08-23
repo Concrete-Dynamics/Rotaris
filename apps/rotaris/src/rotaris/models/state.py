@@ -574,13 +574,14 @@ class PersonaSpec:
     reasoning_scope: str = "default"  # "workspace" | "global" | "default"
 
 
+@traces(SWR.SWR_783)
 @dataclass
 class ProviderInfo:
     id: str
     label: str
     connected: bool
     detail: str = ""
-    status: str = "unknown"  # checking | healthy | warning | unauthenticated | error
+    status: str = "unknown"  # checking | healthy | warning | unauthenticated | error | coming_soon
     auth_flow: str = ""
     user_defined: bool = False
     has_credentials: bool | None = None
@@ -592,6 +593,7 @@ class ProviderInfo:
     destination: str | None = None
     operator_name: str | None = None
     privacy_url: str | None = None
+    available: bool = True
 
     def __post_init__(self) -> None:
         if self.has_credentials is None:

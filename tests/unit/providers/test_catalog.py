@@ -45,6 +45,17 @@ def test_get_provider_raises_for_unknown_id() -> None:
         get_provider("unknown")
 
 
+@verifies(SWR.SWR_783)
+def test_rotaris_cloud_declares_its_public_readiness_gate() -> None:
+    """Productive use: a provider surface can read one shared cloud readiness value.
+    Expected outcome: Rotaris Cloud is unavailable with the public Coming soon reason.
+    """
+    provider = get_provider("concrete-cloud")
+
+    assert provider.available is False
+    assert provider.unavailable_reason == "Rotaris Cloud is coming soon."
+
+
 @verifies(SWR.SWR_308)
 def test_list_providers_is_deterministic() -> None:
     providers = list_providers()

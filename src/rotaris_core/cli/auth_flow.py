@@ -208,12 +208,21 @@ def _ensure_global_config_dir(ui: LoginUI) -> None:
         ui.warning(f"Failed to create global config directory: {exc}")
 
 
+@traces(SWR.SWR_783)
 def _resolve_provider_id(provider_id: str | None, ui: LoginUI) -> str | LoginResult:
     from rotaris_core.providers.catalog import list_providers  # noqa: PLC0415
 
+    providers = list_providers()
     options = [
-        (provider.id, _login_provider_display_name(provider.id, provider.display_name))
-        for provider in list_providers()
+        (
+            provider.id,
+            (
+                f"{_login_provider_display_name(provider.id, provider.display_name)} — Coming soon"
+                if not provider.available
+                else _login_provider_display_name(provider.id, provider.display_name)
+            ),
+        )
+        for provider in providers
     ]
     if provider_id is None:
         provider_id = ui.choose_provider(options)
@@ -224,6 +233,11 @@ def _resolve_provider_id(provider_id: str | None, ui: LoginUI) -> str | LoginRes
     if provider_id not in known_provider_ids:
         ui.error(f"Unknown provider: {provider_id}")
         return LoginResult(provider_id, False, 0, False, False, f"Unknown provider: {provider_id}")  # noqa: FBT003
+    provider = next(candidate for candidate in providers if candidate.id == provider_id)
+    if not provider.available:
+        message = provider.unavailable_reason or f"{provider.display_name} is unavailable."
+        ui.error(message)
+        return LoginResult(provider_id, False, 0, False, False, message)  # noqa: FBT003
     return provider_id
 
 

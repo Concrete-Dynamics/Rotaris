@@ -16,6 +16,8 @@ BUILTIN_PROVIDERS: dict[str, ProviderDescriptor] = {
         connection_mode=ConnectionMode.ROTARIS_CLOUD,
         operator_name="Concrete Dynamics UG (haftungsbeschränkt)",
         privacy_url="https://rotaris.ai/privacy",
+        available=False,
+        unavailable_reason="Rotaris Cloud is coming soon.",
     ),
     "copilot": ProviderDescriptor(
         id="copilot",
@@ -80,7 +82,7 @@ def list_providers() -> list[ProviderDescriptor]:
     return list(BUILTIN_PROVIDERS.values())
 
 
-@traces(SWR.SWR_3721)
+@traces(SWR.SWR_3721, SWR.SWR_783)
 def validate_provider_catalog() -> None:
     """Fail loudly when a built-in provider lacks its transparency metadata.
 
@@ -103,3 +105,5 @@ def validate_provider_catalog() -> None:
             raise ValueError(f"provider {provider_id!r} has no destination host")
         if descriptor.connection_mode is ConnectionMode.CUSTOM and descriptor.operator_name:
             raise ValueError(f"provider {provider_id!r} must not name a fixed operator")
+        if not descriptor.available and not descriptor.unavailable_reason:
+            raise ValueError(f"provider {provider_id!r} must explain why it is unavailable")

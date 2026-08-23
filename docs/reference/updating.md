@@ -11,7 +11,7 @@ rotaris-core rotaris` is the mechanism those users already have.
 
 1. Rotaris works out how it was installed. A source checkout or a pip install
    stops here — the check does not run at all.
-2. It asks `https://api.github.com/repos/theUpsider/Rotaris/releases/latest`,
+2. It asks `https://api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest`,
    with a ten-second timeout.
 3. Anything other than a published release with a newer `v<x>.<y>.<z>` tag ends
    the same way: nothing is shown, a line goes to the log, and the window opens

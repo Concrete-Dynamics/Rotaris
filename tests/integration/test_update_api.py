@@ -29,6 +29,13 @@ if TYPE_CHECKING:
     import pytest
 
 
+@verifies(SWR.SWR_3003)
+def test_update_check_targets_the_public_rotaris_repository() -> None:
+    assert LATEST_RELEASE_URL == (
+        "https://api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest"
+    )
+
+
 def _payload(version: str = "0.102.0", **overrides: object) -> dict[str, object]:
     document: dict[str, object] = {
         "tag_name": f"v{version}",

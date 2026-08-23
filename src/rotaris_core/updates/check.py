@@ -43,7 +43,7 @@ _log = logging.getLogger(__name__)
 
 #: Where the desktop asks about itself. Public so the runbook and the tests name
 #: the same URL the shipped binary uses.
-LATEST_RELEASE_URL = "https://api.github.com/repos/theUpsider/Rotaris/releases/latest"
+LATEST_RELEASE_URL = "https://api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest"
 
 #: AC-002. Ten seconds is the ceiling the requirement names; a launch-time check
 #: that takes longer than that has already failed at being unobtrusive.

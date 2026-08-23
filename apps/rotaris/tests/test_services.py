@@ -521,10 +521,13 @@ def test_config_service_does_not_resurrect_deleted_custom_provider(tmp_path, mon
     assert [provider.id for provider in service._providers()] == ["concrete-cloud"]
 
 
-@verifies(SWR.SWR_2125)
+@verifies(SWR.SWR_2125, SWR.SWR_783)
 def test_config_service_providers_empty_by_default_except_rotaris_cloud(
     tmp_path, monkeypatch
 ) -> None:
+    """Productive use: a new user can understand the built-in cloud provider's state.
+    Expected outcome: the service projects Coming soon and removes network actions.
+    """
     store = WorkspaceStore()
     service = ConfigService(tmp_path, store)
     service.config = None
@@ -540,7 +543,39 @@ def test_config_service_providers_empty_by_default_except_rotaris_cloud(
     providers = service._providers()
 
     assert [provider.id for provider in providers] == ["concrete-cloud"]
-    assert providers[0].quick_start_url == "https://concrete-dynamics.com/rotaris"
+    assert providers[0].status == "coming_soon"
+    assert providers[0].detail == "Rotaris Cloud is coming soon."
+    assert providers[0].available is False
+    assert providers[0].auth_flow == ""
+    assert providers[0].quick_start_url is None
+
+
+@verifies(SWR.SWR_783)
+def test_config_service_stops_cloud_operations_at_the_service_boundary(
+    tmp_path, monkeypatch
+) -> None:
+    """Productive use: every desktop caller receives the readiness explanation.
+    Expected outcome: health and authentication return before reading an auth flow.
+    """
+    service = ConfigService(tmp_path, WorkspaceStore())
+    monkeypatch.setattr(
+        "rotaris_core.auth.provider_settings.get_provider_settings",
+        lambda requested_id: SimpleNamespace(
+            provider_id=requested_id,
+            display_name="Rotaris Cloud (recommended)",
+            authenticated=False,
+        ),
+    )
+
+    health = service.check_provider_health("concrete-cloud")
+    authentication = service.authenticate_provider("concrete-cloud")
+
+    assert health.status == "coming_soon"
+    assert authentication.status == "coming_soon"
+    assert health.available is False
+    assert authentication.available is False
+    assert health.detail == "Rotaris Cloud is coming soon."
+    assert authentication.detail == "Rotaris Cloud is coming soon."
 
 
 @verifies(SWR.SWR_2125)

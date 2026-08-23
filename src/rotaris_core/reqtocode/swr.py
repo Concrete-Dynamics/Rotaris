@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 8453458d683dae8a7fe7c410885f85b5728dc2c2c012031fcbd6cd9abb026709
+# GLOBAL-HASH: 2b28c72dffc6083dae22f9a191d164f36fa783eaee02448abfe72f71443a965e
 
 from __future__ import annotations
 
@@ -1436,6 +1436,9 @@ class SWR(IntEnum):
 
     SWR_782 = 782
     """[approved] Rotaris Cloud catalog pricing and model suggestions - docs/requirements/700-providers-auth/SWR-782-cloud-model-catalog-pricing-and-suggestions.md"""
+
+    SWR_783 = 783
+    """[approved] Rotaris Cloud stays visible as Coming soon until service readiness - docs/requirements/700-providers-auth/SWR-783-cloud-readiness-gate.md"""
 
     SWR_800 = 800
     """[approved] Model Registry & Selection - docs/requirements/800-model-registry.md"""
@@ -5333,6 +5336,7 @@ META: dict[int, ReqMeta] = {
     780: ReqMeta('SWR-780', 780, ReqStatus.APPROVED, 'Rotaris Cloud account credit-status reads', 'docs/requirements/700-providers-auth/SWR-780-cloud-account-status-reads.md', True, True, 'd24644c007b882ba', 'technical', (700,)),
     781: ReqMeta('SWR-781', 781, ReqStatus.APPROVED, 'Standard Keycloak OIDC authorization-code authentication', 'docs/requirements/700-providers-auth/SWR-781-standard-keycloak-oidc.md', True, True, '5a3f31c3221605c7', 'technical', (745,)),
     782: ReqMeta('SWR-782', 782, ReqStatus.APPROVED, 'Rotaris Cloud catalog pricing and model suggestions', 'docs/requirements/700-providers-auth/SWR-782-cloud-model-catalog-pricing-and-suggestions.md', True, True, '39069cb14345c9eb', 'technical', (745,)),
+    783: ReqMeta('SWR-783', 783, ReqStatus.APPROVED, 'Rotaris Cloud stays visible as Coming soon until service readiness', 'docs/requirements/700-providers-auth/SWR-783-cloud-readiness-gate.md', True, True, '4dc7a52026aa1abd', 'product', ()),
     800: ReqMeta('SWR-800', 800, ReqStatus.APPROVED, 'Model Registry & Selection', 'docs/requirements/800-model-registry.md', False, False, '131682b4f2684796', 'product', ()),
     801: ReqMeta('SWR-801', 801, ReqStatus.APPROVED, 'On TUI launch, the active starting model must be initialized from the configured startup model selection resolved at launch.', 'docs/requirements/800-model-registry.md', True, True, '131682b4f2684796', 'product', ()),
     802: ReqMeta('SWR-802', 802, ReqStatus.APPROVED, 'After successful authentication with a provider that has a discovered runtime catalog, the TUI must obtain and present the complete runtime model list exposed by that authenticated provider.', 'docs/requirements/800-model-registry.md', True, True, '131682b4f2684796', 'product', ()),
@@ -6268,7 +6272,7 @@ META: dict[int, ReqMeta] = {
     3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, '8972df65c6149d73', 'product', ()),
     3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, '2c4df891e9bf7928', 'product', ()),
     3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '96963c37c5f0bda9', 'product', ()),
-    3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '8913133f024266bf', 'product', ()),
+    3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '7a1418f1b3cfa3b3', 'product', ()),
     3004: ReqMeta('SWR-3004', 3004, ReqStatus.APPROVED, 'A final assistant message is the completion signal', 'docs/requirements/500-tool-platform/SWR-3004-no-terminal-completion-tool.md', True, True, '28e0403b57eab347', 'technical', (2132, 2808)),
     3005: ReqMeta('SWR-3005', 3005, ReqStatus.DRAFT, 'Persona-published artifacts in the chat transcript', 'docs/requirements/2000-rotaris-desktop/SWR-3005-published-artifacts-in-transcript.md', True, True, 'c0d5c1f8b8aa547a', 'product', ()),
     3006: ReqMeta('SWR-3006', 3006, ReqStatus.DRAFT, 'Sticky prompt header in the chat transcript', 'docs/requirements/2000-rotaris-desktop/SWR-3006-sticky-prompt-header.md', True, True, '49bc5ba8a0956b53', 'product', ()),

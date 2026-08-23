@@ -26,7 +26,7 @@ explicit user action.
 ## Scope
 
 - **In scope**: Launch-time update check via the GitHub Releases API
-  (`/repos/theUpsider/Rotaris/releases/latest`). Version comparison between the
+  (`/repos/Concrete-Dynamics/Rotaris/releases/latest`). Version comparison between the
   running version and the release `tag_name`. A non-blocking notification with
   "Update now" and "Remind next launch" actions. Download of the artifact that
   matches how this copy was installed, SHA256 verification against the release's

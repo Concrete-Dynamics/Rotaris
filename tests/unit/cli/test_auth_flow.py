@@ -279,6 +279,25 @@ def test_run_login_unknown_provider(monkeypatch: Any, tmp_path: Path) -> None:
     assert ui.errors == ["Unknown provider: bogus"]
 
 
+@verifies(SWR.SWR_783)
+def test_run_login_rejects_rotaris_cloud_before_authentication(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    """Productive use: an alpha user can choose another ready provider.
+    Expected outcome: Rotaris Cloud explains that it is coming soon before auth starts.
+    """
+    state = AuthState()
+    _install_fakes(monkeypatch, auth_state=state)
+    ui = FakeUI()
+
+    result = run_login("concrete-cloud", workspace_root=tmp_path, reauth=False, ui=ui)
+
+    assert result.success is False
+    assert result.message == "Rotaris Cloud is coming soon."
+    assert state.authenticate_calls == 0
+    assert ui.errors == ["Rotaris Cloud is coming soon."]
+
+
 @verifies(SWR.SWR_707, SWR.SWR_742)
 def test_run_login_skip_when_authenticated_no_reauth(monkeypatch: Any, tmp_path: Path) -> None:
     state = AuthState(status=AuthStatus.AUTHENTICATED, has_stored_tokens=True)

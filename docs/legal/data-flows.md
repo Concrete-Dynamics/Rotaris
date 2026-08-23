@@ -35,7 +35,7 @@ Erhoben am Quellstand 0.116.1, ergänzt um die Betriebsangaben der Geschäftsfü
 | 3 | `GET /v1/account/usage-status` | Guthabenanzeige, Zulassungsprüfung je Lauf | Kontokennung, Guthaben, Verbrauch, Zulassungsentscheidung | Verantwortlicher |
 | 4 | `GET /v1/models` | Modellauswahl | Bearer-Token | Verantwortlicher |
 | 5 | `api.anthropic.com`, `api.openai.com`, `api.deepseek.com`, `api.githubcopilot.com`, `chatgpt.com/backend-api/codex`, Claude Agent SDK als lokale Laufzeit | Modellaufruf bei selbst gewähltem Anbieter | derselbe Inhalt wie bei 1 | **keine** — die Nutzerin ist Verantwortliche, wir informieren nur |
-| 6 | `api.github.com/repos/theUpsider/Rotaris/releases/latest` sowie Herunterladen von Artefakt und Prüfsummendatei | Prüfung beim Start, nur bei eingefrorenen Installationen (`NOT_FROZEN` prüft nie) | IP, User-Agent, mittelbar die Version | Informationspflicht; GitHub ist Empfänger in den USA |
+| 6 | `api.github.com/repos/Concrete-Dynamics/Rotaris/releases/latest` sowie Herunterladen von Artefakt und Prüfsummendatei | Prüfung beim Start, nur bei eingefrorenen Installationen (`NOT_FROZEN` prüft nie) | IP, User-Agent, mittelbar die Version | Informationspflicht; GitHub ist Empfänger in den USA |
 | 7 | `feedback.geraet.ai/api/v1/tickets` — **SWR-2208, Entwurf, nicht ausgeliefert** | Absenden einer Supportmeldung | Freitext, **auf gesonderte Auswahl** Diagnoseprotokoll und Sitzungsmetadaten mit Pfaden, Benutzernamen und Quellcodeausschnitten | Verantwortlicher, sobald aktiv |
 | 8 | `mcp.tavily.com` und selbst eingerichtete MCP-Server | Recherche der Rolle `librarian` | aus der Aufgabe abgeleitete Suchanfragen | vom Nutzer eingerichtet |
 

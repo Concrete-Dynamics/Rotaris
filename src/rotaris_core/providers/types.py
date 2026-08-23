@@ -23,7 +23,7 @@ class ConnectionMode(StrEnum):
     CUSTOM = "custom"
 
 
-@traces(SWR.SWR_720)
+@traces(SWR.SWR_720, SWR.SWR_783)
 class ProviderDescriptor(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -39,6 +39,8 @@ class ProviderDescriptor(BaseModel):
     connection_mode: ConnectionMode
     operator_name: str | None = None
     privacy_url: str | None = None
+    available: bool = True
+    unavailable_reason: str | None = None
 
     @traces(SWR.SWR_3721)
     def destination_host(self) -> str | None:

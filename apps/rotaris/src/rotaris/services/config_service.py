@@ -459,13 +459,28 @@ class ConfigService:
             ),
         )
 
+    @traces(SWR.SWR_783)
     def check_provider_health(self, provider_id: str) -> ProviderInfo:
         """Verify stored credentials and make a provider-specific free catalog call."""
         from rotaris_core.auth.manager import AuthManager, run_auth_coro
         from rotaris_core.auth.provider import AuthStatus
         from rotaris_core.auth.provider_settings import get_provider_settings, validate_provider
+        from rotaris_core.providers import get_provider
 
         settings = get_provider_settings(provider_id)
+        if provider_id == ROTARIS_CLOUD_PROVIDER_ID:
+            descriptor = get_provider(provider_id)
+            if not descriptor.available:
+                return ProviderInfo(
+                    provider_id,
+                    settings.display_name,
+                    False,
+                    descriptor.unavailable_reason or "Provider unavailable.",
+                    "coming_soon",
+                    "",
+                    has_credentials=settings.authenticated,
+                    available=False,
+                )
         flow = settings.auth_flow.value
 
         def provider_info(
@@ -532,6 +547,7 @@ class ConfigService:
             flow,
         )
 
+    @traces(SWR.SWR_783)
     def authenticate_provider(
         self,
         provider_id: str,
@@ -556,8 +572,22 @@ class ConfigService:
             update_api_key,
             validate_provider,
         )
+        from rotaris_core.providers import get_provider
 
         settings = get_provider_settings(provider_id)
+        if provider_id == ROTARIS_CLOUD_PROVIDER_ID:
+            descriptor = get_provider(provider_id)
+            if not descriptor.available:
+                return ProviderInfo(
+                    provider_id,
+                    settings.display_name,
+                    False,
+                    descriptor.unavailable_reason or "Provider unavailable.",
+                    "coming_soon",
+                    "",
+                    has_credentials=settings.authenticated,
+                    available=False,
+                )
         if settings.auth_flow is AuthFlowType.API_KEY:
             api_key_result = update_api_key(provider_id, api_key, validate=True)
             if not api_key_result.success:
@@ -1283,14 +1313,16 @@ class ConfigService:
             descriptor.privacy_url,
         )
 
-    @traces(SWR.SWR_2125, SWR.SWR_3721)
+    @traces(SWR.SWR_2125, SWR.SWR_3721, SWR.SWR_783)
     def _providers(self) -> list[ProviderInfo]:
         from rotaris_core.auth.provider_settings import (
             get_provider_settings,
             list_provider_settings,
         )
+        from rotaris_core.providers import get_provider
 
         cloud_settings = get_provider_settings(ROTARIS_CLOUD_PROVIDER_ID)
+        cloud_descriptor = get_provider(ROTARIS_CLOUD_PROVIDER_ID)
         connection_mode, destination, operator_name, privacy_url = self._transparency_for(
             ROTARIS_CLOUD_PROVIDER_ID, cloud_settings
         )
@@ -1299,16 +1331,29 @@ class ConfigService:
                 ROTARIS_CLOUD_PROVIDER_ID,
                 cloud_settings.display_name,
                 cloud_settings.authenticated,
-                "Managed inference platform.",
-                "healthy" if cloud_settings.authenticated else "warning",
-                self.provider_flow_type(ROTARIS_CLOUD_PROVIDER_ID),
+                (
+                    "Managed inference platform."
+                    if cloud_descriptor.available
+                    else cloud_descriptor.unavailable_reason or "Provider unavailable."
+                ),
+                ("healthy" if cloud_settings.authenticated else "warning")
+                if cloud_descriptor.available
+                else "coming_soon",
+                (
+                    self.provider_flow_type(ROTARIS_CLOUD_PROVIDER_ID)
+                    if cloud_descriptor.available
+                    else ""
+                ),
                 user_defined=False,
                 has_credentials=cloud_settings.authenticated,
-                quick_start_url=ROTARIS_CLOUD_QUICK_START_URL,
+                quick_start_url=(
+                    ROTARIS_CLOUD_QUICK_START_URL if cloud_descriptor.available else None
+                ),
                 connection_mode=connection_mode,
                 destination=destination,
                 operator_name=operator_name,
                 privacy_url=privacy_url,
+                available=cloud_descriptor.available,
             )
         }
         if self.config is None:

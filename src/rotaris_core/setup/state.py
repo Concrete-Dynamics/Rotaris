@@ -62,9 +62,9 @@ def _pid_running(pid: int) -> bool:
     # Windows Python routes ordinary signal values through TerminateProcess,
     # which makes signal 0 destructive.  psutil provides the same read-only
     # existence check on every supported Rotaris platform.
-    import psutil
+    import psutil  # type: ignore[import-untyped]
 
-    return psutil.pid_exists(pid)
+    return bool(psutil.pid_exists(pid))
 
 
 @traces(SWR.SWR_3715)

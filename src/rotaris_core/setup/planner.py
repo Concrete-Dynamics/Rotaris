@@ -7,7 +7,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from packaging.version import InvalidVersion, Version
 
@@ -23,6 +23,9 @@ from .models import (
     ToolProbe,
     ToolSpec,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 _VERSION = re.compile(r"(?<!\d)(\d+(?:\.\d+){1,3})(?!\d)")
 
@@ -93,7 +96,7 @@ def _is_exact_package(package: str) -> bool:
 
 
 @traces(SWR.SWR_3715)
-def derive_mcp_warmups(mcp_servers: dict[str, Any]) -> tuple[SetupStep, ...]:
+def derive_mcp_warmups(mcp_servers: Mapping[str, Any]) -> tuple[SetupStep, ...]:
     """Derive unique exact uvx/npx package warmups from merged MCP config."""
     found: dict[tuple[str, str], SetupStep] = {}
     for name in sorted(mcp_servers):
@@ -113,7 +116,13 @@ def derive_mcp_warmups(mcp_servers: dict[str, Any]) -> tuple[SetupStep, ...]:
                 executable = str(args[marker + 2])
             except (ValueError, IndexError):
                 executable = package.split("==", 1)[0]
-            warm_command = ("uvx", "--from", package, executable, "--help")
+            warm_command: tuple[str, ...] = (
+                "uvx",
+                "--from",
+                package,
+                executable,
+                "--help",
+            )
             kind = SetupStepKind.WARM_UVX
         else:
             warm_command = ("npx", "-y", package, "--help")
@@ -133,7 +142,7 @@ def derive_mcp_warmups(mcp_servers: dict[str, Any]) -> tuple[SetupStep, ...]:
 def build_setup_plan(
     manifest: SetupManifest,
     *,
-    mcp_servers: dict[str, Any],
+    mcp_servers: Mapping[str, Any],
     record: SetupRecord | None = None,
     env: dict[str, str] | None = None,
     manual: bool = False,

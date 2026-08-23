@@ -6,8 +6,9 @@ import os
 import subprocess
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
+from typing import Any, TextIO
 from urllib.parse import urlparse
 
 from rotaris_core.config.paths import GLOBAL_DATA_DIR
@@ -47,8 +48,8 @@ def activate_managed_tool_environment(
     record: SetupRecord | None = None,
     *,
     data_dir: Path = GLOBAL_DATA_DIR,
-    environ: dict[str, str] | None = None,
-) -> dict[str, str]:
+    environ: MutableMapping[str, str] | None = None,
+) -> MutableMapping[str, str]:
     """Activate verified managed tools and Rotaris-owned caches in one process."""
     target = os.environ if environ is None else environ
     _tools, state_path, cache, _lock = setup_paths(data_dir)
@@ -180,7 +181,7 @@ def _completed_versions(manifest: SetupManifest) -> dict[str, str]:
 def run_setup(
     *,
     manifest: SetupManifest | None = None,
-    mcp_servers: dict[str, object] | None = None,
+    mcp_servers: Mapping[str, Any] | None = None,
     data_dir: Path = GLOBAL_DATA_DIR,
     emit: EventSink | None = None,
     cancelled: CancelCheck | None = None,
@@ -201,7 +202,7 @@ def run_setup(
     try:
         record = load_setup_record(state_path) or SetupRecord(started_at=utc_now())
         activate_managed_tool_environment(record, data_dir=data_dir)
-        servers = mcp_servers
+        servers: Mapping[str, Any] | None = mcp_servers
         if servers is None:
             from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
 
@@ -313,7 +314,7 @@ def is_bundled_runtime() -> bool:
 
 
 @traces(SWR.SWR_3715)
-def ensure_bundled_setup(*, stream: object = sys.stderr) -> SetupOutcome:
+def ensure_bundled_setup(*, stream: TextIO = sys.stderr) -> SetupOutcome:
     """Automatic bundled-host check with diagnostics on the supplied stream."""
     if not is_bundled_runtime():
         activate_managed_tool_environment()

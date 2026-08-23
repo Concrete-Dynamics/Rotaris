@@ -72,6 +72,15 @@ jobs:
       - run: uv run python -m rotaris_core.packaging build rotaris-cli --mode onedir
       - run: uv run python -m rotaris_core.packaging build rotaris-headless --mode onedir
 
+      - name: Bundled Serena smoke
+        shell: bash
+        run: |
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            ./dist/rotaris/rotaris.exe --rotaris-run-bundled-serena start-mcp-server --help
+          else
+            ./dist/rotaris/rotaris --rotaris-run-bundled-serena start-mcp-server --help
+          fi
+
       - name: Windows installer and portable executable
         if: runner.os == 'Windows'
         shell: pwsh

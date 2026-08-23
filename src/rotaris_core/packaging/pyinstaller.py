@@ -79,6 +79,11 @@ _DYNAMIC_IMPORTS: tuple[str, ...] = (
     "tiktoken_ext.openai_public",
 )
 
+#: Dependency packages whose runtime surface is selected dynamically. The spec
+#: files feed these through PyInstaller's ``collect_all`` so every Serena
+#: language backend, resource, and metadata file travels with the artifact.
+_COLLECT_ALL_PACKAGES: tuple[str, ...] = ("serena",)
+
 #: Roots of the metadata closure. Their whole dependency tree comes along,
 #: because reading one's own installed version at import time is a common habit:
 #: ``rotaris_core._read_version`` does it, and so do ``fastmcp/__init__.py``,
@@ -128,6 +133,7 @@ class BundleSpec:
     datas: tuple[tuple[str, str], ...]
     hidden_imports: tuple[str, ...]
     metadata_packages: tuple[str, ...]
+    collect_all_packages: tuple[str, ...]
     icon: str | None
 
 
@@ -252,7 +258,7 @@ def repo_root() -> Path:
     return find_repo_root()
 
 
-@traces(SWR.SWR_3001)
+@traces(SWR.SWR_3001, SWR.SWR_3723)
 def bundle_spec(name: str, *, root: Path | None = None) -> BundleSpec:
     """Resolve one entry point into a complete, buildable bundle description."""
     try:
@@ -272,5 +278,6 @@ def bundle_spec(name: str, *, root: Path | None = None) -> BundleSpec:
         datas=collect_datas(),
         hidden_imports=hidden_imports(),
         metadata_packages=metadata_packages(),
+        collect_all_packages=_COLLECT_ALL_PACKAGES,
         icon=str(icon_path) if icon_path.is_file() else None,
     )

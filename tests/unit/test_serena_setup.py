@@ -16,7 +16,8 @@ from unittest.mock import Mock
 import pytest
 
 import rotaris_core.init.serena_setup as serena_setup
-from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS, SERENA_PINNED_VERSION
+from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
+from rotaris_core.config.mcp_resolution import resolve_serena_cli_command
 from rotaris_core.config.schema import MCPServerConfig, RotarisConfig
 from rotaris_core.init.serena_setup import (
     INDEX_STEP,
@@ -34,6 +35,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 pytestmark = pytest.mark.unit
+
+_DEFAULT_SERENA_CLI = resolve_serena_cli_command(DEFAULT_MCP_SERVERS["serena"])
+assert _DEFAULT_SERENA_CLI is not None
+_DEFAULT_SERENA_PREFIX = [_DEFAULT_SERENA_CLI[0], *_DEFAULT_SERENA_CLI[1]]
 
 
 class _FakeProcesses:
@@ -64,7 +69,7 @@ class _FakeProcesses:
     @property
     def subcommands(self) -> list[str]:
         """The Serena subcommand of each call — everything after the launch prefix."""
-        prefix = len(["uvx", "--from", f"serena-agent=={SERENA_PINNED_VERSION}", "serena"])
+        prefix = len(_DEFAULT_SERENA_PREFIX)
         return [" ".join(call[prefix:-1]) for call in self.calls]
 
 
@@ -115,12 +120,7 @@ def test_code_workspace_runs_every_stage(tmp_path: Path) -> None:
         (MEMORIES_STEP, "success"),
     ]
     # The pin reaches the CLI, not only the server launch (SWR-2823).
-    assert processes.calls[0][:4] == [
-        "uvx",
-        "--from",
-        f"serena-agent=={SERENA_PINNED_VERSION}",
-        "serena",
-    ]
+    assert processes.calls[0][: len(_DEFAULT_SERENA_PREFIX)] == _DEFAULT_SERENA_PREFIX
     assert processes.calls[0][-1] == str(workspace)
 
 
@@ -137,7 +137,7 @@ def test_code_workspace_passes_detected_languages_without_prompting(tmp_path: Pa
     result = run_serena_setup(_config(workspace), workspace, run_process=processes)
 
     assert result.status == "success"
-    assert processes.calls[0][4:] == [
+    assert processes.calls[0][len(_DEFAULT_SERENA_PREFIX) :] == [
         "project",
         "create",
         "--ls",

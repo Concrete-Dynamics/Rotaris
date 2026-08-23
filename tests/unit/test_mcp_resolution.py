@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from importlib import import_module
 from typing import TYPE_CHECKING, cast
 
@@ -26,7 +27,6 @@ if TYPE_CHECKING:
 
 from rotaris_core.config.defaults import (  # noqa: E402 — after the TYPE_CHECKING block
     DEFAULT_MCP_SERVERS,
-    SERENA_PINNED_VERSION,
 )
 from rotaris_core.config.schema import MCPServerConfig  # noqa: E402 — same
 
@@ -419,7 +419,7 @@ def test_is_uvx_package_truth_table() -> None:
 # The CLI the deterministic setup runs (SWR-2823)
 
 
-@verifies(SWR.SWR_2823)
+@verifies(SWR.SWR_2823, SWR.SWR_3723)
 def test_serena_cli_command_uses_the_pinned_default() -> None:
     """Productive use: the Serena that indexes a project is the Serena that answers
     questions about it afterwards.
@@ -428,7 +428,7 @@ def test_serena_cli_command_uses_the_pinned_default() -> None:
     to, carrying the same pin the MCP server launches with (SWR-2819)."""
     resolved = resolve_serena_cli_command(DEFAULT_MCP_SERVERS["serena"])
 
-    assert resolved == ("uvx", ["--from", f"serena-agent=={SERENA_PINNED_VERSION}", "serena"])
+    assert resolved == (sys.executable, ["-m", "rotaris_core.mcp.bundled_serena"])
 
 
 @verifies(SWR.SWR_2823)

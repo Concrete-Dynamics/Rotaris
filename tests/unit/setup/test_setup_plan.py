@@ -20,11 +20,11 @@ from rotaris_core.setup import (
     manifest_fingerprint,
     probe_tool,
 )
-from rotaris_core.setup.manifest import PLAYWRIGHT_MCP_VERSION, SERENA_VERSION
+from rotaris_core.setup.manifest import PLAYWRIGHT_MCP_VERSION
 from rotaris_core.setup.models import ToolProbe
 
 
-@verifies(SWR.SWR_3715)
+@verifies(SWR.SWR_3715, SWR.SWR_3723)
 def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
     """Productive use: a user can reproduce the exact toolchain another install received.
     Expected outcome: each archive has an HTTPS URL, literal digest, version, and license."""
@@ -33,15 +33,11 @@ def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
     assert [
         (tool.name, tool.minimum_version, tool.provisioned_version) for tool in manifest.tools
     ] == [
-        ("uv", "0.12.0", "0.12.5"),
         ("git", "2.36.0", "2.55.0"),
         ("node", "20.0.0", "24.19.0"),
         ("ripgrep", "14.1.0", "15.2.0"),
     ]
-    assert manifest.mcp_pins == {
-        "serena-agent": SERENA_VERSION,
-        "@playwright/mcp": PLAYWRIGHT_MCP_VERSION,
-    }
+    assert manifest.mcp_pins == {"@playwright/mcp": PLAYWRIGHT_MCP_VERSION}
     for tool in manifest.tools:
         assert tool.license
         for artifact in tool.artifacts.values():
@@ -50,15 +46,14 @@ def test_release_manifest_carries_exact_tool_and_mcp_pins() -> None:
             int(artifact.sha256, 16)
 
 
-@verifies(SWR.SWR_3715)
+@verifies(SWR.SWR_3715, SWR.SWR_3723)
 def test_default_mcp_configuration_derives_every_pinned_warmup() -> None:
     """Productive use: a bundled install warms every package its default agents can launch.
     Expected outcome: the setup plan follows the authoritative MCP configuration and shared pins."""
     from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
 
     assert [step.id for step in derive_mcp_warmups(DEFAULT_MCP_SERVERS)] == [
-        "warm:npx:@playwright/mcp@0.0.75",
-        "warm:uvx:serena-agent==1.7.0",
+        "warm:npx:@playwright/mcp@0.0.75"
     ]
 
 
@@ -108,12 +103,12 @@ def test_setup_plan_reuses_system_git_2_41_without_an_install_step(
     assert [step.id for step in plan.steps] == ["detect", "satisfied:git", "record"]
 
 
-@verifies(SWR.SWR_3715)
+@verifies(SWR.SWR_3715, SWR.SWR_3723)
 def test_plan_orders_missing_tools_then_deduplicated_exact_warmups(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Productive use: first launch explains work in a stable, dependency-safe order.
-    Expected outcome: uv, Git, Node, ripgrep precede sorted exact cache warmups and recording."""
+    Expected outcome: Git, Node, ripgrep precede sorted exact cache warmups and recording."""
     monkeypatch.setattr(
         "rotaris_core.setup.planner.probe_tool",
         lambda spec, **_kwargs: ToolProbe(spec.name, None, None, False),
@@ -137,7 +132,6 @@ def test_plan_orders_missing_tools_then_deduplicated_exact_warmups(
 
     assert [step.id for step in plan.steps] == [
         "detect",
-        "install:uv",
         "install:git",
         "install:node",
         "install:ripgrep",
@@ -182,7 +176,6 @@ def test_manifest_change_creates_a_top_up_plan(monkeypatch: pytest.MonkeyPatch) 
     assert plan.top_up is True
     assert [step.id for step in plan.steps] == [
         "detect",
-        "satisfied:uv",
         "satisfied:git",
         "satisfied:node",
         "satisfied:ripgrep",

@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 720cf448483197f5d8863965bacaf130103b7211264c14bc8d65fff9987b7df8
+# GLOBAL-HASH: d0130e76a2c2ce1d1f6ad322f2831aa27f2c7f602ccc86b05be29510a68d837f
 
 from __future__ import annotations
 
@@ -4743,6 +4743,9 @@ class SWR(IntEnum):
     SWR_3722 = 3722
     """[draft] The official download page discloses automatic network access without degrading the download UX - docs/requirements/3000-distribution-updates/SWR-3722-website-download-network-disclosure.md"""
 
+    SWR_3723 = 3723
+    """[approved] Standalone distributions carry the pinned Serena runtime - docs/requirements/3000-distribution-updates/SWR-3723-bundled-serena-runtime.md"""
+
 
 #: Members carrying the deprecation marker (blueprint §3/§5).
 DEPRECATED: frozenset[SWR] = frozenset({
@@ -6222,11 +6225,11 @@ META: dict[int, ReqMeta] = {
     2816: ReqMeta('SWR-2816', 2816, ReqStatus.APPROVED, 'Hook scope fallback when a workspace list is refused', 'docs/requirements/2700-lifecycle-hooks/SWR-2816-hook-scope-fallback.md', True, True, 'd48fa679ee100786', 'technical', (2701,)),
     2817: ReqMeta('SWR-2817', 2817, ReqStatus.APPROVED, 'Stale run status detection and repair', 'docs/requirements/2400-git-worktrees/SWR-2817-stale-run-status-recovery.md', True, True, '4a5921b2355b83bb', 'technical', (2437,)),
     2818: ReqMeta('SWR-2818', 2818, ReqStatus.APPROVED, 'Serena is the only semantic code-intelligence server in the defaults', 'docs/requirements/2800-project-initialization/SWR-2818-serena-sole-code-intelligence.md', True, True, 'd202171a0aa24cf1', 'product', ()),
-    2819: ReqMeta('SWR-2819', 2819, ReqStatus.APPROVED, 'Serena runs at a pinned release', 'docs/requirements/2800-project-initialization/SWR-2819-serena-pinned-release.md', True, True, '1e808f1ecf16b5c9', 'technical', (2818,)),
+    2819: ReqMeta('SWR-2819', 2819, ReqStatus.APPROVED, 'Serena runs at a pinned release', 'docs/requirements/2800-project-initialization/SWR-2819-serena-pinned-release.md', True, True, 'fb538f0cb537a1b4', 'technical', (2818,)),
     2820: ReqMeta('SWR-2820', 2820, ReqStatus.APPROVED, 'Deterministic Serena project setup', 'docs/requirements/2800-project-initialization/SWR-2820-deterministic-serena-setup.md', True, True, '307433176c9a5d64', 'product', ()),
     2821: ReqMeta('SWR-2821', 2821, ReqStatus.APPROVED, 'Initialization tasks declare whether they need the user', 'docs/requirements/2800-project-initialization/SWR-2821-initialization-consent.md', True, True, 'b69642810ef5e146', 'product', ()),
     2822: ReqMeta('SWR-2822', 2822, ReqStatus.APPROVED, 'Personas read and write Serena memories', 'docs/requirements/2800-project-initialization/SWR-2822-persona-serena-memories.md', True, True, '74b98845b353ff97', 'product', ()),
-    2823: ReqMeta('SWR-2823', 2823, ReqStatus.APPROVED, 'Serena CLI command resolution', 'docs/requirements/2800-project-initialization/SWR-2823-serena-cli-command-resolution.md', True, True, 'a08d9195e11f72ac', 'technical', (2820,)),
+    2823: ReqMeta('SWR-2823', 2823, ReqStatus.APPROVED, 'Serena CLI command resolution', 'docs/requirements/2800-project-initialization/SWR-2823-serena-cli-command-resolution.md', True, True, 'f5949829cc7fb244', 'technical', (2820,)),
     2900: ReqMeta('SWR-2900', 2900, ReqStatus.DRAFT, 'Event Store, Replay & Trajectory Export', 'docs/requirements/2900-event-store.md', False, False, 'd00e9a3803398f5e', 'product', ()),
     2901: ReqMeta('SWR-2901', 2901, ReqStatus.DRAFT, 'Durable per-session event store', 'docs/requirements/2900-event-store/SWR-2901-session-event-store.md', True, True, '3af525184d8b173c', 'product', ()),
     2902: ReqMeta('SWR-2902', 2902, ReqStatus.DRAFT, 'Query and replay API', 'docs/requirements/2900-event-store/SWR-2902-query-and-replay.md', True, True, 'a0da184313f4b98f', 'product', ()),
@@ -6241,8 +6244,8 @@ META: dict[int, ReqMeta] = {
     2911: ReqMeta('SWR-2911', 2911, ReqStatus.APPROVED, 'Tool outcome histogram covers every recorded tool call', 'docs/requirements/1500-sessions-diagnostics/SWR-2911-tool-outcome-classification-coverage.md', True, True, '78b907ace3046ca7', 'technical', (1546,)),
     2912: ReqMeta('SWR-2912', 2912, ReqStatus.APPROVED, 'Every child record reaches a terminal state when its run ends', 'docs/requirements/100-orchestration-core/SWR-2912-terminal-child-records-on-run-end.md', True, True, 'c9dcd4ddb4c8b9df', 'product', ()),
     2913: ReqMeta('SWR-2913', 2913, ReqStatus.APPROVED, 'A session that is not running shows no live agent', 'docs/requirements/2000-rotaris-desktop/SWR-2913-no-live-agent-in-a-finished-session.md', True, True, '19c81bdbc89938ab', 'product', ()),
-    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, 'f06a0573c4d9ad39', 'product', ()),
-    3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, 'd0d8389da8ef101e', 'product', ()),
+    3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, '2c1c0eb5059aef5c', 'product', ()),
+    3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, '00acbcc8d68d46f6', 'product', ()),
     3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '96963c37c5f0bda9', 'product', ()),
     3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '8913133f024266bf', 'product', ()),
     3004: ReqMeta('SWR-3004', 3004, ReqStatus.APPROVED, 'A final assistant message is the completion signal', 'docs/requirements/500-tool-platform/SWR-3004-no-terminal-completion-tool.md', True, True, '28e0403b57eab347', 'technical', (2132, 2808)),
@@ -6407,11 +6410,12 @@ META: dict[int, ReqMeta] = {
     3711: ReqMeta('SWR-3711', 3711, ReqStatus.APPROVED, 'Credential status is classified without an event loop', 'docs/requirements/700-providers-auth/SWR-3711-credential-status-without-event-loop.md', True, True, 'd1405012d7dfd798', 'technical', (700,)),
     3712: ReqMeta('SWR-3712', 3712, ReqStatus.APPROVED, 'A run resolves its provider credentials up front and keeps them staged', 'docs/requirements/700-providers-auth/SWR-3712-run-primes-provider-credentials.md', True, True, 'a7401f11d05e5f46', 'technical', (700,)),
     3714: ReqMeta('SWR-3714', 3714, ReqStatus.APPROVED, 'Continuing a session settles the children its previous run left running', 'docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md', True, True, '6791d8bf47ff793b', 'product', ()),
-    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, 'c644b65fb6610360', 'product', ()),
+    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, 'f469c2e347607465', 'product', ()),
     3716: ReqMeta('SWR-3716', 3716, ReqStatus.DRAFT, 'The first launch offers Rotaris Cloud and lets the user in without it', 'docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md', True, True, 'eeffef4c8eae9cc7', 'product', ()),
     3717: ReqMeta('SWR-3717', 3717, ReqStatus.DRAFT, 'Legal and product information is always reachable from the desktop app', 'docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md', True, True, 'ef38e5f34f7858a2', 'product', ()),
     3719: ReqMeta('SWR-3719', 3719, ReqStatus.DRAFT, 'Desktop credentials are protected with platform-appropriate user access controls', 'docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md', True, True, 'f8899c1096cccf92', 'product', ()),
     3720: ReqMeta('SWR-3720', 3720, ReqStatus.DRAFT, 'Release artifacts carry complete third-party notices', 'docs/requirements/3000-distribution-updates/SWR-3720-complete-third-party-notices.md', True, True, '92dd64e32c97cac3', 'product', ()),
     3721: ReqMeta('SWR-3721', 3721, ReqStatus.DRAFT, 'Provider settings state where model traffic is sent', 'docs/requirements/2000-rotaris-desktop/SWR-3721-provider-data-destination-transparency.md', True, True, '656b8155c7daa024', 'product', ()),
     3722: ReqMeta('SWR-3722', 3722, ReqStatus.DRAFT, 'The official download page discloses automatic network access without degrading the download UX', 'docs/requirements/3000-distribution-updates/SWR-3722-website-download-network-disclosure.md', True, True, '3cea9a561b365183', 'product', ()),
+    3723: ReqMeta('SWR-3723', 3723, ReqStatus.APPROVED, 'Standalone distributions carry the pinned Serena runtime', 'docs/requirements/3000-distribution-updates/SWR-3723-bundled-serena-runtime.md', True, True, 'aedcb0d00eee0ac9', 'product', ()),
 }

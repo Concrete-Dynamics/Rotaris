@@ -10,16 +10,13 @@ date: 2026-08-22
 
 # SWR-3715 — A bundled install provisions the machine once, before the app opens
 
-SWR-3001 froze Python and every Python dependency into the shipped bundle, and
-said plainly what it does not carry: the external programs Rotaris shells out
-to. `git` drives worktrees and checkpoints, `uvx` starts the pinned
-`serena-agent` MCP server, `npx` starts the Playwright MCP server in
-`DEFAULT_MCP_SERVERS`, and `rg` backs the search tool. A user who installs from
-`Rotaris-<v>-windows-x64-setup.exe`, the DMG, or the AppImage therefore lands in
-an application whose worktrees, semantic navigation and search are broken behind
-warnings, and whose first agent run stalls for minutes while cold `uvx` and
-`npx` caches populate under a spinner that explains none of it. The install
-finished; the product did not.
+SWR-3001 freezes Python and the application dependency graph into the shipped
+bundle. SWR-3723 adds the pinned Serena runtime to that graph. The remaining
+external programs Rotaris shells out to are `git` for worktrees and checkpoints,
+`npx` for the Playwright MCP server in `DEFAULT_MCP_SERVERS`, and `rg` for the
+search tool. A user who installs from `Rotaris-<v>-windows-x64-setup.exe`, the
+DMG, or the AppImage therefore needs one visible setup run for those external
+tools and the Playwright package cache before productive use.
 
 Rotaris shall close that gap with a **setup run**: the first launch after a
 bundled install provisions what is missing, tells the user what it is doing
@@ -30,8 +27,8 @@ Every later launch skips it.
 
 - **In scope**: Windows, macOS and Linux bundled artifacts from SWR-3001 —
   installer, portable `.exe`, `.app`/DMG, AppImage. Detection and per-user
-  provisioning of `git`, `uv`/`uvx`, Node/`npx` and `rg`; warming the MCP
-  package caches those servers need; removal of the shipped Git MCP server in
+  provisioning of `git`, Node/`npx` and `rg`; warming the JavaScript MCP package
+  caches those servers need; removal of the shipped Git MCP server in
   favour of terminal Git commands; the progress window; the completion record
   that makes the run once-only; a re-runnable repair; a non-interactive
   equivalent for `rotaris-cli` and `rotaris-headless`.
@@ -46,20 +43,19 @@ Every later launch skips it.
 **It only does what is missing.** Each step first asks whether the tool is
 already usable — a satisfying version on `PATH`, or one Rotaris provisioned
 earlier — and when it is, the step reports `already installed` and costs
-nothing. A machine that already has git, uv, Node and ripgrep sees a setup run
+nothing. A machine that already has git, Node and ripgrep sees a setup run
 that completes in seconds without downloading anything.
 
 Git 2.36.0 or newer is satisfying because it carries the NUL-delimited worktree
 listing Rotaris uses. A system Git at that floor is reused directly and never
 replaced by Rotaris-managed Git.
 
-**Steps, in order.** Detect what is present; provision `uv`; provision `git`;
-provision Node; provision `rg`; warm the `uvx` cache for the pinned
-`serena-agent` and the `npx` cache for the Playwright MCP server;
+**Steps, in order.** Detect what is present; provision `git`; provision Node;
+provision `rg`; warm the `npx` cache for the Playwright MCP server;
 record what was provisioned; hand off to the application. The list is derived
-from the tools Rotaris actually resolves, not hand-maintained in the window:
-adding an MCP server that resolves through `uvx` or `npx` adds its warm-up step
-by construction.
+from the external tools Rotaris actually resolves, not hand-maintained in the
+window. A user-configured `uvx` entry uses a user-supplied executable and may
+contribute a warm-up when that executable is available.
 
 Rotaris ships no Git MCP server, pin, warm-up, persona grant, or server-specific
 initialization. Agents that need Git invoke the installed `git` command through
@@ -120,9 +116,9 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 ## Acceptance criteria
 
 - **AC-001**: The first launch of a bundled Rotaris on a machine with none of
-  `git`, `uv`, Node or `rg` provisions all four, warms the required MCP caches, and then
+  `git`, Node or `rg` provisions all three, warms the required JavaScript MCP cache, and then
   starts the desktop application without further user action.
-- **AC-002**: On a machine that already has satisfying versions of all four,
+- **AC-002**: On a machine that already has satisfying versions of all three,
   the run reports each as already installed, downloads nothing, and reaches the
   application. Git 2.36.0 or newer satisfies the Git step.
 - **AC-003**: The second launch starts the application directly — no setup
@@ -155,7 +151,7 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 
 | Level           | Productive scenario                                                                                                                             | Exercised boundary                                             | Planned/covering test                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Unit            | Detection reuses Git 2.36+; the default setup plan derives only the MCP packages Rotaris ships and excludes Git MCP                       | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
+| Unit            | Detection reuses Git 2.36+; the default setup plan excludes `uv`, derives the Playwright warm-up, and excludes Git MCP and Serena warm-ups | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
 | Unit            | Default agents start without a Git MCP server or persona grant                                                                                 | Shipped persona and MCP configuration                            | `tests/unit/test_config_defaults.py::test_git_mcp_is_absent_from_the_shipped_configuration` |
 | Unit            | A pinned archive with a wrong digest is refused and nothing is unpacked; a matching one is unpacked into the per-user tool directory             | Download-and-verify step over a local HTTPS fixture             | `tests/unit/setup/test_tool_download.py`                     |
 | Integration     | A cancelled, then resumed, run completes the remaining steps only; a completion record makes a later run a no-op; a raised minimum triggers a top-up | Setup runner → completion record in the data dir                | `tests/integration/test_setup_resume_and_record.py`          |
@@ -163,6 +159,8 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 | User-flow E2E   | A first-time user watches the run progress, opens the details log, hits a failing step, chooses `Continue without it`, and reaches a usable app  | Real setup window driven by accessible name, network faked      | `apps/rotaris/tests/test_first_run_setup_flow.py`            |
 
 Depends on: [SWR-3001 — Cross-Platform Standalone Binaries](SWR-3001-cross-platform-standalone-binaries.md)
+
+Related: [SWR-3723 — Standalone distributions carry the pinned Serena runtime](SWR-3723-bundled-serena-runtime.md)
 
 Serves: [SWR-3716 — The first launch offers Rotaris Cloud and lets the user in without it](../2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md)
 

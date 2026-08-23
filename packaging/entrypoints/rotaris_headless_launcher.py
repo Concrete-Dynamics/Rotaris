@@ -8,9 +8,14 @@ milliseconds, not after the SDK.
 import sys
 
 from rotaris_core.requirements.sources.parser_host import intercept
+from rotaris_core.mcp.bundled_serena import intercept as intercept_serena
 
 if __name__ == "__main__":
     hosted = intercept(sys.argv)
+    if hosted is not None:
+        sys.exit(hosted)
+
+    hosted = intercept_serena(sys.argv)
     if hosted is not None:
         sys.exit(hosted)
 

@@ -1,6 +1,6 @@
 [project]
 name = "rotaris-core"
-version = "0.120.9"
+version = "0.120.10"
 description = "CLI-native agentic orchestration framework built on OpenHands SDK"
 requires-python = ">=3.12"
 license = "MIT"
@@ -21,6 +21,7 @@ dependencies = [
     "platformdirs>=4.0",
     "toml>=0.10.2",
     "claude-agent-sdk>=0.2.128",
+    "serena-agent==1.7.0",
 ]
 
 [project.optional-dependencies]

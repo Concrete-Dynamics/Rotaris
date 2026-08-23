@@ -1,6 +1,6 @@
 [project]
 name = "rotaris-core"
-version = "0.120.1"
+version = "0.120.4"
 description = "CLI-native agentic orchestration framework built on OpenHands SDK"
 requires-python = ">=3.12"
 license = "MIT"

@@ -83,6 +83,7 @@ if TYPE_CHECKING:
     SWR.SWR_2704,
     SWR.SWR_2802,
     SWR.SWR_2805,
+    SWR.SWR_3715,
 )
 class MainWindow(Themed, QMainWindow):
     """Owns six primary views and auxiliary persona windows."""
@@ -307,6 +308,7 @@ class MainWindow(Themed, QMainWindow):
         self.git.checkpoint_restore_requested.connect(self._restore_checkpoint)
         self.settings.hook_trust_review_requested.connect(self._review_workspace_hooks)
         self.settings.cloud_credit_refresh_requested.connect(self.refresh_cloud_credit)
+        self.settings.machine_setup_repair_requested.connect(self._repair_machine_setup)
         self.store.run_state_changed.connect(self._run_state_changed_for_credit)
         self.settings.save_requested.connect(self._save_settings)
         self.settings.discard_requested.connect(self._discard_settings)
@@ -1472,6 +1474,25 @@ class MainWindow(Themed, QMainWindow):
         """
         del mode
         self._save_settings()
+
+    @traces(SWR.SWR_3715)
+    def _repair_machine_setup(self) -> None:
+        from rotaris.setup_coordinator import run_desktop_setup
+
+        outcome = run_desktop_setup(
+            workspace=getattr(self.config_service, "workspace", None),
+            manual=True,
+            parent=self,
+        )
+        self.settings.refresh_machine_setup()
+        if outcome.value == "complete":
+            self.notify("Machine setup completed.")
+        elif outcome.value == "degraded":
+            self.notify("Rotaris is open with reduced machine-tool capabilities.", error=True)
+        elif outcome.value == "cancelled":
+            self.notify("Machine setup paused. Completed steps are saved.")
+        else:
+            self.notify("Machine setup is already running in another Rotaris process.")
 
     def _discard_settings(self) -> None:
         self.store.discard_settings_changes()

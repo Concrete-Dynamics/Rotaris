@@ -1,6 +1,6 @@
 ---
 req-id: SWR-3715
-status: draft
+status: approved
 trace: required
 test: required
 title: "A bundled install provisions the machine once, before the app opens"

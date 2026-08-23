@@ -553,8 +553,10 @@ def test_default_tavily_mcp_uses_http_transport(tmp_path: Path, monkeypatch) -> 
     }
 
 
-@verifies(SWR.SWR_507)
+@verifies(SWR.SWR_507, SWR.SWR_3715)
 def test_default_playwright_mcp_uses_npx_package_runner(tmp_path: Path, monkeypatch) -> None:
+    """Productive use: the default browser MCP starts reproducibly on a prepared machine.
+    Expected outcome: agent wiring launches the exact package version warmed during setup."""
     from rotaris_core.agents.factory import _resolve_mcp_config
     from rotaris_core.config.defaults import DEFAULT_MCP_SERVERS
 
@@ -580,7 +582,7 @@ def test_default_playwright_mcp_uses_npx_package_runner(tmp_path: Path, monkeypa
         "playwright": {
             "transport": "stdio",
             "command": "npx",
-            "args": ["-y", "@playwright/mcp@latest", "--headless"],
+            "args": ["-y", "@playwright/mcp@0.0.75", "--headless"],
             "env": {},
             "cwd": str(tmp_path),
         },

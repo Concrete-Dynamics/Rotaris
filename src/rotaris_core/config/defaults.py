@@ -105,6 +105,8 @@ ARTIFACT_ALL_TOOLS = [*ARTIFACT_READ_TOOLS, "artifact_write"]
 LEGACY_PERSONA_ALIASES = {"oracle": "codebase-analyst"}
 
 SERENA_PINNED_VERSION = "1.7.0"
+PLAYWRIGHT_MCP_PINNED_VERSION = "0.0.75"
+GIT_MCP_PINNED_VERSION = "2.15.1"
 """The one place the Serena release is named (SWR-2819).
 
 Upgrading Serena is a single edit here with the whole suite behind it, which is
@@ -545,7 +547,7 @@ DEFAULT_MCP_SERVERS = {
     ),
     "playwright": MCPServerConfig(
         command="npx",
-        args=["-y", "@playwright/mcp@latest", "--headless"],
+        args=["-y", f"@playwright/mcp@{PLAYWRIGHT_MCP_PINNED_VERSION}", "--headless"],
     ),
     # Symbolic code intelligence (symbol search, references, diagnostics, edits)
     # plus project onboarding memories — and, since SWR-2818, the *only* one of
@@ -590,7 +592,7 @@ DEFAULT_MCP_SERVERS = {
     ),
     "git": MCPServerConfig(
         command="npx",
-        args=["-y", "@cyanheads/git-mcp-server@latest"],
+        args=["-y", f"@cyanheads/git-mcp-server@{GIT_MCP_PINNED_VERSION}"],
         disabled_tools=[
             "git_init",
             "git_clone",

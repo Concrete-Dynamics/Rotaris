@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 @traces(SWR.SWR_3715)
 class SetupWorker(QObject):
-    event = Signal(object)
+    setup_event = Signal(object)
     completed = Signal(str)
     failed = Signal(str)
 
@@ -52,7 +52,7 @@ class SetupWorker(QObject):
     def run(self) -> None:
         try:
             outcome = run_setup(
-                emit=self.event.emit,
+                emit=self.setup_event.emit,
                 cancelled=self.cancel_event.is_set,
                 manual=self.manual,
                 mcp_servers=self.mcp_servers,
@@ -169,7 +169,7 @@ class SetupCoordinatorDialog(QDialog):
         )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
-        self._worker.event.connect(self._on_event)
+        self._worker.setup_event.connect(self._on_event)
         self._worker.completed.connect(self._on_completed)
         self._worker.failed.connect(self._on_failed)
         self._worker.completed.connect(self._thread.quit)

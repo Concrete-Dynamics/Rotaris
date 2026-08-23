@@ -493,11 +493,15 @@ class TranscriptListModel(QAbstractListModel):
             # Shorter: settle the rows that stay, then drop the tail. Removal
             # last so no index the update used is invalidated under it.
             self._events[first:new_count] = rows
-            self.dataChanged.emit(
-                self.index(first, 0),
-                self.index(new_count - 1, 0),
-                [EVENT_ROLE, int(Qt.ItemDataRole.DisplayRole)],
-            )
+            if rows:
+                # Guarded because a pure removal — the trailer emptying when an
+                # approval is answered — supplies no rows, and ``dataChanged``
+                # over an inverted range is not a no-op to Qt.
+                self.dataChanged.emit(
+                    self.index(first, 0),
+                    self.index(new_count - 1, 0),
+                    [EVENT_ROLE, int(Qt.ItemDataRole.DisplayRole)],
+                )
             self.operation_counts["update"] += len(rows)
             self.beginRemoveRows(QModelIndex(), new_count, old_count - 1)
             del self._events[new_count:]

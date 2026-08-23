@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Rotaris">
+  <defs>
+    <linearGradient id="background" x1="32" y1="24" x2="224" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#312E81"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="52" fill="url(#background)"/>
+  <circle cx="128" cy="128" r="84" fill="none" stroke="#8B5CF6" stroke-width="10"/>
+  <circle cx="204" cy="92" r="13" fill="#22D3EE"/>
+  <path d="M78 194V62h55c37 0 59 20 59 51 0 24-14 41-37 48l39 33h-43l-34-30h-8v30H78zm31-59h22c19 0 29-8 29-22s-10-22-29-22h-22v44z" fill="#F8FAFC"/>
+</svg>

@@ -7,6 +7,7 @@ distribution metadata both packages need to report their real version."""
 from __future__ import annotations
 
 import importlib
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -148,7 +149,9 @@ def test_spec_file_is_version_controlled_for_every_entry_point(name: str) -> Non
 
 @verifies(SWR.SWR_3001)
 def test_platform_installer_recipes_are_version_controlled() -> None:
-    """AC-003/005/006: each wrapper around the frozen tree is a checked-in recipe."""
+    """Productive use: a maintainer can build every native installer from checkout.
+    Expected outcome: each recipe and its required AppImage icon are versioned.
+    """
     from rotaris_core.packaging.pyinstaller import repo_root
 
     packaging_dir = repo_root() / "packaging"
@@ -156,6 +159,24 @@ def test_platform_installer_recipes_are_version_controlled() -> None:
     assert (packaging_dir / "macos" / "make_dmg.sh").is_file()
     assert (packaging_dir / "linux" / "make_appimage.sh").is_file()
     assert (packaging_dir / "linux" / "rotaris.desktop").is_file()
+    assert (packaging_dir / "assets" / "rotaris.svg").is_file()
+
+
+@verifies(SWR.SWR_3001)
+def test_appimage_recipe_carries_the_desktop_icon() -> None:
+    """Productive use: a Linux user can launch the bundled desktop from an AppImage.
+    Expected outcome: the recipe supplies a valid icon matching the desktop entry.
+    """
+    from rotaris_core.packaging.pyinstaller import repo_root
+
+    packaging_dir = repo_root() / "packaging"
+    icon = packaging_dir / "assets" / "rotaris.svg"
+    recipe = (packaging_dir / "linux" / "make_appimage.sh").read_text(encoding="utf-8")
+    desktop = (packaging_dir / "linux" / "rotaris.desktop").read_text(encoding="utf-8")
+
+    assert ET.parse(icon).getroot().tag.endswith("svg")
+    assert 'cp "${ICON}" "${APPDIR}/rotaris.svg"' in recipe
+    assert "Icon=rotaris" in desktop
 
 
 @verifies(SWR.SWR_3001)

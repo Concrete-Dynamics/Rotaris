@@ -22,6 +22,7 @@ and notifies users when one is available on GitHub Releases.
 | SWR-3003 | In-App Update Notification                                          | approved |
 | SWR-3715 | A bundled install provisions the machine once, before the app opens | approved |
 | SWR-3720 | Release artifacts carry complete third-party notices                | draft    |
+| SWR-3722 | Official download page discloses automatic network access           | draft    |
 
 ## SWR-3715 — A bundled install provisions the machine once, before the app opens
 
@@ -41,6 +42,16 @@ components and assets actually included in the delivered application rather than
 assuming the Python dependency graph is the complete product inventory.
 
 Full requirement: [SWR-3720 — Release artifacts carry complete third-party notices](3000-distribution-updates/SWR-3720-complete-third-party-notices.md)
+
+## SWR-3722 — Official download page discloses automatic network access
+
+The official product website exposes the automatic first-run provisioning and
+launch-time update-check behaviour through a compact, optional information control
+at the download surface. The disclosure must not turn the download hero into a
+legal notice or add a blocking consent step. GitHub Release pages are deliberately
+not part of this consumer-facing disclosure requirement.
+
+Full requirement: [SWR-3722 — The official download page discloses automatic network access without degrading the download UX](3000-distribution-updates/SWR-3722-website-download-network-disclosure.md)
 
 Building the artifacts: [`docs/reference/building-standalone.md`](../reference/building-standalone.md).
 Cutting a release: [`docs/reference/releasing.md`](../reference/releasing.md).

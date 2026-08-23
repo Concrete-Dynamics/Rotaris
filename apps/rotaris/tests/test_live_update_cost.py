@@ -10,6 +10,7 @@ whatever is watching it.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -182,6 +183,87 @@ def test_applying_a_delta_to_the_store_does_not_read_the_whole_transcript(
     assert model.operation_counts["insert"] == 1
     assert model.operation_counts["reset"] == 0
     assert model.operation_counts["refused"] == 0
+
+
+@verifies(SWR.SWR_2130)
+@pytest.mark.parametrize("length", [30, 300, 3000])
+def test_the_facts_payload_does_not_carry_the_session_it_describes(length: int) -> None:
+    """Productive use: the agent tree and the todos update while a long session
+    runs. Expected outcome: what is sent is bounded by what is happening, not by
+    how much has happened — the transcript has its own channel and must not be
+    copied into this one as well."""
+    from rotaris_core.session.state import SessionState
+
+    now = dt.datetime.now(dt.UTC)
+    state = SessionState(
+        session_id="s1",
+        workspace_root="/workspace",
+        created_at=now,
+        updated_at=now,
+        transcript_events=[
+            {"role": "assistant", "name": "coder", "content": f"line {i}"} for i in range(length)
+        ],
+        ui_edit_diffs=[{"diff_id": f"d{i}"} for i in range(length)],
+        report_artifacts=[{"id": f"r{i}"} for i in range(length)],
+        child_states=[{"canonical_name": "coder-1", "persona": "coder", "state": "running"}],
+    )
+    manager = SimpleNamespace(persister=_Persister(), session_dir=lambda _id: None)
+    observer = _SessionObserver(asyncio.new_event_loop(), manager, state)
+    seen: list[Any] = []
+    observer.bind_facts_sink(seen.append)
+
+    observer._save()  # noqa: SLF001
+
+    assert len(seen) == 1
+    facts = seen[0]
+    assert facts.transcript_events == []
+    assert facts.ui_edit_diffs == []
+    assert facts.report_artifacts == []
+    # What the live surfaces read is there, and copied — the run keeps writing
+    # the originals while the Qt thread reads what it was handed.
+    assert facts.child_states == state.child_states
+    assert facts.child_states is not state.child_states
+    assert facts.execution_status == state.execution_status
+
+
+@verifies(SWR.SWR_2130)
+def test_a_broken_facts_consumer_costs_the_view_and_not_the_run() -> None:
+    """Productive use: the same failure as for the transcript, on the other
+    channel. Expected outcome: the record is still written."""
+    observer, _seen = _observer(3)
+
+    def explode(_facts: Any) -> None:
+        raise RuntimeError("the view is on fire")
+
+    observer.bind_facts_sink(explode)
+    before = observer.manager.persister.saves
+    observer._save()  # noqa: SLF001
+
+    assert observer.manager.persister.saves == before + 1
+
+
+@verifies(SWR.SWR_2454, SWR.SWR_2504)
+def test_a_delta_that_only_removes_rows_removes_them() -> None:
+    """Productive use: the user answers the approval the run was blocked on, and
+    the row saying so has to go. Expected outcome: the rows are removed, and the
+    model is not asked to redraw a range that does not exist."""
+    store = WorkspaceStore()
+    model = TranscriptListModel()
+    store.transcript_delta.connect(lambda first, rows: model.apply_delta(first, list(rows)))
+    rows = [
+        TranscriptEvent(timestamp="12:00:00", role="assistant", text="recorded"),
+        TranscriptEvent(timestamp="", role="coder-1", text="Approval needed", kind="approval"),
+    ]
+    store.set_transcript(list(rows))
+    model.sync(list(rows))
+    model.operation_counts.update(dict.fromkeys(model.operation_counts, 0))
+
+    store.apply_transcript_delta(1, [])
+
+    assert model.rowCount() == 1
+    assert [event.kind for event in store.transcript] == ["message"]
+    assert model.operation_counts["remove"] == 1
+    assert model.operation_counts["update"] == 0
 
 
 @verifies(SWR.SWR_2454)

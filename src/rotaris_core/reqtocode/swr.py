@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: ede7109c084732e92756855c84375a1771cfc126a1833c3cea068f2a82cc2581
+# GLOBAL-HASH: 4520b441c04a7d2cb9689dd7be5512133de8c503d426ea5f37e046ec9378eaec
 
 from __future__ import annotations
 
@@ -6037,7 +6037,7 @@ META: dict[int, ReqMeta] = {
     2127: ReqMeta('SWR-2127', 2127, ReqStatus.APPROVED, 'Terminal tool module import robustness', 'docs/requirements/500-tool-platform/SWR-2127-terminal-module-import-robustness.md', True, True, 'e057caea68e5ac94', 'technical', (500,)),
     2128: ReqMeta('SWR-2128', 2128, ReqStatus.APPROVED, 'Shared run bootstrap factories', 'docs/requirements/100-orchestration-core/SWR-2128-shared-run-bootstrap.md', True, True, '87a15ebd65509988', 'technical', (100,)),
     2129: ReqMeta('SWR-2129', 2129, ReqStatus.APPROVED, 'Malformed tool-call argument repair', 'docs/requirements/500-tool-platform/SWR-2129-tool-call-argument-repair.md', True, True, 'bb70172e932c25eb', 'technical', (500,)),
-    2130: ReqMeta('SWR-2130', 2130, ReqStatus.APPROVED, 'Debounced session persistence writes', 'docs/requirements/1500-sessions-diagnostics/SWR-2130-debounced-session-persistence.md', True, True, '59affb4818e645c1', 'technical', (1545,)),
+    2130: ReqMeta('SWR-2130', 2130, ReqStatus.APPROVED, 'Debounced session persistence writes', 'docs/requirements/1500-sessions-diagnostics/SWR-2130-debounced-session-persistence.md', True, True, '7597f1415dd7f820', 'technical', (1545,)),
     2131: ReqMeta('SWR-2131', 2131, ReqStatus.APPROVED, 'Queued prompt injection as a new todo phase', 'docs/requirements/1300-runtime-control/SWR-2131-queued-prompt-todo-injection.md', True, True, '82d62112c6a8260c', 'technical', (1322,)),
     2132: ReqMeta('SWR-2132', 2132, ReqStatus.APPROVED, 'Deterministic child-result handoff', 'docs/requirements/100-orchestration-core/SWR-2132-deterministic-child-handoff.md', True, True, 'bd7ca88529638314', 'technical', (107, 141, 142)),
     2200: ReqMeta('SWR-2200', 2200, ReqStatus.DRAFT, 'Remote Access & Support Platform', 'docs/requirements/2200-remote-platform.md', False, False, 'd25c39ea460401b6', 'product', ()),
@@ -6148,7 +6148,7 @@ META: dict[int, ReqMeta] = {
     2451: ReqMeta('SWR-2451', 2451, ReqStatus.DRAFT, 'Create and delete personas from Settings UI', 'docs/requirements/2000-rotaris-desktop/SWR-2451-create-delete-personas.md', True, True, '9fc81747151a5977', 'product', ()),
     2452: ReqMeta('SWR-2452', 2452, ReqStatus.APPROVED, 'Transcript geometry is incremental and never partially laid out', 'docs/requirements/2000-rotaris-desktop/SWR-2452-incremental-transcript-geometry.md', True, True, '50d30593bc23a2bf', 'technical', (2447,)),
     2453: ReqMeta('SWR-2453', 2453, ReqStatus.DRAFT, 'Every run the desktop starts is the same run as a CLI run', 'docs/requirements/2000-rotaris-desktop/SWR-2453-desktop-runs-on-the-shared-run-lifecycle.md', True, True, '705a37bde1c00e2a', 'product', ()),
-    2454: ReqMeta('SWR-2454', 2454, ReqStatus.DRAFT, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'ea8310e4950d7a80', 'product', ()),
+    2454: ReqMeta('SWR-2454', 2454, ReqStatus.DRAFT, 'The live view keeps up with the run', 'docs/requirements/2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md', True, True, 'e13689e277dc54c9', 'product', ()),
     2500: ReqMeta('SWR-2500', 2500, ReqStatus.APPROVED, 'Secure Execution: Permissions & Sandbox', 'docs/requirements/2500-secure-execution.md', False, False, 'cd4969ecb18ee886', 'product', ()),
     2501: ReqMeta('SWR-2501', 2501, ReqStatus.APPROVED, 'Permission policy engine (allow/ask/deny)', 'docs/requirements/2500-secure-execution/SWR-2501-permission-policy-engine.md', True, True, 'c5bf13329aa7756f', 'product', ()),
     2502: ReqMeta('SWR-2502', 2502, ReqStatus.APPROVED, 'Terminal command permission patterns', 'docs/requirements/2500-secure-execution/SWR-2502-terminal-command-patterns.md', True, True, 'ebe1eb6ffa2a4609', 'product', ()),

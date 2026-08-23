@@ -110,10 +110,54 @@ def test_the_transcript_arrives_without_the_poll(tmp_path, qtbot, monkeypatch) -
         assert "run the tests" in texts
         assert "pytest -x -q" in texts
         assert "tool" in kinds
+        # And the surfaces that are not the transcript (SWR-2130). These used to
+        # arrive only through the snapshot read, which is why the desktop
+        # shortened the persistence debounce to make that read frequent enough.
+        assert store.session_status == "running"
+        assert store.run_summary.tool_calls >= 0
     finally:
         released.set()
         qtbot.waitUntil(lambda: not bridge.running, timeout=15_000)
         bridge.shutdown()
+
+
+@verifies(SWR.SWR_2130)
+def test_the_run_does_not_shorten_the_persistence_debounce(tmp_path, qtbot, monkeypatch) -> None:
+    """Productive use: a run writes its record as often as durability wants, not
+    as often as a view wants. Expected outcome: the session manager the run
+    builds carries the engine's own debounce window.
+
+    The knob and the view are what SWR-2130 exists to separate; this asserts the
+    separation rather than the comment describing it."""
+    from rotaris_core.session.manager import SessionManager as Manager
+
+    sdk = sdk_events()
+    store = WorkspaceStore()
+    service = _service(tmp_path, store)
+    windows: list[float | None] = []
+    original = Manager.__init__
+
+    def recording_init(self, workspace, *args, **kwargs):  # noqa: ANN001, ANN202
+        windows.append(kwargs.get("persist_debounce_seconds"))
+        original(self, workspace, *args, **kwargs)
+
+    monkeypatch.setattr(Manager, "__init__", recording_init)
+    monkeypatch.setattr("rotaris_core.cli.background._run_task", _streaming_run_task(sdk))
+    monkeypatch.setattr(
+        "rotaris_core.ralph.state.summarize_run_progress",
+        lambda progress: ("completed", "Run finished.", "info"),
+    )
+
+    bridge = RunBridge(tmp_path, store, service)
+    try:
+        with qtbot.waitSignal(bridge.run_finished, timeout=15_000):
+            assert bridge.start("run the tests") is True
+        qtbot.waitUntil(lambda: not bridge.running, timeout=10_000)
+    finally:
+        bridge.shutdown()
+
+    assert windows, "the run never built a session manager"
+    assert all(window is None for window in windows), windows
 
 
 @verifies(SWR.SWR_2454)

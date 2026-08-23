@@ -81,6 +81,10 @@ class ConfigService:
         # reconciling read and the delta feed never write it in the same breath.
         self._transcript_projector = TranscriptProjector()
         self._transcript_is_live = False
+        #: How many of the store's transcript rows came from the projector. The
+        #: rest are the trailer, which always sits after them.
+        self._projected_len = 0
+        self._trailer: tuple[TranscriptEvent, ...] = ()
         # Hydrated SessionArtifactStore cache, keyed by (session_id, index mtime)
         # so the 750ms poll tick only re-reads artifact files when they changed.
         self._artifact_store: Any | None = None
@@ -1017,9 +1021,12 @@ class ConfigService:
         """
         rows = list(delta.rows)
         if delta.first == 0:
-            events = self._transcript_projector.seed(rows, list(delta.new_diffs), delta.personas)
+            events = list(
+                self._transcript_projector.seed(rows, list(delta.new_diffs), delta.personas)
+            )
             self._transcript_is_live = True
-            self.store.set_transcript(list(events))
+            self._projected_len = len(events)
+            self.store.set_transcript(events + list(self._trailer))
             return
         applied = self._transcript_projector.apply(
             delta.first,
@@ -1032,7 +1039,71 @@ class ConfigService:
             return
         first, tail = applied
         self._transcript_is_live = True
-        self.store.apply_transcript_delta(first, list(tail))
+        self._projected_len = first + len(tail)
+        # The trailer goes back on the end. It is not part of what the run
+        # recorded — it says the run is *waiting* — so the projector never sees
+        # it and every write of the transcript has to re-append it.
+        self.store.apply_transcript_delta(first, list(tail) + list(self._trailer))
+
+    @traces(SWR.SWR_2130, SWR.SWR_2454)
+    def apply_session_facts(self, facts: Any) -> None:
+        """Apply everything a live run changed except its transcript. Qt thread only.
+
+        *facts* is the session record with its unbounded lists emptied, so this
+        runs the ordinary projection over it and applies every surface the
+        transcript does not own. Reusing :func:`build_session_projection` rather
+        than deriving these surfaces a second way is the point: a live view and
+        a reloaded one have to agree, and two derivations eventually will not.
+
+        Artifacts are not re-read here. They live on disk behind an mtime cache
+        and change on their own schedule; the reconciling read still owns them,
+        and the ones already on screen are carried across untouched.
+        """
+        from rotaris.services.session_projection import build_session_projection
+
+        projection = build_session_projection(
+            facts,
+            self.config,
+            self.projection_context(),
+            list(self.store.artifacts),
+        )
+        s = self.store
+        s.session_name = projection.session_name
+        s.set_session_runtime_label(projection.worktree_branch)
+        s.set_session_status(projection.session_status)
+        if projection.active_model:
+            s.active_model = projection.active_model
+            s.session_model_override = projection.active_model
+        s.set_run_summary(projection.run)
+        s.set_agents(list(projection.agents))
+        s.set_todos(list(projection.todos))
+        s.set_kpis(projection.kpis)
+        s.set_pending_questions(projection.pending_questions)
+        s.set_pending_approvals(projection.pending_approvals)
+        s.set_verifier(projection.verifier)
+        self._refresh_transcript_trailer(projection.pending_questions, projection.pending_approvals)
+
+    @traces(SWR.SWR_2504, SWR.SWR_2454)
+    def _refresh_transcript_trailer(
+        self,
+        pending_questions: dict[str, Any] | None,
+        pending_approvals: tuple[dict[str, Any], ...],
+    ) -> None:
+        """Put the waiting-on-someone rows at the end of a live transcript.
+
+        Only while the delta feed owns the transcript: otherwise the whole-state
+        read already built them in, and rewriting them here would append a
+        second copy.
+        """
+        from rotaris.services.session_projection import transcript_trailer
+
+        trailer = transcript_trailer(pending_questions, pending_approvals)
+        if trailer == self._trailer:
+            return
+        self._trailer = trailer
+        if not self._transcript_is_live:
+            return
+        self.store.apply_transcript_delta(self._projected_len, list(trailer))
 
     @traces(SWR.SWR_2454)
     def release_transcript_delta_feed(self) -> None:
@@ -1043,6 +1114,8 @@ class ConfigService:
         the authority again, and it has to be allowed to write the transcript.
         """
         self._transcript_is_live = False
+        self._projected_len = 0
+        self._trailer = ()
         self._transcript_projector.reset()
 
     def apply_session_projection(self, projection: SessionProjection) -> None:
@@ -1070,6 +1143,12 @@ class ConfigService:
         s.set_pending_questions(projection.pending_questions)
         s.set_pending_approvals(projection.pending_approvals)
         s.set_verifier(projection.verifier)
+        # Last, and after the two ``set_pending_*`` calls it depends on. When the
+        # transcript is live this read did not write it, so the rows saying the
+        # run is waiting on someone (SWR-2504, SWR-2423) have to be put on the
+        # end here — otherwise an approval raised mid-run would never appear in
+        # the transcript at all.
+        self._refresh_transcript_trailer(projection.pending_questions, projection.pending_approvals)
 
     # ── artifacts ─────────────────────────────────────────────────────────
 

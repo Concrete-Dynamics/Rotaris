@@ -251,21 +251,46 @@ Left standing:
 
 1. **A foreign session is still whole-state per read** — the SWR-1829
    prerequisite above.
-2. **Only the transcript is on the live channel.** Child states, todos,
-   approvals, verifier progress and token counts still reach the view through
-   the reconciling read, because their cost is bounded by concurrency and never
-   grew with the session. The thing to keep in view is not their cost but their
-   *latency*: they hold the reconciler's, and the desktop still shortens the
-   persistence debounce for them — exactly the SWR-2130 coupling that
-   requirement's scope note wants gone. The transcript no longer needs it; they
-   do.
-3. **Two stages inside the view still read the whole list.** An agent filter
+2. **Two stages inside the view still read the whole list.** An agent filter
    (SWR-2099) and tool grouping (SWR-2432) each rewrite which rows exist, so a
    boundary in source rows is not a boundary in displayed rows. Both are
    *refused* by `TranscriptScrollArea.apply_events_delta` rather than
    approximated, and the whole-list refresh runs instead — correct, and merely
    as expensive as it always was. With neither on, which is the default, the
    cheap path holds end to end.
+
+### The second channel, and the debounce it freed (SWR-2130)
+
+Written a day later, and worth separating from the above because the first pass
+left it as a limitation and it turned out to be a small change.
+
+The transcript was the only surface whose cost grew with the session, so it was
+the only one that needed a *delta*. Everything else the view shows — child
+states, todos, pending approvals, verifier progress, token counts — is bounded
+by how much is happening at once, so it can travel whole. `_SessionObserver`
+now publishes both: `_touch` sends the transcript delta and the facts, `_save`
+sends the facts alone.
+
+The facts payload is the session record with its unbounded lists emptied, rather
+than a hand-listed set of fields. That is deliberate: `build_session_projection`
+reads a great many fields, and a list here would be a second statement of what
+it needs, wrong the first time someone adds a field to either. The consumer runs
+that same projection over the payload, so a live view and a reloaded one cannot
+disagree about what a snapshot means.
+
+With that, the desktop stopped constructing its `SessionManager` with a 0.5 s
+persistence debounce. That override existed only because the view read the
+snapshot; the window is now chosen on durability grounds alone, which is all
+SWR-2130 ever asked.
+
+**One thing this pass found rather than built.** The approval and
+question-stepper rows are *not* transcript history — they are derived from what
+is pending right now, and they always sit after every recorded row. The delta
+path had bypassed them, so during a live run the approval row a user has to
+click was silently absent. `transcript_trailer` is now one function both paths
+call, and `ConfigService` re-appends it on every write of the transcript. The
+regression is covered by
+`apps/rotaris/tests/test_approval_flow.py::test_a_live_run_still_shows_the_approval_row_it_is_blocked_on`.
 
 ## Open questions for the implementation plan
 

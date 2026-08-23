@@ -74,16 +74,22 @@ event that carries what the transcript renders. Until it does, a foreign session
 is served by a whole-session read whose *frequency* is bounded but whose *cost
 per read* is not, and the latency ceiling in § Reach is what keeps that honest.
 
-**Within this process, the transcript is served first.** It is the only surface
-whose cost grew with the session, and it is the one the criteria were written
-about. The rest — child states, todos, pending approvals, verifier progress,
-token counts — is bounded by how much is happening at once rather than by how
-long the session has run, and stays on the reconciling read that already serves
-every foreign session. Two consequences follow and are stated rather than left
-to be discovered: those surfaces keep the reconciler's latency rather than the
-250 ms budget, and the desktop keeps shortening the persistence debounce for
-them, which is the coupling SWR-2130's scope note exists to end. Giving them a
-channel of their own is what closes both.
+**Within this process, two channels carry two shapes of change.** The transcript
+is the only surface whose cost grew with the session, so it travels as a delta:
+the earliest row that can still change, and everything after it. Every other
+surface — child states, todos, pending approvals, verifier progress, token
+counts — is bounded by how much is happening at once rather than by how long the
+session has run, so it travels whole. Both come from the run itself; neither
+waits for a read. With that, the desktop no longer shortens the persistence
+debounce, which is what SWR-2130's scope note asks for.
+
+**What the view layer still reads whole.** Two stages downstream of the store
+rewrite which rows exist, so a boundary in recorded rows is not a boundary in
+displayed ones: filtering the transcript to one agent (SWR-2099) and grouping
+consecutive tool calls (SWR-2432). Both are refused by the incremental path
+rather than approximated, and the whole-list refresh runs instead — correct, and
+no more expensive than it was before. With neither in effect, which is the
+default, the bounded path holds from the run to the painted row.
 
 ### Reach — what must keep working
 

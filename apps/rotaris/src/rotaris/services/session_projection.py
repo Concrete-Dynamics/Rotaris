@@ -517,6 +517,7 @@ def build_session_projection(
             breakdown[tool] = breakdown.get(tool, 0) + count
 
     pending_questions = copy.deepcopy(getattr(state, "pending_questions", None))
+    pending_approvals = _project_pending_approvals(state)
     transcript = list(
         _project_transcript(
             state.transcript_events,
@@ -525,30 +526,7 @@ def build_session_projection(
             session_live=state.execution_status == "running",
         )
     )
-    if pending_questions:
-        steps = pending_questions.get("steps", [])
-        first_title = str(steps[0].get("title", "?")) if steps else "?"
-        step_count = len(steps)
-        transcript.append(
-            TranscriptEvent(
-                timestamp="",
-                role=str(pending_questions.get("agent_id", "")),
-                text=f"{step_count} step{'s' if step_count != 1 else ''} — {first_title}",
-                kind="question_stepper",
-            )
-        )
-
-    pending_approvals = _project_pending_approvals(state)
-    for approval in pending_approvals:
-        summary = approval.get("command") or approval.get("tool_name", "")
-        transcript.append(
-            TranscriptEvent(
-                timestamp="",
-                role=str(approval.get("agent_id", "")),
-                text=f"Approval needed — {summary}",
-                kind="approval",
-            )
-        )
+    transcript.extend(transcript_trailer(pending_questions, pending_approvals))
 
     return SessionProjection(
         session_name=state.session_id,
@@ -574,6 +552,45 @@ def build_session_projection(
         pending_approvals=pending_approvals,
         verifier=verifier,
     )
+
+
+@traces(SWR.SWR_2504, SWR.SWR_2423, SWR.SWR_2454)
+def transcript_trailer(
+    pending_questions: dict[str, Any] | None,
+    pending_approvals: Sequence[dict[str, Any]],
+) -> tuple[TranscriptEvent, ...]:
+    """The rows that sit after the transcript because the run is waiting on someone.
+
+    Not transcript history: these are derived from what is *pending right now*,
+    they appear and disappear as the run blocks and unblocks, and they always
+    sit after every recorded row. Whoever writes the transcript has to put them
+    back on the end — which is why this is a function both the whole-state read
+    and the live delta path call, rather than a loop inside one of them.
+    """
+    rows: list[TranscriptEvent] = []
+    if pending_questions:
+        steps = pending_questions.get("steps", [])
+        first_title = str(steps[0].get("title", "?")) if steps else "?"
+        step_count = len(steps)
+        rows.append(
+            TranscriptEvent(
+                timestamp="",
+                role=str(pending_questions.get("agent_id", "")),
+                text=f"{step_count} step{'s' if step_count != 1 else ''} — {first_title}",
+                kind="question_stepper",
+            )
+        )
+    for approval in pending_approvals:
+        summary = approval.get("command") or approval.get("tool_name", "")
+        rows.append(
+            TranscriptEvent(
+                timestamp="",
+                role=str(approval.get("agent_id", "")),
+                text=f"Approval needed — {summary}",
+                kind="approval",
+            )
+        )
+    return tuple(rows)
 
 
 @traces(SWR.SWR_2609)

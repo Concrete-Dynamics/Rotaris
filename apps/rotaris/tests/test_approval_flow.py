@@ -69,6 +69,48 @@ def _dialogs(view: TranscriptListView) -> Sequence[Any]:
     return [child for child in view.children() if isinstance(child, ApprovalDialog)]
 
 
+@verifies(SWR.SWR_2504, SWR.SWR_2454)
+def test_a_live_run_still_shows_the_approval_row_it_is_blocked_on(tmp_path) -> None:
+    """Productive use: an agent asks permission halfway through a run the user is
+    watching. Expected outcome: the approval row is in the transcript, even
+    though the run — not the reconciling read — is writing the transcript.
+
+    The row is derived from what is pending, not from what was recorded, so the
+    live path has to put it back on the end of every write. Regression: it did
+    not, and the row a user has to click was silently absent for the whole time
+    the run was live."""
+    from rotaris.models.state import TranscriptDelta
+    from rotaris.services.config_service import ConfigService
+
+    store = WorkspaceStore()
+    service = ConfigService(tmp_path, store)
+    service.apply_transcript_delta(
+        TranscriptDelta(first=0, rows=[{"role": "assistant", "content": "working on it"}])
+    )
+    assert [event.kind for event in store.transcript] == ["message"]
+
+    service._refresh_transcript_trailer(None, (_payload(),))
+
+    kinds = [event.kind for event in store.transcript]
+    assert kinds == ["message", "approval"]
+    assert "git push" in store.transcript[-1].text
+
+    # The next row the run produces lands *before* the approval row, not after
+    # it: the trailer is not history and must not be buried by it.
+    service.apply_transcript_delta(
+        TranscriptDelta(
+            first=1,
+            rows=[{"role": "assistant", "content": "still waiting"}],
+        )
+    )
+    kinds = [event.kind for event in store.transcript]
+    assert kinds == ["message", "message", "approval"], kinds
+
+    # Resolved: the row goes away and the recorded rows stay.
+    service._refresh_transcript_trailer(None, ())
+    assert [event.kind for event in store.transcript] == ["message", "message"]
+
+
 @verifies(SWR.SWR_2504)
 def test_pending_approval_is_projected_into_the_transcript() -> None:
     now = dt.datetime.now(dt.UTC)

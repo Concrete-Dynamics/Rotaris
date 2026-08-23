@@ -229,6 +229,7 @@ class RunBridge(QObject):
         worker.worktree_ready.connect(self._on_worktree_ready)
         worker.hook_notice.connect(self._on_hook_notice)
         worker.transcript_delta.connect(self._on_transcript_delta)
+        worker.session_facts.connect(self._on_session_facts)
         worker.finished.connect(thread.quit)
         worker.failed.connect(thread.quit)
         self._thread = thread
@@ -535,6 +536,29 @@ class RunBridge(QObject):
             _log.warning("Could not apply a transcript delta; reconciling instead.", exc_info=True)
             self.config_service.release_transcript_delta_feed()
             return
+        self.store_updated.emit()
+
+    @Slot(object)
+    @traces(SWR.SWR_2130)
+    def _on_session_facts(self, facts: object) -> None:
+        """Put everything but the transcript on screen. Qt thread, queued.
+
+        Same guards and the same promise as :meth:`_on_transcript_delta`: only
+        the focused handle writes the shared store, and a failure here costs one
+        reconcile of latency rather than anything the run cares about.
+        """
+        if not self.projection_enabled or self._shutting_down:
+            return
+        try:
+            self.config_service.apply_session_facts(facts)
+        except Exception:  # noqa: BLE001 - a view failure must not reach the run
+            _log.warning("Could not apply session facts; reconciling instead.", exc_info=True)
+            return
+        self.session_summary.emit(
+            self._session_id,
+            str(getattr(facts, "execution_status", "") or ""),
+            str(getattr(getattr(facts, "worktree", None), "branch", "") or ""),
+        )
         self.store_updated.emit()
 
     @Slot()
@@ -852,6 +876,9 @@ class _RunWorker(QObject):
     #: from the run's own thread and delivered queued, which is the whole of
     #: what this worker's observer is allowed to do with Qt.
     transcript_delta = Signal(object)
+    #: The session record without its unbounded lists (SWR-2130) — everything
+    #: the view shows that is not the transcript.
+    session_facts = Signal(object)
 
     def __init__(
         self,
@@ -921,22 +948,18 @@ class _RunWorker(QObject):
         moment, an observer that needs the live :class:`SessionState`, and the
         approval host that lets the window answer an ``ask`` decision.
         """
-        # The default 10s persistence debounce is tuned for headless/background
-        # runs; the desktop shortens it because a snapshot read is still how it
-        # learns some of what a run is doing.
-        #
-        # Narrower than it was. The transcript no longer waits for this window
-        # (SWR-2454): the observer hands its changes to the view directly, and
-        # the read is that surface's reconciler rather than its source. What
-        # still comes through the snapshot is everything else — child states,
-        # todos, approvals, verifier progress, token counts — so the window
-        # stays short until those have a channel of their own. SWR-2130 is the
-        # requirement that says this coupling should not exist; this is how much
-        # of it is left.
+        # No persistence-debounce override any more, and that absence is the
+        # point (SWR-2130). The desktop used to construct its SessionManager
+        # with a 0.5s window because it polled the persisted snapshot to drive a
+        # live view, which paid in write amplification for a property the
+        # durability layer was never meant to provide. Both halves of the view
+        # now hear from the run directly — the transcript as deltas (SWR-2454),
+        # everything else as facts — so the window goes back to being chosen on
+        # durability grounds alone, which is the engine's default.
         from rotaris_core.run_host import RunRequest, execute_run
         from rotaris_core.session.manager import SessionManager
 
-        manager = SessionManager(self.workspace, persist_debounce_seconds=0.5)
+        manager = SessionManager(self.workspace)
         self._loop = asyncio.get_running_loop()
         self._cancel = asyncio.Event()
 
@@ -956,6 +979,7 @@ class _RunWorker(QObject):
             # run's side waits for the view and no Qt object is reachable from
             # the run.
             observer.bind_delta_sink(self.transcript_delta.emit)
+            observer.bind_facts_sink(self.session_facts.emit)
             self._observer = observer
             self._register_approval_host(observer, state.session_id)
             return observer
@@ -1316,6 +1340,11 @@ class _SessionObserver:
         # straight to the view. Durability and liveness are now two consumers
         # of one event rather than one pretending to be the other (SWR-2130).
         self._delta_sink: Callable[[TranscriptDelta], None] | None = None
+        #: Where everything that is *not* the transcript goes (SWR-2130): the
+        #: agent tree, todos, approvals, verifier progress, token counts. All of
+        #: it is bounded by how much is happening at once, so it travels whole
+        #: rather than as a diff.
+        self._facts_sink: Callable[[Any], None] | None = None
         #: Raw index of each appended row, by object identity. Only appends go
         #: in here, and ``_append_row`` is the only place a row is appended.
         self._row_index: dict[int, int] = {}
@@ -1356,14 +1385,64 @@ class _SessionObserver:
         return held
 
     def _save(self) -> None:
-        """Make the session record current. Nothing in the transcript changed.
+        """Make the session record current, then report it. The transcript did not change.
 
-        These surfaces — approvals, questions, todos, child state, token
-        counts — are bounded by how much is happening at once rather than by
-        how long the session has run, so they stay on the reconciling read that
-        already serves every session this process is not executing.
+        These surfaces — approvals, questions, todos, child state, verifier
+        progress, token counts — are bounded by how much is happening at once
+        rather than by how long the session has run, which is why they travel
+        whole while the transcript travels as a delta.
+
+        They used to reach the view only through the reconciling read, and the
+        desktop shortened the persistence debounce to make that read frequent
+        enough to feel live — the coupling SWR-2130 names. Reporting them here
+        is what lets that window go back to being about durability.
         """
         self.manager.persister.request_save(self.state)
+        self._publish_facts()
+
+    @traces(SWR.SWR_2130, SWR.SWR_2454)
+    def _publish_facts(self) -> None:
+        """Hand the view everything about this run except its transcript.
+
+        The payload is the session record with its two unbounded lists emptied.
+        Copying the *record* rather than a hand-listed set of fields is
+        deliberate: the projection reads a great many of them, and a list here
+        would be a second statement of what the projection needs, drifting the
+        first time someone adds a field to either.
+
+        Mutable containers the run keeps writing are deep-copied; scalars are
+        not. What is left out is what grows with the session — the transcript
+        (it has its own channel), the edit diffs (likewise), and the report,
+        checkpoint and compression histories, which no live surface reads.
+
+        Never raises, for the same reason :meth:`_publish_delta` does not.
+        """
+        sink = self._facts_sink
+        if sink is None:
+            return
+        try:
+            facts = self.state.model_copy(deep=False)
+            facts.transcript_events = []
+            facts.ui_edit_diffs = []
+            facts.report_artifacts = []
+            facts.checkpoints = []
+            facts.seen_compression_ids = {}
+            facts.child_states = copy.deepcopy(self.state.child_states)
+            facts.todo_state = copy.deepcopy(self.state.todo_state)
+            facts.agent_todo_state = copy.deepcopy(self.state.agent_todo_state)
+            facts.pending_approvals = copy.deepcopy(self.state.pending_approvals)
+            facts.pending_questions = copy.deepcopy(self.state.pending_questions)
+            facts.verifier_state = copy.deepcopy(self.state.verifier_state)
+            facts.token_usage = copy.deepcopy(self.state.token_usage)
+            facts.agent_metrics = copy.deepcopy(self.state.agent_metrics)
+            sink(facts)
+        except Exception:  # noqa: BLE001 - the view is not allowed to fail the run
+            _log.warning("Could not publish session facts; the view will reconcile.")
+
+    @traces(SWR.SWR_2130)
+    def bind_facts_sink(self, sink: Callable[[Any], None] | None) -> None:
+        """Where everything but the transcript goes. Same contract as the delta sink."""
+        self._facts_sink = sink
 
     def _touch(self, *rows: dict[str, Any]) -> None:
         """Make the change durable, then make it visible — in that order.
@@ -1379,6 +1458,11 @@ class _SessionObserver:
         """
         self.manager.persister.request_save(self.state)
         self._publish_delta(rows)
+        # A transcript change almost always rides with one elsewhere — the tool
+        # row and the agent's active-tool chips are one event seen twice — and
+        # the facts payload is bounded, so reporting both is cheaper than
+        # working out whether this particular change needed it.
+        self._publish_facts()
 
     @traces(SWR.SWR_2454)
     def _publish_delta(self, extra_rows: tuple[dict[str, Any], ...] = ()) -> None:

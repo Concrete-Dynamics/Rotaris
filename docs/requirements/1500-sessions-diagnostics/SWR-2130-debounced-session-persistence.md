@@ -44,11 +44,16 @@ not a means of controlling how promptly a user interface learns what a run is
 doing, and must not be tuned for that purpose. A host that shortens it to make
 its view feel live is paying in write amplification for a property it should be
 getting some other way, and is coupling its refresh rate to the durability
-layer's. Callers today do exactly this — the desktop constructs its
-`SessionManager` with a 0.5 s window for view reasons — which
-[SWR-2454 — The live view keeps up with the run](../2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md)
-exists to unpick. Whatever that lands on, this requirement's window stays free
-to be chosen on durability grounds alone.
+layer's.
+
+The desktop used to do exactly this, constructing its `SessionManager` with a
+0.5 s window because it polled the persisted snapshot to drive a live view. It
+no longer does: a run reports what it is doing to whoever is watching, so the
+view never needed the write to land first. See
+[SWR-2454 — The live view keeps up with the run](../2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md).
+No caller overrides this window today, and none should: it is chosen on
+durability grounds alone. A new override is a sign that some surface has no
+channel of its own, and the fix belongs there rather than here.
 
 Derived from: [SWR-1545 — Session persistence must write split state files for resume state, run config, and UI transcript.](../1500-sessions-diagnostics.md)
 

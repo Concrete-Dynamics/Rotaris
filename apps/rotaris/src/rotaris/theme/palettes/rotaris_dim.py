@@ -35,8 +35,9 @@ from rotaris.theme.color import Color, oklch
 from rotaris.theme.palettes._scale import AA_BOUNDARY, AA_TEXT, step_clearing
 from rotaris.theme.palettes._scale import LIGHTNESS as _LIGHTNESS
 from rotaris.theme.spec import (
+    BODY_FAMILIES,
+    DISPLAY_FAMILIES,
     MONO_FAMILIES,
-    UI_FAMILIES,
     ColorTokens,
     Elevation,
     Motion,
@@ -144,8 +145,8 @@ def _ansi(ground: Color) -> dict[str, Color]:
 @traces(SWR.SWR_3700)
 def build() -> Theme:
     """Construct the Rotaris Dim theme."""
-    surface = oklch(0.265, 0, 0)
-    hover = oklch(0.35, 0, 0)
+    surface = oklch(0.25, 0, 0)
+    hover = oklch(0.30, 0, 0)
     terminal_bg = oklch(0.16, 0, 0)
     accent_500 = _ACCENT[500]
 
@@ -176,24 +177,24 @@ def build() -> Theme:
         color=ColorTokens(
             bg=oklch(0.21, 0, 0),
             surface=surface,
-            surface_raised=oklch(0.305, 0, 0),
-            chrome=oklch(0.235, 0, 0),
+            surface_raised=oklch(0.29, 0, 0),
+            chrome=oklch(0.23, 0, 0),
             # Not in the web kit: the left column sits between the ground and
             # the chrome so a panel reads as attached to the window rather than
             # floating on the page.
-            panel=oklch(0.225, 0, 0),
+            panel=oklch(0.22, 0, 0),
             # A meter ground is a well, so it goes *below* the page ground.
             track=oklch(0.17, 0, 0),
             hover=hover,
             overlay=oklch(0.12, 0, 0, 0.72),
-            border=oklch(0.36, 0, 0),
-            # Lifted from the specified 48%: a boundary is drawn on the hover
-            # fill too, not only on the page ground, and 48% does not clear 3:1
+            border=oklch(0.31, 0, 0),
+            # Lifted from the specified 40%: a boundary is drawn on the hover
+            # fill too, not only on the page ground, and 40% does not clear 3:1
             # there. This is the lightness that clears it against the lightest
             # ground Rotaris draws a control's edge on.
-            border_strong=raise_on(oklch(0.48, 0, 0), hover, AA_BOUNDARY),
-            border_panel=oklch(0.32, 0, 0),
-            divider=_TEXT.with_opacity(0.14),
+            border_strong=raise_on(oklch(0.40, 0, 0), hover, AA_BOUNDARY),
+            border_panel=oklch(0.28, 0, 0),
+            divider=_TEXT.with_opacity(0.09),
             focus=oklch(0.83, 0.10, 292),
             text=_TEXT,
             text_secondary=_TEXT_SECONDARY,
@@ -237,13 +238,13 @@ def build() -> Theme:
             # A wash of the 500 under the 200 of the same hue. Danger takes the
             # 300 rather than the 200: at the 200 a failure tag goes pink, and
             # the one state that must never look decorative is that one.
-            fill_accent=accent_500.with_opacity(0.24),
+            fill_accent=accent_500.with_opacity(0.17),
             fill_accent_ink=_ACCENT[200],
-            fill_x=_AXIS_X[500].with_opacity(0.22),
+            fill_x=_AXIS_X[500].with_opacity(0.16),
             fill_x_ink=_AXIS_X[200],
-            fill_y=_AXIS_Y[500].with_opacity(0.22),
+            fill_y=_AXIS_Y[500].with_opacity(0.16),
             fill_y_ink=_AXIS_Y[200],
-            fill_danger=_DANGER[500].with_opacity(0.22),
+            fill_danger=_DANGER[500].with_opacity(0.16),
             fill_danger_ink=_DANGER[300],
             diff_add=_AXIS_Y[300],
             diff_add_bg=_AXIS_Y[500].with_opacity(0.10),
@@ -269,64 +270,67 @@ def build() -> Theme:
             readable_ground=surface,
         ),
         space=Spacing(xs=4, sm=8, md=12, lg=16, xl=24, x2l=32, x3l=48, x4l=64, grid_unit=32),
-        radius=Radii(sm=6, md=10, lg=16, pill=999, control=8),
+        radius=Radii(sm=5, md=8, lg=14, pill=999, control=8),
         size=Sizing(
-            control_height=34,
+            control_height=32,
             control_height_compact=26,
-            icon_button=34,
-            nav_rail_width=76,
-            nav_item_width=60,
-            status_dot=7,
+            icon_button=30,
+            nav_rail_width=68,
+            nav_item_width=54,
+            status_dot=6,
             toggle_width=32,
             toggle_height=18,
             ring_size=20,
             ring_thickness=3,
-            scrollbar=8,
+            scrollbar=6,
             focus_ring=2,
             hairline=1,
+            title_bar_height=44,
+            status_bar_height=26,
         ),
         type=Typography(
-            # The design system's brand pair (Space Grotesk / Manrope) is
-            # bundled but deliberately not named here: it was tried in the
-            # product and rejected as unreadable at the sizes an operator
-            # actually reads — ten- and eleven-pixel chips, dense table rows.
-            # What this palette keeps from the system is the type *system* — the
-            # size ramp, the weights, the tracking — which is the part that
-            # outlives any one face.
-            display=css_stack(UI_FAMILIES),
-            body=css_stack(UI_FAMILIES),
+            # The design system's brand pair, exactly as `typography.css`
+            # names it: Space Grotesk for display and section heads, Manrope
+            # for body and UI, JetBrains Mono for every number and path. The
+            # host faces behind them are fallbacks, not alternatives.
+            display=css_stack(DISPLAY_FAMILIES),
+            body=css_stack(BODY_FAMILIES),
             mono=css_stack(MONO_FAMILIES),
-            display_families=UI_FAMILIES,
-            body_families=UI_FAMILIES,
+            display_families=DISPLAY_FAMILIES,
+            body_families=BODY_FAMILIES,
             mono_families=MONO_FAMILIES,
-            # 12.5px in the source: Qt sets pixel sizes as integers, so `sm`
-            # rounds to 13. The half-pixel was never resolvable on a 1x display
-            # anyway.
             scale=TypeScale(
-                x2s=10, xs=11, sm=13, base=14, md=16, h6=13, h5=16, h4=20, h3=25, h2=33, h1=46
+                x2s=10,
+                xs=11,
+                sm=12,
+                base=14,
+                md=16,
+                h6=11,
+                h5=16,
+                h4=20,
+                h3=24,
+                h2=32,
+                h1=44,
+                kpi=26,
             ),
-            weight_display=600,
-            # The design system asks for 500 body / 700 strong. Those numbers
-            # were drawn against Manrope, whose 500 sits about where a grotesque
-            # like Segoe UI puts its 400; carried across literally they render
-            # the whole interface a step heavier than it was ever meant to look.
-            # A weight token names a *role* — resting text, emphasised text —
-            # and the number that fills it belongs to the face in use.
+            weight_display=500,
+            # Three weights, and only three: hierarchy comes from size, colour
+            # and space, never from adding weight, and nothing goes above 500.
             weight_body=400,
-            weight_strong=600,
+            weight_strong=500,
             # em in the source; QFont expresses tracking as a percentage of the
-            # glyph advance, so 0.1em is 10.
-            tracking_tight=-2.0,
-            tracking_wide=6.0,
-            tracking_label=10.0,
-            leading_tight=1.14,
-            leading_body=1.6,
+            # glyph advance, so -0.022em is -2.2 and 0.075em is 7.5.
+            tracking_tight=-2.2,
+            tracking_wide=5.0,
+            tracking_label=7.5,
+            leading_tight=1.12,
+            leading_body=1.62,
         ),
         motion=MotionTokens(
-            fast=100,
-            normal=180,
-            slow=260,
-            shift=4,
+            fast=90,
+            normal=160,
+            slow=240,
+            shift=3,
             pulse=1600,
             ease=Motion(0.4, 0.0, 0.2, 1.0),
             ease_out=Motion(0.0, 0.0, 0.2, 1.0),
@@ -334,11 +338,11 @@ def build() -> Theme:
         ),
         # A card at rest is a hairline, not a shadow. Shadows are reserved for
         # things that actually float — dialogs, popovers, toasts.
-        elevation_sm=Elevation(border=oklch(0.36, 0, 0), blur=0, offset_y=0, shadow=_TEXT),
+        elevation_sm=Elevation(border=oklch(0.31, 0, 0), blur=0, offset_y=0, shadow=_TEXT),
         elevation_md=Elevation(
-            border=oklch(0.48, 0, 0), blur=22, offset_y=8, shadow=oklch(0.10, 0.01, 70, 0.50)
+            border=oklch(0.31, 0, 0), blur=16, offset_y=6, shadow=oklch(0.08, 0, 0, 0.44)
         ),
         elevation_lg=Elevation(
-            border=oklch(0.48, 0, 0), blur=48, offset_y=22, shadow=oklch(0.10, 0.01, 70, 0.60)
+            border=oklch(0.31, 0, 0), blur=40, offset_y=18, shadow=oklch(0.08, 0, 0, 0.54)
         ),
     )

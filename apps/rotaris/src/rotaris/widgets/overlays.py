@@ -101,7 +101,11 @@ _ARC_SPAN_DEGREES: Final = 90
 
 #: The track behind the head, as a share of the accent. Present enough to show
 #: the shape of the ring, faint enough that the head is unambiguous.
-_TRACK_ALPHA: Final = 0.28
+_TRACK_ALPHA: Final = 0.26
+
+#: The stroke per size, from `.spinner` / `-sm` / `-lg` in `components.css` —
+#: the ring thins as it shrinks, or the smaller arcs turn to blobs.
+_SPINNER_STROKES: Final[dict[str, float]] = {"sm": 1.25, "md": 1.5, "lg": 2.0}
 
 
 @traces(SWR.SWR_3702)
@@ -164,12 +168,13 @@ class Toast(Themed, QFrame):
 
     def apply_theme(self, theme: Theme) -> None:
         color, space, type_ = theme.color, theme.space, theme.type
-        self._row.setContentsMargins(space.md, space.md, space.md, space.md)
+        # `.toast`: 10px 12px around a surface ground with a hairline border.
+        self._row.setContentsMargins(space[1.5], space[1.25], space[1.5], space[1.25])
         self._row.setSpacing(space.sm)
         self._copy.setSpacing(space[0.25])
         self.setStyleSheet(
-            f"QFrame#toast{{background:{color.surface_raised};"
-            f"border:{theme.size.hairline}px solid {color.border_strong};"
+            f"QFrame#toast{{background:{color.surface};"
+            f"border:{theme.size.hairline}px solid {color.border};"
             f"border-radius:{theme.radius.md}px;}}"
         )
         # The word form of the state, not the dot form: this glyph is read, so
@@ -181,9 +186,7 @@ class Toast(Themed, QFrame):
             "fail": color.fail_text,
         }
         self.glyph.setStyleSheet(f"color:{glyph_colors[self._kind]};font-size:{type_.scale.md}px;")
-        self.title.setStyleSheet(
-            f"font-size:{type_.scale.sm}px;font-weight:{type_.weight_display};"
-        )
+        self.title.setStyleSheet(f"font-size:{type_.scale.sm}px;font-weight:{type_.weight_strong};")
         self.body.setStyleSheet(f"font-size:{type_.scale.xs}px;")
         # A toast is the one surface in this system that genuinely floats, so it
         # is also one of the few that earns the ambient half of an elevation
@@ -338,7 +341,15 @@ class ToastStack(Themed, QWidget):
         return toast.sizeHint().height()
 
     def _rise(self, toast: Toast) -> None:
-        """Bring *toast* up the motion scale's shift, once, on arrival."""
+        """Bring *toast* up the motion scale's shift, once, on arrival.
+
+        Under reduced motion the toast is already at its landing position at
+        full opacity — what the gate removes is the travel, never the outcome.
+        """
+        from rotaris.theme.reduced_motion import reduced_motion
+
+        if reduced_motion():
+            return
         theme = tokens()
         landing = toast.pos()
         animation = QPropertyAnimation(toast, QByteArray(b"pos"), toast)
@@ -369,6 +380,7 @@ class Spinner(QWidget):
     ) -> None:
         super().__init__(parent)
         self._side = _SPINNER_SIDES[size]
+        self._stroke = _SPINNER_STROKES[size]
         self._angle = 0.0
         self.setFixedSize(QSize(self._side, self._side))
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -387,6 +399,13 @@ class Spinner(QWidget):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt's spelling
         super().showEvent(event)
+        from rotaris.theme.reduced_motion import reduced_motion
+
+        if reduced_motion():
+            # The spinner renders statically: an arc on a ring, still
+            # unmistakably "working" — the gate removes the turn, not the cue.
+            self.update()
+            return
         self._timer.start()
 
     def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802 — Qt's spelling
@@ -402,7 +421,7 @@ class Spinner(QWidget):
         theme = tokens()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        stroke = max(1.5, self._side / 8)
+        stroke = self._stroke
         # The arc is drawn on the stroke's centre line, so the ring is inset by
         # half of it or the outer edge is clipped by the widget's own bounds.
         ring = QRectF(stroke / 2, stroke / 2, self._side - stroke, self._side - stroke)

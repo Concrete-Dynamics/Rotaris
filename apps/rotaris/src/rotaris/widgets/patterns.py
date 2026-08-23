@@ -377,9 +377,11 @@ class TableCard(Card):
         super().apply_theme(theme)
         if not hasattr(self, "table"):
             return
-        pad_y, pad_x = theme.space[1.25], theme.space.lg
-        self.header_row.setContentsMargins(pad_x, pad_y, pad_x, pad_y)
-        self._foot_row.setContentsMargins(pad_x, pad_y, pad_x, pad_y)
+        # `.table-card`: head 9px, foot 8px, columns inset 14px — the design
+        # system's own component literals, one step short of the card's 16/20.
+        head_y, foot_y, pad_x = theme.space[1.125], theme.space.sm, theme.space[1.75]
+        self.header_row.setContentsMargins(pad_x, head_y, pad_x, head_y)
+        self._foot_row.setContentsMargins(pad_x, foot_y, pad_x, foot_y)
         for rule in (self._head_rule, self._foot_rule):
             rule.setFixedHeight(theme.size.hairline)
         self.footer_label.setStyleSheet(f"font-size:{theme.type.scale.xs}px;")

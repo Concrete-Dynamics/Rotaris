@@ -1,0 +1,20 @@
+<!-- @dsCard group="Motion" viewport="700x210" name="Motion language" subtitle="Calm & precise — decelerating ease-out, ≤4px travel, 100–260ms. Nothing springy." -->
+<link rel="stylesheet" href="../styles.css">
+<style>
+.demo{display:flex;align-items:center;gap:12px}
+.chip{width:120px;padding:8px 0;text-align:center;font-size:11px;font-weight:500;color:var(--rt-text);background:var(--rt-surface-2);border:1px solid var(--rt-border);border-radius:8px;}
+.d1{animation:m1 2.4s var(--rt-ease-out) infinite}
+.d2{animation:m2 2.4s var(--rt-ease-out) infinite}
+.d3{animation:m3 2.4s var(--rt-ease) infinite}
+@keyframes m1{0%,55%,100%{opacity:1;transform:none}45%,50%{opacity:0;transform:translateY(var(--rt-shift))}}
+@keyframes m2{0%,55%,100%{opacity:1}45%,50%{opacity:.35}}
+@keyframes m3{0%,40%,100%{background:var(--rt-surface-2)}50%,80%{background:var(--rt-hover)}}
+</style>
+<div style="width:700px;padding:20px;background:var(--rt-bg);display:flex;flex-direction:column;gap:14px">
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+<div class="demo" style="flex-direction:column;align-items:flex-start;gap:8px"><div class="chip d1">Enter / exit</div><div class="mono text-dim" style="font-size:10.5px">--rt-duration-slow · ease-out · 4px rise</div></div>
+<div class="demo" style="flex-direction:column;align-items:flex-start;gap:8px"><div class="chip d2">State change</div><div class="mono text-dim" style="font-size:10.5px">--rt-duration · opacity only</div></div>
+<div class="demo" style="flex-direction:column;align-items:flex-start;gap:8px"><div class="chip d3">Hover / press</div><div class="mono text-dim" style="font-size:10.5px">--rt-duration-fast · bg + border</div></div>
+</div>
+<div style="font-size:12px;color:var(--rt-text-secondary);line-height:1.55;max-width:640px">Motion confirms, never entertains. Entrances fade up ≤ <span class="mono">--rt-shift</span> (4px); exits fade down faster than they entered. No bounces, no scale pops, no travel across the screen. Continuous states (running agents) pulse opacity at ≥1.5s periods.</div>
+</div>

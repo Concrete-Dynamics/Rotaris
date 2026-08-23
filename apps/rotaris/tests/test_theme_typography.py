@@ -8,8 +8,9 @@ the source and renders untracked. Both are caught by measuring, which is the
 only way to tell the difference.
 
 One test guards a product decision rather than a Qt trap: the design system's
-brand display/body pair is bundled but deliberately unused, and re-adopting it
-by editing one palette line should have to be a decision, not an accident.
+brand display/body pair leads every shipped palette's type stacks, and swapping
+them away by editing one palette line should have to be a decision, not an
+accident.
 """
 
 from __future__ import annotations
@@ -113,47 +114,55 @@ def test_the_mono_face_measures_on_a_fixed_grid(qtbot) -> None:
 
 
 @verifies(SWR.SWR_3703)
-def test_the_type_stacks_are_host_first_and_end_in_something_guaranteed(qtbot) -> None:
-    """Ask for the host's face, but never end the stack on a maybe.
+def test_the_type_stacks_lead_with_the_brand_faces(qtbot) -> None:
+    """Space Grotesk speaks for display, Manrope for body, mono stays the host's.
 
-    A stack whose last entry is a family the machine might not have is a stack
-    that can resolve to whatever Qt feels like — which for a mono stack means a
-    proportional face on the terminal's fixed grid (SWR-2429).
+    The brand faces are bundled, so a stack that leads with them can never run
+    out before its fallbacks; a host face behind them is the safety net for the
+    one desktop that cannot render the variable font.
     """
     register_bundled_fonts()
     type_ = tokens().type
 
-    assert type_.body_families[0] == "Inter"
-    assert "Segoe UI" in type_.body_families
+    assert type_.display_families[0] == "Space Grotesk"
+    assert type_.body_families[0] == "Manrope"
+    assert "Segoe UI" in type_.body_families, "a host face must sit behind the brand face"
     assert type_.mono_families[0] == "Cascadia Mono"
     assert "JetBrains Mono" in type_.mono_families, "the bundled floor is missing"
     assert type_.mono_families.index("JetBrains Mono") > type_.mono_families.index("Consolas"), (
-        "the bundled face must be the fallback, not the first choice"
+        "the bundled mono face must be the fallback, not the first choice"
     )
 
 
 @pytest.mark.parametrize("name", theme_names())
 @verifies(SWR.SWR_3703)
-def test_no_palette_paints_the_interface_in_the_rejected_brand_pair(qtbot, name: str) -> None:
-    """The brand pair ships, and no theme is allowed to *choose* it.
+def test_every_palette_leads_with_the_brand_pair(qtbot, name: str) -> None:
+    """The brand pair is the choice, not an accident to be re-made per palette.
 
-    It was applied to the product and rejected as unreadable at the sizes this
-    interface actually uses — ten- and eleven-pixel chips, dense rows. The faces
-    stay in the bundle because a future palette may want them, and because the
-    offscreen platform has no host fonts at all; neither is a licence for a
-    palette to quietly adopt them again.
+    A palette that dropped Space Grotesk or Manrope from the front of its stacks
+    would silently return the interface to a face the design system does not
+    name.
     """
     type_ = theme_named(name).type
 
-    for families in (type_.display_families, type_.body_families):
-        assert "Space Grotesk" not in families, f"{name} paints its interface in Space Grotesk"
-        # Manrope is allowed exactly one position: dead last, behind the generic
-        # `sans-serif` that any desktop with fonts of its own resolves. There it
-        # is the floor for a host with no fonts at all, and unreachable
-        # everywhere else. Anywhere earlier and it is a choice.
-        if "Manrope" in families:
-            assert families[-1] == "Manrope", f"{name} could resolve to Manrope before the host"
-            assert families.index("sans-serif") < families.index("Manrope")
+    assert type_.display_families[0] == "Space Grotesk", f"{name} lost its display face"
+    assert type_.body_families[0] == "Manrope", f"{name} lost its body face"
+
+
+@pytest.mark.parametrize("name", theme_names())
+@verifies(SWR.SWR_3703)
+def test_nothing_goes_above_the_500_weight_ceiling_except_high_contrast(qtbot, name: str) -> None:
+    """Three weights and only three: 400 resting, 500 emphasised.
+
+    High Contrast is the one exception — its 700/800 are its contrast budget
+    for readers the AA floor does not serve, not decoration.
+    """
+    type_ = theme_named(name).type
+    ceiling = 800 if name == "high-contrast" else 500
+
+    assert type_.weight_display <= ceiling, f"{name}: display weight {type_.weight_display}"
+    assert type_.weight_body <= ceiling, f"{name}: body weight {type_.weight_body}"
+    assert type_.weight_strong <= ceiling, f"{name}: strong weight {type_.weight_strong}"
 
 
 @verifies(SWR.SWR_3703)

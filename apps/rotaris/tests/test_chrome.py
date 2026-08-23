@@ -151,16 +151,16 @@ def test_glyph_icon_all_nav_glyphs_render(monkeypatch, qtbot) -> None:
 
 
 @verifies(SWR.SWR_2092)
-def test_navrail_buttons_have_24x24_icon_size(qtbot) -> None:
-    """Every NavRail button reports iconSize=24×24 to match the glyph pixmap."""
+def test_navrail_buttons_have_17x17_icon_size(qtbot) -> None:
+    """Every NavRail button reports iconSize=17×17 — `.nav-item i` from components.css."""
     from rotaris.views.chrome import NavRail
 
     rail = NavRail()
     qtbot.addWidget(rail)
     for vid, button in rail._buttons.items():
-        assert button.iconSize() == QSize(24, 24), (
+        assert button.iconSize() == QSize(17, 17), (
             f"button {vid} iconSize={button.iconSize().width()}×"
-            f"{button.iconSize().height()}, expected 24×24"
+            f"{button.iconSize().height()}, expected 17×17"
         )
 
 
@@ -390,7 +390,7 @@ def test_the_rail_carries_seven_primary_views_with_requirements_between_mission_
     button = rail._buttons["requirements"]
     # The glyph survives the DPI treatment of SWR-2092 like every other one.
     assert not button.icon().isNull()
-    assert button.iconSize() == QSize(24, 24)
+    assert button.iconSize() == QSize(17, 17)
     assert button.accessibleName() == "Open Requirements"
     with qtbot.waitSignal(rail.view_selected, timeout=500) as caught:
         rail.select("requirements", emit=True)

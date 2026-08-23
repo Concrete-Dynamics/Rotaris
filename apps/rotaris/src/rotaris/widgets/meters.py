@@ -32,7 +32,7 @@ from PySide6.QtCore import (
     QVariantAnimation,
     Signal,
 )
-from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QPushButton, QWidget
 from rotaris_core.reqtocode import SWR, traces
 
@@ -420,6 +420,14 @@ class ToggleSwitch(Themed, QAbstractButton):
         self._travel.setEasingCurve(theme.motion.ease.curve())
 
     def _start_travel(self, checked: bool) -> None:
+        from rotaris.theme.reduced_motion import reduced_motion
+
+        # Under reduced motion the knob arrives instantly: the state changes,
+        # only the travel is gone.
+        if reduced_motion():
+            self._knob = 1.0 if checked else 0.0
+            self.update()
+            return
         # Resumed from wherever the knob currently is rather than from the far
         # end: a switch flicked twice must not jump back in order to make the
         # second trip.
@@ -482,13 +490,10 @@ class ToggleSwitch(Themed, QAbstractButton):
             return QBrush(theme.color.disabled_surface.qcolor)
         if not self.isChecked():
             return QBrush(theme.color.surface_raised.qcolor)
-        # The on state is the one place in the product that carries a gradient:
-        # the design system lights the track from above so the knob reads as
-        # sitting in it rather than on it.
-        gradient = QLinearGradient(QPointF(0.0, 0.0), QPointF(0.0, float(self.height())))
-        gradient.setColorAt(0.0, theme.color.accent[600].qcolor)
-        gradient.setColorAt(1.0, theme.color.accent[700].qcolor)
-        return QBrush(gradient)
+        # The on state is a flat `accent-600` — the design system removed the
+        # gradient, and a wash of light is the only thing the track needs to
+        # read as switched.
+        return QBrush(theme.color.accent[600].qcolor)
 
     def _knob_color(self, theme: Theme) -> Color:
         if not self.isEnabled():
@@ -554,11 +559,13 @@ class SegmentedControl(Themed, QWidget):
             background: {color.bg};
             border: {size.hairline}px solid {color.border_strong};
             border-radius: 0;
-            padding: {theme.space.xs}px {theme.space.md}px;
+            padding: {theme.space.xs}px {theme.space[1.25]}px;
             font-size: {type_.scale.xs}px;
-            font-weight: {type_.weight_display};
+            font-weight: {type_.weight_strong};
         }}
-        QPushButton[seg="middle"], QPushButton[seg="last"] {{ border-left: none; }}
+        QPushButton[seg="middle"], QPushButton[seg="last"] {{
+            border-left: {size.hairline}px solid {color.border};
+        }}
         QPushButton[seg="first"], QPushButton[seg="only"] {{
             border-top-left-radius: {theme.radius.control}px;
             border-bottom-left-radius: {theme.radius.control}px;
@@ -567,14 +574,14 @@ class SegmentedControl(Themed, QWidget):
             border-top-right-radius: {theme.radius.control}px;
             border-bottom-right-radius: {theme.radius.control}px;
         }}
-        QPushButton:hover:!checked {{ background: {color.hover}; }}
+        QPushButton:hover:!checked {{ background: {color.text.with_opacity(0.06)}; }}
         QPushButton:checked {{
             background: {color.surface_raised};
             color: {color.accent[200]};
         }}
         QPushButton:focus {{
             border: {size.focus_ring}px solid {color.focus};
-            padding: {max(0, theme.space.xs - grow)}px {max(0, theme.space.md - grow)}px;
+            padding: {max(0, theme.space.xs - grow)}px {max(0, theme.space[1.25] - grow)}px;
         }}
         QPushButton:disabled {{
             color: {color.text_disabled};

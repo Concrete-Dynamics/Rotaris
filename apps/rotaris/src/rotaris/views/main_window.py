@@ -85,6 +85,7 @@ if TYPE_CHECKING:
     SWR.SWR_2802,
     SWR.SWR_2805,
     SWR.SWR_3715,
+    SWR.SWR_3728,
 )
 class MainWindow(Themed, QMainWindow):
     """Owns six primary views and auxiliary persona windows."""
@@ -191,6 +192,7 @@ class MainWindow(Themed, QMainWindow):
         layout.setSpacing(0)
         self.title_bar = TitleBar(store)
         self.title_bar.workspace_open_requested.connect(self._choose_workspace_folder)
+        self.title_bar.new_session_requested.connect(self._new_session)
         layout.addWidget(self.title_bar)
         self.notice_banner = InlineBanner()
         self.notice_banner.action_requested.connect(self._handle_notice_action)

@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 0d2d12b27adb1ec1fd36eb23b25ceced2b7e2ae7a21711ca234975c80c36b3b1
+# GLOBAL-HASH: 49225cebceccf880260212d403713c2b5ff7fcad4bf990377c3d404b8ed9d3b4
 
 from __future__ import annotations
 
@@ -4773,6 +4773,9 @@ class SWR(IntEnum):
     SWR_3727 = 3727
     """[approved] Desktop startup stays visible, responsive, and console-free - docs/requirements/2000-rotaris-desktop/SWR-3727-quiet-responsive-desktop-startup.md"""
 
+    SWR_3728 = 3728
+    """[approved] New sessions are available from the global title bar - docs/requirements/2000-rotaris-desktop/SWR-3728-global-title-bar-new-session.md"""
+
 
 #: Members carrying the deprecation marker (blueprint §3/§5).
 DEPRECATED: frozenset[SWR] = frozenset({
@@ -6454,4 +6457,5 @@ META: dict[int, ReqMeta] = {
     3725: ReqMeta('SWR-3725', 3725, ReqStatus.APPROVED, 'Global external-hook catalog', 'docs/requirements/2000-rotaris-desktop/SWR-3725-global-external-hook-catalog.md', True, True, '93d40c379217434d', 'product', ()),
     3726: ReqMeta('SWR-3726', 3726, ReqStatus.APPROVED, 'Brand mark ships with the application', 'docs/requirements/2000-rotaris-desktop/SWR-3726-brand-mark-ships-with-the-app.md', True, True, '916079cb924bb792', 'technical', (3700,)),
     3727: ReqMeta('SWR-3727', 3727, ReqStatus.APPROVED, 'Desktop startup stays visible, responsive, and console-free', 'docs/requirements/2000-rotaris-desktop/SWR-3727-quiet-responsive-desktop-startup.md', True, True, 'f280863906a3a573', 'product', ()),
+    3728: ReqMeta('SWR-3728', 3728, ReqStatus.APPROVED, 'New sessions are available from the global title bar', 'docs/requirements/2000-rotaris-desktop/SWR-3728-global-title-bar-new-session.md', True, True, 'a4f064345a42b78d', 'product', ()),
 }

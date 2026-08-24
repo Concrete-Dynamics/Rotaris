@@ -13,7 +13,7 @@ each has a concrete call site in this repository:
    markdown.
 3. **Modules imported by string**, which no static analysis can see: the
    OpenHands terminal internals (``tools/terminal.py``), the Claude SDK provider
-   shims (``providers/claude_sdk/__init__.py``), the Serena task runner
+   shims (``providers/claude_sdk/__init__.py``), the Serena setup runners
    (``init/registry.py``), the config loader reached from the auth flow
    (``cli/auth_flow.py``), and ``tiktoken``'s plugin namespace.
 
@@ -70,6 +70,8 @@ _DYNAMIC_IMPORTS: tuple[str, ...] = (
     "rotaris_core.providers.claude_sdk",
     # rotaris_core/init/registry.py::_SERENA_RUNNER_MODULE
     "rotaris_core.init.serena_task",
+    # rotaris_core/init/registry.py::_SERENA_SETUP_MODULE
+    "rotaris_core.init.serena_setup",
     # rotaris_core/cli/auth_flow.py — import_module("rotaris_core.config.loader")
     "rotaris_core.config.loader",
     # rotaris_core/cli/auth_flow.py and config/project_snapshot.py — import_module("yaml")

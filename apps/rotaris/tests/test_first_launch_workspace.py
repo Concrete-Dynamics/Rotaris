@@ -6,10 +6,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 from rotaris_core.reqtocode import SWR, verifies
+from ui_query import click_by_name
 
 import rotaris.main as desktop
+from rotaris.views.chrome import WorkspaceChip
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,11 +28,15 @@ def test_first_launch_chooses_project_before_creating_the_desktop(
     Expected outcome: the real desktop and services are wired to the selected project."""
     project = tmp_path / "project"
     project.mkdir()
+    second_project = tmp_path / "second-project"
+    second_project.mkdir()
+    choices = iter((project, second_project))
     windows = []
     create_window = desktop.create_window
 
     monkeypatch.setattr(
-        "rotaris.main.QFileDialog.getExistingDirectory", lambda *_args: str(project)
+        "rotaris.main.QFileDialog.getExistingDirectory",
+        lambda *_args: str(next(choices)),
     )
     monkeypatch.setattr(QApplication, "exec", lambda _self: 0)
     monkeypatch.setattr(
@@ -51,6 +58,15 @@ def test_first_launch_chooses_project_before_creating_the_desktop(
     assert len(windows) == 1
     assert windows[0].store.workspace_path == str(project.resolve())
     assert windows[0].config_service.workspace == project.resolve()
+
+    click_by_name(qtbot, windows[0], "Open project folder", WorkspaceChip)
+
+    assert len(windows) == 2
+    assert windows[1].store.workspace_path == str(second_project.resolve())
+    assert windows[1].config_service.workspace == second_project.resolve()
+    assert QSettings().value(desktop.LAST_WORKSPACE_KEY) == str(second_project.resolve())
+    assert windows[1].isVisible()
+    assert not windows[0].isVisible()
 
 
 @verifies(SWR.SWR_2455)

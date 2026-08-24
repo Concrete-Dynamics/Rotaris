@@ -994,9 +994,10 @@ Full requirement: [SWR-2454 — The live view keeps up with the run](2000-rotari
 
 status: approved
 
-When Rotaris starts without an explicit or remembered workspace, it opens the
-operating system's native project-folder chooser before creating the desktop
-window or initializing a project.
+When Rotaris starts without an explicit or remembered workspace, or when the
+user activates the title-bar workspace text, it opens the operating system's
+native project-folder chooser before constructing project services for the
+selected folder.
 
 Full requirement: [SWR-2455 — First desktop launch opens a real project folder](2000-rotaris-desktop/SWR-2455-first-launch-project-folder.md)
 

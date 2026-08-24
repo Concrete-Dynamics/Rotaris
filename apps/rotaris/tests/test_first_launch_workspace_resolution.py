@@ -1,16 +1,23 @@
 """Productive use: desktop users reopen or choose the project Rotaris should work in.
-Expected outcome: startup resolves a real folder without inferring the process directory."""
+Expected outcome: startup resolves a usable first-paint folder and onboarding intent."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QFileDialog
 from rotaris_core.reqtocode import SWR, verifies
 
-from rotaris.main import LAST_WORKSPACE_KEY, select_startup_workspace
+from rotaris.main import (
+    FIRST_LAUNCH_PROMPT_DELAY_MS,
+    LAST_WORKSPACE_KEY,
+    schedule_first_launch_workspace_prompt,
+    select_startup_workspace,
+)
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.unit
 
@@ -29,9 +36,10 @@ def test_explicit_project_bypasses_the_folder_chooser_and_is_remembered(
     )
     settings = QSettings()
 
-    selected = select_startup_workspace(str(project), settings=settings)
+    startup = select_startup_workspace(str(project), settings=settings)
 
-    assert selected == project.resolve()
+    assert startup.path == project.resolve()
+    assert not startup.prompt_after_show
     assert settings.value(LAST_WORKSPACE_KEY) == str(project.resolve())
 
 
@@ -50,45 +58,70 @@ def test_existing_remembered_project_reopens_without_prompting(
         lambda *_args: (_ for _ in ()).throw(AssertionError("folder chooser opened")),
     )
 
-    assert select_startup_workspace(None, settings=settings) == project.resolve()
+    startup = select_startup_workspace(None, settings=settings)
+
+    assert startup.path == project.resolve()
+    assert not startup.prompt_after_show
 
 
 @verifies(SWR.SWR_2455)
-def test_missing_remembered_project_opens_native_folder_chooser(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_missing_remembered_project_uses_fallback_and_defers_onboarding(
+    tmp_path: Path,
 ) -> None:
-    """Productive use: a first-launch user chooses the project Rotaris should initialize.
-    Expected outcome: a native directory chooser starts at home and returns the chosen folder."""
-    project = tmp_path / "chosen"
-    project.mkdir()
-    settings = QSettings()
-    settings.setValue(LAST_WORKSPACE_KEY, str(tmp_path / "removed"))
-    call: tuple[object, ...] = ()
-
-    def choose(*args: object) -> str:
-        nonlocal call
-        call = args
-        return str(project)
-
-    monkeypatch.setattr("rotaris.main.QFileDialog.getExistingDirectory", choose)
-
-    assert select_startup_workspace(None, settings=settings) == project.resolve()
-    assert call[0] is None
-    assert call[1:3] == ("Open a project folder", str(Path.home()))
-    assert call[3] == QFileDialog.Option.ShowDirsOnly
-    assert settings.value(LAST_WORKSPACE_KEY) == str(project.resolve())
-
-
-@verifies(SWR.SWR_2455)
-def test_cancelling_folder_chooser_preserves_remembered_value(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Productive use: a user cancels project selection during launch.
-    Expected outcome: startup stops cleanly and preserves the prior remembered value."""
+    """Productive use: a first-launch user sees a usable desktop before project onboarding.
+    Expected outcome: startup uses the fallback and requests a prompt after first paint."""
+    fallback = tmp_path / "default"
+    fallback.mkdir()
     missing = tmp_path / "removed"
     settings = QSettings()
     settings.setValue(LAST_WORKSPACE_KEY, str(missing))
-    monkeypatch.setattr("rotaris.main.QFileDialog.getExistingDirectory", lambda *_args: "")
 
-    assert select_startup_workspace(None, settings=settings) is None
+    startup = select_startup_workspace(
+        None,
+        settings=settings,
+        fallback_workspace=fallback,
+    )
+
+    assert startup.path == fallback.resolve()
+    assert startup.prompt_after_show
     assert settings.value(LAST_WORKSPACE_KEY) == str(missing)
+
+
+@verifies(SWR.SWR_2455)
+def test_first_launch_fallback_defaults_to_process_working_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Productive use: a first-launch user can use Rotaris's prior default workspace.
+    Expected outcome: the process working directory backs the first visible desktop."""
+    workspace = tmp_path / "working"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+
+    startup = select_startup_workspace(None, settings=QSettings())
+
+    assert startup.path == workspace.resolve()
+    assert startup.prompt_after_show
+
+
+@verifies(SWR.SWR_2455)
+def test_first_launch_onboarding_is_deferred_after_window_activation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a first-launch user sees the complete desktop before onboarding.
+    Expected outcome: project selection is scheduled after a visible-paint delay."""
+    calls: list[tuple[int, object]] = []
+
+    class Window:
+        def prompt_for_initial_workspace(self) -> None:
+            pass
+
+    window = Window()
+    monkeypatch.setattr(
+        "rotaris.main.QTimer.singleShot",
+        lambda delay, callback: calls.append((delay, callback)),
+    )
+
+    schedule_first_launch_workspace_prompt(window)  # type: ignore[arg-type]
+
+    assert calls == [(FIRST_LAUNCH_PROMPT_DELAY_MS, window.prompt_for_initial_workspace)]
+    assert FIRST_LAUNCH_PROMPT_DELAY_MS > 0

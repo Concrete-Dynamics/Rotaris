@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication, QFileDialog, QWidget
 from rotaris_core.reqtocode import SWR, traces
 
 from rotaris import __version__
@@ -44,6 +44,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 @traces(SWR.SWR_2455)
+def choose_workspace_folder(
+    *,
+    parent: QWidget | None = None,
+    initial_directory: Path | None = None,
+) -> Path | None:
+    """Offer the native project-folder chooser from a useful starting path."""
+    selected = QFileDialog.getExistingDirectory(
+        parent,
+        "Open a project folder",
+        str(initial_directory or Path.home()),
+        QFileDialog.Option.ShowDirsOnly,
+    )
+    return Path(selected).resolve() if selected else None
+
+
+@traces(SWR.SWR_2455)
 def select_startup_workspace(
     workspace_argument: str | None,
     *,
@@ -58,15 +74,10 @@ def select_startup_workspace(
         remembered_path = Path(remembered).expanduser() if remembered else None
         if remembered_path is not None and remembered_path.is_dir():
             return remembered_path.resolve()
-        selected = QFileDialog.getExistingDirectory(
-            None,
-            "Open a project folder",
-            str(Path.home()),
-            QFileDialog.Option.ShowDirsOnly,
-        )
-        if not selected:
+        selected = choose_workspace_folder()
+        if selected is None:
             return None
-        workspace = Path(selected).resolve()
+        workspace = selected
     preferences.setValue(LAST_WORKSPACE_KEY, str(workspace))
     return workspace
 
@@ -158,20 +169,49 @@ def main(argv: list[str] | None = None) -> int:
         if selected_workspace is None:
             return 0
         workspace = selected_workspace
-    diagnostics = (
-        LiveDiagnostics(diagnostics_config, workspace)
-        if diagnostics_config.enabled
-        else NoopDiagnostics()
-    )
-    window = create_window(workspace, demo=args.demo, diagnostics=diagnostics)
-    diagnostics.attach_window(window)
-    window.show()
-    # After ``show`` and only here (SWR-3003, AC-005): the notification belongs on
-    # a window the user can already see, and a check started from ``MainWindow``
-    # itself would run in every test that builds one.
-    window.start_update_check()
-    # Same rule for the Rotaris Cloud balance (SWR-3013): started here, so a
-    # test that builds a window never reads an account over the network.
-    if not args.demo:
-        window.start_cloud_credit()
+    active_windows: list[MainWindow] = []
+
+    def build_window(selected: Path) -> MainWindow:
+        diagnostics = (
+            LiveDiagnostics(diagnostics_config, selected)
+            if diagnostics_config.enabled
+            else NoopDiagnostics()
+        )
+        created = create_window(selected, demo=args.demo, diagnostics=diagnostics)
+        diagnostics.attach_window(created)
+        created.workspace_open_requested.connect(
+            lambda path, source=created: replace_workspace(source, Path(path))
+        )
+        return created
+
+    def activate_window(created: MainWindow) -> None:
+        created.show()
+        # After ``show`` and only here (SWR-3003, AC-005): the notification belongs on
+        # a window the user can already see, and a check started from ``MainWindow``
+        # itself would run in every test that builds one.
+        created.start_update_check()
+        # Same rule for the Rotaris Cloud balance (SWR-3013): started here, so a
+        # test that builds a window never reads an account over the network.
+        if not args.demo:
+            created.start_cloud_credit()
+
+    def replace_workspace(source: MainWindow, selected: Path) -> None:
+        if not active_windows or source is not active_windows[0]:
+            return
+        try:
+            replacement = build_window(selected)
+        except Exception as exc:  # noqa: BLE001 - keep the active project usable
+            source.notify(f"Could not open the selected project: {exc}", error=True)
+            return
+        replacement.show()
+        if not source.close():
+            replacement.close()
+            return
+        active_windows[0] = replacement
+        QSettings().setValue(LAST_WORKSPACE_KEY, str(selected))
+        activate_window(replacement)
+
+    window = build_window(workspace)
+    active_windows.append(window)
+    activate_window(window)
     return app.exec()

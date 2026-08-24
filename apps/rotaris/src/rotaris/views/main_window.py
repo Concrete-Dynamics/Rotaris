@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import QSettings, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     SWR.SWR_2404,
     SWR.SWR_2413,
     SWR.SWR_2414,
+    SWR.SWR_2455,
     SWR.SWR_2437,
     SWR.SWR_2701,
     SWR.SWR_2704,
@@ -87,6 +88,8 @@ if TYPE_CHECKING:
 )
 class MainWindow(Themed, QMainWindow):
     """Owns six primary views and auxiliary persona windows."""
+
+    workspace_open_requested = Signal(str)
 
     VIEW_ORDER = (
         "dashboard",
@@ -186,6 +189,7 @@ class MainWindow(Themed, QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.title_bar = TitleBar(store)
+        self.title_bar.workspace_open_requested.connect(self._choose_workspace_folder)
         layout.addWidget(self.title_bar)
         self.notice_banner = InlineBanner()
         self.notice_banner.action_requested.connect(self._handle_notice_action)
@@ -1035,6 +1039,31 @@ class MainWindow(Themed, QMainWindow):
             )
         else:
             self.notify(f"Deleted {len(merged_paths)} merged worktree(s).")
+
+    @traces(SWR.SWR_2455)
+    def _choose_workspace_folder(self) -> None:
+        integration = self._integration_bridge
+        if integration is not None and integration.running:
+            self.notify(
+                "Finish the worktree integration before opening another project.",
+                error=True,
+            )
+            return
+        if self._active_run_count() or self.store.run_state.busy:
+            self.notify("Finish the active run before opening another project.", error=True)
+            return
+        if not self._confirm_settings_transition():
+            return
+
+        from pathlib import Path
+
+        from rotaris.main import choose_workspace_folder
+
+        current = Path(self.store.workspace_path).expanduser().resolve()
+        selected = choose_workspace_folder(parent=self, initial_directory=current)
+        if selected is None or selected == current:
+            return
+        self.workspace_open_requested.emit(str(selected))
 
     def notify(self, text: str, *, error: bool = False) -> None:
         self.toast.setText(text)

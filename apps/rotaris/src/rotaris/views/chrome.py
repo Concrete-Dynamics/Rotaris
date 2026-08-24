@@ -32,7 +32,7 @@ from rotaris.widgets.cards import _tag_variant
 from rotaris.widgets.meters import StatusDot
 
 if TYPE_CHECKING:
-    from PySide6.QtGui import QResizeEvent
+    from PySide6.QtGui import QKeyEvent, QMouseEvent, QResizeEvent
 
     from rotaris.models.store import WorkspaceStore
     from rotaris.theme.spec import Theme
@@ -136,9 +136,46 @@ def _glyph_icon(glyph: str, size: int = 17) -> QIcon:
     return icon
 
 
-@traces(SWR.SWR_2033, SWR.SWR_2414, SWR.SWR_3726)
+@traces(SWR.SWR_2455)
+class WorkspaceChip(QLabel):
+    """Accessible title-bar action for selecting the active project folder."""
+
+    activated = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("workspaceChip")
+        self.setAccessibleName("Open project folder")
+        self.setToolTip("Open another project folder")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self.activated.emit()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
+        if event.key() in {
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Space,
+        }:
+            self.activated.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+@traces(SWR.SWR_2033, SWR.SWR_2414, SWR.SWR_2455, SWR.SWR_3726)
 class TitleBar(Themed, QWidget):
     """Brand strip: mark + name + version, workspace chip, session status."""
+
+    workspace_open_requested = Signal()
 
     def __init__(self, store: WorkspaceStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -172,9 +209,8 @@ class TitleBar(Themed, QWidget):
         layout.addWidget(self.version_label)
 
         layout.addStretch(1)
-        self.workspace_chip = QLabel()
-        self.workspace_chip.setAccessibleName("Current workspace and session")
-        self.workspace_chip.setObjectName("workspaceChip")
+        self.workspace_chip = WorkspaceChip()
+        self.workspace_chip.activated.connect(self.workspace_open_requested.emit)
         layout.addWidget(self.workspace_chip)
         layout.addStretch(1)
 
@@ -242,6 +278,8 @@ class TitleBar(Themed, QWidget):
             f"padding:{theme.space.xs}px {theme.space.md}px;"
             f"background:{color.bg};font-size:{type_.scale.sm}px;"
             f"color:{color.text_secondary};}}"
+            f"QLabel#workspaceChip:hover,QLabel#workspaceChip:focus{{"
+            f"border-color:{color.accent[400]};}}"
         )
         status_style = f"font-size:{type_.scale.xs}px;color:{color.text_secondary};"
         self.improvement_label.setStyleSheet(status_style)
@@ -268,6 +306,9 @@ class TitleBar(Themed, QWidget):
             f'font-size:{t.type.scale.xs}px;">{html.escape(s.workspace_path)}</span>'
             f'&nbsp;<span style="color:{color.text_tertiary};">·</span>&nbsp;'
             f"{html.escape(s.session_name or '—')}"
+        )
+        self.workspace_chip.setAccessibleDescription(
+            f"Current project: {s.workspace_path}. Opens the native project folder chooser."
         )
         # A dot, not a word: the graphical steps, which owe 3:1. The status
         # itself is spelled out in the label beside it (SWR-3304).

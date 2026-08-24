@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -187,11 +188,11 @@ def build_setup_plan(
         record.steps if record is not None and record.manifest_fingerprint == fingerprint else {}
     )
     for warmup in derive_mcp_warmups(mcp_servers):
-        if (
-            warmup.kind == SetupStepKind.WARM_NPX
-            and shutil.which("npx", path=(env or os.environ).get("PATH")) is None
-        ):
-            continue
+        if warmup.kind == SetupStepKind.WARM_NPX:
+            executable = shutil.which("npx", path=(env or os.environ).get("PATH"))
+            if executable is None:
+                continue
+            warmup = replace(warmup, command=(executable, *warmup.command[1:]))
         state = completed.get(warmup.id)
         if manual or state is None or state.status != "complete":
             steps.append(warmup)

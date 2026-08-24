@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: e7afe36da5ee780b388247480d3df418958b5b3aee5da83848263cf623daaf77
+# GLOBAL-HASH: ca37b1bb148e606afeb755e0060e88ef3fba7eeb407f4e174035201328ffe933
 
 from __future__ import annotations
 
@@ -6435,7 +6435,7 @@ META: dict[int, ReqMeta] = {
     3711: ReqMeta('SWR-3711', 3711, ReqStatus.APPROVED, 'Credential status is classified without an event loop', 'docs/requirements/700-providers-auth/SWR-3711-credential-status-without-event-loop.md', True, True, 'd1405012d7dfd798', 'technical', (700,)),
     3712: ReqMeta('SWR-3712', 3712, ReqStatus.APPROVED, 'A run resolves its provider credentials up front and keeps them staged', 'docs/requirements/700-providers-auth/SWR-3712-run-primes-provider-credentials.md', True, True, 'a7401f11d05e5f46', 'technical', (700,)),
     3714: ReqMeta('SWR-3714', 3714, ReqStatus.APPROVED, 'Continuing a session settles the children its previous run left running', 'docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md', True, True, '6791d8bf47ff793b', 'product', ()),
-    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, '0faa831a4b1107ac', 'product', ()),
+    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, '0d3832adadb27951', 'product', ()),
     3716: ReqMeta('SWR-3716', 3716, ReqStatus.DRAFT, 'The first launch offers Rotaris Cloud and lets the user in without it', 'docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md', True, True, 'eeffef4c8eae9cc7', 'product', ()),
     3717: ReqMeta('SWR-3717', 3717, ReqStatus.APPROVED, 'Legal and product information is always reachable from the desktop app', 'docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md', True, True, 'fcb42c12e1878212', 'product', ()),
     3719: ReqMeta('SWR-3719', 3719, ReqStatus.APPROVED, 'Desktop credentials are protected with platform-appropriate user access controls', 'docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md', True, True, '49cea058d6390263', 'product', ()),

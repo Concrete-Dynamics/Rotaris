@@ -54,7 +54,8 @@ the pinned managed download.
 
 **Steps, in order.** Detect what is present; provision `git`; provision `rg`;
 warm the cache for an enabled exact JavaScript MCP package when `npx` is already
-on PATH; record what was provisioned; hand off to the application. Node is a
+on PATH, using the executable discovered during detection (including `npx.cmd`
+on Windows); record what was provisioned; hand off to the application. Node is a
 user-installed prerequisite and the bundled installer never downloads it. The
 default Playwright MCP server is available when `npx` is present and unavailable
 when it is absent. The list is derived from the external tools Rotaris actually
@@ -122,8 +123,9 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
   Node or `rg` provisions Git and ripgrep, omits Node and every `npx` cache
   warm-up, and then starts the desktop application without further user action.
 - **AC-002**: The default Playwright MCP server is available when Node.js
-  supplies `npx` and unavailable otherwise. The bundled installer never
-  downloads Node.js to make Playwright available.
+  supplies `npx` and unavailable otherwise. Cache warming launches the
+  discovered executable, including `npx.cmd` on Windows. The bundled installer
+  never downloads Node.js to make Playwright available.
 - **AC-003**: On a machine with any working Git executable and satisfying
   ripgrep version, the run reports each required tool as already installed,
   downloads nothing, and reaches the application. The pinned Git version
@@ -158,7 +160,7 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 
 | Level           | Productive scenario                                                                                                                             | Exercised boundary                                             | Planned/covering test                                        |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Unit            | Detection reuses every working installed Git; the default setup plan omits Node and skips the Playwright warm-up when `npx` is absent | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
+| Unit            | Detection reuses every working installed Git; the default setup plan omits Node, skips the Playwright warm-up when `npx` is absent, and launches the discovered `npx.cmd` on Windows | Tool probe and step planner over a faked `PATH` and MCP config  | `tests/unit/setup/test_setup_plan.py`                        |
 | Unit            | Default agents start without a Git MCP server or persona grant                                                                                 | Shipped persona and MCP configuration                            | `tests/unit/test_config_defaults.py::test_git_mcp_is_absent_from_the_shipped_configuration` |
 | Unit            | A pinned archive with a wrong digest is refused and nothing is unpacked; a matching one is unpacked into the per-user tool directory             | Download-and-verify step over a local HTTPS fixture             | `tests/unit/setup/test_tool_download.py`                     |
 | Integration     | A cancelled, then resumed, run completes the remaining steps only; a completion record makes a later run a no-op; a raised discovery floor triggers a top-up for tools that use one | Setup runner → completion record in the data dir                | `tests/integration/test_setup_resume_and_record.py`          |

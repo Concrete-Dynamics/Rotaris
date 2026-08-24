@@ -195,6 +195,29 @@ def test_plan_skips_node_and_playwright_warmup_without_system_npx(
 
 
 @verifies(SWR.SWR_3715)
+def test_plan_launches_the_discovered_windows_npx_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Productive use: a Windows user warms Playwright with their Node.js installation.
+    Expected outcome: setup launches the discovered npx.CMD executable successfully."""
+    npx = r"C:\Program Files\nodejs\npx.CMD"
+    monkeypatch.setattr(
+        "rotaris_core.setup.planner.shutil.which",
+        lambda command, **_kwargs: npx if command == "npx" else None,
+    )
+    servers = {
+        "playwright": SimpleNamespace(
+            type="stdio", command="npx", args=["-y", "@playwright/mcp@0.0.75", "--headless"]
+        )
+    }
+
+    plan = build_setup_plan(SetupManifest(1, (), {}), mcp_servers=servers)
+
+    warmup = next(step for step in plan.steps if step.id.startswith("warm:npx:"))
+    assert warmup.command == (npx, "-y", "@playwright/mcp@0.0.75", "--help")
+
+
+@verifies(SWR.SWR_3715)
 def test_matching_completion_and_remembered_degradation_are_fast_paths() -> None:
     """Productive use: later launches reach Rotaris without a perceptible setup check.
     Expected outcome: a matching complete or accepted-degraded fingerprint returns no steps."""

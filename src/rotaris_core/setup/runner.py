@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from rotaris_core.config.paths import GLOBAL_DATA_DIR
 from rotaris_core.reqtocode import SWR, traces
+from rotaris_core.subprocess_utils import prepare_child_command
 
 from .download import SetupSupplyError, download_archive, extract_and_promote
 from .manifest import default_setup_manifest, platform_key
@@ -139,6 +140,7 @@ def _install(
     return "Installed " + ", ".join(str(path) for path in executables)
 
 
+@traces(SWR.SWR_3715, SWR.SWR_3727)
 def _run_warmup(
     step: SetupStep,
     *,
@@ -148,13 +150,15 @@ def _run_warmup(
     rendered = subprocess.list2cmdline(list(step.command))
     emit(SetupEvent(SetupEventKind.DETAIL, step.id, rendered))
     try:
+        prepared, process_options = prepare_child_command(step.command)
         result = command_runner(
-            list(step.command),
+            prepared,
             capture_output=True,
             text=True,
             timeout=180,
             check=False,
             env=os.environ.copy(),
+            **process_options,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise SetupSupplyError(f"command {rendered} failed: {exc}") from exc

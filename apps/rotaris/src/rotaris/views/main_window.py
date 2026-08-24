@@ -159,6 +159,7 @@ class MainWindow(Themed, QMainWindow):
         # ``start_cloud_credit`` and by nothing else, so a window built in a test
         # never reaches the network on its own.
         self._cloud_bridge: Any | None = None
+        self._git_refresh_bridge: Any | None = None
         # Named apart from ``_update_applied``, the slot: an attribute of the same
         # name shadows the bound method and the signal connects to ``None``.
         self._applied_update: Any | None = None
@@ -1162,6 +1163,8 @@ class MainWindow(Themed, QMainWindow):
             self._update_bridge.stop()
         if self._cloud_bridge is not None:
             self._cloud_bridge.stop()
+        if self._git_refresh_bridge is not None:
+            self._git_refresh_bridge.shutdown()
         self.diagnostics.close()
         for window in self.agent_windows.values():
             window.close()
@@ -2798,6 +2801,25 @@ class MainWindow(Themed, QMainWindow):
     DISMISSED_UPDATE_KEY = "updates/dismissedVersion"
 
     # ── Rotaris Cloud credit (SWR-3013) ───────────────────────────────────
+
+    @traces(SWR.SWR_3727)
+    def start_git_refresh(self, bridge: Any | None = None) -> bool:
+        """Load workspace Git state after the window is visible."""
+        service = self.git_service
+        if service is None:
+            return False
+        current = self._git_refresh_bridge
+        if current is not None and current.running:
+            return False
+        if bridge is None:
+            from rotaris.services.git_refresh_bridge import GitRefreshBridge
+
+            bridge = GitRefreshBridge(service, parent=self)
+        self._git_refresh_bridge = bridge
+        bridge.failed.connect(
+            lambda message: self.notify(f"Git status could not be refreshed: {message}", error=True)
+        )
+        return bool(bridge.start())
 
     @traces(SWR.SWR_3013)
     def start_cloud_credit(self, bridge: Any | None = None) -> None:

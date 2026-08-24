@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rotaris_core.reqtocode import SWR, traces
+from rotaris_core.subprocess_utils import hidden_process_kwargs
 
 from rotaris.models.state import CommitInfo, NoticeSeverity, UiNotice, WorktreeInfo
 
@@ -39,21 +40,21 @@ INITIAL_COMMIT_MESSAGE = "Initial commit"
 GIT_SETUP_ACTION = "git.setup"
 
 
-@traces(SWR.SWR_2005, SWR.SWR_2405)
+@traces(SWR.SWR_2005, SWR.SWR_2405, SWR.SWR_3727)
 class GitService:
     def __init__(self, workspace: Path, store: WorkspaceStore) -> None:
         self.workspace = workspace
         self.store = store
 
-    @traces(SWR.SWR_2005, SWR.SWR_2405)
+    @traces(SWR.SWR_2005, SWR.SWR_2405, SWR.SWR_3727)
     def refresh(self) -> None:
         """Read this workspace's git state into the store. Never raises.
 
-        Called from ``create_window`` before there is a window to report an
-        error on, so every failure here has to be a *value*. Three of them are
-        ordinary rather than exceptional and all three used to end the process:
-        no git on the machine, a folder that is not a repository, and a
-        repository whose branch has no commits yet — the first day of a project.
+        Startup calls this through ``GitRefreshBridge`` after the window paints,
+        while user-requested Git mutations call it at their existing boundary.
+        Every failure here remains a value: no git on the machine, a folder that
+        is not a repository, and a repository whose branch has no commits yet are
+        ordinary states.
 
         Git is asked whether it can answer rather than the filesystem being asked
         whether ``.git`` is there. The two are not the same question: a workspace
@@ -263,6 +264,7 @@ class GitService:
                 capture_output=True,
                 timeout=15,
                 check=True,
+                **hidden_process_kwargs(),
             )
         except (OSError, subprocess.SubprocessError):
             return False
@@ -407,13 +409,11 @@ class GitService:
     def _run(self, *args: str, check: bool = False) -> str:
         """One git command. ``""`` when git will not answer, unless *check*.
 
-        A read that git refuses is an answer, not an exception. This adapter is
-        driven by :meth:`refresh`, which runs while the window is being built, so
-        anything raising here takes the whole application down before it has a
-        surface to report on — and the things git refuses are ordinary: a
-        repository with no commits has no ``log``, a checkout with no upstream
-        has no ``rev-list``, a folder nobody has ``git init``-ed has none of it,
-        and a machine without git installed answers nothing at all.
+        A read that git refuses is an answer, not an exception. Startup refresh
+        runs after first paint on a worker, and the things git refuses are
+        ordinary: a repository with no commits has no ``log``, a checkout with no
+        upstream has no ``rev-list``, a folder nobody has ``git init``-ed has none
+        of it, and a machine without git installed answers nothing at all.
 
         So *check* means what it says. Off — the default, and what every read on
         the refresh path uses — a refusal degrades to ``""`` and the caller shows
@@ -436,6 +436,7 @@ class GitService:
                 errors="replace",
                 timeout=15,
                 check=False,
+                **hidden_process_kwargs(),
             )
         except (OSError, subprocess.SubprocessError) as exc:
             if check:

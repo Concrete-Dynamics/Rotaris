@@ -537,7 +537,7 @@ class _TodoAddRow(Themed, QWidget):
             self.added.emit(self._phase_id, text)
 
 
-@traces(SWR.SWR_2122, SWR.SWR_2414, SWR.SWR_2415, SWR.SWR_2509)
+@traces(SWR.SWR_2122, SWR.SWR_2414, SWR.SWR_2415, SWR.SWR_2509, SWR.SWR_3728)
 class WorkspaceView(Themed, QWidget):
     prompt_submitted = Signal(str)
     prompt_queued = Signal(str)
@@ -569,6 +569,9 @@ class WorkspaceView(Themed, QWidget):
     #: The composer's permission-mode chip changed (SWR-2509). The view has
     #: already stored the choice and told any live run; the window persists it.
     permission_mode_selected = Signal(str)
+    #: The user asked to start a new session (SWR-3728). The view only reports
+    #: the intent; the window owns the launch workflow.
+    new_session_requested = Signal()
 
     def __init__(
         self,
@@ -942,6 +945,15 @@ class WorkspaceView(Themed, QWidget):
         toolbar_layout = QHBoxLayout(self.context_toolbar)
         toolbar_layout.setContentsMargins(12, 6, 12, 6)
         toolbar_layout.setSpacing(8)
+        self.new_session_button = make_button("New session", "secondary", compact=True)
+        set_button_icon(self.new_session_button, "plus")
+        self.new_session_button.setAccessibleName("New session")
+        self.new_session_button.setAccessibleDescription(
+            "Open the session launch options for a fresh session in this project."
+        )
+        self.new_session_button.setToolTip("Start a new session")
+        self.new_session_button.clicked.connect(self.new_session_requested.emit)
+        toolbar_layout.addWidget(self.new_session_button)
         self.sidebar_toggle = make_button("Agents & todos", "secondary")
         self.sidebar_toggle.setAccessibleName("Toggle agents and todos drawer")
         self.sidebar_toggle.clicked.connect(self._toggle_sidebar)

@@ -6622,7 +6622,7 @@ dev = [
 
 [[package]]
 name = "rotaris-core"
-version = "0.120.22a1"
+version = "0.120.23a1"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },

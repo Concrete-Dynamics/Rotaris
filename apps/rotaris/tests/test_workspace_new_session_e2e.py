@@ -1,5 +1,8 @@
-"""Productive use: users can create a session from the global desktop title bar.
-Expected outcome: the visible action opens the real session-launch dialog from any primary view."""
+"""Productive use: users can create a session from the Workspace screen.
+
+Expected outcome: the Workspace transcript context toolbar's "New session"
+action opens the real session-launch dialog.
+"""
 
 from __future__ import annotations
 
@@ -16,9 +19,9 @@ pytestmark = pytest.mark.e2e
 
 
 @verifies(SWR.SWR_3728)
-def test_workspace_user_opens_new_session_dialog_from_global_title_bar(qtbot) -> None:
-    """Productive use: a user working outside Overview starts a fresh session.
-    Expected outcome: the global title-bar action opens the normal launch-options dialog."""
+def test_workspace_user_opens_new_session_dialog_from_context_toolbar(qtbot) -> None:
+    """Productive use: a user working in the Workspace starts a fresh session.
+    Expected outcome: the context-toolbar action opens the normal launch-options dialog."""
     window = MainWindow(sample_store())
     qtbot.addWidget(window)
     window.resize(1000, 680)

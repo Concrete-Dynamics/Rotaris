@@ -8,7 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import QApplication, QFileDialog
 from rotaris_core.reqtocode import SWR, traces
 
 from rotaris import __version__
@@ -18,10 +19,12 @@ from rotaris.theme.brand import mark_icon
 from rotaris.theme.fonts import register_bundled_fonts
 from rotaris.views import MainWindow
 
+LAST_WORKSPACE_KEY = "workspace/lastOpened"
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rotaris")
-    parser.add_argument("workspace", nargs="?", default=".", help="workspace directory")
+    parser.add_argument("workspace", nargs="?", default=None, help="workspace directory")
     parser.add_argument("--demo", action="store_true", help="open with representative data")
     parser.add_argument("--version", action="store_true", help="show the Rotaris version and exit")
     parser.add_argument(
@@ -38,6 +41,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="base directory for the timestamped diagnostics run",
     )
     return parser
+
+
+@traces(SWR.SWR_2455)
+def select_startup_workspace(
+    workspace_argument: str | None,
+    *,
+    settings: QSettings | None = None,
+) -> Path | None:
+    """Resolve an explicit, remembered, or newly chosen desktop workspace."""
+    preferences = settings or QSettings()
+    if workspace_argument:
+        workspace = Path(workspace_argument).expanduser().resolve()
+    else:
+        remembered = str(preferences.value(LAST_WORKSPACE_KEY, "") or "")
+        remembered_path = Path(remembered).expanduser() if remembered else None
+        if remembered_path is not None and remembered_path.is_dir():
+            return remembered_path.resolve()
+        selected = QFileDialog.getExistingDirectory(
+            None,
+            "Open a project folder",
+            str(Path.home()),
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if not selected:
+            return None
+        workspace = Path(selected).resolve()
+    preferences.setValue(LAST_WORKSPACE_KEY, str(workspace))
+    return workspace
 
 
 def create_window(
@@ -71,7 +102,14 @@ def create_window(
     )
 
 
-@traces(SWR.SWR_2001, SWR.SWR_3701, SWR.SWR_3703, SWR.SWR_3715, SWR.SWR_3726)
+@traces(
+    SWR.SWR_2001,
+    SWR.SWR_2455,
+    SWR.SWR_3701,
+    SWR.SWR_3703,
+    SWR.SWR_3715,
+    SWR.SWR_3726,
+)
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -111,8 +149,15 @@ def main(argv: list[str] | None = None) -> int:
     if is_bundled_runtime():
         from rotaris.setup_coordinator import run_desktop_setup
 
-        run_desktop_setup(workspace=Path(args.workspace))
-    workspace = Path(args.workspace)
+        setup_workspace = Path(args.workspace) if args.workspace else None
+        run_desktop_setup(workspace=setup_workspace)
+    if args.demo:
+        workspace = Path(args.workspace or ".").resolve()
+    else:
+        selected_workspace = select_startup_workspace(args.workspace)
+        if selected_workspace is None:
+            return 0
+        workspace = selected_workspace
     diagnostics = (
         LiveDiagnostics(diagnostics_config, workspace)
         if diagnostics_config.enabled

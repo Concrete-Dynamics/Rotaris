@@ -89,6 +89,13 @@ def test_string_imported_modules_are_declared_hidden(module_name: str) -> None:
 
 
 @verifies(SWR.SWR_3001)
+def test_deterministic_serena_setup_runner_is_declared_hidden() -> None:
+    """Productive use: a standalone user opens a workspace that needs Serena setup.
+    Expected outcome: the frozen app includes the dynamically imported setup runner."""
+    assert "rotaris_core.init.serena_setup" in hidden_imports()
+
+
+@verifies(SWR.SWR_3001)
 def test_distribution_metadata_is_carried() -> None:
     """``rotaris_core._read_version`` reads installed metadata and degrades to
     ``0+unknown`` without it — a binary that misreports its own version."""

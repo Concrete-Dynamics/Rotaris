@@ -1041,7 +1041,12 @@ class MainWindow(Themed, QMainWindow):
             self.notify(f"Deleted {len(merged_paths)} merged worktree(s).")
 
     @traces(SWR.SWR_2455)
-    def _choose_workspace_folder(self) -> None:
+    def prompt_for_initial_workspace(self) -> None:
+        """Offer project onboarding after the default desktop is visible."""
+        self._choose_workspace_folder(remind_on_cancel=True)
+
+    @traces(SWR.SWR_2455)
+    def _choose_workspace_folder(self, *, remind_on_cancel: bool = False) -> None:
         integration = self._integration_bridge
         if integration is not None and integration.running:
             self.notify(
@@ -1061,7 +1066,14 @@ class MainWindow(Themed, QMainWindow):
 
         current = Path(self.store.workspace_path).expanduser().resolve()
         selected = choose_workspace_folder(parent=self, initial_directory=current)
-        if selected is None or selected == current:
+        if selected is None:
+            if remind_on_cancel:
+                self.notify(
+                    "Open a project folder when you're ready by selecting the "
+                    "workspace path in the title bar."
+                )
+            return
+        if selected == current:
             return
         self.workspace_open_requested.emit(str(selected))
 

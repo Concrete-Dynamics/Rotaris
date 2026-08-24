@@ -3,17 +3,24 @@ req-id: SWR-2455
 status: approved
 trace: required
 test: required
-title: "Desktop workspace actions open a real project folder"
+title: "Desktop workspace actions open a project folder"
 epic: SWR-2000
 date: 2026-08-24
 ---
 
-# SWR-2455 — Desktop workspace actions open a real project folder
+# SWR-2455 — Desktop workspace actions open a project folder
 
 When Rotaris starts without a workspace argument, it shall use the last
 successfully opened project folder when that directory still exists. When no
-valid remembered project exists, Rotaris shall prompt the user with the
-operating system's native directory chooser titled "Open a project folder".
+valid remembered project exists, Rotaris shall first open the complete desktop
+against the process working directory, then present the operating system's
+native modal directory chooser titled "Open a project folder" after the window
+has become visible.
+
+Cancelling this first-launch chooser shall keep the default workspace and the
+complete desktop usable. Rotaris shall then show a toast explaining that the
+user can open a project folder by activating the workspace path in the title
+bar. Cancellation shall preserve any remembered workspace value.
 
 The workspace text in the desktop title bar shall be an accessible mouse and
 keyboard action. Activating it shall open the same native project-folder
@@ -22,21 +29,19 @@ folder shall reopen the desktop against that folder so configuration, sessions,
 Git state, skills, MCP servers, and project initialization all use the selected
 workspace.
 
-Rotaris shall create or reopen the main window and begin project initialization
-only after a real project folder has been selected. Cancelling either chooser
-shall leave the current or remembered workspace unchanged. The process working
-directory and Rotaris's per-user application-data directory shall never become
-an implicit project workspace.
-
 An explicit workspace argument remains authoritative and becomes the remembered
 project after it is accepted.
 
 ## Acceptance criteria
 
-- A desktop launch without a workspace and without a valid remembered project
-  opens the native folder chooser at the user's home directory.
-- Selecting a folder opens Rotaris against that folder, remembers it, and lets
-  project initialization run there.
+- A launch without an explicit or valid remembered workspace shows the complete
+  desktop against the process working directory before presenting the chooser.
+- The native project-folder chooser opens as a modal after the desktop has
+  become visible.
+- Selecting a folder opens Rotaris against that folder and remembers it.
+- Cancelling the first-launch chooser keeps the default workspace and desktop
+  usable, preserves the remembered value, and shows an actionable reminder
+  toast.
 - A later desktop launch restores the remembered folder while it still exists.
 - Clicking the title-bar workspace text opens the same native folder chooser at
   the current workspace.
@@ -44,19 +49,17 @@ project after it is accepted.
   description identifying its purpose and current project.
 - Selecting a different folder from the title bar closes the idle project
   window and opens a replacement wired to the selected project.
-- Cancelling either chooser preserves the active and remembered workspace.
-- An explicit workspace argument bypasses the chooser and becomes the
-  remembered folder.
-- The current process directory and per-user Rotaris data directory are never
-  inferred as the workspace.
+- Cancelling a title-bar chooser preserves the active and remembered workspace.
+- An explicit workspace argument bypasses onboarding and becomes the remembered
+  folder.
 
 ## Test portfolio
 
 | Level | Productive scenario | Exercised boundary | Planned/covering test |
 | --- | --- | --- | --- |
-| Unit | Startup resolves explicit, remembered, missing, and cancelled workspace choices | Startup workspace resolution over temporary directories and settings | `apps/rotaris/tests/test_first_launch_workspace_resolution.py` |
+| Unit | Startup resolves explicit, remembered, and fallback workspace choices plus onboarding intent | Startup workspace resolution over temporary directories and settings | `apps/rotaris/tests/test_first_launch_workspace_resolution.py` |
 | Integration | The title-bar workspace chip exposes accessible pointer and keyboard activation | TitleBar widget signal and accessibility contract | `apps/rotaris/tests/test_workspace_title_bar.py` |
-| User-flow E2E | A user clicks the title-bar workspace text, chooses another project, and sees the replacement desktop use it | Desktop title bar → native chooser seam → window/service reconstruction | `apps/rotaris/tests/test_first_launch_workspace.py` |
+| User-flow E2E | A first-launch user sees Rotaris before the modal, can cancel into a usable default workspace with a reminder, or choose another project | Desktop launch → post-show native chooser → toast or window/service reconstruction | `apps/rotaris/tests/test_first_launch_workspace.py` |
 
 Depends on: [SWR-2431 — In-App Workspace Selection](SWR-2431-in-app-workspace-selection.md)
 

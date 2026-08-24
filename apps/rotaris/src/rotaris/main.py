@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, QTimer
 from PySide6.QtWidgets import QApplication, QFileDialog, QWidget
 from rotaris_core.reqtocode import SWR, traces
 
@@ -20,6 +21,15 @@ from rotaris.theme.fonts import register_bundled_fonts
 from rotaris.views import MainWindow
 
 LAST_WORKSPACE_KEY = "workspace/lastOpened"
+FIRST_LAUNCH_PROMPT_DELAY_MS = 650
+
+
+@dataclass(frozen=True)
+class StartupWorkspace:
+    """Workspace available for first paint and whether onboarding remains."""
+
+    path: Path
+    prompt_after_show: bool
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,22 +74,31 @@ def select_startup_workspace(
     workspace_argument: str | None,
     *,
     settings: QSettings | None = None,
-) -> Path | None:
-    """Resolve an explicit, remembered, or newly chosen desktop workspace."""
+    fallback_workspace: Path | None = None,
+) -> StartupWorkspace:
+    """Resolve the workspace for first paint and any post-show onboarding."""
     preferences = settings or QSettings()
     if workspace_argument:
         workspace = Path(workspace_argument).expanduser().resolve()
-    else:
-        remembered = str(preferences.value(LAST_WORKSPACE_KEY, "") or "")
-        remembered_path = Path(remembered).expanduser() if remembered else None
-        if remembered_path is not None and remembered_path.is_dir():
-            return remembered_path.resolve()
-        selected = choose_workspace_folder()
-        if selected is None:
-            return None
-        workspace = selected
-    preferences.setValue(LAST_WORKSPACE_KEY, str(workspace))
-    return workspace
+        preferences.setValue(LAST_WORKSPACE_KEY, str(workspace))
+        return StartupWorkspace(workspace, prompt_after_show=False)
+
+    remembered = str(preferences.value(LAST_WORKSPACE_KEY, "") or "")
+    remembered_path = Path(remembered).expanduser() if remembered else None
+    if remembered_path is not None and remembered_path.is_dir():
+        return StartupWorkspace(remembered_path.resolve(), prompt_after_show=False)
+
+    workspace = (fallback_workspace or Path.cwd()).expanduser().resolve()
+    return StartupWorkspace(workspace, prompt_after_show=True)
+
+
+@traces(SWR.SWR_2455)
+def schedule_first_launch_workspace_prompt(window: MainWindow) -> None:
+    """Defer onboarding long enough for the complete window to paint."""
+    QTimer.singleShot(
+        FIRST_LAUNCH_PROMPT_DELAY_MS,
+        window.prompt_for_initial_workspace,
+    )
 
 
 def create_window(
@@ -163,12 +182,10 @@ def main(argv: list[str] | None = None) -> int:
         setup_workspace = Path(args.workspace) if args.workspace else None
         run_desktop_setup(workspace=setup_workspace)
     if args.demo:
-        workspace = Path(args.workspace or ".").resolve()
+        startup = StartupWorkspace(Path(args.workspace or ".").resolve(), prompt_after_show=False)
     else:
-        selected_workspace = select_startup_workspace(args.workspace)
-        if selected_workspace is None:
-            return 0
-        workspace = selected_workspace
+        startup = select_startup_workspace(args.workspace)
+    workspace = startup.path
     active_windows: list[MainWindow] = []
 
     def build_window(selected: Path) -> MainWindow:
@@ -214,4 +231,6 @@ def main(argv: list[str] | None = None) -> int:
     window = build_window(workspace)
     active_windows.append(window)
     activate_window(window)
+    if startup.prompt_after_show:
+        schedule_first_launch_workspace_prompt(window)
     return app.exec()

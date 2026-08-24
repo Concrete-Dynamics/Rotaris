@@ -22,6 +22,7 @@ from rotaris_core.packaging.release import (
     checksum_lines,
     declared_versions,
     expected_artifacts,
+    release_channel,
     release_notes,
     verify_versions,
     version_from_tag,
@@ -63,15 +64,32 @@ class FakeGit:
 def test_release_tag_yields_its_version() -> None:
     assert version_from_tag("refs/tags/v1.2.3") == "1.2.3"
     assert version_from_tag("v0.101.0") == "0.101.0"
+    assert version_from_tag("refs/tags/v0.120.15a1") == "0.120.15a1"
+    assert version_from_tag("v2.0.0rc3") == "2.0.0rc3"
 
 
-@pytest.mark.parametrize("ref", ["v1.2", "1.2.3", "refs/heads/master", "v1.2.3-rc1", "vlatest"])
+@pytest.mark.parametrize(
+    "ref",
+    ["v1.2", "1.2.3", "refs/heads/master", "v1.2.3-rc1", "v1.2.3dev1", "vlatest"],
+)
 @verifies(SWR.SWR_3002)
 def test_non_release_tags_are_rejected_with_the_reason(ref: str) -> None:
-    """The workflow's tag glob filters, but a glob cannot explain itself in a log —
-    and ``v1.2.3-rc1`` matches ``v*.*.*`` while pre-release channels are out of scope."""
+    """Productive use: a maintainer receives an actionable tag-format failure.
+    Expected outcome: unsupported version spellings stop before native builds begin.
+    """
     with pytest.raises(ValueError, match="release tag"):
         version_from_tag(ref)
+
+
+@verifies(SWR.SWR_3002)
+def test_release_channel_separates_stable_and_prerelease_publication() -> None:
+    """Productive use: a maintainer can publish alpha artifacts safely.
+    Expected outcome: stable versions select PyPI and alpha versions select prerelease.
+    """
+    assert release_channel("1.2.3") == "stable"
+    assert release_channel("1.2.3a1") == "prerelease"
+    assert release_channel("1.2.3b2") == "prerelease"
+    assert release_channel("1.2.3rc3") == "prerelease"
 
 
 @verifies(SWR.SWR_3002)

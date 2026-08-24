@@ -1,7 +1,7 @@
 name: Release
 
-# AC-001: only a v<major>.<minor>.<patch> tag releases. No branch or PR trigger —
-# this workflow publishes, and publishing cannot be undone.
+# AC-001: supported stable and PEP 440 prerelease tags release. Branch and PR
+# events stay outside this publishing workflow.
 on:
   push:
     tags:
@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.check.outputs.version }}
+      channel: ${{ steps.check.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,7 +29,9 @@ jobs:
           PYTHONPATH: src
         run: |
           version=$(python -m rotaris_core.packaging verify-version "$GITHUB_REF")
+          channel=$(python -m rotaris_core.packaging release-channel "$version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
   # AC-002/AC-003: every artifact on a native runner, and one platform failing
   # must not stop the others. `fail-fast: false` keeps the siblings running; the
@@ -170,6 +173,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: Rotaris ${{ needs.guard.outputs.version }}
+          prerelease: ${{ needs.guard.outputs.channel == 'prerelease' }}
           body_path: release-notes.md
           files: staging/*
           fail_on_unmatched_files: true
@@ -178,6 +182,7 @@ jobs:
   # it and never gates it.
   publish-pypi:
     needs: [guard, release]
+    if: needs.guard.outputs.channel == 'stable'
     runs-on: ubuntu-24.04
     continue-on-error: true
     permissions:

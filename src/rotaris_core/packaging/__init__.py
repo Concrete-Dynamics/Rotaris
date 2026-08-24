@@ -32,6 +32,7 @@ from rotaris_core.packaging.release import (
     checksum_lines,
     declared_versions,
     expected_artifacts,
+    release_channel,
     release_notes,
     verify_versions,
     version_from_tag,
@@ -60,6 +61,7 @@ __all__ = [
     "hidden_imports",
     "metadata_packages",
     "release_notes",
+    "release_channel",
     "verify_versions",
     "version_from_tag",
 ]

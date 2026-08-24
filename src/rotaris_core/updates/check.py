@@ -289,8 +289,8 @@ def latest_release(
 def _release_from(document: Any) -> Release | None:
     """A ``Release`` from the API payload, or ``None`` if it is not one.
 
-    Drafts and pre-releases are dropped here as well as by the tag grammar: the
-    API flags them explicitly and a draft is not something a user can download.
+    GitHub's explicit draft and prerelease flags keep the installed-app update
+    channel stable while prerelease artifacts remain available for direct download.
     """
     if not isinstance(document, dict):
         return None

@@ -21,6 +21,7 @@ from rotaris_core.packaging.release import (
     VersionMismatchError,
     changelog,
     checksum_lines,
+    release_channel,
     release_notes,
     verify_versions,
 )
@@ -49,6 +50,13 @@ def _run_verify_version(args: argparse.Namespace) -> int:
     """Print the agreed version, or explain the disagreement and fail (AC-006)."""
     version = verify_versions(args.ref, args.root or repo_root())
     print(version)
+    return 0
+
+
+@traces(SWR.SWR_3002)
+def _run_release_channel(args: argparse.Namespace) -> int:
+    """Print ``stable`` or ``prerelease`` for workflow policy decisions."""
+    print(release_channel(args.version))
     return 0
 
 
@@ -108,6 +116,10 @@ def _parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("ref", help="tag or full ref, e.g. v1.2.3 or refs/tags/v1.2.3")
     verify_parser.add_argument("--root", type=Path, default=None, help="checkout to inspect")
     verify_parser.set_defaults(handler=_run_verify_version)
+
+    channel_parser = sub.add_parser("release-channel", help="classify a supported product version")
+    channel_parser.add_argument("version", help="version without the leading v")
+    channel_parser.set_defaults(handler=_run_release_channel)
 
     checksums_parser = sub.add_parser(
         "checksums", help=f"write {CHECKSUM_FILE} for the collected artifacts"

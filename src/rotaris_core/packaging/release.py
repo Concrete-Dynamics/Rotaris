@@ -33,9 +33,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from pathlib import Path
 
-#: Tags that release. Mirrors the ``on.push.tags`` glob, but a glob only filters
-#: — this is what rejects ``v1.2`` or ``v1.2.3-rc1`` with a reason (AC-001).
-TAG_PATTERN = re.compile(r"^v(?P<version>\d+\.\d+\.\d+)$")
+#: Stable and PEP 440 prerelease tags that publish native artifacts (AC-001).
+TAG_PATTERN = re.compile(r"^v(?P<version>\d+\.\d+\.\d+(?P<prerelease>(?:a|b|rc)\d+)?)$")
 
 #: The two distributions that release together under one tag (AC-006).
 PACKAGE_MANIFESTS: dict[str, str] = {
@@ -129,17 +128,26 @@ def version_from_tag(ref: str) -> str:
     """Version carried by a release tag, accepting a bare tag or a full ref.
 
     Raises ``ValueError`` naming what was rejected. The workflow's tag glob
-    already filters most of this, but a glob cannot explain itself in a log, and
-    ``v1.2.3-rc1`` matching ``v*.*.*`` would otherwise publish a release channel
-    that is explicitly out of scope.
+    already filters most inputs, while this parser enforces the exact stable and
+    prerelease grammar with an actionable log message.
     """
     tag = ref.removeprefix("refs/tags/").strip()
     match = TAG_PATTERN.match(tag)
     if match is None:
         raise ValueError(
-            f"{tag!r} is not a release tag; expected the form v<major>.<minor>.<patch>"
+            f"{tag!r} is not a release tag; expected v<major>.<minor>.<patch> "
+            "with an optional a<number>, b<number>, or rc<number> suffix"
         )
     return match.group("version")
+
+
+@traces(SWR.SWR_3002)
+def release_channel(version: str) -> str:
+    """Return the GitHub release channel for an accepted product version."""
+    match = TAG_PATTERN.fullmatch(f"v{version}")
+    if match is None:
+        raise ValueError(f"{version!r} is not a supported product version")
+    return "prerelease" if match.group("prerelease") else "stable"
 
 
 @traces(SWR.SWR_3002)

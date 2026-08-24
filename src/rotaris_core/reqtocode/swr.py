@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: e0627fcef34467c07ca805f67d35688f4a7d62c59070166d1ff85b3030b35147
+# GLOBAL-HASH: 0d2d12b27adb1ec1fd36eb23b25ceced2b7e2ae7a21711ca234975c80c36b3b1
 
 from __future__ import annotations
 
@@ -4738,7 +4738,7 @@ class SWR(IntEnum):
     """[approved] Continuing a session settles the children its previous run left running - docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md"""
 
     SWR_3715 = 3715
-    """[approved] A bundled install provisions the machine once, before the app opens - docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md"""
+    """[approved] A bundled install provisions the machine once during first launch - docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md"""
 
     SWR_3716 = 3716
     """[draft] The first launch offers Rotaris Cloud and lets the user in without it - docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md"""
@@ -4769,6 +4769,9 @@ class SWR(IntEnum):
 
     SWR_3726 = 3726
     """[approved] Brand mark ships with the application - docs/requirements/2000-rotaris-desktop/SWR-3726-brand-mark-ships-with-the-app.md"""
+
+    SWR_3727 = 3727
+    """[approved] Desktop startup stays visible, responsive, and console-free - docs/requirements/2000-rotaris-desktop/SWR-3727-quiet-responsive-desktop-startup.md"""
 
 
 #: Members carrying the deprecation marker (blueprint §3/§5).
@@ -6439,7 +6442,7 @@ META: dict[int, ReqMeta] = {
     3711: ReqMeta('SWR-3711', 3711, ReqStatus.APPROVED, 'Credential status is classified without an event loop', 'docs/requirements/700-providers-auth/SWR-3711-credential-status-without-event-loop.md', True, True, 'd1405012d7dfd798', 'technical', (700,)),
     3712: ReqMeta('SWR-3712', 3712, ReqStatus.APPROVED, 'A run resolves its provider credentials up front and keeps them staged', 'docs/requirements/700-providers-auth/SWR-3712-run-primes-provider-credentials.md', True, True, 'a7401f11d05e5f46', 'technical', (700,)),
     3714: ReqMeta('SWR-3714', 3714, ReqStatus.APPROVED, 'Continuing a session settles the children its previous run left running', 'docs/requirements/100-orchestration-core/SWR-3714-continued-session-settles-orphaned-children.md', True, True, '6791d8bf47ff793b', 'product', ()),
-    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once, before the app opens', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, '0d3832adadb27951', 'product', ()),
+    3715: ReqMeta('SWR-3715', 3715, ReqStatus.APPROVED, 'A bundled install provisions the machine once during first launch', 'docs/requirements/3000-distribution-updates/SWR-3715-first-run-machine-setup.md', True, True, 'e3a2c2c157bd7f73', 'product', ()),
     3716: ReqMeta('SWR-3716', 3716, ReqStatus.DRAFT, 'The first launch offers Rotaris Cloud and lets the user in without it', 'docs/requirements/2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md', True, True, 'eeffef4c8eae9cc7', 'product', ()),
     3717: ReqMeta('SWR-3717', 3717, ReqStatus.APPROVED, 'Legal and product information is always reachable from the desktop app', 'docs/requirements/2000-rotaris-desktop/SWR-3717-about-legal-center.md', True, True, 'fcb42c12e1878212', 'product', ()),
     3719: ReqMeta('SWR-3719', 3719, ReqStatus.APPROVED, 'Desktop credentials are protected with platform-appropriate user access controls', 'docs/requirements/2000-rotaris-desktop/SWR-3719-platform-credential-protection.md', True, True, '49cea058d6390263', 'product', ()),
@@ -6450,4 +6453,5 @@ META: dict[int, ReqMeta] = {
     3724: ReqMeta('SWR-3724', 3724, ReqStatus.APPROVED, 'Standalone distributions carry the pinned Serena runtime', 'docs/requirements/3000-distribution-updates/SWR-3724-bundled-serena-runtime.md', True, True, 'e5cc73f6df105a42', 'product', ()),
     3725: ReqMeta('SWR-3725', 3725, ReqStatus.APPROVED, 'Global external-hook catalog', 'docs/requirements/2000-rotaris-desktop/SWR-3725-global-external-hook-catalog.md', True, True, '93d40c379217434d', 'product', ()),
     3726: ReqMeta('SWR-3726', 3726, ReqStatus.APPROVED, 'Brand mark ships with the application', 'docs/requirements/2000-rotaris-desktop/SWR-3726-brand-mark-ships-with-the-app.md', True, True, '916079cb924bb792', 'technical', (3700,)),
+    3727: ReqMeta('SWR-3727', 3727, ReqStatus.APPROVED, 'Desktop startup stays visible, responsive, and console-free', 'docs/requirements/2000-rotaris-desktop/SWR-3727-quiet-responsive-desktop-startup.md', True, True, 'f280863906a3a573', 'product', ()),
 }

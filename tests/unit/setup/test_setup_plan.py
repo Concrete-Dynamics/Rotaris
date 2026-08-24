@@ -22,6 +22,7 @@ from rotaris_core.setup import (
 )
 from rotaris_core.setup.manifest import PLAYWRIGHT_MCP_VERSION
 from rotaris_core.setup.models import ToolProbe
+from rotaris_core.subprocess_utils import hidden_process_kwargs, prepare_child_command
 
 
 @verifies(SWR.SWR_3715, SWR.SWR_3724)
@@ -215,6 +216,31 @@ def test_plan_launches_the_discovered_windows_npx_command(
 
     warmup = next(step for step in plan.steps if step.id.startswith("warm:npx:"))
     assert warmup.command == (npx, "-y", "@playwright/mcp@0.0.75", "--help")
+
+
+@verifies(SWR.SWR_3727)
+def test_windows_children_are_hidden_and_batch_launchers_use_comspec() -> None:
+    """Productive use: a Windows user launches Rotaris without flashing command windows.
+    Expected outcome: native tools and npx.cmd receive quiet, executable launch contracts."""
+    native, native_options = prepare_child_command(
+        [r"C:\Program Files\Git\cmd\git.exe", "--version"],
+        platform="win32",
+        environ={"COMSPEC": r"C:\Windows\System32\cmd.exe"},
+    )
+    batch, batch_options = prepare_child_command(
+        [r"C:\Program Files\nodejs\npx.cmd", "-y", "@playwright/mcp@0.0.75", "--help"],
+        platform="win32",
+        environ={"COMSPEC": r"C:\Windows\System32\cmd.exe"},
+    )
+
+    assert native == [r"C:\Program Files\Git\cmd\git.exe", "--version"]
+    assert native_options == {"creationflags": 0x08000000}
+    assert isinstance(batch, str)
+    assert batch.startswith(r"C:\Windows\System32\cmd.exe /d /s /c ")
+    assert '"C:\\Program Files\\nodejs\\npx.cmd"' in batch
+    assert "@playwright/mcp@0.0.75" in batch
+    assert batch_options == {"creationflags": 0x08000000}
+    assert hidden_process_kwargs(platform="linux") == {}
 
 
 @verifies(SWR.SWR_3715)

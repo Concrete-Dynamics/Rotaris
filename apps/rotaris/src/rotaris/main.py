@@ -101,6 +101,27 @@ def schedule_first_launch_workspace_prompt(window: MainWindow) -> None:
     )
 
 
+@traces(SWR.SWR_3715, SWR.SWR_3727)
+def schedule_post_show_machine_setup(
+    window: MainWindow,
+    workspace: Path,
+    *,
+    prompt_for_workspace: bool = False,
+) -> None:
+    """Run required machine setup after first paint, then continue onboarding."""
+
+    def run() -> None:
+        from rotaris.setup_coordinator import run_desktop_setup
+
+        run_desktop_setup(workspace=workspace, parent=window)
+        window.settings.refresh_machine_setup()
+        window.start_git_refresh()
+        if prompt_for_workspace:
+            window.prompt_for_initial_workspace()
+
+    QTimer.singleShot(FIRST_LAUNCH_PROMPT_DELAY_MS, run)
+
+
 def create_window(
     workspace: Path, *, demo: bool = False, diagnostics: Any | None = None
 ) -> MainWindow:
@@ -120,8 +141,6 @@ def create_window(
     with recorder.span("config.load"):
         config.load()
     git = GitService(workspace.resolve(), store)
-    with recorder.span("git.refresh"):
-        git.refresh()
     bridge = RunCoordinator(workspace.resolve(), store, config, diagnostics=recorder)
     return MainWindow(
         store,
@@ -174,13 +193,14 @@ def main(argv: list[str] | None = None) -> int:
     # application name and organisation are set first because that is what
     # decides which ``QSettings`` file the preference is read from.
     install_theme_persistence()
-    from rotaris_core.setup import is_bundled_runtime
+    from rotaris_core.setup import (
+        activate_managed_tool_environment,
+        is_bundled_runtime,
+        setup_required,
+    )
 
-    if is_bundled_runtime():
-        from rotaris.setup_coordinator import run_desktop_setup
-
-        setup_workspace = Path(args.workspace) if args.workspace else None
-        run_desktop_setup(workspace=setup_workspace)
+    activate_managed_tool_environment()
+    machine_setup_after_show = is_bundled_runtime() and setup_required()
     if args.demo:
         startup = StartupWorkspace(Path(args.workspace or ".").resolve(), prompt_after_show=False)
     else:
@@ -201,8 +221,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return created
 
-    def activate_window(created: MainWindow) -> None:
+    def activate_window(created: MainWindow, *, start_git: bool = True) -> None:
         created.show()
+        if start_git:
+            created.start_git_refresh()
         # After ``show`` and only here (SWR-3003, AC-005): the notification belongs on
         # a window the user can already see, and a check started from ``MainWindow``
         # itself would run in every test that builds one.
@@ -230,7 +252,13 @@ def main(argv: list[str] | None = None) -> int:
 
     window = build_window(workspace)
     active_windows.append(window)
-    activate_window(window)
-    if startup.prompt_after_show:
+    activate_window(window, start_git=not machine_setup_after_show)
+    if machine_setup_after_show:
+        schedule_post_show_machine_setup(
+            window,
+            workspace,
+            prompt_for_workspace=startup.prompt_after_show,
+        )
+    elif startup.prompt_after_show:
         schedule_first_launch_workspace_prompt(window)
     return app.exec()

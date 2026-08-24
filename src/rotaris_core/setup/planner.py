@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from packaging.version import InvalidVersion, Version
 
 from rotaris_core.reqtocode import SWR, traces
+from rotaris_core.subprocess_utils import hidden_process_kwargs
 
 from .manifest import manifest_fingerprint
 from .models import (
@@ -45,7 +46,7 @@ def _meets(version: str | None, minimum: str) -> bool:
         return False
 
 
-@traces(SWR.SWR_3715)
+@traces(SWR.SWR_3715, SWR.SWR_3727)
 def probe_tool(spec: ToolSpec, *, env: dict[str, str] | None = None) -> ToolProbe:
     executable = shutil.which(spec.command, path=(env or os.environ).get("PATH"))
     if executable is None:
@@ -58,6 +59,7 @@ def probe_tool(spec: ToolSpec, *, env: dict[str, str] | None = None) -> ToolProb
             timeout=10,
             check=False,
             env=env,
+            **hidden_process_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return ToolProbe(spec.name, Path(executable), None, False)

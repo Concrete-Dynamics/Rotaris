@@ -3,12 +3,12 @@ req-id: SWR-3715
 status: approved
 trace: required
 test: required
-title: "A bundled install provisions the machine once, before the app opens"
+title: "A bundled install provisions the machine once during first launch"
 epic: SWR-3000
 date: 2026-08-22
 ---
 
-# SWR-3715 — A bundled install provisions the machine once, before the app opens
+# SWR-3715 — A bundled install provisions the machine once during first launch
 
 SWR-3001 freezes Python and the application dependency graph into the shipped
 bundle. SWR-3724 adds the pinned Serena runtime to that graph. The remaining
@@ -16,11 +16,12 @@ managed external programs are `git` for worktrees and checkpoints and `rg` for
 the search tool. `npx` supports optional JavaScript MCP servers, including the
 default Playwright server, when the user has installed Node.js. A user who
 installs from `Rotaris-<v>-windows-x64-setup.exe`, the DMG, or the AppImage
-therefore needs one visible setup run for Git and ripgrep before productive use.
+therefore needs one visible setup run for Git and ripgrep after the desktop first paints and before
+productive use.
 
-Rotaris shall close that gap with a **setup run**: the first launch after a
-bundled install provisions what is missing, tells the user what it is doing
-while it does it, and then starts the application it was installed to start.
+Rotaris shall close that gap with a **setup run**: the first launch after a bundled install paints
+the desktop, provisions what is missing, tells the user what it is doing while it does it, and then
+leaves the already-visible application ready for productive use.
 Every later launch skips it.
 
 ## Scope
@@ -119,9 +120,9 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 
 ## Acceptance criteria
 
-- **AC-001**: The first launch of a bundled Rotaris on a machine with no `git`,
-  Node or `rg` provisions Git and ripgrep, omits Node and every `npx` cache
-  warm-up, and then starts the desktop application without further user action.
+- **AC-001**: The first launch of a bundled Rotaris on a machine with no `git`, Node or `rg`
+  paints the desktop, provisions Git and ripgrep, omits Node and every `npx` cache warm-up, and
+  reaches a ready desktop without further user action.
 - **AC-002**: The default Playwright MCP server is available when Node.js
   supplies `npx` and unavailable otherwise. Cache warming launches the
   discovered executable, including `npx.cmd` on Windows. The bundled installer
@@ -170,6 +171,8 @@ blocks on one: it provisions if it can and otherwise reports the missing tool.
 Depends on: [SWR-3001 — Cross-Platform Standalone Binaries](SWR-3001-cross-platform-standalone-binaries.md)
 
 Related: [SWR-3724 — Standalone distributions carry the pinned Serena runtime](SWR-3724-bundled-serena-runtime.md)
+
+Related: [SWR-3727 — Desktop startup stays visible, responsive, and console-free](../2000-rotaris-desktop/SWR-3727-quiet-responsive-desktop-startup.md)
 
 Serves: [SWR-3716 — The first launch offers Rotaris Cloud and lets the user in without it](../2000-rotaris-desktop/SWR-3716-first-launch-provider-guide.md)
 

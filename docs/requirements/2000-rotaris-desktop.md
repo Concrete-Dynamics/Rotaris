@@ -990,6 +990,16 @@ the view.
 
 Full requirement: [SWR-2454 — The live view keeps up with the run](2000-rotaris-desktop/SWR-2454-live-view-keeps-up-with-the-run.md)
 
+## SWR-2455 — First desktop launch opens a real project folder
+
+status: approved
+
+When Rotaris starts without an explicit or remembered workspace, it opens the
+operating system's native project-folder chooser before creating the desktop
+window or initializing a project.
+
+Full requirement: [SWR-2455 — First desktop launch opens a real project folder](2000-rotaris-desktop/SWR-2455-first-launch-project-folder.md)
+
 ## SWR-2913 — A session that is not running shows no live agent
 
 The run header and the agent list are two readings of one snapshot (SWR-2122), and nothing

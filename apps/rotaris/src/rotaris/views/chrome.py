@@ -28,7 +28,7 @@ from rotaris.theme import phosphor, tokens
 from rotaris.theme.a11y import raise_on
 from rotaris.theme.brand import mark_pixmap
 from rotaris.theme.manager import Themed
-from rotaris.widgets.cards import _tag_variant, make_button
+from rotaris.widgets.cards import _tag_variant
 from rotaris.widgets.meters import StatusDot
 
 if TYPE_CHECKING:
@@ -171,12 +171,11 @@ class WorkspaceChip(QLabel):
         super().keyPressEvent(event)
 
 
-@traces(SWR.SWR_2033, SWR.SWR_2414, SWR.SWR_2455, SWR.SWR_3726, SWR.SWR_3728)
+@traces(SWR.SWR_2033, SWR.SWR_2414, SWR.SWR_2455, SWR.SWR_3726)
 class TitleBar(Themed, QWidget):
-    """Brand strip, active workspace and session, plus the global create action."""
+    """Brand strip, active workspace and session."""
 
     workspace_open_requested = Signal()
-    new_session_requested = Signal()
 
     def __init__(self, store: WorkspaceStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -227,19 +226,6 @@ class TitleBar(Themed, QWidget):
         self.status_label = QLabel()
         self._session_chip_layout.addWidget(self.status_label)
         layout.addWidget(self.session_chip)
-
-        # A persistent secondary action keeps session creation available from
-        # every primary view while leaving each view's own primary hierarchy
-        # intact (SWR-3728).
-        self.new_session_button = make_button("New session", "secondary", compact=True)
-        phosphor.set_button_icon(self.new_session_button, "plus")
-        self.new_session_button.setAccessibleName("New session")
-        self.new_session_button.setAccessibleDescription(
-            "Open the session launch options for a fresh session in this project."
-        )
-        self.new_session_button.setToolTip("Start a new session")
-        self.new_session_button.clicked.connect(self.new_session_requested.emit)
-        layout.addWidget(self.new_session_button)
 
         # One step under the session dot: a background review is subordinate to
         # the run it is reviewing, and the two must not compete for the eye.

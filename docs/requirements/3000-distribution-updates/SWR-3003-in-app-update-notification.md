@@ -58,9 +58,9 @@ explicit user action.
   includes the 404 returned while the repository has no release at all, and the
   403 returned when the unauthenticated rate limit is exhausted.
 - **AC-004**: The running version is compared to the release `tag_name` using
-  semantic versioning. Pre-release tags and drafts are ignored — SWR-3002's tag
-  grammar already rejects anything but `v<major>.<minor>.<patch>`, so this is one
-  rule enforced in one place rather than restated here.
+  semantic versioning. GitHub payloads marked as prereleases or drafts are
+  ignored, preserving the stable in-app update channel while SWR-3002 publishes
+  prerelease artifacts for direct download.
 - **AC-015**: No Settings control, persisted user preference or supported desktop
   configuration option can disable the standalone launch-time update check. Test
   seams may replace the release source, but production user configuration cannot

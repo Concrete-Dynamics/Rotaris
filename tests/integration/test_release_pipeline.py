@@ -65,6 +65,21 @@ def test_the_guard_command_accepts_an_agreeing_checkout(
 
 
 @verifies(SWR.SWR_3002)
+def test_the_guard_command_accepts_an_agreeing_alpha_checkout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Productive use: a maintainer can publish native alpha downloads.
+    Expected outcome: matching alpha package versions pass the release guard.
+    """
+    root = _checkout(tmp_path, core="0.120.15a1", desktop="0.120.15a1")
+
+    exit_code = main(["verify-version", "refs/tags/v0.120.15a1", "--root", str(root)])
+
+    assert exit_code == 0
+    assert capsys.readouterr().out.strip() == "0.120.15a1"
+
+
+@verifies(SWR.SWR_3002)
 def test_the_guard_command_stops_a_mismatched_release(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -224,6 +239,7 @@ def test_publishing_uses_trusted_publishing_and_never_gates_the_release(
     assert publish["permissions"]["contents"] == "read"
     assert publish["permissions"]["id-token"] == "write"
     assert publish["continue-on-error"] is True
+    assert publish["if"] == "needs.guard.outputs.channel == 'stable'"
     assert "release" in publish["needs"]
     steps = _steps_text(publish)
     assert "pypa/gh-action-pypi-publish" in steps
@@ -231,6 +247,22 @@ def test_publishing_uses_trusted_publishing_and_never_gates_the_release(
     # A bare `uv build` in a workspace builds the root package only.
     assert "--package rotaris-core" in steps
     assert "--package rotaris " in steps
+
+
+@verifies(SWR.SWR_3002)
+def test_prereleases_update_github_without_entering_the_stable_package_channel(
+    workflow: Mapping[str, Any],
+) -> None:
+    """Productive use: alpha users receive native downloads from GitHub.
+    Expected outcome: the guard publishes its channel and the release keeps that state.
+    """
+    jobs = workflow["jobs"]
+    guard = jobs["guard"]
+    release_steps = _steps_text(jobs["release"])
+
+    assert guard["outputs"]["channel"] == "${{ steps.check.outputs.channel }}"
+    assert "release-channel" in _steps_text(guard)
+    assert "prerelease: ${{ needs.guard.outputs.channel == 'prerelease' }}" in release_steps
 
 
 @verifies(SWR.SWR_3002)

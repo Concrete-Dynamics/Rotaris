@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: 2b28c72dffc6083dae22f9a191d164f36fa783eaee02448abfe72f71443a965e
+# GLOBAL-HASH: e7afe36da5ee780b388247480d3df418958b5b3aee5da83848263cf623daaf77
 
 from __future__ import annotations
 
@@ -6271,8 +6271,8 @@ META: dict[int, ReqMeta] = {
     2913: ReqMeta('SWR-2913', 2913, ReqStatus.APPROVED, 'A session that is not running shows no live agent', 'docs/requirements/2000-rotaris-desktop/SWR-2913-no-live-agent-in-a-finished-session.md', True, True, '19c81bdbc89938ab', 'product', ()),
     3000: ReqMeta('SWR-3000', 3000, ReqStatus.DRAFT, 'Distribution & Updates', 'docs/requirements/3000-distribution-updates.md', False, False, '8972df65c6149d73', 'product', ()),
     3001: ReqMeta('SWR-3001', 3001, ReqStatus.APPROVED, 'Cross-Platform Standalone Binaries', 'docs/requirements/3000-distribution-updates/SWR-3001-cross-platform-standalone-binaries.md', True, True, '2c4df891e9bf7928', 'product', ()),
-    3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '96963c37c5f0bda9', 'product', ()),
-    3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '7a1418f1b3cfa3b3', 'product', ()),
+    3002: ReqMeta('SWR-3002', 3002, ReqStatus.APPROVED, 'Automated Release Pipeline', 'docs/requirements/3000-distribution-updates/SWR-3002-automated-release-pipeline.md', True, True, '97e8129a2685006f', 'product', ()),
+    3003: ReqMeta('SWR-3003', 3003, ReqStatus.APPROVED, 'In-App Update Notification', 'docs/requirements/3000-distribution-updates/SWR-3003-in-app-update-notification.md', True, True, '54abf2c030c3333d', 'product', ()),
     3004: ReqMeta('SWR-3004', 3004, ReqStatus.APPROVED, 'A final assistant message is the completion signal', 'docs/requirements/500-tool-platform/SWR-3004-no-terminal-completion-tool.md', True, True, '28e0403b57eab347', 'technical', (2132, 2808)),
     3005: ReqMeta('SWR-3005', 3005, ReqStatus.DRAFT, 'Persona-published artifacts in the chat transcript', 'docs/requirements/2000-rotaris-desktop/SWR-3005-published-artifacts-in-transcript.md', True, True, 'c0d5c1f8b8aa547a', 'product', ()),
     3006: ReqMeta('SWR-3006', 3006, ReqStatus.DRAFT, 'Sticky prompt header in the chat transcript', 'docs/requirements/2000-rotaris-desktop/SWR-3006-sticky-prompt-header.md', True, True, '49bc5ba8a0956b53', 'product', ()),

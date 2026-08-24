@@ -29,7 +29,7 @@ These are one-time, and none of them can be done from inside the repository.
    <https://pypi.org/project/rotaris-core/> before tagging.
 2. **Configure trusted publishing** for each project — PyPI → *Manage* →
    *Publishing* → *Add a new publisher* (GitHub):
-   - Owner `theUpsider`, repository `Rotaris`
+   - Owner `Concrete-Dynamics`, repository `Rotaris`
    - Workflow name `release.yml`
    - Environment: leave blank
 
@@ -52,9 +52,9 @@ git tag v0.101.0
 git push origin v0.101.0
 ```
 
-Only `v<major>.<minor>.<patch>` releases. `v1.2`, `v1.2.3-rc1` and branch pushes
-do not — pre-release channels are out of scope, and the guard rejects them by
-name rather than letting the tag glob decide silently.
+Stable releases use `v<major>.<minor>.<patch>`. Native prerelease artifacts use
+PEP 440 suffixes such as `v0.120.15a1`, `v0.120.15b1`, or `v0.120.15rc1`.
+Prereleases retain GitHub's prerelease state and keep PyPI on the stable channel.
 
 ## What the pipeline does
 
@@ -63,7 +63,7 @@ name rather than letting the tag glob decide silently.
 | `guard` | Checks the tag against both manifests | Stops everything — nothing is built |
 | `build` | Freezes the three entry points on each native runner and wraps them (installer / DMG / AppImage) | One platform failing does not stop the others |
 | `release` | Collects what arrived, writes `SHA256SUMS.txt`, renders the body, creates the Release | Runs even when a build leg failed |
-| `publish-pypi` | `uv build` both packages, publishes via OIDC | Does not roll back the Release |
+| `publish-pypi` | For stable tags, `uv build` publishes both packages via OIDC | Does not roll back the Release |
 | `status` | Turns the run red if any leg failed | Makes a partial release visible |
 
 ## Artifacts

@@ -10,36 +10,35 @@ date: 2026-08-11
 
 # SWR-3002 — Automated Release Pipeline
 
-Pushing a version tag must trigger an automated CI/CD pipeline that builds every
-standalone binary on its native platform, creates a GitHub Release with all
-artifacts, and publishes updated pip packages to PyPI for both `rotaris-core`
-and `rotaris`. The pipeline must fail cleanly — a build failure on one platform
-must not block successful artifacts from the others, and the Release must
-clearly distinguish which platforms succeeded.
+Pushing a supported product-version tag shall trigger an automated CI/CD
+pipeline that builds every standalone binary on its native platform and creates
+or updates the matching GitHub Release with all available artifacts and a
+checksum manifest. Stable tags also publish `rotaris-core` and `rotaris` to
+PyPI. Prerelease tags publish native GitHub artifacts, retain GitHub's
+prerelease state, and leave the stable package channel unchanged.
 
 ## Scope
 
-- **In scope**: Tag-triggered GitHub Actions workflow. Matrix build across the
-  platforms SWR-3001 can actually produce: Windows x64, macOS ARM64, Linux x64.
-  GitHub Release creation with attached platform binaries and a generated
-  checksum file. PyPI publish for `rotaris-core` and `rotaris`. Version number
-  sourced from the tag and checked against both `pyproject.toml` files.
-- **Out of scope**: Pre-release / release-candidate channels. Signed commits or
-  SLSA provenance. Homebrew cask, Chocolatey, WinGet, or Snap publication. Code
-  signing and notarization (inherited from SWR-3001: the artifacts trip
-  SmartScreen and Gatekeeper on first launch).
-- **Out of scope — Windows ARM64 and Intel macOS (deferred 2026-08-13).**
-  Windows ARM64 has no buildable target at all while PySide6 ships no
-  `win_arm64` wheel (SWR-3001). Intel macOS is dropped for a different reason: a
-  universal2 build requires *every* native dependency to be installed as a
-  universal2 wheel, and uv resolves host-matched wheels, so the pipeline builds
-  natively on Apple Silicon instead. Both are revisited when a second runner or
-  a native wheel makes them real rather than aspirational.
+- **In scope**: Tag-triggered GitHub Actions workflow for stable versions and
+  PEP 440 prereleases using `v<major>.<minor>.<patch>`,
+  `v<major>.<minor>.<patch>a<number>`,
+  `v<major>.<minor>.<patch>b<number>`, or
+  `v<major>.<minor>.<patch>rc<number>`. Matrix builds across Windows x64,
+  macOS ARM64, and Linux x64. GitHub Release creation or update with platform
+  binaries, console archives, and `SHA256SUMS.txt`. Version agreement across
+  the tag and both package manifests. Stable-release publication of both Python
+  packages through PyPI trusted publishing.
+- **Out of scope**: Signed commits, SLSA provenance, Homebrew, Chocolatey,
+  WinGet, Snap, code signing, and notarization.
+- **Deferred platforms**: Windows ARM64 remains deferred while PySide6 lacks a
+  `win_arm64` wheel. Intel macOS remains deferred while the dependency set
+  lacks a complete universal2 wheel path.
 
 ## Acceptance criteria
 
-- **AC-001**: Pushing a tag matching `v*.*.*` triggers the full release
-  workflow. Pushing any other tag or branch does not.
+- **AC-001**: Pushing a supported stable or prerelease version tag triggers the
+  full release workflow. Branch pushes and tags outside the supported grammar
+  leave the release workflow idle.
 - **AC-002**: The workflow builds every standalone binary on a native runner for
   its platform — `windows-latest`, `macos-latest` (Apple Silicon) and a pinned
   `ubuntu-24.04`. The Linux runner is pinned rather than `-latest` so a runner
@@ -50,9 +49,9 @@ clearly distinguish which platforms succeeded.
 - **AC-004**: The GitHub Release body lists every artifact with its SHA256
   hash, the source tag, and the changelog (derived from commit history since
   the previous tag).
-- **AC-005**: On success, `rotaris-core` and `rotaris` are published to PyPI
-  with the version from the tag. A PyPI publish failure does not roll back the
-  GitHub Release.
+- **AC-005**: Stable tags publish `rotaris-core` and `rotaris` to PyPI through
+  trusted publishing. Prerelease tags retain GitHub prerelease status and
+  publish their native artifacts through GitHub Releases.
 - **AC-006**: The version declared in the tag, `pyproject.toml` (root), and
   `apps/rotaris/pyproject.toml` must agree. A mismatch aborts the pipeline
   before any artifacts are built, and the failure names all three values.
@@ -66,9 +65,9 @@ clearly distinguish which platforms succeeded.
 
 | Level         | Productive scenario                                                                                                                | Exercised boundary                             | Planned/covering test                              |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
-| Unit          | A maintainer tags a version the packages do not carry and is told all three numbers; a user verifies a download against the published hash; a release with a failed platform still says which artifact is missing | Version guard, checksum manifest, release body   | `tests/unit/packaging/test_release_metadata.py`     |
-| Integration   | A maintainer runs the documented guard command against the checkout and the workflow is wired to the platforms the code declares    | `python -m rotaris_core.packaging` → `release.yml` | `tests/integration/test_release_pipeline.py`        |
-| User-flow E2E | N/A — the product boundary is a pushed tag, which cannot be exercised hermetically and cannot be undone                             | —                                               | —                                                   |
+| Unit          | A maintainer supplies a stable or prerelease tag and receives an agreed product version; malformed and mismatched versions receive actionable failures | Version-tag grammar, manifest agreement, checksum and release metadata | `tests/unit/packaging/test_release_metadata.py`     |
+| Integration   | A maintainer's tag drives the native matrix, release upload, prerelease flag, and stable-only PyPI gate declared by the workflow | Packaging CLI → `.github/workflows/release.yml` | `tests/integration/test_release_pipeline.py`        |
+| User-flow E2E | N/A — a pushed release tag creates durable external publication state and therefore has no hermetic reversible product boundary | — | — |
 
 The release logic that can be wrong — version agreement, artifact naming,
 checksums, changelog, partial-failure notes — lives in

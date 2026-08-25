@@ -6572,7 +6572,7 @@ wheels = [
 
 [[package]]
 name = "rotaris"
-version = "0.120.22a1"
+version = "0.120.23a1"
 source = { editable = "apps/rotaris" }
 dependencies = [
     { name = "mistune" },

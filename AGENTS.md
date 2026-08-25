@@ -136,7 +136,20 @@ owns exactly one area, and none of them may write into another's:
 | --- | --- |
 | an agent inside a Rotaris session | You are **already** in one: `.rotaris/worktrees/<session-id>`, branch `rotaris/session/<session-id>`, cut from the base checkout's current branch by `GitWorktreeService` (`rotaris … --isolate`). Work there. Do not create another, and do not `git checkout` — the harness owns this tree. |
 | Claude Code | `.claude/worktrees/<name>` — mechanics in [CLAUDE.md](CLAUDE.md#worktrees-in-claude-code-sessions). |
-| any other agent, or a background job that cannot change directory | `rtk git worktree add .tmp_wt/<name> -b <type>/<swr-id>-<slug> origin/master` |
+| any other agent, or a background job that cannot change directory | `rtk git worktree add .tmp_wt/<name> -b <type>/<swr-id>-<slug> origin/<base>` |
+
+**Ask which branch is your base — never assume `master`.** A requirement that
+belongs to a [milestone](docs/milestones/README.md) branches from, and merges
+back into, that milestone's branch. The answer is a command, not a document you
+have to have read:
+
+```bash
+uv run python devtools/milestone.py branch-for SWR-<n>    # -> milestone/m1-… or master
+```
+
+`master` is the normal answer and means today's behaviour, unchanged: a bug fix
+or a requirement in no milestone goes straight to `master`. Anything else is
+`<base>` in the table above and in § 4 below.
 
 Branches are `feat/…`, `fix/…`, or `chore/…` plus the requirement id when there
 is one. Keep every worktree **inside** the repo — `.rotaris/worktrees/`,
@@ -153,6 +166,11 @@ feature branch, a second tree can grab `master` and two sessions then merge into
 two different working copies of the same branch. If you find `master` checked
 out somewhere other than the repo root, that is a defect — move that tree off it
 (`git checkout -b …` or remove the worktree) before doing anything else.
+
+The same reasoning applies one level down: **a milestone or epic integration
+branch is checked out in exactly one worktree.** Two trees on the same
+integration branch is the same collision as two trees on `master` — each merge
+lands in a different working copy of one branch.
 
 Then give the worktree its own environment, once:
 
@@ -208,17 +226,21 @@ changed — and nothing else. No full suite, no broader selection:
 uv run pytest <test-file-for-the-module-you-changed> -q --timeout=30
 ```
 
-### 4. Merge into `master` yourself — no review, no waiting
+### 4. Merge into your base branch yourself — no review, no waiting
 
 **Merging is the agent's job, not a human's.** With § 3 green and the branch
 fully committed, integrate it. Do not wait for approval or a review.
 
-First bring `master` into the branch, inside your own worktree — that is where
+`<base>` throughout this section is what `milestone.py branch-for` answered in
+§ 1 — the milestone branch when the requirement belongs to one, `master`
+otherwise.
+
+First bring `<base>` into the branch, inside your own worktree — that is where
 conflicts get resolved, with the worktree's own environment behind you:
 
 ```bash
 rtk git fetch origin
-rtk git merge master               # in your worktree, on your branch
+rtk git merge <base>               # in your worktree, on your branch
 ```
 
 **Resolve conflicts by keeping both sides' behavior.** A conflict is two
@@ -234,36 +256,59 @@ and say so plainly in your report.
 - Requirement docs and epic indices: keep **both** ids, never drop the incoming
   one to make `diff --strict` quiet.
 
-Then merge to `master` **in the main repo root** — the one tree allowed to hold
-`master` (§ 1). There is no second place to do this:
+Then merge to `<base>` **in the one tree that holds it** (§ 1). Which tree that
+is depends on the base, and the main checkout never leaves `master`:
 
 ```bash
 rtk git status                     # untracked or uncommitted work you did not
                                    # create? Leave it alone — a live session may
                                    # own it, and never `git stash` it away.
+
+# base is `master`: the main repo root, the only tree allowed to hold it.
 rtk git checkout master            # only ever run in the main repo root
 rtk git merge --no-ff <branch> -m "<type>: <summary> (SWR-<n>)"
+
+# base is a milestone or epic branch: its own integration worktree, cut once
+# when the branch was created. Never `git checkout` it in the main repo root —
+# that frees `master` for a second tree to grab, which is what § 1 forbids.
+rtk git worktree list              # find it; cut one if the branch has none:
+                                   #   rtk git worktree add .tmp_wt/<base-slug> <base>
+cd <that worktree> && rtk git merge --no-ff <branch> -m "<type>: <summary> (SWR-<n>)"
 ```
 
-If the main checkout is busy — a live session owns it, or it sits on a branch
-whose owner still needs it — do **not** spin up a scratch worktree on `master`.
-Two trees on `master` is exactly the collision § 1 forbids. Instead, update the
-`master` ref without checking it out anywhere, from your own worktree:
+If that tree is busy — a live session owns it, or its owner still needs it — do
+**not** spin up a second worktree on `<base>`. Two trees on one branch is
+exactly the collision § 1 forbids. Instead, update the `<base>` ref without
+checking it out anywhere, from your own worktree:
 
 ```bash
-rtk proxy git push . <branch>:master   # fast-forward only; refuses otherwise
+rtk proxy git push . <branch>:<base>   # fast-forward only; refuses otherwise
 ```
 
-This is safe precisely because you just merged `master` into `<branch>` above,
-so `master` is an ancestor and the update is a fast-forward. If git refuses,
-`master` moved underneath you: `rtk git fetch origin && rtk git merge master` in
+This is safe precisely because you just merged `<base>` into `<branch>` above,
+so `<base>` is an ancestor and the update is a fast-forward. If git refuses,
+`<base>` moved underneath you: `rtk git fetch origin && rtk git merge <base>` in
 your worktree again, then retry. It costs the `--no-ff` merge commit, so prefer
 the main checkout whenever it is free; when it is not, a fast-forwarded `master`
 beats a second tree owning the branch.
 
 Never merge from inside the worktree that holds the branch. Push only when
-asked. Epic units merge into the epic integration branch, not `master`; only
-the epic branch merges into `master`.
+asked.
+
+**The chain, in full.** Unit branches merge into their epic branch; epic
+branches merge into their milestone branch; only a milestone branch — or a
+requirement belonging to no milestone — merges into `master`. A milestone branch
+reaches `master` when, and only when, its gate is green:
+
+```bash
+uv run python devtools/milestone.py gate M<n> --tests-passed
+```
+
+That is every member requirement `approved`, ReqToCode clean, no requirement
+text drifted from its code, both manifests carrying the milestone's
+`target-version`, `origin/master` already merged in, and the full suite green on
+this head. Merging it is what cuts the release — see
+[docs/milestones/README.md](docs/milestones/README.md).
 
 ### 5. Clean up the branch and worktree
 
@@ -287,9 +332,10 @@ rtk git worktree remove <worktree-path>            # ~15 s
 
 **Do not stop early.** Work is finished when *all* hold: the requirement is
 implemented completely, ReqToCode is clean (`check` green, requirement
-`status: approved`, epic index updated), and the branch is **merged into
-`master`**. A partial implementation, an unresolved trace, or an unmerged
-branch is not done — keep going until it is, or state plainly what is blocked
+`status: approved`, epic index updated), and the branch is **merged into its
+base branch** — the milestone branch when the requirement belongs to one,
+`master` otherwise (§ 1). A partial implementation, an unresolved trace, or an
+unmerged branch is not done — keep going until it is, or state plainly what is blocked
 and why.
 
 ## Critical rules — ReqToCode (enforced, build-breaking)

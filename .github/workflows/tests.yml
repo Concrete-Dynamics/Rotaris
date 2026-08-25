@@ -1,0 +1,52 @@
+name: Tests
+
+# The suite had no CI at all before this file: only `reqtocode.yml` and
+# `release.yml` existed, and `docs/reference/releasing.md` referred to a
+# `rotaris.yml` that was never checked in. The milestone gate's "full suite
+# green" check is only worth something once something actually runs the suite.
+on:
+  pull_request:
+  push:
+    branches: [master, main, "milestone/**", "epic/**"]
+  # Called by milestone.yml so the gate can consume this verdict in the same run
+  # rather than guessing from a separate workflow's history.
+  workflow_call:
+    outputs:
+      passed:
+        description: "true when every suite in this workflow passed"
+        value: ${{ jobs.suite.outputs.passed }}
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      passed: ${{ steps.verdict.outputs.passed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages
+
+      # `--dist loadfile` and the snapshot flag come from `addopts` in
+      # pyproject.toml; `-n auto` is what makes the engine suite affordable.
+      - name: Engine and integration suite
+        run: uv run pytest -q --timeout=120 -n auto
+
+      # The Qt suite needs its own invocation: the serial-marked tests want a
+      # core to themselves, exactly as `make test-rotaris` splits them.
+      - name: Rotaris desktop suite
+        run: |
+          uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
+          uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
+
+      # Dev tooling. Deliberately outside `testpaths`, so it needs its own line.
+      - name: Dev tooling suite
+        run: uv run pytest devtools/tests -q --timeout=60
+
+      - id: verdict
+        run: echo "passed=true" >> "$GITHUB_OUTPUT"

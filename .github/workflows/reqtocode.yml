@@ -3,7 +3,9 @@ name: ReqToCode traceability
 on:
   pull_request:
   push:
-    branches: [master, main]
+    # Milestone and epic integration branches get the same gate as master:
+    # without it a long-lived branch has no ReqToCode signal between merges.
+    branches: [master, main, "milestone/**", "epic/**"]
 
 jobs:
   check:

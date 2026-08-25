@@ -37,7 +37,7 @@ These are one-time, and none of them can be done from inside the repository.
    exists, the `publish-pypi` job fails — and by design that does *not* roll back
    a Release that already shipped (AC-005).
 3. **Check the quality gates are green on `master`.** The release workflow does
-   not re-run them; it trusts the branch. `reqtocode.yml` and `rotaris.yml` run
+   not re-run them; it trusts the branch. `reqtocode.yml` and `tests.yml` run
    on every push to `master`, so "green on master" is a real signal — just not
    one this pipeline re-checks.
 
@@ -55,6 +55,31 @@ git push origin v0.101.0
 Stable releases use `v<major>.<minor>.<patch>`. Native prerelease artifacts use
 PEP 440 suffixes such as `v0.120.15a1`, `v0.120.15b1`, or `v0.120.15rc1`.
 Prereleases retain GitHub's prerelease state and keep PyPI on the stable channel.
+
+### When the tag closes a milestone
+
+A [milestone](../milestones/README.md) is a declared bundle of epics and
+requirements on its own long-lived branch. Merging that branch into `master` is
+what cuts its release, and the version is the milestone's `target-version` — a
+minor bump, while the per-feature alphas along the way keep their own patch
+line.
+
+Nothing in this pipeline changes for a milestone tag. The version guard is the
+same guard, and `release.py` neither knows nor needs to know that milestones
+exist — it is shipped product code, and our planning process is not part of the
+product. The grouped narrative is applied afterwards instead:
+
+```bash
+uv run python devtools/milestone.py gate M1 --tests-passed   # must be green first
+# merge, tag, let release.yml publish, then:
+uv run python devtools/milestone.py notes M1 > notes.md
+gh release edit v0.121.0 --notes-file notes.md
+```
+
+`notes` groups the commit subjects by member epic and requirement, using the
+`(SWR-<n>)` suffix the merge convention in AGENTS.md § 4 already guarantees.
+Subjects with no id, or an id outside the milestone, are kept under
+"Other changes" rather than dropped.
 
 ## What the pipeline does
 

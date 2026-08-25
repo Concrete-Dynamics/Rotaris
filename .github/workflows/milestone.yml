@@ -1,0 +1,103 @@
+name: Milestone
+
+# Milestone planning and the merge gate. Dev tooling for building Rotaris, not
+# part of the product: `devtools/` is outside the ReqToCode roots and ships in
+# no wheel.
+on:
+  push:
+    branches: ["milestone/**"]
+  pull_request:
+    paths:
+      - "docs/milestones/**"
+      - "devtools/**"
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: "Milestone id (e.g. M1)"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Stdlib-only, no dependency install -- the same shape as reqtocode.yml and
+  # the release guard. Seconds, and it runs on every push to a milestone branch.
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python devtools/milestone.py check
+        env:
+          PYTHONPATH: src
+
+  tests:
+    needs: manifests
+    uses: ./.github/workflows/tests.yml
+
+  # Reports rather than fails: a milestone branch is red for most of its life by
+  # design, and a permanently failing check trains people to ignore it. The
+  # verdict lands in the tracking PR body instead.
+  gate:
+    needs: [manifests, tests]
+    if: always() && needs.manifests.result == 'success'
+    runs-on: ubuntu-24.04
+    outputs:
+      milestone: ${{ steps.resolve.outputs.milestone }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The branch names the milestone: `milestone/m1-event-store` -> `M1`.
+      - id: resolve
+        env:
+          INPUT_MILESTONE: ${{ inputs.milestone }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_MILESTONE" ]; then
+            echo "milestone=$INPUT_MILESTONE" >> "$GITHUB_OUTPUT"
+          else
+            slug="${BRANCH#milestone/}"
+            echo "milestone=$(echo "${slug%%-*}" | tr '[:lower:]' '[:upper:]')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Evaluate the gate
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+          MILESTONE: ${{ steps.resolve.outputs.milestone }}
+          TESTS_PASSED: ${{ needs.tests.result == 'success' }}
+        run: |
+          git fetch --no-tags origin master:refs/remotes/origin/master
+          args=""
+          if [ "$TESTS_PASSED" = "true" ]; then args="--tests-passed"; fi
+          python devtools/milestone.py gate "$MILESTONE" $args | tee gate.txt
+
+      - name: Refresh the tracking PR body
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: src
+          MILESTONE: ${{ steps.resolve.outputs.milestone }}
+          TESTS_PASSED: ${{ needs.tests.result == 'success' }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          number=$(gh pr list --head "$BRANCH" --base master --state open \
+                     --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            echo "No open tracking PR for $BRANCH — nothing to refresh."
+            exit 0
+          fi
+          gh pr view "$number" --json body --jq .body > current-body.md
+          args=""
+          if [ "$TESTS_PASSED" = "true" ]; then args="--tests-passed"; fi
+          python devtools/milestone.py pr-body "$MILESTONE" \
+            --existing current-body.md $args > new-body.md
+          gh pr edit "$number" --body-file new-body.md

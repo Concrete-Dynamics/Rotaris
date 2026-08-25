@@ -9,44 +9,92 @@ on:
   push:
     branches: [master, main, "milestone/**", "epic/**"]
   # Called by milestone.yml so the gate can consume this verdict in the same run
-  # rather than guessing from a separate workflow's history.
+  # rather than inferring it from another workflow's history.
   workflow_call:
     outputs:
       passed:
         description: "true when every suite in this workflow passed"
-        value: ${{ jobs.suite.outputs.passed }}
+        value: ${{ jobs.verdict.outputs.passed }}
 
 permissions:
   contents: read
 
 jobs:
-  suite:
+  # `--dist loadfile` and the snapshot flag come from `addopts` in
+  # pyproject.toml; `-n auto` is what makes the engine suite affordable.
+  engine:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    outputs:
-      passed: ${{ steps.verdict.outputs.passed }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-packages
+      - run: uv run pytest -q --timeout=120 -n auto
+
+  # Its own job: it needs system libraries the engine suite does not, and it is
+  # the long pole, so running it beside the engine suite halves the wall clock.
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # PySide6 links libEGL/libGL even when it never opens a window. The tests
+      # select the offscreen platform themselves (apps/rotaris/tests/conftest.py),
+      # so no QT_QPA_PLATFORM is needed here — but the libraries still must exist.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
       - run: uv sync --all-packages
 
-      # `--dist loadfile` and the snapshot flag come from `addopts` in
-      # pyproject.toml; `-n auto` is what makes the engine suite affordable.
-      - name: Engine and integration suite
-        run: uv run pytest -q --timeout=120 -n auto
+      # Two passes, as `make test-rotaris` does: the serial-marked tests want a
+      # core to themselves.
+      - run: uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
+      - run: uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
 
-      # The Qt suite needs its own invocation: the serial-marked tests want a
-      # core to themselves, exactly as `make test-rotaris` splits them.
-      - name: Rotaris desktop suite
+  # Dev tooling. Deliberately outside `testpaths`, so it needs its own line.
+  devtools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-packages
+      - run: uv run pytest devtools/tests -q --timeout=60
+
+  # One place for callers to read, so the milestone gate does not have to know
+  # how many suites there are.
+  verdict:
+    needs: [engine, desktop, devtools]
+    if: always()
+    runs-on: ubuntu-24.04
+    outputs:
+      passed: ${{ steps.rollup.outputs.passed }}
+    steps:
+      - id: rollup
+        env:
+          RESULTS: ${{ needs.engine.result }},${{ needs.desktop.result }},${{ needs.devtools.result }}
         run: |
-          uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
-          uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
-
-      # Dev tooling. Deliberately outside `testpaths`, so it needs its own line.
-      - name: Dev tooling suite
-        run: uv run pytest devtools/tests -q --timeout=60
-
-      - id: verdict
-        run: echo "passed=true" >> "$GITHUB_OUTPUT"
+          if [ "$RESULTS" = "success,success,success" ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "Suites: $RESULTS"
+            exit 1
+          fi

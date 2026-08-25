@@ -73,7 +73,7 @@ jobs:
         env:
           PYTHONPATH: src
           MILESTONE: ${{ steps.resolve.outputs.milestone }}
-          TESTS_PASSED: ${{ needs.tests.result == 'success' }}
+          TESTS_PASSED: ${{ needs.tests.outputs.passed }}
         run: |
           git fetch --no-tags origin master:refs/remotes/origin/master
           args=""
@@ -86,7 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PYTHONPATH: src
           MILESTONE: ${{ steps.resolve.outputs.milestone }}
-          TESTS_PASSED: ${{ needs.tests.result == 'success' }}
+          TESTS_PASSED: ${{ needs.tests.outputs.passed }}
           BRANCH: ${{ github.ref_name }}
         run: |
           number=$(gh pr list --head "$BRANCH" --base master --state open \

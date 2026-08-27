@@ -4,14 +4,11 @@ Expected outcome: setup records preserve completed work, degradation, and finger
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
 
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.setup import SetupManifest, SetupOutcome, load_setup_record, run_setup
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _manifest() -> SetupManifest:
@@ -51,7 +48,13 @@ def test_cancel_resume_then_second_launch_fast_path(tmp_path: Path) -> None:
 
     assert resumed == SetupOutcome.COMPLETE
     assert second == SetupOutcome.COMPLETE
-    assert commands == [["npx", "-y", "@scope/mcp@1.0.0", "--help"]]
+    # `planner.py` resolves the command through `shutil.which`, so the recorded
+    # argv carries an absolute path wherever npx is on PATH -- and `npx.cmd` on
+    # Windows (SWR-3715). Asserting the bare name only passed on a machine
+    # without Node installed.
+    assert len(commands) == 1
+    assert Path(commands[0][0]).stem == "npx"
+    assert commands[0][1:] == ["-y", "@scope/mcp@1.0.0", "--help"]
     record = load_setup_record(tmp_path / "setup" / "state.json")
     assert record is not None
     assert record.outcome == "complete"

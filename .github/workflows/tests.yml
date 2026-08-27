@@ -47,7 +47,11 @@ jobs:
   # the long pole, so running it beside the engine suite halves the wall clock.
   desktop:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # 30, not 45: the suite takes ~2.5 min locally, so even a 4x slower runner
+    # should finish inside 10. A limit above that only buys a longer wait for
+    # the same answer -- the first run burned 44 minutes and was cancelled
+    # without ever reporting.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -67,8 +71,16 @@ jobs:
 
       # Two passes, as `make test-rotaris` does: the serial-marked tests want a
       # core to themselves.
-      - run: uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -n auto -m "not serial"
-      - run: uv run pytest apps/rotaris/tests -q --timeout=120 -p no:textual-snapshot -m serial
+      #
+      # `--timeout-method=thread` is not decoration. pytest-timeout defaults to
+      # `signal` on Linux, and SIGALRM cannot interrupt a thread blocked inside a
+      # C extension -- which is precisely what a Qt event loop is. So `--timeout`
+      # alone could not kill a stuck Qt test: the first run of this job sat for
+      # 44 minutes and was cancelled without reporting anything. The thread timer
+      # kills the worker and dumps the stack instead, turning a silent hang into
+      # a named failure.
+      - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -n auto -m "not serial"
+      - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -m serial
 
   # Dev tooling. Deliberately outside `testpaths`, so it needs its own line.
   devtools:

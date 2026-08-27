@@ -34,8 +34,12 @@ jobs:
         env:
           PYTHONPATH: src
 
+  # Only where a milestone branch actually exists. On a pull_request event
+  # tests.yml already runs on its own `pull_request` trigger, so calling it here
+  # too would run the whole suite twice for one PR.
   tests:
     needs: manifests
+    if: github.event_name != 'pull_request'
     uses: ./.github/workflows/tests.yml
 
   # Reports rather than fails: a milestone branch is red for most of its life by
@@ -43,7 +47,9 @@ jobs:
   # verdict lands in the tracking PR body instead.
   gate:
     needs: [manifests, tests]
-    if: always() && needs.manifests.result == 'success'
+    if: >-
+      always() && needs.manifests.result == 'success'
+      && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     outputs:
       milestone: ${{ steps.resolve.outputs.milestone }}
@@ -56,6 +62,8 @@ jobs:
           python-version: "3.12"
 
       # The branch names the milestone: `milestone/m1-event-store` -> `M1`.
+      # Safe because this job never runs on a pull_request event, where
+      # `ref_name` would be `<number>/merge` rather than a branch name.
       - id: resolve
         env:
           INPUT_MILESTONE: ${{ inputs.milestone }}

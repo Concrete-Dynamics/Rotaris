@@ -59,11 +59,19 @@ def test_the_windows_profile_boundary_holds() -> None:
     (AC-003); on POSIX inside the home directory."""
     token_dir = _get_default_token_dir()
 
+    # Not `Path.home()`: the autouse skill-root isolation fixture in
+    # tests/conftest.py monkeypatches it to an empty tmp directory, while
+    # GLOBAL_DATA_DIR behind `_get_default_token_dir` is resolved by
+    # platformdirs at import time from the real home. Asking the OS directly
+    # keeps this checking the boundary the requirement is about rather than the
+    # fixture's stand-in.
+    real_home = Path(os.path.expanduser("~"))
+
     if os.name == "nt":
-        profile = Path(os.environ.get("LOCALAPPDATA") or Path.home())
+        profile = Path(os.environ.get("LOCALAPPDATA") or real_home)
         assert profile in token_dir.parents
     else:
-        assert Path.home() in token_dir.parents
+        assert real_home in token_dir.parents
 
 
 @verifies(SWR.SWR_3719)

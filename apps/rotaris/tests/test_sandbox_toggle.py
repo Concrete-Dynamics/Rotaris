@@ -25,7 +25,14 @@ from rotaris_core.init import registry
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.sandbox.spec import SandboxAvailability
 from rotaris_core.session.manager import SessionManager
-from ui_query import click, click_by_name, find_by_accessible_name, settle, type_text
+from ui_query import (
+    click,
+    click_by_name,
+    find_by_accessible_name,
+    pump_until,
+    settle,
+    type_text,
+)
 
 from rotaris.models.state import ProviderInfo
 from rotaris.models.store import WorkspaceStore
@@ -116,6 +123,25 @@ def repository(tmp_path: Path) -> Path:
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-m", "initial")
     return tmp_path
+
+
+def _until(predicate, what: str, *, timeout: float = 15.0) -> None:
+    """Wait for *predicate*, describing *what* if it never holds.
+
+    `pump_until` rather than `qtbot.waitUntil` throughout this file, and that is
+    the point of the helper. Every wait here happens with two real runs going --
+    `RunBridge` worker threads inside `asyncio.run` -- and `waitUntil` nests a
+    `QEventLoop.exec()`. Python's cyclic collector running inside that nested
+    loop, while those threads are live, is what crashed a worker in
+    `test_badge_follows_the_recorded_verdict_when_a_second_session_is_not_sandboxed`:
+    `Garbage-collecting` sat directly above `qtbot.waitUntil` in the faulthandler
+    stack. Pumping the queue delivers the same events without the re-entry.
+
+    `pump_until` returns a bool where `waitUntil` raises, so the message is
+    supplied here — a bare `assert` on a timeout says nothing about what the run
+    failed to reach.
+    """
+    assert pump_until(predicate, timeout=timeout), f"timed out waiting for {what}"
 
 
 #: Windows this file has opened, drained by `_dispose_live_windows` below.
@@ -215,14 +241,14 @@ def test_user_sandboxes_one_session_and_sees_which_backend_ran_it(
     assert dialog.sandbox_checkbox.isEnabled()
     assert dialog.sandbox_mode == "workspace-write"
     _send(window, qtbot, "audit the dependencies")
-    qtbot.waitUntil(lambda: bool(coordinator.focused_session_id), timeout=10_000)
+    _until(lambda: bool(coordinator.focused_session_id), "the run to report its session")
     session_id = coordinator.focused_session_id
-    qtbot.waitUntil(lambda: bool(agent.configs), timeout=10_000)
+    _until(lambda: bool(agent.configs), "the agent to receive a run config")
 
     # The engine reads the mode off the config the run actually launched with.
     assert agent.configs[0].runtime.sandbox_mode == "workspace-write"
 
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=15_000)
+    _until(lambda: not coordinator.active_session_ids, "the run to finish")
     coordinator.shutdown_all()
     snapshot = SessionManager(repository).read_session_snapshot(session_id)
 
@@ -244,10 +270,10 @@ def test_declining_the_sandbox_runs_and_records_an_unsandboxed_session(
     dialog = _open_launch_dialog(window, qtbot, monkeypatch, sandboxed=False)
     assert dialog.sandbox_mode == "off"
     _send(window, qtbot, "rename a variable")
-    qtbot.waitUntil(lambda: bool(coordinator.focused_session_id), timeout=10_000)
+    _until(lambda: bool(coordinator.focused_session_id), "the run to report its session")
+    _until(lambda: bool(agent.configs), "the agent to receive a run config")
     session_id = coordinator.focused_session_id
-    qtbot.waitUntil(lambda: bool(agent.configs), timeout=10_000)
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=15_000)
+    _until(lambda: not coordinator.active_session_ids, "the run to finish")
     coordinator.shutdown_all()
     snapshot = SessionManager(repository).read_session_snapshot(session_id)
 
@@ -305,12 +331,12 @@ def test_configured_sandbox_that_cannot_run_fails_the_session_instead_of_droppin
     assert dialog.sandbox_mode == "workspace-write"
 
     _send(window, qtbot, "refactor the parser")
-    qtbot.waitUntil(
+    _until(
         lambda: getattr(_notice(window), "title", "") == "Run stopped before it started",
-        timeout=15_000,
+        "the refusal notice",
     )
     notice = _notice(window)
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=15_000)
+    _until(lambda: not coordinator.active_session_ids, "the run to finish")
     coordinator.shutdown_all()
 
     assert agent.configs == []
@@ -333,14 +359,15 @@ def test_badge_follows_the_recorded_verdict_when_a_second_session_is_not_sandbox
 
     _open_launch_dialog(window, qtbot, monkeypatch, sandboxed=True)
     _send(window, qtbot, "task one")
-    qtbot.waitUntil(lambda: bool(coordinator.focused_session_id), timeout=10_000)
+    _until(lambda: bool(coordinator.focused_session_id), "the run to report its session")
     sandboxed_session = coordinator.focused_session_id
-    qtbot.waitUntil(lambda: window.workspace.sandbox_badge.isVisible(), timeout=10_000)
+    _until(lambda: window.workspace.sandbox_badge.isVisible(), "the sandbox badge to appear")
 
     _open_launch_dialog(window, qtbot, monkeypatch, sandboxed=False)
     _send(window, qtbot, "task two")
-    qtbot.waitUntil(
-        lambda: coordinator.focused_session_id not in ("", sandboxed_session), timeout=10_000
+    _until(
+        lambda: coordinator.focused_session_id not in ("", sandboxed_session),
+        "the second run to take focus",
     )
 
     assert not window.workspace.sandbox_badge.isVisible()
@@ -350,5 +377,5 @@ def test_badge_follows_the_recorded_verdict_when_a_second_session_is_not_sandbox
     assert window.workspace.sandbox_badge.isVisible()
     assert "bubblewrap" in window.workspace.sandbox_badge.text()
 
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=15_000)
+    _until(lambda: not coordinator.active_session_ids, "the run to finish")
     coordinator.shutdown_all()

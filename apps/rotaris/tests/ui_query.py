@@ -15,9 +15,10 @@ as the test selectors, so the two cannot drift apart unnoticed.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QRadioButton,
@@ -27,6 +28,8 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from pytestqt.qtbot import QtBot
 
     from rotaris.views.transcript import TranscriptListView
@@ -38,6 +41,7 @@ __all__ = [
     "click_by_name",
     "find_all_by_accessible_name",
     "find_by_accessible_name",
+    "pump_until",
     "settle",
     "transcript_anchor_point",
     "type_text",
@@ -67,6 +71,39 @@ def transcript_anchor_point(view: TranscriptListView, row: int, prefix: str) -> 
             if layout.anchorAt(QPointF(x, y)).startswith(prefix):
                 return body_rect.topLeft() + QPoint(x, y)
     raise AssertionError(f"transcript row {row} rendered no {prefix} link")
+
+
+def pump_until(predicate: Callable[[], bool], *, timeout: float = 10.0) -> bool:
+    """Drive Qt until *predicate* holds, without nesting an event loop.
+
+    `qtbot.waitUntil` runs a nested ``QEventLoop.exec()``. Re-entering the loop
+    while this suite's worker threads are alive is the precondition for a class
+    of crash it has produced repeatedly: Python's cyclic collector runs at
+    whatever moment an allocation threshold trips, and when that lands inside
+    the nested loop it destroys Qt objects while a thread is still using them.
+    The faulthandler stack reads `Garbage-collecting` directly above
+    `qtbot.waitUntil`, and names whichever test the scheduler happened to be
+    running -- never the one at fault.
+
+    The application never re-enters its loop that way: it runs its *main* loop
+    for the life of the process. Pumping the queue keeps Qt delivering, which is
+    the behaviour these tests are about, without the re-entry. Polling on
+    `time.monotonic` rather than on a Qt timer also means a saturated queue
+    cannot starve the check -- which is separately how a five-second sampling
+    window went unobserved for ten seconds in `test_diagnostics`.
+
+    Returns whether the predicate held before *timeout*, so a caller can raise
+    an error that says what it was waiting for.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() > deadline:
+            return False
+        QCoreApplication.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        time.sleep(0.005)
 
 
 def settle(qtbot: QtBot) -> None:

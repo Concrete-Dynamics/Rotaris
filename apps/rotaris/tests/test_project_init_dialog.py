@@ -33,7 +33,11 @@ from rotaris.models.store import WorkspaceStore
 from rotaris.services.project_init_service import ProjectInitService
 from rotaris.widgets.project_init_dialog import ProjectInitDialog
 
-pytestmark = pytest.mark.integration
+# These tests are *about* project initialization, so they opt back in to the
+# real registry run the suite otherwise neutralises (see `conftest.py`'s
+# `no_unasked_project_initialization`). Each points the workspace at a fake
+# `serena` of its own, so the run stays hermetic.
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("real_project_initialization")]
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

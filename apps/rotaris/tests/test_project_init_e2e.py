@@ -44,7 +44,11 @@ from rotaris.widgets.project_init_dialog import ProjectInitDialog
 if TYPE_CHECKING:
     from pathlib import Path
 
-pytestmark = pytest.mark.e2e
+# These tests are *about* project initialization, so they opt back in to the
+# real registry run the suite otherwise neutralises (see `conftest.py`'s
+# `no_unasked_project_initialization`). Each points the workspace at a fake
+# `serena` of its own, so the run stays hermetic.
+pytestmark = [pytest.mark.e2e, pytest.mark.usefixtures("real_project_initialization")]
 
 SERENA = "serena-setup"
 SERENA_LABEL = "Serena project setup"

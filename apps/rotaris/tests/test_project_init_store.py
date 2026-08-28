@@ -20,7 +20,11 @@ from rotaris.models.state import SERENA_INIT_TASK, ProjectInitState
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
 
-pytestmark = pytest.mark.integration
+# These tests are *about* project initialization, so they opt back in to the
+# real registry run the suite otherwise neutralises (see `conftest.py`'s
+# `no_unasked_project_initialization`). Each points the workspace at a fake
+# `serena` of its own, so the run stays hermetic.
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("real_project_initialization")]
 
 
 def _workspace(tmp_path):

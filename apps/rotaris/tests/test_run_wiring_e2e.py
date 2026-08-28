@@ -726,8 +726,21 @@ def test_run_bridge_end_to_end_polls_events_into_store(tmp_path, qtbot, monkeypa
         # right after run_finished used to destroy a QThread that was still
         # winding down, which is a qFatal in Qt.
         qtbot.waitUntil(lambda: not bridge.running, timeout=10_000)
+        # `running` going false is not the same as the previous run being
+        # reapable. `start` reaps it by calling `_join_thread`, which gives the
+        # OS thread five seconds to wind down and *refuses the restart* if it
+        # has not — so on a loaded machine the second start returned False and
+        # the assertion below said only `assert False is True`. Waiting for the
+        # thread to finish takes that five-second cap off the critical path;
+        # the message says which precondition failed if it ever does again.
+        qtbot.waitUntil(
+            lambda: bridge._thread is None or bridge._thread.isFinished(), timeout=10_000
+        )
         with qtbot.waitSignal(bridge.run_finished, timeout=15_000):
-            assert bridge.start("run the tests again") is True
+            assert bridge.start("run the tests again") is True, (
+                f"restart refused: running={bridge.running} "
+                f"final_completion={bridge._final_completion!r} thread={bridge._thread!r}"
+            )
     finally:
         bridge.shutdown()
     assert bridge._thread is None

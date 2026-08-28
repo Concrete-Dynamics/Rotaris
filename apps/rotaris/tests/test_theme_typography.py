@@ -73,11 +73,13 @@ def test_a_missing_font_directory_does_not_stop_the_application(
     from rotaris.theme import fonts
 
     monkeypatch.setattr(fonts, "FONT_DIR", tmp_path / "not-here")
+    # Both halves of the memo, or teardown restores the key while leaving this
+    # test's empty result as the value — and every later caller in the process
+    # gets "no families" from a cache that thinks it is still valid.
     monkeypatch.setattr(fonts, "_registered_from", None)
+    monkeypatch.setattr(fonts, "_registered", ())
 
     assert fonts.register_bundled_fonts() == ()
-
-    monkeypatch.setattr(fonts, "_registered_from", None)
 
 
 @verifies(SWR.SWR_3703)
@@ -88,11 +90,11 @@ def test_a_file_that_is_not_a_font_is_skipped_rather_than_fatal(
 
     (tmp_path / "broken.ttf").write_bytes(b"this is not a font")
     monkeypatch.setattr(fonts, "FONT_DIR", tmp_path)
+    # Both halves of the memo — see the note in the missing-directory test.
     monkeypatch.setattr(fonts, "_registered_from", None)
+    monkeypatch.setattr(fonts, "_registered", ())
 
     assert fonts.register_bundled_fonts() == ()
-
-    monkeypatch.setattr(fonts, "_registered_from", None)
 
 
 @verifies(SWR.SWR_3703)

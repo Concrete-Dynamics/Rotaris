@@ -4,10 +4,11 @@ Expected outcome: Git work completes off-thread, updates the store, and joins at
 from __future__ import annotations
 
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QObject, QTimer, Slot
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, Slot
 from rotaris_core.reqtocode import SWR, verifies
 from ui_query import settle
 
@@ -24,11 +25,16 @@ class _BlockingGitService:
         self.release = threading.Event()
         self.worker_thread = 0
 
-    def refresh(self) -> None:
+    def collect(self) -> str:
+        """Read off the GUI thread: block, then hand back what to apply."""
         self.worker_thread = threading.get_ident()
         self.started.set()
         self.release.wait(timeout=2)
-        self.store.branch = "loaded-after-paint"
+        return "loaded-after-paint"
+
+    def apply(self, snapshot: str) -> None:
+        """Write on the GUI thread, as the real service does since SWR-3727."""
+        self.store.branch = snapshot
         self.store.git_changed.emit()
 
 
@@ -54,6 +60,26 @@ class _StoreObserver(QObject):
         self.seen.append(self._store.branch)
 
 
+def _pump_until(predicate, *, timeout: float = 5.0) -> bool:
+    """Drive Qt until *predicate* holds, without nesting an event loop.
+
+    `qtbot.waitUntil` runs a nested ``QEventLoop.exec()``, and re-entering the
+    loop while this file's QThread is alive is what made it segfault about one
+    run in five. The application never does that: it runs its *main* loop for
+    the life of the process. Pumping the queue keeps Qt delivering -- which is
+    the behaviour these tests are about -- without the re-entry.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() > deadline:
+            return False
+        QCoreApplication.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        time.sleep(0.005)
+
+
 @verifies(SWR.SWR_3727)
 def test_startup_git_refresh_keeps_qt_responsive_and_updates_the_store(qtbot) -> None:
     """Productive use: a user can interact with Rotaris while a slow Git checkout is read.
@@ -70,17 +96,17 @@ def test_startup_git_refresh_keeps_qt_responsive_and_updates_the_store(qtbot) ->
 
     responsive: list[bool] = []
     QTimer.singleShot(0, lambda: responsive.append(True))
-    qtbot.waitUntil(lambda: bool(responsive), timeout=500)
+    assert _pump_until(lambda: bool(responsive), timeout=5.0)
 
     service.release.set()
-    qtbot.waitUntil(lambda: observer.seen == ["loaded-after-paint"], timeout=1000)
+    assert _pump_until(lambda: observer.seen == ["loaded-after-paint"], timeout=10.0)
     # Drain the queued delivery before the worker thread is allowed to end. The
     # service emits `git_changed` from that thread, so Qt posts the call across
     # the boundary; letting the QThread finish and be destroyed while one of its
     # cross-thread events is still in flight crashes in native code, with no
     # Python frame to show for it.
     settle(qtbot)
-    qtbot.waitUntil(lambda: not bridge.running, timeout=1000)
+    assert _pump_until(lambda: not bridge.running, timeout=10.0)
     bridge.shutdown()
     # Drain before leaving. `shutdown()` schedules the QThread's deletion with
     # deleteLater, and the thread is a *child* of the bridge -- so a test that

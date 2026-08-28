@@ -37,10 +37,18 @@ class GitRefreshBridge(QObject):
         worker = _GitRefreshWorker(self._service)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.completed.connect(self.completed)
+        # Queued across the thread boundary, because this object lives in the
+        # GUI thread: the snapshot is read on the worker and written to the
+        # store here, which is the whole point of the split (SWR-3727).
+        worker.collected.connect(self._apply)
         worker.failed.connect(self.failed)
         worker.finished.connect(thread.quit)
+        # Qt's own idiom: each object's deletion is scheduled exactly once, by
+        # the signal that says it is safe. The bridge does not schedule either
+        # of them itself -- doing that from `_finished` *and* from `shutdown()`
+        # is how the same QThread got two deferred deletions and a double free.
         thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
         thread.finished.connect(self._finished)
         self._thread = thread
         self._worker = worker
@@ -57,34 +65,52 @@ class GitRefreshBridge(QObject):
             return
         thread.quit()
         thread.wait()
-        thread.deleteLater()
+        # Deliberately no deleteLater: `thread.finished` already scheduled it.
+
+    @Slot()
+    def _apply(self) -> None:
+        """Write the worker's snapshot into the store, on the GUI thread."""
+        worker = self._worker
+        if worker is None:
+            return
+        try:
+            self._service.apply(worker.snapshot)  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001 - a launch refresh stays recoverable
+            self.failed.emit(str(exc))
+            return
+        self.completed.emit()
 
     @Slot()
     def _finished(self) -> None:
-        thread = self._thread
+        """Forget the finished run. Deleting its objects is Qt's job, above."""
         self._thread = None
         self._worker = None
-        if thread is not None:
-            thread.deleteLater()
 
 
 @traces(SWR.SWR_3727)
 class _GitRefreshWorker(QObject):
-    completed = Signal()
+    #: Raised once the snapshot is ready. It carries nothing: the snapshot is
+    #: left on the worker and read by the GUI thread from there, so no Python
+    #: object is marshalled across the thread boundary by Qt.
+    collected = Signal()
     failed = Signal(str)
     finished = Signal()
 
     def __init__(self, service: GitService) -> None:
         super().__init__()
         self._service = service
+        #: What `collect()` read, for the GUI thread to pick up. Written once
+        #: here and read once there, ordered by the `collected` signal between.
+        self.snapshot: object = None
 
     @Slot()
     def run(self) -> None:
+        """Read git off the GUI thread. Touches nothing the GUI thread owns."""
         try:
-            self._service.refresh()
+            self.snapshot = self._service.collect()
         except Exception as exc:  # noqa: BLE001 - a launch refresh stays recoverable
             self.failed.emit(str(exc))
         else:
-            self.completed.emit()
+            self.collected.emit()
         finally:
             self.finished.emit()

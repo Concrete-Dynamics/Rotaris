@@ -15,6 +15,7 @@ be created when the restore deletes it.
 from __future__ import annotations
 
 import subprocess
+import time
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -133,38 +134,82 @@ def _drive_restore_dialog(
     A poller rather than a one-shot: ``exec()`` runs a nested event loop, and the
     dialog only opens once the preview comes back off the worker thread, so there
     is no synchronous moment to hook.
+
+    It is also the suite's only way out of that nested loop, which is why it
+    refuses to give up while a dialog is still on screen. ``exec()`` starves the
+    outer ``waitUntil``'s timeout and defers pytest-timeout's SIGALRM until it
+    returns, so a dialog this poller fails to answer does not fail the test — it
+    hangs the worker for ever, and under ``--timeout-method=thread`` it becomes a
+    crash-and-restart loop instead. Every path below therefore ends with the
+    dialog closed and, when something went wrong, a reason in *seen* for the
+    assertion to report.
     """
     timer = QTimer(window)
     timer.setInterval(20)
+    deadline = time.monotonic() + 30.0
+    answered = False
 
     def tick() -> None:
+        nonlocal answered
         dialogs = [d for d in window.findChildren(CheckpointRestoreDialog) if d.isVisible()]
         if not dialogs:
+            # Gone: either we answered it, or it never came and time ran out.
+            if answered or time.monotonic() > deadline:
+                if not answered:
+                    seen["driver_error"] = "the restore dialog never appeared"
+                timer.stop()
             return
+
         dialog = dialogs[0]
+        if answered:
+            # Answered, still up: a disabled control swallowed the click. Close
+            # it rather than let exec() hold the worker.
+            if time.monotonic() > deadline:
+                seen["driver_error"] = (
+                    "the restore dialog stayed open after being answered "
+                    f"(confirm enabled={dialog.confirm_button.isEnabled()})"
+                )
+                dialog.reject()
+                timer.stop()
+            return
+
         seen["preview_text"] = dialog.preview_text.toPlainText()
         seen["confirm_enabled_before_force"] = dialog.confirm_button.isEnabled()
         seen["confirm_reason"] = str(dialog.confirm_button.property("availabilityReason") or "")
         seen["has_force"] = dialog.force_check is not None
-        timer.stop()
-        if force and dialog.force_check is not None:
-            click(
-                qtbot, find_by_accessible_name(dialog, "Overwrite uncommitted changes", QCheckBox)
+        answered = True
+        try:
+            if force and dialog.force_check is not None:
+                click(
+                    qtbot,
+                    find_by_accessible_name(dialog, "Overwrite uncommitted changes", QCheckBox),
+                )
+            if confirm:
+                click_by_name(qtbot, dialog, dialog.confirm_button.accessibleName(), QPushButton)
+            else:
+                click_by_name(qtbot, dialog, "Cancel restore", QPushButton)
+        except Exception as exc:  # noqa: BLE001 - reported through *seen*, never swallowed
+            seen["driver_error"] = (
+                f"answering the restore dialog raised {type(exc).__name__}: {exc}"
             )
-        if confirm:
-            click_by_name(qtbot, dialog, dialog.confirm_button.accessibleName(), QPushButton)
-        else:
-            click_by_name(qtbot, dialog, "Cancel restore", QPushButton)
+            dialog.reject()
+            timer.stop()
 
     timer.timeout.connect(tick)
     timer.start()
     return timer
 
 
-def _select_checkpoint(window: MainWindow, session_id: str, sequence: int) -> None:
+def _select_checkpoint(qtbot: Any, window: MainWindow, session_id: str, sequence: int) -> None:
     combo = window.git.checkpoint_session_combo
     combo.setCurrentIndex(combo.findData(session_id))
+    # Choosing a session asks the engine for that session's checkpoints, so the
+    # rows arrive on a later turn of the event loop rather than inside
+    # setCurrentIndex. Wait for the render instead of reading a table that the
+    # view has not drawn yet.
     table = window.git.checkpoint_table
+    qtbot.waitUntil(lambda: table.topLevelItemCount() > 0, timeout=15_000)
+    settle(qtbot)
     for row in range(table.topLevelItemCount()):
         item = table.topLevelItem(row)
         if item.text(0) == str(sequence):
@@ -287,14 +332,17 @@ def test_user_restores_a_session_checkpoint_from_the_git_view(tmp_path, qtbot) -
 
     assert [row.sequence for row in window.store.checkpoints.rows] == [1, 2, 3]
     assert [row.iteration for row in window.store.checkpoints.rows] == [1, 2, 3]
-    assert window.git.checkpoint_table.topLevelItemCount() == 3
+    # The listing reaching the store is not the same as the view having drawn
+    # it: the git view re-renders on the store's change signal, a turn later.
+    qtbot.waitUntil(lambda: window.git.checkpoint_table.topLevelItemCount() == 3, timeout=15_000)
 
-    _select_checkpoint(window, state.session_id, 1)
+    _select_checkpoint(qtbot, window, state.session_id, 1)
     seen: dict[str, Any] = {}
     timer = _drive_restore_dialog(qtbot, window, force=False, confirm=True, seen=seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)
     qtbot.waitUntil(lambda: not window._checkpoint_bridge.busy and bool(seen), timeout=30_000)
     timer.stop()
+    assert not seen.get("driver_error"), seen["driver_error"]
     qtbot.waitUntil(
         lambda: (root / "alpha.txt").read_text(encoding="utf-8") == "two\n",
         timeout=30_000,
@@ -330,12 +378,13 @@ def test_uncommitted_work_blocks_a_restore_and_leaves_the_tree_untouched(tmp_pat
         timeout=15_000,
     )
 
-    _select_checkpoint(window, state.session_id, 1)
+    _select_checkpoint(qtbot, window, state.session_id, 1)
     seen: dict[str, Any] = {}
     timer = _drive_restore_dialog(qtbot, window, force=False, confirm=False, seen=seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)
     qtbot.waitUntil(lambda: bool(seen), timeout=30_000)
     timer.stop()
+    assert not seen.get("driver_error"), seen["driver_error"]
     settle(qtbot)
 
     assert seen["has_force"] is True

@@ -242,6 +242,28 @@ def test_the_review_dialog_shows_the_command_and_takes_an_explicit_allow(qtbot) 
 # ── the whole flow, through the window ──────────────────────────────────────
 
 
+def _hook_rows(table: QTreeWidget) -> list[list[str]]:
+    """Every hook row in the Hooks tab, flattened across its agent groups.
+
+    SWR-3725 grouped the tab by the agent that owns each hook, so a hook is a
+    child of its agent's row rather than a top-level row of its own.
+    """
+    return [
+        [group.child(index).text(column) for column in range(table.columnCount())]
+        for group in (table.topLevelItem(row) for row in range(table.topLevelItemCount()))
+        for index in range(group.childCount())
+    ]
+
+
+def _agent_group(table: QTreeWidget, label: str):
+    """The top-level row for one agent, or None when the tab does not list it."""
+    for row in range(table.topLevelItemCount()):
+        item = table.topLevelItem(row)
+        if item.text(0) == label:
+            return item
+    return None
+
+
 @verifies(SWR.SWR_2701, SWR.SWR_2704, SWR.SWR_2815)
 def test_hooks_tab_lists_the_workspace_hook_without_showing_its_command(
     tmp_path, qtbot, monkeypatch
@@ -252,13 +274,20 @@ def test_hooks_tab_lists_the_workspace_hook_without_showing_its_command(
     window = _window(qtbot, root)
 
     table = find_by_accessible_name(window.settings, "Lifecycle hooks", QTreeWidget)
-    rows = [
-        [table.topLevelItem(row).text(column) for column in range(table.columnCount())]
-        for row in range(table.topLevelItemCount())
-    ]
 
-    assert rows == [
-        ["repo-setup", "session_start", "every tool call", "workspace", "blocked — not reviewed"]
+    # The workspace's own hook is listed under the Rotaris agent group, and it
+    # is the only hook this workspace contributes.
+    rotaris = _agent_group(table, "Rotaris")
+    assert rotaris is not None
+    assert [rotaris.child(i).text(0) for i in range(rotaris.childCount())] == ["repo-setup"]
+    assert _hook_rows(table) == [
+        [
+            "repo-setup",
+            "session_start",
+            "every matching call",
+            "workspace",
+            "blocked — not reviewed",
+        ]
     ]
     assert "not been reviewed" in window.settings.hook_trust_label.text()
     assert WORKSPACE_COMMAND not in _outside_the_review(window)
@@ -317,7 +346,12 @@ def test_user_allows_workspace_hooks_and_the_verdict_is_recorded(
     assert summary.status == "trusted"
     assert summary.hooks[0].allowed is True
     table = find_by_accessible_name(window.settings, "Lifecycle hooks", QTreeWidget)
-    assert table.topLevelItem(0).text(4) == "allowed"
+    rows = _hook_rows(table)
+    assert [row[0] for row in rows] == ["repo-setup"]
+    # "active" is the reviewed-and-running end of the status vocabulary the tab
+    # uses (inactive / disabled by agent / disabled / blocked — not reviewed /
+    # active); before the review it read "blocked — not reviewed" above.
+    assert rows[0][4] == "active"
 
 
 def _answer_review(qtbot: Any, window: MainWindow, button_name: str) -> dict[str, Any]:

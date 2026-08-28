@@ -690,7 +690,7 @@ class WorkspaceView(Themed, QWidget):
         self._refresh_stash_button()
         self._refresh_run_state()
         self._refresh_verifier_activity()
-        QTimer.singleShot(0, self._apply_responsive_layout)
+        QTimer.singleShot(0, self, self._apply_responsive_layout)
         # Draws the sidebar and the inspector for the first time as well as
         # subscribing them: both are built out of tokens, so `apply_theme` is
         # the one place that has to know how, and calling it here rather than

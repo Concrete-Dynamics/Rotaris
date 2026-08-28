@@ -190,10 +190,14 @@ def _settled_listing(qtbot: Any, window: MainWindow, session_id: str) -> None:
     )
 
 
-def _select_checkpoint(window: MainWindow, session_id: str, sequence: int) -> None:
+def _select_checkpoint(qtbot: Any, window: MainWindow, session_id: str, sequence: int) -> None:
     combo = find_by_accessible_name(window.git, "Checkpoint session", QComboBox)
     combo.setCurrentIndex(combo.findData(session_id))
     table = find_by_accessible_name(window.git, "Session checkpoints", QTreeWidget)
+    # Choosing a session asks the engine for its checkpoints and the view draws
+    # them a turn later, so the listing reaching the store is not the same as
+    # the rows being on screen.
+    qtbot.waitUntil(lambda: table.topLevelItemCount() > 0, timeout=15_000)
     for row in range(table.topLevelItemCount()):
         item = table.topLevelItem(row)
         if item.text(0) == str(sequence):
@@ -256,7 +260,7 @@ def test_a_crashed_sessions_rollback_is_offered_again_and_the_repair_is_announce
     assert (manager.session_dir(state.session_id) / "lock").exists() is False
     assert any("marked it interrupted" in message for message in announced), announced
 
-    _select_checkpoint(window, state.session_id, 1)
+    _select_checkpoint(qtbot, window, state.session_id, 1)
     restore_button = find_by_accessible_name(
         window.git, "Restore selected checkpoint", QPushButton, visible_only=True
     )
@@ -302,8 +306,10 @@ def test_a_session_with_a_live_process_is_still_refused_and_told_why(tmp_path, q
         window.git, "Restore selected checkpoint", QPushButton, visible_only=True
     )
 
+    # The store already carries the refusal; the button catches up on the view's
+    # next redraw, so wait for the reason to reach the control the user reads.
+    qtbot.waitUntil(lambda: RUNNING_SESSION_REASON in button.toolTip(), timeout=15_000)
     assert button.isEnabled() is False
-    assert RUNNING_SESSION_REASON in button.toolTip()
     assert RUNNING_SESSION_REASON in button.accessibleDescription()
     assert (root / "alpha.txt").read_text(encoding="utf-8") == "two\n"
 

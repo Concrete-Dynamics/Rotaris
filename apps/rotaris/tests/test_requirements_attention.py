@@ -563,7 +563,15 @@ def test_a_released_run_that_stops_to_ask_is_found_answered_and_carries_on(
         controller.attach_view(board)
         board.detail_view.attention_activated.connect(controller.open_run)
         _publish(controller, _run(SESSION))
-        qtbot.waitUntil(lambda: (tmp_path / ".rotaris/sessions" / SESSION).exists(), timeout=5000)
+        # Wait for the session to be *listable*, not merely for its directory to
+        # exist: the directory appears before the metadata `list_sessions()`
+        # reads, and the board refreshes once rather than in a loop — so a
+        # refresh that raced the write would answer "no sessions" and that empty
+        # answer would stand for the rest of the test.
+        qtbot.waitUntil(
+            lambda: any(item["session_id"] == SESSION for item in manager.list_sessions()),
+            timeout=15_000,
+        )
 
         # The user comes back to the board, and it is the board that tells them.
         service.refresh_sessions()

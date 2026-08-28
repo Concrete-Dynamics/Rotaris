@@ -1556,7 +1556,7 @@ class SettingsView(Themed, QWidget):
         self._hook_summary = None
         # Rebuilding a QTreeWidget from itemChanged deletes the item currently
         # completing its check-state transaction on Windows.  Queue the update.
-        QTimer.singleShot(0, self.refresh_hooks)
+        QTimer.singleShot(0, self, self.refresh_hooks)
 
     @traces(SWR.SWR_2424)
     def _add_inventory_tab(self, tab_id: str, label: str, title: str) -> None:

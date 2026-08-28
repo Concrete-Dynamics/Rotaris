@@ -727,7 +727,7 @@ class RunBridge(QObject):
             self._request_refresh(final=pending_final)
             return
         if was_final and self._final_refresh_attempts < 3:
-            QTimer.singleShot(100, self._request_final_refresh_attempt)
+            QTimer.singleShot(100, self, self._request_final_refresh_attempt)
             return
         if was_final:
             self.refresh_failed.emit(f"Final session refresh failed after 3 attempts: {message}")

@@ -148,6 +148,12 @@ class MainWindow(Themed, QMainWindow):
         self._primary_reauth_model = ""
         self._prompt_persistence: Any | None = None
         self._project_init_dialog: ProjectInitDialog | None = None
+        # Set by `closeEvent`, read by everything deferred. A window that has
+        # been asked to close must not start new background work: Qt delivers a
+        # queued callback to a closed-but-not-yet-destroyed window quite
+        # happily, and the thread it would start there has no owner left to
+        # stop it -- `closeEvent` has already run its shutdown.
+        self._closing = False
         self._project_init_worker: Any | None = None
         self._project_init_tasks: tuple[Any, ...] = ()
         self._project_init_auto_opened = False
@@ -398,8 +404,17 @@ class MainWindow(Themed, QMainWindow):
         # Deferred by one event-loop turn: the workspace's setup check touches
         # the filesystem and may raise a modal, and neither belongs inside the
         # constructor of the window that would have to parent them.
-        QTimer.singleShot(0, self._resolve_project_initialization)
-        QTimer.singleShot(0, self._offer_hook_review)
+        #
+        # `self` is passed as the *context* object, and that argument is
+        # load-bearing rather than tidy. Without it Qt has no receiver to track,
+        # so a window closed inside that one turn -- which is ordinary at
+        # shutdown, and is what every `qtbot.addWidget` teardown does -- leaves
+        # the callback armed and pointing at a C++ object that is already gone.
+        # It then fires into the next event loop the process happens to run and
+        # takes it down in native code, with no Python frame to name the window
+        # that caused it. With the context, Qt disconnects on destruction.
+        QTimer.singleShot(0, self, self._resolve_project_initialization)
+        QTimer.singleShot(0, self, self._offer_hook_review)
         self.install_theme_hook()
 
     def apply_theme(self, theme: Theme) -> None:
@@ -746,12 +761,12 @@ class MainWindow(Themed, QMainWindow):
         self._checkpoint_load_scheduled = False
         bridge = self._checkpoint_bridge
         session_id = self._checkpoint_session_wanted
-        if bridge is None or not session_id:
+        if self._closing or bridge is None or not session_id:
             return
         if bridge.load(session_id):
             return
         self._checkpoint_load_scheduled = True
-        QTimer.singleShot(150, self._dispatch_checkpoint_load)
+        QTimer.singleShot(150, self, self._dispatch_checkpoint_load)
 
     @traces(SWR.SWR_2437)
     def _checkpoints_listed(self, listing: object) -> None:
@@ -900,6 +915,8 @@ class MainWindow(Themed, QMainWindow):
         The review is opened by the user, never by the window: a security
         dialog that appears unbidden on startup is one people learn to dismiss.
         """
+        if self._closing:
+            return
         summary = self.settings.hook_summary
         if not summary.review_due:
             return
@@ -1147,6 +1164,9 @@ class MainWindow(Themed, QMainWindow):
             if answer is not QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
+        # Past every `event.ignore()` branch: this window is closing for real,
+        # so nothing deferred may start work from here on.
+        self._closing = True
         if self.run_bridge is not None:
             shutdown_all = getattr(self.run_bridge, "shutdown_all", None)
             if callable(shutdown_all):
@@ -2358,6 +2378,8 @@ class MainWindow(Themed, QMainWindow):
         whatever needs no decision from the user (SWR-2821), and lets the store
         signal decide whether a modal belongs on screen for the rest.
         """
+        if self._closing:
+            return
         service = self.config_service
         if service is None or getattr(service, "config", None) is None:
             return
@@ -2398,7 +2420,7 @@ class MainWindow(Themed, QMainWindow):
         Started after the prompt sync so that a workspace owing both kinds shows
         its modal immediately rather than behind a worker launch.
         """
-        if not tasks:
+        if self._closing or not tasks:
             return
         worker = self._project_init_worker
         if worker is not None and worker.isRunning():
@@ -2807,6 +2829,8 @@ class MainWindow(Themed, QMainWindow):
     @traces(SWR.SWR_3727)
     def start_git_refresh(self, bridge: Any | None = None) -> bool:
         """Load workspace Git state after the window is visible."""
+        if self._closing:
+            return False
         service = self.git_service
         if service is None:
             return False
@@ -3018,7 +3042,7 @@ class MainWindow(Themed, QMainWindow):
             # The installer is already running and cannot write over a live
             # process. Long enough to read the sentence, short enough that the
             # installer is not left waiting on a window nobody is looking at.
-            QTimer.singleShot(1200, self.close)
+            QTimer.singleShot(1200, self, self.close)
 
     @traces(SWR.SWR_3003)
     def _update_failed(self, message: str) -> None:

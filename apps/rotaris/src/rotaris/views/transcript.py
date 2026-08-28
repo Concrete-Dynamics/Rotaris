@@ -2177,7 +2177,7 @@ class TranscriptListView(Themed, QAbstractItemView):
             event.accept()
             return
         super().keyPressEvent(event)
-        QTimer.singleShot(0, self._sync_tail_state_from_position)
+        QTimer.singleShot(0, self, self._sync_tail_state_from_position)
 
     def _show_copy_menu(self, point: QPoint) -> None:
         index = self.indexAt(point)

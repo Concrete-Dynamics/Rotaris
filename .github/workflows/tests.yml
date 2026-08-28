@@ -87,8 +87,20 @@ jobs:
       # crash that takes one second to happen costs 30 minutes and reports
       # nothing. At zero restarts the crash ends the run immediately, with the
       # faulthandler stack of the test that caused it still in the log.
+      #
+      # `timeout-minutes` on the step, not just the job, because neither of the
+      # two guards above stops the run that actually happened: a worker
+      # segfaulted inside `TerminalView.paintEvent`, xdist printed `[gw0] node
+      # down: Not properly terminated`, and the session then sat silent for 27
+      # minutes until the *job* limit cancelled it -- which throws the step away
+      # and reports nothing but "The operation was canceled". Failing the step
+      # instead keeps the faulthandler stack, lets the serial pass still run,
+      # and costs twelve minutes rather than thirty.
       - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -n auto --max-worker-restart=0 -m "not serial"
+        timeout-minutes: 12
       - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -m serial
+        timeout-minutes: 8
+        if: always()
 
   # Dev tooling. Deliberately outside `testpaths`, so it needs its own line.
   devtools:

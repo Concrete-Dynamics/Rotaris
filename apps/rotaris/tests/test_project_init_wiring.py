@@ -476,3 +476,38 @@ def test_closing_the_window_stops_the_setup_worker(qtbot, tmp_path) -> None:
     assert not worker.isRunning(), "a live QThread must not outlive the window that owns it"
     assert window._project_init_worker is None
     assert _modal(window) is None
+
+
+@verifies(SWR.SWR_2802, SWR.SWR_2821)
+def test_a_window_closed_before_its_deferred_setup_runs_starts_nothing(qtbot, tmp_path) -> None:
+    """Productive use: a user quits during the first paint, before setup has begun.
+    Expected outcome: the deferred resolve finds a closing window and starts no worker,
+    rather than launching a thread nobody is left to stop.
+
+    The window defers its setup check by one event-loop turn, so a close that
+    lands inside that turn arrives *before* the check. `closeEvent` has already
+    run its shutdown by then, so a worker started afterwards has no owner: it
+    keeps indexing, and the destruction of its parent takes the process down
+    with `QThread: Destroyed while thread is still running`. Reproduced in the
+    parallel suite as an abort two files after the test that leaked it.
+    """
+    workspace, log = _workspace(tmp_path)
+    store = WorkspaceStore()
+    service = ConfigService(workspace, store)
+    service._providers = lambda: []  # type: ignore[method-assign]
+    service._subscription_limits = lambda: []  # type: ignore[method-assign]
+    service.load()
+
+    window = MainWindow(store, config_service=service)
+    qtbot.addWidget(window)
+    window.close()
+
+    # What the deferred `singleShot(0, ...)` would have delivered, delivered by
+    # hand: the point is what a closed window does with it, not when Qt gets to
+    # it. Calling it directly also keeps the test honest about the guard rather
+    # than about event-loop timing.
+    window._resolve_project_initialization()
+    settle(qtbot)
+
+    assert window._project_init_worker is None, "a closed window started a setup worker"
+    assert not _subcommands(log), "a closed window launched a setup subprocess"

@@ -144,6 +144,7 @@ def test_post_show_setup_refreshes_git_before_workspace_onboarding(monkeypatch, 
     from rotaris.main import schedule_post_show_machine_setup
 
     callbacks = []
+    contexts: list[object] = []
     events: list[str] = []
     window = SimpleNamespace(
         settings=SimpleNamespace(refresh_machine_setup=lambda: events.append("status")),
@@ -156,11 +157,15 @@ def test_post_show_setup_refreshes_git_before_workspace_onboarding(monkeypatch, 
         events.append("setup")
 
     monkeypatch.setattr(
-        "rotaris.main.QTimer.singleShot", lambda _delay, callback: callbacks.append(callback)
+        "rotaris.main.QTimer.singleShot",
+        lambda _delay, context, callback: (contexts.append(context), callbacks.append(callback)),
     )
     monkeypatch.setattr("rotaris.setup_coordinator.run_desktop_setup", setup)
 
     schedule_post_show_machine_setup(window, tmp_path, prompt_for_workspace=True)  # type: ignore[arg-type]
+    # Scheduled against the window, not free-floating: a window destroyed inside
+    # the delay must cancel this, not run setup against a deleted widget.
+    assert contexts == [window]
     assert events == []
     callbacks[0]()
     assert events == ["setup", "status", "git", "workspace"]

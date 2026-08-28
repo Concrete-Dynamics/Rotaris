@@ -193,7 +193,7 @@ models:
     assert config.models["workspace-model"].provider == "anthropic"
 
 
-@verifies(SWR.SWR_313, SWR.SWR_318, SWR.SWR_386, SWR.SWR_1702)
+@verifies(SWR.SWR_313, SWR.SWR_318, SWR.SWR_386)
 def test_load_config_resolves_medium_model_aliases(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -248,7 +248,7 @@ models:
     assert config.circuit_breaker.model == "balanced-model"
 
 
-@verifies(SWR.SWR_313, SWR.SWR_316, SWR.SWR_1702)
+@verifies(SWR.SWR_313, SWR.SWR_316)
 def test_load_config_normalizes_legacy_oracle_persona_name(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

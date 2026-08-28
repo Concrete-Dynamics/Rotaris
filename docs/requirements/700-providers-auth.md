@@ -619,6 +619,8 @@ source: docs/requirement-log/done/requirements-20260713-multiple-openai-compatib
 date: 2026-07-13
 source: docs/requirement-log/done/requirements-20260713-multiple-openai-compatible-providers.md
 
+Derived requirements: [SWR-1734 — Project-settings snapshot is a versioned, atomic, secret-free store](1700-config-mcp/SWR-1734-project-settings-snapshot-store.md), [SWR-1735 — Snapshot models reach the config without overruling what the user set](1700-config-mcp/SWR-1735-snapshot-to-config-bridge.md)
+
 ## SWR-771 — Registration validates the URL, credentials, and model catalog before persistence and rolls credentials back if snapshot persistence fails.
 
 date: 2026-07-13

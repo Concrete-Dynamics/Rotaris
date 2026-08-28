@@ -885,6 +885,7 @@ def _withheld_model_entry(
     SWR.SWR_318,
     SWR.SWR_356,
     SWR.SWR_1701,
+    SWR.SWR_1735,
     SWR.SWR_1825,
     SWR.SWR_2811,
     SWR.SWR_2813,

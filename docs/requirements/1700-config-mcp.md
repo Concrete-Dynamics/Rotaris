@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1700, SWR-1701, SWR-1702, SWR-1704, SWR-1706, SWR-1707, SWR-1708, SWR-1709, SWR-1710, SWR-1711, SWR-1712, SWR-1713, SWR-1714, SWR-1715, SWR-1716, SWR-1717, SWR-1718, SWR-1719, SWR-1720, SWR-1721, SWR-1722, SWR-1723, SWR-1724, SWR-1725, SWR-1726, SWR-1727, SWR-1728, SWR-1729, SWR-1730]
+req-id: [SWR-1700, SWR-1701, SWR-1704, SWR-1706, SWR-1707, SWR-1708, SWR-1709, SWR-1710, SWR-1711, SWR-1712, SWR-1713, SWR-1714, SWR-1715, SWR-1716, SWR-1717, SWR-1718, SWR-1719, SWR-1720, SWR-1721, SWR-1722, SWR-1723, SWR-1724, SWR-1725, SWR-1726, SWR-1727, SWR-1728, SWR-1729, SWR-1730]
 status: approved
 trace: required
 test: required
@@ -14,7 +14,7 @@ test: optional
 
 Layered configuration wiring, external MCP server discovery (mcp.json), MCP secrets management, and MCP merge warnings.
 
-Derived requirements: [SWR-1731 — Session-scoped MCP client and tool-provider runtime](1700-config-mcp/SWR-1731-session-scoped-mcp-runtime.md), [SWR-1733 — MCP server config normalization must not mutate the input config](1700-config-mcp/SWR-1733-mcp-server-config-normalization-is-non-mutating.md), [SWR-3009 — MCP tool grants are enforced at tool creation](1700-config-mcp/SWR-3009-mcp-tool-grant-enforcement.md)
+Derived requirements: [SWR-1731 — Session-scoped MCP client and tool-provider runtime](1700-config-mcp/SWR-1731-session-scoped-mcp-runtime.md), [SWR-1733 — MCP server config normalization must not mutate the input config](1700-config-mcp/SWR-1733-mcp-server-config-normalization-is-non-mutating.md), [SWR-3009 — MCP tool grants are enforced at tool creation](1700-config-mcp/SWR-3009-mcp-tool-grant-enforcement.md), [SWR-1734 — Project-settings snapshot is a versioned, atomic, secret-free store](1700-config-mcp/SWR-1734-project-settings-snapshot-store.md), [SWR-1735 — Snapshot models reach the config without overruling what the user set](1700-config-mcp/SWR-1735-snapshot-to-config-bridge.md)
 
 ## SWR-1701 — Shared Top-Level Merge Logic
 legacy-id: REQ-20260414-155438-001
@@ -22,14 +22,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-155438.md
 
 Config merge behavior must be centralized so all top-level sections are merged consistently across loader and CLI override paths.
-
-## SWR-1702 — Researcher Override Wiring
-trace: optional
-legacy-id: REQ-20260414-155438-002
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-155438.md
-
-The top-level `researcher` config block must be loaded from scope config files and honored by CLI override config files.
 
 ## SWR-1704 — LLM Runtime Wiring
 legacy-id: REQ-20260414-155438-004

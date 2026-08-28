@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1100, SWR-1101, SWR-1102, SWR-1103, SWR-1104, SWR-1105, SWR-1106, SWR-1107, SWR-1108, SWR-1109, SWR-1110, SWR-1111, SWR-1112, SWR-1113, SWR-1114, SWR-1115, SWR-1116, SWR-1117, SWR-1118, SWR-1119, SWR-1120, SWR-1121, SWR-1122, SWR-1123, SWR-1124, SWR-1125, SWR-1126, SWR-1127, SWR-1128, SWR-1129, SWR-1130, SWR-1131, SWR-1132, SWR-1133, SWR-1134, SWR-1135, SWR-1136, SWR-1137, SWR-1138, SWR-1139, SWR-1140, SWR-1141, SWR-1142, SWR-1147, SWR-1148, SWR-1149, SWR-1153, SWR-1154, SWR-1155, SWR-1156, SWR-1157, SWR-1158, SWR-1159, SWR-1160, SWR-1161, SWR-1162, SWR-1163, SWR-1164, SWR-1165, SWR-1166, SWR-1167, SWR-1168, SWR-1169, SWR-1170, SWR-1171, SWR-1172, SWR-1173, SWR-1174, SWR-1175, SWR-1176, SWR-1177, SWR-1178, SWR-1179, SWR-1180, SWR-1181, SWR-1182, SWR-1183, SWR-1184, SWR-1185]
+req-id: [SWR-1100, SWR-1101, SWR-1102, SWR-1103, SWR-1104, SWR-1105, SWR-1106, SWR-1107, SWR-1108, SWR-1109, SWR-1110, SWR-1111, SWR-1113, SWR-1114, SWR-1115, SWR-1116, SWR-1117, SWR-1118, SWR-1119, SWR-1120, SWR-1122, SWR-1123, SWR-1124, SWR-1125, SWR-1126, SWR-1127, SWR-1128, SWR-1129, SWR-1130, SWR-1131, SWR-1132, SWR-1133, SWR-1134, SWR-1135, SWR-1136, SWR-1137, SWR-1138, SWR-1139, SWR-1140, SWR-1141, SWR-1142, SWR-1147, SWR-1148, SWR-1149, SWR-1153, SWR-1154, SWR-1155, SWR-1156, SWR-1157, SWR-1158, SWR-1159, SWR-1160, SWR-1161, SWR-1162, SWR-1163, SWR-1164, SWR-1165, SWR-1166, SWR-1167, SWR-1168, SWR-1169, SWR-1170, SWR-1171, SWR-1172, SWR-1173, SWR-1174, SWR-1175, SWR-1176, SWR-1177, SWR-1178, SWR-1179, SWR-1180, SWR-1181, SWR-1182, SWR-1183, SWR-1184, SWR-1185]
 status: approved
 trace: required
 test: required
@@ -92,14 +92,6 @@ source: docs/requirement-log/done/requirements-20260414-120000.md
 
 No new top-level UI surface may be introduced; all stash/pop controls must reside within the existing settings menu or as an inline command.
 
-## SWR-1112 — Superseded
-status: deprecated
-legacy-id: REQ-001
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-120000.md
-
-`ctrl+s` binding on RotarisTuiApp triggers `action_stash_input`. **Superseded by `requirements-20260616-000001-keyboard-shortcut-architecture.md`:** the binding is moved to `Ctrl+X S`.
-
 ## SWR-1113 — 'Stash input' entry in command palette (search + discover)
 legacy-id: REQ-002
 date: 2026-04-14
@@ -155,14 +147,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-120000.md
 
 `PromptStash` uses `list.append`/`list.pop` (LIFO)
-
-## SWR-1121 — `ctrl+s` shortcut + clickable `_MetaStashShortcut` in meta bar. **Superseded by 
-status: deprecated
-legacy-id: REQ-010
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-120000.md
-
-`ctrl+s` shortcut + clickable `_MetaStashShortcut` in meta bar. **Superseded by `requirements-20260616-000001-keyboard-shortcut-architecture.md`:** the binding is moved to `Ctrl+X S`.
 
 ## SWR-1122 — All controls in command palette and meta bar; no new UI surface
 legacy-id: REQ-011

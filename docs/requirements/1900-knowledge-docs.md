@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1900, SWR-1901, SWR-1902, SWR-1903, SWR-1904, SWR-1905, SWR-1906, SWR-1907, SWR-1908, SWR-1909, SWR-1910, SWR-1911, SWR-1912, SWR-1913, SWR-1914, SWR-1915, SWR-1916, SWR-1917, SWR-1918, SWR-1919, SWR-1920, SWR-1921, SWR-1922, SWR-1923]
+req-id: [SWR-1900, SWR-1901, SWR-1902, SWR-1904, SWR-1905, SWR-1906, SWR-1907, SWR-1908, SWR-1909, SWR-1910, SWR-1911, SWR-1912, SWR-1913, SWR-1914, SWR-1915, SWR-1916, SWR-1917, SWR-1918, SWR-1919, SWR-1920, SWR-1921, SWR-1922, SWR-1923]
 status: approved
 trace: optional
 test: optional
@@ -27,20 +27,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-115229.md
 
 The Librarian must be able to search the codebase for files, symbols, patterns, and content matches.
-
-## SWR-1903 — `find` Tool Access
-status: deprecated
-trace: required
-test: required
-legacy-id: REQ-20260414-115229-003
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-115229.md
-
-The Librarian must have the `find` tool registered and available in its tool set.
-
-Epic: [Knowledge, Librarian & Architecture Docs](../1900-knowledge-docs.md)
-
-> Deprecated 2026-07-19: the `find` tool was retired; the persona uses read_file/grep/glob read-only tools instead.
 
 ## SWR-1904 — Additional Search Tools
 test: required

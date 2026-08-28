@@ -1,73 +1,5 @@
 ---
-req-id:
-  [
-    SWR-400,
-    SWR-401,
-    SWR-402,
-    SWR-403,
-    SWR-404,
-    SWR-405,
-    SWR-406,
-    SWR-407,
-    SWR-408,
-    SWR-409,
-    SWR-410,
-    SWR-411,
-    SWR-412,
-    SWR-413,
-    SWR-414,
-    SWR-415,
-    SWR-416,
-    SWR-417,
-    SWR-418,
-    SWR-419,
-    SWR-420,
-    SWR-421,
-    SWR-422,
-    SWR-423,
-    SWR-424,
-    SWR-425,
-    SWR-426,
-    SWR-427,
-    SWR-428,
-    SWR-429,
-    SWR-430,
-    SWR-431,
-    SWR-432,
-    SWR-433,
-    SWR-434,
-    SWR-435,
-    SWR-436,
-    SWR-437,
-    SWR-438,
-    SWR-439,
-    SWR-440,
-    SWR-441,
-    SWR-442,
-    SWR-443,
-    SWR-444,
-    SWR-445,
-    SWR-446,
-    SWR-447,
-    SWR-448,
-    SWR-449,
-    SWR-450,
-    SWR-451,
-    SWR-452,
-    SWR-453,
-    SWR-454,
-    SWR-455,
-    SWR-456,
-    SWR-457,
-    SWR-458,
-    SWR-459,
-    SWR-460,
-    SWR-461,
-    SWR-462,
-    SWR-463,
-    SWR-464,
-    SWR-465,
-  ]
+req-id: [SWR-400, SWR-401, SWR-402, SWR-403, SWR-404, SWR-405, SWR-406, SWR-407, SWR-408, SWR-409, SWR-410, SWR-411, SWR-412, SWR-413, SWR-414, SWR-415, SWR-416, SWR-417, SWR-418, SWR-419, SWR-420, SWR-421, SWR-422, SWR-423, SWR-424, SWR-425, SWR-426, SWR-427, SWR-428, SWR-429, SWR-430, SWR-431, SWR-432, SWR-433, SWR-434, SWR-435, SWR-436, SWR-437, SWR-438, SWR-439, SWR-440, SWR-441, SWR-442, SWR-443, SWR-445, SWR-449, SWR-450, SWR-451, SWR-452, SWR-453, SWR-454, SWR-455, SWR-456, SWR-457, SWR-458, SWR-460, SWR-462, SWR-463, SWR-464, SWR-465]
 status: approved
 trace: required
 test: required
@@ -454,19 +386,6 @@ source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
 
 Tests must assert that `/skills` lists discovered skills with their metadata accurately and that `/skill <path>` handles valid paths, nonexistent paths, invalid files, duplicate names, and updates the catalog visible through `/skills`.
 
-## SWR-444 — Three-Tier Discovery
-
-status: deprecated
-legacy-id: REQ-20260526-AGENTSMD-001
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-At session start, the framework must discover AGENTS.md content across three tiers in priority order: (1) user-global paths under `~/.codex/` and `~/.config/opencode/`, (2) project-root paths starting from the Git repository root, (3) subdirectory walk from Git root toward `config.workspace_root`. Discovery must follow the exact priority table in this document.
-
-Epic: [Agent Context, Skills & Instructions](../400-agent-context-skills.md)
-
-> Deprecated 2026-07-19: superseded — AGENTS.md injection is workspace-root-only (`_discover_agents_md_files`); multi-tier discovery, git-root walk, and CLAUDE.md fallback were retired.
-
 ## SWR-445 — Override File Precedence
 
 legacy-id: REQ-20260526-AGENTSMD-002
@@ -474,45 +393,6 @@ date: 2026-05-26
 source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
 
 When `AGENTS.override.md` is present at a given directory level, it must be used instead of `AGENTS.md` at that level. The presence of an override file must not suppress override or regular files at other directory levels.
-
-## SWR-446 — Git Root Detection
-
-status: deprecated
-legacy-id: REQ-20260526-AGENTSMD-003
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-The framework must detect the Git repository root by walking up from `config.workspace_root` looking for a `.git/` directory. If no Git repository is found, `config.workspace_root` itself must be used as the project root. The detection must not shell out to `git`; it must use filesystem checks only.
-
-Epic: [Agent Context, Skills & Instructions](../400-agent-context-skills.md)
-
-> Deprecated 2026-07-19: superseded — AGENTS.md injection is workspace-root-only (`_discover_agents_md_files`); multi-tier discovery, git-root walk, and CLAUDE.md fallback were retired.
-
-## SWR-447 — Subdirectory Walk
-
-status: deprecated
-legacy-id: REQ-20260526-AGENTSMD-004
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-After processing the project root, the framework must walk down from the Git root toward `config.workspace_root`, collecting files at each intermediate directory level in the documented priority order. The walk must be top-down (root first, CWD last) so later files have higher recency weight. Directories above the Git root must not be searched.
-
-Epic: [Agent Context, Skills & Instructions](../400-agent-context-skills.md)
-
-> Deprecated 2026-07-19: superseded — AGENTS.md injection is workspace-root-only (`_discover_agents_md_files`); multi-tier discovery, git-root walk, and CLAUDE.md fallback were retired.
-
-## SWR-448 — Fallback Filename Support
-
-status: deprecated
-legacy-id: REQ-20260526-AGENTSMD-005
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-When no `AGENTS.md` or `AGENTS.override.md` exists at the project root, the framework must check `CLAUDE.md` and then `GEMINI.md` at that level, in that order. Fallback files must be treated as project-root-level content with the same always-on, no-frontmatter semantics as `AGENTS.md`.
-
-Epic: [Agent Context, Skills & Instructions](../400-agent-context-skills.md)
-
-> Deprecated 2026-07-19: superseded — AGENTS.md injection is workspace-root-only (`_discover_agents_md_files`); multi-tier discovery, git-root walk, and CLAUDE.md fallback were retired.
 
 ## SWR-449 — Top-Down Merge
 
@@ -597,19 +477,6 @@ source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection
 
 Given the same filesystem state and `config.workspace_root`, the merged content must be identical across process runs. No random ordering, timestamps, or process-ID data may appear in the output.
 
-## SWR-459 — Test: Three-Tier Discovery and Merge Order
-
-status: deprecated
-legacy-id: REQ-20260526-AGENTSMD-T-001
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-Tests must provide a mock filesystem with files at user-global, project-root, and subdirectory levels and assert that the merged output concatenates them in the documented top-down order, with correct source-path comments separating each block.
-
-Epic: [Agent Context, Skills & Instructions](../400-agent-context-skills.md)
-
-> Deprecated 2026-07-19: superseded — AGENTS.md injection is workspace-root-only (`_discover_agents_md_files`); multi-tier discovery, git-root walk, and CLAUDE.md fallback were retired.
-
 ## SWR-460 — Test: Override File Replaces Regular File
 
 trace: optional
@@ -618,19 +485,6 @@ date: 2026-05-26
 source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
 
 Tests must assert that when both `AGENTS.override.md` and `AGENTS.md` exist at the same directory level, only the override file's content appears in the merged output for that level.
-
-## SWR-461 — Test: Git Root Detection
-
-status: deprecated
-legacy-id: REQ-20260526-AGENTSMD-T-003
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-Tests must cover: (a) a workspace nested inside a Git repo where `.git/` is several levels up, (b) a workspace that is itself the Git root, and (c) a workspace with no `.git/` ancestor, asserting that `config.workspace_root` is used as the fallback root.
-
-Epic: [Agent Context, Skills & Instructions](../400-agent-context-skills.md)
-
-> Deprecated 2026-07-19: superseded — AGENTS.md injection is workspace-root-only (`_discover_agents_md_files`); multi-tier discovery, git-root walk, and CLAUDE.md fallback were retired.
 
 ## SWR-462 — Test: Per-File and Total Size Caps
 

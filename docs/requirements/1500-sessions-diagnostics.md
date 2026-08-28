@@ -1,59 +1,5 @@
 ---
-req-id:
-  [
-    SWR-1500,
-    SWR-1501,
-    SWR-1502,
-    SWR-1503,
-    SWR-1504,
-    SWR-1505,
-    SWR-1506,
-    SWR-1507,
-    SWR-1508,
-    SWR-1509,
-    SWR-1510,
-    SWR-1511,
-    SWR-1512,
-    SWR-1513,
-    SWR-1514,
-    SWR-1515,
-    SWR-1516,
-    SWR-1517,
-    SWR-1518,
-    SWR-1519,
-    SWR-1520,
-    SWR-1521,
-    SWR-1522,
-    SWR-1523,
-    SWR-1524,
-    SWR-1525,
-    SWR-1526,
-    SWR-1527,
-    SWR-1528,
-    SWR-1529,
-    SWR-1530,
-    SWR-1531,
-    SWR-1532,
-    SWR-1533,
-    SWR-1534,
-    SWR-1535,
-    SWR-1536,
-    SWR-1537,
-    SWR-1538,
-    SWR-1539,
-    SWR-1540,
-    SWR-1541,
-    SWR-1542,
-    SWR-1543,
-    SWR-1544,
-    SWR-1545,
-    SWR-1546,
-    SWR-1547,
-    SWR-1548,
-    SWR-1549,
-    SWR-1550,
-    SWR-1551,
-  ]
+req-id: [SWR-1500, SWR-1501, SWR-1502, SWR-1503, SWR-1504, SWR-1505, SWR-1506, SWR-1507, SWR-1508, SWR-1509, SWR-1510, SWR-1511, SWR-1512, SWR-1513, SWR-1514, SWR-1515, SWR-1517, SWR-1518, SWR-1519, SWR-1520, SWR-1521, SWR-1522, SWR-1523, SWR-1524, SWR-1525, SWR-1526, SWR-1527, SWR-1528, SWR-1529, SWR-1530, SWR-1531, SWR-1532, SWR-1533, SWR-1534, SWR-1535, SWR-1536, SWR-1537, SWR-1538, SWR-1539, SWR-1540, SWR-1541, SWR-1542, SWR-1543, SWR-1544, SWR-1545, SWR-1546, SWR-1547, SWR-1548, SWR-1549, SWR-1550, SWR-1551]
 status: approved
 trace: required
 test: required
@@ -190,19 +136,6 @@ date: 2026-05-03
 source: docs/requirement-log/done/requirements-20260503-session-task-name-hygiene.md
 
 Unit tests shall cover compact display names, preservation of full payloads, and compact child canonical names.
-
-## SWR-1516 — Version Bump
-
-status: deprecated
-legacy-id: REQ-20260503-TASKNAME-NF-002
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-session-task-name-hygiene.md
-
-The package version shall be bumped for the bug fix.
-
-Epic: [Session Persistence & Diagnostics](../1500-sessions-diagnostics.md)
-
-> Deprecated 2026-07-19: one-time release action, completed.
 
 ## SWR-1517 — Artifact record schema
 

@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-500, SWR-501, SWR-502, SWR-503, SWR-504, SWR-505, SWR-506, SWR-507, SWR-508, SWR-509, SWR-510, SWR-511, SWR-512, SWR-513, SWR-514, SWR-515, SWR-516, SWR-517, SWR-518, SWR-519, SWR-520, SWR-521, SWR-522, SWR-523, SWR-524, SWR-525, SWR-526, SWR-527, SWR-528, SWR-529, SWR-530, SWR-531, SWR-532, SWR-533, SWR-534, SWR-535, SWR-536, SWR-537, SWR-538, SWR-539, SWR-540, SWR-541, SWR-542, SWR-543, SWR-544, SWR-545, SWR-546, SWR-547, SWR-548, SWR-549, SWR-550, SWR-551, SWR-552, SWR-553, SWR-554, SWR-555, SWR-556, SWR-557, SWR-558, SWR-559, SWR-560, SWR-561, SWR-562, SWR-563]
+req-id: [SWR-500, SWR-501, SWR-502, SWR-503, SWR-504, SWR-505, SWR-506, SWR-507, SWR-508, SWR-509, SWR-510, SWR-511, SWR-512, SWR-513, SWR-514, SWR-515, SWR-516, SWR-517, SWR-518, SWR-519, SWR-520, SWR-521, SWR-522, SWR-523, SWR-524, SWR-525, SWR-526, SWR-527, SWR-528, SWR-529, SWR-530, SWR-531, SWR-532, SWR-533, SWR-534, SWR-535, SWR-536, SWR-537, SWR-538, SWR-539, SWR-540, SWR-541, SWR-542, SWR-543, SWR-544, SWR-545, SWR-546, SWR-547, SWR-548, SWR-549, SWR-550, SWR-551, SWR-553, SWR-554, SWR-555, SWR-557, SWR-559, SWR-560, SWR-561, SWR-562, SWR-563]
 status: approved
 trace: required
 test: required
@@ -385,18 +385,6 @@ source: docs/requirement-log/done/requirements-20260414-224700.md
 
 Add regression tests for housekeeping-only retries/failures, recovery after a corrective prompt, fixture-based reproduction of the captured session pattern, and mixed streaming-marker handling.
 
-## SWR-552 — Release Hygiene
-status: deprecated
-legacy-id: REQ-20260414-224700-006
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-224700.md
-
-Bump the package version after shipping the bug fix.
-
-Epic: [Tool Platform & Integrations](../500-tool-platform.md)
-
-> Deprecated 2026-07-19: one-time release action, completed; version policy lives in CLAUDE.md.
-
 ## SWR-553 — Disable Undocumented ThinkTool
 legacy-id: REQ-20260414-230140-001
 date: 2026-04-14
@@ -421,18 +409,6 @@ source: docs/requirement-log/done/requirements-20260414-230140.md
 
 Prompt tool hints must explicitly mention accepted argument names for HAET and terminal tooling to reduce malformed tool calls.
 
-## SWR-556 — Recover Researcher JSON Once
-status: deprecated
-legacy-id: REQ-20260414-230140-004
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-230140.md
-
-The internal Researcher flow must retry once with a corrective prompt when its first response is not valid JSON.
-
-Epic: [Tool Platform & Integrations](../500-tool-platform.md)
-
-> Deprecated 2026-07-19: the internal Researcher flow was retired with the `find` tool.
-
 ## SWR-557 — Regression Coverage
 trace: optional
 legacy-id: REQ-20260414-230140-005
@@ -440,18 +416,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-230140.md
 
 Add unit tests for runtime-name rendering, default-tool configuration, and Researcher JSON-repair retry behavior.
-
-## SWR-558 — Release Hygiene
-status: deprecated
-legacy-id: REQ-20260414-230140-006
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-230140.md
-
-Bump the package version after shipping the fixes.
-
-Epic: [Tool Platform & Integrations](../500-tool-platform.md)
-
-> Deprecated 2026-07-19: one-time release action, completed; version policy lives in CLAUDE.md.
 
 ## SWR-559 — Terminal observations must classify command outcomes separately from internal tool errors.
 legacy-id: REQ-20260709-TERM-001

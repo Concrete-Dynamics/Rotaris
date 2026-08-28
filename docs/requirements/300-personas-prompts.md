@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-300, SWR-301, SWR-302, SWR-303, SWR-304, SWR-305, SWR-306, SWR-307, SWR-308, SWR-309, SWR-310, SWR-311, SWR-312, SWR-313, SWR-314, SWR-315, SWR-316, SWR-317, SWR-318, SWR-319, SWR-320, SWR-321, SWR-322, SWR-323, SWR-324, SWR-325, SWR-326, SWR-327, SWR-328, SWR-329, SWR-330, SWR-331, SWR-332, SWR-333, SWR-334, SWR-335, SWR-336, SWR-337, SWR-338, SWR-339, SWR-340, SWR-341, SWR-342, SWR-343, SWR-344, SWR-345, SWR-346, SWR-347, SWR-348, SWR-349, SWR-350, SWR-351, SWR-352, SWR-353, SWR-354, SWR-355, SWR-356, SWR-357, SWR-358, SWR-359, SWR-360, SWR-361, SWR-362, SWR-363, SWR-364, SWR-365, SWR-366, SWR-367, SWR-368, SWR-369, SWR-370, SWR-371, SWR-372, SWR-373, SWR-374, SWR-375, SWR-376, SWR-377, SWR-378, SWR-379, SWR-380, SWR-381, SWR-382, SWR-383, SWR-384, SWR-385]
+req-id: [SWR-300, SWR-301, SWR-302, SWR-303, SWR-304, SWR-305, SWR-306, SWR-308, SWR-309, SWR-310, SWR-311, SWR-313, SWR-314, SWR-315, SWR-316, SWR-317, SWR-318, SWR-319, SWR-320, SWR-321, SWR-322, SWR-323, SWR-324, SWR-325, SWR-326, SWR-327, SWR-328, SWR-329, SWR-330, SWR-331, SWR-332, SWR-333, SWR-334, SWR-335, SWR-336, SWR-337, SWR-338, SWR-339, SWR-340, SWR-341, SWR-342, SWR-343, SWR-344, SWR-346, SWR-347, SWR-348, SWR-349, SWR-350, SWR-351, SWR-352, SWR-353, SWR-354, SWR-355, SWR-356, SWR-357, SWR-358, SWR-359, SWR-361, SWR-362, SWR-364, SWR-365, SWR-366, SWR-367, SWR-368, SWR-369, SWR-370, SWR-372, SWR-373, SWR-374, SWR-375, SWR-376, SWR-377, SWR-378, SWR-379, SWR-380, SWR-381, SWR-382, SWR-384, SWR-385]
 status: approved
 trace: required
 test: required
@@ -56,14 +56,6 @@ source: docs/requirement-log/done/requirements-20260413-000002-personas-and-conf
 
 Uses the **OpenHands SDK LLM Registry** for provider abstraction.
 
-## SWR-307 — models.yml
-status: deprecated
-legacy-id: FR-5-002
-date: 2026-04-13
-source: docs/requirement-log/done/requirements-20260413-000002-personas-and-config.md
-
-LLM providers and models are declared in a `models.yml` configuration file, from which the registry is built at startup.
-
 ## SWR-308 — Supported Providers
 legacy-id: FR-5-003
 date: 2026-04-13
@@ -91,14 +83,6 @@ date: 2026-04-13
 source: docs/requirement-log/done/requirements-20260413-000002-personas-and-config.md
 
 This enables per-agent model routing: the orchestrator can use a powerful model while sub-agents use cheaper/faster ones.
-
-## SWR-312 — Secrets in models.yml
-status: deprecated
-legacy-id: FR-5-007
-date: 2026-04-13
-source: docs/requirement-log/done/requirements-20260413-000002-personas-and-config.md
-
-Secrets are allowed in `models.yml`, including inline API keys, but must be handled according to the redaction and prompt-isolation rules (see tool integration requirements).
 
 ## SWR-313 — Two-Tier Hierarchy
 legacy-id: FR-CONFIG-001
@@ -329,18 +313,6 @@ source: docs/requirement-log/done/requirements-20260416-omo-prompt-adaptation.md
 
 A read-only consultation persona is available (formerly `oracle`; now `codebase-analyst`, with a legacy alias mapping `oracle` to `codebase-analyst`).
 
-## SWR-345 — Explore persona (read-only codebase recon)
-status: deprecated
-legacy-id: REQ-OMO-PHASE3-004
-date: 2026-04-16
-source: docs/requirement-log/done/requirements-20260416-omo-prompt-adaptation.md
-
-Removed - retired from defaults; current prompts route codebase recon through available read-only/reference delegates by purpose
-
-Epic: [Agent Personas & Prompt System](../300-personas-prompts.md)
-
-> Deprecated 2026-07-19: explore persona retired from defaults; codebase recon routes through read-only delegates.
-
 ## SWR-346 — Default config wires both personas
 legacy-id: REQ-OMO-PHASE3-005
 date: 2026-04-16
@@ -444,18 +416,6 @@ source: docs/requirement-log/done/requirements-20260425-120000.md
 
 Add unit tests for the updated `_format_delegates_section` covering: (a) delegates with purposes, (b) delegates without purposes (fallback), (c) empty delegate list. Update any existing snapshot or assertion tests that check the rendered delegates section.
 
-## SWR-360 — Persona prompt upgrades
-status: deprecated
-legacy-id: REQ-20260425-OPENCODE-ALIGNMEN-001
-date: 2026-04-25
-source: docs/requirement-log/done/requirements-20260425-opencode-alignment.md
-
-Refresh the following persona prompts with the strongest OpenCode patterns while keeping Rotaris's tool wiring and placeholders intact: - **orchestrator** - added Sisyphus parallel-execution defaults, inherited-context discipline, 3-failure recovery protocol (stop / oracle escalate / user return), and an explicit Completion Gate ("Relentless") that require
-
-Epic: [Agent Personas & Prompt System](../300-personas-prompts.md)
-
-> Deprecated 2026-07-19: one-time action, completed; not an ongoing system requirement.
-
 ## SWR-361 — Relentless (autonomous-completion) mode
 legacy-id: REQ-20260425-OPENCODE-ALIGNMEN-002
 date: 2026-04-25
@@ -469,18 +429,6 @@ date: 2026-04-25
 source: docs/requirement-log/done/requirements-20260425-opencode-alignment.md
 
 Rename the autonomous-completion mode from "ultrawork" to "relentless" across runtime configuration, Ralph loop internals, test naming, and operator-facing prompt text. Acceptance: - Runtime config fields renamed to `relentless` and `relentless_max_cycles`. - Ralph loop internals renamed to `relentless` terminology in method names, counters, log messages, an
-
-## SWR-363 — Version bump
-status: deprecated
-legacy-id: REQ-20260425-OPENCODE-ALIGNMEN-004
-date: 2026-04-25
-source: docs/requirement-log/done/requirements-20260425-opencode-alignment.md
-
-`pyproject.toml` bumped `0.24.1` → `0.25.0` (minor - new feature flag and end-to-end behaviour).
-
-Epic: [Agent Personas & Prompt System](../300-personas-prompts.md)
-
-> Deprecated 2026-07-19: one-time action, completed; not an ongoing system requirement.
 
 ## SWR-364 — Built-in Persona Config
 legacy-id: REQ-20260503-REQENG-001
@@ -534,18 +482,6 @@ date: 2026-05-03
 source: docs/requirement-log/done/requirements-20260503-requirements-engineer-persona.md
 
 Unit tests shall cover default registration, delegation wiring, prompt loading, prompt guardrails, active routing text, and research-context propagation.
-
-## SWR-371 — Version Bump
-status: deprecated
-legacy-id: REQ-20260503-REQENG-NF-003
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-requirements-engineer-persona.md
-
-The package version shall be bumped for the feature addition.
-
-Epic: [Agent Personas & Prompt System](../300-personas-prompts.md)
-
-> Deprecated 2026-07-19: one-time action, completed; not an ongoing system requirement.
 
 ## SWR-372 — Built-in Persona Config
 legacy-id: REQ-20260528-UV-001
@@ -638,19 +574,6 @@ source: docs/requirement-log/done/requirements-20260528-ui-verifier-persona.md
 priority: High
 
 Unit tests shall cover: default registration in `DEFAULT_PERSONAS`, delegation wiring in orchestrator/coding-agent/tester `delegates_to` lists, prompt loading and guardrail validation, and the structured output contract.
-
-## SWR-383 — Version Bump
-status: deprecated
-legacy-id: REQ-20260528-UV-NF-003
-date: 2026-05-28
-source: docs/requirement-log/done/requirements-20260528-ui-verifier-persona.md
-priority: Medium
-
-The package version in `pyproject.toml` shall be bumped (minor) for the feature addition.
-
-Epic: [Agent Personas & Prompt System](../300-personas-prompts.md)
-
-> Deprecated 2026-07-19: one-time action, completed; not an ongoing system requirement.
 
 ## SWR-384 — No Overlap with Tester
 trace: optional

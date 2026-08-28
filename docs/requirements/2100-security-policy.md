@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-2100, SWR-2101, SWR-2102, SWR-2103, SWR-2104, SWR-2105, SWR-2106, SWR-2107, SWR-2108, SWR-2109, SWR-2110, SWR-2111, SWR-2112, SWR-2113, SWR-2114, SWR-2115, SWR-2116, SWR-2117, SWR-2118, SWR-2119, SWR-2120, SWR-2121]
+req-id: [SWR-2100, SWR-2101, SWR-2102, SWR-2103, SWR-2104, SWR-2105, SWR-2106, SWR-2107, SWR-2108, SWR-2110, SWR-2111, SWR-2112, SWR-2113, SWR-2114, SWR-2115, SWR-2116, SWR-2117, SWR-2118, SWR-2119, SWR-2120, SWR-2121]
 status: approved
 trace: required
 test: required
@@ -85,18 +85,6 @@ date: 2026-04-13
 source: docs/requirement-log/partial/requirements-20260413-000005-nfr-and-policy.md
 
 Runtime concurrency is single-process and asyncio-based.
-
-## SWR-2109 — Traceability Matrix
-status: deprecated
-trace: optional
-test: optional
-legacy-id: NFR-9
-date: 2026-04-13
-source: docs/requirement-log/partial/requirements-20260413-000005-nfr-and-policy.md
-
-A traceability matrix between requirement IDs (`FR-*` / `NFR-*`) and tests is generated automatically by `generate_traceability.py`. The script parses requirement IDs from requirement files and `# @req: <ID>[, <ID>...]` annotations above test functions, emits `TRACEABILITY.md`, and is run as a pre-commit hook (`.pre-commit-hook.sh`) and via `make traceability` / `make test-trace`.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`python -m rotaris_core.reqtocode check`, see `docs/reference/reqtocode-blueprint.md`). `generate_traceability.py`, `TRACEABILITY.md`, and the `make traceability` / `make test-trace` targets have been removed; the pre-commit hook now runs only the ReqToCode gate.
 
 ## SWR-2110 — Protected LLM Completion Against Bare-Raise Crash
 legacy-id: NFR-10

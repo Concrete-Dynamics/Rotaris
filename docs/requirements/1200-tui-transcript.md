@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1200, SWR-1201, SWR-1202, SWR-1203, SWR-1204, SWR-1205, SWR-1206, SWR-1207, SWR-1208, SWR-1209, SWR-1210, SWR-1211, SWR-1212, SWR-1213, SWR-1214, SWR-1215, SWR-1216, SWR-1217, SWR-1218, SWR-1219, SWR-1220, SWR-1221, SWR-1222, SWR-1223, SWR-1224, SWR-1225, SWR-1226, SWR-1227, SWR-1228, SWR-1229, SWR-1230, SWR-1231, SWR-1232, SWR-1233, SWR-1234, SWR-1235, SWR-1236, SWR-1237, SWR-1238, SWR-1239, SWR-1240, SWR-1241, SWR-1242, SWR-1243, SWR-1244, SWR-1245, SWR-1246, SWR-1247, SWR-1248, SWR-1249, SWR-1250, SWR-1251, SWR-1252, SWR-1253, SWR-1254, SWR-1255, SWR-1256, SWR-1257, SWR-1258, SWR-1259, SWR-1260, SWR-1261, SWR-1262, SWR-1263, SWR-1264, SWR-1265, SWR-1266, SWR-1267, SWR-1268, SWR-1269, SWR-1270, SWR-1271, SWR-1272, SWR-1273, SWR-1274, SWR-1275, SWR-1276, SWR-1277, SWR-1278, SWR-1279, SWR-1280, SWR-1281, SWR-1282, SWR-1283, SWR-1284]
+req-id: [SWR-1200, SWR-1201, SWR-1202, SWR-1203, SWR-1204, SWR-1205, SWR-1206, SWR-1207, SWR-1208, SWR-1209, SWR-1210, SWR-1211, SWR-1212, SWR-1213, SWR-1214, SWR-1215, SWR-1216, SWR-1217, SWR-1218, SWR-1219, SWR-1220, SWR-1221, SWR-1222, SWR-1223, SWR-1224, SWR-1225, SWR-1226, SWR-1227, SWR-1228, SWR-1229, SWR-1230, SWR-1231, SWR-1232, SWR-1233, SWR-1234, SWR-1235, SWR-1236, SWR-1237, SWR-1238, SWR-1239, SWR-1240, SWR-1241, SWR-1242, SWR-1243, SWR-1244, SWR-1245, SWR-1246, SWR-1247, SWR-1248, SWR-1249, SWR-1250, SWR-1251, SWR-1252, SWR-1253, SWR-1254, SWR-1255, SWR-1256, SWR-1257, SWR-1258, SWR-1259, SWR-1260, SWR-1261, SWR-1262, SWR-1263, SWR-1264, SWR-1265, SWR-1266, SWR-1267, SWR-1268, SWR-1269, SWR-1270, SWR-1271, SWR-1272, SWR-1273, SWR-1274, SWR-1279, SWR-1280, SWR-1281, SWR-1282, SWR-1283, SWR-1284]
 status: approved
 trace: required
 test: required
@@ -601,38 +601,6 @@ date: 2026-06-10
 source: docs/requirement-log/done/requirements-20260610-tui-lazy-transcript.md
 
 Archive reads SHALL run via `asyncio.to_thread` or a worker thread to avoid blocking the TUI event loop.
-
-## SWR-1275 — Visible-Range Rendering
-status: deprecated
-legacy-id: FR-VIRT-001
-date: 2026-06-10
-source: docs/requirement-log/done/requirements-20260610-tui-lazy-transcript.md
-
-`ChatPanel._refresh_widgets` SHALL compute the visible line range from the current scroll position and viewport height, and only call `_render_chat_event` for events whose rendered lines intersect that range.
-
-## SWR-1276 — Event-to-Line Height Map
-status: deprecated
-legacy-id: FR-VIRT-002
-date: 2026-06-10
-source: docs/requirement-log/done/requirements-20260610-tui-lazy-transcript.md
-
-The TUI SHALL maintain a cumulative line-height map (event index → starting line number) to enable O(log n) lookup of which events are visible. This map SHALL be incrementally updated as events are added, avoiding full recomputation.
-
-## SWR-1277 — Incremental Rebuild Preference
-status: deprecated
-legacy-id: FR-VIRT-003
-date: 2026-06-10
-source: docs/requirement-log/done/requirements-20260610-tui-lazy-transcript.md
-
-When the visible range hasn't changed (e.g., streaming updates at the bottom while following), `_refresh_widgets` SHALL prefer incremental updates over full rebuilds. The `chat_needs_full_rebuild` flag SHALL only be set on structural changes (new child, completed tool).
-
-## SWR-1278 — Compatibility with RichLog
-status: deprecated
-legacy-id: FR-VIRT-004
-date: 2026-06-10
-source: docs/requirement-log/done/requirements-20260610-tui-lazy-transcript.md
-
-Virtual rendering SHALL maintain compatibility with Textual's `RichLog` selection highlighting, URL clicking, and reasoning-block toggle behaviors.
 
 ## SWR-1279 — Virtualized Rendering
 legacy-id: REQ-20260629-001

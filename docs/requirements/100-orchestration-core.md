@@ -1,74 +1,5 @@
 ---
-req-id:
-  [
-    SWR-100,
-    SWR-101,
-    SWR-102,
-    SWR-103,
-    SWR-104,
-    SWR-105,
-    SWR-106,
-    SWR-107,
-    SWR-108,
-    SWR-109,
-    SWR-110,
-    SWR-111,
-    SWR-112,
-    SWR-113,
-    SWR-114,
-    SWR-115,
-    SWR-116,
-    SWR-117,
-    SWR-118,
-    SWR-119,
-    SWR-120,
-    SWR-121,
-    SWR-122,
-    SWR-123,
-    SWR-124,
-    SWR-125,
-    SWR-126,
-    SWR-127,
-    SWR-128,
-    SWR-129,
-    SWR-130,
-    SWR-131,
-    SWR-132,
-    SWR-133,
-    SWR-134,
-    SWR-135,
-    SWR-136,
-    SWR-137,
-    SWR-138,
-    SWR-139,
-    SWR-140,
-    SWR-141,
-    SWR-142,
-    SWR-143,
-    SWR-144,
-    SWR-145,
-    SWR-146,
-    SWR-147,
-    SWR-148,
-    SWR-149,
-    SWR-150,
-    SWR-151,
-    SWR-152,
-    SWR-153,
-    SWR-154,
-    SWR-155,
-    SWR-156,
-    SWR-157,
-    SWR-158,
-    SWR-159,
-    SWR-160,
-    SWR-161,
-    SWR-162,
-    SWR-163,
-    SWR-164,
-    SWR-165,
-    SWR-166,
-  ]
+req-id: [SWR-100, SWR-101, SWR-102, SWR-103, SWR-104, SWR-105, SWR-106, SWR-107, SWR-108, SWR-109, SWR-110, SWR-111, SWR-112, SWR-113, SWR-114, SWR-115, SWR-116, SWR-117, SWR-118, SWR-119, SWR-120, SWR-121, SWR-122, SWR-123, SWR-124, SWR-125, SWR-126, SWR-127, SWR-128, SWR-129, SWR-130, SWR-131, SWR-132, SWR-133, SWR-134, SWR-135, SWR-136, SWR-137, SWR-139, SWR-140, SWR-141, SWR-142, SWR-143, SWR-144, SWR-145, SWR-146, SWR-147, SWR-148, SWR-152, SWR-154, SWR-155, SWR-156, SWR-157, SWR-159, SWR-160, SWR-161, SWR-162, SWR-163, SWR-164, SWR-165, SWR-166]
 status: approved
 trace: required
 test: required
@@ -383,19 +314,6 @@ source: docs/requirement-log/done/requirements-20260414-235403.md
 
 Add unit tests for successful `stuck` recovery, repeated `stuck` escalation, `error` fail-fast behavior, and `terminal-stuck` fallback behavior.
 
-## SWR-138 — Release Hygiene
-
-status: deprecated
-legacy-id: REQ-20260414-235403-008
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-235403.md
-
-Bump the package version after shipping the bug fix.
-
-Epic: [Orchestration & Delegation Core](../100-orchestration-core.md)
-
-> Deprecated 2026-07-19: one-time release action, completed; ongoing version policy lives in CLAUDE.md.
-
 ## SWR-139 — Task IDs and Non-Blocking Spawn
 
 legacy-id: REQ-20260416-120000-001
@@ -480,45 +398,6 @@ priority: High
 
 Remove \"Phase 0: Intent Classification\" from the current `orchestrator.md` system prompt.
 
-## SWR-149 — Add a `[[ROTARIS:INTENT_INSTRUCTIONS]]` placeholder to the orchestrator's prompt.
-
-status: deprecated
-
-legacy-id: REQ-20260520-004
-date: 2026-05-20
-source: docs/requirement-log/done/requirements-20260520-000001-intent-classification.md
-priority: High
-
-Add a `[[ROTARIS:INTENT_INSTRUCTIONS]]` placeholder to the orchestrator's prompt.
-
-Superseded by SWR-2416: the orchestrator's intent text is now the `[[ROTARIS:PLAYBOOK]]` cell, and `[[ROTARIS:INTENT_INSTRUCTIONS]]` was removed.
-
-## SWR-150 — Introduce a mapping of intents to specific instruction text (prompt snippets).
-
-status: deprecated
-
-legacy-id: REQ-20260520-005
-date: 2026-05-20
-source: docs/requirement-log/done/requirements-20260520-000001-intent-classification.md
-priority: High
-
-Introduce a mapping of intents to specific instruction text (prompt snippets).
-
-Superseded by SWR-2416: intent-to-instruction snippets were replaced by the persona x intent x model-tier matrix in `agents/prompts/playbooks/`.
-
-## SWR-151 — Inject the matched intent's instruction text into the `[[ROTARIS:INTENT_INSTRUCTIONS]]` placeholder when initializing the orchestrator.
-
-status: deprecated
-
-legacy-id: REQ-20260520-006
-date: 2026-05-20
-source: docs/requirement-log/done/requirements-20260520-000001-intent-classification.md
-priority: High
-
-Inject the matched intent's instruction text into the `[[ROTARIS:INTENT_INSTRUCTIONS]]` placeholder when initializing the orchestrator.
-
-Superseded by SWR-2416: the resolved playbook cell is injected instead, and it reaches every persona rather than only the orchestrator.
-
 ## SWR-152 — Configure the intent classifier to use structured outputs (JSON schema or a forced tool call) to guarantee stable, predictable parsing of the intent enum.
 
 legacy-id: REQ-20260520-007
@@ -527,19 +406,6 @@ source: docs/requirement-log/done/requirements-20260520-000001-intent-classifica
 priority: High
 
 Configure the intent classifier to use structured outputs (JSON schema or a forced tool call) to guarantee stable, predictable parsing of the intent enum.
-
-## SWR-153 — Define intent mappings securely outside of hardcoded logic (e.g., using a metadata YAML file mapping intents to markdown snippet files in `src/rotaris_core/agents/prompts/intents/`).
-
-status: deprecated
-
-legacy-id: REQ-20260520-008
-date: 2026-05-20
-source: docs/requirement-log/done/requirements-20260520-000001-intent-classification.md
-priority: Medium
-
-Define intent mappings securely outside of hardcoded logic (e.g., using a metadata YAML file mapping intents to markdown snippet files in `src/rotaris_core/agents/prompts/intents/`).
-
-Superseded by SWR-2416: `intents.yaml` now carries tool gating only (SWR-156); the markdown snippet files it pointed at were deleted.
 
 ## SWR-154 — Implement a resilient fallback: if the classification step times out, fails, or returns an unmapped string, default to a `generic_feature` intent without stopping the run.
 
@@ -576,19 +442,6 @@ source: docs/requirement-log/done/requirements-20260520-000001-intent-classifica
 priority: High
 
 TUI Visual Feedback During Classification\*\* - Show a live visual indicator while the intent classifier is running. In the TUI, append a transient \"Classifying intent...\" status message to the chat transcript the moment classification begins (before awaiting the LLM call). Replace it in-place with the final result (\"Intent classified: moderate_feature\") upon completion. On failure, replace the transient status with a neutral fallback message and then append the final fallback classification result.
-
-## SWR-158 — Planner-First Routing For Plan-Worthy Intents
-
-status: deprecated
-
-trace: optional
-legacy-id: REQ-20260609-PLANNER-FIRST-001
-date: 2026-06-09
-source: docs/requirement-log/done/requirements-20260609-planner-first-orchestration.md
-
-For `moderate_feature`, `large_feature`, `whole_project`, and `refactor`, the orchestrator must delegate to `planner` before broad research or design work.
-
-Superseded by SWR-2416: planner-first routing is now conditional on the implementation owner's model tier — a `large_model` owner scopes its own work, so `moderate_feature`/`refactor` no longer force a planner step. See the orchestrator matrix in docs/architecture/prompt-composition-matrix.md.
 
 ## SWR-159 — Planner-Owned Research Delegation
 

@@ -91,12 +91,8 @@ class LibraryView(QWidget):
         # a table and builds every row again, and a run publishes artifacts and
         # improvement proposals while the user is looking at another tab.
         self._reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self.refresh)
-        self._artifacts_reflow = HiddenPanelReflow(
-            self, PANEL_REFLOW_MS, self._refresh_artifacts
-        )
-        self._proposals_reflow = HiddenPanelReflow(
-            self, PANEL_REFLOW_MS, self._refresh_proposals
-        )
+        self._artifacts_reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self._refresh_artifacts)
+        self._proposals_reflow = HiddenPanelReflow(self, PANEL_REFLOW_MS, self._refresh_proposals)
         store.library_changed.connect(self._reflow.request)
         store.artifacts_changed.connect(self._artifacts_reflow.request)
         store.improvement_proposals_changed.connect(self._proposals_reflow.request)

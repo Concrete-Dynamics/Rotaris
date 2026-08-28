@@ -278,9 +278,7 @@ def test_switching_agent_rebuilds_the_strip_for_the_tools_it_actually_holds(qtbo
 
     after = _chips(view)
     assert all(chip not in before for chip in after)
-    assert {chip.text().split(" · ")[0] for chip in after} == set(
-        store.agents["tester"].tools
-    )
+    assert {chip.text().split(" · ")[0] for chip in after} == set(store.agents["tester"].tools)
 
 
 @verifies(SWR.SWR_2454)
@@ -558,14 +556,10 @@ def test_a_setter_told_what_the_store_already_holds_publishes_nothing(qtbot) -> 
     store.settings_changed.connect(lambda: heard.__setitem__("settings", heard["settings"] + 1))
     store.ui_changed.connect(lambda: heard.__setitem__("ui", heard["ui"] + 1))
 
-    proposal = ImprovementProposal(
-        id="p1", artifact_id="art1", category="cost", summary="do less"
-    )
+    proposal = ImprovementProposal(id="p1", artifact_id="art1", category="cost", summary="do less")
 
     def say_everything() -> None:
-        store.upsert_agent(
-            AgentNode(id="a1", name="a1", persona="coder", state=AgentState.RUNNING)
-        )
+        store.upsert_agent(AgentNode(id="a1", name="a1", persona="coder", state=AgentState.RUNNING))
         store.upsert_session(SessionInfo(id="s1", name="one", status="idle"))
         store.set_improvement_proposals([replace(proposal)])
         store.set_session_persona("reviewer")

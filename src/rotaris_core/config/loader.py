@@ -730,7 +730,7 @@ def _resolve_model_aliases(data: dict[str, Any]) -> dict[str, Any]:
     """Replace 'small_model'/'large_model' placeholders with their configured model names.
 
     Scans all model-reference fields (persona model/summary_model/fallback_model,
-    researcher/compressor/circuit_breaker model, default_summary_model) and substitutes
+    compressor/circuit_breaker model, default_summary_model) and substitutes
         the alias string with the resolved value from the configured tier fields.
     """
     aliases: dict[str, str] = {}

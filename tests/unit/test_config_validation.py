@@ -41,7 +41,7 @@ def test_validate_config_valid_returns_empty_list() -> None:
     assert validate_config(config) == []
 
 
-@verifies(SWR.SWR_309, SWR.SWR_1703)
+@verifies(SWR.SWR_309)
 def test_validate_config_persona_references_missing_model() -> None:
     config = make_config(
         personas={

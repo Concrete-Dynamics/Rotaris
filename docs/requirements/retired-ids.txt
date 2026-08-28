@@ -138,6 +138,7 @@ SWR-1629	2026-08-28	Unit: persona-memory boundedness and visibility
 SWR-1630	2026-08-28	Unit: manual persona-memory edit compatibility
 SWR-1631	2026-08-28	Unit: collector persona-memory proposal validation
 SWR-1632	2026-08-28	Integration: persona-memory approval flow
+SWR-1703	2026-08-28	Researcher Validation
 SWR-1705	2026-08-28	Regression Coverage
 SWR-1903	2026-08-28	`find` Tool Access
 SWR-2109	2026-08-28	Traceability Matrix

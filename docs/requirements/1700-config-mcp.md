@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1700, SWR-1701, SWR-1702, SWR-1703, SWR-1704, SWR-1706, SWR-1707, SWR-1708, SWR-1709, SWR-1710, SWR-1711, SWR-1712, SWR-1713, SWR-1714, SWR-1715, SWR-1716, SWR-1717, SWR-1718, SWR-1719, SWR-1720, SWR-1721, SWR-1722, SWR-1723, SWR-1724, SWR-1725, SWR-1726, SWR-1727, SWR-1728, SWR-1729, SWR-1730]
+req-id: [SWR-1700, SWR-1701, SWR-1702, SWR-1704, SWR-1706, SWR-1707, SWR-1708, SWR-1709, SWR-1710, SWR-1711, SWR-1712, SWR-1713, SWR-1714, SWR-1715, SWR-1716, SWR-1717, SWR-1718, SWR-1719, SWR-1720, SWR-1721, SWR-1722, SWR-1723, SWR-1724, SWR-1725, SWR-1726, SWR-1727, SWR-1728, SWR-1729, SWR-1730]
 status: approved
 trace: required
 test: required
@@ -30,14 +30,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-155438.md
 
 The top-level `researcher` config block must be loaded from scope config files and honored by CLI override config files.
-
-## SWR-1703 — Researcher Validation
-trace: optional
-legacy-id: REQ-20260414-155438-003
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-155438.md
-
-Validation must fail fast if `researcher.model` references an unknown model.
 
 ## SWR-1704 — LLM Runtime Wiring
 legacy-id: REQ-20260414-155438-004

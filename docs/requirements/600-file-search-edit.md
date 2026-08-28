@@ -13,7 +13,7 @@ status: approved
 trace: optional
 test: optional
 
-File reading/writing/search tooling: researcher find tool, read_file/write_file split, and the HAET hash-anchored edit tool family.
+File reading/writing/search tooling: grep/glob search, the read_file/write_file split, and the HAET hash-anchored edit tool family.
 
 ## SWR-629 — Cross-Platform Fast Path
 status: approved

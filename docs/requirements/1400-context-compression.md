@@ -361,3 +361,7 @@ source: docs/requirement-log/done/requirements-20260513-compress-command.md
 
 `/compress` MUST appear in the slash command autocomplete overlay (when that feature is active) with its description, identical to all other built-in commands.
 
+## History
+
+Source documents were merged into this epic on 2026-07-18; the originals live in
+git history under `docs/requirement-log/`.

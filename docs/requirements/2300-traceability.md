@@ -457,32 +457,5 @@ SWR-2316.
   convention seam) — which are what the later per-stack work depends on. Derivation:
   [docs/plans/2026-08-09-marktanalyse-offene-punkte.md](../plans/2026-08-09-marktanalyse-offene-punkte.md), item O1.
 
-Source documents merged into this epic (sections preserved verbatim; requirement tables migrated to the files above).
-
-### Requirements Traceability System (2026-04-17)
-
-Original: `docs/requirement-log/partial/requirements-20260417-173238.md` — document status: Partial - recursive requirement/test ingestion, Markdown matrix generation, README guidance, and a pre-commit regeneration hook are implemented; status/blocker columns, strict uncovered enforcement, tombstones, and the originally requested post-commit hook remain unimplemented or superseded by the pre-commit flow.
-
-#### Description
-
-The system establishes a structured requirements log folder as the single source of truth for all project requirements. Each requirement carries a unique ID that must be referenced in the tests covering it. A parser script reads all requirements files and test annotations, then generates and maintains an external traceability matrix. This matrix is the canonical reference for implementation status and is linked from `agents.md` at the project root.
-
-#### Implementation Notes
-
-**Requirements Document:**
-
-**Traceability Matrix - Expected Column Schema:**
-
-This section defines the intended structure of the generated matrix for reference by the parser implementation. Column | Type | Description `ID` | string | Requirement ID (`REQ-YYYYMMDD-HHMMSS-NNN`) `Title` | string | Short requirement title `Status` | enum | `future` · `implemented` · `not planned` · `not implemented` · `removed` `Tests` | list | Comma-separated test IDs that cover this requirement; empty if uncovered `Blocked By` | list | Comma-separated requirement IDs that block this requirement; empty if unblocked `Notes` | string | Optional free-text; used for blocker rationale or deferral reason
-
-**Excluded / Out of Scope:**
-
-- Real-time / live-reload matrix updates (the script runs on commit, not on file save).
-
-- GUI or web interface for the matrix (plain Markdown output only).
-
-- Automatic assignment of requirements to tests (annotation must be added by the developer).
-
-#### Acceptance Criteria
-
-**Constraints:**
+Source documents were merged into this epic on 2026-07-18; the originals live in
+git history under `docs/requirement-log/`.

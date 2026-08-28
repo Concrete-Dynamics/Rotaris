@@ -197,7 +197,14 @@ and productive-use contract.
 Test level and productive intent are review-enforced. `@verifies` remains the
 machine-readable ReqToCode coverage link.
 
-Epic files end with a **History** section preserving the Description /
-Implementation Notes / Acceptance Criteria of the original requirement-log
-documents that were merged into the epic (migrated 2026-07-18; originals
-remain in git history under `docs/requirement-log/`).
+Epic files end with a **History** section. It is for narrative a reader cannot
+reconstruct from the requirements above it — why a requirement was re-cut, what
+an implementation chose over the alternative, when a batch of ids was triaged.
+
+It is **not** a second copy of the requirements. The 2026-07-18 migration pasted
+each source document's Description / Implementation Notes / Acceptance Criteria
+under here verbatim, next to the requirements those same documents had already
+become; that duplicate was deleted on 2026-08-28 and every epic now carries a
+one-line pointer instead — the originals are in git history under
+`docs/requirement-log/`. Add to History when the story is worth telling, never to
+restate a requirement.

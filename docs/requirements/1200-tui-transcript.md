@@ -589,3 +589,7 @@ source: docs/requirement-log/done/requirements-20260629-virtual-transcript-rende
 
 Follow mode, paused scroll anchoring, archive-page loading, queued prompts, links, and reasoning toggles remain supported.
 
+## History
+
+Source documents were merged into this epic on 2026-07-18; the originals live in
+git history under `docs/requirement-log/`.

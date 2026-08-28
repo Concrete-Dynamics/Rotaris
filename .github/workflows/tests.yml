@@ -96,7 +96,15 @@ jobs:
       # and reports nothing but "The operation was canceled". Failing the step
       # instead keeps the faulthandler stack, lets the serial pass still run,
       # and costs twelve minutes rather than thirty.
-      - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -n auto --max-worker-restart=0 -m "not serial"
+      #
+      # `-v`, not `-q`, and that is a diagnosis decision rather than taste. This
+      # job has now failed four times reporting `FFFF` at 70% and a stall after
+      # 92% -- four failures and a hang whose *names* `-q` does not print, so
+      # every cycle cost twelve minutes and said nothing actionable. Under
+      # xdist, `-v` prints each test as its worker takes it, which names both
+      # the failures and the test the run stopped inside. `--tb=line` keeps the
+      # tracebacks to one line each so the log stays readable.
+      - run: uv run pytest apps/rotaris/tests -v --tb=line --timeout=120 --timeout-method=thread -p no:textual-snapshot -n auto --max-worker-restart=0 -m "not serial"
         timeout-minutes: 12
       - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -m serial
         timeout-minutes: 8

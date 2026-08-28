@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,6 +41,28 @@ INITIAL_COMMIT_MESSAGE = "Initial commit"
 GIT_SETUP_ACTION = "git.setup"
 
 
+@traces(SWR.SWR_3727)
+@dataclass(frozen=True)
+class GitSnapshot:
+    """Everything one refresh read from git, before any of it reaches the store.
+
+    The point of the type is the boundary it draws. Reading git means several
+    subprocess calls and belongs off the GUI thread; the store is a QObject that
+    lives *on* it, so writing to it from a worker -- and emitting its signals
+    from there -- is a data race that segfaults rather than misbehaves. A
+    snapshot is what crosses the boundary between the two.
+    """
+
+    available: bool
+    branch: str = ""
+    ahead: int = 0
+    behind: int = 0
+    worktrees: tuple[WorktreeInfo, ...] = ()
+    commits: tuple[CommitInfo, ...] = ()
+    files_touched: int = 0
+    uncommitted: int = 0
+
+
 @traces(SWR.SWR_2005, SWR.SWR_2405, SWR.SWR_3727)
 class GitService:
     def __init__(self, workspace: Path, store: WorkspaceStore) -> None:
@@ -62,26 +85,29 @@ class GitService:
         and that combination is what used to reach ``subprocess`` and raise
         ``FileNotFoundError`` out of a window constructor.
         """
+        self.apply(self.collect())
+
+    @traces(SWR.SWR_3727)
+    def collect(self) -> GitSnapshot:
+        """Read this workspace's git state. Never raises, never touches the store.
+
+        Safe to call from a worker thread: every line here is a subprocess call
+        or a file read, and nothing it produces is shared with the GUI until
+        :meth:`apply` puts it there.
+        """
         if not self._ok("rev-parse", "--git-dir"):
-            self.store.branch = ""
-            self.store.ahead = self.store.behind = 0
-            self.store.worktrees = []
-            self.store.commits = []
-            self._announce_unavailable()
-            self.store.git_changed.emit()
-            return
-        self.store.branch = self._run("branch", "--show-current").strip()
-        self.store.ahead, self.store.behind = self._ahead_behind()
-        self.store.worktrees = self._worktrees()
-        self._associate_sessions(self.store.worktrees)
-        self.store.commits = self._commits()
+            return GitSnapshot(available=False)
+        worktrees = self._worktrees()
+        self._associate_sessions(worktrees)
+        commits = self._commits()
         additions, deletions, files = self._diff_stats()
-        self.store.kpis.files_touched = files
-        self.store.kpis.uncommitted = len(
+        uncommitted = len(
             [line for line in self._run("status", "--porcelain=v1").splitlines() if line]
         )
+        ahead, behind = self._ahead_behind()
+        branch = self._run("branch", "--show-current").strip()
         base = self._base_branch()
-        for tree in self.store.worktrees:
+        for tree in worktrees:
             if tree.is_base:
                 tree.additions = additions
                 tree.deletions = deletions
@@ -96,6 +122,39 @@ class GitService:
                     tree.additions = ba
                     tree.deletions = bd
                     tree.files_touched = bf
+        return GitSnapshot(
+            available=True,
+            branch=branch,
+            ahead=ahead,
+            behind=behind,
+            worktrees=tuple(worktrees),
+            commits=tuple(commits),
+            files_touched=files,
+            uncommitted=uncommitted,
+        )
+
+    @traces(SWR.SWR_3727)
+    def apply(self, snapshot: GitSnapshot) -> None:
+        """Put a collected snapshot into the store. **GUI thread only.**
+
+        The store is a QObject with the GUI thread's affinity, so this is the
+        only place its fields are written and its signal emitted.
+        """
+        if not snapshot.available:
+            self.store.branch = ""
+            self.store.ahead = self.store.behind = 0
+            self.store.worktrees = []
+            self.store.commits = []
+            self._announce_unavailable()
+            self.store.git_changed.emit()
+            return
+        self.store.branch = snapshot.branch
+        self.store.ahead = snapshot.ahead
+        self.store.behind = snapshot.behind
+        self.store.worktrees = list(snapshot.worktrees)
+        self.store.commits = list(snapshot.commits)
+        self.store.kpis.files_touched = snapshot.files_touched
+        self.store.kpis.uncommitted = snapshot.uncommitted
         self.store.git_changed.emit()
 
     def create_worktree(self, path: Path, branch: str, *, base: str = "HEAD") -> None:

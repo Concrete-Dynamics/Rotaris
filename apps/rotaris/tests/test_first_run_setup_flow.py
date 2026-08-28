@@ -13,6 +13,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QLabel, QPushButton
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.setup import SetupEvent, SetupEventKind, SetupOutcome
+from shiboken6 import isValid
 from ui_query import find_by_accessible_name
 
 if TYPE_CHECKING:
@@ -24,14 +25,44 @@ from rotaris.setup_coordinator import SetupCoordinatorDialog, run_desktop_setup
 pytestmark = pytest.mark.e2e
 
 
-def _click_when_ready(dialog: SetupCoordinatorDialog, name: str) -> None:
+#: How long a `_click_when_ready` chain keeps looking before it gives up.
+#: Generous, because the worker it waits on shares a core with seven other
+#: pytest workers -- but finite, which is the point.
+_CLICK_DEADLINE_S = 30.0
+
+
+def _click_when_ready(
+    dialog: SetupCoordinatorDialog, name: str, deadline: float | None = None
+) -> None:
+    """Click *name* once the dialog offers it, and stop rather than spin forever.
+
+    Both bounds are load-bearing. The chain re-arms itself, and it closes over
+    the dialog: a button that never appears leaves a timer firing every 15 ms
+    for the rest of the session -- into *other tests'* event loops, against a
+    dialog `qtbot` has since closed and scheduled for deletion. That crashes the
+    worker with no Python frame naming the test that armed it, which is how this
+    file kept turning up in the parallel run's faulthandler stacks while passing
+    on its own.
+
+    So the chain ends: at a deadline, and the moment the dialog's C++ object is
+    gone. `dialog` is passed as the timer's context object as well, so Qt drops
+    the pending call on destruction instead of delivering it to freed memory.
+    """
+    if deadline is None:
+        deadline = time.monotonic() + _CLICK_DEADLINE_S
+    if not isValid(dialog) or time.monotonic() > deadline:
+        return
+
+    def again() -> None:
+        QTimer.singleShot(15, dialog, lambda: _click_when_ready(dialog, name, deadline))
+
     try:
         button = find_by_accessible_name(dialog, name, QPushButton)
     except (AssertionError, LookupError):
-        QTimer.singleShot(15, lambda: _click_when_ready(dialog, name))
+        again()
         return
     if not button.isVisible() or not button.isEnabled():
-        QTimer.singleShot(15, lambda: _click_when_ready(dialog, name))
+        again()
         return
     QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 

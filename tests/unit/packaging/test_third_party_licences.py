@@ -201,7 +201,13 @@ def test_provisioned_tools_come_from_the_setup_manifest(tpl: ModuleType) -> None
 
     assert tools is not None
     by_name = {tool.name: tool for tool in tools}
-    assert {"git", "node", "ripgrep"} <= set(by_name)
+    assert {"git", "ripgrep"} <= set(by_name)
+    # SWR-3715: "Node is a user-installed prerequisite and the bundled installer
+    # never downloads it." npx enables the optional JavaScript MCP servers when
+    # the user has Node, but Rotaris never ships or downloads it -- so it owes no
+    # third-party notice for it. A node entry appearing here would mean the
+    # installer had started provisioning it without a licence notice to match.
+    assert "node" not in by_name
     for tool in tools:
         assert tool.version
         assert tool.source_url.startswith("https://")

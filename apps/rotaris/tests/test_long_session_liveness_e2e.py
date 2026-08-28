@@ -173,6 +173,21 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
         )
     )
 
+    # Every publication the store makes, recorded as it happens. "Rows kept
+    # arriving" is a statement about a *sequence*, and sampling the transcript
+    # twice cannot make it: the transcript is a capped buffer and the run can
+    # outrun the test, so under load the first sample already holds everything
+    # the second one would -- the assertion then reads as "nothing arrived" on a
+    # run that in fact delivered the lot. Recording each publication instead says
+    # what the user saw arrive, at any speed.
+    published: list[frozenset[str]] = []
+
+    def record(*_args: object) -> None:
+        published.append(frozenset(event.text for event in store.transcript))
+
+    store.transcript_changed.connect(record)
+    store.transcript_delta.connect(record)
+
     session_ids: list[str] = []
     bridge = RunBridge(tmp_path, store, service)
     bridge.run_started.connect(session_ids.append)
@@ -182,7 +197,6 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
 
         # Early: the user is already being shown something.
         qtbot.waitUntil(lambda: len(store.transcript) > 1, timeout=15_000)
-        early_rows = len(store.transcript)
         early_ops = dict(model.operation_counts)
 
         # Late: the last thing the run said is on screen, and the run is still going.
@@ -192,7 +206,10 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
         )
 
         assert bridge.running, "every assertion here is about a run that has not ended"
-        assert len(store.transcript) > early_rows
+        assert len(published) > 1, "the whole run reached the user in one publication"
+        assert set().union(*published) - published[0], (
+            "nothing arrived after the first rows the user was shown"
+        )
         # The other live surfaces, on their own channel and equally current.
         assert [agent.id for agent in store.agent_list()] == ["coder-1"]
         assert [todo.status for todo in store.todos] == ["done", "done", "open"]

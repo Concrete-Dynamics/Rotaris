@@ -222,7 +222,16 @@ def test_deep_window_keeps_qt_responsive_and_reports_growth_sites(
     # Long enough that the sampling window is unmistakably still open while the
     # heartbeats below are collected, so their arrival says something about the
     # UI thread rather than about how fast the window closed.
-    monkeypatch.setattr(live, "ALLOCATION_WINDOW_S", 0.5)
+    #
+    # Seconds, not half a second: the window is opened on a worker thread, and
+    # the allocations below have to land inside it or there is nothing for the
+    # summary to rank. Sharing a core with seven other pytest workers, half a
+    # second went on getting that thread scheduled and `tracemalloc` started --
+    # so the window opened and shut before this thread allocated anything, and
+    # the test failed waiting to see tracing that had already been and gone.
+    # Widening it changes no assertion; it stops the machine's load deciding
+    # the verdict.
+    monkeypatch.setattr(live, "ALLOCATION_WINDOW_S", 5.0)
     monkeypatch.setattr(live, "ALLOCATION_SLOW_MS", 10_000.0)
     recorder = LiveDiagnostics(DiagnosticsConfig("deep", tmp_path), tmp_path)
     window = MainWindow(WorkspaceStore(), diagnostics=recorder)
@@ -235,7 +244,7 @@ def test_deep_window_keeps_qt_responsive_and_reports_growth_sites(
     timer.start()
 
     assert recorder.request_allocation_snapshot("user-flow") is True
-    qtbot.waitUntil(tracemalloc.is_tracing, timeout=1_000)
+    qtbot.waitUntil(tracemalloc.is_tracing, timeout=10_000)
     retained = [bytearray(1024) for _ in range(1_000)]
     assert retained
     assert recorder._allocation_thread is not None
@@ -244,7 +253,7 @@ def test_deep_window_keeps_qt_responsive_and_reports_growth_sites(
     # Counting whatever fitted into a fixed stretch of wall clock measures how
     # busy the machine is; waiting for the ticks measures the UI thread.
     qtbot.waitUntil(lambda: len(heartbeats) >= 2, timeout=5_000)
-    qtbot.waitUntil(lambda: not recorder._allocation_thread.is_alive(), timeout=10_000)
+    qtbot.waitUntil(lambda: not recorder._allocation_thread.is_alive(), timeout=30_000)
     timer.stop()
     recorder.close()
 
@@ -320,7 +329,7 @@ def test_deep_window_coalesces_requests_and_close_cancels_owned_tracing(
     recorder = LiveDiagnostics(DiagnosticsConfig("deep", tmp_path), tmp_path)
 
     assert recorder.request_allocation_snapshot("first") is True
-    qtbot.waitUntil(tracemalloc.is_tracing, timeout=1_000)
+    qtbot.waitUntil(tracemalloc.is_tracing, timeout=10_000)
     assert recorder.request_allocation_snapshot("duplicate") is False
     recorder.close()
 

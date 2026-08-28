@@ -97,6 +97,7 @@ def schedule_first_launch_workspace_prompt(window: MainWindow) -> None:
     """Defer onboarding long enough for the complete window to paint."""
     QTimer.singleShot(
         FIRST_LAUNCH_PROMPT_DELAY_MS,
+        window,
         window.prompt_for_initial_workspace,
     )
 
@@ -119,7 +120,7 @@ def schedule_post_show_machine_setup(
         if prompt_for_workspace:
             window.prompt_for_initial_workspace()
 
-    QTimer.singleShot(FIRST_LAUNCH_PROMPT_DELAY_MS, run)
+    QTimer.singleShot(FIRST_LAUNCH_PROMPT_DELAY_MS, window, run)
 
 
 def create_window(

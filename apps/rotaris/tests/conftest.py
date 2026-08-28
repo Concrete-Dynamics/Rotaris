@@ -138,6 +138,51 @@ def isolated_prompt_registry() -> Iterator[None]:
     PromptRegistry().clear()
 
 
+@pytest.fixture
+def real_project_initialization() -> None:
+    """Opt back in to running the workspace's real setup tasks.
+
+    Requested by the tests that are *about* project initialization. They point
+    the workspace at a `serena` of their own making, so the run stays hermetic
+    while still going through the real registry, the real worker thread and a
+    real subprocess.
+    """
+    return None
+
+
+@pytest.fixture(autouse=True)
+def no_unasked_project_initialization(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Opening a window must not run this machine's real setup in a test's repo.
+
+    `MainWindow` asks the registry what the workspace owes one event-loop turn
+    after it is built, and starts whatever needs no decision from the user
+    (SWR-2821) on a worker thread. In a test that is a *real* serena install,
+    launched as a subprocess against the tmp repository the test just made — so
+    it writes `.serena/` into that tree, and any test that afterwards asks Git
+    what changed gets an answer about Rotaris's own setup rather than about the
+    code under test.
+
+    Measured, not theorised: `test_user_restores_a_session_checkpoint_from_the_git_view`
+    failed under load because the restore preview found those files uncommitted
+    and correctly refused to overwrite them. It passed on an idle machine only
+    because setup happened to finish before the preview was taken. The same
+    worker is what left a live `QThread` running a subprocess across a test
+    boundary, which aborts the process when its parent is destroyed.
+
+    Neutralised at the registry, not at the window, so a test still exercises
+    every wire the window has — the decision, the worker, the store flags, the
+    finish handlers — and only the machine work is left out.
+    """
+    if "real_project_initialization" in request.fixturenames:
+        yield
+        return
+    from rotaris_core.init import registry
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(registry, "run_pending_tasks", lambda *_args, **_kwargs: ())
+        yield
+
+
 @pytest.fixture(autouse=True)
 def no_leaked_allocation_sampler() -> Iterator[None]:
     """Fail the test that leaks a diagnostics sampler, not the one that runs next.

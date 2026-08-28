@@ -109,7 +109,7 @@ def test_first_launch_onboarding_is_deferred_after_window_activation(
 ) -> None:
     """Productive use: a first-launch user sees the complete desktop before onboarding.
     Expected outcome: project selection is scheduled after a visible-paint delay."""
-    calls: list[tuple[int, object]] = []
+    calls: list[tuple[int, object, object]] = []
 
     class Window:
         def prompt_for_initial_workspace(self) -> None:
@@ -118,10 +118,14 @@ def test_first_launch_onboarding_is_deferred_after_window_activation(
     window = Window()
     monkeypatch.setattr(
         "rotaris.main.QTimer.singleShot",
-        lambda delay, callback: calls.append((delay, callback)),
+        lambda delay, context, callback: calls.append((delay, context, callback)),
     )
 
     schedule_first_launch_workspace_prompt(window)  # type: ignore[arg-type]
 
-    assert calls == [(FIRST_LAUNCH_PROMPT_DELAY_MS, window.prompt_for_initial_workspace)]
+    # The window is passed as Qt's *context* object, so a window closed before
+    # the delay elapses cancels the prompt instead of firing it at a destroyed
+    # widget. Asserted rather than assumed: the crash it prevents happens in
+    # native code, where a test can only observe it as a dead worker.
+    assert calls == [(FIRST_LAUNCH_PROMPT_DELAY_MS, window, window.prompt_for_initial_workspace)]
     assert FIRST_LAUNCH_PROMPT_DELAY_MS > 0

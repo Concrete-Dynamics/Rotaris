@@ -232,8 +232,20 @@ def _switch_to_session(window: MainWindow, qtbot, label: str) -> None:
     for these hermetic runs, the prompt that started it — not the session id.
     """
     window.show_view("workspace")
-    settle(qtbot)
-    click_by_name(qtbot, window.workspace, f"Switch to session {label}", QPushButton)
+    # Waited for, not settled into. The sidebar coalesces its redraws on a 120 ms
+    # timer and holds them entirely while the panel is off screen (SWR-2454), so
+    # the row for the *other* run is rebuilt a beat after the view is shown --
+    # and `settle()` drains the event queue without advancing that timer. Reading
+    # straight through it finds the pane mid-rebuild and reports the switcher
+    # missing, which is how this test failed roughly one serial run in three.
+    name = f"Switch to session {label}"
+    qtbot.waitUntil(
+        lambda: bool(
+            find_all_by_accessible_name(window.workspace, name, QPushButton, visible_only=True)
+        ),
+        timeout=5000,
+    )
+    click_by_name(qtbot, window.workspace, name, QPushButton)
 
 
 # Two live sessions racing each other, with `waitUntil` deadlines on both. Given a

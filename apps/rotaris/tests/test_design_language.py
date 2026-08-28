@@ -210,12 +210,21 @@ def test_the_sidebar_kickers_carry_their_counts_as_data(qtbot) -> None:
     store = WorkspaceStore()
     view = WorkspaceView(store)
     qtbot.addWidget(view)
+    # Shown at a real width on purpose. The sidebar coalesces its rebuilds and
+    # *holds* them while its panel is off screen, paying them back on the next
+    # Show (HiddenPanelReflow, SWR-2454) — and at the default size the layout
+    # collapses the sidebar, so showing alone is not enough to put it on
+    # screen. Asserting on a kicker the user cannot see tests nothing.
+    view.resize(1600, 900)
+    view.show()
+    qtbot.waitExposed(view)
+    assert view.sidebar_panel.isVisible()
 
     store.add_todo("phase-1", "Map the handler call graph")
+    qtbot.waitUntil(lambda: view.todos_header.datum.text() == "0/1", timeout=5_000)
 
     assert view.todos_header.label.text() == "TODOS"
     assert not any(ch.isdigit() for ch in view.todos_header.label.text())
-    assert view.todos_header.datum.text() == "0/1"
     assert view.live_label.text() == "0 live"
     assert view.live_label is view.agents_header.datum
 

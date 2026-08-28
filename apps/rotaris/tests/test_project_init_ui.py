@@ -290,14 +290,34 @@ def test_a_deferred_task_can_still_be_run_from_the_tab(qtbot) -> None:
 
 
 @verifies(SWR.SWR_2094, SWR.SWR_2805)
-def test_project_is_the_last_tab_so_saved_preferences_keep_their_meaning(qtbot) -> None:
+def test_tab_ids_only_ever_append_so_saved_preferences_keep_their_meaning(qtbot) -> None:
     """Productive use: a user who left Settings on Display reopens the app after an update.
-    Expected outcome: every pre-existing tab keeps its index and Project sits after them."""
+    Expected outcome: every pre-existing tab keeps its index, so the stored index still
+    names the tab they chose."""
     view = SettingsView(WorkspaceStore())
     qtbot.addWidget(view)
 
-    assert view._TAB_IDS[-1] == "project"
-    assert view.tabs.tabText(view.tabs.count() - 1) == "Project"
+    # The preference persists an *index*, so ids may only ever be appended: an
+    # insertion in the middle silently reassigns every saved preference. Pin
+    # the whole prefix rather than "project is last" — tabs appended after it
+    # (about, and whatever follows) are exactly what the rule allows, and the
+    # invariant worth guarding is that none of these twelve ever move.
+    assert view._TAB_IDS[:12] == (
+        "models",
+        "personas",
+        "runtime",
+        "interface",
+        "display",
+        "skills",
+        "instructions",
+        "hooks",
+        "mcp",
+        "plugins",
+        "tools",
+        "project",
+    )
+    assert view.tabs.count() == len(view._TAB_IDS)
+    assert view.tabs.tabText(view._TAB_IDS.index("project")) == "Project"
     assert view.set_active_tab("display") == "display"
     assert view.tabs.currentIndex() == 4
     assert view.set_active_tab("project") == "project"

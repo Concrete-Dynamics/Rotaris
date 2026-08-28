@@ -161,10 +161,16 @@ def _drive_restore_dialog(
     return timer
 
 
-def _select_checkpoint(window: MainWindow, session_id: str, sequence: int) -> None:
+def _select_checkpoint(qtbot: Any, window: MainWindow, session_id: str, sequence: int) -> None:
     combo = window.git.checkpoint_session_combo
     combo.setCurrentIndex(combo.findData(session_id))
+    # Choosing a session asks the engine for that session's checkpoints, so the
+    # rows arrive on a later turn of the event loop rather than inside
+    # setCurrentIndex. Wait for the render instead of reading a table that the
+    # view has not drawn yet.
     table = window.git.checkpoint_table
+    qtbot.waitUntil(lambda: table.topLevelItemCount() > 0, timeout=15_000)
+    settle(qtbot)
     for row in range(table.topLevelItemCount()):
         item = table.topLevelItem(row)
         if item.text(0) == str(sequence):
@@ -287,9 +293,11 @@ def test_user_restores_a_session_checkpoint_from_the_git_view(tmp_path, qtbot) -
 
     assert [row.sequence for row in window.store.checkpoints.rows] == [1, 2, 3]
     assert [row.iteration for row in window.store.checkpoints.rows] == [1, 2, 3]
-    assert window.git.checkpoint_table.topLevelItemCount() == 3
+    # The listing reaching the store is not the same as the view having drawn
+    # it: the git view re-renders on the store's change signal, a turn later.
+    qtbot.waitUntil(lambda: window.git.checkpoint_table.topLevelItemCount() == 3, timeout=15_000)
 
-    _select_checkpoint(window, state.session_id, 1)
+    _select_checkpoint(qtbot, window, state.session_id, 1)
     seen: dict[str, Any] = {}
     timer = _drive_restore_dialog(qtbot, window, force=False, confirm=True, seen=seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)
@@ -330,7 +338,7 @@ def test_uncommitted_work_blocks_a_restore_and_leaves_the_tree_untouched(tmp_pat
         timeout=15_000,
     )
 
-    _select_checkpoint(window, state.session_id, 1)
+    _select_checkpoint(qtbot, window, state.session_id, 1)
     seen: dict[str, Any] = {}
     timer = _drive_restore_dialog(qtbot, window, force=False, confirm=False, seen=seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)

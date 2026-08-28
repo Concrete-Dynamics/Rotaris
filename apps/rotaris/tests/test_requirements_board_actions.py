@@ -2015,26 +2015,38 @@ def test_the_git_view_lands_on_the_branch_and_the_commit_it_was_given(qtbot) -> 
     ]
     view = GitView(store)
     qtbot.addWidget(view)
+    # The Git view holds its redraws while it is off screen and pays them back
+    # on the next Show (HiddenPanelReflow, SWR-2454), so a focus handed to a
+    # hidden view selects nothing. Follow the branch the way a user does, with
+    # the view actually on screen.
+    view.resize(1400, 900)
+    view.show()
+    qtbot.waitExposed(view)
 
+    # The view coalesces its redraws on a timer, so wait for the selection to
+    # land rather than draining the event queue and reading immediately: how
+    # much of a 120 ms window a drain clears depends on the machine.
     store.set_git_focus("rotaris/req/swr-4018/unit-1")
-    settle(qtbot)
-    selected = view.worktree_table.currentItem()
-    assert selected is not None
-    assert selected.text(0) == "rotaris/req/swr-4018/unit-1"
+    qtbot.waitUntil(lambda: view.worktree_table.currentItem() is not None, timeout=5_000)
+    assert view.worktree_table.currentItem().text(0) == "rotaris/req/swr-4018/unit-1"
 
     # The full sha a run records still finds the short hash the history shows.
     store.set_git_focus("c0ffee1abcdef0123456789")
-    settle(qtbot)
-    commit = view.commit_table.currentItem()
-    assert commit is not None
-    assert commit.text(0) == "c0ffee1"
+    qtbot.waitUntil(lambda: view.commit_table.currentItem() is not None, timeout=5_000)
+    assert view.commit_table.currentItem().text(0) == "c0ffee1"
 
     # A branch that has already been merged away selects nothing at all, rather
     # than landing the user on whichever row happens to be first.
+    # The redraw rebuilds both tables, so the previous selection goes with it
+    # and nothing takes its place. Wait for that redraw rather than reading
+    # through the coalescer's window at the old selection.
     store.set_git_focus("rotaris/req/gone")
-    settle(qtbot)
-    assert view.commit_table.currentItem() is None
-    assert view.worktree_table.currentItem() is None
+    qtbot.waitUntil(
+        lambda: (
+            view.commit_table.currentItem() is None and view.worktree_table.currentItem() is None
+        ),
+        timeout=5_000,
+    )
 
 
 @pytest.mark.unit

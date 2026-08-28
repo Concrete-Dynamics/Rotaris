@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-600, SWR-629, SWR-630, SWR-631, SWR-632, SWR-633, SWR-634, SWR-639, SWR-640, SWR-641, SWR-642, SWR-643, SWR-644, SWR-646, SWR-647, SWR-648, SWR-649, SWR-657, SWR-658, SWR-659, SWR-660, SWR-661, SWR-662, SWR-663, SWR-664, SWR-665, SWR-666]
+req-id: [SWR-600, SWR-629, SWR-630, SWR-631, SWR-632, SWR-633, SWR-639, SWR-640, SWR-641, SWR-642, SWR-643, SWR-646, SWR-647, SWR-648, SWR-657, SWR-658, SWR-659, SWR-660, SWR-661, SWR-662, SWR-665, SWR-666]
 status: approved
 trace: required
 test: required
@@ -56,15 +56,6 @@ source: docs/requirement-log/done/requirements-20260414-162640.md
 
 Streaming and tool events from `find` should not rebuild the full TUI transcript on every burst of activity.
 
-## SWR-634 — Regression Coverage
-status: approved
-trace: optional
-legacy-id: REQ-20260414-162640-006
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-162640.md
-
-Add targeted tests for search fallback behavior, ignored-path behavior, ripgrep fast-path wiring, and TUI refresh coalescing.
-
 ## SWR-639 — Document Required HAET Operation Field
 status: approved
 trace: optional
@@ -110,16 +101,6 @@ source: docs/requirement-log/done/requirements-20260414-232544.md
 
 Scheduler transcript extraction must not preserve internal tool-debug monologues as assistant-visible progress content.
 
-## SWR-644 — Regression Coverage
-status: approved
-trace: optional
-test: optional
-legacy-id: REQ-20260414-232544-006
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-232544.md
-
-Add regression tests for HAET prompt guidance, streaming suppression, transcript extraction suppression, and persisted transcript filtering.
-
 ## SWR-646 — Detect plain `call:<tool>{...}` shape
 status: approved
 trace: optional
@@ -146,16 +127,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-232544.md
 
 Preserve malformed-attempt classification for stall recovery.
-
-## SWR-649 — Regression coverage
-status: approved
-trace: optional
-test: optional
-legacy-id: REQ-20260414-233300-004
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-232544.md
-
-Regression coverage.
 
 ## SWR-657 — FileToolEngine shared state module
 status: approved
@@ -206,24 +177,6 @@ date: 2026-04-17
 source: docs/requirement-log/done/requirements-20260417-120000.md
 
 6 personas migrated from file_editor → read_file + write_file; librarian → read_file only
-
-## SWR-663 — Unit tests
-status: approved
-trace: optional
-legacy-id: REQ-20260417-007
-date: 2026-04-17
-source: docs/requirement-log/done/requirements-20260417-120000.md
-
-57 new tests: 26 engine, 12 read, 19 write - all passing
-
-## SWR-664 — Integration tests
-status: approved
-trace: optional
-legacy-id: REQ-20260417-008
-date: 2026-04-17
-source: docs/requirement-log/done/requirements-20260417-120000.md
-
-12 e2e tests covering round-trip flows, undo, grep→edit, encoding, atomicity, fallback cascade
 
 ## SWR-665 — README and documentation
 status: approved

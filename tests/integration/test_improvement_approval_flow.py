@@ -145,7 +145,7 @@ def _completed_todo() -> TodoList:
     )
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1626)
+@verifies(SWR.SWR_1602)
 def test_end_to_end_approval_flow_starts_improvement_run(tmp_path: Path) -> None:
     """REQ-T007: task_run → artifact → approve → improvement_run with only approved."""
     session_id = "session-e2e"
@@ -243,7 +243,7 @@ def test_end_to_end_approval_flow_starts_improvement_run(tmp_path: Path) -> None
     assert improvement_loop.last_improvement_artifact_id is None
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1618, SWR.SWR_1632)
+@verifies(SWR.SWR_1602, SWR.SWR_1618)
 def test_persona_memory_approval_flow_writes_only_target_persona(tmp_path: Path) -> None:
     """REQ-T013: approved persona_memory_update updates only the target persona."""
     session_id = "session-pm"

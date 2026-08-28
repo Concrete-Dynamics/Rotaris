@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-100, SWR-101, SWR-102, SWR-103, SWR-104, SWR-105, SWR-106, SWR-107, SWR-108, SWR-109, SWR-110, SWR-111, SWR-112, SWR-113, SWR-114, SWR-115, SWR-116, SWR-117, SWR-118, SWR-119, SWR-120, SWR-121, SWR-122, SWR-123, SWR-124, SWR-125, SWR-126, SWR-127, SWR-128, SWR-129, SWR-130, SWR-131, SWR-132, SWR-133, SWR-134, SWR-135, SWR-136, SWR-137, SWR-139, SWR-140, SWR-141, SWR-142, SWR-143, SWR-144, SWR-145, SWR-146, SWR-147, SWR-148, SWR-152, SWR-154, SWR-155, SWR-156, SWR-157, SWR-159, SWR-160, SWR-161, SWR-162, SWR-163, SWR-164, SWR-165, SWR-166]
+req-id: [SWR-100, SWR-101, SWR-102, SWR-103, SWR-104, SWR-105, SWR-106, SWR-107, SWR-108, SWR-109, SWR-110, SWR-111, SWR-112, SWR-113, SWR-114, SWR-115, SWR-116, SWR-117, SWR-118, SWR-119, SWR-120, SWR-121, SWR-122, SWR-123, SWR-124, SWR-125, SWR-126, SWR-127, SWR-128, SWR-129, SWR-130, SWR-131, SWR-132, SWR-133, SWR-134, SWR-135, SWR-136, SWR-139, SWR-140, SWR-141, SWR-142, SWR-143, SWR-144, SWR-146, SWR-147, SWR-148, SWR-152, SWR-154, SWR-155, SWR-156, SWR-157, SWR-159, SWR-160, SWR-162, SWR-163, SWR-164, SWR-165, SWR-166]
 status: approved
 trace: required
 test: required
@@ -305,15 +305,6 @@ source: docs/requirement-log/done/requirements-20260414-235403.md
 
 If classifier output is invalid or returns no usable recovery for `terminal-stuck`, the circuit breaker must fall back to a deterministic corrective message tailored to a repeated read/edit loop.
 
-## SWR-137 — Regression Coverage
-
-trace: optional
-legacy-id: REQ-20260414-235403-007
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-235403.md
-
-Add unit tests for successful `stuck` recovery, repeated `stuck` escalation, `error` fail-fast behavior, and `terminal-stuck` fallback behavior.
-
 ## SWR-139 — Task IDs and Non-Blocking Spawn
 
 legacy-id: REQ-20260416-120000-001
@@ -361,15 +352,6 @@ date: 2026-04-16
 source: docs/requirement-log/done/requirements-20260416-120000.md
 
 `_DELEGATION_STRATEGY` rewritten, `TOOL_HINTS` for both new tools, delegate description updated
-
-## SWR-145 — Tests
-
-trace: optional
-legacy-id: REQ-20260416-120000-007
-date: 2026-04-16
-source: docs/requirement-log/done/requirements-20260416-120000.md
-
-Unit tests cover child manager, background_output, wait_for_tasks, delegate fixes, and parent todo reminders on foreground/background child completion; integration e2e tests cover notification flow.
 
 ## SWR-146 — Create a new Intent Classification persona/agent whose primary job is to classify the user's initial request into predefined categories.
 
@@ -460,15 +442,6 @@ date: 2026-06-09
 source: docs/requirement-log/done/requirements-20260609-planner-first-orchestration.md
 
 `explicit_trivial`, `single_file_change`, `small_feature`, `question`, `exploration`, `ambiguous`, and `problem_resolution` remain exempt from mandatory planner-first routing unless a later requirement changes that policy.
-
-## SWR-161 — Regression Coverage
-
-trace: optional
-legacy-id: REQ-20260609-PLANNER-FIRST-004
-date: 2026-06-09
-source: docs/requirement-log/done/requirements-20260609-planner-first-orchestration.md
-
-Automated tests must lock the planner-first ordering for the affected intent snippets and the prompt contracts that make the planner delegate research instead of front-running it locally.
 
 ## SWR-162 — Stable Scheduler seam
 

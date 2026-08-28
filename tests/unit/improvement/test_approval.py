@@ -68,7 +68,7 @@ def test_set_proposal_status_updates_single_proposal(tmp_path: Path) -> None:
     assert by_id[p2.id].status == ApprovalStatus.PENDING_REVIEW
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1608, SWR.SWR_1623)
+@verifies(SWR.SWR_1602, SWR.SWR_1608)
 def test_set_proposal_status_persists_across_reload(tmp_path: Path) -> None:
     p = _make_proposal("x")
     artifact = _make_artifact(p)

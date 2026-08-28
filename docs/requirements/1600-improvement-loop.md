@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1600, SWR-1601, SWR-1602, SWR-1603, SWR-1604, SWR-1605, SWR-1606, SWR-1607, SWR-1608, SWR-1609, SWR-1610, SWR-1611, SWR-1612, SWR-1613, SWR-1614, SWR-1615, SWR-1616, SWR-1617, SWR-1618, SWR-1619, SWR-1620, SWR-1621, SWR-1622, SWR-1623, SWR-1624, SWR-1625, SWR-1626, SWR-1627, SWR-1628, SWR-1629, SWR-1630, SWR-1631, SWR-1632, SWR-1633, SWR-1634, SWR-1635, SWR-1636, SWR-1637]
+req-id: [SWR-1600, SWR-1601, SWR-1602, SWR-1603, SWR-1604, SWR-1605, SWR-1606, SWR-1607, SWR-1608, SWR-1609, SWR-1610, SWR-1611, SWR-1612, SWR-1613, SWR-1614, SWR-1615, SWR-1616, SWR-1617, SWR-1618, SWR-1619, SWR-1633, SWR-1634, SWR-1635, SWR-1636, SWR-1637]
 status: approved
 trace: required
 test: required
@@ -159,110 +159,6 @@ date: 2026-05-15
 source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
 
 Persona-specific workspace memory MUST remain narrowly scoped to durable workspace-operating guidance for that persona. It MUST NOT be used as an unbounded mechanism for silently rewriting a persona's role, replacing its maintained system prompt, or smuggling unrelated product work into a future run. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1620 — Unit: Improvement Collector invoked post-run
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T001
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-When a `task_run` reaches terminal state, the `Improvement Collector` is invoked exactly once with the completed run context and artifacts. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1621 — Unit: no Improvement Collector inline task interference
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T002
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-`Improvement Collector` execution does not alter scheduler decisions or child delegation within the active `task_run`. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1622 — Unit: artifact validation
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T003
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-Structured improvement artifacts are validated on write and reject malformed proposals missing required fields such as ID, category, summary, evidence, or approval status. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1623 — Unit: approval persistence
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T004
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-Proposal approval states persist across snapshot save/load cycles. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1624 — Unit: improvement-run gating
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T005
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-No `improvement_run` starts unless at least one proposal is explicitly approved. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1625 — Unit: no recursive chaining
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T006
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-Completing an `improvement_run` does not automatically schedule a second `improvement_run`. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1626 — Integration: end-to-end approval flow
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T007
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-An integration test covers: completed `task_run` -> `Improvement Collector` artifact created -> proposal approved -> `Improver` `improvement_run` started with only approved proposals. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1627 — TUI workflow
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T008
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-If surfaced in the TUI, the workflow must cover: review proposals, approve one or more, start improvement execution, and confirm no crash or undefined widget state. **Augmented by REQ-20260610: add proactive toast notification when proposals are available.** | Complete — see REQ-20260610 for toast notification extension.
-
-## SWR-1628 — Unit: persona-memory injection isolation
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T009
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-When multiple personas have workspace memory, each persona receives only its own memory during agent creation unless memory is explicitly duplicated across personas. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1629 — Unit: persona-memory boundedness and visibility
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T010
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-Persona-memory storage is written to visible workspace-local state and enforces the configured size bound or truncation strategy. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1630 — Unit: manual persona-memory edit compatibility
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T011
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-Direct manual edits to persona-memory storage are reflected in subsequent persona creation and survive session save/load cycles. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1631 — Unit: collector persona-memory proposal validation
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T012
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-Collector-emitted `persona_memory_update` proposals reject missing required fields such as target persona, summary, evidence, recommended action, or approval status. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
-
-## SWR-1632 — Integration: persona-memory approval flow
-trace: optional
-legacy-id: REQ-20260515-POSTRUN-IMPROVE-T013
-date: 2026-05-15
-source: docs/requirement-log/done/requirements-20260515-post-run-improvement-loop.md
-
-An integration test covers: completed `task_run` -> `Improvement Collector` emits a `persona_memory_update` proposal -> proposal approved -> `Improver` `improvement_run` updates only the targeted persona memory -> a later run of that persona receives the updated memory. | Complete - Phase 1 (v0.49.0, collector pipeline), Phase 2 (v0.50.0, approval workflow + Improver executor), Phase 3 (v0.51.0, persona-specific workspace memory), Phase 4 (v0.52.0, integration tests T007/T013 + TUI review surface T008). REQ-001..019 implemented; T001..T013 covered.
 
 ## SWR-1633 — Toast on non-empty improvement artifact
 status: draft

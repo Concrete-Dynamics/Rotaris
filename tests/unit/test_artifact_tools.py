@@ -144,7 +144,7 @@ def test_list_empty_message(tmp_path: Path) -> None:
     assert "no artifacts" in obs.body.lower()
 
 
-@verifies(SWR.SWR_1502, SWR.SWR_1536)
+@verifies(SWR.SWR_1502)
 def test_write_publishes_artifact(store: SessionArtifactStore) -> None:
     exec_ = ArtifactWriteExecutor(store, persona="planner")
     obs = exec_(

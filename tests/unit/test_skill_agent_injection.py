@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@verifies(SWR.SWR_425, SWR.SWR_426, SWR.SWR_429, SWR.SWR_439, SWR.SWR_440)
+@verifies(SWR.SWR_425, SWR.SWR_426, SWR.SWR_429)
 def test_factory_injects_portable_skill_catalog_without_body(tmp_path: Path) -> None:
     clear_skill_catalog_cache()
     skill_dir = tmp_path / ".agents" / "skills" / "review"
@@ -36,7 +36,7 @@ def test_factory_injects_portable_skill_catalog_without_body(tmp_path: Path) -> 
     assert "secret body" not in skill.content
 
 
-@verifies(SWR.SWR_429, SWR.SWR_439)
+@verifies(SWR.SWR_429)
 def test_factory_orders_skill_catalog_between_agents_md_and_memory(tmp_path: Path) -> None:
     clear_skill_catalog_cache()
     (tmp_path / ".git").mkdir()

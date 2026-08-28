@@ -104,7 +104,7 @@ def test_build_improver_todo_rejects_empty_list() -> None:
         build_improver_todo([])
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1624)
+@verifies(SWR.SWR_1602)
 def test_prepare_improvement_run_returns_only_approved(tmp_path: Path) -> None:
     approved = _proposal("a", status=ApprovalStatus.APPROVED)
     pending = _proposal("b")
@@ -126,7 +126,7 @@ def test_prepare_improvement_run_returns_only_approved(tmp_path: Path) -> None:
     assert len(todo.phases[0].tasks) == 1
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1624)
+@verifies(SWR.SWR_1602)
 def test_prepare_improvement_run_raises_when_nothing_approved(tmp_path: Path) -> None:
     p = _proposal("a")
     artifact = ImprovementProposalArtifact(

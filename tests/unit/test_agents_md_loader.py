@@ -20,7 +20,7 @@ def clear_loader_cache() -> None:
     clear_agents_md_cache()
 
 
-@verifies(SWR.SWR_301, SWR.SWR_449, SWR.SWR_450, SWR.SWR_464)
+@verifies(SWR.SWR_301, SWR.SWR_449, SWR.SWR_450)
 def test_only_workspace_agents_file_is_injected(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -50,7 +50,7 @@ def test_only_workspace_agents_file_is_injected(
     assert merged == expected
 
 
-@verifies(SWR.SWR_301, SWR.SWR_445, SWR.SWR_460)
+@verifies(SWR.SWR_301, SWR.SWR_445)
 def test_override_replaces_regular_file_same_level(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -110,7 +110,7 @@ def test_find_git_root_returns_workspace_when_no_git_root_exists(
     assert _find_git_root(workspace_root) == workspace_root
 
 
-@verifies(SWR.SWR_301, SWR.SWR_452, SWR.SWR_462)
+@verifies(SWR.SWR_301, SWR.SWR_452)
 def test_per_file_size_cap_truncates_on_line_boundary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -132,7 +132,7 @@ def test_per_file_size_cap_truncates_on_line_boundary(
     assert "Truncating AGENTS.md file" in caplog.text
 
 
-@verifies(SWR.SWR_301, SWR.SWR_453, SWR.SWR_462)
+@verifies(SWR.SWR_301, SWR.SWR_453)
 def test_total_content_cap_truncates_later_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -181,7 +181,7 @@ def test_total_content_cap_drops_file_when_no_budget_remains(
     assert "Dropping AGENTS.md file" in caplog.text
 
 
-@verifies(SWR.SWR_301, SWR.SWR_451, SWR.SWR_463)
+@verifies(SWR.SWR_301, SWR.SWR_451)
 def test_empty_files_are_skipped(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     workspace_root = tmp_path / "repo"
@@ -192,7 +192,7 @@ def test_empty_files_are_skipped(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     assert load_agents_md_content(workspace_root) == ""
 
 
-@verifies(SWR.SWR_301, SWR.SWR_457, SWR.SWR_463)
+@verifies(SWR.SWR_301, SWR.SWR_457)
 def test_read_errors_are_skipped_with_warning(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

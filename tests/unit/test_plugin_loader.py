@@ -47,7 +47,7 @@ class SampleTool(ToolDefinition[SampleAction, SampleObservation]):
 """
 
 
-@verifies(SWR.SWR_537, SWR.SWR_538, SWR.SWR_542, SWR.SWR_543, SWR.SWR_663)
+@verifies(SWR.SWR_537, SWR.SWR_538, SWR.SWR_542, SWR.SWR_543)
 def test_load_valid_plugin_returns_registered_name(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -78,7 +78,7 @@ def test_plugin_with_no_tool_definition_subclass_raises_type_error(
         plugin_loader.load_plugin(plugin_path, tmp_path)
 
 
-@verifies(SWR.SWR_545, SWR.SWR_663)
+@verifies(SWR.SWR_545)
 def test_import_error_is_wrapped(tmp_path: Path) -> None:
     plugin_path = tmp_path / "broken_plugin.py"
     plugin_path.write_text("raise RuntimeError('boom')\n")
@@ -87,7 +87,7 @@ def test_import_error_is_wrapped(tmp_path: Path) -> None:
         plugin_loader.load_plugin(plugin_path, tmp_path)
 
 
-@verifies(SWR.SWR_537, SWR.SWR_540, SWR.SWR_663, SWR.SWR_664)
+@verifies(SWR.SWR_537, SWR.SWR_540)
 def test_load_from_directory_loads_all_plugins(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -107,7 +107,7 @@ def test_load_from_directory_loads_all_plugins(
     assert registered == ["global_a", "workspace_b"]
 
 
-@verifies(SWR.SWR_537, SWR.SWR_663)
+@verifies(SWR.SWR_537)
 def test_missing_directory_returns_empty_list(tmp_path: Path) -> None:
     loaded = plugin_loader.load_plugins_from_dirs(tmp_path / "missing", None)
 

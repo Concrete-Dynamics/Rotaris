@@ -47,7 +47,7 @@ async def test_force_compress_child_calls_run_compressor_with_zero_tokens() -> N
     mock_rc.assert_awaited_once()
 
 
-@verifies(SWR.SWR_1405, SWR.SWR_1451)
+@verifies(SWR.SWR_1405)
 async def test_force_compress_child_does_not_consult_threshold_config() -> None:
     """REQ-T004 (threshold bypass): no threshold attributes are accessed on config."""
     from rotaris_core.config.schema import RotarisConfig
@@ -74,7 +74,7 @@ async def test_force_compress_child_does_not_consult_threshold_config() -> None:
 # ---------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_1405, SWR.SWR_1452)
+@verifies(SWR.SWR_1405)
 async def test_on_force_compress_no_active_ralph_loop_shows_warning() -> None:
     """REQ-T004: No running agents → warning toast, no compression attempted."""
     app = RotarisTuiApp()
@@ -91,7 +91,7 @@ async def test_on_force_compress_no_active_ralph_loop_shows_warning() -> None:
         assert kwargs.get("severity") == "warning"
 
 
-@verifies(SWR.SWR_1405, SWR.SWR_1452)
+@verifies(SWR.SWR_1405)
 async def test_on_force_compress_empty_active_conversations_shows_warning() -> None:
     """REQ-T004: Active ralph loop but no running conversations → warning toast."""
     app = RotarisTuiApp()
@@ -120,7 +120,7 @@ async def test_on_force_compress_empty_active_conversations_shows_warning() -> N
 # ---------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_1405, SWR.SWR_1444, SWR.SWR_1453)
+@verifies(SWR.SWR_1405, SWR.SWR_1444)
 async def test_on_force_compress_multiple_agents_all_compressed() -> None:
     """REQ-T005: N running children → force_compress_child called N times, toast shown."""
     import threading
@@ -214,7 +214,7 @@ async def test_on_force_compress_error_for_one_child_shows_error_toast() -> None
 # ---------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_1405, SWR.SWR_1447, SWR.SWR_1454)
+@verifies(SWR.SWR_1405, SWR.SWR_1447)
 async def test_tui_compress_slash_command_shows_toast_no_crash() -> None:
     """REQ-T006: Full TUI workflow — type /compress + Enter, toast shown, no crash."""
     app = RotarisTuiApp()
@@ -248,7 +248,7 @@ async def test_tui_compress_slash_command_shows_toast_no_crash() -> None:
 # ---------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_1405, SWR.SWR_1455)
+@verifies(SWR.SWR_1405)
 async def test_compress_slash_command_no_session_no_exception() -> None:
     """REQ-T007: /compress with no session must not raise or leave app broken."""
     app = RotarisTuiApp()

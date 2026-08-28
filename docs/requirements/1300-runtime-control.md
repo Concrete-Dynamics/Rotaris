@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1300, SWR-1301, SWR-1302, SWR-1303, SWR-1304, SWR-1305, SWR-1306, SWR-1307, SWR-1308, SWR-1309, SWR-1310, SWR-1311, SWR-1312, SWR-1313, SWR-1314, SWR-1315, SWR-1316, SWR-1317, SWR-1318, SWR-1319, SWR-1320, SWR-1321]
+req-id: [SWR-1300, SWR-1301, SWR-1302, SWR-1303, SWR-1304, SWR-1305, SWR-1306, SWR-1307, SWR-1309, SWR-1310, SWR-1311, SWR-1312, SWR-1314, SWR-1315, SWR-1316, SWR-1317, SWR-1318, SWR-1319, SWR-1320, SWR-1321]
 status: approved
 trace: required
 test: required
@@ -68,14 +68,6 @@ source: docs/requirement-log/done/requirements-20260414-170500.md
 
 The implementation must use the existing stdlib/runtime stack only.
 
-## SWR-1308 — Regression Coverage
-trace: optional
-legacy-id: REQ-20260414-170500-008
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-170500.md
-
-Tests must cover the interrupt controller and shutdown behavior wiring.
-
 ## SWR-1309 — Unified Interactive Quit Path
 legacy-id: REQ-20260506-QUIT-001
 date: 2026-05-06
@@ -103,14 +95,6 @@ date: 2026-05-06
 source: docs/requirement-log/done/requirements-20260506-quit-hardening.md
 
 If shutdown remains blocked past the grace window, the app must force-exit automatically without requiring the terminal to be killed manually.
-
-## SWR-1313 — Regression Coverage
-trace: optional
-legacy-id: REQ-20260506-QUIT-005
-date: 2026-05-06
-source: docs/requirement-log/done/requirements-20260506-quit-hardening.md
-
-Tests must cover deferred quit, countdown-based force escalation, and TUI responsiveness during shutdown.
 
 ## SWR-1314 — Reuse Existing Runtime Controls
 legacy-id: REQ-20260506-QUIT-006

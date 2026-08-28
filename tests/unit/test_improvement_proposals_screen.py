@@ -67,7 +67,7 @@ def _two_proposal_artifact(session_id: str = "sess") -> ImprovementProposalArtif
     )
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1627)
+@verifies(SWR.SWR_1602)
 @pytest.mark.asyncio
 async def test_improvement_proposals_full_workflow(tmp_path: Path) -> None:
     """Open screen, approve one proposal, start improvement run, close."""
@@ -123,7 +123,7 @@ async def test_improvement_proposals_full_workflow(tmp_path: Path) -> None:
         assert not isinstance(app.screen, ImprovementProposalsScreen)
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1627)
+@verifies(SWR.SWR_1602)
 @pytest.mark.asyncio
 async def test_improvement_proposals_alternative_paths(
     tmp_path: Path,
@@ -198,7 +198,7 @@ async def test_action_show_improvement_proposals_falls_back_to_latest_workspace_
         assert app.screen.artifact.artifact_id == artifact.artifact_id
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1627)
+@verifies(SWR.SWR_1602)
 @pytest.mark.asyncio
 async def test_improvement_proposals_random_interaction(
     tmp_path: Path,

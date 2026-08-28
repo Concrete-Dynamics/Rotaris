@@ -161,7 +161,7 @@ def test_name_dedup_twice(manager):
     assert r2.canonical_name == "test_1"
 
 
-@verifies(SWR.SWR_103, SWR.SWR_1513, SWR.SWR_1515)
+@verifies(SWR.SWR_103, SWR.SWR_1513)
 def test_long_child_name_gets_compact_canonical_name(manager):
     long_name = (
         "Files touched: REQUIREMENTS.md generate_traceability.py .pre-commit-hook.sh "
@@ -464,7 +464,7 @@ def test_mark_terminal_enqueues_notification_for_background_child(manager):
     assert notifications[0].state == ChildTaskState.SUCCEEDED
 
 
-@verifies(SWR.SWR_143, SWR.SWR_145)
+@verifies(SWR.SWR_143)
 def test_mark_terminal_no_notification_for_foreground_child(manager):
     record = manager.spawn_child("worker", "builder", "do work", run_in_background=False)
     record.transition(ChildTaskState.RUNNING)
@@ -621,12 +621,12 @@ def test_build_inherited_context_block_skips_unknown_and_pending(manager):
     assert block == ""
 
 
-@verifies(SWR.SWR_143, SWR.SWR_145)
+@verifies(SWR.SWR_143)
 def test_build_inherited_context_block_empty_input(manager):
     assert manager.build_inherited_context_block([]) == ""
 
 
-@verifies(SWR.SWR_143, SWR.SWR_145)
+@verifies(SWR.SWR_143)
 def test_build_inherited_context_block_rejects_empty_string(manager):
     with pytest.raises(ValueError, match="non-empty"):
         manager.build_inherited_context_block([""])

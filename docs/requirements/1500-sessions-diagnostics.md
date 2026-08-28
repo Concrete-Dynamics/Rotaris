@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1500, SWR-1501, SWR-1502, SWR-1503, SWR-1504, SWR-1505, SWR-1506, SWR-1507, SWR-1508, SWR-1509, SWR-1510, SWR-1511, SWR-1512, SWR-1513, SWR-1514, SWR-1515, SWR-1517, SWR-1518, SWR-1519, SWR-1520, SWR-1521, SWR-1522, SWR-1523, SWR-1524, SWR-1525, SWR-1526, SWR-1527, SWR-1528, SWR-1529, SWR-1530, SWR-1531, SWR-1532, SWR-1533, SWR-1534, SWR-1535, SWR-1536, SWR-1537, SWR-1538, SWR-1539, SWR-1540, SWR-1541, SWR-1542, SWR-1543, SWR-1544, SWR-1545, SWR-1546, SWR-1547, SWR-1548, SWR-1549, SWR-1550, SWR-1551]
+req-id: [SWR-1500, SWR-1501, SWR-1502, SWR-1503, SWR-1504, SWR-1505, SWR-1506, SWR-1507, SWR-1508, SWR-1509, SWR-1511, SWR-1512, SWR-1513, SWR-1514, SWR-1517, SWR-1518, SWR-1519, SWR-1520, SWR-1521, SWR-1522, SWR-1523, SWR-1524, SWR-1525, SWR-1526, SWR-1527, SWR-1528, SWR-1529, SWR-1530, SWR-1531, SWR-1532, SWR-1533, SWR-1534, SWR-1535, SWR-1537, SWR-1538, SWR-1539, SWR-1540, SWR-1541, SWR-1542, SWR-1543, SWR-1544, SWR-1545, SWR-1546, SWR-1547, SWR-1548, SWR-1549, SWR-1550, SWR-1551]
 status: approved
 trace: required
 test: required
@@ -87,15 +87,6 @@ source: docs/requirement-log/done/requirements-20260430-160000.md
 
 The system shall document that snippet fidelity is bounded by what the summarization pipeline preserved or explicitly stored; verbatim mode does not imply raw transcript replay.
 
-## SWR-1510 — Regression Test Coverage
-
-trace: optional
-legacy-id: REQ-20260430-160000-NF-004
-date: 2026-04-30
-source: docs/requirement-log/done/requirements-20260430-160000.md
-
-Automated tests shall cover compact retrieval, verbatim retrieval, and SummaryAgent parsing of the optional `detail_payload`.
-
 ## SWR-1511 — Compact Top-Level Task Display Name
 
 legacy-id: REQ-20260503-TASKNAME-001
@@ -127,15 +118,6 @@ date: 2026-05-03
 source: docs/requirement-log/done/requirements-20260503-session-task-name-hygiene.md
 
 Long normalized names shall keep a stable hash suffix before normal deduplication so unrelated long names do not collide silently.
-
-## SWR-1515 — Regression Coverage
-
-trace: optional
-legacy-id: REQ-20260503-TASKNAME-NF-001
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-session-task-name-hygiene.md
-
-Unit tests shall cover compact display names, preservation of full payloads, and compact child canonical names.
 
 ## SWR-1517 — Artifact record schema
 
@@ -297,15 +279,6 @@ date: 2026-05-22
 source: docs/requirement-log/done/requirements-20260522-shared-artifacts.md
 
 New module `orchestrator/artifacts.py` shall be importable without triggering heavy SDK imports. `tools/artifacts.py` shall use lazy SDK-tool imports inside `create`.
-
-## SWR-1536 — Test coverage
-
-trace: optional
-legacy-id: REQ-20260522-ART-N05
-date: 2026-05-22
-source: docs/requirement-log/done/requirements-20260522-shared-artifacts.md
-
-Unit tests for store, injection, and tools; one integration test that reproduces the planner-from-zero failure with the fix in place.
 
 ## SWR-1537 — Track artifact relationships per child
 

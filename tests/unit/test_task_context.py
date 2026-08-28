@@ -9,7 +9,7 @@ from rotaris_core.session.task_context import (
 )
 
 
-@verifies(SWR.SWR_401, SWR.SWR_1511, SWR.SWR_1515)
+@verifies(SWR.SWR_401, SWR.SWR_1511)
 def test_build_task_display_name_compacts_long_multiline_prompt() -> None:
     prompt = (
         "Files touched:\n"

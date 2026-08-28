@@ -150,7 +150,7 @@ def test_factory_builds_agent_with_distinct_main_and_condenser_usage_ids() -> No
     assert agent.condenser.llm.usage_id != agent.llm.usage_id
 
 
-@verifies(SWR.SWR_634, SWR.SWR_663)
+@verifies(SWR.SWR_660)
 def test_factory_returns_agent_with_mapped_tools() -> None:
     persona = PersonaConfig(
         name="coding-agent",
@@ -861,7 +861,7 @@ def test_prompts_dir_points_to_agents_prompts() -> None:
     assert Path(factory.__file__).parent / "prompts" == factory.PROMPTS_DIR
 
 
-@verifies(SWR.SWR_557, SWR.SWR_2426)
+@verifies(SWR.SWR_2426)
 def test_child_agent_todo_does_not_fire_parent_callback() -> None:
     """Regression: child agent todo calls must not contaminate the parent's _last_todo_state.
 

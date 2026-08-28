@@ -56,7 +56,7 @@ JSON-safe binding key that also travels in `Tool.params`.
   not accumulate for the lifetime of a long run.
 - The binding key is deterministic and scoped to the agent: an agent built
   without child context is keyed by its persona, so building a child agent
-  neither clobbers nor inherits its parent's binding (see SWR-557).
+  neither clobbers nor inherits its parent's binding.
 
 Derived from: [SWR-500 — Tool Platform & Integrations](../500-tool-platform.md)
 

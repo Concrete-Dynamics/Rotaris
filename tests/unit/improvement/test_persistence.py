@@ -55,7 +55,7 @@ def _make_artifact() -> ImprovementProposalArtifact:
     )
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1623)
+@verifies(SWR.SWR_1602)
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
     artifact = _make_artifact()
     path = save_improvement_artifact(tmp_path, artifact)
@@ -101,7 +101,7 @@ def test_load_missing_artifact_raises(tmp_path: Path) -> None:
         load_improvement_artifact(tmp_path, "impart_doesnotex")
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1622)
+@verifies(SWR.SWR_1602)
 def test_save_rejects_malformed_artifact(tmp_path: Path) -> None:
     # Hand-build malformed payload to bypass Pydantic validators, then write it
     # directly and try to load — the loader re-validates.

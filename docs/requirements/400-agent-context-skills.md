@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-400, SWR-401, SWR-402, SWR-403, SWR-404, SWR-405, SWR-406, SWR-407, SWR-408, SWR-409, SWR-410, SWR-411, SWR-412, SWR-413, SWR-414, SWR-415, SWR-416, SWR-417, SWR-418, SWR-419, SWR-420, SWR-421, SWR-422, SWR-423, SWR-424, SWR-425, SWR-426, SWR-427, SWR-428, SWR-429, SWR-430, SWR-431, SWR-432, SWR-433, SWR-434, SWR-435, SWR-436, SWR-437, SWR-438, SWR-439, SWR-440, SWR-441, SWR-442, SWR-443, SWR-445, SWR-449, SWR-450, SWR-451, SWR-452, SWR-453, SWR-454, SWR-455, SWR-456, SWR-457, SWR-458, SWR-460, SWR-462, SWR-463, SWR-464, SWR-465]
+req-id: [SWR-400, SWR-401, SWR-402, SWR-403, SWR-404, SWR-405, SWR-406, SWR-407, SWR-408, SWR-409, SWR-410, SWR-411, SWR-412, SWR-413, SWR-414, SWR-415, SWR-416, SWR-417, SWR-418, SWR-419, SWR-420, SWR-421, SWR-422, SWR-423, SWR-424, SWR-425, SWR-426, SWR-427, SWR-428, SWR-429, SWR-430, SWR-431, SWR-432, SWR-433, SWR-434, SWR-435, SWR-436, SWR-445, SWR-449, SWR-450, SWR-451, SWR-452, SWR-453, SWR-454, SWR-455, SWR-456, SWR-457, SWR-458, SWR-465]
 status: approved
 trace: required
 test: required
@@ -323,69 +323,6 @@ source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
 
 Discovery and parsing must read local files directly. The framework must not shell out to OpenHands, Codex, Claude Code, or any other external runtime just to discover or parse `SKILL.md` files.
 
-## SWR-437 — Test: Discovery Priority and Name Collisions
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-001
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Tests must provide duplicate skill names across `.agents/skills`, `.opencode/skills`, `~/.config/opencode/skills`, and `~/.openhands/skills/installed` and assert the documented precedence rules plus deterministic winner selection.
-
-## SWR-438 — Test: Canonical and Legacy Frontmatter Parsing
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-002
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Unit tests must cover parsing of `name` + `description` (canonical), legacy `trigger` + `type` + `triggers` alias normalization, missing `name` or `description`, malformed YAML, and unsupported trigger shapes.
-
-## SWR-439 — Test: Level 1 Metadata Catalog Injection
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-003
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Tests must assert that every valid discovered skill has its `name` and `description` injected into the system prompt at agent construction, that the catalog is clearly separated from persona/AGENTS.md/tool sections, and that skills missing `description` are excluded from the catalog.
-
-## SWR-440 — Test: Level 2 Agent-Initiated Retrieval
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-004
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Tests must verify that the full `SKILL.md` body is NOT pre-loaded at startup, that the agent can access skill files through its filesystem/bash tooling, and that a bash read of a skill path returns the expected body content.
-
-## SWR-441 — Test: Level 3 Script Execution Boundary
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-005
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Tests must assert that scripts referenced by skills execute via shell, that only stdout/stderr enters context, and that script source code is not injected into context unless the agent explicitly reads the script file.
-
-## SWR-442 — Test: Slash-Command Registration and Invocation
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-006
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Tests must assert that slash-prefixed trigger keywords register commands into `SlashCommandRegistry`, that invoking such a command injects the skill body for the current turn, and that the raw slash command text is not forwarded as a normal user prompt.
-
-## SWR-443 — Test: `/skills` and `/skill` UX
-
-trace: optional
-legacy-id: REQ-20260503-SKILL-T-007
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-skill-md-protocol.md
-
-Tests must assert that `/skills` lists discovered skills with their metadata accurately and that `/skill <path>` handles valid paths, nonexistent paths, invalid files, duplicate names, and updates the catalog visible through `/skills`.
-
 ## SWR-445 — Override File Precedence
 
 legacy-id: REQ-20260526-AGENTSMD-002
@@ -476,42 +413,6 @@ date: 2026-05-26
 source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
 
 Given the same filesystem state and `config.workspace_root`, the merged content must be identical across process runs. No random ordering, timestamps, or process-ID data may appear in the output.
-
-## SWR-460 — Test: Override File Replaces Regular File
-
-trace: optional
-legacy-id: REQ-20260526-AGENTSMD-T-002
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-Tests must assert that when both `AGENTS.override.md` and `AGENTS.md` exist at the same directory level, only the override file's content appears in the merged output for that level.
-
-## SWR-462 — Test: Per-File and Total Size Caps
-
-trace: optional
-legacy-id: REQ-20260526-AGENTSMD-T-004
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-Tests must assert that a file exceeding 32,768 bytes is truncated on a line boundary and that a `WARNING` is logged. Tests must also assert that when the cumulative content exceeds 131,072 bytes, later files are truncated or dropped and a `WARNING` is logged for each.
-
-## SWR-463 — Test: Empty File Skip and Read Errors
-
-trace: optional
-legacy-id: REQ-20260526-AGENTSMD-T-005
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-Tests must assert that whitespace-only files produce no output block. Tests must assert that a file that raises `OSError` on read is skipped with a `WARNING` log and does not abort discovery of subsequent files.
-
-## SWR-464 — Test: AgentContext Injection
-
-trace: optional
-legacy-id: REQ-20260526-AGENTSMD-T-006
-date: 2026-05-26
-source: docs/requirement-log/done/requirements-20260526-agents-md-auto-injection.md
-
-Tests must assert that `create_agent_for_persona()` constructs an `AgentContext` whose `skills` list contains exactly one always-on Skill named `"workspace_agents_context"` when AGENTS.md files are present, and that `AgentContext` is constructed with an empty skills list when no files are found or when `inject_agents_md=False`.
 
 ## SWR-465 — ROTARIS.md Instruction File Injection
 

@@ -195,7 +195,7 @@ async def test_timeout_returns_empty_artifact() -> None:
     assert "timed out" in artifact.notes
 
 
-@verifies(SWR.SWR_1612, SWR.SWR_1621)
+@verifies(SWR.SWR_1612)
 def test_timeout_does_not_block_the_host_closing_its_event_loop() -> None:
     """A user ending a run gets their shell back even while the provider hangs.
 

@@ -6,7 +6,7 @@ Regenerate: `python -m rotaris_core.reqtocode generate` (or `check --fix`).
 
 # ruff: noqa
 # fmt: off
-# GLOBAL-HASH: ad937506ff19ef47e0464afdacd43e5d5130c59c007c7e7b7f9cefe34b90a113
+# GLOBAL-HASH: 568eb2b649694583609e80dc20aa00f39e59c2bbff69667909f1fa6a25b2c5b9
 
 from __future__ import annotations
 
@@ -129,9 +129,6 @@ class SWR(IntEnum):
     SWR_136 = 136
     """[approved] Deterministic Fallback for `terminal-stuck` - docs/requirements/100-orchestration-core.md"""
 
-    SWR_137 = 137
-    """[approved] Regression Coverage - docs/requirements/100-orchestration-core.md"""
-
     SWR_139 = 139
     """[approved] Task IDs and Non-Blocking Spawn - docs/requirements/100-orchestration-core.md"""
 
@@ -149,9 +146,6 @@ class SWR(IntEnum):
 
     SWR_144 = 144
     """[approved] Prompt / Tool-Description Updates - docs/requirements/100-orchestration-core.md"""
-
-    SWR_145 = 145
-    """[approved] Tests - docs/requirements/100-orchestration-core.md"""
 
     SWR_146 = 146
     """[approved] Create a new Intent Classification persona/agent whose primary job is to classify the user's initial request into predefined categories. - docs/requirements/100-orchestration-core.md"""
@@ -182,9 +176,6 @@ class SWR(IntEnum):
 
     SWR_160 = 160
     """[approved] Exempt Intents Remain Direct - docs/requirements/100-orchestration-core.md"""
-
-    SWR_161 = 161
-    """[approved] Regression Coverage - docs/requirements/100-orchestration-core.md"""
 
     SWR_162 = 162
     """[approved] Stable Scheduler seam - docs/requirements/100-orchestration-core.md"""
@@ -411,9 +402,6 @@ class SWR(IntEnum):
     SWR_332 = 332
     """[approved] Tool Hints Not Descriptions - docs/requirements/300-personas-prompts.md"""
 
-    SWR_333 = 333
-    """[approved] Test Coverage - docs/requirements/300-personas-prompts.md"""
-
     SWR_334 = 334
     """[approved] Hard Blocks section in orchestrator prompt - docs/requirements/300-personas-prompts.md"""
 
@@ -486,9 +474,6 @@ class SWR(IntEnum):
     SWR_358 = 358
     """[approved] No New Heavy Imports - docs/requirements/300-personas-prompts.md"""
 
-    SWR_359 = 359
-    """[approved] Tests - docs/requirements/300-personas-prompts.md"""
-
     SWR_361 = 361
     """[approved] Relentless (autonomous-completion) mode - docs/requirements/300-personas-prompts.md"""
 
@@ -512,9 +497,6 @@ class SWR(IntEnum):
 
     SWR_369 = 369
     """[approved] Prompt/Tool Alignment - docs/requirements/300-personas-prompts.md"""
-
-    SWR_370 = 370
-    """[approved] Regression Coverage - docs/requirements/300-personas-prompts.md"""
 
     SWR_372 = 372
     """[approved] Built-in Persona Config - docs/requirements/300-personas-prompts.md"""
@@ -545,9 +527,6 @@ class SWR(IntEnum):
 
     SWR_381 = 381
     """[approved] Prompt/Tool Alignment - docs/requirements/300-personas-prompts.md"""
-
-    SWR_382 = 382
-    """[approved] Regression Coverage - docs/requirements/300-personas-prompts.md"""
 
     SWR_384 = 384
     """[approved] No Overlap with Tester - docs/requirements/300-personas-prompts.md"""
@@ -669,27 +648,6 @@ class SWR(IntEnum):
     SWR_436 = 436
     """[approved] No External Runtime Dependency - docs/requirements/400-agent-context-skills.md"""
 
-    SWR_437 = 437
-    """[approved] Test: Discovery Priority and Name Collisions - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_438 = 438
-    """[approved] Test: Canonical and Legacy Frontmatter Parsing - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_439 = 439
-    """[approved] Test: Level 1 Metadata Catalog Injection - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_440 = 440
-    """[approved] Test: Level 2 Agent-Initiated Retrieval - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_441 = 441
-    """[approved] Test: Level 3 Script Execution Boundary - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_442 = 442
-    """[approved] Test: Slash-Command Registration and Invocation - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_443 = 443
-    """[approved] Test: `/skills` and `/skill` UX - docs/requirements/400-agent-context-skills.md"""
-
     SWR_445 = 445
     """[approved] Override File Precedence - docs/requirements/400-agent-context-skills.md"""
 
@@ -722,18 +680,6 @@ class SWR(IntEnum):
 
     SWR_458 = 458
     """[approved] Deterministic Output - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_460 = 460
-    """[approved] Test: Override File Replaces Regular File - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_462 = 462
-    """[approved] Test: Per-File and Total Size Caps - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_463 = 463
-    """[approved] Test: Empty File Skip and Read Errors - docs/requirements/400-agent-context-skills.md"""
-
-    SWR_464 = 464
-    """[approved] Test: AgentContext Injection - docs/requirements/400-agent-context-skills.md"""
 
     SWR_465 = 465
     """[draft] ROTARIS.md Instruction File Injection - docs/requirements/400-agent-context-skills.md"""
@@ -891,9 +837,6 @@ class SWR(IntEnum):
     SWR_550 = 550
     """[approved] Preserve Mixed Streaming Content - docs/requirements/500-tool-platform.md"""
 
-    SWR_551 = 551
-    """[approved] Regression Coverage - docs/requirements/500-tool-platform.md"""
-
     SWR_553 = 553
     """[approved] Disable Undocumented ThinkTool - docs/requirements/500-tool-platform.md"""
 
@@ -902,9 +845,6 @@ class SWR(IntEnum):
 
     SWR_555 = 555
     """[approved] Clarify Tool Argument Shapes - docs/requirements/500-tool-platform.md"""
-
-    SWR_557 = 557
-    """[approved] Regression Coverage - docs/requirements/500-tool-platform.md"""
 
     SWR_559 = 559
     """[approved] Terminal observations must classify command outcomes separately from internal tool errors. - docs/requirements/500-tool-platform.md"""
@@ -939,9 +879,6 @@ class SWR(IntEnum):
     SWR_633 = 633
     """[approved] Reduce TUI Refresh Thrash - docs/requirements/600-file-search-edit.md"""
 
-    SWR_634 = 634
-    """[approved] Regression Coverage - docs/requirements/600-file-search-edit.md"""
-
     SWR_639 = 639
     """[approved] Document Required HAET Operation Field - docs/requirements/600-file-search-edit.md"""
 
@@ -957,9 +894,6 @@ class SWR(IntEnum):
     SWR_643 = 643
     """[approved] Exclude Internal Tool Debug from Scheduler Transcript - docs/requirements/600-file-search-edit.md"""
 
-    SWR_644 = 644
-    """[approved] Regression Coverage - docs/requirements/600-file-search-edit.md"""
-
     SWR_646 = 646
     """[approved] Detect plain `call:<tool>{...}` shape - docs/requirements/600-file-search-edit.md"""
 
@@ -968,9 +902,6 @@ class SWR(IntEnum):
 
     SWR_648 = 648
     """[approved] Preserve malformed-attempt classification for stall recovery - docs/requirements/600-file-search-edit.md"""
-
-    SWR_649 = 649
-    """[approved] Regression coverage - docs/requirements/600-file-search-edit.md"""
 
     SWR_657 = 657
     """[approved] FileToolEngine shared state module - docs/requirements/600-file-search-edit.md"""
@@ -989,12 +920,6 @@ class SWR(IntEnum):
 
     SWR_662 = 662
     """[approved] Default persona migration - docs/requirements/600-file-search-edit.md"""
-
-    SWR_663 = 663
-    """[approved] Unit tests - docs/requirements/600-file-search-edit.md"""
-
-    SWR_664 = 664
-    """[approved] Integration tests - docs/requirements/600-file-search-edit.md"""
 
     SWR_665 = 665
     """[approved] README and documentation - docs/requirements/600-file-search-edit.md"""
@@ -1629,9 +1554,6 @@ class SWR(IntEnum):
     SWR_1038 = 1038
     """[approved] Graceful Small-Terminal Degradation - docs/requirements/1000-tui-core.md"""
 
-    SWR_1039 = 1039
-    """[approved] Regression Test Coverage - docs/requirements/1000-tui-core.md"""
-
     SWR_1040 = 1040
     """[approved] Dynamic Layout Coverage - docs/requirements/1000-tui-core.md"""
 
@@ -1658,9 +1580,6 @@ class SWR(IntEnum):
 
     SWR_1048 = 1048
     """[approved] No regression in top-level todo display - docs/requirements/1000-tui-core.md"""
-
-    SWR_1049 = 1049
-    """[approved] Regression test coverage - docs/requirements/1000-tui-core.md"""
 
     SWR_1050 = 1050
     """[approved] Semantic Theme Schema - docs/requirements/1000-tui-core.md"""
@@ -1697,12 +1616,6 @@ class SWR(IntEnum):
 
     SWR_1061 = 1061
     """[approved] Reviewed Snapshot Updates - docs/requirements/1000-tui-core.md"""
-
-    SWR_1062 = 1062
-    """[approved] Theme Command Tests - docs/requirements/1000-tui-core.md"""
-
-    SWR_1063 = 1063
-    """[approved] Visual Snapshot Tests - docs/requirements/1000-tui-core.md"""
 
     SWR_1064 = 1064
     """[draft] Theme Contract Tests - docs/requirements/1000-tui-core.md"""
@@ -2175,24 +2088,6 @@ class SWR(IntEnum):
     SWR_1251 = 1251
     """[approved] Transcript-only chrome, no prompt contamination - docs/requirements/1200-tui-transcript.md"""
 
-    SWR_1252 = 1252
-    """[approved] Unit: focus selection drives header label - docs/requirements/1200-tui-transcript.md"""
-
-    SWR_1253 = 1253
-    """[approved] Unit: elapsed formatting for focused running agent - docs/requirements/1200-tui-transcript.md"""
-
-    SWR_1254 = 1254
-    """[approved] Unit: elapsed freeze on terminal state - docs/requirements/1200-tui-transcript.md"""
-
-    SWR_1255 = 1255
-    """[approved] Unit: color mapping by state - docs/requirements/1200-tui-transcript.md"""
-
-    SWR_1256 = 1256
-    """[approved] TUI workflow: arrow-key traversal - docs/requirements/1200-tui-transcript.md"""
-
-    SWR_1257 = 1257
-    """[approved] TUI resilience: no focus available - docs/requirements/1200-tui-transcript.md"""
-
     SWR_1258 = 1258
     """[approved] When no session is active, the info pane must show ALL configured MCP servers from `config.mcp_servers`, regardless of persona - docs/requirements/1200-tui-transcript.md"""
 
@@ -2259,9 +2154,6 @@ class SWR(IntEnum):
     SWR_1283 = 1283
     """[approved] Behavior Compatibility - docs/requirements/1200-tui-transcript.md"""
 
-    SWR_1284 = 1284
-    """[approved] Regression Coverage - docs/requirements/1200-tui-transcript.md"""
-
     SWR_1285 = 1285
     """[approved] Deterministic lorem and mock-LLM test/demo data generators - docs/requirements/1200-tui-transcript/SWR-1285-lorem-test-demo-generators.md"""
 
@@ -2289,9 +2181,6 @@ class SWR(IntEnum):
     SWR_1307 = 1307
     """[approved] No New Dependencies - docs/requirements/1300-runtime-control.md"""
 
-    SWR_1308 = 1308
-    """[approved] Regression Coverage - docs/requirements/1300-runtime-control.md"""
-
     SWR_1309 = 1309
     """[approved] Unified Interactive Quit Path - docs/requirements/1300-runtime-control.md"""
 
@@ -2303,9 +2192,6 @@ class SWR(IntEnum):
 
     SWR_1312 = 1312
     """[approved] Automatic Escalation - docs/requirements/1300-runtime-control.md"""
-
-    SWR_1313 = 1313
-    """[approved] Regression Coverage - docs/requirements/1300-runtime-control.md"""
 
     SWR_1314 = 1314
     """[approved] Reuse Existing Runtime Controls - docs/requirements/1300-runtime-control.md"""
@@ -2481,27 +2367,6 @@ class SWR(IntEnum):
     SWR_1448 = 1448
     """[approved] Command visibility - docs/requirements/1400-context-compression.md"""
 
-    SWR_1449 = 1449
-    """[approved] Unit: command registered - docs/requirements/1400-context-compression.md"""
-
-    SWR_1450 = 1450
-    """[approved] Unit: ForceCompress posted - docs/requirements/1400-context-compression.md"""
-
-    SWR_1451 = 1451
-    """[approved] Unit: threshold bypass - docs/requirements/1400-context-compression.md"""
-
-    SWR_1452 = 1452
-    """[approved] Unit: no agents running - docs/requirements/1400-context-compression.md"""
-
-    SWR_1453 = 1453
-    """[approved] Integration: multiple agents compressed - docs/requirements/1400-context-compression.md"""
-
-    SWR_1454 = 1454
-    """[approved] TUI workflow - docs/requirements/1400-context-compression.md"""
-
-    SWR_1455 = 1455
-    """[approved] TUI no-crash (random interaction) - docs/requirements/1400-context-compression.md"""
-
     SWR_1500 = 1500
     """[approved] Session Persistence & Diagnostics - docs/requirements/1500-sessions-diagnostics.md"""
 
@@ -2532,9 +2397,6 @@ class SWR(IntEnum):
     SWR_1509 = 1509
     """[approved] Evidence Fidelity Bound - docs/requirements/1500-sessions-diagnostics.md"""
 
-    SWR_1510 = 1510
-    """[approved] Regression Test Coverage - docs/requirements/1500-sessions-diagnostics.md"""
-
     SWR_1511 = 1511
     """[approved] Compact Top-Level Task Display Name - docs/requirements/1500-sessions-diagnostics.md"""
 
@@ -2546,9 +2408,6 @@ class SWR(IntEnum):
 
     SWR_1514 = 1514
     """[approved] Deterministic Long-Name Deduplication - docs/requirements/1500-sessions-diagnostics.md"""
-
-    SWR_1515 = 1515
-    """[approved] Regression Coverage - docs/requirements/1500-sessions-diagnostics.md"""
 
     SWR_1517 = 1517
     """[approved] Artifact record schema - docs/requirements/1500-sessions-diagnostics.md"""
@@ -2606,9 +2465,6 @@ class SWR(IntEnum):
 
     SWR_1535 = 1535
     """[approved] Lazy imports - docs/requirements/1500-sessions-diagnostics.md"""
-
-    SWR_1536 = 1536
-    """[approved] Test coverage - docs/requirements/1500-sessions-diagnostics.md"""
 
     SWR_1537 = 1537
     """[approved] Track artifact relationships per child - docs/requirements/1500-sessions-diagnostics.md"""
@@ -2724,45 +2580,6 @@ class SWR(IntEnum):
     SWR_1619 = 1619
     """[approved] Persona-memory scope boundary - docs/requirements/1600-improvement-loop.md"""
 
-    SWR_1620 = 1620
-    """[approved] Unit: Improvement Collector invoked post-run - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1621 = 1621
-    """[approved] Unit: no Improvement Collector inline task interference - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1622 = 1622
-    """[approved] Unit: artifact validation - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1623 = 1623
-    """[approved] Unit: approval persistence - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1624 = 1624
-    """[approved] Unit: improvement-run gating - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1625 = 1625
-    """[approved] Unit: no recursive chaining - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1626 = 1626
-    """[approved] Integration: end-to-end approval flow - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1627 = 1627
-    """[approved] TUI workflow - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1628 = 1628
-    """[approved] Unit: persona-memory injection isolation - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1629 = 1629
-    """[approved] Unit: persona-memory boundedness and visibility - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1630 = 1630
-    """[approved] Unit: manual persona-memory edit compatibility - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1631 = 1631
-    """[approved] Unit: collector persona-memory proposal validation - docs/requirements/1600-improvement-loop.md"""
-
-    SWR_1632 = 1632
-    """[approved] Integration: persona-memory approval flow - docs/requirements/1600-improvement-loop.md"""
-
     SWR_1633 = 1633
     """[draft] Toast on non-empty improvement artifact - docs/requirements/1600-improvement-loop.md"""
 
@@ -2807,9 +2624,6 @@ class SWR(IntEnum):
 
     SWR_1704 = 1704
     """[approved] LLM Runtime Wiring - docs/requirements/1700-config-mcp.md"""
-
-    SWR_1705 = 1705
-    """[approved] Regression Coverage - docs/requirements/1700-config-mcp.md"""
 
     SWR_1706 = 1706
     """[approved] Discover `mcp.json` files at standard locations (project-level `.mcp.json`, user-level `~/.config/mcp.json` or OS-equivalent) and parse them - docs/requirements/1700-config-mcp.md"""
@@ -4518,67 +4332,64 @@ DEPRECATED: frozenset[SWR] = frozenset()
 
 #: Requirement metadata keyed by member value.
 META: dict[int, ReqMeta] = {
-    100: ReqMeta('SWR-100', 100, ReqStatus.APPROVED, 'Orchestration & Delegation Core', 'docs/requirements/100-orchestration-core.md', False, False, '13fb64868a277ae0', 'product', ()),
-    101: ReqMeta('SWR-101', 101, ReqStatus.APPROVED, 'Entry Persona', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    102: ReqMeta('SWR-102', 102, ReqStatus.APPROVED, 'Delegation Tool Call Contract', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    103: ReqMeta('SWR-103', 103, ReqStatus.APPROVED, 'Child Task Name Deduplication', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    104: ReqMeta('SWR-104', 104, ReqStatus.APPROVED, 'Parallel Fan-Out', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    105: ReqMeta('SWR-105', 105, ReqStatus.APPROVED, 'Re-Delegation by Any Persona', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    106: ReqMeta('SWR-106', 106, ReqStatus.APPROVED, 'Max Delegation Depth', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    107: ReqMeta('SWR-107', 107, ReqStatus.APPROVED, 'Dependency: Start Gate', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    108: ReqMeta('SWR-108', 108, ReqStatus.APPROVED, 'Dependency: Cycle Detection', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    109: ReqMeta('SWR-109', 109, ReqStatus.APPROVED, 'Dependency: Failure Propagation', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    110: ReqMeta('SWR-110', 110, ReqStatus.APPROVED, 'Suspension via End-Generation', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    111: ReqMeta('SWR-111', 111, ReqStatus.APPROVED, 'Parent Resume Trigger', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    112: ReqMeta('SWR-112', 112, ReqStatus.APPROVED, 'Child Terminal States', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    113: ReqMeta('SWR-113', 113, ReqStatus.APPROVED, 'Resume Payload', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    114: ReqMeta('SWR-114', 114, ReqStatus.APPROVED, 'Post-Resume Actions', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    115: ReqMeta('SWR-115', 115, ReqStatus.APPROVED, 'Sub-Agent Isolation', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    116: ReqMeta('SWR-116', 116, ReqStatus.APPROVED, 'Shared Workspace', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    117: ReqMeta('SWR-117', 117, ReqStatus.APPROVED, 'First-Class Mode', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    118: ReqMeta('SWR-118', 118, ReqStatus.APPROVED, 'Iteration Structure', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    119: ReqMeta('SWR-119', 119, ReqStatus.APPROVED, 'Iteration Visibility', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    120: ReqMeta('SWR-120', 120, ReqStatus.APPROVED, 'Normative Iteration Steps', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    121: ReqMeta('SWR-121', 121, ReqStatus.APPROVED, 'Iteration End Contract', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    122: ReqMeta('SWR-122', 122, ReqStatus.APPROVED, 'No Silent Task Roll-Over', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    123: ReqMeta('SWR-123', 123, ReqStatus.APPROVED, 'Stop Conditions', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    124: ReqMeta('SWR-124', 124, ReqStatus.APPROVED, 'Usable by Any Persona', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    125: ReqMeta('SWR-125', 125, ReqStatus.APPROVED, 'Works in All Session Modes', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    126: ReqMeta('SWR-126', 126, ReqStatus.APPROVED, 'Mandatory on Terminal', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    127: ReqMeta('SWR-127', 127, ReqStatus.APPROVED, 'Summary Agent', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    128: ReqMeta('SWR-128', 128, ReqStatus.APPROVED, 'Dependency Gate', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    129: ReqMeta('SWR-129', 129, ReqStatus.APPROVED, 'Parent Consumes Artifact', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    130: ReqMeta('SWR-130', 130, ReqStatus.APPROVED, 'Schema', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    131: ReqMeta('SWR-131', 131, ReqStatus.APPROVED, 'Recover `stuck` Through Circuit Breaker', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    132: ReqMeta('SWR-132', 132, ReqStatus.APPROVED, 'Scheduler-Driven `stuck` Activation', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    133: ReqMeta('SWR-133', 133, ReqStatus.APPROVED, 'Corrective Message Injection for `stuck`', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    134: ReqMeta('SWR-134', 134, ReqStatus.APPROVED, 'Escalate Repeated `stuck` Retriggers', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    135: ReqMeta('SWR-135', 135, ReqStatus.APPROVED, 'Preserve Immediate Failure for `error`', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    136: ReqMeta('SWR-136', 136, ReqStatus.APPROVED, 'Deterministic Fallback for `terminal-stuck`', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    137: ReqMeta('SWR-137', 137, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/100-orchestration-core.md', False, True, '13fb64868a277ae0', 'product', ()),
-    139: ReqMeta('SWR-139', 139, ReqStatus.APPROVED, 'Task IDs and Non-Blocking Spawn', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    140: ReqMeta('SWR-140', 140, ReqStatus.APPROVED, 'OMO-Style Completion Notifications', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    141: ReqMeta('SWR-141', 141, ReqStatus.APPROVED, '`background_output` Result-Retrieval Tool', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    142: ReqMeta('SWR-142', 142, ReqStatus.APPROVED, '`wait_for_tasks` Voluntary-Wait Tool', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    143: ReqMeta('SWR-143', 143, ReqStatus.APPROVED, 'Scheduler & ChildManager Refactor', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    144: ReqMeta('SWR-144', 144, ReqStatus.APPROVED, 'Prompt / Tool-Description Updates', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    145: ReqMeta('SWR-145', 145, ReqStatus.APPROVED, 'Tests', 'docs/requirements/100-orchestration-core.md', False, True, '13fb64868a277ae0', 'product', ()),
-    146: ReqMeta('SWR-146', 146, ReqStatus.APPROVED, "Create a new Intent Classification persona/agent whose primary job is to classify the user's initial request into predefined categories.", 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    147: ReqMeta('SWR-147', 147, ReqStatus.APPROVED, 'Execute the Intent Classification agent as a pre-flight step before initializing the orchestrator.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    148: ReqMeta('SWR-148', 148, ReqStatus.APPROVED, 'Remove \\"Phase 0: Intent Classification\\" from the current `orchestrator.md` system prompt.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    152: ReqMeta('SWR-152', 152, ReqStatus.APPROVED, 'Configure the intent classifier to use structured outputs (JSON schema or a forced tool call) to guarantee stable, predictable parsing of the intent enum.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    154: ReqMeta('SWR-154', 154, ReqStatus.APPROVED, 'Implement a resilient fallback: if the classification step times out, fails, or returns an unmapped string, default to a `generic_feature` intent without stopping the run.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    155: ReqMeta('SWR-155', 155, ReqStatus.APPROVED, 'During classification, supply only the raw user prompt and essential metadata to the classifier, excluding full file contents or deep codebase context, to ensure the step is fast and low-token.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    156: ReqMeta('SWR-156', 156, ReqStatus.APPROVED, 'Extend the intent classification system so that the classified intent also controls which tools the orchestrator agent has access to at runtime, not just which prompt instructions it receives. Simple intents (`explicit_trivial`, `single_file_change`) grant direct file editing tools (`read_file`, `write_file`) and shell access to the orchestrator; complex intents fall back to the coordinator-only bundle.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    157: ReqMeta('SWR-157', 157, ReqStatus.APPROVED, 'TUI Visual Feedback During Classification\\*\\* - Show a live visual indicator while the intent classifier is running. In the TUI, append a transient \\"Classifying intent...\\" status message to the chat transcript the moment classification begins (before awaiting the LLM call). Replace it in-place with the final result (\\"Intent classified: moderate_feature\\") upon completion. On failure, replace the transient status with a neutral fallback message and then append the final fallback classification result.', 'docs/requirements/100-orchestration-core.md', True, True, '13fb64868a277ae0', 'product', ()),
-    159: ReqMeta('SWR-159', 159, ReqStatus.APPROVED, 'Planner-Owned Research Delegation', 'docs/requirements/100-orchestration-core.md', False, True, '13fb64868a277ae0', 'product', ()),
-    160: ReqMeta('SWR-160', 160, ReqStatus.APPROVED, 'Exempt Intents Remain Direct', 'docs/requirements/100-orchestration-core.md', False, True, '13fb64868a277ae0', 'product', ()),
-    161: ReqMeta('SWR-161', 161, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/100-orchestration-core.md', False, True, '13fb64868a277ae0', 'product', ()),
-    162: ReqMeta('SWR-162', 162, ReqStatus.APPROVED, 'Stable Scheduler seam', 'docs/requirements/100-orchestration-core.md', True, False, '13fb64868a277ae0', 'product', ()),
-    163: ReqMeta('SWR-163', 163, ReqStatus.APPROVED, 'Single drain implementation', 'docs/requirements/100-orchestration-core.md', True, False, '13fb64868a277ae0', 'product', ()),
-    164: ReqMeta('SWR-164', 164, ReqStatus.APPROVED, 'Report policy locality', 'docs/requirements/100-orchestration-core.md', True, False, '13fb64868a277ae0', 'product', ()),
-    165: ReqMeta('SWR-165', 165, ReqStatus.APPROVED, 'Child run locality', 'docs/requirements/100-orchestration-core.md', True, False, '13fb64868a277ae0', 'product', ()),
-    166: ReqMeta('SWR-166', 166, ReqStatus.APPROVED, 'Architecture documentation', 'docs/requirements/100-orchestration-core.md', False, False, '13fb64868a277ae0', 'product', ()),
+    100: ReqMeta('SWR-100', 100, ReqStatus.APPROVED, 'Orchestration & Delegation Core', 'docs/requirements/100-orchestration-core.md', False, False, '1f25bd3e89f0ddba', 'product', ()),
+    101: ReqMeta('SWR-101', 101, ReqStatus.APPROVED, 'Entry Persona', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    102: ReqMeta('SWR-102', 102, ReqStatus.APPROVED, 'Delegation Tool Call Contract', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    103: ReqMeta('SWR-103', 103, ReqStatus.APPROVED, 'Child Task Name Deduplication', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    104: ReqMeta('SWR-104', 104, ReqStatus.APPROVED, 'Parallel Fan-Out', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    105: ReqMeta('SWR-105', 105, ReqStatus.APPROVED, 'Re-Delegation by Any Persona', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    106: ReqMeta('SWR-106', 106, ReqStatus.APPROVED, 'Max Delegation Depth', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    107: ReqMeta('SWR-107', 107, ReqStatus.APPROVED, 'Dependency: Start Gate', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    108: ReqMeta('SWR-108', 108, ReqStatus.APPROVED, 'Dependency: Cycle Detection', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    109: ReqMeta('SWR-109', 109, ReqStatus.APPROVED, 'Dependency: Failure Propagation', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    110: ReqMeta('SWR-110', 110, ReqStatus.APPROVED, 'Suspension via End-Generation', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    111: ReqMeta('SWR-111', 111, ReqStatus.APPROVED, 'Parent Resume Trigger', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    112: ReqMeta('SWR-112', 112, ReqStatus.APPROVED, 'Child Terminal States', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    113: ReqMeta('SWR-113', 113, ReqStatus.APPROVED, 'Resume Payload', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    114: ReqMeta('SWR-114', 114, ReqStatus.APPROVED, 'Post-Resume Actions', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    115: ReqMeta('SWR-115', 115, ReqStatus.APPROVED, 'Sub-Agent Isolation', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    116: ReqMeta('SWR-116', 116, ReqStatus.APPROVED, 'Shared Workspace', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    117: ReqMeta('SWR-117', 117, ReqStatus.APPROVED, 'First-Class Mode', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    118: ReqMeta('SWR-118', 118, ReqStatus.APPROVED, 'Iteration Structure', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    119: ReqMeta('SWR-119', 119, ReqStatus.APPROVED, 'Iteration Visibility', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    120: ReqMeta('SWR-120', 120, ReqStatus.APPROVED, 'Normative Iteration Steps', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    121: ReqMeta('SWR-121', 121, ReqStatus.APPROVED, 'Iteration End Contract', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    122: ReqMeta('SWR-122', 122, ReqStatus.APPROVED, 'No Silent Task Roll-Over', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    123: ReqMeta('SWR-123', 123, ReqStatus.APPROVED, 'Stop Conditions', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    124: ReqMeta('SWR-124', 124, ReqStatus.APPROVED, 'Usable by Any Persona', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    125: ReqMeta('SWR-125', 125, ReqStatus.APPROVED, 'Works in All Session Modes', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    126: ReqMeta('SWR-126', 126, ReqStatus.APPROVED, 'Mandatory on Terminal', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    127: ReqMeta('SWR-127', 127, ReqStatus.APPROVED, 'Summary Agent', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    128: ReqMeta('SWR-128', 128, ReqStatus.APPROVED, 'Dependency Gate', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    129: ReqMeta('SWR-129', 129, ReqStatus.APPROVED, 'Parent Consumes Artifact', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    130: ReqMeta('SWR-130', 130, ReqStatus.APPROVED, 'Schema', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    131: ReqMeta('SWR-131', 131, ReqStatus.APPROVED, 'Recover `stuck` Through Circuit Breaker', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    132: ReqMeta('SWR-132', 132, ReqStatus.APPROVED, 'Scheduler-Driven `stuck` Activation', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    133: ReqMeta('SWR-133', 133, ReqStatus.APPROVED, 'Corrective Message Injection for `stuck`', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    134: ReqMeta('SWR-134', 134, ReqStatus.APPROVED, 'Escalate Repeated `stuck` Retriggers', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    135: ReqMeta('SWR-135', 135, ReqStatus.APPROVED, 'Preserve Immediate Failure for `error`', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    136: ReqMeta('SWR-136', 136, ReqStatus.APPROVED, 'Deterministic Fallback for `terminal-stuck`', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    139: ReqMeta('SWR-139', 139, ReqStatus.APPROVED, 'Task IDs and Non-Blocking Spawn', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    140: ReqMeta('SWR-140', 140, ReqStatus.APPROVED, 'OMO-Style Completion Notifications', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    141: ReqMeta('SWR-141', 141, ReqStatus.APPROVED, '`background_output` Result-Retrieval Tool', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    142: ReqMeta('SWR-142', 142, ReqStatus.APPROVED, '`wait_for_tasks` Voluntary-Wait Tool', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    143: ReqMeta('SWR-143', 143, ReqStatus.APPROVED, 'Scheduler & ChildManager Refactor', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    144: ReqMeta('SWR-144', 144, ReqStatus.APPROVED, 'Prompt / Tool-Description Updates', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    146: ReqMeta('SWR-146', 146, ReqStatus.APPROVED, "Create a new Intent Classification persona/agent whose primary job is to classify the user's initial request into predefined categories.", 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    147: ReqMeta('SWR-147', 147, ReqStatus.APPROVED, 'Execute the Intent Classification agent as a pre-flight step before initializing the orchestrator.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    148: ReqMeta('SWR-148', 148, ReqStatus.APPROVED, 'Remove \\"Phase 0: Intent Classification\\" from the current `orchestrator.md` system prompt.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    152: ReqMeta('SWR-152', 152, ReqStatus.APPROVED, 'Configure the intent classifier to use structured outputs (JSON schema or a forced tool call) to guarantee stable, predictable parsing of the intent enum.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    154: ReqMeta('SWR-154', 154, ReqStatus.APPROVED, 'Implement a resilient fallback: if the classification step times out, fails, or returns an unmapped string, default to a `generic_feature` intent without stopping the run.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    155: ReqMeta('SWR-155', 155, ReqStatus.APPROVED, 'During classification, supply only the raw user prompt and essential metadata to the classifier, excluding full file contents or deep codebase context, to ensure the step is fast and low-token.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    156: ReqMeta('SWR-156', 156, ReqStatus.APPROVED, 'Extend the intent classification system so that the classified intent also controls which tools the orchestrator agent has access to at runtime, not just which prompt instructions it receives. Simple intents (`explicit_trivial`, `single_file_change`) grant direct file editing tools (`read_file`, `write_file`) and shell access to the orchestrator; complex intents fall back to the coordinator-only bundle.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    157: ReqMeta('SWR-157', 157, ReqStatus.APPROVED, 'TUI Visual Feedback During Classification\\*\\* - Show a live visual indicator while the intent classifier is running. In the TUI, append a transient \\"Classifying intent...\\" status message to the chat transcript the moment classification begins (before awaiting the LLM call). Replace it in-place with the final result (\\"Intent classified: moderate_feature\\") upon completion. On failure, replace the transient status with a neutral fallback message and then append the final fallback classification result.', 'docs/requirements/100-orchestration-core.md', True, True, '1f25bd3e89f0ddba', 'product', ()),
+    159: ReqMeta('SWR-159', 159, ReqStatus.APPROVED, 'Planner-Owned Research Delegation', 'docs/requirements/100-orchestration-core.md', False, True, '1f25bd3e89f0ddba', 'product', ()),
+    160: ReqMeta('SWR-160', 160, ReqStatus.APPROVED, 'Exempt Intents Remain Direct', 'docs/requirements/100-orchestration-core.md', False, True, '1f25bd3e89f0ddba', 'product', ()),
+    162: ReqMeta('SWR-162', 162, ReqStatus.APPROVED, 'Stable Scheduler seam', 'docs/requirements/100-orchestration-core.md', True, False, '1f25bd3e89f0ddba', 'product', ()),
+    163: ReqMeta('SWR-163', 163, ReqStatus.APPROVED, 'Single drain implementation', 'docs/requirements/100-orchestration-core.md', True, False, '1f25bd3e89f0ddba', 'product', ()),
+    164: ReqMeta('SWR-164', 164, ReqStatus.APPROVED, 'Report policy locality', 'docs/requirements/100-orchestration-core.md', True, False, '1f25bd3e89f0ddba', 'product', ()),
+    165: ReqMeta('SWR-165', 165, ReqStatus.APPROVED, 'Child run locality', 'docs/requirements/100-orchestration-core.md', True, False, '1f25bd3e89f0ddba', 'product', ()),
+    166: ReqMeta('SWR-166', 166, ReqStatus.APPROVED, 'Architecture documentation', 'docs/requirements/100-orchestration-core.md', False, False, '1f25bd3e89f0ddba', 'product', ()),
     167: ReqMeta('SWR-167', 167, ReqStatus.APPROVED, 'Feed last orchestrator response into intent classifier', 'docs/requirements/100-orchestration-core/SWR-167-classifier-orchestrator-context.md', True, True, 'c5578401ac71b1ba', 'product', ()),
     168: ReqMeta('SWR-168', 168, ReqStatus.DRAFT, 'Plan/Auto Mode Toggle', 'docs/requirements/100-orchestration-core/SWR-168-plan-auto-mode-gate.md', True, True, 'c9c7e6972c4537f7', 'product', ()),
     169: ReqMeta('SWR-169', 169, ReqStatus.DRAFT, 'Plan Proposal in Plan Mode', 'docs/requirements/100-orchestration-core/SWR-168-plan-auto-mode-gate.md', True, True, 'c9c7e6972c4537f7', 'product', ()),
@@ -4618,234 +4429,212 @@ META: dict[int, ReqMeta] = {
     225: ReqMeta('SWR-225', 225, ReqStatus.APPROVED, 'Scheduler disabled flag', 'docs/requirements/200-circuit-breaker.md', True, True, 'f78ce6949d4ad40d', 'product', ()),
     226: ReqMeta('SWR-226', 226, ReqStatus.APPROVED, 'Rotaris wiring via `build_run_config()`', 'docs/requirements/200-circuit-breaker.md', True, True, 'f78ce6949d4ad40d', 'product', ()),
     227: ReqMeta('SWR-227', 227, ReqStatus.APPROVED, 'Backward compatibility', 'docs/requirements/200-circuit-breaker.md', True, True, 'f78ce6949d4ad40d', 'product', ()),
-    300: ReqMeta('SWR-300', 300, ReqStatus.APPROVED, 'Agent Personas & Prompt System', 'docs/requirements/300-personas-prompts.md', False, False, '618be07097d8d234', 'product', ()),
-    301: ReqMeta('SWR-301', 301, ReqStatus.APPROVED, 'Persona Definition', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    302: ReqMeta('SWR-302', 302, ReqStatus.APPROVED, 'Persona Payload', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    303: ReqMeta('SWR-303', 303, ReqStatus.APPROVED, 'Persona Config Location', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    304: ReqMeta('SWR-304', 304, ReqStatus.APPROVED, 'Custom Personas', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    305: ReqMeta('SWR-305', 305, ReqStatus.APPROVED, 'Orchestrator as Persona', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    306: ReqMeta('SWR-306', 306, ReqStatus.APPROVED, 'OpenHands SDK LLM Registry', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    308: ReqMeta('SWR-308', 308, ReqStatus.APPROVED, 'Supported Providers', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    309: ReqMeta('SWR-309', 309, ReqStatus.APPROVED, 'Per-Persona Model Reference', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    310: ReqMeta('SWR-310', 310, ReqStatus.APPROVED, 'Summary Model', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    311: ReqMeta('SWR-311', 311, ReqStatus.APPROVED, 'Per-Agent Model Routing', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    313: ReqMeta('SWR-313', 313, ReqStatus.APPROVED, 'Two-Tier Hierarchy', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    314: ReqMeta('SWR-314', 314, ReqStatus.APPROVED, 'Workspace Root', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    315: ReqMeta('SWR-315', 315, ReqStatus.APPROVED, 'Path Resolution', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    316: ReqMeta('SWR-316', 316, ReqStatus.APPROVED, 'Keyed Registry Override', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    317: ReqMeta('SWR-317', 317, ReqStatus.APPROVED, 'Collection-Valued Fields', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    318: ReqMeta('SWR-318', 318, ReqStatus.APPROVED, 'Global Fallback', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    319: ReqMeta('SWR-319', 319, ReqStatus.APPROVED, 'Template Syntax', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    320: ReqMeta('SWR-320', 320, ReqStatus.APPROVED, 'PERSONA_NAME Token', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    321: ReqMeta('SWR-321', 321, ReqStatus.APPROVED, 'TOOL_NAMES Token', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    322: ReqMeta('SWR-322', 322, ReqStatus.APPROVED, 'TOOLS_SECTION Token', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    323: ReqMeta('SWR-323', 323, ReqStatus.APPROVED, 'DELEGATE_NAMES Token', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    324: ReqMeta('SWR-324', 324, ReqStatus.APPROVED, 'DELEGATES_SECTION Token', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    325: ReqMeta('SWR-325', 325, ReqStatus.APPROVED, 'MCP_SECTION Token', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    326: ReqMeta('SWR-326', 326, ReqStatus.APPROVED, 'Backward Compatibility', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    327: ReqMeta('SWR-327', 327, ReqStatus.APPROVED, 'Unknown Token Handling', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    328: ReqMeta('SWR-328', 328, ReqStatus.APPROVED, 'All Prompts Converted', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    329: ReqMeta('SWR-329', 329, ReqStatus.APPROVED, 'Factory Integration', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    330: ReqMeta('SWR-330', 330, ReqStatus.APPROVED, 'Registry Integration', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    331: ReqMeta('SWR-331', 331, ReqStatus.APPROVED, 'No New Dependencies', 'docs/requirements/300-personas-prompts.md', False, False, '618be07097d8d234', 'product', ()),
-    332: ReqMeta('SWR-332', 332, ReqStatus.APPROVED, 'Tool Hints Not Descriptions', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    333: ReqMeta('SWR-333', 333, ReqStatus.APPROVED, 'Test Coverage', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    334: ReqMeta('SWR-334', 334, ReqStatus.APPROVED, 'Hard Blocks section in orchestrator prompt', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    335: ReqMeta('SWR-335', 335, ReqStatus.APPROVED, 'Anti-Patterns section with examples', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    336: ReqMeta('SWR-336', 336, ReqStatus.APPROVED, 'Consolidated Communication Style section', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    337: ReqMeta('SWR-337', 337, ReqStatus.APPROVED, 'Variant infrastructure in `prompt_render`', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    338: ReqMeta('SWR-338', 338, ReqStatus.APPROVED, 'Orchestrator GPT/Claude/Gemini variants', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    339: ReqMeta('SWR-339', 339, ReqStatus.APPROVED, '`coding_agent` (backend-dev) variants', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    340: ReqMeta('SWR-340', 340, ReqStatus.APPROVED, 'Planner variants', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    341: ReqMeta('SWR-341', 341, ReqStatus.APPROVED, 'Variant selection from `LLM.model` family', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    342: ReqMeta('SWR-342', 342, ReqStatus.APPROVED, '`tool_restrictions` field on `PersonaConfig`', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    343: ReqMeta('SWR-343', 343, ReqStatus.APPROVED, 'Restrictions enforced in `agents/factory.py`', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    344: ReqMeta('SWR-344', 344, ReqStatus.APPROVED, 'Oracle persona (read-only consultation)', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    346: ReqMeta('SWR-346', 346, ReqStatus.APPROVED, 'Default config wires both personas', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    347: ReqMeta('SWR-347', 347, ReqStatus.APPROVED, 'Documentation in AGENTS.md / examples', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    348: ReqMeta('SWR-348', 348, ReqStatus.APPROVED, 'Token expansion (`[[ROTARIS:DELEGATES]]`, `[[ROTARIS:TOOLS]]`, etc.)', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    349: ReqMeta('SWR-349', 349, ReqStatus.APPROVED, 'Variant + token rendering in single pipeline', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    350: ReqMeta('SWR-350', 350, ReqStatus.APPROVED, '`purpose` Field on `PersonaConfig`', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    351: ReqMeta('SWR-351', 351, ReqStatus.APPROVED, 'Populate `purpose` for All Built-in Personas', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    352: ReqMeta('SWR-352', 352, ReqStatus.APPROVED, 'Surface `purpose` in `DELEGATES_SECTION`', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    353: ReqMeta('SWR-353', 353, ReqStatus.APPROVED, 'Pass Config to Renderer', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    354: ReqMeta('SWR-354', 354, ReqStatus.APPROVED, '`AgentDefinition.description` Uses `purpose`', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    355: ReqMeta('SWR-355', 355, ReqStatus.APPROVED, 'Remove Hardcoded Agent-Name References in Orchestrator Prompt', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    356: ReqMeta('SWR-356', 356, ReqStatus.APPROVED, 'YAML Config Support', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    357: ReqMeta('SWR-357', 357, ReqStatus.APPROVED, 'Backward Compatibility', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    358: ReqMeta('SWR-358', 358, ReqStatus.APPROVED, 'No New Heavy Imports', 'docs/requirements/300-personas-prompts.md', False, False, '618be07097d8d234', 'product', ()),
-    359: ReqMeta('SWR-359', 359, ReqStatus.APPROVED, 'Tests', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    361: ReqMeta('SWR-361', 361, ReqStatus.APPROVED, 'Relentless (autonomous-completion) mode', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    362: ReqMeta('SWR-362', 362, ReqStatus.APPROVED, 'Mode rename to Relentless', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    364: ReqMeta('SWR-364', 364, ReqStatus.APPROVED, 'Built-in Persona Config', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    365: ReqMeta('SWR-365', 365, ReqStatus.APPROVED, 'Requirements Engineer Prompt', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    366: ReqMeta('SWR-366', 366, ReqStatus.APPROVED, 'Orchestrator Routing', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    367: ReqMeta('SWR-367', 367, ReqStatus.APPROVED, 'Planner Routing', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    368: ReqMeta('SWR-368', 368, ReqStatus.APPROVED, 'Context Propagation', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    369: ReqMeta('SWR-369', 369, ReqStatus.APPROVED, 'Prompt/Tool Alignment', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    370: ReqMeta('SWR-370', 370, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    372: ReqMeta('SWR-372', 372, ReqStatus.APPROVED, 'Built-in Persona Config', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    373: ReqMeta('SWR-373', 373, ReqStatus.APPROVED, 'UI Verifier Prompt', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    374: ReqMeta('SWR-374', 374, ReqStatus.APPROVED, 'Orchestrator Routing', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    375: ReqMeta('SWR-375', 375, ReqStatus.APPROVED, 'Coding-Agent Routing', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    376: ReqMeta('SWR-376', 376, ReqStatus.APPROVED, 'Tester Routing', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    377: ReqMeta('SWR-377', 377, ReqStatus.APPROVED, 'Headless Default', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    378: ReqMeta('SWR-378', 378, ReqStatus.APPROVED, 'Structured Output Contract', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    379: ReqMeta('SWR-379', 379, ReqStatus.APPROVED, 'Read-Only Boundary', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    380: ReqMeta('SWR-380', 380, ReqStatus.APPROVED, 'FR-PLAYWRIGHT-003 Realisation', 'docs/requirements/300-personas-prompts.md', True, True, '618be07097d8d234', 'product', ()),
-    381: ReqMeta('SWR-381', 381, ReqStatus.APPROVED, 'Prompt/Tool Alignment', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    382: ReqMeta('SWR-382', 382, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    384: ReqMeta('SWR-384', 384, ReqStatus.APPROVED, 'No Overlap with Tester', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
-    385: ReqMeta('SWR-385', 385, ReqStatus.APPROVED, 'No Overlap with Verifier', 'docs/requirements/300-personas-prompts.md', False, True, '618be07097d8d234', 'product', ()),
+    300: ReqMeta('SWR-300', 300, ReqStatus.APPROVED, 'Agent Personas & Prompt System', 'docs/requirements/300-personas-prompts.md', False, False, 'c90f868a0f58f3ce', 'product', ()),
+    301: ReqMeta('SWR-301', 301, ReqStatus.APPROVED, 'Persona Definition', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    302: ReqMeta('SWR-302', 302, ReqStatus.APPROVED, 'Persona Payload', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    303: ReqMeta('SWR-303', 303, ReqStatus.APPROVED, 'Persona Config Location', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    304: ReqMeta('SWR-304', 304, ReqStatus.APPROVED, 'Custom Personas', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    305: ReqMeta('SWR-305', 305, ReqStatus.APPROVED, 'Orchestrator as Persona', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    306: ReqMeta('SWR-306', 306, ReqStatus.APPROVED, 'OpenHands SDK LLM Registry', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    308: ReqMeta('SWR-308', 308, ReqStatus.APPROVED, 'Supported Providers', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    309: ReqMeta('SWR-309', 309, ReqStatus.APPROVED, 'Per-Persona Model Reference', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    310: ReqMeta('SWR-310', 310, ReqStatus.APPROVED, 'Summary Model', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    311: ReqMeta('SWR-311', 311, ReqStatus.APPROVED, 'Per-Agent Model Routing', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    313: ReqMeta('SWR-313', 313, ReqStatus.APPROVED, 'Two-Tier Hierarchy', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    314: ReqMeta('SWR-314', 314, ReqStatus.APPROVED, 'Workspace Root', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    315: ReqMeta('SWR-315', 315, ReqStatus.APPROVED, 'Path Resolution', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    316: ReqMeta('SWR-316', 316, ReqStatus.APPROVED, 'Keyed Registry Override', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    317: ReqMeta('SWR-317', 317, ReqStatus.APPROVED, 'Collection-Valued Fields', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    318: ReqMeta('SWR-318', 318, ReqStatus.APPROVED, 'Global Fallback', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    319: ReqMeta('SWR-319', 319, ReqStatus.APPROVED, 'Template Syntax', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    320: ReqMeta('SWR-320', 320, ReqStatus.APPROVED, 'PERSONA_NAME Token', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    321: ReqMeta('SWR-321', 321, ReqStatus.APPROVED, 'TOOL_NAMES Token', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    322: ReqMeta('SWR-322', 322, ReqStatus.APPROVED, 'TOOLS_SECTION Token', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    323: ReqMeta('SWR-323', 323, ReqStatus.APPROVED, 'DELEGATE_NAMES Token', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    324: ReqMeta('SWR-324', 324, ReqStatus.APPROVED, 'DELEGATES_SECTION Token', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    325: ReqMeta('SWR-325', 325, ReqStatus.APPROVED, 'MCP_SECTION Token', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    326: ReqMeta('SWR-326', 326, ReqStatus.APPROVED, 'Backward Compatibility', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    327: ReqMeta('SWR-327', 327, ReqStatus.APPROVED, 'Unknown Token Handling', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    328: ReqMeta('SWR-328', 328, ReqStatus.APPROVED, 'All Prompts Converted', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    329: ReqMeta('SWR-329', 329, ReqStatus.APPROVED, 'Factory Integration', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    330: ReqMeta('SWR-330', 330, ReqStatus.APPROVED, 'Registry Integration', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    331: ReqMeta('SWR-331', 331, ReqStatus.APPROVED, 'No New Dependencies', 'docs/requirements/300-personas-prompts.md', False, False, 'c90f868a0f58f3ce', 'product', ()),
+    332: ReqMeta('SWR-332', 332, ReqStatus.APPROVED, 'Tool Hints Not Descriptions', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    334: ReqMeta('SWR-334', 334, ReqStatus.APPROVED, 'Hard Blocks section in orchestrator prompt', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    335: ReqMeta('SWR-335', 335, ReqStatus.APPROVED, 'Anti-Patterns section with examples', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    336: ReqMeta('SWR-336', 336, ReqStatus.APPROVED, 'Consolidated Communication Style section', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    337: ReqMeta('SWR-337', 337, ReqStatus.APPROVED, 'Variant infrastructure in `prompt_render`', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    338: ReqMeta('SWR-338', 338, ReqStatus.APPROVED, 'Orchestrator GPT/Claude/Gemini variants', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    339: ReqMeta('SWR-339', 339, ReqStatus.APPROVED, '`coding_agent` (backend-dev) variants', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    340: ReqMeta('SWR-340', 340, ReqStatus.APPROVED, 'Planner variants', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    341: ReqMeta('SWR-341', 341, ReqStatus.APPROVED, 'Variant selection from `LLM.model` family', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    342: ReqMeta('SWR-342', 342, ReqStatus.APPROVED, '`tool_restrictions` field on `PersonaConfig`', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    343: ReqMeta('SWR-343', 343, ReqStatus.APPROVED, 'Restrictions enforced in `agents/factory.py`', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    344: ReqMeta('SWR-344', 344, ReqStatus.APPROVED, 'Oracle persona (read-only consultation)', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    346: ReqMeta('SWR-346', 346, ReqStatus.APPROVED, 'Default config wires both personas', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    347: ReqMeta('SWR-347', 347, ReqStatus.APPROVED, 'Documentation in AGENTS.md / examples', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    348: ReqMeta('SWR-348', 348, ReqStatus.APPROVED, 'Token expansion (`[[ROTARIS:DELEGATES]]`, `[[ROTARIS:TOOLS]]`, etc.)', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    349: ReqMeta('SWR-349', 349, ReqStatus.APPROVED, 'Variant + token rendering in single pipeline', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    350: ReqMeta('SWR-350', 350, ReqStatus.APPROVED, '`purpose` Field on `PersonaConfig`', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    351: ReqMeta('SWR-351', 351, ReqStatus.APPROVED, 'Populate `purpose` for All Built-in Personas', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    352: ReqMeta('SWR-352', 352, ReqStatus.APPROVED, 'Surface `purpose` in `DELEGATES_SECTION`', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    353: ReqMeta('SWR-353', 353, ReqStatus.APPROVED, 'Pass Config to Renderer', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    354: ReqMeta('SWR-354', 354, ReqStatus.APPROVED, '`AgentDefinition.description` Uses `purpose`', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    355: ReqMeta('SWR-355', 355, ReqStatus.APPROVED, 'Remove Hardcoded Agent-Name References in Orchestrator Prompt', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    356: ReqMeta('SWR-356', 356, ReqStatus.APPROVED, 'YAML Config Support', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    357: ReqMeta('SWR-357', 357, ReqStatus.APPROVED, 'Backward Compatibility', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    358: ReqMeta('SWR-358', 358, ReqStatus.APPROVED, 'No New Heavy Imports', 'docs/requirements/300-personas-prompts.md', False, False, 'c90f868a0f58f3ce', 'product', ()),
+    361: ReqMeta('SWR-361', 361, ReqStatus.APPROVED, 'Relentless (autonomous-completion) mode', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    362: ReqMeta('SWR-362', 362, ReqStatus.APPROVED, 'Mode rename to Relentless', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    364: ReqMeta('SWR-364', 364, ReqStatus.APPROVED, 'Built-in Persona Config', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    365: ReqMeta('SWR-365', 365, ReqStatus.APPROVED, 'Requirements Engineer Prompt', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    366: ReqMeta('SWR-366', 366, ReqStatus.APPROVED, 'Orchestrator Routing', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    367: ReqMeta('SWR-367', 367, ReqStatus.APPROVED, 'Planner Routing', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    368: ReqMeta('SWR-368', 368, ReqStatus.APPROVED, 'Context Propagation', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    369: ReqMeta('SWR-369', 369, ReqStatus.APPROVED, 'Prompt/Tool Alignment', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    372: ReqMeta('SWR-372', 372, ReqStatus.APPROVED, 'Built-in Persona Config', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    373: ReqMeta('SWR-373', 373, ReqStatus.APPROVED, 'UI Verifier Prompt', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    374: ReqMeta('SWR-374', 374, ReqStatus.APPROVED, 'Orchestrator Routing', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    375: ReqMeta('SWR-375', 375, ReqStatus.APPROVED, 'Coding-Agent Routing', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    376: ReqMeta('SWR-376', 376, ReqStatus.APPROVED, 'Tester Routing', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    377: ReqMeta('SWR-377', 377, ReqStatus.APPROVED, 'Headless Default', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    378: ReqMeta('SWR-378', 378, ReqStatus.APPROVED, 'Structured Output Contract', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    379: ReqMeta('SWR-379', 379, ReqStatus.APPROVED, 'Read-Only Boundary', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    380: ReqMeta('SWR-380', 380, ReqStatus.APPROVED, 'FR-PLAYWRIGHT-003 Realisation', 'docs/requirements/300-personas-prompts.md', True, True, 'c90f868a0f58f3ce', 'product', ()),
+    381: ReqMeta('SWR-381', 381, ReqStatus.APPROVED, 'Prompt/Tool Alignment', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    384: ReqMeta('SWR-384', 384, ReqStatus.APPROVED, 'No Overlap with Tester', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
+    385: ReqMeta('SWR-385', 385, ReqStatus.APPROVED, 'No Overlap with Verifier', 'docs/requirements/300-personas-prompts.md', False, True, 'c90f868a0f58f3ce', 'product', ()),
     386: ReqMeta('SWR-386', 386, ReqStatus.APPROVED, 'Tier-aware coding-agent delegation guidance', 'docs/requirements/300-personas-prompts/SWR-386-tier-aware-coding-delegation.md', True, True, '2fee5d1c326949db', 'product', ()),
-    400: ReqMeta('SWR-400', 400, ReqStatus.APPROVED, 'Agent Context, Skills & Instructions', 'docs/requirements/400-agent-context-skills.md', False, False, 'c92baba910953b64', 'product', ()),
-    401: ReqMeta('SWR-401', 401, ReqStatus.DRAFT, 'Orchestrator: Language Detection Before Implementation', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    402: ReqMeta('SWR-402', 402, ReqStatus.DRAFT, 'Orchestrator: Linter/Formatter Resolution per Language', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    403: ReqMeta('SWR-403', 403, ReqStatus.DRAFT, 'Orchestrator: Tool Installation', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    404: ReqMeta('SWR-404', 404, ReqStatus.DRAFT, 'Orchestrator: Tool Registration', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    405: ReqMeta('SWR-405', 405, ReqStatus.DRAFT, 'Coding Agent Tool: `lint`', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    406: ReqMeta('SWR-406', 406, ReqStatus.DRAFT, 'Coding Agent Tool: `format`', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    407: ReqMeta('SWR-407', 407, ReqStatus.DRAFT, 'Tool Isolation: Language Namespace', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    408: ReqMeta('SWR-408', 408, ReqStatus.DRAFT, 'Tool Configuration: Custom Commands', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    409: ReqMeta('SWR-409', 409, ReqStatus.DRAFT, 'Slash Command: `/inittools`', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    410: ReqMeta('SWR-410', 410, ReqStatus.DRAFT, 'Tool Setup: Idempotency', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    411: ReqMeta('SWR-411', 411, ReqStatus.DRAFT, 'Tool Setup: Graceful Degradation', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    412: ReqMeta('SWR-412', 412, ReqStatus.DRAFT, 'Language Agnosticism', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    413: ReqMeta('SWR-413', 413, ReqStatus.DRAFT, 'Test: Language Detection Accuracy', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    414: ReqMeta('SWR-414', 414, ReqStatus.DRAFT, 'Test: Tool Resolution Mapping', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    415: ReqMeta('SWR-415', 415, ReqStatus.DRAFT, 'Test: Tool Installation', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    416: ReqMeta('SWR-416', 416, ReqStatus.DRAFT, 'Test: `lint` and `format` Tool Invocation', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    417: ReqMeta('SWR-417', 417, ReqStatus.DRAFT, 'Test: `/inittools` Command', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    418: ReqMeta('SWR-418', 418, ReqStatus.APPROVED, 'Skill Discovery: Project Paths', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    419: ReqMeta('SWR-419', 419, ReqStatus.APPROVED, 'Skill Discovery: User Paths', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    420: ReqMeta('SWR-420', 420, ReqStatus.APPROVED, 'Legacy Path Exclusion', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    421: ReqMeta('SWR-421', 421, ReqStatus.APPROVED, 'Skill Identity and Conflict Resolution', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    422: ReqMeta('SWR-422', 422, ReqStatus.APPROVED, 'Markdown and Frontmatter Parsing', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    423: ReqMeta('SWR-423', 423, ReqStatus.APPROVED, 'Legacy Trigger Alias Normalization', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    424: ReqMeta('SWR-424', 424, ReqStatus.APPROVED, 'Invalid Skill Handling', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    425: ReqMeta('SWR-425', 425, ReqStatus.APPROVED, 'Level 1 — Metadata Catalog Injection', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    426: ReqMeta('SWR-426', 426, ReqStatus.APPROVED, 'Level 2 — Agent-Initiated Body Retrieval', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    427: ReqMeta('SWR-427', 427, ReqStatus.APPROVED, 'Level 3 — Script and Resource Execution', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    428: ReqMeta('SWR-428', 428, ReqStatus.APPROVED, 'Slash-Command Skill Registration (UX Convenience)', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    429: ReqMeta('SWR-429', 429, ReqStatus.APPROVED, 'Agent Context Injection Boundary', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    430: ReqMeta('SWR-430', 430, ReqStatus.APPROVED, 'Skill Representation — Filesystem-Native', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    431: ReqMeta('SWR-431', 431, ReqStatus.APPROVED, 'Skill Catalog Listing', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    432: ReqMeta('SWR-432', 432, ReqStatus.APPROVED, 'Manual Skill Loading (`/skill`)', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    433: ReqMeta('SWR-433', 433, ReqStatus.APPROVED, 'Manual Load Persistence Boundary', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    434: ReqMeta('SWR-434', 434, ReqStatus.APPROVED, 'Discovery and Parse Resilience', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    435: ReqMeta('SWR-435', 435, ReqStatus.APPROVED, 'Deterministic Ordering', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    436: ReqMeta('SWR-436', 436, ReqStatus.APPROVED, 'No External Runtime Dependency', 'docs/requirements/400-agent-context-skills.md', True, False, 'c92baba910953b64', 'product', ()),
-    437: ReqMeta('SWR-437', 437, ReqStatus.APPROVED, 'Test: Discovery Priority and Name Collisions', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    438: ReqMeta('SWR-438', 438, ReqStatus.APPROVED, 'Test: Canonical and Legacy Frontmatter Parsing', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    439: ReqMeta('SWR-439', 439, ReqStatus.APPROVED, 'Test: Level 1 Metadata Catalog Injection', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    440: ReqMeta('SWR-440', 440, ReqStatus.APPROVED, 'Test: Level 2 Agent-Initiated Retrieval', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    441: ReqMeta('SWR-441', 441, ReqStatus.APPROVED, 'Test: Level 3 Script Execution Boundary', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    442: ReqMeta('SWR-442', 442, ReqStatus.APPROVED, 'Test: Slash-Command Registration and Invocation', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    443: ReqMeta('SWR-443', 443, ReqStatus.APPROVED, 'Test: `/skills` and `/skill` UX', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    445: ReqMeta('SWR-445', 445, ReqStatus.APPROVED, 'Override File Precedence', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    449: ReqMeta('SWR-449', 449, ReqStatus.APPROVED, 'Top-Down Merge', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    450: ReqMeta('SWR-450', 450, ReqStatus.APPROVED, 'Injection Point', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    451: ReqMeta('SWR-451', 451, ReqStatus.APPROVED, 'Empty File Skip', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    452: ReqMeta('SWR-452', 452, ReqStatus.APPROVED, 'Per-File Size Limit', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    453: ReqMeta('SWR-453', 453, ReqStatus.APPROVED, 'Total Content Cap', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    454: ReqMeta('SWR-454', 454, ReqStatus.APPROVED, 'Session-Scoped Cache', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    455: ReqMeta('SWR-455', 455, ReqStatus.APPROVED, 'Opt-Out Configuration Flag', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    456: ReqMeta('SWR-456', 456, ReqStatus.APPROVED, 'Discovery Latency', 'docs/requirements/400-agent-context-skills.md', False, False, 'c92baba910953b64', 'product', ()),
-    457: ReqMeta('SWR-457', 457, ReqStatus.APPROVED, 'Read Resilience', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    458: ReqMeta('SWR-458', 458, ReqStatus.APPROVED, 'Deterministic Output', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    460: ReqMeta('SWR-460', 460, ReqStatus.APPROVED, 'Test: Override File Replaces Regular File', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    462: ReqMeta('SWR-462', 462, ReqStatus.APPROVED, 'Test: Per-File and Total Size Caps', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    463: ReqMeta('SWR-463', 463, ReqStatus.APPROVED, 'Test: Empty File Skip and Read Errors', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    464: ReqMeta('SWR-464', 464, ReqStatus.APPROVED, 'Test: AgentContext Injection', 'docs/requirements/400-agent-context-skills.md', False, True, 'c92baba910953b64', 'product', ()),
-    465: ReqMeta('SWR-465', 465, ReqStatus.DRAFT, 'ROTARIS.md Instruction File Injection', 'docs/requirements/400-agent-context-skills.md', True, True, 'c92baba910953b64', 'product', ()),
-    500: ReqMeta('SWR-500', 500, ReqStatus.APPROVED, 'Tool Platform & Integrations', 'docs/requirements/500-tool-platform.md', False, False, '26bad7da029c9a75', 'product', ()),
-    501: ReqMeta('SWR-501', 501, ReqStatus.APPROVED, 'Unavailable Tool Handling', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    502: ReqMeta('SWR-502', 502, ReqStatus.APPROVED, 'Path Resolution', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    503: ReqMeta('SWR-503', 503, ReqStatus.APPROVED, 'Shell CWD', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    504: ReqMeta('SWR-504', 504, ReqStatus.APPROVED, 'No Full OS Sandboxing', 'docs/requirements/500-tool-platform.md', False, False, '26bad7da029c9a75', 'product', ()),
-    505: ReqMeta('SWR-505', 505, ReqStatus.APPROVED, 'Secret Redaction', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    506: ReqMeta('SWR-506', 506, ReqStatus.APPROVED, 'Tool Timeouts', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    507: ReqMeta('SWR-507', 507, ReqStatus.DRAFT, 'Preinstalled MCP Servers', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    508: ReqMeta('SWR-508', 508, ReqStatus.APPROVED, 'Hard Timeout Kill', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    509: ReqMeta('SWR-509', 509, ReqStatus.APPROVED, 'Structured Error Payload', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    510: ReqMeta('SWR-510', 510, ReqStatus.APPROVED, 'Default Timeout', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    511: ReqMeta('SWR-511', 511, ReqStatus.APPROVED, 'Soft No-Output Annotation', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    512: ReqMeta('SWR-512', 512, ReqStatus.APPROVED, 'TUI Command Visibility', 'docs/requirements/500-tool-platform.md', False, True, '26bad7da029c9a75', 'product', ()),
-    513: ReqMeta('SWR-513', 513, ReqStatus.APPROVED, 'Reset Capability', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    514: ReqMeta('SWR-514', 514, ReqStatus.APPROVED, 'Interactive Input', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    515: ReqMeta('SWR-515', 515, ReqStatus.APPROVED, 'Backend Transparency', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    516: ReqMeta('SWR-516', 516, ReqStatus.APPROVED, 'Atomic Observation Coercion', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    517: ReqMeta('SWR-517', 517, ReqStatus.APPROVED, 'Session-Scoped', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    518: ReqMeta('SWR-518', 518, ReqStatus.APPROVED, 'Stable IDs', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    519: ReqMeta('SWR-519', 519, ReqStatus.APPROVED, 'Operations', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    520: ReqMeta('SWR-520', 520, ReqStatus.APPROVED, 'ID-Based Targeting', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    521: ReqMeta('SWR-521', 521, ReqStatus.APPROVED, 'Update Capabilities', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    522: ReqMeta('SWR-522', 522, ReqStatus.APPROVED, 'Phase/Task Structure', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    523: ReqMeta('SWR-523', 523, ReqStatus.APPROVED, 'Task States', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    524: ReqMeta('SWR-524', 524, ReqStatus.APPROVED, 'Replace Constraints', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    525: ReqMeta('SWR-525', 525, ReqStatus.APPROVED, 'TUI Visibility', 'docs/requirements/500-tool-platform.md', False, True, '26bad7da029c9a75', 'product', ()),
-    526: ReqMeta('SWR-526', 526, ReqStatus.APPROVED, 'Ralph Loop Anchor', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    527: ReqMeta('SWR-527', 527, ReqStatus.APPROVED, 'One Page Per Call', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    528: ReqMeta('SWR-528', 528, ReqStatus.APPROVED, 'Default Format', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    529: ReqMeta('SWR-529', 529, ReqStatus.APPROVED, 'Line Truncation', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    530: ReqMeta('SWR-530', 530, ReqStatus.APPROVED, 'Optional Parameters', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    531: ReqMeta('SWR-531', 531, ReqStatus.APPROVED, 'Structured Metadata', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    532: ReqMeta('SWR-532', 532, ReqStatus.APPROVED, 'Timeout and Error Handling', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    533: ReqMeta('SWR-533', 533, ReqStatus.DRAFT, 'First-Class Integration', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    534: ReqMeta('SWR-534', 534, ReqStatus.DRAFT, 'Per-Persona Configuration', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    535: ReqMeta('SWR-535', 535, ReqStatus.APPROVED, 'Intended Use', 'docs/requirements/500-tool-platform.md', False, False, '26bad7da029c9a75', 'product', ()),
-    536: ReqMeta('SWR-536', 536, ReqStatus.DRAFT, 'Headless Default', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    537: ReqMeta('SWR-537', 537, ReqStatus.APPROVED, 'Plugin Interface', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    538: ReqMeta('SWR-538', 538, ReqStatus.APPROVED, 'Sync and Async', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    539: ReqMeta('SWR-539', 539, ReqStatus.APPROVED, 'Serialization', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    540: ReqMeta('SWR-540', 540, ReqStatus.APPROVED, 'Per-Persona Config', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    541: ReqMeta('SWR-541', 541, ReqStatus.APPROVED, 'MCP vs Plugin Boundary', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    542: ReqMeta('SWR-542', 542, ReqStatus.APPROVED, 'In-Process Execution', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    543: ReqMeta('SWR-543', 543, ReqStatus.APPROVED, 'Stateless', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    544: ReqMeta('SWR-544', 544, ReqStatus.APPROVED, 'Duplicate Name Error', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    545: ReqMeta('SWR-545', 545, ReqStatus.APPROVED, 'Exception Handling', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    546: ReqMeta('SWR-546', 546, ReqStatus.APPROVED, 'Startup Validation', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    547: ReqMeta('SWR-547', 547, ReqStatus.APPROVED, 'Detect Housekeeping-Only Runs', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    548: ReqMeta('SWR-548', 548, ReqStatus.APPROVED, 'Single Recovery Prompt', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    549: ReqMeta('SWR-549', 549, ReqStatus.APPROVED, 'Fail Incomplete Execution Cleanly', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    550: ReqMeta('SWR-550', 550, ReqStatus.APPROVED, 'Preserve Mixed Streaming Content', 'docs/requirements/500-tool-platform.md', False, True, '26bad7da029c9a75', 'product', ()),
-    551: ReqMeta('SWR-551', 551, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/500-tool-platform.md', False, True, '26bad7da029c9a75', 'product', ()),
-    553: ReqMeta('SWR-553', 553, ReqStatus.APPROVED, 'Disable Undocumented ThinkTool', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    554: ReqMeta('SWR-554', 554, ReqStatus.APPROVED, 'Render Runtime Tool Names', 'docs/requirements/500-tool-platform.md', False, True, '26bad7da029c9a75', 'product', ()),
-    555: ReqMeta('SWR-555', 555, ReqStatus.APPROVED, 'Clarify Tool Argument Shapes', 'docs/requirements/500-tool-platform.md', False, False, '26bad7da029c9a75', 'product', ()),
-    557: ReqMeta('SWR-557', 557, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/500-tool-platform.md', False, True, '26bad7da029c9a75', 'product', ()),
-    559: ReqMeta('SWR-559', 559, ReqStatus.APPROVED, 'Terminal observations must classify command outcomes separately from internal tool errors.', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    560: ReqMeta('SWR-560', 560, ReqStatus.APPROVED, 'Session diagnostics must record shell failures, suspicious successful terminal output, and terminal timeouts as issues.', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    561: ReqMeta('SWR-561', 561, ReqStatus.APPROVED, 'Completed child diagnostics must record terminal child states, not intermediate running or summarizing states.', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    562: ReqMeta('SWR-562', 562, ReqStatus.APPROVED, 'Read/search/edit tools must provide recoverable behavior for common agent mistakes: wrong paths, absolute grep paths, and safe HAET anchor-line drift.', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    563: ReqMeta('SWR-563', 563, ReqStatus.APPROVED, 'Interactive `ask_questions` Tool', 'docs/requirements/500-tool-platform.md', True, True, '26bad7da029c9a75', 'product', ()),
-    600: ReqMeta('SWR-600', 600, ReqStatus.APPROVED, 'File, Search & Edit Tools', 'docs/requirements/600-file-search-edit.md', False, False, '579201e40fbedd7c', 'product', ()),
-    629: ReqMeta('SWR-629', 629, ReqStatus.APPROVED, 'Cross-Platform Fast Path', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    630: ReqMeta('SWR-630', 630, ReqStatus.APPROVED, 'Portable Fallback', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    631: ReqMeta('SWR-631', 631, ReqStatus.APPROVED, 'Ignore Expensive Workspace Noise', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    632: ReqMeta('SWR-632', 632, ReqStatus.APPROVED, 'Limit Costly File Reads', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    633: ReqMeta('SWR-633', 633, ReqStatus.APPROVED, 'Reduce TUI Refresh Thrash', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    634: ReqMeta('SWR-634', 634, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    639: ReqMeta('SWR-639', 639, ReqStatus.APPROVED, 'Document Required HAET Operation Field', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    640: ReqMeta('SWR-640', 640, ReqStatus.APPROVED, 'Strengthen Coding-Agent HAET Prompting', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    641: ReqMeta('SWR-641', 641, ReqStatus.APPROVED, 'Forbid User-Visible Retry Monologue', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    642: ReqMeta('SWR-642', 642, ReqStatus.APPROVED, 'Suppress Internal Tool Debug Streams', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    643: ReqMeta('SWR-643', 643, ReqStatus.APPROVED, 'Exclude Internal Tool Debug from Scheduler Transcript', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    644: ReqMeta('SWR-644', 644, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/600-file-search-edit.md', False, False, '579201e40fbedd7c', 'product', ()),
-    646: ReqMeta('SWR-646', 646, ReqStatus.APPROVED, 'Detect plain `call:<tool>{...}` shape', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    647: ReqMeta('SWR-647', 647, ReqStatus.APPROVED, 'Strip from streaming + persisted TUI transcript', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    648: ReqMeta('SWR-648', 648, ReqStatus.APPROVED, 'Preserve malformed-attempt classification for stall recovery', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    649: ReqMeta('SWR-649', 649, ReqStatus.APPROVED, 'Regression coverage', 'docs/requirements/600-file-search-edit.md', False, False, '579201e40fbedd7c', 'product', ()),
-    657: ReqMeta('SWR-657', 657, ReqStatus.APPROVED, 'FileToolEngine shared state module', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    658: ReqMeta('SWR-658', 658, ReqStatus.APPROVED, 'ReadFileTool', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    659: ReqMeta('SWR-659', 659, ReqStatus.APPROVED, 'WriteFileTool', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    660: ReqMeta('SWR-660', 660, ReqStatus.APPROVED, 'Agent factory integration', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
-    661: ReqMeta('SWR-661', 661, ReqStatus.APPROVED, 'Prompt hints and system prompt updates', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    662: ReqMeta('SWR-662', 662, ReqStatus.APPROVED, 'Default persona migration', 'docs/requirements/600-file-search-edit.md', True, False, '579201e40fbedd7c', 'product', ()),
-    663: ReqMeta('SWR-663', 663, ReqStatus.APPROVED, 'Unit tests', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    664: ReqMeta('SWR-664', 664, ReqStatus.APPROVED, 'Integration tests', 'docs/requirements/600-file-search-edit.md', False, True, '579201e40fbedd7c', 'product', ()),
-    665: ReqMeta('SWR-665', 665, ReqStatus.APPROVED, 'README and documentation', 'docs/requirements/600-file-search-edit.md', False, False, '579201e40fbedd7c', 'product', ()),
-    666: ReqMeta('SWR-666', 666, ReqStatus.APPROVED, 'HAET (Hash-Anchored Edit Tool) full overhaul', 'docs/requirements/600-file-search-edit.md', True, True, '579201e40fbedd7c', 'product', ()),
+    400: ReqMeta('SWR-400', 400, ReqStatus.APPROVED, 'Agent Context, Skills & Instructions', 'docs/requirements/400-agent-context-skills.md', False, False, '0594f00e829fe0ad', 'product', ()),
+    401: ReqMeta('SWR-401', 401, ReqStatus.DRAFT, 'Orchestrator: Language Detection Before Implementation', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    402: ReqMeta('SWR-402', 402, ReqStatus.DRAFT, 'Orchestrator: Linter/Formatter Resolution per Language', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    403: ReqMeta('SWR-403', 403, ReqStatus.DRAFT, 'Orchestrator: Tool Installation', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    404: ReqMeta('SWR-404', 404, ReqStatus.DRAFT, 'Orchestrator: Tool Registration', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    405: ReqMeta('SWR-405', 405, ReqStatus.DRAFT, 'Coding Agent Tool: `lint`', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    406: ReqMeta('SWR-406', 406, ReqStatus.DRAFT, 'Coding Agent Tool: `format`', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    407: ReqMeta('SWR-407', 407, ReqStatus.DRAFT, 'Tool Isolation: Language Namespace', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    408: ReqMeta('SWR-408', 408, ReqStatus.DRAFT, 'Tool Configuration: Custom Commands', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    409: ReqMeta('SWR-409', 409, ReqStatus.DRAFT, 'Slash Command: `/inittools`', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    410: ReqMeta('SWR-410', 410, ReqStatus.DRAFT, 'Tool Setup: Idempotency', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    411: ReqMeta('SWR-411', 411, ReqStatus.DRAFT, 'Tool Setup: Graceful Degradation', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    412: ReqMeta('SWR-412', 412, ReqStatus.DRAFT, 'Language Agnosticism', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    413: ReqMeta('SWR-413', 413, ReqStatus.DRAFT, 'Test: Language Detection Accuracy', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    414: ReqMeta('SWR-414', 414, ReqStatus.DRAFT, 'Test: Tool Resolution Mapping', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    415: ReqMeta('SWR-415', 415, ReqStatus.DRAFT, 'Test: Tool Installation', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    416: ReqMeta('SWR-416', 416, ReqStatus.DRAFT, 'Test: `lint` and `format` Tool Invocation', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    417: ReqMeta('SWR-417', 417, ReqStatus.DRAFT, 'Test: `/inittools` Command', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    418: ReqMeta('SWR-418', 418, ReqStatus.APPROVED, 'Skill Discovery: Project Paths', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    419: ReqMeta('SWR-419', 419, ReqStatus.APPROVED, 'Skill Discovery: User Paths', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    420: ReqMeta('SWR-420', 420, ReqStatus.APPROVED, 'Legacy Path Exclusion', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    421: ReqMeta('SWR-421', 421, ReqStatus.APPROVED, 'Skill Identity and Conflict Resolution', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    422: ReqMeta('SWR-422', 422, ReqStatus.APPROVED, 'Markdown and Frontmatter Parsing', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    423: ReqMeta('SWR-423', 423, ReqStatus.APPROVED, 'Legacy Trigger Alias Normalization', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    424: ReqMeta('SWR-424', 424, ReqStatus.APPROVED, 'Invalid Skill Handling', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    425: ReqMeta('SWR-425', 425, ReqStatus.APPROVED, 'Level 1 — Metadata Catalog Injection', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    426: ReqMeta('SWR-426', 426, ReqStatus.APPROVED, 'Level 2 — Agent-Initiated Body Retrieval', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    427: ReqMeta('SWR-427', 427, ReqStatus.APPROVED, 'Level 3 — Script and Resource Execution', 'docs/requirements/400-agent-context-skills.md', False, True, '0594f00e829fe0ad', 'product', ()),
+    428: ReqMeta('SWR-428', 428, ReqStatus.APPROVED, 'Slash-Command Skill Registration (UX Convenience)', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    429: ReqMeta('SWR-429', 429, ReqStatus.APPROVED, 'Agent Context Injection Boundary', 'docs/requirements/400-agent-context-skills.md', False, True, '0594f00e829fe0ad', 'product', ()),
+    430: ReqMeta('SWR-430', 430, ReqStatus.APPROVED, 'Skill Representation — Filesystem-Native', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    431: ReqMeta('SWR-431', 431, ReqStatus.APPROVED, 'Skill Catalog Listing', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    432: ReqMeta('SWR-432', 432, ReqStatus.APPROVED, 'Manual Skill Loading (`/skill`)', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    433: ReqMeta('SWR-433', 433, ReqStatus.APPROVED, 'Manual Load Persistence Boundary', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    434: ReqMeta('SWR-434', 434, ReqStatus.APPROVED, 'Discovery and Parse Resilience', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    435: ReqMeta('SWR-435', 435, ReqStatus.APPROVED, 'Deterministic Ordering', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    436: ReqMeta('SWR-436', 436, ReqStatus.APPROVED, 'No External Runtime Dependency', 'docs/requirements/400-agent-context-skills.md', True, False, '0594f00e829fe0ad', 'product', ()),
+    445: ReqMeta('SWR-445', 445, ReqStatus.APPROVED, 'Override File Precedence', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    449: ReqMeta('SWR-449', 449, ReqStatus.APPROVED, 'Top-Down Merge', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    450: ReqMeta('SWR-450', 450, ReqStatus.APPROVED, 'Injection Point', 'docs/requirements/400-agent-context-skills.md', False, True, '0594f00e829fe0ad', 'product', ()),
+    451: ReqMeta('SWR-451', 451, ReqStatus.APPROVED, 'Empty File Skip', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    452: ReqMeta('SWR-452', 452, ReqStatus.APPROVED, 'Per-File Size Limit', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    453: ReqMeta('SWR-453', 453, ReqStatus.APPROVED, 'Total Content Cap', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    454: ReqMeta('SWR-454', 454, ReqStatus.APPROVED, 'Session-Scoped Cache', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    455: ReqMeta('SWR-455', 455, ReqStatus.APPROVED, 'Opt-Out Configuration Flag', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    456: ReqMeta('SWR-456', 456, ReqStatus.APPROVED, 'Discovery Latency', 'docs/requirements/400-agent-context-skills.md', False, False, '0594f00e829fe0ad', 'product', ()),
+    457: ReqMeta('SWR-457', 457, ReqStatus.APPROVED, 'Read Resilience', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    458: ReqMeta('SWR-458', 458, ReqStatus.APPROVED, 'Deterministic Output', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    465: ReqMeta('SWR-465', 465, ReqStatus.DRAFT, 'ROTARIS.md Instruction File Injection', 'docs/requirements/400-agent-context-skills.md', True, True, '0594f00e829fe0ad', 'product', ()),
+    500: ReqMeta('SWR-500', 500, ReqStatus.APPROVED, 'Tool Platform & Integrations', 'docs/requirements/500-tool-platform.md', False, False, '5616a5f1d3a1d92c', 'product', ()),
+    501: ReqMeta('SWR-501', 501, ReqStatus.APPROVED, 'Unavailable Tool Handling', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    502: ReqMeta('SWR-502', 502, ReqStatus.APPROVED, 'Path Resolution', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    503: ReqMeta('SWR-503', 503, ReqStatus.APPROVED, 'Shell CWD', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    504: ReqMeta('SWR-504', 504, ReqStatus.APPROVED, 'No Full OS Sandboxing', 'docs/requirements/500-tool-platform.md', False, False, '5616a5f1d3a1d92c', 'product', ()),
+    505: ReqMeta('SWR-505', 505, ReqStatus.APPROVED, 'Secret Redaction', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    506: ReqMeta('SWR-506', 506, ReqStatus.APPROVED, 'Tool Timeouts', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    507: ReqMeta('SWR-507', 507, ReqStatus.DRAFT, 'Preinstalled MCP Servers', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    508: ReqMeta('SWR-508', 508, ReqStatus.APPROVED, 'Hard Timeout Kill', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    509: ReqMeta('SWR-509', 509, ReqStatus.APPROVED, 'Structured Error Payload', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    510: ReqMeta('SWR-510', 510, ReqStatus.APPROVED, 'Default Timeout', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    511: ReqMeta('SWR-511', 511, ReqStatus.APPROVED, 'Soft No-Output Annotation', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    512: ReqMeta('SWR-512', 512, ReqStatus.APPROVED, 'TUI Command Visibility', 'docs/requirements/500-tool-platform.md', False, True, '5616a5f1d3a1d92c', 'product', ()),
+    513: ReqMeta('SWR-513', 513, ReqStatus.APPROVED, 'Reset Capability', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    514: ReqMeta('SWR-514', 514, ReqStatus.APPROVED, 'Interactive Input', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    515: ReqMeta('SWR-515', 515, ReqStatus.APPROVED, 'Backend Transparency', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    516: ReqMeta('SWR-516', 516, ReqStatus.APPROVED, 'Atomic Observation Coercion', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    517: ReqMeta('SWR-517', 517, ReqStatus.APPROVED, 'Session-Scoped', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    518: ReqMeta('SWR-518', 518, ReqStatus.APPROVED, 'Stable IDs', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    519: ReqMeta('SWR-519', 519, ReqStatus.APPROVED, 'Operations', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    520: ReqMeta('SWR-520', 520, ReqStatus.APPROVED, 'ID-Based Targeting', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    521: ReqMeta('SWR-521', 521, ReqStatus.APPROVED, 'Update Capabilities', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    522: ReqMeta('SWR-522', 522, ReqStatus.APPROVED, 'Phase/Task Structure', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    523: ReqMeta('SWR-523', 523, ReqStatus.APPROVED, 'Task States', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    524: ReqMeta('SWR-524', 524, ReqStatus.APPROVED, 'Replace Constraints', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    525: ReqMeta('SWR-525', 525, ReqStatus.APPROVED, 'TUI Visibility', 'docs/requirements/500-tool-platform.md', False, True, '5616a5f1d3a1d92c', 'product', ()),
+    526: ReqMeta('SWR-526', 526, ReqStatus.APPROVED, 'Ralph Loop Anchor', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    527: ReqMeta('SWR-527', 527, ReqStatus.APPROVED, 'One Page Per Call', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    528: ReqMeta('SWR-528', 528, ReqStatus.APPROVED, 'Default Format', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    529: ReqMeta('SWR-529', 529, ReqStatus.APPROVED, 'Line Truncation', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    530: ReqMeta('SWR-530', 530, ReqStatus.APPROVED, 'Optional Parameters', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    531: ReqMeta('SWR-531', 531, ReqStatus.APPROVED, 'Structured Metadata', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    532: ReqMeta('SWR-532', 532, ReqStatus.APPROVED, 'Timeout and Error Handling', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    533: ReqMeta('SWR-533', 533, ReqStatus.DRAFT, 'First-Class Integration', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    534: ReqMeta('SWR-534', 534, ReqStatus.DRAFT, 'Per-Persona Configuration', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    535: ReqMeta('SWR-535', 535, ReqStatus.APPROVED, 'Intended Use', 'docs/requirements/500-tool-platform.md', False, False, '5616a5f1d3a1d92c', 'product', ()),
+    536: ReqMeta('SWR-536', 536, ReqStatus.DRAFT, 'Headless Default', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    537: ReqMeta('SWR-537', 537, ReqStatus.APPROVED, 'Plugin Interface', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    538: ReqMeta('SWR-538', 538, ReqStatus.APPROVED, 'Sync and Async', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    539: ReqMeta('SWR-539', 539, ReqStatus.APPROVED, 'Serialization', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    540: ReqMeta('SWR-540', 540, ReqStatus.APPROVED, 'Per-Persona Config', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    541: ReqMeta('SWR-541', 541, ReqStatus.APPROVED, 'MCP vs Plugin Boundary', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    542: ReqMeta('SWR-542', 542, ReqStatus.APPROVED, 'In-Process Execution', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    543: ReqMeta('SWR-543', 543, ReqStatus.APPROVED, 'Stateless', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    544: ReqMeta('SWR-544', 544, ReqStatus.APPROVED, 'Duplicate Name Error', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    545: ReqMeta('SWR-545', 545, ReqStatus.APPROVED, 'Exception Handling', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    546: ReqMeta('SWR-546', 546, ReqStatus.APPROVED, 'Startup Validation', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    547: ReqMeta('SWR-547', 547, ReqStatus.APPROVED, 'Detect Housekeeping-Only Runs', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    548: ReqMeta('SWR-548', 548, ReqStatus.APPROVED, 'Single Recovery Prompt', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    549: ReqMeta('SWR-549', 549, ReqStatus.APPROVED, 'Fail Incomplete Execution Cleanly', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    550: ReqMeta('SWR-550', 550, ReqStatus.APPROVED, 'Preserve Mixed Streaming Content', 'docs/requirements/500-tool-platform.md', False, True, '5616a5f1d3a1d92c', 'product', ()),
+    553: ReqMeta('SWR-553', 553, ReqStatus.APPROVED, 'Disable Undocumented ThinkTool', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    554: ReqMeta('SWR-554', 554, ReqStatus.APPROVED, 'Render Runtime Tool Names', 'docs/requirements/500-tool-platform.md', False, True, '5616a5f1d3a1d92c', 'product', ()),
+    555: ReqMeta('SWR-555', 555, ReqStatus.APPROVED, 'Clarify Tool Argument Shapes', 'docs/requirements/500-tool-platform.md', False, False, '5616a5f1d3a1d92c', 'product', ()),
+    559: ReqMeta('SWR-559', 559, ReqStatus.APPROVED, 'Terminal observations must classify command outcomes separately from internal tool errors.', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    560: ReqMeta('SWR-560', 560, ReqStatus.APPROVED, 'Session diagnostics must record shell failures, suspicious successful terminal output, and terminal timeouts as issues.', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    561: ReqMeta('SWR-561', 561, ReqStatus.APPROVED, 'Completed child diagnostics must record terminal child states, not intermediate running or summarizing states.', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    562: ReqMeta('SWR-562', 562, ReqStatus.APPROVED, 'Read/search/edit tools must provide recoverable behavior for common agent mistakes: wrong paths, absolute grep paths, and safe HAET anchor-line drift.', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    563: ReqMeta('SWR-563', 563, ReqStatus.APPROVED, 'Interactive `ask_questions` Tool', 'docs/requirements/500-tool-platform.md', True, True, '5616a5f1d3a1d92c', 'product', ()),
+    600: ReqMeta('SWR-600', 600, ReqStatus.APPROVED, 'File, Search & Edit Tools', 'docs/requirements/600-file-search-edit.md', False, False, '42f2bb127fd90479', 'product', ()),
+    629: ReqMeta('SWR-629', 629, ReqStatus.APPROVED, 'Cross-Platform Fast Path', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    630: ReqMeta('SWR-630', 630, ReqStatus.APPROVED, 'Portable Fallback', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    631: ReqMeta('SWR-631', 631, ReqStatus.APPROVED, 'Ignore Expensive Workspace Noise', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    632: ReqMeta('SWR-632', 632, ReqStatus.APPROVED, 'Limit Costly File Reads', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    633: ReqMeta('SWR-633', 633, ReqStatus.APPROVED, 'Reduce TUI Refresh Thrash', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    639: ReqMeta('SWR-639', 639, ReqStatus.APPROVED, 'Document Required HAET Operation Field', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    640: ReqMeta('SWR-640', 640, ReqStatus.APPROVED, 'Strengthen Coding-Agent HAET Prompting', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    641: ReqMeta('SWR-641', 641, ReqStatus.APPROVED, 'Forbid User-Visible Retry Monologue', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    642: ReqMeta('SWR-642', 642, ReqStatus.APPROVED, 'Suppress Internal Tool Debug Streams', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    643: ReqMeta('SWR-643', 643, ReqStatus.APPROVED, 'Exclude Internal Tool Debug from Scheduler Transcript', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    646: ReqMeta('SWR-646', 646, ReqStatus.APPROVED, 'Detect plain `call:<tool>{...}` shape', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    647: ReqMeta('SWR-647', 647, ReqStatus.APPROVED, 'Strip from streaming + persisted TUI transcript', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    648: ReqMeta('SWR-648', 648, ReqStatus.APPROVED, 'Preserve malformed-attempt classification for stall recovery', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    657: ReqMeta('SWR-657', 657, ReqStatus.APPROVED, 'FileToolEngine shared state module', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    658: ReqMeta('SWR-658', 658, ReqStatus.APPROVED, 'ReadFileTool', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    659: ReqMeta('SWR-659', 659, ReqStatus.APPROVED, 'WriteFileTool', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    660: ReqMeta('SWR-660', 660, ReqStatus.APPROVED, 'Agent factory integration', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
+    661: ReqMeta('SWR-661', 661, ReqStatus.APPROVED, 'Prompt hints and system prompt updates', 'docs/requirements/600-file-search-edit.md', False, True, '42f2bb127fd90479', 'product', ()),
+    662: ReqMeta('SWR-662', 662, ReqStatus.APPROVED, 'Default persona migration', 'docs/requirements/600-file-search-edit.md', True, False, '42f2bb127fd90479', 'product', ()),
+    665: ReqMeta('SWR-665', 665, ReqStatus.APPROVED, 'README and documentation', 'docs/requirements/600-file-search-edit.md', False, False, '42f2bb127fd90479', 'product', ()),
+    666: ReqMeta('SWR-666', 666, ReqStatus.APPROVED, 'HAET (Hash-Anchored Edit Tool) full overhaul', 'docs/requirements/600-file-search-edit.md', True, True, '42f2bb127fd90479', 'product', ()),
     700: ReqMeta('SWR-700', 700, ReqStatus.APPROVED, 'Provider Integration & Authentication', 'docs/requirements/700-providers-auth.md', False, False, '168bcf2e3c1d1d2c', 'product', ()),
     701: ReqMeta('SWR-701', 701, ReqStatus.APPROVED, 'Copilot Provider Support', 'docs/requirements/700-providers-auth.md', True, True, '168bcf2e3c1d1d2c', 'product', ()),
     702: ReqMeta('SWR-702', 702, ReqStatus.APPROVED, 'Codex Provider Support', 'docs/requirements/700-providers-auth.md', True, True, '168bcf2e3c1d1d2c', 'product', ()),
@@ -5018,95 +4807,91 @@ META: dict[int, ReqMeta] = {
     919: ReqMeta('SWR-919', 919, ReqStatus.APPROVED, 'LLM runtime error classification', 'docs/requirements/900-runtime-safeguards/SWR-919-llm-error-classification.md', True, True, '65a36fc90c777dd0', 'technical', (900,)),
     920: ReqMeta('SWR-920', 920, ReqStatus.APPROVED, 'Per-model concurrency cap', 'docs/requirements/900-runtime-safeguards/SWR-920-per-model-concurrency-cap.md', True, True, '394dac4d8ad0edb0', 'technical', (900,)),
     921: ReqMeta('SWR-921', 921, ReqStatus.APPROVED, 'Per-model response-format capability resolution', 'docs/requirements/900-runtime-safeguards/SWR-921-response-format-capabilities.md', True, True, '8035f346b73f9f19', 'technical', (919,)),
-    1000: ReqMeta('SWR-1000', 1000, ReqStatus.APPROVED, 'TUI Core Layout & Chrome', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1001: ReqMeta('SWR-1001', 1001, ReqStatus.APPROVED, 'Framework', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1002: ReqMeta('SWR-1002', 1002, ReqStatus.APPROVED, 'Chat/Transcript Panel', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1003: ReqMeta('SWR-1003', 1003, ReqStatus.APPROVED, 'Agent Status Pane', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1004: ReqMeta('SWR-1004', 1004, ReqStatus.APPROVED, 'Todo Pane', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1005: ReqMeta('SWR-1005', 1005, ReqStatus.APPROVED, 'Input Composer', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1006: ReqMeta('SWR-1006', 1006, ReqStatus.APPROVED, 'Keyboard-First', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1009: ReqMeta('SWR-1009', 1009, ReqStatus.APPROVED, 'Agent State Labels', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1010: ReqMeta('SWR-1010', 1010, ReqStatus.APPROVED, 'Report Artifact Rendering', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1011: ReqMeta('SWR-1011', 1011, ReqStatus.APPROVED, 'No Edit Confirm/Reject', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1012: ReqMeta('SWR-1012', 1012, ReqStatus.APPROVED, 'Reasoning Summary', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1013: ReqMeta('SWR-1013', 1013, ReqStatus.APPROVED, 'Inline Error Rendering', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1014: ReqMeta('SWR-1014', 1014, ReqStatus.APPROVED, 'Color Scheme', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1015: ReqMeta('SWR-1015', 1015, ReqStatus.APPROVED, 'Not Color-Only Status', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1016: ReqMeta('SWR-1016', 1016, ReqStatus.APPROVED, 'First-Class Mode', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1017: ReqMeta('SWR-1017', 1017, ReqStatus.APPROVED, '--background Flag', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1018: ReqMeta('SWR-1018', 1018, ReqStatus.APPROVED, 'Detach from TUI', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1019: ReqMeta('SWR-1019', 1019, ReqStatus.APPROVED, 'Continues Full Execution', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1020: ReqMeta('SWR-1020', 1020, ReqStatus.APPROVED, 'Reattachable', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1021: ReqMeta('SWR-1021', 1021, ReqStatus.APPROVED, 'Session Directory', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1022: ReqMeta('SWR-1022', 1022, ReqStatus.APPROVED, 'Reattach Mechanism', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1023: ReqMeta('SWR-1023', 1023, ReqStatus.APPROVED, 'Multiple Sessions', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1024: ReqMeta('SWR-1024', 1024, ReqStatus.APPROVED, 'Incremental Writes', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1025: ReqMeta('SWR-1025', 1025, ReqStatus.APPROVED, 'Versioned Snapshots', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1026: ReqMeta('SWR-1026', 1026, ReqStatus.APPROVED, 'Partial Recovery', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1027: ReqMeta('SWR-1027', 1027, ReqStatus.APPROVED, 'Incompatible Snapshot', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1028: ReqMeta('SWR-1028', 1028, ReqStatus.APPROVED, 'Continue Session', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1029: ReqMeta('SWR-1029', 1029, ReqStatus.APPROVED, 'Independent Scrollable Agents Panel', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1030: ReqMeta('SWR-1030', 1030, ReqStatus.APPROVED, 'Independent Scrollable Info Panel', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1031: ReqMeta('SWR-1031', 1031, ReqStatus.APPROVED, 'Independent Scrollable Todo Panel', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1032: ReqMeta('SWR-1032', 1032, ReqStatus.APPROVED, 'Default Right-Rail Vertical Split', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1033: ReqMeta('SWR-1033', 1033, ReqStatus.APPROVED, 'Resize-Safe Overflow Behavior', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1034: ReqMeta('SWR-1034', 1034, ReqStatus.APPROVED, 'Input Routing for Scroll Interaction', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1035: ReqMeta('SWR-1035', 1035, ReqStatus.APPROVED, 'No Regression in Data Rendering', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1036: ReqMeta('SWR-1036', 1036, ReqStatus.APPROVED, 'Flex-Grow Right-Rail Space Fill', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1037: ReqMeta('SWR-1037', 1037, ReqStatus.APPROVED, 'Layout Stability', 'docs/requirements/1000-tui-core.md', True, False, 'b402559db716a335', 'product', ()),
-    1038: ReqMeta('SWR-1038', 1038, ReqStatus.APPROVED, 'Graceful Small-Terminal Degradation', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1039: ReqMeta('SWR-1039', 1039, ReqStatus.APPROVED, 'Regression Test Coverage', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1040: ReqMeta('SWR-1040', 1040, ReqStatus.APPROVED, 'Dynamic Layout Coverage', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1041: ReqMeta('SWR-1041', 1041, ReqStatus.APPROVED, 'Per-child todo state field', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1042: ReqMeta('SWR-1042', 1042, ReqStatus.APPROVED, 'Per-child todo callback wiring', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1043: ReqMeta('SWR-1043', 1043, ReqStatus.APPROVED, 'Context-aware todo resolution in view model', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1044: ReqMeta('SWR-1044', 1044, ReqStatus.APPROVED, 'Markdown checkbox rendering', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1045: ReqMeta('SWR-1045', 1045, ReqStatus.APPROVED, 'Scrollable panel compatibility', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1046: ReqMeta('SWR-1046', 1046, ReqStatus.APPROVED, 'Backward compatibility with old snapshots', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1047: ReqMeta('SWR-1047', 1047, ReqStatus.APPROVED, 'Thread safety for per-child todo writes', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1048: ReqMeta('SWR-1048', 1048, ReqStatus.APPROVED, 'No regression in top-level todo display', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1049: ReqMeta('SWR-1049', 1049, ReqStatus.APPROVED, 'Regression test coverage', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1050: ReqMeta('SWR-1050', 1050, ReqStatus.APPROVED, 'Semantic Theme Schema', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1051: ReqMeta('SWR-1051', 1051, ReqStatus.APPROVED, 'CSS Variable Export', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1052: ReqMeta('SWR-1052', 1052, ReqStatus.APPROVED, 'Built-In Themes', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1053: ReqMeta('SWR-1053', 1053, ReqStatus.APPROVED, 'Default Theme', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1054: ReqMeta('SWR-1054', 1054, ReqStatus.APPROVED, 'Stylesheet Theme Use', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1055: ReqMeta('SWR-1055', 1055, ReqStatus.APPROVED, 'Rich Render Palette', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1056: ReqMeta('SWR-1056', 1056, ReqStatus.APPROVED, 'Runtime Theme Switching', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1057: ReqMeta('SWR-1057', 1057, ReqStatus.APPROVED, 'Style-Guided Feature Work', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1058: ReqMeta('SWR-1058', 1058, ReqStatus.APPROVED, 'Visual Continuity', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1059: ReqMeta('SWR-1059', 1059, ReqStatus.DRAFT, 'State Distinguishability', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1060: ReqMeta('SWR-1060', 1060, ReqStatus.APPROVED, 'Snapshot-Based Regression Guard', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1061: ReqMeta('SWR-1061', 1061, ReqStatus.APPROVED, 'Reviewed Snapshot Updates', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1062: ReqMeta('SWR-1062', 1062, ReqStatus.APPROVED, 'Theme Command Tests', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1063: ReqMeta('SWR-1063', 1063, ReqStatus.APPROVED, 'Visual Snapshot Tests', 'docs/requirements/1000-tui-core.md', False, True, 'b402559db716a335', 'product', ()),
-    1064: ReqMeta('SWR-1064', 1064, ReqStatus.DRAFT, 'Theme Contract Tests', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1065: ReqMeta('SWR-1065', 1065, ReqStatus.APPROVED, 'Display absolute workspace path', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1066: ReqMeta('SWR-1066', 1066, ReqStatus.APPROVED, 'Display active git branch', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1067: ReqMeta('SWR-1067', 1067, ReqStatus.APPROVED, 'Tilde-expand `$HOME` in displayed path', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1068: ReqMeta('SWR-1068', 1068, ReqStatus.APPROVED, 'Hide branch info when no git repo detected', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1069: ReqMeta('SWR-1069', 1069, ReqStatus.APPROVED, 'Reactive update: refresh on session switch and periodic poll', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1070: ReqMeta('SWR-1070', 1070, ReqStatus.APPROVED, 'Themed appearance matching existing TUI style', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1071: ReqMeta('SWR-1071', 1071, ReqStatus.APPROVED, 'The TUI shall render a dedicated run-timing indicator in the composer metadata region directly above the prompt input field, so timing is visible in the same gaze zone as message composition.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1072: ReqMeta('SWR-1072', 1072, ReqStatus.APPROVED, 'While a run is active, the timing indicator shall show the elapsed duration of the current in-flight model-execution segment. When execution advances to a new segment within the same run, this live elapsed value shall reset and begin counting again.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1073: ReqMeta('SWR-1073', 1073, ReqStatus.APPROVED, 'When a run reaches a terminal state, the timing indicator shall present the total elapsed wall-clock duration for the completed run until a new run replaces it.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1074: ReqMeta('SWR-1074', 1074, ReqStatus.APPROVED, 'The default TUI visual baseline shall use black as the primary application background, light gray for chrome and secondary UI text such as borders, labels, counters, and panel titles, and white for primary user-facing content text.', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1075: ReqMeta('SWR-1075', 1075, ReqStatus.APPROVED, 'Semantic accent colors for states such as success, warning, error, and active focus may remain in use, but they shall be visually subordinate to the black/gray/white default hierarchy rather than replacing it as the main chrome language.', 'docs/requirements/1000-tui-core.md', False, False, 'b402559db716a335', 'product', ()),
-    1076: ReqMeta('SWR-1076', 1076, ReqStatus.APPROVED, 'The agents panel shall use a compact row presentation that abbreviates the agent task or display label and suppresses non-essential verbosity for non-focused rows, so the default panel consumes less vertical space per visible agent.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1077: ReqMeta('SWR-1077', 1077, ReqStatus.APPROVED, 'The default agents panel presentation shall display at most five concrete agent rows at one time, regardless of how many agents exist in the current logical navigation set.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1078: ReqMeta('SWR-1078', 1078, ReqStatus.APPROVED, 'When the logical agent set contains more items than can be shown directly, the TUI shall represent hidden contiguous ranges with ellipsis placeholders. In the default collapsed state for a single hidden middle range, the panel shall render two visible rows above the ellipsis and three visible rows below it.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1079: ReqMeta('SWR-1079', 1079, ReqStatus.APPROVED, 'Agent ordering in the panel shall be newest-first from top to bottom. When keyboard navigation selects an agent that would otherwise be hidden inside a collapsed range, that agent shall surface into the visible five-row presentation and the ellipsis placeholders shall move above and/or below it to represent the remaining hidden ranges.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1080: ReqMeta('SWR-1080', 1080, ReqStatus.APPROVED, 'Collapsing or hiding agents from the default panel view shall not remove them from transcript history, session state, or keyboard navigation. Hidden agents remain part of the navigable logical list even when not shown as concrete rows.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1081: ReqMeta('SWR-1081', 1081, ReqStatus.APPROVED, 'When the focused agent changes while the user is traversing hidden history, the focus cursor shall remain on the selected logical agent rather than snapping back to the newest agent solely because the visible panel summary re-collapses or new agent activity appears elsewhere.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1082: ReqMeta('SWR-1082', 1082, ReqStatus.APPROVED, 'TUI Scrolling Inside Borders', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1083: ReqMeta('SWR-1083', 1083, ReqStatus.APPROVED, 'Add `TuiDisplayConfig` model with `show_tool_results: bool = True` and `tool_result_max_lines: int = Field(default=10, ge=0)`. Add `display: TuiDisplayConfig` to `RotarisConfig`.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1084: ReqMeta('SWR-1084', 1084, ReqStatus.APPROVED, '`ChatPanel.add_tool_event()` shall truncate content to `max_lines` newline-separated lines. When truncated, append a dim indicator `… +N more lines, tool result truncated` (or `tool call input truncated` for inputs). When `max_lines=None` or `max_lines=0`, render full content unchanged.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1085: ReqMeta('SWR-1085', 1085, ReqStatus.APPROVED, 'The `show_tool_events` reactive shall be replaced by a property reading `config.display.show_tool_results`. Toggling the value shall persist to workspace `agents.yaml` via atomic write.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1086: ReqMeta('SWR-1086', 1086, ReqStatus.APPROVED, 'A `ToolResultSettingsScreen` (ModalScreen) shall provide toggles (Switch) for show/hide results and inputs, and dropdowns (Select) for max lines each (presets: 1, 2, 5, 10, 20, 50, No limit). Settings are saved via ctrl+s and persisted to workspace config. The screen is accessible from the command palette under \\"Tool result settings\\".', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1087: ReqMeta('SWR-1087', 1087, ReqStatus.APPROVED, 'Truncation shall be render-only. Full tool input and result content shall remain in `session.transcript_events` unchanged for model context, summaries, compression, and session replay.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1088: ReqMeta('SWR-1088', 1088, ReqStatus.APPROVED, 'The command palette hit \\"Toggle tool events\\" shall be renamed to \\"Toggle tool results\\" and shall still toggle `show_tool_results` visibility.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1089: ReqMeta('SWR-1089', 1089, ReqStatus.APPROVED, 'Add `show_tool_inputs: bool = True` and `tool_input_max_lines: int = Field(default=2, ge=0)` to `TuiDisplayConfig`. In `_render_chat_event`, tool events without a `phase` key (tool inputs from scheduler/compressor) shall respect `show_tool_inputs` and `tool_input_max_lines`, while events with a `phase` key (tool results) shall respect the existing `show_tool_results` and `tool_result_max_lines`.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
-    1090: ReqMeta('SWR-1090', 1090, ReqStatus.APPROVED, 'A `show_tool_inputs` property on `RotarisTuiApp` shall mirror the `show_tool_events` pattern: read from `config.display.show_tool_inputs`, fall back to `_show_tool_inputs_fallback`.', 'docs/requirements/1000-tui-core.md', True, True, 'b402559db716a335', 'product', ()),
+    1000: ReqMeta('SWR-1000', 1000, ReqStatus.APPROVED, 'TUI Core Layout & Chrome', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1001: ReqMeta('SWR-1001', 1001, ReqStatus.APPROVED, 'Framework', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1002: ReqMeta('SWR-1002', 1002, ReqStatus.APPROVED, 'Chat/Transcript Panel', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1003: ReqMeta('SWR-1003', 1003, ReqStatus.APPROVED, 'Agent Status Pane', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1004: ReqMeta('SWR-1004', 1004, ReqStatus.APPROVED, 'Todo Pane', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1005: ReqMeta('SWR-1005', 1005, ReqStatus.APPROVED, 'Input Composer', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1006: ReqMeta('SWR-1006', 1006, ReqStatus.APPROVED, 'Keyboard-First', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1009: ReqMeta('SWR-1009', 1009, ReqStatus.APPROVED, 'Agent State Labels', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1010: ReqMeta('SWR-1010', 1010, ReqStatus.APPROVED, 'Report Artifact Rendering', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1011: ReqMeta('SWR-1011', 1011, ReqStatus.APPROVED, 'No Edit Confirm/Reject', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1012: ReqMeta('SWR-1012', 1012, ReqStatus.APPROVED, 'Reasoning Summary', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1013: ReqMeta('SWR-1013', 1013, ReqStatus.APPROVED, 'Inline Error Rendering', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1014: ReqMeta('SWR-1014', 1014, ReqStatus.APPROVED, 'Color Scheme', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1015: ReqMeta('SWR-1015', 1015, ReqStatus.APPROVED, 'Not Color-Only Status', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1016: ReqMeta('SWR-1016', 1016, ReqStatus.APPROVED, 'First-Class Mode', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1017: ReqMeta('SWR-1017', 1017, ReqStatus.APPROVED, '--background Flag', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1018: ReqMeta('SWR-1018', 1018, ReqStatus.APPROVED, 'Detach from TUI', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1019: ReqMeta('SWR-1019', 1019, ReqStatus.APPROVED, 'Continues Full Execution', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1020: ReqMeta('SWR-1020', 1020, ReqStatus.APPROVED, 'Reattachable', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1021: ReqMeta('SWR-1021', 1021, ReqStatus.APPROVED, 'Session Directory', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1022: ReqMeta('SWR-1022', 1022, ReqStatus.APPROVED, 'Reattach Mechanism', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1023: ReqMeta('SWR-1023', 1023, ReqStatus.APPROVED, 'Multiple Sessions', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1024: ReqMeta('SWR-1024', 1024, ReqStatus.APPROVED, 'Incremental Writes', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1025: ReqMeta('SWR-1025', 1025, ReqStatus.APPROVED, 'Versioned Snapshots', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1026: ReqMeta('SWR-1026', 1026, ReqStatus.APPROVED, 'Partial Recovery', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1027: ReqMeta('SWR-1027', 1027, ReqStatus.APPROVED, 'Incompatible Snapshot', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1028: ReqMeta('SWR-1028', 1028, ReqStatus.APPROVED, 'Continue Session', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1029: ReqMeta('SWR-1029', 1029, ReqStatus.APPROVED, 'Independent Scrollable Agents Panel', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1030: ReqMeta('SWR-1030', 1030, ReqStatus.APPROVED, 'Independent Scrollable Info Panel', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1031: ReqMeta('SWR-1031', 1031, ReqStatus.APPROVED, 'Independent Scrollable Todo Panel', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1032: ReqMeta('SWR-1032', 1032, ReqStatus.APPROVED, 'Default Right-Rail Vertical Split', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1033: ReqMeta('SWR-1033', 1033, ReqStatus.APPROVED, 'Resize-Safe Overflow Behavior', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1034: ReqMeta('SWR-1034', 1034, ReqStatus.APPROVED, 'Input Routing for Scroll Interaction', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1035: ReqMeta('SWR-1035', 1035, ReqStatus.APPROVED, 'No Regression in Data Rendering', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1036: ReqMeta('SWR-1036', 1036, ReqStatus.APPROVED, 'Flex-Grow Right-Rail Space Fill', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1037: ReqMeta('SWR-1037', 1037, ReqStatus.APPROVED, 'Layout Stability', 'docs/requirements/1000-tui-core.md', True, False, '89ff0cddadb00ea5', 'product', ()),
+    1038: ReqMeta('SWR-1038', 1038, ReqStatus.APPROVED, 'Graceful Small-Terminal Degradation', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1040: ReqMeta('SWR-1040', 1040, ReqStatus.APPROVED, 'Dynamic Layout Coverage', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1041: ReqMeta('SWR-1041', 1041, ReqStatus.APPROVED, 'Per-child todo state field', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1042: ReqMeta('SWR-1042', 1042, ReqStatus.APPROVED, 'Per-child todo callback wiring', 'docs/requirements/1000-tui-core.md', False, True, '89ff0cddadb00ea5', 'product', ()),
+    1043: ReqMeta('SWR-1043', 1043, ReqStatus.APPROVED, 'Context-aware todo resolution in view model', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1044: ReqMeta('SWR-1044', 1044, ReqStatus.APPROVED, 'Markdown checkbox rendering', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1045: ReqMeta('SWR-1045', 1045, ReqStatus.APPROVED, 'Scrollable panel compatibility', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1046: ReqMeta('SWR-1046', 1046, ReqStatus.APPROVED, 'Backward compatibility with old snapshots', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1047: ReqMeta('SWR-1047', 1047, ReqStatus.APPROVED, 'Thread safety for per-child todo writes', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1048: ReqMeta('SWR-1048', 1048, ReqStatus.APPROVED, 'No regression in top-level todo display', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1050: ReqMeta('SWR-1050', 1050, ReqStatus.APPROVED, 'Semantic Theme Schema', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1051: ReqMeta('SWR-1051', 1051, ReqStatus.APPROVED, 'CSS Variable Export', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1052: ReqMeta('SWR-1052', 1052, ReqStatus.APPROVED, 'Built-In Themes', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1053: ReqMeta('SWR-1053', 1053, ReqStatus.APPROVED, 'Default Theme', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1054: ReqMeta('SWR-1054', 1054, ReqStatus.APPROVED, 'Stylesheet Theme Use', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1055: ReqMeta('SWR-1055', 1055, ReqStatus.APPROVED, 'Rich Render Palette', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1056: ReqMeta('SWR-1056', 1056, ReqStatus.APPROVED, 'Runtime Theme Switching', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1057: ReqMeta('SWR-1057', 1057, ReqStatus.APPROVED, 'Style-Guided Feature Work', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1058: ReqMeta('SWR-1058', 1058, ReqStatus.APPROVED, 'Visual Continuity', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1059: ReqMeta('SWR-1059', 1059, ReqStatus.DRAFT, 'State Distinguishability', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1060: ReqMeta('SWR-1060', 1060, ReqStatus.APPROVED, 'Snapshot-Based Regression Guard', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1061: ReqMeta('SWR-1061', 1061, ReqStatus.APPROVED, 'Reviewed Snapshot Updates', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1064: ReqMeta('SWR-1064', 1064, ReqStatus.DRAFT, 'Theme Contract Tests', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1065: ReqMeta('SWR-1065', 1065, ReqStatus.APPROVED, 'Display absolute workspace path', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1066: ReqMeta('SWR-1066', 1066, ReqStatus.APPROVED, 'Display active git branch', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1067: ReqMeta('SWR-1067', 1067, ReqStatus.APPROVED, 'Tilde-expand `$HOME` in displayed path', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1068: ReqMeta('SWR-1068', 1068, ReqStatus.APPROVED, 'Hide branch info when no git repo detected', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1069: ReqMeta('SWR-1069', 1069, ReqStatus.APPROVED, 'Reactive update: refresh on session switch and periodic poll', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1070: ReqMeta('SWR-1070', 1070, ReqStatus.APPROVED, 'Themed appearance matching existing TUI style', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1071: ReqMeta('SWR-1071', 1071, ReqStatus.APPROVED, 'The TUI shall render a dedicated run-timing indicator in the composer metadata region directly above the prompt input field, so timing is visible in the same gaze zone as message composition.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1072: ReqMeta('SWR-1072', 1072, ReqStatus.APPROVED, 'While a run is active, the timing indicator shall show the elapsed duration of the current in-flight model-execution segment. When execution advances to a new segment within the same run, this live elapsed value shall reset and begin counting again.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1073: ReqMeta('SWR-1073', 1073, ReqStatus.APPROVED, 'When a run reaches a terminal state, the timing indicator shall present the total elapsed wall-clock duration for the completed run until a new run replaces it.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1074: ReqMeta('SWR-1074', 1074, ReqStatus.APPROVED, 'The default TUI visual baseline shall use black as the primary application background, light gray for chrome and secondary UI text such as borders, labels, counters, and panel titles, and white for primary user-facing content text.', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1075: ReqMeta('SWR-1075', 1075, ReqStatus.APPROVED, 'Semantic accent colors for states such as success, warning, error, and active focus may remain in use, but they shall be visually subordinate to the black/gray/white default hierarchy rather than replacing it as the main chrome language.', 'docs/requirements/1000-tui-core.md', False, False, '89ff0cddadb00ea5', 'product', ()),
+    1076: ReqMeta('SWR-1076', 1076, ReqStatus.APPROVED, 'The agents panel shall use a compact row presentation that abbreviates the agent task or display label and suppresses non-essential verbosity for non-focused rows, so the default panel consumes less vertical space per visible agent.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1077: ReqMeta('SWR-1077', 1077, ReqStatus.APPROVED, 'The default agents panel presentation shall display at most five concrete agent rows at one time, regardless of how many agents exist in the current logical navigation set.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1078: ReqMeta('SWR-1078', 1078, ReqStatus.APPROVED, 'When the logical agent set contains more items than can be shown directly, the TUI shall represent hidden contiguous ranges with ellipsis placeholders. In the default collapsed state for a single hidden middle range, the panel shall render two visible rows above the ellipsis and three visible rows below it.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1079: ReqMeta('SWR-1079', 1079, ReqStatus.APPROVED, 'Agent ordering in the panel shall be newest-first from top to bottom. When keyboard navigation selects an agent that would otherwise be hidden inside a collapsed range, that agent shall surface into the visible five-row presentation and the ellipsis placeholders shall move above and/or below it to represent the remaining hidden ranges.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1080: ReqMeta('SWR-1080', 1080, ReqStatus.APPROVED, 'Collapsing or hiding agents from the default panel view shall not remove them from transcript history, session state, or keyboard navigation. Hidden agents remain part of the navigable logical list even when not shown as concrete rows.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1081: ReqMeta('SWR-1081', 1081, ReqStatus.APPROVED, 'When the focused agent changes while the user is traversing hidden history, the focus cursor shall remain on the selected logical agent rather than snapping back to the newest agent solely because the visible panel summary re-collapses or new agent activity appears elsewhere.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1082: ReqMeta('SWR-1082', 1082, ReqStatus.APPROVED, 'TUI Scrolling Inside Borders', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1083: ReqMeta('SWR-1083', 1083, ReqStatus.APPROVED, 'Add `TuiDisplayConfig` model with `show_tool_results: bool = True` and `tool_result_max_lines: int = Field(default=10, ge=0)`. Add `display: TuiDisplayConfig` to `RotarisConfig`.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1084: ReqMeta('SWR-1084', 1084, ReqStatus.APPROVED, '`ChatPanel.add_tool_event()` shall truncate content to `max_lines` newline-separated lines. When truncated, append a dim indicator `… +N more lines, tool result truncated` (or `tool call input truncated` for inputs). When `max_lines=None` or `max_lines=0`, render full content unchanged.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1085: ReqMeta('SWR-1085', 1085, ReqStatus.APPROVED, 'The `show_tool_events` reactive shall be replaced by a property reading `config.display.show_tool_results`. Toggling the value shall persist to workspace `agents.yaml` via atomic write.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1086: ReqMeta('SWR-1086', 1086, ReqStatus.APPROVED, 'A `ToolResultSettingsScreen` (ModalScreen) shall provide toggles (Switch) for show/hide results and inputs, and dropdowns (Select) for max lines each (presets: 1, 2, 5, 10, 20, 50, No limit). Settings are saved via ctrl+s and persisted to workspace config. The screen is accessible from the command palette under \\"Tool result settings\\".', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1087: ReqMeta('SWR-1087', 1087, ReqStatus.APPROVED, 'Truncation shall be render-only. Full tool input and result content shall remain in `session.transcript_events` unchanged for model context, summaries, compression, and session replay.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1088: ReqMeta('SWR-1088', 1088, ReqStatus.APPROVED, 'The command palette hit \\"Toggle tool events\\" shall be renamed to \\"Toggle tool results\\" and shall still toggle `show_tool_results` visibility.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1089: ReqMeta('SWR-1089', 1089, ReqStatus.APPROVED, 'Add `show_tool_inputs: bool = True` and `tool_input_max_lines: int = Field(default=2, ge=0)` to `TuiDisplayConfig`. In `_render_chat_event`, tool events without a `phase` key (tool inputs from scheduler/compressor) shall respect `show_tool_inputs` and `tool_input_max_lines`, while events with a `phase` key (tool results) shall respect the existing `show_tool_results` and `tool_result_max_lines`.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
+    1090: ReqMeta('SWR-1090', 1090, ReqStatus.APPROVED, 'A `show_tool_inputs` property on `RotarisTuiApp` shall mirror the `show_tool_events` pattern: read from `config.display.show_tool_inputs`, fall back to `_show_tool_inputs_fallback`.', 'docs/requirements/1000-tui-core.md', True, True, '89ff0cddadb00ea5', 'product', ()),
     1100: ReqMeta('SWR-1100', 1100, ReqStatus.APPROVED, 'TUI Input, Commands & Shortcuts', 'docs/requirements/1100-tui-input.md', False, False, '882de9d03f8dd42f', 'product', ()),
     1101: ReqMeta('SWR-1101', 1101, ReqStatus.APPROVED, 'Stash Command', 'docs/requirements/1100-tui-input.md', True, True, '882de9d03f8dd42f', 'product', ()),
     1102: ReqMeta('SWR-1102', 1102, ReqStatus.APPROVED, 'Stash via Settings Menu', 'docs/requirements/1100-tui-input.md', True, True, '882de9d03f8dd42f', 'product', ()),
@@ -5185,295 +4970,262 @@ META: dict[int, ReqMeta] = {
     1184: ReqMeta('SWR-1184', 1184, ReqStatus.APPROVED, 'Default leader documented in user-facing help.** All in-app help text, status prompts, and the command palette cheatsheet (per `requirements-20260526-command-palette-shortcuts.md`) SHALL reference leader-chord notation (e.g., `Ctrl+X P`) rather than single-stroke `Ctrl+` shortcuts.', 'docs/requirements/1100-tui-input.md', False, True, '882de9d03f8dd42f', 'product', ()),
     1185: ReqMeta('SWR-1185', 1185, ReqStatus.APPROVED, 'Backward compatibility — existing slash commands preserved.** All existing slash commands (`/stop`, `/pause`, `/resume`, `/new`, `/stash`, `/pop`, `/theme`, `/tools`, `/background`, `/mcp`, `/improvements`, `/compress`, `/logout`) SHALL continue to function identically. Their behaviour SHALL NOT be altered by the leader-chord migration.', 'docs/requirements/1100-tui-input.md', True, True, '882de9d03f8dd42f', 'product', ()),
     1186: ReqMeta('SWR-1186', 1186, ReqStatus.APPROVED, 'File-based custom prompt slash commands', 'docs/requirements/1100-tui-input/SWR-1186-file-based-custom-prompt-commands.md', True, True, '1cf261bef3294e39', 'technical', (1142,)),
-    1200: ReqMeta('SWR-1200', 1200, ReqStatus.APPROVED, 'TUI Transcript & Rendering Performance', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1201: ReqMeta('SWR-1201', 1201, ReqStatus.APPROVED, '`tui/AGENTS.md` Documentation Reference', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1202: ReqMeta('SWR-1202', 1202, ReqStatus.APPROVED, 'TUI Testing Standards File Location', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1203: ReqMeta('SWR-1203', 1203, ReqStatus.APPROVED, 'Test Category: Full User Workflow Paths', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1204: ReqMeta('SWR-1204', 1204, ReqStatus.APPROVED, 'Test Category: Alternative Workflow Paths', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1205: ReqMeta('SWR-1205', 1205, ReqStatus.APPROVED, 'Test Category: Random Interaction Tests', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1206: ReqMeta('SWR-1206', 1206, ReqStatus.APPROVED, 'Test-First Approach', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1207: ReqMeta('SWR-1207', 1207, ReqStatus.APPROVED, 'Test Coverage Update on New Workflow Paths', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1208: ReqMeta('SWR-1208', 1208, ReqStatus.APPROVED, 'Test Framework', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1209: ReqMeta('SWR-1209', 1209, ReqStatus.APPROVED, 'Snapshot Testing for Visual Regressions', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1210: ReqMeta('SWR-1210', 1210, ReqStatus.APPROVED, 'Async Timing Safety', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1211: ReqMeta('SWR-1211', 1211, ReqStatus.APPROVED, 'Test Category Completeness', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1212: ReqMeta('SWR-1212', 1212, ReqStatus.APPROVED, 'Documentation Co-location', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1213: ReqMeta('SWR-1213', 1213, ReqStatus.APPROVED, 'Collapsible Thinking Block', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1214: ReqMeta('SWR-1214', 1214, ReqStatus.APPROVED, 'Thinking Visibility Toggle', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1215: ReqMeta('SWR-1215', 1215, ReqStatus.APPROVED, 'Thinking Animation', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1216: ReqMeta('SWR-1216', 1216, ReqStatus.APPROVED, 'Completion State Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1217: ReqMeta('SWR-1217', 1217, ReqStatus.APPROVED, 'Streaming Markdown Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1218: ReqMeta('SWR-1218', 1218, ReqStatus.APPROVED, 'Real-Time Output Display', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1219: ReqMeta('SWR-1219', 1219, ReqStatus.APPROVED, 'Agent-Level Transcript Isolation', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1220: ReqMeta('SWR-1220', 1220, ReqStatus.APPROVED, 'Orchestrator Visibility', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1221: ReqMeta('SWR-1221', 1221, ReqStatus.APPROVED, 'Hierarchical Transcript Navigation', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1222: ReqMeta('SWR-1222', 1222, ReqStatus.APPROVED, 'Context-Specific Transcript Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1223: ReqMeta('SWR-1223', 1223, ReqStatus.APPROVED, 'UI Responsiveness', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1224: ReqMeta('SWR-1224', 1224, ReqStatus.APPROVED, 'Animation Performance', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1225: ReqMeta('SWR-1225', 1225, ReqStatus.APPROVED, 'Usability of Transcript', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1226: ReqMeta('SWR-1226', 1226, ReqStatus.APPROVED, 'Consistent Markdown Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1227: ReqMeta('SWR-1227', 1227, ReqStatus.APPROVED, 'Scalability of Transcript View', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1228: ReqMeta('SWR-1228', 1228, ReqStatus.APPROVED, 'State Consistency', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1229: ReqMeta('SWR-1229', 1229, ReqStatus.APPROVED, 'Visual Clarity of Thinking State', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1230: ReqMeta('SWR-1230', 1230, ReqStatus.DRAFT, 'Accessibility Compliance', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1231: ReqMeta('SWR-1231', 1231, ReqStatus.APPROVED, 'Maintainability', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1232: ReqMeta('SWR-1232', 1232, ReqStatus.APPROVED, 'Reliability of Streaming', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1233: ReqMeta('SWR-1233', 1233, ReqStatus.APPROVED, 'System shall compute a line-based unified diff from the before and after file contents at the moment each file-write tool commits its change. The diff must be computed in-memory with no additional disk I/O.', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1234: ReqMeta('SWR-1234', 1234, ReqStatus.APPROVED, 'Diff text shall use a line-prefix convention: deletions prefixed with `- ` in red colour, additions prefixed with `+ ` in green colour, context lines prefixed with ` ` in dim grey. Each prefix line shall be preceded by `[line_number]` (numeric only, no file path repetition).', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1235: ReqMeta('SWR-1235', 1235, ReqStatus.APPROVED, 'Each diff block shall begin with a header line identifying the file path, using Rich-styled bold text (e.g., `[bold]@ file/path/to/target.ext @[/bold][green] +8 -3[/green]`).', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1236: ReqMeta('SWR-1236', 1236, ReqStatus.APPROVED, 'Diff data shall be classified as user-only UI data. It must not be stored in the ordinary model-visible transcript stream and must not be represented as ordinary `role/content` transcript text.', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1237: ReqMeta('SWR-1237', 1237, ReqStatus.APPROVED, 'ChatPanel shall render the diff as an expanded colour-coded block directly beneath the triggering observation line. No collapsing, no click-to-toggle interaction - the block is visible by default.', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1238: ReqMeta('SWR-1238', 1238, ReqStatus.APPROVED, 'Maximum rendered diff lines per write shall be 50 (counting all `+` and `-` lines combined). If the diff exceeds 50 lines, render only the first 50 and append `[dim]… +N more lines, diff truncated[/dim]` at the end, where N equals the remaining uncaptured lines.', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1239: ReqMeta('SWR-1239', 1239, ReqStatus.APPROVED, 'The diff rendering shall cover all file-write tool paths uniformly: write_file (engine), haet_edit (HAET engine). (SDK file_editor removed in v0.60.0 — no longer applicable.)', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1240: ReqMeta('SWR-1240', 1240, ReqStatus.APPROVED, 'All write operations - create, edit, overwrite, insert, undo - shall receive diff rendering treatment. Create operations with no before-state shall render with only addition lines and a `[Created]` tag. Undo operations shall render the restoration diff (lines reverted appear as removals).', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1241: ReqMeta('SWR-1241', 1241, ReqStatus.APPROVED, 'Failed writes (errors, validation failures, binary detection) shall carry no diff block. They retain existing error-only rendering in the transcript.', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1242: ReqMeta('SWR-1242', 1242, ReqStatus.APPROVED, 'If session recovery or history replay is supported for this feature, the system shall persist enough diff data to reconstruct the user-visible transcript after reload, but that persisted representation must remain separate from model-visible transcript content and must not be consumed by prompt building, summarization, or compression.', 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1243: ReqMeta('SWR-1243', 1243, ReqStatus.APPROVED, 'Diff data shall be excluded from continuation-context assembly for follow-up tasks, from child-summary generation inputs, from compressor transcript extraction, and from any prompt text sent to an LLM.', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1244: ReqMeta('SWR-1244', 1244, ReqStatus.APPROVED, 'Diff data shall be excluded from token estimation, token-usage displays, context-threshold warnings, compression-trigger calculations, and any other context-size heuristics shown to the user or used by the runtime.', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1245: ReqMeta('SWR-1245', 1245, ReqStatus.APPROVED, "The presence or absence of the diff-rendering feature shall not change the model's effective conversational context for the same run. Enabling this feature is a visibility enhancement only, not a prompt-content change.", 'docs/requirements/1200-tui-transcript.md', False, False, 'a0d04b99c561d5f8', 'product', ()),
-    1246: ReqMeta('SWR-1246', 1246, ReqStatus.APPROVED, 'Focused agent identity in transcript top bar', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1247: ReqMeta('SWR-1247', 1247, ReqStatus.APPROVED, 'Arrow-key navigation updates header immediately', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1248: ReqMeta('SWR-1248', 1248, ReqStatus.APPROVED, 'Focused agent elapsed runtime display', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1249: ReqMeta('SWR-1249', 1249, ReqStatus.APPROVED, 'State-based color coding', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1250: ReqMeta('SWR-1250', 1250, ReqStatus.APPROVED, 'Empty-focus fallback', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1251: ReqMeta('SWR-1251', 1251, ReqStatus.APPROVED, 'Transcript-only chrome, no prompt contamination', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1252: ReqMeta('SWR-1252', 1252, ReqStatus.APPROVED, 'Unit: focus selection drives header label', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1253: ReqMeta('SWR-1253', 1253, ReqStatus.APPROVED, 'Unit: elapsed formatting for focused running agent', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1254: ReqMeta('SWR-1254', 1254, ReqStatus.APPROVED, 'Unit: elapsed freeze on terminal state', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1255: ReqMeta('SWR-1255', 1255, ReqStatus.APPROVED, 'Unit: color mapping by state', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1256: ReqMeta('SWR-1256', 1256, ReqStatus.APPROVED, 'TUI workflow: arrow-key traversal', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1257: ReqMeta('SWR-1257', 1257, ReqStatus.APPROVED, 'TUI resilience: no focus available', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1258: ReqMeta('SWR-1258', 1258, ReqStatus.APPROVED, 'When no session is active, the info pane must show ALL configured MCP servers from `config.mcp_servers`, regardless of persona', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1259: ReqMeta('SWR-1259', 1259, ReqStatus.APPROVED, 'Stdio MCP servers whose command is not found on PATH must be displayed as unavailable (dimmed) in the info pane', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1260: ReqMeta('SWR-1260', 1260, ReqStatus.APPROVED, 'HTTP/SSE MCP servers must be shown as active in pre-run state (no connection check without a live agent)', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1261: ReqMeta('SWR-1261', 1261, ReqStatus.APPROVED, 'When no session is active, the info pane must show ALL public built-in tools from `ALLOWED_PUBLIC_TOOL_NAMES`, sorted alphabetically', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1262: ReqMeta('SWR-1262', 1262, ReqStatus.APPROVED, 'Token stats, context-window size, and per-agent metrics must be hidden in pre-run state (no meaningful data to display)', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1263: ReqMeta('SWR-1263', 1263, ReqStatus.APPROVED, 'The Warnings section must be hidden in pre-run state when there are no warnings', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1264: ReqMeta('SWR-1264', 1264, ReqStatus.APPROVED, 'The info pane must be populated from config immediately on screen mount, before any user interaction', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1265: ReqMeta('SWR-1265', 1265, ReqStatus.APPROVED, 'Transcript Right-Click Copy', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1266: ReqMeta('SWR-1266', 1266, ReqStatus.APPROVED, 'Clipboard Result Must Be Observable', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1267: ReqMeta('SWR-1267', 1267, ReqStatus.APPROVED, 'Cross-Platform Clipboard Support', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1268: ReqMeta('SWR-1268', 1268, ReqStatus.APPROVED, 'Accurate Failure Feedback', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1269: ReqMeta('SWR-1269', 1269, ReqStatus.APPROVED, 'No Interaction Regression in Transcript Panel', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
-    1270: ReqMeta('SWR-1270', 1270, ReqStatus.APPROVED, 'Auth and Recovery Text Remains Copyable', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1271: ReqMeta('SWR-1271', 1271, ReqStatus.APPROVED, 'In-Memory Event Cap', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1272: ReqMeta('SWR-1272', 1272, ReqStatus.APPROVED, 'Scroll-Up Loading Trigger', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1273: ReqMeta('SWR-1273', 1273, ReqStatus.APPROVED, 'Archive Format', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1274: ReqMeta('SWR-1274', 1274, ReqStatus.APPROVED, 'Disk I/O Off Main Thread', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1279: ReqMeta('SWR-1279', 1279, ReqStatus.APPROVED, 'Virtualized Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1280: ReqMeta('SWR-1280', 1280, ReqStatus.APPROVED, 'Stable Markdown Cache', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1281: ReqMeta('SWR-1281', 1281, ReqStatus.APPROVED, 'Volatile Stream Handling', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1282: ReqMeta('SWR-1282', 1282, ReqStatus.APPROVED, 'Bounded Memory', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1283: ReqMeta('SWR-1283', 1283, ReqStatus.APPROVED, 'Behavior Compatibility', 'docs/requirements/1200-tui-transcript.md', True, True, 'a0d04b99c561d5f8', 'product', ()),
-    1284: ReqMeta('SWR-1284', 1284, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/1200-tui-transcript.md', False, True, 'a0d04b99c561d5f8', 'product', ()),
+    1200: ReqMeta('SWR-1200', 1200, ReqStatus.APPROVED, 'TUI Transcript & Rendering Performance', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1201: ReqMeta('SWR-1201', 1201, ReqStatus.APPROVED, '`tui/AGENTS.md` Documentation Reference', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1202: ReqMeta('SWR-1202', 1202, ReqStatus.APPROVED, 'TUI Testing Standards File Location', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1203: ReqMeta('SWR-1203', 1203, ReqStatus.APPROVED, 'Test Category: Full User Workflow Paths', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1204: ReqMeta('SWR-1204', 1204, ReqStatus.APPROVED, 'Test Category: Alternative Workflow Paths', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1205: ReqMeta('SWR-1205', 1205, ReqStatus.APPROVED, 'Test Category: Random Interaction Tests', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1206: ReqMeta('SWR-1206', 1206, ReqStatus.APPROVED, 'Test-First Approach', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1207: ReqMeta('SWR-1207', 1207, ReqStatus.APPROVED, 'Test Coverage Update on New Workflow Paths', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1208: ReqMeta('SWR-1208', 1208, ReqStatus.APPROVED, 'Test Framework', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1209: ReqMeta('SWR-1209', 1209, ReqStatus.APPROVED, 'Snapshot Testing for Visual Regressions', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1210: ReqMeta('SWR-1210', 1210, ReqStatus.APPROVED, 'Async Timing Safety', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1211: ReqMeta('SWR-1211', 1211, ReqStatus.APPROVED, 'Test Category Completeness', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1212: ReqMeta('SWR-1212', 1212, ReqStatus.APPROVED, 'Documentation Co-location', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1213: ReqMeta('SWR-1213', 1213, ReqStatus.APPROVED, 'Collapsible Thinking Block', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1214: ReqMeta('SWR-1214', 1214, ReqStatus.APPROVED, 'Thinking Visibility Toggle', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1215: ReqMeta('SWR-1215', 1215, ReqStatus.APPROVED, 'Thinking Animation', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1216: ReqMeta('SWR-1216', 1216, ReqStatus.APPROVED, 'Completion State Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1217: ReqMeta('SWR-1217', 1217, ReqStatus.APPROVED, 'Streaming Markdown Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1218: ReqMeta('SWR-1218', 1218, ReqStatus.APPROVED, 'Real-Time Output Display', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1219: ReqMeta('SWR-1219', 1219, ReqStatus.APPROVED, 'Agent-Level Transcript Isolation', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1220: ReqMeta('SWR-1220', 1220, ReqStatus.APPROVED, 'Orchestrator Visibility', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1221: ReqMeta('SWR-1221', 1221, ReqStatus.APPROVED, 'Hierarchical Transcript Navigation', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1222: ReqMeta('SWR-1222', 1222, ReqStatus.APPROVED, 'Context-Specific Transcript Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1223: ReqMeta('SWR-1223', 1223, ReqStatus.APPROVED, 'UI Responsiveness', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1224: ReqMeta('SWR-1224', 1224, ReqStatus.APPROVED, 'Animation Performance', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1225: ReqMeta('SWR-1225', 1225, ReqStatus.APPROVED, 'Usability of Transcript', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1226: ReqMeta('SWR-1226', 1226, ReqStatus.APPROVED, 'Consistent Markdown Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1227: ReqMeta('SWR-1227', 1227, ReqStatus.APPROVED, 'Scalability of Transcript View', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1228: ReqMeta('SWR-1228', 1228, ReqStatus.APPROVED, 'State Consistency', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1229: ReqMeta('SWR-1229', 1229, ReqStatus.APPROVED, 'Visual Clarity of Thinking State', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1230: ReqMeta('SWR-1230', 1230, ReqStatus.DRAFT, 'Accessibility Compliance', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1231: ReqMeta('SWR-1231', 1231, ReqStatus.APPROVED, 'Maintainability', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1232: ReqMeta('SWR-1232', 1232, ReqStatus.APPROVED, 'Reliability of Streaming', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1233: ReqMeta('SWR-1233', 1233, ReqStatus.APPROVED, 'System shall compute a line-based unified diff from the before and after file contents at the moment each file-write tool commits its change. The diff must be computed in-memory with no additional disk I/O.', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1234: ReqMeta('SWR-1234', 1234, ReqStatus.APPROVED, 'Diff text shall use a line-prefix convention: deletions prefixed with `- ` in red colour, additions prefixed with `+ ` in green colour, context lines prefixed with ` ` in dim grey. Each prefix line shall be preceded by `[line_number]` (numeric only, no file path repetition).', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1235: ReqMeta('SWR-1235', 1235, ReqStatus.APPROVED, 'Each diff block shall begin with a header line identifying the file path, using Rich-styled bold text (e.g., `[bold]@ file/path/to/target.ext @[/bold][green] +8 -3[/green]`).', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1236: ReqMeta('SWR-1236', 1236, ReqStatus.APPROVED, 'Diff data shall be classified as user-only UI data. It must not be stored in the ordinary model-visible transcript stream and must not be represented as ordinary `role/content` transcript text.', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1237: ReqMeta('SWR-1237', 1237, ReqStatus.APPROVED, 'ChatPanel shall render the diff as an expanded colour-coded block directly beneath the triggering observation line. No collapsing, no click-to-toggle interaction - the block is visible by default.', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1238: ReqMeta('SWR-1238', 1238, ReqStatus.APPROVED, 'Maximum rendered diff lines per write shall be 50 (counting all `+` and `-` lines combined). If the diff exceeds 50 lines, render only the first 50 and append `[dim]… +N more lines, diff truncated[/dim]` at the end, where N equals the remaining uncaptured lines.', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1239: ReqMeta('SWR-1239', 1239, ReqStatus.APPROVED, 'The diff rendering shall cover all file-write tool paths uniformly: write_file (engine), haet_edit (HAET engine). (SDK file_editor removed in v0.60.0 — no longer applicable.)', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1240: ReqMeta('SWR-1240', 1240, ReqStatus.APPROVED, 'All write operations - create, edit, overwrite, insert, undo - shall receive diff rendering treatment. Create operations with no before-state shall render with only addition lines and a `[Created]` tag. Undo operations shall render the restoration diff (lines reverted appear as removals).', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1241: ReqMeta('SWR-1241', 1241, ReqStatus.APPROVED, 'Failed writes (errors, validation failures, binary detection) shall carry no diff block. They retain existing error-only rendering in the transcript.', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1242: ReqMeta('SWR-1242', 1242, ReqStatus.APPROVED, 'If session recovery or history replay is supported for this feature, the system shall persist enough diff data to reconstruct the user-visible transcript after reload, but that persisted representation must remain separate from model-visible transcript content and must not be consumed by prompt building, summarization, or compression.', 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1243: ReqMeta('SWR-1243', 1243, ReqStatus.APPROVED, 'Diff data shall be excluded from continuation-context assembly for follow-up tasks, from child-summary generation inputs, from compressor transcript extraction, and from any prompt text sent to an LLM.', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1244: ReqMeta('SWR-1244', 1244, ReqStatus.APPROVED, 'Diff data shall be excluded from token estimation, token-usage displays, context-threshold warnings, compression-trigger calculations, and any other context-size heuristics shown to the user or used by the runtime.', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1245: ReqMeta('SWR-1245', 1245, ReqStatus.APPROVED, "The presence or absence of the diff-rendering feature shall not change the model's effective conversational context for the same run. Enabling this feature is a visibility enhancement only, not a prompt-content change.", 'docs/requirements/1200-tui-transcript.md', False, False, '4a093c949f391144', 'product', ()),
+    1246: ReqMeta('SWR-1246', 1246, ReqStatus.APPROVED, 'Focused agent identity in transcript top bar', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1247: ReqMeta('SWR-1247', 1247, ReqStatus.APPROVED, 'Arrow-key navigation updates header immediately', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1248: ReqMeta('SWR-1248', 1248, ReqStatus.APPROVED, 'Focused agent elapsed runtime display', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1249: ReqMeta('SWR-1249', 1249, ReqStatus.APPROVED, 'State-based color coding', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1250: ReqMeta('SWR-1250', 1250, ReqStatus.APPROVED, 'Empty-focus fallback', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1251: ReqMeta('SWR-1251', 1251, ReqStatus.APPROVED, 'Transcript-only chrome, no prompt contamination', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1258: ReqMeta('SWR-1258', 1258, ReqStatus.APPROVED, 'When no session is active, the info pane must show ALL configured MCP servers from `config.mcp_servers`, regardless of persona', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1259: ReqMeta('SWR-1259', 1259, ReqStatus.APPROVED, 'Stdio MCP servers whose command is not found on PATH must be displayed as unavailable (dimmed) in the info pane', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1260: ReqMeta('SWR-1260', 1260, ReqStatus.APPROVED, 'HTTP/SSE MCP servers must be shown as active in pre-run state (no connection check without a live agent)', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1261: ReqMeta('SWR-1261', 1261, ReqStatus.APPROVED, 'When no session is active, the info pane must show ALL public built-in tools from `ALLOWED_PUBLIC_TOOL_NAMES`, sorted alphabetically', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1262: ReqMeta('SWR-1262', 1262, ReqStatus.APPROVED, 'Token stats, context-window size, and per-agent metrics must be hidden in pre-run state (no meaningful data to display)', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1263: ReqMeta('SWR-1263', 1263, ReqStatus.APPROVED, 'The Warnings section must be hidden in pre-run state when there are no warnings', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1264: ReqMeta('SWR-1264', 1264, ReqStatus.APPROVED, 'The info pane must be populated from config immediately on screen mount, before any user interaction', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1265: ReqMeta('SWR-1265', 1265, ReqStatus.APPROVED, 'Transcript Right-Click Copy', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1266: ReqMeta('SWR-1266', 1266, ReqStatus.APPROVED, 'Clipboard Result Must Be Observable', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1267: ReqMeta('SWR-1267', 1267, ReqStatus.APPROVED, 'Cross-Platform Clipboard Support', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1268: ReqMeta('SWR-1268', 1268, ReqStatus.APPROVED, 'Accurate Failure Feedback', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1269: ReqMeta('SWR-1269', 1269, ReqStatus.APPROVED, 'No Interaction Regression in Transcript Panel', 'docs/requirements/1200-tui-transcript.md', False, True, '4a093c949f391144', 'product', ()),
+    1270: ReqMeta('SWR-1270', 1270, ReqStatus.APPROVED, 'Auth and Recovery Text Remains Copyable', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1271: ReqMeta('SWR-1271', 1271, ReqStatus.APPROVED, 'In-Memory Event Cap', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1272: ReqMeta('SWR-1272', 1272, ReqStatus.APPROVED, 'Scroll-Up Loading Trigger', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1273: ReqMeta('SWR-1273', 1273, ReqStatus.APPROVED, 'Archive Format', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1274: ReqMeta('SWR-1274', 1274, ReqStatus.APPROVED, 'Disk I/O Off Main Thread', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1279: ReqMeta('SWR-1279', 1279, ReqStatus.APPROVED, 'Virtualized Rendering', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1280: ReqMeta('SWR-1280', 1280, ReqStatus.APPROVED, 'Stable Markdown Cache', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1281: ReqMeta('SWR-1281', 1281, ReqStatus.APPROVED, 'Volatile Stream Handling', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1282: ReqMeta('SWR-1282', 1282, ReqStatus.APPROVED, 'Bounded Memory', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
+    1283: ReqMeta('SWR-1283', 1283, ReqStatus.APPROVED, 'Behavior Compatibility', 'docs/requirements/1200-tui-transcript.md', True, True, '4a093c949f391144', 'product', ()),
     1285: ReqMeta('SWR-1285', 1285, ReqStatus.APPROVED, 'Deterministic lorem and mock-LLM test/demo data generators', 'docs/requirements/1200-tui-transcript/SWR-1285-lorem-test-demo-generators.md', True, True, '912c12518858d709', 'technical', (1203,)),
-    1300: ReqMeta('SWR-1300', 1300, ReqStatus.APPROVED, 'Runtime Control & Responsiveness', 'docs/requirements/1300-runtime-control.md', False, False, 'b31b2ec1c81eb5cc', 'product', ()),
-    1301: ReqMeta('SWR-1301', 1301, ReqStatus.APPROVED, 'Graceful First Interrupt', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1302: ReqMeta('SWR-1302', 1302, ReqStatus.APPROVED, 'Forceful Second Interrupt', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1303: ReqMeta('SWR-1303', 1303, ReqStatus.APPROVED, 'Stop Active Agents', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1304: ReqMeta('SWR-1304', 1304, ReqStatus.APPROVED, 'Background Mode Support', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1305: ReqMeta('SWR-1305', 1305, ReqStatus.APPROVED, 'TUI Support', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1306: ReqMeta('SWR-1306', 1306, ReqStatus.APPROVED, 'Session Persistence', 'docs/requirements/1300-runtime-control.md', False, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1307: ReqMeta('SWR-1307', 1307, ReqStatus.APPROVED, 'No New Dependencies', 'docs/requirements/1300-runtime-control.md', False, False, 'b31b2ec1c81eb5cc', 'product', ()),
-    1308: ReqMeta('SWR-1308', 1308, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/1300-runtime-control.md', False, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1309: ReqMeta('SWR-1309', 1309, ReqStatus.APPROVED, 'Unified Interactive Quit Path', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1310: ReqMeta('SWR-1310', 1310, ReqStatus.APPROVED, 'Visible Shutdown Progress', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1311: ReqMeta('SWR-1311', 1311, ReqStatus.APPROVED, 'Deferred Exit After Run Teardown', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1312: ReqMeta('SWR-1312', 1312, ReqStatus.APPROVED, 'Automatic Escalation', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1313: ReqMeta('SWR-1313', 1313, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/1300-runtime-control.md', False, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1314: ReqMeta('SWR-1314', 1314, ReqStatus.APPROVED, 'Reuse Existing Runtime Controls', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1315: ReqMeta('SWR-1315', 1315, ReqStatus.APPROVED, 'Model calls must preserve only the current leading system prompt and remove stale system messages from persisted history.', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1316: ReqMeta('SWR-1316', 1316, ReqStatus.APPROVED, 'Model calls must remove historical rendered tool-description payloads from replayed history without dropping normal user, assistant, or tool observations.', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1317: ReqMeta('SWR-1317', 1317, ReqStatus.APPROVED, 'Persona prompt rendering must use the same filtered tool set as agent construction.', 'docs/requirements/1300-runtime-control.md', False, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1318: ReqMeta('SWR-1318', 1318, ReqStatus.APPROVED, 'Artifact auto-context must be deterministic and prioritize relevant, recent, failed, or diagnostic evidence.', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1319: ReqMeta('SWR-1319', 1319, ReqStatus.APPROVED, 'Suspicious success reports must be downgraded when they contain errors, failed tests, or blocking follow-up actions.', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1320: ReqMeta('SWR-1320', 1320, ReqStatus.APPROVED, 'Session evidence must expose model-input sanitization, context selection, and report-validation records.', 'docs/requirements/1300-runtime-control.md', True, True, 'b31b2ec1c81eb5cc', 'product', ()),
-    1321: ReqMeta('SWR-1321', 1321, ReqStatus.APPROVED, 'Runtime hardening changes must include regression coverage.', 'docs/requirements/1300-runtime-control.md', False, True, 'b31b2ec1c81eb5cc', 'product', ()),
+    1300: ReqMeta('SWR-1300', 1300, ReqStatus.APPROVED, 'Runtime Control & Responsiveness', 'docs/requirements/1300-runtime-control.md', False, False, 'a1ba4b97772f55f6', 'product', ()),
+    1301: ReqMeta('SWR-1301', 1301, ReqStatus.APPROVED, 'Graceful First Interrupt', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1302: ReqMeta('SWR-1302', 1302, ReqStatus.APPROVED, 'Forceful Second Interrupt', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1303: ReqMeta('SWR-1303', 1303, ReqStatus.APPROVED, 'Stop Active Agents', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1304: ReqMeta('SWR-1304', 1304, ReqStatus.APPROVED, 'Background Mode Support', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1305: ReqMeta('SWR-1305', 1305, ReqStatus.APPROVED, 'TUI Support', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1306: ReqMeta('SWR-1306', 1306, ReqStatus.APPROVED, 'Session Persistence', 'docs/requirements/1300-runtime-control.md', False, True, 'a1ba4b97772f55f6', 'product', ()),
+    1307: ReqMeta('SWR-1307', 1307, ReqStatus.APPROVED, 'No New Dependencies', 'docs/requirements/1300-runtime-control.md', False, False, 'a1ba4b97772f55f6', 'product', ()),
+    1309: ReqMeta('SWR-1309', 1309, ReqStatus.APPROVED, 'Unified Interactive Quit Path', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1310: ReqMeta('SWR-1310', 1310, ReqStatus.APPROVED, 'Visible Shutdown Progress', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1311: ReqMeta('SWR-1311', 1311, ReqStatus.APPROVED, 'Deferred Exit After Run Teardown', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1312: ReqMeta('SWR-1312', 1312, ReqStatus.APPROVED, 'Automatic Escalation', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1314: ReqMeta('SWR-1314', 1314, ReqStatus.APPROVED, 'Reuse Existing Runtime Controls', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1315: ReqMeta('SWR-1315', 1315, ReqStatus.APPROVED, 'Model calls must preserve only the current leading system prompt and remove stale system messages from persisted history.', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1316: ReqMeta('SWR-1316', 1316, ReqStatus.APPROVED, 'Model calls must remove historical rendered tool-description payloads from replayed history without dropping normal user, assistant, or tool observations.', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1317: ReqMeta('SWR-1317', 1317, ReqStatus.APPROVED, 'Persona prompt rendering must use the same filtered tool set as agent construction.', 'docs/requirements/1300-runtime-control.md', False, True, 'a1ba4b97772f55f6', 'product', ()),
+    1318: ReqMeta('SWR-1318', 1318, ReqStatus.APPROVED, 'Artifact auto-context must be deterministic and prioritize relevant, recent, failed, or diagnostic evidence.', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1319: ReqMeta('SWR-1319', 1319, ReqStatus.APPROVED, 'Suspicious success reports must be downgraded when they contain errors, failed tests, or blocking follow-up actions.', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1320: ReqMeta('SWR-1320', 1320, ReqStatus.APPROVED, 'Session evidence must expose model-input sanitization, context selection, and report-validation records.', 'docs/requirements/1300-runtime-control.md', True, True, 'a1ba4b97772f55f6', 'product', ()),
+    1321: ReqMeta('SWR-1321', 1321, ReqStatus.APPROVED, 'Runtime hardening changes must include regression coverage.', 'docs/requirements/1300-runtime-control.md', False, True, 'a1ba4b97772f55f6', 'product', ()),
     1322: ReqMeta('SWR-1322', 1322, ReqStatus.APPROVED, 'Steering and queued prompt registry and submission API', 'docs/requirements/1300-runtime-control/SWR-1322-steering-queued-prompt-registry.md', True, True, 'c3ca63a61759520c', 'technical', (1300,)),
-    1400: ReqMeta('SWR-1400', 1400, ReqStatus.APPROVED, 'Context Compression & Monitoring', 'docs/requirements/1400-context-compression.md', False, False, '3a7fd40986315b97', 'product', ()),
-    1401: ReqMeta('SWR-1401', 1401, ReqStatus.APPROVED, 'Context Compression: Automatic Trigger', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1402: ReqMeta('SWR-1402', 1402, ReqStatus.APPROVED, 'Context Compression: Default Threshold', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1403: ReqMeta('SWR-1403', 1403, ReqStatus.APPROVED, 'Context Compression: Per-Model Threshold Override', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1404: ReqMeta('SWR-1404', 1404, ReqStatus.APPROVED, 'Context Compression: Auto-Derive Threshold From Model Capacity', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1405: ReqMeta('SWR-1405', 1405, ReqStatus.APPROVED, 'Context Compression: Compressor Agent Definition', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1406: ReqMeta('SWR-1406', 1406, ReqStatus.APPROVED, 'Context Compression: Compressor Model Configuration', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1407: ReqMeta('SWR-1407', 1407, ReqStatus.APPROVED, 'Context Compression: Compression Output Size', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1408: ReqMeta('SWR-1408', 1408, ReqStatus.APPROVED, 'Context Compression: Preserved Content - System Prompt', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1409: ReqMeta('SWR-1409', 1409, ReqStatus.APPROVED, 'Context Compression: Preserved Content - Tool Definitions', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1410: ReqMeta('SWR-1410', 1410, ReqStatus.APPROVED, 'Context Compression: Preserved Content - User Request', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1411: ReqMeta('SWR-1411', 1411, ReqStatus.APPROVED, 'Context Compression: Compressed Content Scope', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1412: ReqMeta('SWR-1412', 1412, ReqStatus.APPROVED, 'Context Compression: Context Reconstruction', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1413: ReqMeta('SWR-1413', 1413, ReqStatus.APPROVED, 'Context Compression: Preserved Content - Todos', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1414: ReqMeta('SWR-1414', 1414, ReqStatus.APPROVED, 'Agent Monitor: Sub-Agent Status List', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1415: ReqMeta('SWR-1415', 1415, ReqStatus.APPROVED, 'Agent Monitor: Arrow-Key Tree Navigation - Descend', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1416: ReqMeta('SWR-1416', 1416, ReqStatus.APPROVED, 'Agent Monitor: Arrow-Key Tree Navigation - Sibling Traversal', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1417: ReqMeta('SWR-1417', 1417, ReqStatus.APPROVED, 'Agent Monitor: Arrow-Key Tree Navigation - Ascend', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1418: ReqMeta('SWR-1418', 1418, ReqStatus.APPROVED, 'Agent Monitor: Focused Agent Context Display', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1419: ReqMeta('SWR-1419', 1419, ReqStatus.APPROVED, 'Right Panel: Token Usage Estimate', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1420: ReqMeta('SWR-1420', 1420, ReqStatus.APPROVED, 'Right Panel: Active MCP Servers', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1421: ReqMeta('SWR-1421', 1421, ReqStatus.APPROVED, 'Right Panel: Active Tools', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1422: ReqMeta('SWR-1422', 1422, ReqStatus.APPROVED, 'Right Panel: Warnings and Problems', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1423: ReqMeta('SWR-1423', 1423, ReqStatus.APPROVED, 'Right Panel: Current Workspace', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1424: ReqMeta('SWR-1424', 1424, ReqStatus.APPROVED, 'Right Panel: Active Model', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1425: ReqMeta('SWR-1425', 1425, ReqStatus.APPROVED, 'Right Panel: Open Todos', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1426: ReqMeta('SWR-1426', 1426, ReqStatus.APPROVED, 'Chat View: Mouse-Wheel Scroll Up', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1427: ReqMeta('SWR-1427', 1427, ReqStatus.APPROVED, 'Chat View: Auto-Scroll on New Messages', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1428: ReqMeta('SWR-1428', 1428, ReqStatus.APPROVED, 'Header: Current Version Display', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1429: ReqMeta('SWR-1429', 1429, ReqStatus.APPROVED, 'Panel Scrollability', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1430: ReqMeta('SWR-1430', 1430, ReqStatus.APPROVED, 'Context Compression: Latency Transparency', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1431: ReqMeta('SWR-1431', 1431, ReqStatus.APPROVED, 'Right Panel: Render Performance', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1432: ReqMeta('SWR-1432', 1432, ReqStatus.APPROVED, 'Context Compression: No Loss of Request', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1433: ReqMeta('SWR-1433', 1433, ReqStatus.APPROVED, 'Arrow-Key Navigation: No Interference with Text Input', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1434: ReqMeta('SWR-1434', 1434, ReqStatus.APPROVED, 'The TUI must provide a user-facing slider that lets the user choose the context compression trigger as a percentage value.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1435: ReqMeta('SWR-1435', 1435, ReqStatus.APPROVED, 'The slider-controlled percentage must be a single global setting that applies across all models rather than a per-model setting.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1436: ReqMeta('SWR-1436', 1436, ReqStatus.APPROVED, 'The selected global percentage must be the primary runtime rule for determining the compression trigger during interactive use, taking precedence over configuration-defined token thresholds and internal auto-threshold ratios.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1437: ReqMeta('SWR-1437', 1437, ReqStatus.APPROVED, 'When the active model exposes a known context capacity, the effective compression threshold in tokens must be computed as `floor(min(model_context_capacity, compressor.default_threshold) * selected_percentage / 100)`, unless the model defines an explicit `context_compression_threshold` capacity cap. This prevents very-large advertised context windows from delaying compression until generation performance is already degraded.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1438: ReqMeta('SWR-1438', 1438, ReqStatus.APPROVED, 'When the active model does not expose a known context capacity, the effective compression threshold in tokens must be computed as `floor(120000 * selected_percentage / 100)`.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1439: ReqMeta('SWR-1439', 1439, ReqStatus.APPROVED, 'The selected percentage must persist as a global user setting and must be restored after application restart.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1440: ReqMeta('SWR-1440', 1440, ReqStatus.APPROVED, "Changing the active model must keep the same selected global percentage and recompute the effective token threshold against the newly active model's bounded compression capacity, or against the `120000`-token fallback when that capacity is unknown.", 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1441: ReqMeta('SWR-1441', 1441, ReqStatus.APPROVED, 'The user-facing compression control must present the percentage-based setting as the operative rule and must not require the user to edit token thresholds in configuration files to change compression timing.', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1442: ReqMeta('SWR-1442', 1442, ReqStatus.APPROVED, 'Command registration', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1443: ReqMeta('SWR-1443', 1443, ReqStatus.APPROVED, 'Message dispatch', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1444: ReqMeta('SWR-1444', 1444, ReqStatus.APPROVED, 'Handler in RotarisTuiApp', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1445: ReqMeta('SWR-1445', 1445, ReqStatus.APPROVED, 'Threshold bypass', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1446: ReqMeta('SWR-1446', 1446, ReqStatus.APPROVED, 'No configuration changes', 'docs/requirements/1400-context-compression.md', False, False, '3a7fd40986315b97', 'product', ()),
-    1447: ReqMeta('SWR-1447', 1447, ReqStatus.APPROVED, 'User feedback', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1448: ReqMeta('SWR-1448', 1448, ReqStatus.APPROVED, 'Command visibility', 'docs/requirements/1400-context-compression.md', True, True, '3a7fd40986315b97', 'product', ()),
-    1449: ReqMeta('SWR-1449', 1449, ReqStatus.APPROVED, 'Unit: command registered', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1450: ReqMeta('SWR-1450', 1450, ReqStatus.APPROVED, 'Unit: ForceCompress posted', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1451: ReqMeta('SWR-1451', 1451, ReqStatus.APPROVED, 'Unit: threshold bypass', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1452: ReqMeta('SWR-1452', 1452, ReqStatus.APPROVED, 'Unit: no agents running', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1453: ReqMeta('SWR-1453', 1453, ReqStatus.APPROVED, 'Integration: multiple agents compressed', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1454: ReqMeta('SWR-1454', 1454, ReqStatus.APPROVED, 'TUI workflow', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1455: ReqMeta('SWR-1455', 1455, ReqStatus.APPROVED, 'TUI no-crash (random interaction)', 'docs/requirements/1400-context-compression.md', False, True, '3a7fd40986315b97', 'product', ()),
-    1500: ReqMeta('SWR-1500', 1500, ReqStatus.APPROVED, 'Session Persistence & Diagnostics', 'docs/requirements/1500-sessions-diagnostics.md', False, False, '719b9667853b931c', 'product', ()),
-    1501: ReqMeta('SWR-1501', 1501, ReqStatus.APPROVED, 'Background Output Detail Level Selector', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1502: ReqMeta('SWR-1502', 1502, ReqStatus.APPROVED, 'Compact Report Retrieval Preserved', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1503: ReqMeta('SWR-1503', 1503, ReqStatus.APPROVED, 'Verbatim Retrieval Mode', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1504: ReqMeta('SWR-1504', 1504, ReqStatus.APPROVED, 'Deterministic Evidence Rendering', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1505: ReqMeta('SWR-1505', 1505, ReqStatus.APPROVED, 'Structured Report Evidence Payload', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1506: ReqMeta('SWR-1506', 1506, ReqStatus.APPROVED, 'Guidance For Retrieval Modes', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1507: ReqMeta('SWR-1507', 1507, ReqStatus.APPROVED, 'Backward Compatibility', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1508: ReqMeta('SWR-1508', 1508, ReqStatus.APPROVED, 'Single Summary Pass', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1509: ReqMeta('SWR-1509', 1509, ReqStatus.APPROVED, 'Evidence Fidelity Bound', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1510: ReqMeta('SWR-1510', 1510, ReqStatus.APPROVED, 'Regression Test Coverage', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1511: ReqMeta('SWR-1511', 1511, ReqStatus.APPROVED, 'Compact Top-Level Task Display Name', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1512: ReqMeta('SWR-1512', 1512, ReqStatus.APPROVED, 'Preserve Full Execution Payload', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1513: ReqMeta('SWR-1513', 1513, ReqStatus.APPROVED, 'Compact Child Canonical Names', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1514: ReqMeta('SWR-1514', 1514, ReqStatus.APPROVED, 'Deterministic Long-Name Deduplication', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1515: ReqMeta('SWR-1515', 1515, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1517: ReqMeta('SWR-1517', 1517, ReqStatus.APPROVED, 'Artifact record schema', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1518: ReqMeta('SWR-1518', 1518, ReqStatus.APPROVED, 'Session artifact store', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1519: ReqMeta('SWR-1519', 1519, ReqStatus.APPROVED, 'Store lifetime', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1520: ReqMeta('SWR-1520', 1520, ReqStatus.APPROVED, 'Auto-record on terminal', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1521: ReqMeta('SWR-1521', 1521, ReqStatus.APPROVED, 'Resume hydration', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1522: ReqMeta('SWR-1522', 1522, ReqStatus.APPROVED, '`artifact_read` tool', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1523: ReqMeta('SWR-1523', 1523, ReqStatus.APPROVED, '`artifact_list` tool', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1524: ReqMeta('SWR-1524', 1524, ReqStatus.APPROVED, '`artifact_write` tool', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1525: ReqMeta('SWR-1525', 1525, ReqStatus.APPROVED, 'Delegate `attach_artifacts` field', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1526: ReqMeta('SWR-1526', 1526, ReqStatus.APPROVED, 'Hybrid auto-injection - baseline index', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1527: ReqMeta('SWR-1527', 1527, ReqStatus.APPROVED, 'Hybrid auto-injection - full body', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1528: ReqMeta('SWR-1528', 1528, ReqStatus.APPROVED, 'Opt-out flags', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1529: ReqMeta('SWR-1529', 1529, ReqStatus.APPROVED, 'Summary-agent tags', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1530: ReqMeta('SWR-1530', 1530, ReqStatus.APPROVED, 'Orchestrator prompt update', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1531: ReqMeta('SWR-1531', 1531, ReqStatus.APPROVED, 'Planner/architect prompt update', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1532: ReqMeta('SWR-1532', 1532, ReqStatus.APPROVED, 'Backward compatibility', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1533: ReqMeta('SWR-1533', 1533, ReqStatus.APPROVED, 'Atomic writes', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1534: ReqMeta('SWR-1534', 1534, ReqStatus.APPROVED, 'Token budget', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1535: ReqMeta('SWR-1535', 1535, ReqStatus.APPROVED, 'Lazy imports', 'docs/requirements/1500-sessions-diagnostics.md', False, False, '719b9667853b931c', 'product', ()),
-    1536: ReqMeta('SWR-1536', 1536, ReqStatus.APPROVED, 'Test coverage', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1537: ReqMeta('SWR-1537', 1537, ReqStatus.APPROVED, 'Track artifact relationships per child', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1538: ReqMeta('SWR-1538', 1538, ReqStatus.APPROVED, 'Editable artifact body persistence', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1539: ReqMeta('SWR-1539', 1539, ReqStatus.APPROVED, 'Info-pane artifact list', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1540: ReqMeta('SWR-1540', 1540, ReqStatus.APPROVED, 'Artifact stepping keymap', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
-    1541: ReqMeta('SWR-1541', 1541, ReqStatus.APPROVED, 'Editable transcript replacement', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1542: ReqMeta('SWR-1542', 1542, ReqStatus.APPROVED, 'Save and dirty-exit behavior', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1543: ReqMeta('SWR-1543', 1543, ReqStatus.APPROVED, 'Editing shortcuts and mouse cursor placement', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1544: ReqMeta('SWR-1544', 1544, ReqStatus.DRAFT, 'Regression coverage', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1545: ReqMeta('SWR-1545', 1545, ReqStatus.APPROVED, 'Session persistence must write split state files for resume state, run config, and UI transcript.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1546: ReqMeta('SWR-1546', 1546, ReqStatus.APPROVED, 'Session directories must include high-signal inspection files: `summary.md`, `timeline.jsonl`, `metrics.json`, and `issues.json`.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1547: ReqMeta('SWR-1547', 1547, ReqStatus.APPROVED, 'Raw debug logs and OpenHands conversation logs must live under `evidence/`, with `run.log` kept as a compatibility pointer.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1548: ReqMeta('SWR-1548', 1548, ReqStatus.APPROVED, 'Tool timing records must be stored separately from the compact timeline.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1549: ReqMeta('SWR-1549', 1549, ReqStatus.APPROVED, 'Artifact indexes must expose creator, consumer, timeline, conversation, and importance metadata.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1550: ReqMeta('SWR-1550', 1550, ReqStatus.APPROVED, 'Legacy `snapshot.json` sessions must remain loadable.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '719b9667853b931c', 'product', ()),
-    1551: ReqMeta('SWR-1551', 1551, ReqStatus.APPROVED, 'New diagnostics behavior must have unit and integration coverage for split state, JSONL timeline records, tool-call evidence, issues, and background sessions.', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '719b9667853b931c', 'product', ()),
+    1400: ReqMeta('SWR-1400', 1400, ReqStatus.APPROVED, 'Context Compression & Monitoring', 'docs/requirements/1400-context-compression.md', False, False, 'f3d9004e2123f1ee', 'product', ()),
+    1401: ReqMeta('SWR-1401', 1401, ReqStatus.APPROVED, 'Context Compression: Automatic Trigger', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1402: ReqMeta('SWR-1402', 1402, ReqStatus.APPROVED, 'Context Compression: Default Threshold', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1403: ReqMeta('SWR-1403', 1403, ReqStatus.APPROVED, 'Context Compression: Per-Model Threshold Override', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1404: ReqMeta('SWR-1404', 1404, ReqStatus.APPROVED, 'Context Compression: Auto-Derive Threshold From Model Capacity', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1405: ReqMeta('SWR-1405', 1405, ReqStatus.APPROVED, 'Context Compression: Compressor Agent Definition', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1406: ReqMeta('SWR-1406', 1406, ReqStatus.APPROVED, 'Context Compression: Compressor Model Configuration', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1407: ReqMeta('SWR-1407', 1407, ReqStatus.APPROVED, 'Context Compression: Compression Output Size', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1408: ReqMeta('SWR-1408', 1408, ReqStatus.APPROVED, 'Context Compression: Preserved Content - System Prompt', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1409: ReqMeta('SWR-1409', 1409, ReqStatus.APPROVED, 'Context Compression: Preserved Content - Tool Definitions', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1410: ReqMeta('SWR-1410', 1410, ReqStatus.APPROVED, 'Context Compression: Preserved Content - User Request', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1411: ReqMeta('SWR-1411', 1411, ReqStatus.APPROVED, 'Context Compression: Compressed Content Scope', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1412: ReqMeta('SWR-1412', 1412, ReqStatus.APPROVED, 'Context Compression: Context Reconstruction', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1413: ReqMeta('SWR-1413', 1413, ReqStatus.APPROVED, 'Context Compression: Preserved Content - Todos', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1414: ReqMeta('SWR-1414', 1414, ReqStatus.APPROVED, 'Agent Monitor: Sub-Agent Status List', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1415: ReqMeta('SWR-1415', 1415, ReqStatus.APPROVED, 'Agent Monitor: Arrow-Key Tree Navigation - Descend', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1416: ReqMeta('SWR-1416', 1416, ReqStatus.APPROVED, 'Agent Monitor: Arrow-Key Tree Navigation - Sibling Traversal', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1417: ReqMeta('SWR-1417', 1417, ReqStatus.APPROVED, 'Agent Monitor: Arrow-Key Tree Navigation - Ascend', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1418: ReqMeta('SWR-1418', 1418, ReqStatus.APPROVED, 'Agent Monitor: Focused Agent Context Display', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1419: ReqMeta('SWR-1419', 1419, ReqStatus.APPROVED, 'Right Panel: Token Usage Estimate', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1420: ReqMeta('SWR-1420', 1420, ReqStatus.APPROVED, 'Right Panel: Active MCP Servers', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1421: ReqMeta('SWR-1421', 1421, ReqStatus.APPROVED, 'Right Panel: Active Tools', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1422: ReqMeta('SWR-1422', 1422, ReqStatus.APPROVED, 'Right Panel: Warnings and Problems', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1423: ReqMeta('SWR-1423', 1423, ReqStatus.APPROVED, 'Right Panel: Current Workspace', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1424: ReqMeta('SWR-1424', 1424, ReqStatus.APPROVED, 'Right Panel: Active Model', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1425: ReqMeta('SWR-1425', 1425, ReqStatus.APPROVED, 'Right Panel: Open Todos', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1426: ReqMeta('SWR-1426', 1426, ReqStatus.APPROVED, 'Chat View: Mouse-Wheel Scroll Up', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1427: ReqMeta('SWR-1427', 1427, ReqStatus.APPROVED, 'Chat View: Auto-Scroll on New Messages', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1428: ReqMeta('SWR-1428', 1428, ReqStatus.APPROVED, 'Header: Current Version Display', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1429: ReqMeta('SWR-1429', 1429, ReqStatus.APPROVED, 'Panel Scrollability', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1430: ReqMeta('SWR-1430', 1430, ReqStatus.APPROVED, 'Context Compression: Latency Transparency', 'docs/requirements/1400-context-compression.md', False, True, 'f3d9004e2123f1ee', 'product', ()),
+    1431: ReqMeta('SWR-1431', 1431, ReqStatus.APPROVED, 'Right Panel: Render Performance', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1432: ReqMeta('SWR-1432', 1432, ReqStatus.APPROVED, 'Context Compression: No Loss of Request', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1433: ReqMeta('SWR-1433', 1433, ReqStatus.APPROVED, 'Arrow-Key Navigation: No Interference with Text Input', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1434: ReqMeta('SWR-1434', 1434, ReqStatus.APPROVED, 'The TUI must provide a user-facing slider that lets the user choose the context compression trigger as a percentage value.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1435: ReqMeta('SWR-1435', 1435, ReqStatus.APPROVED, 'The slider-controlled percentage must be a single global setting that applies across all models rather than a per-model setting.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1436: ReqMeta('SWR-1436', 1436, ReqStatus.APPROVED, 'The selected global percentage must be the primary runtime rule for determining the compression trigger during interactive use, taking precedence over configuration-defined token thresholds and internal auto-threshold ratios.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1437: ReqMeta('SWR-1437', 1437, ReqStatus.APPROVED, 'When the active model exposes a known context capacity, the effective compression threshold in tokens must be computed as `floor(min(model_context_capacity, compressor.default_threshold) * selected_percentage / 100)`, unless the model defines an explicit `context_compression_threshold` capacity cap. This prevents very-large advertised context windows from delaying compression until generation performance is already degraded.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1438: ReqMeta('SWR-1438', 1438, ReqStatus.APPROVED, 'When the active model does not expose a known context capacity, the effective compression threshold in tokens must be computed as `floor(120000 * selected_percentage / 100)`.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1439: ReqMeta('SWR-1439', 1439, ReqStatus.APPROVED, 'The selected percentage must persist as a global user setting and must be restored after application restart.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1440: ReqMeta('SWR-1440', 1440, ReqStatus.APPROVED, "Changing the active model must keep the same selected global percentage and recompute the effective token threshold against the newly active model's bounded compression capacity, or against the `120000`-token fallback when that capacity is unknown.", 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1441: ReqMeta('SWR-1441', 1441, ReqStatus.APPROVED, 'The user-facing compression control must present the percentage-based setting as the operative rule and must not require the user to edit token thresholds in configuration files to change compression timing.', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1442: ReqMeta('SWR-1442', 1442, ReqStatus.APPROVED, 'Command registration', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1443: ReqMeta('SWR-1443', 1443, ReqStatus.APPROVED, 'Message dispatch', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1444: ReqMeta('SWR-1444', 1444, ReqStatus.APPROVED, 'Handler in RotarisTuiApp', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1445: ReqMeta('SWR-1445', 1445, ReqStatus.APPROVED, 'Threshold bypass', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1446: ReqMeta('SWR-1446', 1446, ReqStatus.APPROVED, 'No configuration changes', 'docs/requirements/1400-context-compression.md', False, False, 'f3d9004e2123f1ee', 'product', ()),
+    1447: ReqMeta('SWR-1447', 1447, ReqStatus.APPROVED, 'User feedback', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1448: ReqMeta('SWR-1448', 1448, ReqStatus.APPROVED, 'Command visibility', 'docs/requirements/1400-context-compression.md', True, True, 'f3d9004e2123f1ee', 'product', ()),
+    1500: ReqMeta('SWR-1500', 1500, ReqStatus.APPROVED, 'Session Persistence & Diagnostics', 'docs/requirements/1500-sessions-diagnostics.md', False, False, '7471426a8780dbb8', 'product', ()),
+    1501: ReqMeta('SWR-1501', 1501, ReqStatus.APPROVED, 'Background Output Detail Level Selector', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1502: ReqMeta('SWR-1502', 1502, ReqStatus.APPROVED, 'Compact Report Retrieval Preserved', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1503: ReqMeta('SWR-1503', 1503, ReqStatus.APPROVED, 'Verbatim Retrieval Mode', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1504: ReqMeta('SWR-1504', 1504, ReqStatus.APPROVED, 'Deterministic Evidence Rendering', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1505: ReqMeta('SWR-1505', 1505, ReqStatus.APPROVED, 'Structured Report Evidence Payload', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1506: ReqMeta('SWR-1506', 1506, ReqStatus.APPROVED, 'Guidance For Retrieval Modes', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1507: ReqMeta('SWR-1507', 1507, ReqStatus.APPROVED, 'Backward Compatibility', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1508: ReqMeta('SWR-1508', 1508, ReqStatus.APPROVED, 'Single Summary Pass', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1509: ReqMeta('SWR-1509', 1509, ReqStatus.APPROVED, 'Evidence Fidelity Bound', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1511: ReqMeta('SWR-1511', 1511, ReqStatus.APPROVED, 'Compact Top-Level Task Display Name', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1512: ReqMeta('SWR-1512', 1512, ReqStatus.APPROVED, 'Preserve Full Execution Payload', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1513: ReqMeta('SWR-1513', 1513, ReqStatus.APPROVED, 'Compact Child Canonical Names', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1514: ReqMeta('SWR-1514', 1514, ReqStatus.APPROVED, 'Deterministic Long-Name Deduplication', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1517: ReqMeta('SWR-1517', 1517, ReqStatus.APPROVED, 'Artifact record schema', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1518: ReqMeta('SWR-1518', 1518, ReqStatus.APPROVED, 'Session artifact store', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1519: ReqMeta('SWR-1519', 1519, ReqStatus.APPROVED, 'Store lifetime', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1520: ReqMeta('SWR-1520', 1520, ReqStatus.APPROVED, 'Auto-record on terminal', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1521: ReqMeta('SWR-1521', 1521, ReqStatus.APPROVED, 'Resume hydration', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1522: ReqMeta('SWR-1522', 1522, ReqStatus.APPROVED, '`artifact_read` tool', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1523: ReqMeta('SWR-1523', 1523, ReqStatus.APPROVED, '`artifact_list` tool', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1524: ReqMeta('SWR-1524', 1524, ReqStatus.APPROVED, '`artifact_write` tool', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1525: ReqMeta('SWR-1525', 1525, ReqStatus.APPROVED, 'Delegate `attach_artifacts` field', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1526: ReqMeta('SWR-1526', 1526, ReqStatus.APPROVED, 'Hybrid auto-injection - baseline index', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1527: ReqMeta('SWR-1527', 1527, ReqStatus.APPROVED, 'Hybrid auto-injection - full body', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1528: ReqMeta('SWR-1528', 1528, ReqStatus.APPROVED, 'Opt-out flags', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1529: ReqMeta('SWR-1529', 1529, ReqStatus.APPROVED, 'Summary-agent tags', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1530: ReqMeta('SWR-1530', 1530, ReqStatus.APPROVED, 'Orchestrator prompt update', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1531: ReqMeta('SWR-1531', 1531, ReqStatus.APPROVED, 'Planner/architect prompt update', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1532: ReqMeta('SWR-1532', 1532, ReqStatus.APPROVED, 'Backward compatibility', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1533: ReqMeta('SWR-1533', 1533, ReqStatus.APPROVED, 'Atomic writes', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1534: ReqMeta('SWR-1534', 1534, ReqStatus.APPROVED, 'Token budget', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1535: ReqMeta('SWR-1535', 1535, ReqStatus.APPROVED, 'Lazy imports', 'docs/requirements/1500-sessions-diagnostics.md', False, False, '7471426a8780dbb8', 'product', ()),
+    1537: ReqMeta('SWR-1537', 1537, ReqStatus.APPROVED, 'Track artifact relationships per child', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1538: ReqMeta('SWR-1538', 1538, ReqStatus.APPROVED, 'Editable artifact body persistence', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1539: ReqMeta('SWR-1539', 1539, ReqStatus.APPROVED, 'Info-pane artifact list', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1540: ReqMeta('SWR-1540', 1540, ReqStatus.APPROVED, 'Artifact stepping keymap', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
+    1541: ReqMeta('SWR-1541', 1541, ReqStatus.APPROVED, 'Editable transcript replacement', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1542: ReqMeta('SWR-1542', 1542, ReqStatus.APPROVED, 'Save and dirty-exit behavior', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1543: ReqMeta('SWR-1543', 1543, ReqStatus.APPROVED, 'Editing shortcuts and mouse cursor placement', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1544: ReqMeta('SWR-1544', 1544, ReqStatus.DRAFT, 'Regression coverage', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1545: ReqMeta('SWR-1545', 1545, ReqStatus.APPROVED, 'Session persistence must write split state files for resume state, run config, and UI transcript.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1546: ReqMeta('SWR-1546', 1546, ReqStatus.APPROVED, 'Session directories must include high-signal inspection files: `summary.md`, `timeline.jsonl`, `metrics.json`, and `issues.json`.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1547: ReqMeta('SWR-1547', 1547, ReqStatus.APPROVED, 'Raw debug logs and OpenHands conversation logs must live under `evidence/`, with `run.log` kept as a compatibility pointer.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1548: ReqMeta('SWR-1548', 1548, ReqStatus.APPROVED, 'Tool timing records must be stored separately from the compact timeline.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1549: ReqMeta('SWR-1549', 1549, ReqStatus.APPROVED, 'Artifact indexes must expose creator, consumer, timeline, conversation, and importance metadata.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1550: ReqMeta('SWR-1550', 1550, ReqStatus.APPROVED, 'Legacy `snapshot.json` sessions must remain loadable.', 'docs/requirements/1500-sessions-diagnostics.md', True, True, '7471426a8780dbb8', 'product', ()),
+    1551: ReqMeta('SWR-1551', 1551, ReqStatus.APPROVED, 'New diagnostics behavior must have unit and integration coverage for split state, JSONL timeline records, tool-call evidence, issues, and background sessions.', 'docs/requirements/1500-sessions-diagnostics.md', False, True, '7471426a8780dbb8', 'product', ()),
     1552: ReqMeta('SWR-1552', 1552, ReqStatus.DRAFT, 'Session forking', 'docs/requirements/1500-sessions-diagnostics/SWR-1552-session-forking.md', True, True, '4f25a8b5825911bb', 'product', ()),
     1553: ReqMeta('SWR-1553', 1553, ReqStatus.DRAFT, 'Forked sessions work in an isolated working tree', 'docs/requirements/1500-sessions-diagnostics/SWR-1553-fork-git-isolation.md', True, True, '9171f8676f94b755', 'product', ()),
     1554: ReqMeta('SWR-1554', 1554, ReqStatus.DRAFT, 'Session fork entry points', 'docs/requirements/1500-sessions-diagnostics/SWR-1554-fork-entry-points.md', True, True, '35140957d2e79dc0', 'product', ()),
-    1600: ReqMeta('SWR-1600', 1600, ReqStatus.APPROVED, 'Post-Run Improvement Loop', 'docs/requirements/1600-improvement-loop.md', False, False, '081d268d47042b31', 'product', ()),
-    1601: ReqMeta('SWR-1601', 1601, ReqStatus.APPROVED, 'Run-type separation', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1602: ReqMeta('SWR-1602', 1602, ReqStatus.APPROVED, 'Improvement Collector', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1603: ReqMeta('SWR-1603', 1603, ReqStatus.APPROVED, 'Collector ownership boundary', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1604: ReqMeta('SWR-1604', 1604, ReqStatus.APPROVED, 'Improvement proposal artifact', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1605: ReqMeta('SWR-1605', 1605, ReqStatus.APPROVED, 'Proposal categories', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1606: ReqMeta('SWR-1606', 1606, ReqStatus.APPROVED, 'Evidence requirement', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1607: ReqMeta('SWR-1607', 1607, ReqStatus.APPROVED, 'No inline execution', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1608: ReqMeta('SWR-1608', 1608, ReqStatus.APPROVED, 'User approval model', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1609: ReqMeta('SWR-1609', 1609, ReqStatus.APPROVED, 'Improver executor', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1610: ReqMeta('SWR-1610', 1610, ReqStatus.APPROVED, 'Improvement-run scope boundary', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1611: ReqMeta('SWR-1611', 1611, ReqStatus.APPROVED, 'No self-recursive improvement loop', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1612: ReqMeta('SWR-1612', 1612, ReqStatus.APPROVED, 'Non-blocking task completion', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1613: ReqMeta('SWR-1613', 1613, ReqStatus.APPROVED, 'Workspace-memory compatibility', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1614: ReqMeta('SWR-1614', 1614, ReqStatus.APPROVED, 'Persona-specific workspace memory', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1615: ReqMeta('SWR-1615', 1615, ReqStatus.APPROVED, 'Persona-specific automatic injection', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1616: ReqMeta('SWR-1616', 1616, ReqStatus.APPROVED, 'Visible bounded persona-memory storage', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1617: ReqMeta('SWR-1617', 1617, ReqStatus.APPROVED, 'Collector support for persona-memory proposals', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1618: ReqMeta('SWR-1618', 1618, ReqStatus.APPROVED, 'Approval-gated persona-memory mutation', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1619: ReqMeta('SWR-1619', 1619, ReqStatus.APPROVED, 'Persona-memory scope boundary', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1620: ReqMeta('SWR-1620', 1620, ReqStatus.APPROVED, 'Unit: Improvement Collector invoked post-run', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1621: ReqMeta('SWR-1621', 1621, ReqStatus.APPROVED, 'Unit: no Improvement Collector inline task interference', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1622: ReqMeta('SWR-1622', 1622, ReqStatus.APPROVED, 'Unit: artifact validation', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1623: ReqMeta('SWR-1623', 1623, ReqStatus.APPROVED, 'Unit: approval persistence', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1624: ReqMeta('SWR-1624', 1624, ReqStatus.APPROVED, 'Unit: improvement-run gating', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1625: ReqMeta('SWR-1625', 1625, ReqStatus.APPROVED, 'Unit: no recursive chaining', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1626: ReqMeta('SWR-1626', 1626, ReqStatus.APPROVED, 'Integration: end-to-end approval flow', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1627: ReqMeta('SWR-1627', 1627, ReqStatus.APPROVED, 'TUI workflow', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1628: ReqMeta('SWR-1628', 1628, ReqStatus.APPROVED, 'Unit: persona-memory injection isolation', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1629: ReqMeta('SWR-1629', 1629, ReqStatus.APPROVED, 'Unit: persona-memory boundedness and visibility', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1630: ReqMeta('SWR-1630', 1630, ReqStatus.APPROVED, 'Unit: manual persona-memory edit compatibility', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1631: ReqMeta('SWR-1631', 1631, ReqStatus.APPROVED, 'Unit: collector persona-memory proposal validation', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1632: ReqMeta('SWR-1632', 1632, ReqStatus.APPROVED, 'Integration: persona-memory approval flow', 'docs/requirements/1600-improvement-loop.md', False, True, '081d268d47042b31', 'product', ()),
-    1633: ReqMeta('SWR-1633', 1633, ReqStatus.DRAFT, 'Toast on non-empty improvement artifact', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1634: ReqMeta('SWR-1634', 1634, ReqStatus.DRAFT, 'Toast click opens ImprovementProposalsScreen', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1635: ReqMeta('SWR-1635', 1635, ReqStatus.DRAFT, 'No toast for empty or disabled collector', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1636: ReqMeta('SWR-1636', 1636, ReqStatus.DRAFT, 'Command palette fallback preserved', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
-    1637: ReqMeta('SWR-1637', 1637, ReqStatus.DRAFT, 'Start from proposals screen executes improvement run', 'docs/requirements/1600-improvement-loop.md', True, True, '081d268d47042b31', 'product', ()),
+    1600: ReqMeta('SWR-1600', 1600, ReqStatus.APPROVED, 'Post-Run Improvement Loop', 'docs/requirements/1600-improvement-loop.md', False, False, 'bc58a0280e605a34', 'product', ()),
+    1601: ReqMeta('SWR-1601', 1601, ReqStatus.APPROVED, 'Run-type separation', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1602: ReqMeta('SWR-1602', 1602, ReqStatus.APPROVED, 'Improvement Collector', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1603: ReqMeta('SWR-1603', 1603, ReqStatus.APPROVED, 'Collector ownership boundary', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1604: ReqMeta('SWR-1604', 1604, ReqStatus.APPROVED, 'Improvement proposal artifact', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1605: ReqMeta('SWR-1605', 1605, ReqStatus.APPROVED, 'Proposal categories', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1606: ReqMeta('SWR-1606', 1606, ReqStatus.APPROVED, 'Evidence requirement', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1607: ReqMeta('SWR-1607', 1607, ReqStatus.APPROVED, 'No inline execution', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1608: ReqMeta('SWR-1608', 1608, ReqStatus.APPROVED, 'User approval model', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1609: ReqMeta('SWR-1609', 1609, ReqStatus.APPROVED, 'Improver executor', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1610: ReqMeta('SWR-1610', 1610, ReqStatus.APPROVED, 'Improvement-run scope boundary', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1611: ReqMeta('SWR-1611', 1611, ReqStatus.APPROVED, 'No self-recursive improvement loop', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1612: ReqMeta('SWR-1612', 1612, ReqStatus.APPROVED, 'Non-blocking task completion', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1613: ReqMeta('SWR-1613', 1613, ReqStatus.APPROVED, 'Workspace-memory compatibility', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1614: ReqMeta('SWR-1614', 1614, ReqStatus.APPROVED, 'Persona-specific workspace memory', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1615: ReqMeta('SWR-1615', 1615, ReqStatus.APPROVED, 'Persona-specific automatic injection', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1616: ReqMeta('SWR-1616', 1616, ReqStatus.APPROVED, 'Visible bounded persona-memory storage', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1617: ReqMeta('SWR-1617', 1617, ReqStatus.APPROVED, 'Collector support for persona-memory proposals', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1618: ReqMeta('SWR-1618', 1618, ReqStatus.APPROVED, 'Approval-gated persona-memory mutation', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1619: ReqMeta('SWR-1619', 1619, ReqStatus.APPROVED, 'Persona-memory scope boundary', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1633: ReqMeta('SWR-1633', 1633, ReqStatus.DRAFT, 'Toast on non-empty improvement artifact', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1634: ReqMeta('SWR-1634', 1634, ReqStatus.DRAFT, 'Toast click opens ImprovementProposalsScreen', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1635: ReqMeta('SWR-1635', 1635, ReqStatus.DRAFT, 'No toast for empty or disabled collector', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1636: ReqMeta('SWR-1636', 1636, ReqStatus.DRAFT, 'Command palette fallback preserved', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
+    1637: ReqMeta('SWR-1637', 1637, ReqStatus.DRAFT, 'Start from proposals screen executes improvement run', 'docs/requirements/1600-improvement-loop.md', True, True, 'bc58a0280e605a34', 'product', ()),
     1638: ReqMeta('SWR-1638', 1638, ReqStatus.APPROVED, 'Improvement Collector dedicated model slot', 'docs/requirements/1600-improvement-loop/SWR-1638-improvement-collector-model-slot.md', True, True, '9a9de7443a1e6ef9', 'technical', (1602,)),
     1639: ReqMeta('SWR-1639', 1639, ReqStatus.APPROVED, 'Captured post-run improvement lifecycle', 'docs/requirements/1600-improvement-loop/SWR-1639-captured-post-run-improvement-lifecycle.md', True, True, '341f0523ca0b4c17', 'technical', (1612,)),
     1640: ReqMeta('SWR-1640', 1640, ReqStatus.DRAFT, 'Versioned improvement artifact history', 'docs/requirements/1600-improvement-loop/SWR-1640-improvement-artifact-history.md', True, True, '91d0d19042a9401c', 'product', ()),
     1641: ReqMeta('SWR-1641', 1641, ReqStatus.DRAFT, 'Rollback of an applied improvement run', 'docs/requirements/1600-improvement-loop/SWR-1641-improvement-run-rollback.md', True, True, '46d1db6acbd47628', 'product', ()),
     1642: ReqMeta('SWR-1642', 1642, ReqStatus.DRAFT, 'CLI surface for improvement history and rollback', 'docs/requirements/1600-improvement-loop/SWR-1642-improvement-history-cli.md', True, True, 'b2aadbed7d1168b0', 'product', ()),
-    1700: ReqMeta('SWR-1700', 1700, ReqStatus.APPROVED, 'Configuration & MCP', 'docs/requirements/1700-config-mcp.md', False, False, '1a42769069c55c6c', 'product', ()),
-    1701: ReqMeta('SWR-1701', 1701, ReqStatus.APPROVED, 'Shared Top-Level Merge Logic', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1702: ReqMeta('SWR-1702', 1702, ReqStatus.APPROVED, 'Researcher Override Wiring', 'docs/requirements/1700-config-mcp.md', False, True, '1a42769069c55c6c', 'product', ()),
-    1703: ReqMeta('SWR-1703', 1703, ReqStatus.APPROVED, 'Researcher Validation', 'docs/requirements/1700-config-mcp.md', False, True, '1a42769069c55c6c', 'product', ()),
-    1704: ReqMeta('SWR-1704', 1704, ReqStatus.APPROVED, 'LLM Runtime Wiring', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1705: ReqMeta('SWR-1705', 1705, ReqStatus.APPROVED, 'Regression Coverage', 'docs/requirements/1700-config-mcp.md', False, True, '1a42769069c55c6c', 'product', ()),
-    1706: ReqMeta('SWR-1706', 1706, ReqStatus.APPROVED, 'Discover `mcp.json` files at standard locations (project-level `.mcp.json`, user-level `~/.config/mcp.json` or OS-equivalent) and parse them', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1707: ReqMeta('SWR-1707', 1707, ReqStatus.APPROVED, 'Parse the standard MCP JSON format: support `mcpServers` and `servers` top-level keys, `stdio` transport (`command`, `args`, `env`, `cwd`, `envFile`), and `http`/`sse` transport (`url`, `headers`)', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1708: ReqMeta('SWR-1708', 1708, ReqStatus.APPROVED, 'Merge discovered servers into `config.mcp_servers` with YAML config taking priority over discovered servers on name collision', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1709: ReqMeta('SWR-1709', 1709, ReqStatus.APPROVED, 'Extend `MCPServerConfig` schema to support HTTP/SSE transports (`type`, `url`, `headers`) alongside existing stdio fields', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1710: ReqMeta('SWR-1710', 1710, ReqStatus.APPROVED, 'Validate discovered server names against `^[a-zA-Z][a-zA-Z0-9_-]*$`; log warnings for invalid entries', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1711: ReqMeta('SWR-1711', 1711, ReqStatus.APPROVED, 'Resolve `${workspaceFolder}` and `${env:VAR}` placeholders in `cwd` and `env` fields of discovered stdio servers', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1712: ReqMeta('SWR-1712', 1712, ReqStatus.APPROVED, 'Load environment variables from `envFile` paths referenced in discovered stdio server configs', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1713: ReqMeta('SWR-1713', 1713, ReqStatus.APPROVED, 'Update `_resolve_mcp_config()` to pass HTTP/SSE server configs to the OpenHands SDK without PATH checks', 'docs/requirements/1700-config-mcp.md', False, True, '1a42769069c55c6c', 'product', ()),
-    1714: ReqMeta('SWR-1714', 1714, ReqStatus.APPROVED, 'TUI info pane displays discovered vs. YAML-configured MCP servers with a visual indicator', 'docs/requirements/1700-config-mcp.md', False, True, '1a42769069c55c6c', 'product', ()),
-    1715: ReqMeta('SWR-1715', 1715, ReqStatus.APPROVED, "Support npm-based MCP servers: when a stdio server's `command` is an unprefixed npm package name (e.g. `@modelcontextprotocol/server-filesystem`), auto-resolve to `npx -y <package>` invocation", 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1716: ReqMeta('SWR-1716', 1716, ReqStatus.APPROVED, "Support `uvx`-based MCP servers: when a stdio server's `command` matches a Python package name invocable via `uvx`, auto-resolve to `uvx <package>` invocation", 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1717: ReqMeta('SWR-1717', 1717, ReqStatus.APPROVED, 'TUI: `/mcp` slash command opens an MCP management screen listing all discovered/available servers with on/off toggles', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1718: ReqMeta('SWR-1718', 1718, ReqStatus.APPROVED, 'TUI: MCP management screen also accessible via command palette entry (\\"MCP Servers\\")', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1719: ReqMeta('SWR-1719', 1719, ReqStatus.APPROVED, 'MCP toggle state persists across app restarts in a JSON file in `~/.config/rotaris/mcp_toggles.json` (following `stash.py` pattern)', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1720: ReqMeta('SWR-1720', 1720, ReqStatus.APPROVED, 'Disabled MCP servers are excluded from the config dict passed to the OpenHands SDK (filtered in `_resolve_mcp_config()`)', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1721: ReqMeta('SWR-1721', 1721, ReqStatus.APPROVED, 'MCP management screen shows server source (discovered from `.mcp.json` / `agents.yaml` / missing command / HTTP-SSE), connection status, and server name', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1722: ReqMeta('SWR-1722', 1722, ReqStatus.APPROVED, 'CLI `rotaris-cli secrets` subcommand group supporting `set`, `list`, `unset`, and `edit` operations for MCP server environment variables', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1723: ReqMeta('SWR-1723', 1723, ReqStatus.APPROVED, 'CLI `rotaris-cli config set-tavily-key` convenience command to set `TAVILY_API_KEY` for the Tavily MCP server', 'docs/requirements/1700-config-mcp.md', False, True, '1a42769069c55c6c', 'product', ()),
-    1724: ReqMeta('SWR-1724', 1724, ReqStatus.APPROVED, 'Persist MCP server env vars in a dedicated secrets file (`secrets.yaml` under workspace/global config dir), kept out of version control', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1725: ReqMeta('SWR-1725', 1725, ReqStatus.APPROVED, 'TUI Settings screen/menu entry that allows browsing MCP servers and adding/editing/deleting env vars with a save button', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1726: ReqMeta('SWR-1726', 1726, ReqStatus.APPROVED, 'Env var resolver merges shell environment and user-set secrets; user-set secrets take precedence at child-spawn time', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1727: ReqMeta('SWR-1727', 1727, ReqStatus.APPROVED, 'CLI `list` operation displays env vars grouped by MCP server with masked values (shows only first/last 2 characters)', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1728: ReqMeta('SWR-1728', 1728, ReqStatus.APPROVED, 'Secrets file excludes itself from `.gitignore` auto-generation and is never committed to version control', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1729: ReqMeta('SWR-1729', 1729, ReqStatus.APPROVED, 'MCP silent-drop warnings', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
-    1730: ReqMeta('SWR-1730', 1730, ReqStatus.APPROVED, 'Global MCP config merge verification', 'docs/requirements/1700-config-mcp.md', True, True, '1a42769069c55c6c', 'product', ()),
+    1700: ReqMeta('SWR-1700', 1700, ReqStatus.APPROVED, 'Configuration & MCP', 'docs/requirements/1700-config-mcp.md', False, False, '4aee6559caa31651', 'product', ()),
+    1701: ReqMeta('SWR-1701', 1701, ReqStatus.APPROVED, 'Shared Top-Level Merge Logic', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1702: ReqMeta('SWR-1702', 1702, ReqStatus.APPROVED, 'Researcher Override Wiring', 'docs/requirements/1700-config-mcp.md', False, True, '4aee6559caa31651', 'product', ()),
+    1703: ReqMeta('SWR-1703', 1703, ReqStatus.APPROVED, 'Researcher Validation', 'docs/requirements/1700-config-mcp.md', False, True, '4aee6559caa31651', 'product', ()),
+    1704: ReqMeta('SWR-1704', 1704, ReqStatus.APPROVED, 'LLM Runtime Wiring', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1706: ReqMeta('SWR-1706', 1706, ReqStatus.APPROVED, 'Discover `mcp.json` files at standard locations (project-level `.mcp.json`, user-level `~/.config/mcp.json` or OS-equivalent) and parse them', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1707: ReqMeta('SWR-1707', 1707, ReqStatus.APPROVED, 'Parse the standard MCP JSON format: support `mcpServers` and `servers` top-level keys, `stdio` transport (`command`, `args`, `env`, `cwd`, `envFile`), and `http`/`sse` transport (`url`, `headers`)', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1708: ReqMeta('SWR-1708', 1708, ReqStatus.APPROVED, 'Merge discovered servers into `config.mcp_servers` with YAML config taking priority over discovered servers on name collision', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1709: ReqMeta('SWR-1709', 1709, ReqStatus.APPROVED, 'Extend `MCPServerConfig` schema to support HTTP/SSE transports (`type`, `url`, `headers`) alongside existing stdio fields', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1710: ReqMeta('SWR-1710', 1710, ReqStatus.APPROVED, 'Validate discovered server names against `^[a-zA-Z][a-zA-Z0-9_-]*$`; log warnings for invalid entries', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1711: ReqMeta('SWR-1711', 1711, ReqStatus.APPROVED, 'Resolve `${workspaceFolder}` and `${env:VAR}` placeholders in `cwd` and `env` fields of discovered stdio servers', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1712: ReqMeta('SWR-1712', 1712, ReqStatus.APPROVED, 'Load environment variables from `envFile` paths referenced in discovered stdio server configs', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1713: ReqMeta('SWR-1713', 1713, ReqStatus.APPROVED, 'Update `_resolve_mcp_config()` to pass HTTP/SSE server configs to the OpenHands SDK without PATH checks', 'docs/requirements/1700-config-mcp.md', False, True, '4aee6559caa31651', 'product', ()),
+    1714: ReqMeta('SWR-1714', 1714, ReqStatus.APPROVED, 'TUI info pane displays discovered vs. YAML-configured MCP servers with a visual indicator', 'docs/requirements/1700-config-mcp.md', False, True, '4aee6559caa31651', 'product', ()),
+    1715: ReqMeta('SWR-1715', 1715, ReqStatus.APPROVED, "Support npm-based MCP servers: when a stdio server's `command` is an unprefixed npm package name (e.g. `@modelcontextprotocol/server-filesystem`), auto-resolve to `npx -y <package>` invocation", 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1716: ReqMeta('SWR-1716', 1716, ReqStatus.APPROVED, "Support `uvx`-based MCP servers: when a stdio server's `command` matches a Python package name invocable via `uvx`, auto-resolve to `uvx <package>` invocation", 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1717: ReqMeta('SWR-1717', 1717, ReqStatus.APPROVED, 'TUI: `/mcp` slash command opens an MCP management screen listing all discovered/available servers with on/off toggles', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1718: ReqMeta('SWR-1718', 1718, ReqStatus.APPROVED, 'TUI: MCP management screen also accessible via command palette entry (\\"MCP Servers\\")', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1719: ReqMeta('SWR-1719', 1719, ReqStatus.APPROVED, 'MCP toggle state persists across app restarts in a JSON file in `~/.config/rotaris/mcp_toggles.json` (following `stash.py` pattern)', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1720: ReqMeta('SWR-1720', 1720, ReqStatus.APPROVED, 'Disabled MCP servers are excluded from the config dict passed to the OpenHands SDK (filtered in `_resolve_mcp_config()`)', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1721: ReqMeta('SWR-1721', 1721, ReqStatus.APPROVED, 'MCP management screen shows server source (discovered from `.mcp.json` / `agents.yaml` / missing command / HTTP-SSE), connection status, and server name', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1722: ReqMeta('SWR-1722', 1722, ReqStatus.APPROVED, 'CLI `rotaris-cli secrets` subcommand group supporting `set`, `list`, `unset`, and `edit` operations for MCP server environment variables', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1723: ReqMeta('SWR-1723', 1723, ReqStatus.APPROVED, 'CLI `rotaris-cli config set-tavily-key` convenience command to set `TAVILY_API_KEY` for the Tavily MCP server', 'docs/requirements/1700-config-mcp.md', False, True, '4aee6559caa31651', 'product', ()),
+    1724: ReqMeta('SWR-1724', 1724, ReqStatus.APPROVED, 'Persist MCP server env vars in a dedicated secrets file (`secrets.yaml` under workspace/global config dir), kept out of version control', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1725: ReqMeta('SWR-1725', 1725, ReqStatus.APPROVED, 'TUI Settings screen/menu entry that allows browsing MCP servers and adding/editing/deleting env vars with a save button', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1726: ReqMeta('SWR-1726', 1726, ReqStatus.APPROVED, 'Env var resolver merges shell environment and user-set secrets; user-set secrets take precedence at child-spawn time', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1727: ReqMeta('SWR-1727', 1727, ReqStatus.APPROVED, 'CLI `list` operation displays env vars grouped by MCP server with masked values (shows only first/last 2 characters)', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1728: ReqMeta('SWR-1728', 1728, ReqStatus.APPROVED, 'Secrets file excludes itself from `.gitignore` auto-generation and is never committed to version control', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1729: ReqMeta('SWR-1729', 1729, ReqStatus.APPROVED, 'MCP silent-drop warnings', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
+    1730: ReqMeta('SWR-1730', 1730, ReqStatus.APPROVED, 'Global MCP config merge verification', 'docs/requirements/1700-config-mcp.md', True, True, '4aee6559caa31651', 'product', ()),
     1731: ReqMeta('SWR-1731', 1731, ReqStatus.APPROVED, 'Session-scoped MCP client and tool-provider runtime', 'docs/requirements/1700-config-mcp/SWR-1731-session-scoped-mcp-runtime.md', True, True, 'c3f3aaea0cae3afb', 'technical', (1700,)),
     1732: ReqMeta('SWR-1732', 1732, ReqStatus.APPROVED, 'MCP server health probe', 'docs/requirements/1700-config-mcp/SWR-1732-mcp-server-health-probe.md', True, True, '1b03314f26ed7b3d', 'technical', (2097,)),
     1733: ReqMeta('SWR-1733', 1733, ReqStatus.APPROVED, 'MCP server config normalization must not mutate the input config', 'docs/requirements/1700-config-mcp/SWR-1733-mcp-server-config-normalization-is-non-mutating.md', True, True, 'd435fcd87389bb96', 'technical', (1700,)),
@@ -5730,7 +5482,7 @@ META: dict[int, ReqMeta] = {
     2423: ReqMeta('SWR-2423', 2423, ReqStatus.APPROVED, 'User-Prompt Bridge', 'docs/requirements/2000-rotaris-desktop/SWR-2423-user-prompt-bridge.md', True, True, '2725afc980e647b5', 'technical', (563,)),
     2424: ReqMeta('SWR-2424', 2424, ReqStatus.APPROVED, 'Settings inventory tabs', 'docs/requirements/2000-rotaris-desktop/SWR-2424-settings-inventory-tabs.md', True, True, '2375768141bbefdc', 'technical', (2000,)),
     2425: ReqMeta('SWR-2425', 2425, ReqStatus.APPROVED, "Planner output sized for the implementation owner's model tier", 'docs/requirements/300-personas-prompts/SWR-2425-planner-sizes-for-executor.md', True, True, 'bc1e1a9e66125ad9', 'product', ()),
-    2426: ReqMeta('SWR-2426', 2426, ReqStatus.APPROVED, 'Per-agent runtime tool binding isolation', 'docs/requirements/500-tool-platform/SWR-2426-per-agent-tool-binding-isolation.md', True, True, 'ef901f82a03ef4c4', 'technical', (500,)),
+    2426: ReqMeta('SWR-2426', 2426, ReqStatus.APPROVED, 'Per-agent runtime tool binding isolation', 'docs/requirements/500-tool-platform/SWR-2426-per-agent-tool-binding-isolation.md', True, True, '320db4cbbe03343e', 'technical', (500,)),
     2427: ReqMeta('SWR-2427', 2427, ReqStatus.APPROVED, 'Artifact publication attribution', 'docs/requirements/1500-sessions-diagnostics/SWR-2427-artifact-publication-attribution.md', True, True, '11d0ab72e624bb33', 'technical', (1524,)),
     2428: ReqMeta('SWR-2428', 2428, ReqStatus.APPROVED, 'Live terminal preview in the transcript and interactive pop-out', 'docs/requirements/2000-rotaris-desktop/SWR-2428-terminal-session-workspace-integration.md', True, True, '1196254d2a08f6b7', 'product', ()),
     2429: ReqMeta('SWR-2429', 2429, ReqStatus.APPROVED, 'Terminal emulator widget', 'docs/requirements/2000-rotaris-desktop/SWR-2429-terminal-emulator-widget.md', True, True, 'ca2462c7af27e2a0', 'technical', (2428,)),

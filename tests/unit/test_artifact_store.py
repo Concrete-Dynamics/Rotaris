@@ -57,7 +57,7 @@ def _make_report(
     )
 
 
-@verifies(SWR.SWR_1505, SWR.SWR_1517, SWR.SWR_1520, SWR.SWR_1536)
+@verifies(SWR.SWR_1505, SWR.SWR_1517, SWR.SWR_1520)
 def test_upsert_creates_artifact_with_snippets(tmp_path: Path) -> None:
     store = SessionArtifactStore(tmp_path)
     rec = _make_child_record("child-1", "task-abc")

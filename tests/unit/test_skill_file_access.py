@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@verifies(SWR.SWR_426, SWR.SWR_427, SWR.SWR_440, SWR.SWR_441)
+@verifies(SWR.SWR_426, SWR.SWR_427)
 def test_read_file_can_read_configured_skill_root_outside_workspace(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -27,7 +27,7 @@ def test_read_file_can_read_configured_skill_root_outside_workspace(tmp_path: Pa
     assert "skill body" in observation.text
 
 
-@verifies(SWR.SWR_441)
+@verifies(SWR.SWR_427)
 def test_write_file_rejects_configured_skill_root_outside_workspace(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

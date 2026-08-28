@@ -19,7 +19,6 @@ SWR-834 test
 SWR-844 test
 SWR-848 test
 SWR-853 test
-SWR-1063 test
 SWR-1111 test
 SWR-1116 test
 SWR-1135 test

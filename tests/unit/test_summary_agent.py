@@ -164,7 +164,7 @@ def test_parse_report_normalizes_key_findings_list_to_string() -> None:
     assert report.key_findings == "- Found file A\n- Confirmed test B"
 
 
-@verifies(SWR.SWR_127, SWR.SWR_1510)
+@verifies(SWR.SWR_127)
 def test_parse_report_accepts_detail_payload() -> None:
     agent = _make_agent()
 
@@ -189,7 +189,7 @@ def test_parse_report_accepts_detail_payload() -> None:
     assert report.detail_payload.snippets[0].content == "return 123"
 
 
-@verifies(SWR.SWR_127, SWR.SWR_1510)
+@verifies(SWR.SWR_127)
 def test_parse_report_normalizes_detail_payload_string_lists() -> None:
     agent = _make_agent()
 

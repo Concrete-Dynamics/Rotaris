@@ -222,7 +222,7 @@ def _archived_events(archiver: TranscriptArchiver) -> list[dict[str, Any]]:
     ]
 
 
-@verifies(SWR.SWR_548, SWR.SWR_549, SWR.SWR_551)
+@verifies(SWR.SWR_548, SWR.SWR_549)
 def test_ralph_iteration_outcome_values_exist():
     assert RalphIterationOutcome.COMPLETED == "completed"
     assert RalphIterationOutcome.ABANDONED == "abandoned"
@@ -338,7 +338,7 @@ def test_summarize_run_progress_success() -> None:
     assert summarize_run_progress(progress) == ("completed", "Run completed.", "information")
 
 
-@verifies(SWR.SWR_548, SWR.SWR_551)
+@verifies(SWR.SWR_548)
 def test_summarize_run_progress_user_stop_is_paused() -> None:
     progress = RalphProgressFile(
         session_id="s",
@@ -353,7 +353,7 @@ def test_summarize_run_progress_user_stop_is_paused() -> None:
     )
 
 
-@verifies(SWR.SWR_549, SWR.SWR_551)
+@verifies(SWR.SWR_549)
 def test_summarize_run_progress_failure() -> None:
     progress = RalphProgressFile(
         session_id="s",
@@ -381,7 +381,7 @@ def test_summarize_run_progress_failure() -> None:
     )
 
 
-@verifies(SWR.SWR_549, SWR.SWR_551)
+@verifies(SWR.SWR_549)
 def test_summarize_run_progress_partial_failure() -> None:
     progress = RalphProgressFile(
         session_id="s",

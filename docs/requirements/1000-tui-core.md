@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-1000, SWR-1001, SWR-1002, SWR-1003, SWR-1004, SWR-1005, SWR-1006, SWR-1009, SWR-1010, SWR-1011, SWR-1012, SWR-1013, SWR-1014, SWR-1015, SWR-1016, SWR-1017, SWR-1018, SWR-1019, SWR-1020, SWR-1021, SWR-1022, SWR-1023, SWR-1024, SWR-1025, SWR-1026, SWR-1027, SWR-1028, SWR-1029, SWR-1030, SWR-1031, SWR-1032, SWR-1033, SWR-1034, SWR-1035, SWR-1036, SWR-1037, SWR-1038, SWR-1039, SWR-1040, SWR-1041, SWR-1042, SWR-1043, SWR-1044, SWR-1045, SWR-1046, SWR-1047, SWR-1048, SWR-1049, SWR-1050, SWR-1051, SWR-1052, SWR-1053, SWR-1054, SWR-1055, SWR-1056, SWR-1057, SWR-1058, SWR-1059, SWR-1060, SWR-1061, SWR-1062, SWR-1063, SWR-1064, SWR-1065, SWR-1066, SWR-1067, SWR-1068, SWR-1069, SWR-1070, SWR-1071, SWR-1072, SWR-1073, SWR-1074, SWR-1075, SWR-1076, SWR-1077, SWR-1078, SWR-1079, SWR-1080, SWR-1081, SWR-1082, SWR-1083, SWR-1084, SWR-1085, SWR-1086, SWR-1087, SWR-1088, SWR-1089, SWR-1090]
+req-id: [SWR-1000, SWR-1001, SWR-1002, SWR-1003, SWR-1004, SWR-1005, SWR-1006, SWR-1009, SWR-1010, SWR-1011, SWR-1012, SWR-1013, SWR-1014, SWR-1015, SWR-1016, SWR-1017, SWR-1018, SWR-1019, SWR-1020, SWR-1021, SWR-1022, SWR-1023, SWR-1024, SWR-1025, SWR-1026, SWR-1027, SWR-1028, SWR-1029, SWR-1030, SWR-1031, SWR-1032, SWR-1033, SWR-1034, SWR-1035, SWR-1036, SWR-1037, SWR-1038, SWR-1040, SWR-1041, SWR-1042, SWR-1043, SWR-1044, SWR-1045, SWR-1046, SWR-1047, SWR-1048, SWR-1050, SWR-1051, SWR-1052, SWR-1053, SWR-1054, SWR-1055, SWR-1056, SWR-1057, SWR-1058, SWR-1059, SWR-1060, SWR-1061, SWR-1064, SWR-1065, SWR-1066, SWR-1067, SWR-1068, SWR-1069, SWR-1070, SWR-1071, SWR-1072, SWR-1073, SWR-1074, SWR-1075, SWR-1076, SWR-1077, SWR-1078, SWR-1079, SWR-1080, SWR-1081, SWR-1082, SWR-1083, SWR-1084, SWR-1085, SWR-1086, SWR-1087, SWR-1088, SWR-1089, SWR-1090]
 status: approved
 trace: required
 test: required
@@ -276,14 +276,6 @@ source: docs/requirement-log/done/requirements-20260426-020611.md
 
 On very small terminal heights, exact fractional sizing may degrade, but independent scrollability and panel usability must be preserved.
 
-## SWR-1039 — Regression Test Coverage
-trace: optional
-legacy-id: REQ-20260426-020611-NF-003
-date: 2026-04-26
-source: docs/requirement-log/done/requirements-20260426-020611.md
-
-Automated tests shall cover per-panel overflow behavior and the default `2:1:1` vertical allocation. Existing tests that assert whole-column scrolling must be updated to reflect the new behavior.
-
 ## SWR-1040 — Dynamic Layout Coverage
 trace: optional
 legacy-id: REQ-20260426-020611-NF-004
@@ -353,14 +345,6 @@ date: 2026-04-29
 source: docs/requirement-log/done/requirements-20260429-120000.md
 
 When `focused_agent_id` is `None`, the Todo panel shall continue to display the top-level agent's todo list exactly as before.
-
-## SWR-1049 — Regression test coverage
-trace: optional
-legacy-id: REQ-20260429-120000-NF-004
-date: 2026-04-29
-source: docs/requirement-log/done/requirements-20260429-120000.md
-
-Automated tests shall cover: (a) per-child todo resolution in `build_screen_view_model`; (b) fallback to session-level todo when no child todo exists; (c) `TodoPane` rendering the `[x]` / `[ ]` checkbox format for completed and non-completed tasks. | Partial — existing tests cover the view-model and rendering paths; dedicated checkbox-format unit tests are deferred to a follow-up.
 
 ## SWR-1050 — Semantic Theme Schema
 legacy-id: REQ-20260503-STYLE-001
@@ -454,22 +438,6 @@ date: 2026-05-03
 source: docs/requirement-log/done/requirements-20260503-style-guided-theme.md
 
 Snapshot baselines shall be updated only after a deliberate visual review confirms that the new output is intended.
-
-## SWR-1062 — Theme Command Tests
-trace: optional
-legacy-id: REQ-20260503-STYLE-T-001
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-style-guided-theme.md
-
-Unit tests shall cover valid `/theme`, invalid `/theme`, missing argument, and case-insensitive theme names.
-
-## SWR-1063 — Visual Snapshot Tests
-trace: optional
-legacy-id: REQ-20260503-STYLE-T-002
-date: 2026-05-03
-source: docs/requirement-log/done/requirements-20260503-style-guided-theme.md
-
-Snapshot tests shall cover the initial TUI layout, submitted-message state, and multiline composer state.
 
 ## SWR-1064 — Theme Contract Tests
 status: draft

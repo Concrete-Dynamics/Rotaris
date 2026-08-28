@@ -1890,7 +1890,7 @@ models:
     assert llm.usage_id == "summary-vllm-test"
 
 
-@verifies(SWR.SWR_1704, SWR.SWR_1705)
+@verifies(SWR.SWR_1704)
 def test_load_llm_for_model_applies_model_limits_and_runtime_timeout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

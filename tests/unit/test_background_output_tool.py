@@ -147,7 +147,7 @@ def test_not_found_for_unknown_id(manager: ChildManager) -> None:
     assert obs.is_error is True
 
 
-@verifies(SWR.SWR_141, SWR.SWR_1502, SWR.SWR_1505, SWR.SWR_1506, SWR.SWR_1510)
+@verifies(SWR.SWR_141, SWR.SWR_1502, SWR.SWR_1505, SWR.SWR_1506)
 def test_to_llm_content_ok_includes_report(manager: ChildManager) -> None:
     record = manager.spawn_child("worker", "builder", "implement feature", run_in_background=True)
     task_id = record.task_id
@@ -201,7 +201,7 @@ def test_to_llm_content_still_running(manager: ChildManager) -> None:
     assert "still_running" in content[0].text
 
 
-@verifies(SWR.SWR_1504, SWR.SWR_1501, SWR.SWR_1503, SWR.SWR_1510)
+@verifies(SWR.SWR_1504, SWR.SWR_1501, SWR.SWR_1503)
 def test_verbatim_detail_level_includes_exact_response_and_evidence(manager: ChildManager) -> None:
     record = manager.spawn_child("worker", "builder", "implement feature", run_in_background=True)
     task_id = record.task_id

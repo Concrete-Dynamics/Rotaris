@@ -74,7 +74,7 @@ async def _press_leader_shortcut(pilot: Pilot, key: str) -> None:
     await pilot.pause()
 
 
-@verifies(SWR.SWR_1033, SWR.SWR_1415, SWR.SWR_1416, SWR.SWR_1417, SWR.SWR_1182, SWR.SWR_1256)
+@verifies(SWR.SWR_1033, SWR.SWR_1415, SWR.SWR_1416, SWR.SWR_1417, SWR.SWR_1182)
 async def test_navigation_moves_between_parent_child_and_siblings() -> None:
     app = RotarisTuiApp()
 
@@ -111,9 +111,7 @@ async def test_navigation_moves_between_parent_child_and_siblings() -> None:
         assert app.focused_agent_id == _CHILD_1["canonical_name"]
 
 
-@verifies(
-    SWR.SWR_1033, SWR.SWR_1219, SWR.SWR_1220, SWR.SWR_1418, SWR.SWR_1246, SWR.SWR_1247, SWR.SWR_1252
-)
+@verifies(SWR.SWR_1033, SWR.SWR_1219, SWR.SWR_1220, SWR.SWR_1418, SWR.SWR_1246, SWR.SWR_1247)
 async def test_navigation_updates_chat_and_top_bar_badge_in_lockstep(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -365,7 +363,7 @@ async def test_artifact_navigation_enters_edits_saves_and_exits(tmp_path: Any) -
         assert not app.screen.query(artifact_editor_type)
 
 
-@verifies(SWR.SWR_1038, SWR.SWR_1257)
+@verifies(SWR.SWR_1038)
 async def test_ctrl_down_with_no_agents_does_not_crash() -> None:
     app = RotarisTuiApp()
 
@@ -440,7 +438,7 @@ async def test_alt_down_while_in_artifact_editor_switches_to_next_artifact(
         assert "Body of beta" in editor.text
 
 
-@verifies(SWR.SWR_1039, SWR.SWR_1542)
+@verifies(SWR.SWR_1542)
 async def test_alt_down_in_dirty_artifact_editor_shows_warning_and_does_not_navigate(
     tmp_path: Any,
 ) -> None:
@@ -574,7 +572,7 @@ async def test_flat_up_down_navigation_cycles_focused_agent() -> None:
 # ---------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_1079, SWR.SWR_1080, SWR.SWR_1257)
+@verifies(SWR.SWR_1079, SWR.SWR_1080)
 async def test_flat_up_down_with_no_agents_does_not_crash() -> None:
     """Alternative path: Up/Down on agent pane with zero agents is a no-op."""
     app = RotarisTuiApp()

@@ -50,6 +50,48 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         print(f"\n[verdict-guard] {message}", file=sys.stderr)
 
 
+@pytest.hookimpl(trylast=True)
+def pytest_runtest_teardown(item: pytest.Item) -> None:
+    """Deliver the destructions pytest-qt schedules but never performs.
+
+    `qtbot.addWidget` teardown calls `close()` *and* `deleteLater()` — and then
+    nothing spins the loop, so the C++ objects stay alive. They are destroyed
+    later, by Python's cyclic garbage collector, at whatever unrelated moment an
+    allocation threshold happens to trip. Three symptoms, one cause, all of them
+    billed to an innocent test:
+
+    * a segfault, when the collection lands inside a nested Qt event loop —
+      `Garbage-collecting` sat directly above `qtbot.waitUntil` in the crash
+      that led here, with a live run-bridge thread still in `asyncio.run`;
+    * `AttributeError: 'QWidgetItem' object has no attribute 'unpolish'` in
+      `ThemeManager.repolish`, which is freed memory reused as a layout item
+      while `isValid()` still said the widget was alive;
+    * and simple slowness, because every walk over `topLevelWidgets()` — the
+      theme repolish, the font-database refresh — pays for every survivor.
+      On the CI runner that reached 30 seconds *per* design-system component,
+      and the desktop job hit its limit at 92%.
+
+    `trylast` matters: pytest-qt closes its widgets from this same hook, so
+    running after it means `closeEvent` has already shut down the run, Git,
+    checkpoint and setup bridges. That is what makes delivering the deletion
+    safe — an earlier attempt to drain at test *setup* destroyed a project-init
+    QThread that was still running and aborted the process.
+
+    Deliberately a drain and not a sweep: this delivers only what someone has
+    already scheduled. Closing or deleting widgets `qtbot` still owns is what
+    the note in `dispose_window` records as having killed three workers.
+    """
+    del item
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    app = QCoreApplication.instance()
+    if app is None:
+        return
+    app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    app.processEvents()
+    app.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+
+
 #: Where the per-test settings stores live, and the counter that names them.
 _SETTINGS_ROOTS: Path | None = None
 _SETTINGS_COUNTER = count()

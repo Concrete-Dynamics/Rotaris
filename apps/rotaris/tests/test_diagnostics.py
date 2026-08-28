@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import time
 import tracemalloc
 from typing import TYPE_CHECKING
 
 import pytest
+from PySide6.QtCore import QCoreApplication
 from rotaris_core.reqtocode import SWR, verifies
 
 from rotaris.diagnostics import live
@@ -205,6 +207,33 @@ def test_deep_attach_does_not_enable_continuous_tracing(
     recorder.close()
 
 
+def _pump_until(predicate, *, timeout: float) -> bool:
+    """Drive Qt until *predicate* holds, on a wall-clock cadence.
+
+    Not `qtbot.waitUntil`, and the difference is what this test kept failing on.
+    `waitUntil` nests a `QEventLoop.exec()` and schedules its predicate on a Qt
+    timer, so the predicate is only checked when that timer beats the rest of
+    the queue. This test deliberately saturates the queue — a 10 ms heartbeat
+    timer plus a deep window repainting — and under load the predicate timer
+    lost: the sampler opened its whole five-second tracing window and closed it
+    again with `waitUntil` never once observing `tracemalloc.is_tracing()`.
+    (`counts={'complete': 1}`, `degraded=None`: the sampler had done its job
+    perfectly. The observer was what failed.)
+
+    Checking on `time.monotonic` instead makes the cadence independent of Qt's
+    scheduling, while still pumping the queue so the thing being waited for can
+    happen at all.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() > deadline:
+            return False
+        QCoreApplication.processEvents()
+        time.sleep(0.005)
+
+
 @verifies(SWR.SWR_2418)
 def test_deep_window_keeps_qt_responsive_and_reports_growth_sites(
     qtbot,
@@ -244,7 +273,19 @@ def test_deep_window_keeps_qt_responsive_and_reports_growth_sites(
     timer.start()
 
     assert recorder.request_allocation_snapshot("user-flow") is True
-    qtbot.waitUntil(tracemalloc.is_tracing, timeout=10_000)
+    if not _pump_until(tracemalloc.is_tracing, timeout=10.0):
+        # The sampler records why a window did not open — `external-tracemalloc-active`,
+        # `cancelled`, `allocation-capture-error:...` — so say which of them it
+        # was rather than leaving a bare timeout for the next reader to bisect.
+        thread = recorder._allocation_thread
+        raise AssertionError(
+            "the sampler never started tracing: "
+            f"thread_alive={None if thread is None else thread.is_alive()} "
+            f"counts={dict(recorder._allocation_capture_counts)} "
+            f"degraded={recorder._allocation_degraded_reason!r} "
+            f"disabled={recorder._allocation_disabled} "
+            f"window_s={live.ALLOCATION_WINDOW_S}"
+        )
     retained = [bytearray(1024) for _ in range(1_000)]
     assert retained
     assert recorder._allocation_thread is not None

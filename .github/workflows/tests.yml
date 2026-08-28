@@ -1,0 +1,154 @@
+name: Tests
+
+# The suite had no CI at all before this file: only `reqtocode.yml` and
+# `release.yml` existed, and `docs/reference/releasing.md` referred to a
+# `rotaris.yml` that was never checked in. The milestone gate's "full suite
+# green" check is only worth something once something actually runs the suite.
+on:
+  pull_request:
+  push:
+    branches: [master, main, "milestone/**", "epic/**"]
+  # Called by milestone.yml so the gate can consume this verdict in the same run
+  # rather than inferring it from another workflow's history.
+  workflow_call:
+    outputs:
+      passed:
+        description: "true when every suite in this workflow passed"
+        value: ${{ jobs.verdict.outputs.passed }}
+
+permissions:
+  contents: read
+
+jobs:
+  # `--dist loadfile` and the snapshot flag come from `addopts` in
+  # pyproject.toml; `-n auto` is what makes the engine suite affordable.
+  engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # pytest-qt's `pytest_configure` imports QtGui at session start whatever
+      # tests were selected, and PySide6 links libEGL/libGL even headless -- so
+      # every pytest invocation in this repo needs these, not just the Qt suite.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+      - run: uv sync --all-packages
+      - run: uv run pytest -q --timeout=120 -n auto --max-worker-restart=0
+
+  # Its own job: it needs system libraries the engine suite does not, and it is
+  # the long pole, so running it beside the engine suite halves the wall clock.
+  desktop:
+    runs-on: ubuntu-24.04
+    # 30, not 45: the suite takes ~2.5 min locally, so even a 4x slower runner
+    # should finish inside 10. A limit above that only buys a longer wait for
+    # the same answer -- the first run burned 44 minutes and was cancelled
+    # without ever reporting.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # pytest-qt's `pytest_configure` imports QtGui at session start whatever
+      # tests were selected, and PySide6 links libEGL/libGL even headless -- so
+      # every pytest invocation in this repo needs these, not just the Qt suite.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+      - run: uv sync --all-packages
+
+      # Two passes, as `make test-rotaris` does: the serial-marked tests want a
+      # core to themselves.
+      #
+      # `--timeout-method=thread` is not decoration. pytest-timeout defaults to
+      # `signal` on Linux, and SIGALRM cannot interrupt a thread blocked inside a
+      # C extension -- which is precisely what a Qt event loop is. So `--timeout`
+      # alone could not kill a stuck Qt test: the first run of this job sat for
+      # 44 minutes and was cancelled without reporting anything. The thread timer
+      # kills the worker and dumps the stack instead, turning a silent hang into
+      # a named failure.
+      #
+      # `--max-worker-restart=0` is the other half of that. When a Qt worker
+      # segfaults, xdist prints `node down: Not properly terminated` and tries
+      # to replace it -- and this suite is where that recovery does not work:
+      # the run stops making progress and sits until the job timeout, so a
+      # crash that takes one second to happen costs 30 minutes and reports
+      # nothing. At zero restarts the crash ends the run immediately, with the
+      # faulthandler stack of the test that caused it still in the log.
+      #
+      # `timeout-minutes` on the step, not just the job, because neither of the
+      # two guards above stops the run that actually happened: a worker
+      # segfaulted inside `TerminalView.paintEvent`, xdist printed `[gw0] node
+      # down: Not properly terminated`, and the session then sat silent for 27
+      # minutes until the *job* limit cancelled it -- which throws the step away
+      # and reports nothing but "The operation was canceled". Failing the step
+      # instead keeps the faulthandler stack, lets the serial pass still run,
+      # and costs twelve minutes rather than thirty.
+      #
+      # `-v`, not `-q`, and that is a diagnosis decision rather than taste. This
+      # job has now failed four times reporting `FFFF` at 70% and a stall after
+      # 92% -- four failures and a hang whose *names* `-q` does not print, so
+      # every cycle cost twelve minutes and said nothing actionable. Under
+      # xdist, `-v` prints each test as its worker takes it, which names both
+      # the failures and the test the run stopped inside. `--tb=line` keeps the
+      # tracebacks to one line each so the log stays readable.
+      - run: uv run pytest apps/rotaris/tests -v --tb=line --timeout=120 --timeout-method=thread -p no:textual-snapshot -n auto --max-worker-restart=0 -m "not serial"
+        timeout-minutes: 12
+      - run: uv run pytest apps/rotaris/tests -q --timeout=120 --timeout-method=thread -p no:textual-snapshot -m serial
+        timeout-minutes: 8
+        if: always()
+
+  # Dev tooling. Deliberately outside `testpaths`, so it needs its own line.
+  devtools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # pytest-qt's `pytest_configure` imports QtGui at session start whatever
+      # tests were selected, and PySide6 links libEGL/libGL even headless -- so
+      # every pytest invocation in this repo needs these, not just the Qt suite.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+      - run: uv sync --all-packages
+      - run: uv run pytest devtools/tests -q --timeout=60
+
+  # One place for callers to read, so the milestone gate does not have to know
+  # how many suites there are.
+  verdict:
+    needs: [engine, desktop, devtools]
+    if: always()
+    runs-on: ubuntu-24.04
+    outputs:
+      passed: ${{ steps.rollup.outputs.passed }}
+    steps:
+      - id: rollup
+        env:
+          RESULTS: ${{ needs.engine.result }},${{ needs.desktop.result }},${{ needs.devtools.result }}
+        run: |
+          if [ "$RESULTS" = "success,success,success" ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "Suites: $RESULTS"
+            exit 1
+          fi

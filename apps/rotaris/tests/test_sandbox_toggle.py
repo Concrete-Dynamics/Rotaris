@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from conftest import dispose_window
 from PySide6.QtWidgets import QCheckBox, QLabel, QPlainTextEdit, QPushButton
 from rotaris_core.init import registry
 from rotaris_core.reqtocode import SWR, verifies
@@ -117,6 +118,31 @@ def repository(tmp_path: Path) -> Path:
     return tmp_path
 
 
+#: Windows this file has opened, drained by `_dispose_live_windows` below.
+_LIVE_WINDOWS: list[MainWindow] = []
+
+
+@pytest.fixture(autouse=True)
+def _dispose_live_windows():
+    """Destroy every window this file opened, even when a test fails.
+
+    These are real windows over a real repository with real `RunBridge` threads,
+    and `qtbot.addWidget` does not destroy what it closes. A window left alive
+    is left for Python's cyclic GC to collect whenever it next runs — and when
+    that lands inside another test's nested Qt event loop, it segfaults the
+    worker. `Garbage-collecting` was the top frame of the crash that led here,
+    with a live run-bridge thread still in `asyncio.run` two frames below.
+
+    Ownership is one or the other, so `_window` deliberately does not call
+    `qtbot.addWidget`: pytest-qt would then close a window this has already
+    destroyed. A fixture rather than a line at the end of each test, because the
+    test that fails is exactly the one that would skip it.
+    """
+    yield
+    while _LIVE_WINDOWS:
+        dispose_window(_LIVE_WINDOWS.pop())
+
+
 def _window(repository: Path, qtbot: Any) -> tuple[MainWindow, RunCoordinator, ConfigService]:
     """The real window on `repository`, faking only the provider network probes."""
     store = WorkspaceStore()
@@ -131,7 +157,7 @@ def _window(repository: Path, qtbot: Any) -> tuple[MainWindow, RunCoordinator, C
     ]
     coordinator = RunCoordinator(repository, store, service)
     window = MainWindow(store, config_service=service, run_bridge=coordinator)
-    qtbot.addWidget(window)
+    _LIVE_WINDOWS.append(window)
     window.resize(1440, 900)
     window.show()
     qtbot.waitExposed(window)

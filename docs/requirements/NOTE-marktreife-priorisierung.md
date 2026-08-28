@@ -1,5 +1,10 @@
 # Notiz: Priorisierung Marktreife (2026-08-03)
 
+> **Historische Analyse-Notiz.** Die laufende Release-Planung steht seit
+> 2026-08-25 in [docs/milestones/](../milestones/README.md) — dort ist die
+> Zuordnung maschinenlesbar und wird von `devtools/milestone.py` geprüft.
+> Diese Notiz bleibt als Herleitung stehen und wird nicht mehr nachgeführt.
+>
 > Analyse-Notiz ohne Frontmatter — vom ReqToCode-Tooling ignoriert.
 > Herleitung: [docs/research/marktanalyse-agentic-harnesses-2026-08.md](../research/marktanalyse-agentic-harnesses-2026-08.md).
 > Bei Aufschreiben der Notiz waren alle unten genannten Requirements `status: draft`

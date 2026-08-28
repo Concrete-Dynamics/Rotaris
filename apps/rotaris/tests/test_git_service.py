@@ -166,8 +166,32 @@ def test_an_action_a_user_asked_for_still_reports_its_failure(tmp_path) -> None:
         service.delete_worktree(tmp_path / "nowhere")
 
 
+@pytest.fixture
+def git_identity(tmp_path, monkeypatch) -> None:
+    """Give git an author of this test's own, whatever the machine carries.
+
+    `prepare_repository` refuses to commit without one, and it asks git for the
+    *effective* `user.name` and `user.email` — so the four tests that take the
+    offer passed only on a machine where somebody had run `git config --global`
+    at some point. On the CI runner nobody had, and all four failed on a product
+    error that was entirely correct.
+
+    The neighbouring `test_the_offer_says_what_to_do_when_git_has_no_author`
+    already points `GIT_CONFIG_GLOBAL` at a file that does not exist to reach the
+    other branch; this is the same lever, aimed the other way. Both ignore the
+    system config too, so neither answer depends on the machine.
+    """
+    identity = tmp_path / "identity.gitconfig"
+    identity.write_text(
+        "[user]\n\tname = Test User\n\temail = test@example.invalid\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(identity))
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(tmp_path / "absent.gitconfig"))
+
+
 @verifies(SWR.SWR_2005, SWR.SWR_2405)
-def test_rotaris_can_set_up_git_for_a_folder_nobody_versioned(tmp_path) -> None:
+def test_rotaris_can_set_up_git_for_a_folder_nobody_versioned(tmp_path, git_identity) -> None:
     """Productive use: a user opens Rotaris on a plain folder and takes its offer.
     Expected outcome: a repository, a first commit, and Rotaris' own records kept
     out of that commit."""
@@ -198,7 +222,7 @@ def test_rotaris_can_set_up_git_for_a_folder_nobody_versioned(tmp_path) -> None:
 
 
 @verifies(SWR.SWR_2005)
-def test_setting_up_git_appends_to_an_existing_gitignore(tmp_path) -> None:
+def test_setting_up_git_appends_to_an_existing_gitignore(tmp_path, git_identity) -> None:
     """A user's own ignore rules survive Rotaris adding one of its own."""
     (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / ".gitignore").write_text("*.log\nbuild/\n", encoding="utf-8")
@@ -212,7 +236,7 @@ def test_setting_up_git_appends_to_an_existing_gitignore(tmp_path) -> None:
 
 
 @verifies(SWR.SWR_2005)
-def test_setting_up_git_twice_does_not_make_a_second_commit(tmp_path) -> None:
+def test_setting_up_git_twice_does_not_make_a_second_commit(tmp_path, git_identity) -> None:
     """The offer is idempotent: every step is skipped when it is already true."""
     (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
     store = WorkspaceStore()
@@ -229,7 +253,7 @@ def test_setting_up_git_twice_does_not_make_a_second_commit(tmp_path) -> None:
 
 
 @verifies(SWR.SWR_2005, SWR.SWR_2405)
-def test_a_commit_less_repository_is_offered_the_first_commit(tmp_path) -> None:
+def test_a_commit_less_repository_is_offered_the_first_commit(tmp_path, git_identity) -> None:
     """The other half: already `git init`-ed, still nothing committed."""
     _git(tmp_path, "init", "-b", "main")
     (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")

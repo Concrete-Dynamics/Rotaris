@@ -1,4 +1,4 @@
-.PHONY: install install-dev install-rotaris rotaris rotaris-demo test test-parallel test-rotaris test-capability test-live reqtocode reqtocode-fix lint format typecheck clean
+.PHONY: install install-dev install-rotaris rotaris rotaris-demo test test-parallel test-rotaris test-capability test-live test-devtools reqtocode reqtocode-fix milestone milestone-status lint format typecheck clean
 
 install:
 	uv sync --all-packages
@@ -56,14 +56,17 @@ test-capability:
 test-live:
 	uv run pytest tests/live -m live -q --timeout=900
 
+test-devtools:
+	uv run pytest devtools/tests -q --timeout=60
+
 test-cov:
 	uv run pytest --cov=rotaris_core --cov-report=term-missing
 
 lint:
-	uv run ruff check src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'
+	uv run ruff check devtools/ src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'
 
 format:
-	uv run ruff format src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'
+	uv run ruff format devtools/ src/ tests/ apps/rotaris/src/ apps/rotaris/tests/ --exclude 'tests/fixtures/files/large.py'
 
 typecheck:
 	uv run mypy src/rotaris_core/
@@ -79,3 +82,13 @@ reqtocode:
 
 reqtocode-fix:
 	uv run python -m rotaris_core.reqtocode check --fix
+
+# Milestone planning and the merge gate (devtools/README.md). Dev tooling, not
+# part of the product -- ReqToCode never sees devtools/ and it ships nowhere.
+# `make` is unavailable on Windows, so these are a convenience: the contract is
+# the `uv run python devtools/milestone.py ...` form the docs and agents use.
+milestone:
+	uv run python devtools/milestone.py check
+
+milestone-status:
+	uv run python devtools/milestone.py status

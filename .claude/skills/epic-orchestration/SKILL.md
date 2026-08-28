@@ -67,23 +67,28 @@ adds the `Derived requirements:` back-links in one commit.
 
 ## Phase 3 — integration branch
 
-Never let unit PRs target `master`. This is the one exception to the
-merge-into-`master` step in [AGENTS.md](../../../AGENTS.md#workflow--worktree-merge):
-units land on the epic branch, and only the epic branch reaches `master`.
+Never let unit PRs target `master`. Units land on the epic branch, and the epic
+branch reaches whatever base the epic itself belongs to — a milestone branch if
+one claims these requirements, `master` if none does. Ask, do not assume:
 
 ```bash
-git branch epic/swr-<n> master
+BASE=$(uv run python devtools/milestone.py branch-for SWR-<n>)   # milestone/… or master
+git branch epic/swr-<n> "origin/$BASE"
 git worktree add <scratchpad>/epic-integration epic/swr-<n>
 git push -u origin epic/swr-<n>
-gh pr create --draft --base master --head epic/swr-<n> --title "Epic SWR-<n>: ..."
+gh pr create --draft --base "$BASE" --head epic/swr-<n> --title "Epic SWR-<n>: ..."
 ```
+
+This nesting is what [AGENTS.md § 4](../../../AGENTS.md#workflow--worktree-merge)
+calls the chain: unit → epic → milestone → `master`. Only the last hop needs the
+milestone gate.
 
 Workers reset onto it as their first command (see the template) and target it with
 `gh pr create --base epic/swr-<n>`.
 
 Note: once you merge a unit branch into the epic branch, you can no longer retarget its
-PR — GitHub rejects it as having no new commits. Leave those PRs against `master`; they
-auto-close as merged when the epic lands.
+PR — GitHub rejects it as having no new commits. Leave those PRs against whatever base
+they were opened on; they auto-close as merged when the epic lands.
 
 ## Phase 4 — launch a wave
 
@@ -127,12 +132,20 @@ test per seam to drive the real composed path.
 ## Phase 6 — finalise
 
 The last unit owns: the canonical hermetic user-flow E2E, all `status: approved` flips,
-the spec corrections, `Derived requirements:` back-links, the
-`NOTE-marktreife-priorisierung.md` row, and both version bumps
-(`pyproject.toml` and `apps/rotaris/pyproject.toml`).
+the spec corrections, `Derived requirements:` back-links, and the epic index.
+
+**Version bumps depend on the base.** When the epic sits under a milestone, both manifests
+(`pyproject.toml` and `apps/rotaris/pyproject.toml`) go to that milestone's
+`target-version`, set once by whichever unit closes the *milestone* — not per epic, since
+the gate checks the manifests against it. When the epic goes straight to `master`, bump
+both as usual.
 
 Then: `reqtocode diff --strict` → `check --fix` → `check`, mark the epic PR ready, and
 write its body with the unit table, the notable findings, and anything left unmet.
+
+If the epic belongs to a milestone, `uv run python devtools/milestone.py status M<n>`
+afterwards shows what the milestone still owes — merging the epic is not the same as
+closing the milestone.
 
 ## Traps this project will spring on you
 

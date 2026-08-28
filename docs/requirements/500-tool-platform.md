@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-500, SWR-501, SWR-502, SWR-503, SWR-504, SWR-505, SWR-506, SWR-507, SWR-508, SWR-509, SWR-510, SWR-511, SWR-512, SWR-513, SWR-514, SWR-515, SWR-516, SWR-517, SWR-518, SWR-519, SWR-520, SWR-521, SWR-522, SWR-523, SWR-524, SWR-525, SWR-526, SWR-527, SWR-528, SWR-529, SWR-530, SWR-531, SWR-532, SWR-533, SWR-534, SWR-535, SWR-536, SWR-537, SWR-538, SWR-539, SWR-540, SWR-541, SWR-542, SWR-543, SWR-544, SWR-545, SWR-546, SWR-547, SWR-548, SWR-549, SWR-550, SWR-551, SWR-552, SWR-553, SWR-554, SWR-555, SWR-556, SWR-557, SWR-558, SWR-559, SWR-560, SWR-561, SWR-562, SWR-563]
+req-id: [SWR-500, SWR-501, SWR-502, SWR-503, SWR-504, SWR-505, SWR-506, SWR-507, SWR-508, SWR-509, SWR-510, SWR-511, SWR-512, SWR-513, SWR-514, SWR-515, SWR-516, SWR-517, SWR-518, SWR-519, SWR-520, SWR-521, SWR-522, SWR-523, SWR-524, SWR-525, SWR-526, SWR-527, SWR-528, SWR-529, SWR-530, SWR-531, SWR-532, SWR-533, SWR-534, SWR-535, SWR-536, SWR-537, SWR-538, SWR-539, SWR-540, SWR-541, SWR-542, SWR-543, SWR-544, SWR-545, SWR-546, SWR-547, SWR-548, SWR-549, SWR-550, SWR-553, SWR-554, SWR-555, SWR-559, SWR-560, SWR-561, SWR-562, SWR-563]
 status: approved
 trace: required
 test: required
@@ -377,26 +377,6 @@ source: docs/requirement-log/done/requirements-20260414-224700.md
 
 The TUI streaming filter must suppress pure model-internal markup while preserving chunks that contain both internal markers and user-visible text.
 
-## SWR-551 — Regression Coverage
-trace: optional
-legacy-id: REQ-20260414-224700-005
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-224700.md
-
-Add regression tests for housekeeping-only retries/failures, recovery after a corrective prompt, fixture-based reproduction of the captured session pattern, and mixed streaming-marker handling.
-
-## SWR-552 — Release Hygiene
-status: deprecated
-legacy-id: REQ-20260414-224700-006
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-224700.md
-
-Bump the package version after shipping the bug fix.
-
-Epic: [Tool Platform & Integrations](../500-tool-platform.md)
-
-> Deprecated 2026-07-19: one-time release action, completed; version policy lives in CLAUDE.md.
-
 ## SWR-553 — Disable Undocumented ThinkTool
 legacy-id: REQ-20260414-230140-001
 date: 2026-04-14
@@ -420,38 +400,6 @@ date: 2026-04-14
 source: docs/requirement-log/done/requirements-20260414-230140.md
 
 Prompt tool hints must explicitly mention accepted argument names for HAET and terminal tooling to reduce malformed tool calls.
-
-## SWR-556 — Recover Researcher JSON Once
-status: deprecated
-legacy-id: REQ-20260414-230140-004
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-230140.md
-
-The internal Researcher flow must retry once with a corrective prompt when its first response is not valid JSON.
-
-Epic: [Tool Platform & Integrations](../500-tool-platform.md)
-
-> Deprecated 2026-07-19: the internal Researcher flow was retired with the `find` tool.
-
-## SWR-557 — Regression Coverage
-trace: optional
-legacy-id: REQ-20260414-230140-005
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-230140.md
-
-Add unit tests for runtime-name rendering, default-tool configuration, and Researcher JSON-repair retry behavior.
-
-## SWR-558 — Release Hygiene
-status: deprecated
-legacy-id: REQ-20260414-230140-006
-date: 2026-04-14
-source: docs/requirement-log/done/requirements-20260414-230140.md
-
-Bump the package version after shipping the fixes.
-
-Epic: [Tool Platform & Integrations](../500-tool-platform.md)
-
-> Deprecated 2026-07-19: one-time release action, completed; version policy lives in CLAUDE.md.
 
 ## SWR-559 — Terminal observations must classify command outcomes separately from internal tool errors.
 legacy-id: REQ-20260709-TERM-001
@@ -551,98 +499,5 @@ Derived requirements: [SWR-2422 — Question Stepper Widget](2000-rotaris-deskto
 
 ## History
 
-Source documents merged into this epic (sections preserved verbatim; requirement tables migrated to the files above).
-
-### Rotaris - Tool Integrations and Custom Python Tool Plugins (2026-04-13)
-
-Original: `docs/requirement-log/partial/requirements-20260413-000003-tools.md` — document status: Partial - core tools implemented; preinstalled-MCP packaging assumptions remain open
-
-#### Description
-
-v1 ships with a set of first-class built-in tools (shell, file system, delegation, todo list, fetch, Playwright MCP) and a plugin interface for custom Python tools. All file-system-backed tools enforce workspace-root path restrictions. Secrets are redacted from all observable surfaces.
-
-#### Implementation Notes
-
-**Requirements - Tool Integrations & Custom Plugins:**
-
-**Migrated From:** `REQUIREMENTS.md` FR-3, FR-7 (dissolved 2026-05-03) plugin sandboxing may be incomplete. > **Cross-references:** > > - HAET (hash-anchored edit tool): `requirements-20260430-haet-overhaul.md` - HAET is > intentionally **excluded** from this file; that document is the sole authority. > - HAET tool contract (error messages, anchor format): > `requirements-20260413-201248.md` REQ-014 through REQ-016. > - Delegation tool contract (prompt schema, categories, session ID, background flag): > `requirements-20260413-201248.md` REQ-009 through REQ-013. > - `read_file` / `write_file` tool redesign: > `requirements-20260417-120000.md` - supersedes any `file_editor` references. > - Language-aware linter/formatter tools and `/inittools`: > `requirements-20260413-205430.md`. > - Researcher agent and `find` tool: > `requirements-20260413-210038.md`. > - Fetch tool freeze mitigation: > `requirements-20260414-162640.md`. > - Find tool fixes and schema alignment: > `requirements-20260414-191500.md`, `requirements-20260414-230140.md`. > - External MCP server config discovery (`mcp.json`): > `requirements-20260503-000000.md`.
-
-**General Tool Policy:**
-
-Note: Tavily MCP is configured through `npx -y tavily-mcp@latest`, and Playwright MCP is configured through `npx -y @playwright/mcp@latest --headless`, matching the npm-runner style used by the built-in LSP MCP server so users do not need globally installed MCP executables.
-
-**Hardened Terminal Tool:**
-
-The hardened terminal (`HardenedTerminalTool`) replaces the SDK's default terminal with forced-timeout-kill semantics and structured failure diagnostics. It is unconditionally re-registered under the `"terminal"` tool name at agent construction time.
-
-**Todo List Tool:**
-
-**Fetch Tool:**
-
-**Playwright MCP:**
-
-**FR-7: Custom Python Tool Plugins:**
-
-#### Acceptance Criteria
-
-All requirement rows are implemented or explicitly tracked according to status `Partial - core tools implemented; preinstalled-MCP packaging assumptions remain open`.
-
-### Gemma Tool-Calling Stall Hardening (2026-04-14)
-
-Original: `docs/requirement-log/done/requirements-20260414-224700.md` — document status: Complete
-
-#### Description
-
-Child conversations that only produce planning text plus `todo` housekeeping must not be treated as successful execution. The scheduler now detects that incomplete execution pattern, sends one recovery prompt that explicitly requires a task-advancing tool call, and fails the child cleanly if the model still does not follow through. The TUI streaming filter was also narrowed so mixed-content chunks are not over-suppressed when model-internal markers appear alongside real text.
-
-#### Implementation Notes
-
-**Requirements Document:**
-
-**Implementation Notes:**
-
-- Added transcript progress assessment and incomplete-execution recovery handling in `src/rotaris_core/orchestrator/scheduler.py`.
-
-- Narrowed marker suppression in `src/rotaris_core/tui/streaming.py` so only pure internal markup is filtered.
-
-- Added regression coverage in `tests/unit/test_scheduler.py`, `tests/unit/test_tui_streaming.py`, and the fixture `tests/fixtures/f62432f855bf.json`.
-
-- Updated Textual snapshot baselines in `tests/unit/__snapshots__/test_tui_workflows/` after the full unit run.
-
-- Bumped `pyproject.toml` from `0.10.1` to `0.10.2`.
-
-#### Acceptance Criteria
-
-All requirement rows are implemented or explicitly tracked according to status `Complete`.
-
-### Tool-Call Schema Alignment and Researcher JSON Recovery (2026-04-14)
-
-Original: `docs/requirement-log/done/requirements-20260414-230140.md` — document status: Complete
-
-#### Description
-
-Session `07a0e1a6528c` exposed three concrete issues: normal personas still inherited the undocumented SDK `ThinkTool`, persona prompts described alias names (`haet`, `shell`) instead of the actual runtime tool names (`haet_edit`, `terminal`), and the internal Researcher failed hard when Gemma returned malformed JSON. The fixes remove `ThinkTool` from standard personas, render runtime-accurate tool names and argument hints into prompts, and add a one-time JSON correction retry for the Researcher path.
-
-#### Implementation Notes
-
-**Requirements Document:**
-
-**Implementation Notes:**
-
-- Updated `src/rotaris_core/agents/factory.py` to render mapped runtime tool names into prompts and restrict default built-in tools to `["FinishTool"]`.
-
-- Expanded `src/rotaris_core/agents/prompt_render.py` hints to document runtime tool names and accepted HAET argument shapes.
-
-- Hardened `src/rotaris_core/agents/researcher.py` with a one-time JSON correction retry after malformed output.
-
-- Added regressions in `tests/unit/test_agent_factory.py`, `tests/unit/test_prompt_render.py`, and `tests/unit/test_find_tool.py`.
-
-- Bumped `pyproject.toml` from `0.10.2` to `0.10.3`.
-
-#### Acceptance Criteria
-
-All requirement rows are implemented or explicitly tracked according to status `Complete`.
-
-### requirements-20260709-terminal-tool-reliability.md (2026-07-09)
-
-Original: `docs/requirement-log/done/requirements-20260709-terminal-tool-reliability.md` — document status: done
+Source documents were merged into this epic on 2026-07-18; the originals live in
+git history under `docs/requirement-log/`.

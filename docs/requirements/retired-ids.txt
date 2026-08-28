@@ -6,4 +6,156 @@
 # when an id that the generated module carried is no longer in the store.
 #
 # <req-id>\t<retired-on, ISO 8601>\t<last known title>
+SWR-137	2026-08-28	Regression Coverage
+SWR-138	2026-08-28	Release Hygiene
+SWR-145	2026-08-28	Tests
+SWR-149	2026-08-28	Add a `[[ROTARIS:INTENT_INSTRUCTIONS]]` placeholder to the orchestrator's prompt.
+SWR-150	2026-08-28	Introduce a mapping of intents to specific instruction text (prompt snippets).
+SWR-151	2026-08-28	Inject the matched intent's instruction text into the `[[ROTARIS:INTENT_INSTRUCTIONS]]` placeholder when initializing the orchestrator.
+SWR-153	2026-08-28	Define intent mappings securely outside of hardcoded logic (e.g., using a metadata YAML file mapping intents to markdown snippet files in `src/rotaris_core/agents/prompts/intents/`).
+SWR-158	2026-08-28	Planner-First Routing For Plan-Worthy Intents
+SWR-161	2026-08-28	Regression Coverage
+SWR-307	2026-08-28	models.yml
+SWR-312	2026-08-28	Secrets in models.yml
+SWR-333	2026-08-28	Test Coverage
+SWR-345	2026-08-28	Explore persona (read-only codebase recon)
+SWR-359	2026-08-28	Tests
+SWR-360	2026-08-28	Persona prompt upgrades
+SWR-363	2026-08-28	Version bump
+SWR-370	2026-08-28	Regression Coverage
+SWR-371	2026-08-28	Version Bump
+SWR-382	2026-08-28	Regression Coverage
+SWR-383	2026-08-28	Version Bump
+SWR-437	2026-08-28	Test: Discovery Priority and Name Collisions
+SWR-438	2026-08-28	Test: Canonical and Legacy Frontmatter Parsing
+SWR-439	2026-08-28	Test: Level 1 Metadata Catalog Injection
+SWR-440	2026-08-28	Test: Level 2 Agent-Initiated Retrieval
+SWR-441	2026-08-28	Test: Level 3 Script Execution Boundary
+SWR-442	2026-08-28	Test: Slash-Command Registration and Invocation
+SWR-443	2026-08-28	Test: `/skills` and `/skill` UX
+SWR-444	2026-08-28	Three-Tier Discovery
+SWR-446	2026-08-28	Git Root Detection
+SWR-447	2026-08-28	Subdirectory Walk
+SWR-448	2026-08-28	Fallback Filename Support
+SWR-459	2026-08-28	Test: Three-Tier Discovery and Merge Order
+SWR-460	2026-08-28	Test: Override File Replaces Regular File
+SWR-461	2026-08-28	Test: Git Root Detection
+SWR-462	2026-08-28	Test: Per-File and Total Size Caps
+SWR-463	2026-08-28	Test: Empty File Skip and Read Errors
+SWR-464	2026-08-28	Test: AgentContext Injection
+SWR-551	2026-08-28	Regression Coverage
+SWR-552	2026-08-28	Release Hygiene
+SWR-556	2026-08-28	Recover Researcher JSON Once
+SWR-557	2026-08-28	Regression Coverage
+SWR-558	2026-08-28	Release Hygiene
+SWR-601	2026-08-28	Researcher Agent: Definition
+SWR-602	2026-08-28	Researcher Agent: Non-Addressable by Other Agents
+SWR-603	2026-08-28	`find` Tool: Registration
+SWR-604	2026-08-28	`find` Tool: Parameters
+SWR-605	2026-08-28	`find` Tool: Invocation Dispatches Researcher
+SWR-606	2026-08-28	`find` Tool: Output Contract
+SWR-607	2026-08-28	Researcher Agent: System Prompt - Output Schema
+SWR-608	2026-08-28	Researcher Agent: System Prompt - Search Strategy
+SWR-609	2026-08-28	Researcher Agent: System Prompt - Snippet Extraction Rules
+SWR-610	2026-08-28	Researcher Agent: System Prompt - Prohibited Actions
+SWR-611	2026-08-28	Researcher Agent: Tool Permissions
+SWR-612	2026-08-28	Researcher Agent: Model Configuration
+SWR-613	2026-08-28	`find` Tool: Structured Output Passthrough
+SWR-614	2026-08-28	`find` Tool: Error Handling
+SWR-615	2026-08-28	`find` Tool: Timeout
+SWR-616	2026-08-28	Encapsulation: No Researcher Leakage in UI
+SWR-617	2026-08-28	Output Determinism
+SWR-618	2026-08-28	`find` Tool: Context Efficiency
+SWR-619	2026-08-28	No Direct Researcher Invocation
+SWR-620	2026-08-28	Schema Stability
+SWR-621	2026-08-28	Test: `find` Tool Invocation Dispatches Researcher
+SWR-622	2026-08-28	Test: Researcher Is Not Addressable
+SWR-623	2026-08-28	Test: Output Schema Conformance
+SWR-624	2026-08-28	Test: Snippet Extraction Rules
+SWR-625	2026-08-28	Test: Tool Permission Enforcement
+SWR-626	2026-08-28	Test: Error Object on Failure
+SWR-627	2026-08-28	Test: Structured Output Passthrough
+SWR-628	2026-08-28	Test: Researcher Not in Monitoring UI
+SWR-634	2026-08-28	Regression Coverage
+SWR-635	2026-08-28	Accept OpenHands Assistant Events
+SWR-636	2026-08-28	Preserve JSON Contract
+SWR-637	2026-08-28	Disable Irrelevant Built-Ins
+SWR-638	2026-08-28	Regression Coverage
+SWR-644	2026-08-28	Regression Coverage
+SWR-645	2026-08-28	Release Hygiene
+SWR-649	2026-08-28	Regression coverage
+SWR-650	2026-08-28	Version bump (0.10.5 → 0.10.6)
+SWR-651	2026-08-28	First-Class `file_editor` Tool Mapping
+SWR-652	2026-08-28	Default Personas Use Normal Editing
+SWR-653	2026-08-28	Researcher Uses Standard Read Surface
+SWR-654	2026-08-28	Prompt Guidance Matches Runtime Tools
+SWR-655	2026-08-28	Docs And Examples Reflect New Default
+SWR-656	2026-08-28	Regression Coverage For Dual Support
+SWR-663	2026-08-28	Unit tests
+SWR-664	2026-08-28	Integration tests
+SWR-1007	2026-08-28	Model Selection Shortcut
+SWR-1008	2026-08-28	Command Palette
+SWR-1039	2026-08-28	Regression Test Coverage
+SWR-1049	2026-08-28	Regression test coverage
+SWR-1062	2026-08-28	Theme Command Tests
+SWR-1063	2026-08-28	Visual Snapshot Tests
+SWR-1112	2026-08-28	Superseded
+SWR-1121	2026-08-28	`ctrl+s` shortcut + clickable `_MetaStashShortcut` in meta bar. **Superseded by
+SWR-1252	2026-08-28	Unit: focus selection drives header label
+SWR-1253	2026-08-28	Unit: elapsed formatting for focused running agent
+SWR-1254	2026-08-28	Unit: elapsed freeze on terminal state
+SWR-1255	2026-08-28	Unit: color mapping by state
+SWR-1256	2026-08-28	TUI workflow: arrow-key traversal
+SWR-1257	2026-08-28	TUI resilience: no focus available
+SWR-1275	2026-08-28	Visible-Range Rendering
+SWR-1276	2026-08-28	Event-to-Line Height Map
+SWR-1277	2026-08-28	Incremental Rebuild Preference
+SWR-1278	2026-08-28	Compatibility with RichLog
+SWR-1284	2026-08-28	Regression Coverage
+SWR-1308	2026-08-28	Regression Coverage
+SWR-1313	2026-08-28	Regression Coverage
+SWR-1449	2026-08-28	Unit: command registered
+SWR-1450	2026-08-28	Unit: ForceCompress posted
+SWR-1451	2026-08-28	Unit: threshold bypass
+SWR-1452	2026-08-28	Unit: no agents running
+SWR-1453	2026-08-28	Integration: multiple agents compressed
+SWR-1454	2026-08-28	TUI workflow
+SWR-1455	2026-08-28	TUI no-crash (random interaction)
+SWR-1510	2026-08-28	Regression Test Coverage
+SWR-1515	2026-08-28	Regression Coverage
+SWR-1516	2026-08-28	Version Bump
+SWR-1536	2026-08-28	Test coverage
+SWR-1620	2026-08-28	Unit: Improvement Collector invoked post-run
+SWR-1621	2026-08-28	Unit: no Improvement Collector inline task interference
+SWR-1622	2026-08-28	Unit: artifact validation
+SWR-1623	2026-08-28	Unit: approval persistence
+SWR-1624	2026-08-28	Unit: improvement-run gating
+SWR-1625	2026-08-28	Unit: no recursive chaining
+SWR-1626	2026-08-28	Integration: end-to-end approval flow
+SWR-1627	2026-08-28	TUI workflow
+SWR-1628	2026-08-28	Unit: persona-memory injection isolation
+SWR-1629	2026-08-28	Unit: persona-memory boundedness and visibility
+SWR-1630	2026-08-28	Unit: manual persona-memory edit compatibility
+SWR-1631	2026-08-28	Unit: collector persona-memory proposal validation
+SWR-1632	2026-08-28	Integration: persona-memory approval flow
+SWR-1702	2026-08-28	Researcher Override Wiring
+SWR-1703	2026-08-28	Researcher Validation
+SWR-1705	2026-08-28	Regression Coverage
+SWR-1903	2026-08-28	`find` Tool Access
+SWR-2109	2026-08-28	Traceability Matrix
+SWR-2301	2026-08-28	Requirements Log Folder
+SWR-2302	2026-08-28	Unique Requirement IDs
+SWR-2304	2026-08-28	Parser - Requirements Ingestion
+SWR-2305	2026-08-28	Parser - Test Ingestion
+SWR-2306	2026-08-28	Traceability Matrix Generation
+SWR-2307	2026-08-28	Matrix - Status Column
+SWR-2308	2026-08-28	Matrix - Blocker Column
+SWR-2309	2026-08-28	File-Level Blocker Propagation
+SWR-2310	2026-08-28	Matrix - Test Coverage Column
+SWR-2312	2026-08-28	agents.md Reference
+SWR-2313	2026-08-28	Post-Commit Hook Execution
+SWR-2314	2026-08-28	Matrix Idempotency
+SWR-2320	2026-08-28	Matrix Readability
+SWR-2321	2026-08-28	Matrix is Single Source of Truth
+SWR-2323	2026-08-28	ID Stability
 SWR-3718	2026-08-23	First-run provisioning makes automatic network activity explicit

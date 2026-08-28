@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-2100, SWR-2101, SWR-2102, SWR-2103, SWR-2104, SWR-2105, SWR-2106, SWR-2107, SWR-2108, SWR-2109, SWR-2110, SWR-2111, SWR-2112, SWR-2113, SWR-2114, SWR-2115, SWR-2116, SWR-2117, SWR-2118, SWR-2119, SWR-2120, SWR-2121]
+req-id: [SWR-2100, SWR-2101, SWR-2102, SWR-2103, SWR-2104, SWR-2105, SWR-2106, SWR-2107, SWR-2108, SWR-2110, SWR-2111, SWR-2112, SWR-2113, SWR-2114, SWR-2115, SWR-2116, SWR-2117, SWR-2118, SWR-2119, SWR-2120, SWR-2121]
 status: approved
 trace: required
 test: required
@@ -85,18 +85,6 @@ date: 2026-04-13
 source: docs/requirement-log/partial/requirements-20260413-000005-nfr-and-policy.md
 
 Runtime concurrency is single-process and asyncio-based.
-
-## SWR-2109 — Traceability Matrix
-status: deprecated
-trace: optional
-test: optional
-legacy-id: NFR-9
-date: 2026-04-13
-source: docs/requirement-log/partial/requirements-20260413-000005-nfr-and-policy.md
-
-A traceability matrix between requirement IDs (`FR-*` / `NFR-*`) and tests is generated automatically by `generate_traceability.py`. The script parses requirement IDs from requirement files and `# @req: <ID>[, <ID>...]` annotations above test functions, emits `TRACEABILITY.md`, and is run as a pre-commit hook (`.pre-commit-hook.sh`) and via `make traceability` / `make test-trace`.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`python -m rotaris_core.reqtocode check`, see `docs/reference/reqtocode-blueprint.md`). `generate_traceability.py`, `TRACEABILITY.md`, and the `make traceability` / `make test-trace` targets have been removed; the pre-commit hook now runs only the ReqToCode gate.
 
 ## SWR-2110 — Protected LLM Completion Against Bare-Raise Crash
 legacy-id: NFR-10
@@ -203,81 +191,5 @@ Any unreferenced `secret_redaction` field, unused setter, stale comment, or phan
 
 ## History
 
-Source documents merged into this epic (sections preserved verbatim; requirement tables migrated to the files above).
-
-### Rotaris - NFRs and Operational Policy (2026-04-13)
-
-Original: `docs/requirement-log/partial/requirements-20260413-000005-nfr-and-policy.md` — document status: Partial - pip packaging and GitHub Release bundle automation are complete; Docker image remains open
-
-#### Description
-
-Non-functional requirements covering distribution, runtime constraints, and observability. The default runtime policy table defines v1 timeout, retry, and concurrency defaults.
-
-#### Implementation Notes
-
-**Requirements - Non-Functional Requirements & Default Runtime Policy:**
-
-**Migrated From:** `REQUIREMENTS.md` NFR section, Default Runtime Policy (dissolved 2026-05-03) Docker image and some timeout policy enforcement may be incomplete.
-
-**Default Runtime Policy (v1):**
-
-Setting | Default Max active direct children / parent | `8` Max delegation depth | `3` levels below the entry persona Child agent wall-clock timeout | `20 minutes` from spawn to terminal report artifact Model call timeout | `120 seconds` Shell tool timeout | `300 seconds` Non-shell tool timeout | `30 seconds` Summary agent timeout | `60 seconds` Automatic retries | `1` retry for transient transport/runtime failures; `0` automatic retries for validation errors, HAET hash mismatches, or non-zero shell exits Dependency failure behavior | Dependents move to `blocked` and are not auto-started Parent/session cancellation behavior | Cancellation cascades to active descendants; completed child reports remain available
-
-**Out of Scope for v1:**
-
-Topic | Notes Community persona registry | Future - shareable personas via Git repos or a registry endpoint GUI / web interface | TUI only for v1 Persistent agent memory across sessions | Long-term memory/learning is not a v1 requirement; evaluate MCP memory servers as an optional integration Multi-workspace / multi-project orchestration | Single workspace per session Agent authentication / multi-user | Single-developer local tool
-
-#### Acceptance Criteria
-
-All requirement rows are implemented or explicitly tracked according to status `Partial - pip packaging and GitHub Release bundle automation are complete; Docker image remains open`.
-
-### Centralized Path Authorization (2026-07-14)
-
-Original: `docs/requirement-log/unresolved/requirements-20260714-centralized-path-auth.md` — document status: Not Started
-
-#### Description
-
-Replace scattered per-tool workspace-boundary checks with a centralized
-`PathAuth` class that enforces the "Allow outside workspace" runtime policy
-consistently. The safe default rejects path escapes; explicit opt-in allows
-stated paths. Wire `PathAuth` into `FileToolEngine`, HAET engine, search/glob,
-and git-commit. The terminal tool explicitly documents that shell execution is
-not sandboxed regardless of the workspace boundary toggle.
-
-#### Acceptance Criteria
-
-- `PathAuth(workspace_root, allow_outside=False).validate("/etc/passwd")` raises `ValueError`.
-- `PathAuth(workspace_root, allow_outside=True).validate("/etc/passwd")` returns the resolved path.
-- `PathAuth(workspace_root).validate("src/main.py")` resolves correctly relative to workspace root.
-- Traversal attempt `validate("../outside")` resolves outside the workspace and raises `ValueError`.
-- `FileToolEngine.resolve_path("/etc/passwd")` raises `ValueError` when `allow_outside=False`;
-  returns resolved path when `allow_outside=True`.
-- HAET engine and git-commit reject outside-workspace paths with the same semantics.
-- Search/glob skip results outside the workspace when `allow_outside=False`.
-- All existing tool tests pass without modification.
-- Unit tests for `PathAuth` cover 7+ scenarios (relative, absolute, outside-rejected,
-  outside-allowed, traversal, is_allowed, normalization).
-- Terminal tool description documents the absence of a shell sandbox.
-
-### Secret Redaction Cleanup (2026-07-14)
-
-Original: `docs/requirement-log/unresolved/requirements-20260714-secret-redaction-cleanup.md` — document status: Not Started
-
-#### Description
-
-Secret redaction must always be active. Remove any editable toggle, store field,
-or onboarding logic that suggests redaction can be disabled. Present a
-non-interactive "always active" status in the Runtime Policy settings and chrome.
-Backend redaction behaviour is unchanged — this is a UI cleanup and dead-code
-removal task only.
-
-#### Acceptance Criteria
-
-- `grep -ri "secret_redaction\|redaction.*toggle\|redaction.*disabled\|redaction.*off" apps/rotaris/src/rotaris/ src/rotaris_core/`
-  returns only the two expected non-interactive display lines in `settings.py` and `chrome.py`.
-- No editable toggle, store field, or `secret_redaction` boolean exists anywhere in Rotaris or
-  the backend config schema.
-- Onboarding does not mention disabling or toggling redaction.
-- All existing tests pass without modification — no test relies on a now-removed toggle.
-- Rotaris Settings → Runtime Policy shows "Secret redaction: always active" as a muted,
-  non-interactive label.
+Source documents were merged into this epic on 2026-07-18; the originals live in
+git history under `docs/requirement-log/`.

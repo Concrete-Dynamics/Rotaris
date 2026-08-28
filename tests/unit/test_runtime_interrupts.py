@@ -73,7 +73,7 @@ def test_first_interrupt_does_not_force_exit() -> None:
     assert exits == [], "force_exit must not run on the first interrupt"
 
 
-@verifies(SWR.SWR_1302, SWR.SWR_1308, SWR.SWR_2108)
+@verifies(SWR.SWR_1302, SWR.SWR_2108)
 def test_second_interrupt_uses_exit_code_130() -> None:
     """REQ-002: SIGINT exit code is 128 + signum (130 for SIGINT) per POSIX."""
     exits: list[int] = []
@@ -132,7 +132,7 @@ def test_set_callbacks_late_binds_handlers() -> None:
     assert "late-second" in events
 
 
-@verifies(SWR.SWR_1308)
+@verifies(SWR.SWR_1302)
 def test_callback_exception_does_not_break_interrupt_flow(caplog: Any) -> None:
     """REQ-002: a buggy first-interrupt callback must not prevent the
     second press from force-exiting.
@@ -156,7 +156,7 @@ def test_callback_exception_does_not_break_interrupt_flow(caplog: Any) -> None:
     assert exits == [130]
 
 
-@verifies(SWR.SWR_1308)
+@verifies(SWR.SWR_1302)
 def test_emit_exception_is_swallowed() -> None:
     """A failing ``emit`` must not break the interrupt flow."""
 
@@ -175,7 +175,7 @@ def test_emit_exception_is_swallowed() -> None:
     assert exits == [130]
 
 
-@verifies(SWR.SWR_1305, SWR.SWR_1306, SWR.SWR_1308)
+@verifies(SWR.SWR_1305, SWR.SWR_1306)
 def test_tui_wiring_invokes_request_interrupt_stop() -> None:
     """REQ-005: the TUI entry point binds first-press → stop(force=False),
     second-press → stop(force=True). Verifies the wiring contract by
@@ -201,7 +201,7 @@ def test_tui_wiring_invokes_request_interrupt_stop() -> None:
     assert exits == [130]
 
 
-@verifies(SWR.SWR_1304, SWR.SWR_1308)
+@verifies(SWR.SWR_1304)
 def test_background_wiring_uses_typer_echo_for_emit() -> None:
     """REQ-004: background runner constructs the handler with ``emit=typer.echo``.
 

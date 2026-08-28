@@ -56,7 +56,7 @@ def _job(tmp_path, collector: _Collector) -> PostRunImprovementJob:
     )
 
 
-@verifies(SWR.SWR_1639, SWR.SWR_1621)
+@verifies(SWR.SWR_1639)
 def test_ralph_run_returns_before_optional_analysis_starts() -> None:
     """Productive use: a completed task becomes available immediately.
     Expected outcome: RalphLoop returns terminal progress without awaiting the
@@ -82,7 +82,7 @@ def test_ralph_run_returns_before_optional_analysis_starts() -> None:
     loop._run_main_loop.assert_awaited_once()
 
 
-@verifies(SWR.SWR_1639, SWR.SWR_1620)
+@verifies(SWR.SWR_1639)
 def test_post_run_job_persists_one_terminal_artifact(tmp_path) -> None:
     """Productive use: a completed task run can be reviewed for improvements.
     Expected outcome: the captured job persists its source-session artifact and reports it."""
@@ -133,7 +133,7 @@ def _loop_for_capture(tmp_path, run_type: RunType) -> RalphLoop:
     return loop
 
 
-@verifies(SWR.SWR_1611, SWR.SWR_1625)
+@verifies(SWR.SWR_1611)
 def test_an_improvement_run_captures_no_further_improvement_job(tmp_path) -> None:
     """Productive use: reviewing approved improvements must not breed more reviews.
     Expected outcome: an `improvement_run` captures no collector job, while an

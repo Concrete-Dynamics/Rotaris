@@ -102,7 +102,7 @@ def test_rotaris_agent_leaves_non_finish_tool_calls_unchanged() -> None:
     assert repaired == tool_call
 
 
-@verifies(SWR.SWR_557)
+@verifies(SWR.SWR_2129)
 def test_factory_agent_is_sdk_compatible_subclass() -> None:
     assert issubclass(RotarisAgent, Agent)
 

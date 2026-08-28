@@ -43,7 +43,7 @@ def _write_skill(directory: Path, extra: str = "") -> Path:
     return skill_file
 
 
-@verifies(SWR.SWR_431, SWR.SWR_443)
+@verifies(SWR.SWR_431)
 def test_skills_command_lists_catalog(tmp_path: Path) -> None:
     clear_skill_catalog_cache()
     _write_skill(tmp_path / ".agents" / "skills" / "review")
@@ -58,7 +58,7 @@ def test_skills_command_lists_catalog(tmp_path: Path) -> None:
     assert "in_context=no" in content
 
 
-@verifies(SWR.SWR_428, SWR.SWR_442)
+@verifies(SWR.SWR_428)
 def test_skill_trigger_injects_body_and_marks_in_context(tmp_path: Path) -> None:
     clear_skill_catalog_cache()
     _write_skill(
@@ -75,7 +75,7 @@ def test_skill_trigger_injects_body_and_marks_in_context(tmp_path: Path) -> None
     assert "in_context=yes" in app.current_session.transcript_events[-1]["content"]
 
 
-@verifies(SWR.SWR_428, SWR.SWR_442)
+@verifies(SWR.SWR_428)
 def test_skill_name_registers_as_slash_command(tmp_path: Path) -> None:
     clear_skill_catalog_cache()
     _write_skill(tmp_path / ".agents" / "skills" / "review")
@@ -87,7 +87,7 @@ def test_skill_name_registers_as_slash_command(tmp_path: Path) -> None:
     assert "skill body" in app.steering[0]
 
 
-@verifies(SWR.SWR_432, SWR.SWR_433, SWR.SWR_443)
+@verifies(SWR.SWR_432, SWR.SWR_433)
 def test_skill_command_loads_manual_skill(tmp_path: Path) -> None:
     clear_skill_catalog_cache()
     manual = _write_skill(tmp_path / "manual")

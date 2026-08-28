@@ -77,7 +77,7 @@ def _write_agents_yaml(workspace_root: Path, content: str) -> None:
     (config_dir / "agents.yaml").write_text(content, encoding="utf-8")
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_load_config_without_snapshot_keeps_default_model_set(
     tmp_path: Path,
     monkeypatch: Any,
@@ -89,7 +89,7 @@ def test_load_config_without_snapshot_keeps_default_model_set(
     assert "snapshot-only-model" not in config.models
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_load_config_synthesizes_copilot_models_from_snapshot(
     tmp_path: Path,
     monkeypatch: Any,
@@ -198,7 +198,7 @@ def test_load_cloud_model_forwards_snapshot_customer_pricing_to_litellm(
     assert llm.output_cost_per_token == 0.000002
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_load_config_synthesizes_model_token_limits_from_snapshot(
     tmp_path: Path,
     monkeypatch: Any,
@@ -227,7 +227,7 @@ def test_load_config_synthesizes_model_token_limits_from_snapshot(
     assert config.models["copilot/gpt-runtime"].max_output_tokens == 16000
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_load_config_synthesizes_codex_auth_provider_from_snapshot(
     tmp_path: Path,
     monkeypatch: Any,
@@ -246,7 +246,7 @@ def test_load_config_synthesizes_codex_auth_provider_from_snapshot(
     assert config.models["codex/codex-mini"].api_key is None
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_load_config_synthesizes_deepseek_models_from_snapshot(
     tmp_path: Path,
     monkeypatch: Any,
@@ -272,7 +272,7 @@ def test_load_config_synthesizes_deepseek_models_from_snapshot(
     assert config.models["deepseek/deepseek-v4-flash"].provider == "deepseek"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_snapshot_backed_copilot_model_loads_with_valid_litellm_provider(
     tmp_path: Path,
     monkeypatch: Any,
@@ -423,7 +423,7 @@ def test_snapshot_backed_copilot_chat_model_keeps_the_chat_route(
     assert _litellm_mode("gpt-5.4") != "responses"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_snapshot_backed_deepseek_model_loads_with_deepseek_provider_prefix(
     tmp_path: Path,
     monkeypatch: Any,
@@ -443,7 +443,7 @@ def test_snapshot_backed_deepseek_model_loads_with_deepseek_provider_prefix(
     assert llm.base_url == "https://api.deepseek.com/v1"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_user_defined_model_with_snapshot_id_wins(tmp_path: Path, monkeypatch: Any) -> None:
     monkeypatch.setattr("rotaris_core.config.loader.GLOBAL_CONFIG_DIR", tmp_path)
     write_snapshot(
@@ -468,7 +468,7 @@ def test_user_defined_model_with_snapshot_id_wins(tmp_path: Path, monkeypatch: A
     assert config.models["copilot/gpt-4o"].auth_provider is None
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_medium_and_fallback_model_overlay_merge_global_to_workspace(
     tmp_path: Path,
     monkeypatch,
@@ -488,7 +488,7 @@ def test_medium_and_fallback_model_overlay_merge_global_to_workspace(
     assert config.fallback_model == "global-fallback"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_snapshot_provider_with_zero_models_adds_no_models(
     tmp_path: Path,
     monkeypatch: Any,
@@ -504,7 +504,7 @@ def test_snapshot_provider_with_zero_models_adds_no_models(
     assert all(model.auth_provider != "copilot" for model in config.models.values())
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_malformed_snapshot_logs_warning_and_loads_defaults(
     tmp_path: Path,
     caplog,
@@ -522,7 +522,7 @@ def test_malformed_snapshot_logs_warning_and_loads_defaults(
     assert "Ignoring project settings snapshot" in caplog.text
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_default_persona_only_agents_yaml_with_snapshot_validates_cleanly(
     tmp_path: Path,
     monkeypatch: Any,
@@ -548,7 +548,7 @@ def test_default_persona_only_agents_yaml_with_snapshot_validates_cleanly(
     assert config.models["copilot/gpt-5-mini"].auth_provider == "copilot"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_workspace_aliases_to_snapshot_copilot_models_validate_cleanly(
     tmp_path: Path,
     monkeypatch: Any,
@@ -604,7 +604,7 @@ def test_workspace_aliases_to_snapshot_copilot_models_validate_cleanly(
     assert validate_config(config) == []
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_snapshot_bridges_tier_aliases_when_user_did_not_set(
     tmp_path: Path,
     monkeypatch: Any,
@@ -640,7 +640,7 @@ def test_snapshot_bridges_tier_aliases_when_user_did_not_set(
     assert config.fallback_model == "copilot/gpt-5-nano"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_load_config_synthesizes_openai_compatible_models_with_base_url(
     tmp_path: Path,
     monkeypatch: Any,
@@ -677,7 +677,7 @@ def test_load_config_synthesizes_openai_compatible_models_with_base_url(
     )
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_user_set_large_model_wins_over_snapshot(tmp_path: Path, monkeypatch: Any) -> None:
     monkeypatch.setattr("rotaris_core.config.loader.GLOBAL_CONFIG_DIR", tmp_path)
     write_snapshot(
@@ -703,7 +703,7 @@ def test_user_set_large_model_wins_over_snapshot(tmp_path: Path, monkeypatch: An
     assert config.small_model == "copilot/gpt-5-nano"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_user_set_fallback_model_wins_over_snapshot_small_model(
     tmp_path: Path,
     monkeypatch: Any,
@@ -728,7 +728,7 @@ def test_user_set_fallback_model_wins_over_snapshot_small_model(
     assert config.fallback_model == "custom-fallback"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1735)
 def test_snapshot_with_no_tier_values_preserves_builtin_startup_defaults(
     tmp_path: Path,
     monkeypatch: Any,

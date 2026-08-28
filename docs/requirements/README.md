@@ -129,10 +129,25 @@ every id it declares. See `SWR-2330` (`2300-traceability/`).
 - `draft` — planned/not started/partial; nothing enforced.
 - `approved` — implemented; once ReqToCode is built, `trace: required` demands a
   `Traces` reference and `test: required` a `Verifies` test reference.
-- `deprecated` — superseded/removed behavior; references produce warnings.
+- `deprecated` — superseded/removed behavior; references produce warnings. This
+  is a **transition, not a resting place**: it marks the requirement while its
+  references are migrated away, and once nothing points at it the entry is
+  deleted from the store (see below).
 
 When a requirement's implementation status changes, update `status` in its file
 (this replaces the old `done/` / `partial/` / `unresolved/` folder buckets).
+
+### Deleting a superseded requirement
+
+A `deprecated` requirement whose `@traces` / `@verifies` sites are all gone is
+dead text: it says nothing about the product and nothing about the code. Delete
+it — remove its `## SWR-<n>` section and drop the id from the spec file's
+`req-id:` list — then run `check --fix`, which writes the id, the date and the
+last known title to the append-only `retired-ids.txt`. The tombstone is the
+permanent record; the text itself stays in git history. Ids are never reused, and
+`retired-ids.txt` is what enforces that. Prose elsewhere that named the
+requirement should say it was **retired** and point at the tombstone file, so a
+reader who follows an old id lands somewhere.
 
 ## Code and test annotations (ReqToCode)
 
@@ -182,7 +197,14 @@ and productive-use contract.
 Test level and productive intent are review-enforced. `@verifies` remains the
 machine-readable ReqToCode coverage link.
 
-Epic files end with a **History** section preserving the Description /
-Implementation Notes / Acceptance Criteria of the original requirement-log
-documents that were merged into the epic (migrated 2026-07-18; originals
-remain in git history under `docs/requirement-log/`).
+Epic files end with a **History** section. It is for narrative a reader cannot
+reconstruct from the requirements above it — why a requirement was re-cut, what
+an implementation chose over the alternative, when a batch of ids was triaged.
+
+It is **not** a second copy of the requirements. The 2026-07-18 migration pasted
+each source document's Description / Implementation Notes / Acceptance Criteria
+under here verbatim, next to the requirements those same documents had already
+become; that duplicate was deleted on 2026-08-28 and every epic now carries a
+one-line pointer instead — the originals are in git history under
+`docs/requirement-log/`. Add to History when the story is worth telling, never to
+restate a requirement.

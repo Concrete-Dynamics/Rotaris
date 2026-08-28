@@ -66,7 +66,7 @@ def test_proposal_requires_at_least_one_evidence() -> None:
         )
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1617, SWR.SWR_1631)
+@verifies(SWR.SWR_1602, SWR.SWR_1617)
 def test_persona_memory_update_requires_target_persona() -> None:
     with pytest.raises(ValidationError, match="target_persona"):
         ImprovementProposal(
@@ -127,7 +127,7 @@ def test_artifact_round_trips_through_json() -> None:
     assert reloaded.proposals[0].summary == proposal.summary
 
 
-@verifies(SWR.SWR_1602, SWR.SWR_1606, SWR.SWR_1622)
+@verifies(SWR.SWR_1602, SWR.SWR_1606)
 def test_validate_artifact_rejects_proposal_without_evidence() -> None:
     bad_payload = {
         "artifact_id": new_artifact_id(),

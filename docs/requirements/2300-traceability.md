@@ -1,5 +1,5 @@
 ---
-req-id: [SWR-2300, SWR-2301, SWR-2302, SWR-2303, SWR-2304, SWR-2305, SWR-2306, SWR-2307, SWR-2308, SWR-2309, SWR-2310, SWR-2311, SWR-2312, SWR-2313, SWR-2314, SWR-2315, SWR-2316, SWR-2317, SWR-2318, SWR-2319, SWR-2320, SWR-2321, SWR-2322, SWR-2323, SWR-2324, SWR-2325, SWR-2326, SWR-2327, SWR-2328, SWR-2329, SWR-2330, SWR-2331, SWR-2332, SWR-2333, SWR-2334, SWR-2335, SWR-2336, SWR-2337]
+req-id: [SWR-2300, SWR-2303, SWR-2311, SWR-2315, SWR-2316, SWR-2317, SWR-2318, SWR-2319, SWR-2322, SWR-2324, SWR-2325, SWR-2326, SWR-2327, SWR-2328, SWR-2329, SWR-2330, SWR-2331, SWR-2332, SWR-2333, SWR-2334, SWR-2335, SWR-2336, SWR-2337]
 status: draft
 trace: required
 test: required
@@ -14,31 +14,6 @@ trace: optional
 test: optional
 
 The requirements traceability system itself: ID conventions, matrix generation, and test annotation coverage.
-
-## SWR-2301 — Requirements Log Folder
-status: deprecated
-trace: optional
-legacy-id: REQ-20260417-120000-001
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The project must contain a dedicated requirements log folder that holds all requirements files.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`docs/reference/reqtocode-blueprint.md`). The legacy `generate_traceability.py` parser and `TRACEABILITY.md` matrix were removed; traceability is now enforced by `python -m rotaris_core.reqtocode check` over `@traces` / `@verifies` annotations and the `docs/requirements/` store.
-
-## SWR-2302 — Unique Requirement IDs
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-002
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-Every requirement within a requirements file must have a unique, stable ID.
-
-> **Deprecated (2026-08-09):** absorbed by [SWR-2324](#swr-2324--generated-traceables-module),
-> whose acceptance criteria already require the generator to abort on duplicate ids. Kept
-> as a tombstone so the id is never reused.
 
 ## SWR-2303 — Annotation convention is stack-resolved, not Python-only
 legacy-id: REQ-20260417-120000-003
@@ -57,89 +32,6 @@ Requirement: the sweep resolves its convention from the detected stack (SWR-2315
 registerable convention interface (SWR-2316), with the Python convention as the default and
 unchanged behaviour for this repository.
 
-## SWR-2304 — Parser - Requirements Ingestion
-status: deprecated
-trace: optional
-legacy-id: REQ-20260417-120000-004
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The parser script must read and parse all requirements files from the requirements log folder.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`docs/reference/reqtocode-blueprint.md`). The legacy `generate_traceability.py` parser and `TRACEABILITY.md` matrix were removed; traceability is now enforced by `python -m rotaris_core.reqtocode check` over `@traces` / `@verifies` annotations and the `docs/requirements/` store.
-
-## SWR-2305 — Parser - Test Ingestion
-status: deprecated
-trace: optional
-legacy-id: REQ-20260417-120000-005
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The parser script must scan all test files and extract requirement ID references from them.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`docs/reference/reqtocode-blueprint.md`). The legacy `generate_traceability.py` parser and `TRACEABILITY.md` matrix were removed; traceability is now enforced by `python -m rotaris_core.reqtocode check` over `@traces` / `@verifies` annotations and the `docs/requirements/` store.
-
-## SWR-2306 — Traceability Matrix Generation
-status: deprecated
-trace: optional
-legacy-id: REQ-20260417-120000-006
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The parser script must produce and overwrite an external traceability matrix file from the parsed data.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`docs/reference/reqtocode-blueprint.md`). The legacy `generate_traceability.py` parser and `TRACEABILITY.md` matrix were removed; traceability is now enforced by `python -m rotaris_core.reqtocode check` over `@traces` / `@verifies` annotations and the `docs/requirements/` store.
-
-## SWR-2307 — Matrix - Status Column
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-007
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The traceability matrix must include a status column with exactly four values: `future`, `implemented`, `not planned`, `not implemented`.
-
-> **Deprecated (2026-08-09):** the generated matrix does not exist. Lifecycle state lives in
-> each requirement's `status:` frontmatter (`draft`/`approved`/`deprecated`) and is compiled
-> into `META` by SWR-2324.
-
-## SWR-2308 — Matrix - Blocker Column
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-008
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The traceability matrix must include a blocker column that lists one or more requirement IDs that block the given requirement.
-
-> **Deprecated (2026-08-09):** no matrix, and no blocker modelling was ever adopted —
-> dependency order is expressed in epic/plan documents instead. Tombstoned, not replaced.
-
-## SWR-2309 — File-Level Blocker Propagation
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-009
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-If a requirements file is marked as blocked, all requirements within that file must inherit the blocker entry.
-
-> **Deprecated (2026-08-09):** depends on SWR-2308's blocker column, which was never built.
-
-## SWR-2310 — Matrix - Test Coverage Column
-status: deprecated
-trace: optional
-legacy-id: REQ-20260417-120000-010
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The traceability matrix must include a column listing all test IDs that reference each requirement.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`docs/reference/reqtocode-blueprint.md`). The legacy `generate_traceability.py` parser and `TRACEABILITY.md` matrix were removed; traceability is now enforced by `python -m rotaris_core.reqtocode check` over `@traces` / `@verifies` annotations and the `docs/requirements/` store.
-
 ## SWR-2311 — Coverage report for repositories without a ratchet
 legacy-id: REQ-20260417-120000-011
 date: 2026-04-17
@@ -154,41 +46,6 @@ deciding what to enforce.
 Requirement: `check` offers a non-blocking coverage report (uncovered requirements with
 their titles and source files, exit code 0) distinct from the enforcing run (SWR-2317).
 This repository's own behaviour — enforcing, baseline-suppressed — is unchanged.
-
-## SWR-2312 — agents.md Reference
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-012
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The `agents.md` file at the project root must contain a reference (link or path) to the traceability matrix.
-
-> **Deprecated (2026-08-09):** there is no matrix to link. `AGENTS.md` points at
-> `docs/requirements/README.md` and `docs/reference/reqtocode-playbook.md` instead, which is
-> what SWR-2329 requires.
-
-## SWR-2313 — Post-Commit Hook Execution
-status: deprecated
-legacy-id: REQ-20260417-120000-013
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The parser script must be registered and executable as a git `post-commit` hook so it runs automatically after every commit. | Superseded - implemented as a pre-commit hook
-
-## SWR-2314 — Matrix Idempotency
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-014
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-Re-running the parser on unchanged input must produce an identical matrix output (no spurious diffs).
-
-> **Deprecated (2026-08-09):** absorbed by [SWR-2324](#swr-2324--generated-traceables-module),
-> whose acceptance criteria already demand deterministic and idempotent generation.
 
 ## SWR-2315 — Stack detection for a target repository
 legacy-id: REQ-20260417-130000-020
@@ -263,25 +120,6 @@ source: docs/requirement-log/partial/requirements-20260417-173238.md
 
 After initial hook registration, the matrix must update without any manual script invocation.
 
-## SWR-2320 — Matrix Readability
-status: deprecated
-trace: optional
-legacy-id: REQ-20260417-120000-016
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-The traceability matrix must be human-readable in a plain-text or Markdown format, reviewable directly in a browser or editor without tooling.
-
-> **Deprecated (2026-07-19):** superseded by ReqToCode (`docs/reference/reqtocode-blueprint.md`). The legacy `generate_traceability.py` parser and `TRACEABILITY.md` matrix were removed; traceability is now enforced by `python -m rotaris_core.reqtocode check` over `@traces` / `@verifies` annotations and the `docs/requirements/` store.
-
-## SWR-2321 — Matrix is Single Source of Truth
-status: deprecated
-legacy-id: REQ-20260417-120000-017
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-Implementation status must not be tracked in any other file; all tooling and documentation must defer to the traceability matrix. | Superseded - current repo tracks per-requirement status in the requirement files plus `TRACEABILITY.md`
-
 ## SWR-2322 — agents.md Location
 status: approved
 trace: optional
@@ -291,21 +129,6 @@ date: 2026-04-17
 source: docs/requirement-log/partial/requirements-20260417-173238.md
 
 The `agents.md` file is located at the project root and must not be moved.
-
-## SWR-2323 — ID Stability
-status: deprecated
-trace: optional
-test: optional
-legacy-id: REQ-20260417-120000-019
-date: 2026-04-17
-source: docs/requirement-log/partial/requirements-20260417-173238.md
-
-Requirement IDs must never be renumbered or reused once assigned. When a requirement is removed from its source file, the matrix row is retained with status `removed` and the ID is appended to `removed-requirements.log` (see REQ-20260417-130000-023).
-
-> **Deprecated (2026-08-09):** split in two. The never-renumber rule is store convention
-> (`docs/requirements/README.md`, "ID convention") and is what makes `content_hash`
-> comparison in SWR-2332 meaningful; the tombstone half is re-cut as SWR-2318. This entry
-> described both through the dead matrix and is retired as a whole.
 
 ## SWR-2324 — Generated Traceables Module
 status: approved
@@ -626,39 +449,13 @@ SWR-2316.
   `draft` since the 2026-04-17 import and described the *generated matrix* that ReqToCode
   replaced in 2026-07-19; because they were `draft`, their inherited `trace: required` /
   `test: required` flags were never enforced, so the debt was invisible. Seven are now
-  `deprecated` as absorbed or never-adopted (SWR-2302, 2307, 2308, 2309, 2312, 2314, 2323);
+  retired as absorbed or never-adopted (SWR-2302, 2307, 2308, 2309, 2312, 2314, 2323 —
+  deprecated on that date, deleted in the 2026-08-28 sweep, tombstoned in `retired-ids.txt`);
   six are re-cut in ReqToCode terms as the productization backlog (SWR-2303, 2311, 2315,
   2316, 2317, 2318). Three new requirements carry the first productization step —
   SWR-2335 (layout as data), SWR-2336 (public coverage query), SWR-2337 (annotation
   convention seam) — which are what the later per-stack work depends on. Derivation:
   [docs/plans/2026-08-09-marktanalyse-offene-punkte.md](../plans/2026-08-09-marktanalyse-offene-punkte.md), item O1.
 
-Source documents merged into this epic (sections preserved verbatim; requirement tables migrated to the files above).
-
-### Requirements Traceability System (2026-04-17)
-
-Original: `docs/requirement-log/partial/requirements-20260417-173238.md` — document status: Partial - recursive requirement/test ingestion, Markdown matrix generation, README guidance, and a pre-commit regeneration hook are implemented; status/blocker columns, strict uncovered enforcement, tombstones, and the originally requested post-commit hook remain unimplemented or superseded by the pre-commit flow.
-
-#### Description
-
-The system establishes a structured requirements log folder as the single source of truth for all project requirements. Each requirement carries a unique ID that must be referenced in the tests covering it. A parser script reads all requirements files and test annotations, then generates and maintains an external traceability matrix. This matrix is the canonical reference for implementation status and is linked from `agents.md` at the project root.
-
-#### Implementation Notes
-
-**Requirements Document:**
-
-**Traceability Matrix - Expected Column Schema:**
-
-This section defines the intended structure of the generated matrix for reference by the parser implementation. Column | Type | Description `ID` | string | Requirement ID (`REQ-YYYYMMDD-HHMMSS-NNN`) `Title` | string | Short requirement title `Status` | enum | `future` · `implemented` · `not planned` · `not implemented` · `removed` `Tests` | list | Comma-separated test IDs that cover this requirement; empty if uncovered `Blocked By` | list | Comma-separated requirement IDs that block this requirement; empty if unblocked `Notes` | string | Optional free-text; used for blocker rationale or deferral reason
-
-**Excluded / Out of Scope:**
-
-- Real-time / live-reload matrix updates (the script runs on commit, not on file save).
-
-- GUI or web interface for the matrix (plain Markdown output only).
-
-- Automatic assignment of requirements to tests (annotation must be added by the developer).
-
-#### Acceptance Criteria
-
-**Constraints:**
+Source documents were merged into this epic on 2026-07-18; the originals live in
+git history under `docs/requirement-log/`.

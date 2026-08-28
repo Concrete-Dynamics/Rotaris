@@ -3,7 +3,7 @@
 **Date:** 2026-08-08
 **Status:** Fixed 2026-08-09 — see [Root cause](#root-cause-measured-2026-08-09)
 **Severity:** Medium (no product defect known; it makes the documented parallel test command unusable as a gate)
-**Affected requirements:** SWR-1169, SWR-1414, SWR-1418, SWR-1246, SWR-1247, SWR-1252
+**Affected requirements:** SWR-1169, SWR-1414, SWR-1418, SWR-1246, SWR-1247
 
 ---
 

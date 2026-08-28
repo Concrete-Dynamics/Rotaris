@@ -2514,7 +2514,7 @@ def test_assess_transcript_progress_substantive_tool_outranks_finish() -> None:
     assert progress.has_substantive_tool_call is True
 
 
-@verifies(SWR.SWR_547, SWR.SWR_551)
+@verifies(SWR.SWR_547)
 def test_assess_transcript_progress_with_session_fixture_detects_housekeeping_only() -> None:
     scheduler, _ = make_scheduler()
     fixture_path = Path(__file__).resolve().parent.parent / "fixtures" / "f62432f855bf.json"

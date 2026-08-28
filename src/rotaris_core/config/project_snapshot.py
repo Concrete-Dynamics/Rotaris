@@ -103,7 +103,7 @@ class SnapshotProvider(BaseModel):
         return value
 
 
-@traces(SWR.SWR_770)
+@traces(SWR.SWR_770, SWR.SWR_1734)
 class ProjectSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

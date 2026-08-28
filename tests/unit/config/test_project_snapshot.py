@@ -75,12 +75,12 @@ def _sample_snapshot() -> ProjectSnapshot:
     )
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_snapshot_path_returns_workspace_settings_file(tmp_path: Path) -> None:
     assert snapshot_path(tmp_path) == tmp_path / "project_settings.yaml"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_snapshot_timestamp_is_iso_8601_roundtrippable() -> None:
     value = _iso_now()
 
@@ -89,7 +89,7 @@ def test_snapshot_timestamp_is_iso_8601_roundtrippable() -> None:
     assert parsed.tzinfo == UTC
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_write_and_read_snapshot_roundtrip(tmp_path: Path) -> None:
     snapshot = _sample_snapshot()
 
@@ -132,7 +132,7 @@ def test_snapshot_allows_public_model_token_price_metadata(tmp_path: Path) -> No
     }
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_defaults_missing_tier_aliases_to_none(tmp_path: Path) -> None:
     path = snapshot_path(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,7 +157,7 @@ providers:
     assert snapshot.providers["copilot"].small_model is None
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_write_snapshot_uses_atomic_write_without_tmp_leftovers(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
 
@@ -166,7 +166,7 @@ def test_write_snapshot_uses_atomic_write_without_tmp_leftovers(tmp_path: Path) 
     assert leftovers == []
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 @pytest.mark.skipif(os.name == "nt", reason="Windows does not preserve POSIX 0644 mode bits")
 def test_write_snapshot_sets_0644_permissions(tmp_path: Path) -> None:
     path = write_snapshot(_sample_snapshot(), base=tmp_path)
@@ -174,7 +174,7 @@ def test_write_snapshot_sets_0644_permissions(tmp_path: Path) -> None:
     assert oct(path.stat().st_mode & 0o777) == "0o644"
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_write_snapshot_creates_parent_directory(tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
 
@@ -184,12 +184,12 @@ def test_write_snapshot_creates_parent_directory(tmp_path: Path) -> None:
     assert path.parent == workspace_root
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_missing_file_returns_none(tmp_path: Path) -> None:
     assert read_snapshot(tmp_path) is None
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_reuses_parse_but_hands_out_independent_copies(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
 
@@ -206,7 +206,7 @@ def test_read_snapshot_reuses_parse_but_hands_out_independent_copies(tmp_path: P
     assert read_snapshot(tmp_path) == second
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_sees_writes_through_this_module(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
     read_snapshot(tmp_path)
@@ -219,7 +219,7 @@ def test_read_snapshot_sees_writes_through_this_module(tmp_path: Path) -> None:
     assert removed not in reloaded.providers
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_returns_none_after_file_is_deleted(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
     assert read_snapshot(tmp_path) is not None
@@ -229,7 +229,7 @@ def test_read_snapshot_returns_none_after_file_is_deleted(tmp_path: Path) -> Non
     assert read_snapshot(tmp_path) is None
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_invalid_yaml_raises_value_error_with_path(tmp_path: Path) -> None:
     path = snapshot_path(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,7 +239,7 @@ def test_read_snapshot_invalid_yaml_raises_value_error_with_path(tmp_path: Path)
         read_snapshot(tmp_path)
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_schema_mismatch_raises_value_error(tmp_path: Path) -> None:
     path = snapshot_path(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -260,7 +260,7 @@ providers:
         read_snapshot(tmp_path)
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_read_snapshot_malformed_providers_raises_value_error(tmp_path: Path) -> None:
     path = snapshot_path(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,7 +287,7 @@ providers:
         read_snapshot(tmp_path)
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_update_provider_adds_new_provider_preserves_others(tmp_path: Path) -> None:
     existing = _sample_snapshot()
     write_snapshot(existing, base=tmp_path)
@@ -305,7 +305,7 @@ def test_update_provider_adds_new_provider_preserves_others(tmp_path: Path) -> N
     assert merged.providers["copilot"] == existing.providers["copilot"]
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_update_provider_replaces_existing_provider_by_id(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
     replacement = SnapshotProvider(
@@ -330,7 +330,7 @@ def test_update_provider_replaces_existing_provider_by_id(tmp_path: Path) -> Non
     assert set(merged.providers) == {"copilot", "codex"}
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_remove_provider_deletes_existing_provider(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
 
@@ -342,7 +342,7 @@ def test_remove_provider_deletes_existing_provider(tmp_path: Path) -> None:
     assert set(snapshot.providers) == {"codex"}
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_remove_provider_returns_false_when_provider_missing(tmp_path: Path) -> None:
     write_snapshot(_sample_snapshot(), base=tmp_path)
 
@@ -351,7 +351,7 @@ def test_remove_provider_returns_false_when_provider_missing(tmp_path: Path) -> 
     assert removed is False
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_secret_scrubbing_rejects_secret_like_key_name() -> None:
     with pytest.raises(
         ValueError,
@@ -360,14 +360,14 @@ def test_secret_scrubbing_rejects_secret_like_key_name() -> None:
         _assert_no_secrets({"providers": {"copilot": {"token": "ghu_abc123"}}})
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 @pytest.mark.parametrize("key", ["Authorization", "auth", "bearer"])
 def test_secret_scrubbing_rejects_auth_like_key_names(key: str) -> None:
     with pytest.raises(ValueError, match="secret-like field detected"):
         _assert_no_secrets({"providers": {"copilot": {key: "not persisted"}}})
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 @pytest.mark.parametrize(
     "value",
     [
@@ -384,7 +384,7 @@ def test_secret_scrubbing_rejects_common_token_value_patterns(value: str) -> Non
         _assert_no_secrets({"providers": {"copilot": {"capabilities": {"notes": value}}}})
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_secret_scrubbing_rejects_nested_token_like_value() -> None:
     with pytest.raises(
         ValueError,
@@ -402,7 +402,7 @@ def test_secret_scrubbing_rejects_nested_token_like_value() -> None:
         )
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_secret_scrubbing_allows_benign_snapshot_content(tmp_path: Path) -> None:
     snapshot = ProjectSnapshot(
         providers={
@@ -430,7 +430,7 @@ def test_secret_scrubbing_allows_benign_snapshot_content(tmp_path: Path) -> None
     assert read_snapshot(tmp_path) == snapshot
 
 
-@verifies(SWR.SWR_1702)
+@verifies(SWR.SWR_1734)
 def test_secret_scrubbing_rejects_token_prefix_in_model_capabilities(tmp_path: Path) -> None:
     snapshot = ProjectSnapshot(
         providers={

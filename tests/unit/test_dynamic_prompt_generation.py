@@ -31,7 +31,7 @@ RETIRED_TOKENS = (
 )
 
 
-@verifies(SWR.SWR_319, SWR.SWR_322, SWR.SWR_333, SWR.SWR_348, SWR.SWR_349)
+@verifies(SWR.SWR_319, SWR.SWR_322, SWR.SWR_348, SWR.SWR_349)
 class TestRenderSystemPromptTokens:
     """Token substitution mechanics."""
 

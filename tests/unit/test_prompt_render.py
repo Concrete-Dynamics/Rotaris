@@ -31,7 +31,7 @@ def _ctx(
     )
 
 
-@verifies(SWR.SWR_326, SWR.SWR_333)
+@verifies(SWR.SWR_326)
 def test_passthrough_no_placeholders() -> None:
     raw = "You are a helpful agent.\n\nDo good work."
     assert render_system_prompt(raw, _ctx()) == raw
@@ -107,14 +107,14 @@ def test_delegates_section() -> None:
     assert "- `coding-agent`" in result
 
 
-@verifies(SWR.SWR_324, SWR.SWR_359)
+@verifies(SWR.SWR_324)
 def test_delegates_section_empty() -> None:
     template = "[[ROTARIS:DELEGATES_SECTION]]"
     result = render_system_prompt(template, _ctx(delegates=[]))
     assert "_No delegate personas configured._" in result
 
 
-@verifies(SWR.SWR_324, SWR.SWR_352, SWR.SWR_353, SWR.SWR_359)
+@verifies(SWR.SWR_324, SWR.SWR_352, SWR.SWR_353)
 def test_delegates_section_with_purposes() -> None:
     template = "[[ROTARIS:DELEGATES_SECTION]]"
     ctx = PromptRenderContext(
@@ -144,7 +144,7 @@ def test_delegates_section_partial_purposes() -> None:
     assert "- `librarian`\n" in result or result.endswith("- `librarian`")
 
 
-@verifies(SWR.SWR_324, SWR.SWR_354, SWR.SWR_359)
+@verifies(SWR.SWR_324, SWR.SWR_354)
 def test_delegates_section_no_purposes_fallback() -> None:
     """When delegate_purposes is empty, renders bare name format for all delegates."""
     template = "[[ROTARIS:DELEGATES_SECTION]]"
@@ -337,7 +337,7 @@ def test_playbook_empty_by_default() -> None:
     assert render_system_prompt(template, _ctx()) == "beforeafter"
 
 
-@verifies(SWR.SWR_319, SWR.SWR_333)
+@verifies(SWR.SWR_319)
 def test_multiple_placeholders_in_one_template() -> None:
     template = (
         "Name: [[ROTARIS:PERSONA_NAME]]\n"

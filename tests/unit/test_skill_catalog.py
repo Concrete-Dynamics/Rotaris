@@ -37,7 +37,7 @@ def test_normalize_skill_name() -> None:
     assert normalize_skill_name("Code Review!") == "code-review"
 
 
-@verifies(SWR.SWR_422, SWR.SWR_423, SWR.SWR_438)
+@verifies(SWR.SWR_422, SWR.SWR_423)
 def test_parse_skill_file_normalizes_legacy_trigger_alias(tmp_path: Path) -> None:
     skill_file = _write_skill(
         tmp_path / "review",
@@ -53,7 +53,7 @@ def test_parse_skill_file_normalizes_legacy_trigger_alias(tmp_path: Path) -> Non
     assert meta.raw_metadata["type"] == "keyword"
 
 
-@verifies(SWR.SWR_424, SWR.SWR_438)
+@verifies(SWR.SWR_424)
 def test_parse_skill_file_rejects_missing_description(tmp_path: Path) -> None:
     skill_file = tmp_path / "SKILL.md"
     skill_file.write_text("---\nname: Missing Description\n---\n\nbody\n", encoding="utf-8")
@@ -75,7 +75,7 @@ def test_parse_skill_file_rejects_unsupported_trigger_shape(tmp_path: Path) -> N
         parse_skill_file(skill_file, source_scope="project")
 
 
-@verifies(SWR.SWR_418, SWR.SWR_421, SWR.SWR_437)
+@verifies(SWR.SWR_418, SWR.SWR_421)
 def test_discovery_priority_and_name_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

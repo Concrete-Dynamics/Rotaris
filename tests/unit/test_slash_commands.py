@@ -328,7 +328,7 @@ def test_pop_command() -> None:
     app.post_message.assert_called_once()
 
 
-@verifies(SWR.SWR_1442, SWR.SWR_1062, SWR.SWR_1056)
+@verifies(SWR.SWR_1442, SWR.SWR_1056)
 def test_theme_command_valid() -> None:
     """Test /theme command with valid theme."""
     registry = create_builtin_registry()
@@ -340,7 +340,7 @@ def test_theme_command_valid() -> None:
     app.post_message.assert_called_once()
 
 
-@verifies(SWR.SWR_1445, SWR.SWR_1062)
+@verifies(SWR.SWR_1445)
 def test_theme_command_invalid() -> None:
     """Test /theme command with invalid theme."""
     registry = create_builtin_registry()
@@ -353,7 +353,7 @@ def test_theme_command_invalid() -> None:
     assert "Unknown theme" in app.notify.call_args[0][0]
 
 
-@verifies(SWR.SWR_1442, SWR.SWR_1062)
+@verifies(SWR.SWR_1442)
 def test_theme_command_no_args() -> None:
     """Test /theme command with no arguments."""
     registry = create_builtin_registry()
@@ -366,7 +366,7 @@ def test_theme_command_no_args() -> None:
     assert "Usage" in app.notify.call_args[0][0]
 
 
-@verifies(SWR.SWR_1442, SWR.SWR_1062, SWR.SWR_1056)
+@verifies(SWR.SWR_1442, SWR.SWR_1056)
 def test_theme_command_case_insensitive() -> None:
     """Test /theme command is case-insensitive."""
     registry = create_builtin_registry()
@@ -397,7 +397,7 @@ def test_slash_command_creation() -> None:
 # ---------------------------------------------------------------------------
 
 
-@verifies(SWR.SWR_1442, SWR.SWR_1449)
+@verifies(SWR.SWR_1442)
 def test_compress_command_registered_in_builtin_registry() -> None:
     """REQ-T001: create_builtin_registry() returns a registry containing 'compress'."""
     registry = create_builtin_registry()
@@ -414,7 +414,7 @@ def test_compress_command_has_correct_description() -> None:
     assert "compress" in cmd.description.lower()
 
 
-@verifies(SWR.SWR_1443, SWR.SWR_1450)
+@verifies(SWR.SWR_1443)
 def test_compress_command_posts_force_compress_message() -> None:
     """REQ-T002: Executing /compress posts exactly one ForceCompress message."""
     from rotaris_core.tui.app import ForceCompress
@@ -430,7 +430,7 @@ def test_compress_command_posts_force_compress_message() -> None:
     assert isinstance(posted, ForceCompress)
 
 
-@verifies(SWR.SWR_1133, SWR.SWR_1442, SWR.SWR_1449)
+@verifies(SWR.SWR_1133, SWR.SWR_1442)
 def test_compress_command_case_insensitive() -> None:
     """AC-006: /compress is case-insensitive."""
     from rotaris_core.tui.app import ForceCompress

@@ -57,7 +57,7 @@ def test_write_then_load_roundtrip(tmp_path: Path) -> None:
     assert load_persona_memory(tmp_path, "tester") == content
 
 
-@verifies(SWR.SWR_303, SWR.SWR_1616, SWR.SWR_1629)
+@verifies(SWR.SWR_303, SWR.SWR_1616)
 def test_write_creates_visible_workspace_local_file(tmp_path: Path) -> None:
     """REQ-T010: memory must be a visible workspace-local file."""
     path = write_persona_memory(tmp_path, "tester", "hello\n")
@@ -67,7 +67,7 @@ def test_write_creates_visible_workspace_local_file(tmp_path: Path) -> None:
     assert path.parent == persona_memory_dir(tmp_path)
 
 
-@verifies(SWR.SWR_303, SWR.SWR_1615, SWR.SWR_1628)
+@verifies(SWR.SWR_303, SWR.SWR_1615)
 def test_injection_isolation_between_personas(tmp_path: Path) -> None:
     """REQ-T009: each persona receives only its own memory by default."""
     write_persona_memory(tmp_path, "tester", "tester note\n")
@@ -78,7 +78,7 @@ def test_injection_isolation_between_personas(tmp_path: Path) -> None:
     assert load_persona_memory(tmp_path, "coder") is None
 
 
-@verifies(SWR.SWR_303, SWR.SWR_1616, SWR.SWR_1629)
+@verifies(SWR.SWR_303, SWR.SWR_1616)
 def test_write_truncates_oversize_content(tmp_path: Path) -> None:
     """REQ-T010: enforce bound on write."""
     oversize = "\n".join(f"line {i}" for i in range(MAX_PERSONA_MEMORY_LINES + 50))
@@ -104,7 +104,7 @@ def test_load_truncates_oversize_file_without_modifying_it(tmp_path: Path) -> No
     assert path.read_text(encoding="utf-8") == raw
 
 
-@verifies(SWR.SWR_303, SWR.SWR_1630)
+@verifies(SWR.SWR_303)
 def test_manual_edit_is_source_of_truth(tmp_path: Path) -> None:
     """REQ-T011: direct manual edits are reflected on next load."""
     write_persona_memory(tmp_path, "tester", "original\n")

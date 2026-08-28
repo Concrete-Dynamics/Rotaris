@@ -21,7 +21,7 @@ def _make_tools(tmp_path: Path) -> tuple[FileToolEngine, ReadFileExecutor, Write
     return engine, ReadFileExecutor(engine), WriteFileExecutor(engine)
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_658, SWR.SWR_659)
 def test_round_trip_create_read_edit_and_read_again(tmp_path: Path) -> None:
     _, read_exec, write_exec = _make_tools(tmp_path)
 
@@ -43,7 +43,7 @@ def test_round_trip_create_read_edit_and_read_again(tmp_path: Path) -> None:
     assert second_read.text == "1: alpha\n2: BETA"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_657, SWR.SWR_659)
 def test_read_before_write_ledger_gates_existing_files_until_read(tmp_path: Path) -> None:
     target = tmp_path / "gated.txt"
     _ = target.write_text("draft\n", encoding="utf-8", newline="")
@@ -64,7 +64,7 @@ def test_read_before_write_ledger_gates_existing_files_until_read(tmp_path: Path
     assert target.read_text(encoding="utf-8") == "published\n"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_657, SWR.SWR_659)
 def test_undo_after_multiple_edits_restores_intermediate_state(tmp_path: Path) -> None:
     _, read_exec, write_exec = _make_tools(tmp_path)
 
@@ -88,7 +88,7 @@ def test_undo_after_multiple_edits_restores_intermediate_state(tmp_path: Path) -
     assert final_read.text == "1: one\n2: TWO\n3: three"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_658, SWR.SWR_659)
 def test_grep_then_edit_workflow_updates_the_matched_line(tmp_path: Path) -> None:
     _, read_exec, write_exec = _make_tools(tmp_path)
     _ = write_exec(
@@ -118,7 +118,7 @@ def test_grep_then_edit_workflow_updates_the_matched_line(tmp_path: Path) -> Non
     assert "3: status = 'done'" in final_read.text
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_657, SWR.SWR_658)
 def test_binary_file_read_failure_prevents_follow_up_write_flow(tmp_path: Path) -> None:
     binary_path = tmp_path / "blob.bin"
     _ = binary_path.write_bytes(b"abc\0def")
@@ -136,7 +136,7 @@ def test_binary_file_read_failure_prevents_follow_up_write_flow(tmp_path: Path) 
     assert binary_path.read_bytes() == b"abc\0def"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_657, SWR.SWR_659)
 def test_latin1_file_can_be_read_then_overwritten_preserving_encoding(tmp_path: Path) -> None:
     latin1_path = tmp_path / "latin1.txt"
     _ = latin1_path.write_bytes("olá\nmañana\n".encode("latin-1"))
@@ -158,7 +158,7 @@ def test_latin1_file_can_be_read_then_overwritten_preserving_encoding(tmp_path: 
     assert second_read.text == "1: café\n2: señor"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_658)
 def test_read_tool_lists_directories_with_real_workspace_entries(tmp_path: Path) -> None:
     (tmp_path / "nested").mkdir()
     (tmp_path / ".git").mkdir()
@@ -172,7 +172,7 @@ def test_read_tool_lists_directories_with_real_workspace_entries(tmp_path: Path)
     assert obs.text == "a.txt\nb.txt\nnested/"
 
 
-@verifies(SWR.SWR_116, SWR.SWR_664)
+@verifies(SWR.SWR_116, SWR.SWR_657)
 def test_paths_outside_workspace_are_rejected_for_read_and_write(tmp_path: Path) -> None:
     outside = tmp_path.parent / "escape.txt"
     _, read_exec, write_exec = _make_tools(tmp_path)
@@ -213,7 +213,7 @@ def test_concurrent_writes_to_different_files_share_one_engine_safely(tmp_path: 
     assert (tmp_path / "right.txt").read_text(encoding="utf-8") == "RIGHT\n"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_657, SWR.SWR_659)
 def test_overwrite_is_atomic_and_never_exposes_partial_target_content(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -258,7 +258,7 @@ def test_overwrite_is_atomic_and_never_exposes_partial_target_content(
     assert target.read_text(encoding="utf-8") == "new\ncontent\n"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_657, SWR.SWR_659)
 def test_whitespace_normalized_fallback_edit_succeeds_end_to_end(tmp_path: Path) -> None:
     _, read_exec, write_exec = _make_tools(tmp_path)
     _ = write_exec(
@@ -287,7 +287,7 @@ def test_whitespace_normalized_fallback_edit_succeeds_end_to_end(tmp_path: Path)
     assert final_read.text == "1: ALPHA\n2: BETA\n3: omega"
 
 
-@verifies(SWR.SWR_664)
+@verifies(SWR.SWR_659)
 def test_replace_all_updates_every_occurrence_and_read_confirms_result(tmp_path: Path) -> None:
     _, read_exec, write_exec = _make_tools(tmp_path)
     _ = write_exec(

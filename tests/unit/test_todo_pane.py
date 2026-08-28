@@ -25,7 +25,7 @@ def _render(todo: TodoList) -> str:
     return capture.get()
 
 
-@verifies(SWR.SWR_1044, SWR.SWR_1049)
+@verifies(SWR.SWR_1044)
 def test_todo_pane_renders_markdown_checkboxes_per_task_status() -> None:
     """Productive use: operators read progress as a familiar Markdown checklist.
     Expected outcome: completed tasks render `[x]`, every other status renders `[ ]`."""

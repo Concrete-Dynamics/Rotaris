@@ -470,10 +470,12 @@ No new rendering engine — `agents/prompt_render.py` gained one token and lost 
 | orchestrator "Persona Routing Matrix" | kept — situation→persona is tier-independent |
 | `delegation_strategy` text appended to the intent snippet | `RUN_OVERRIDES` in `agents/playbook.py` |
 
-**Deprecated requirements:** SWR-149, SWR-150, SWR-151, SWR-153 (intent-snippet machinery)
-and **SWR-158** (planner-first routing). SWR-158 is a deliberate behaviour change, not a
-cleanup: planner-first is now conditional on the implementation owner's tier, so
-`moderate_feature` and `refactor` with a `large_model` owner no longer force a planner step.
+**Retired requirements:** SWR-149, SWR-150, SWR-151, SWR-153 (intent-snippet machinery)
+and SWR-158 (planner-first routing) were deprecated with this change and have since been
+deleted from the store — see `docs/requirements/retired-ids.txt`. SWR-158 was a deliberate
+behaviour change, not a cleanup: planner-first is now conditional on the implementation
+owner's tier, so `moderate_feature` and `refactor` with a `large_model` owner no longer
+force a planner step.
 
 ---
 

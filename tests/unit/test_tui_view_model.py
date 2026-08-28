@@ -21,7 +21,7 @@ def test_focused_agent_badge_falls_back_without_selection() -> None:
     assert not badge.has_agent
 
 
-@verifies(SWR.SWR_1421, SWR.SWR_1248, SWR.SWR_1253)
+@verifies(SWR.SWR_1421, SWR.SWR_1248)
 def test_focused_agent_badge_elapsed_increases_for_running_agent() -> None:
     agent = {
         "name": "impl-task",
@@ -37,7 +37,7 @@ def test_focused_agent_badge_elapsed_increases_for_running_agent() -> None:
     assert second.text == "orch.impl · 1:05"
 
 
-@verifies(SWR.SWR_1421, SWR.SWR_1248, SWR.SWR_1254)
+@verifies(SWR.SWR_1421, SWR.SWR_1248)
 def test_focused_agent_badge_elapsed_freezes_for_terminal_agent() -> None:
     agent = {
         "name": "impl-task",
@@ -53,7 +53,7 @@ def test_focused_agent_badge_elapsed_freezes_for_terminal_agent() -> None:
     assert badge.text == "orch.impl · 2:03"
 
 
-@verifies(SWR.SWR_1421, SWR.SWR_1249, SWR.SWR_1255)
+@verifies(SWR.SWR_1421, SWR.SWR_1249)
 def test_top_bar_focus_badge_state_mapping() -> None:
     top_bar = TopBar()
 
@@ -323,7 +323,7 @@ def _todo_payload(task_name: str) -> dict:
     )
 
 
-@verifies(SWR.SWR_1041, SWR.SWR_1049)
+@verifies(SWR.SWR_1041)
 def test_view_model_prefers_the_focused_childs_own_todo_state() -> None:
     """Productive use: focusing a child agent shows that child's plan, not the parent's.
     Expected outcome: the todo pane is fed from `ChildTaskRecord.todo_state`."""
@@ -362,7 +362,7 @@ def test_view_model_prefers_the_focused_childs_own_todo_state() -> None:
     assert view_model.todo_source == "orch.impl"
 
 
-@verifies(SWR.SWR_1041, SWR.SWR_1049)
+@verifies(SWR.SWR_1041)
 def test_view_model_falls_back_to_session_todo_when_child_has_none() -> None:
     """Productive use: a child without its own plan still shows the run-level plan.
     Expected outcome: resolution falls back to `session.agent_todo_state`."""

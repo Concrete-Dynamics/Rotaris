@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from rotaris_core.reqtocode import SWR, verifies
@@ -14,9 +16,17 @@ from rotaris_core.reqtocode.declarations import (
 from rotaris_core.reqtocode.swr import META
 
 
-def _deprecated_member() -> SWR:
-    meta = next(m for m in META.values() if m.status is ReqStatus.DEPRECATED)
-    return SWR(meta.number)
+def _deprecated_member(monkeypatch: pytest.MonkeyPatch) -> SWR:
+    """An approved member re-labelled deprecated for the duration of one test.
+
+    The store carries no deprecated requirement to borrow — the 2026-08-28 sweep
+    deleted the superseded ones and tombstoned their ids — and the warning must
+    keep firing for a store that is mid-transition, so the deprecated metadata
+    is supplied here instead of taken from `META`.
+    """
+    member = _approved_member()
+    monkeypatch.setitem(META, int(member), replace(META[int(member)], status=ReqStatus.DEPRECATED))
+    return member
 
 
 def _approved_member() -> SWR:
@@ -56,8 +66,10 @@ def test_verifies_uses_separate_attribute() -> None:
 
 
 @verifies(SWR.SWR_2325)
-def test_deprecated_reference_emits_deprecation_warning() -> None:
-    member = _deprecated_member()
+def test_deprecated_reference_emits_deprecation_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    member = _deprecated_member(monkeypatch)
     with pytest.warns(DeprecationWarning, match=META[int(member)].req_id):
         traces(member)(lambda: None)
     with pytest.warns(DeprecationWarning, match=META[int(member)].req_id):

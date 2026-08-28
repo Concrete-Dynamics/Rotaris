@@ -1373,7 +1373,7 @@ async def test_load_transcript_page_keeps_previous_page_sentinel() -> None:
     app.request_widget_refresh.assert_called_once()
 
 
-@verifies(SWR.SWR_1309, SWR.SWR_1313, SWR.SWR_1314)
+@verifies(SWR.SWR_1309, SWR.SWR_1314)
 def test_request_interrupt_stop_pauses_active_tui_run() -> None:
     app = RotarisTuiApp()
     session = MagicMock()
@@ -1394,7 +1394,7 @@ def test_request_interrupt_stop_pauses_active_tui_run() -> None:
     app.session_manager.persister.request_save.assert_called_once_with(session)
 
 
-@verifies(SWR.SWR_1309, SWR.SWR_1310, SWR.SWR_1313)
+@verifies(SWR.SWR_1309, SWR.SWR_1310)
 def test_handle_quit_request_defers_exit_for_active_run() -> None:
     app = RotarisTuiApp()
     session = MagicMock()
@@ -1428,7 +1428,7 @@ def test_handle_quit_request_defers_exit_for_active_run() -> None:
     assert app._live_agent_activity["root-task"]["activity_text"] == "Stopping... force quit in 2s"
 
 
-@verifies(SWR.SWR_1312, SWR.SWR_1313)
+@verifies(SWR.SWR_1312)
 def test_tick_shutdown_countdown_force_quits_after_deadline() -> None:
     app = RotarisTuiApp()
     session = MagicMock()
@@ -1468,7 +1468,7 @@ def test_tick_shutdown_countdown_force_quits_after_deadline() -> None:
     )
 
 
-@verifies(SWR.SWR_1311, SWR.SWR_1313)
+@verifies(SWR.SWR_1311)
 def test_complete_pending_exit_after_run_exits_once_task_is_done() -> None:
     app = RotarisTuiApp()
     app._pending_exit_after_run = True

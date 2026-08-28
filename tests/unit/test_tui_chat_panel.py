@@ -248,7 +248,7 @@ async def test_virtual_transcript_preserves_paused_scroll_anchor_on_prepend() ->
         assert block.event is before_block.event
 
 
-@verifies(SWR.SWR_1283, SWR.SWR_1284)
+@verifies(SWR.SWR_1283)
 async def test_virtual_transcript_suppresses_replayed_thinking_events() -> None:
     app = _PanelApp()
     async with app.run_test(size=(100, 24)) as pilot:

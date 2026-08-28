@@ -56,6 +56,8 @@ The product MUST therefore:
   no unavailable entry.
 - Requesting an unavailable model raises an error carrying that model's reason text.
 
+Derived requirements: [SWR-1735 — Snapshot models reach the config without overruling what the user set](../1700-config-mcp/SWR-1735-snapshot-to-config-bridge.md)
+
 Derived from: [SWR-2812 — A model the provider will not accept must stay visible, must not be selectable, and must state why](../800-model-registry.md)
 
 Epic: [Model Registry](../800-model-registry.md)

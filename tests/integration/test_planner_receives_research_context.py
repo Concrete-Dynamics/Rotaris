@@ -29,7 +29,7 @@ def _report(summary: str, key_findings: str, persona: str) -> ChildReportArtifac
     )
 
 
-@verifies(SWR.SWR_129, SWR.SWR_143, SWR.SWR_1526, SWR.SWR_1536)
+@verifies(SWR.SWR_129, SWR.SWR_143, SWR.SWR_1526)
 def test_planner_receives_research_context_from_prior_sibling_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -142,7 +142,7 @@ def test_planner_receives_research_context_from_prior_sibling_artifacts(
     assert "requirements-20260522-shared-artifacts.md" in body.body_markdown
 
 
-@verifies(SWR.SWR_105, SWR.SWR_161)
+@verifies(SWR.SWR_105)
 def test_planner_can_spawn_research_children_as_nested_dag(
     tmp_path: Path,
 ) -> None:

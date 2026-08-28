@@ -9,12 +9,12 @@ from rotaris_core.orchestrator.report import ChildReportArtifact
 from rotaris_core.reqtocode import SWR, verifies
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_364, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_364)
 def test_requirements_engineer_in_default_personas() -> None:
     assert "requirements-engineer" in DEFAULT_PERSONAS
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_364, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_364)
 def test_requirements_engineer_config_is_bounded_to_requirements_work() -> None:
     persona = DEFAULT_PERSONAS["requirements-engineer"]
 
@@ -36,18 +36,18 @@ def test_requirements_engineer_config_is_bounded_to_requirements_work() -> None:
     assert persona.delegates_to == ["librarian", "codebase-analyst"]
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_366, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_366)
 def test_orchestrator_delegates_to_requirements_engineer() -> None:
     assert "requirements-engineer" in DEFAULT_PERSONAS["orchestrator"].delegates_to
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_367, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_367)
 def test_planner_delegates_to_requirements_engineer() -> None:
     assert "requirements-engineer" in DEFAULT_PERSONAS["planner"].delegates_to
     assert "delegate" in DEFAULT_PERSONAS["planner"].tools
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_365, SWR.SWR_369, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_365, SWR.SWR_369)
 def test_requirements_engineer_prompt_loads_with_required_contract() -> None:
     prompt = load_system_prompt(DEFAULT_PERSONAS["requirements-engineer"])
 
@@ -67,7 +67,7 @@ def test_requirements_engineer_prompt_loads_with_required_contract() -> None:
         assert text in prompt
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_366, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_366)
 def test_orchestrator_prompt_routes_requirements_work() -> None:
     prompt = load_system_prompt(DEFAULT_PERSONAS["orchestrator"])
 
@@ -75,7 +75,7 @@ def test_orchestrator_prompt_routes_requirements_work() -> None:
     assert "traceable requirements + acceptance criteria" in prompt
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_367, SWR.SWR_370)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_367)
 def test_planner_prompt_routes_requirements_work() -> None:
     prompt = load_system_prompt(DEFAULT_PERSONAS["planner"])
 
@@ -84,7 +84,7 @@ def test_planner_prompt_routes_requirements_work() -> None:
     assert "## Requirement Traceability" in prompt
 
 
-@verifies(SWR.SWR_159, SWR.SWR_161)
+@verifies(SWR.SWR_159)
 def test_orchestrator_prompt_routes_plan_worthy_work_through_planner() -> None:
     prompt = load_system_prompt(DEFAULT_PERSONAS["orchestrator"])
 
@@ -92,7 +92,7 @@ def test_orchestrator_prompt_routes_plan_worthy_work_through_planner() -> None:
     assert "Owns prerequisite research/design delegation and synthesizes the plan." in prompt
 
 
-@verifies(SWR.SWR_159, SWR.SWR_161)
+@verifies(SWR.SWR_159)
 def test_planner_prompt_prefers_delegated_research() -> None:
     prompt = load_system_prompt(DEFAULT_PERSONAS["planner"])
 
@@ -100,7 +100,7 @@ def test_planner_prompt_prefers_delegated_research() -> None:
     assert "Read files yourself only for bounded validation" in prompt
 
 
-@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_370, SWR.SWR_368)
+@verifies(SWR.SWR_301, SWR.SWR_303, SWR.SWR_368)
 def test_requirements_engineer_context_uses_authoritative_result() -> None:
     """Productive use: implementers can consume completed requirements work.
     Expected outcome: inherited context contains the exact final result without lossy summaries.

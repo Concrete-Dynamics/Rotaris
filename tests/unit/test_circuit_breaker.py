@@ -66,7 +66,7 @@ class FakeBreaker:
         return self.activation
 
 
-@verifies(SWR.SWR_137, SWR.SWR_202, SWR.SWR_203, SWR.SWR_204)
+@verifies(SWR.SWR_202, SWR.SWR_203, SWR.SWR_204)
 @pytest.mark.asyncio
 async def test_circuit_breaker_session_triggers_on_independent_tool_threshold() -> None:
     session = CircuitBreakerSession(
@@ -95,7 +95,7 @@ async def test_circuit_breaker_session_triggers_on_independent_tool_threshold() 
     assert breaker.calls[0]["message_count"] == 1
 
 
-@verifies(SWR.SWR_137, SWR.SWR_205)
+@verifies(SWR.SWR_205)
 @pytest.mark.asyncio
 async def test_circuit_breaker_session_supports_weighted_trigger_mode() -> None:
     session = CircuitBreakerSession(
@@ -126,7 +126,7 @@ async def test_circuit_breaker_session_supports_weighted_trigger_mode() -> None:
     assert pause_calls == ["pause"]
 
 
-@verifies(SWR.SWR_137, SWR.SWR_213, SWR.SWR_214, SWR.SWR_215)
+@verifies(SWR.SWR_213, SWR.SWR_214, SWR.SWR_215)
 @pytest.mark.asyncio
 async def test_circuit_breaker_escalates_on_third_activation() -> None:
     session = CircuitBreakerSession(
@@ -192,7 +192,7 @@ async def test_circuit_breaker_session_escalates_on_third_terminal_stuck_activat
     assert third.escalation.reason == "repeated_loop_detection"
 
 
-@verifies(SWR.SWR_137, SWR.SWR_201, SWR.SWR_207, SWR.SWR_209, SWR.SWR_210, SWR.SWR_211, SWR.SWR_220)
+@verifies(SWR.SWR_201, SWR.SWR_207, SWR.SWR_209, SWR.SWR_210, SWR.SWR_211, SWR.SWR_220)
 @pytest.mark.asyncio
 async def test_circuit_breaker_classifier_returns_injected_message_when_loop_detected() -> None:
     llm = MockLLM(
@@ -221,7 +221,7 @@ async def test_circuit_breaker_classifier_returns_injected_message_when_loop_det
     assert len(llm.calls) == 1
 
 
-@verifies(SWR.SWR_136, SWR.SWR_137)
+@verifies(SWR.SWR_136)
 @pytest.mark.asyncio
 async def test_circuit_breaker_terminal_stuck_falls_back_when_classifier_returns_false() -> None:
     llm = MockLLM('{"loop_detected": false, "reason": "not a loop", "corrective_message": null}')
@@ -241,7 +241,7 @@ async def test_circuit_breaker_terminal_stuck_falls_back_when_classifier_returns
     assert "write_file" in activation.corrective_message
 
 
-@verifies(SWR.SWR_137, SWR.SWR_222)
+@verifies(SWR.SWR_222)
 @pytest.mark.asyncio
 async def test_session_triggers_on_repeated_action() -> None:
     session = CircuitBreakerSession(
@@ -278,7 +278,7 @@ async def test_session_triggers_on_repeated_action() -> None:
     assert breaker.calls[0]["trigger_mode"] == "repeated-action"
 
 
-@verifies(SWR.SWR_137, SWR.SWR_222)
+@verifies(SWR.SWR_222)
 @pytest.mark.asyncio
 async def test_session_triggers_on_repeated_cycle() -> None:
     session = CircuitBreakerSession(
@@ -315,7 +315,7 @@ async def test_session_triggers_on_repeated_cycle() -> None:
     assert breaker.calls[0]["trigger_mode"] == "repeated-cycle"
 
 
-@verifies(SWR.SWR_137)
+@verifies(SWR.SWR_222)
 @pytest.mark.asyncio
 async def test_session_does_not_trigger_on_diverse_tool_usage() -> None:
     session = CircuitBreakerSession(
@@ -344,7 +344,7 @@ async def test_session_does_not_trigger_on_diverse_tool_usage() -> None:
     assert pause_calls == []
 
 
-@verifies(SWR.SWR_137, SWR.SWR_217, SWR.SWR_220)
+@verifies(SWR.SWR_217, SWR.SWR_220)
 def test_action_fingerprint_deterministic() -> None:
     fp1 = _action_fingerprint("read_file", "read src/main.py")
     fp2 = _action_fingerprint("read_file", "read src/main.py")
@@ -355,7 +355,7 @@ def test_action_fingerprint_deterministic() -> None:
     assert len(fp1) == 12
 
 
-@verifies(SWR.SWR_137, SWR.SWR_217)
+@verifies(SWR.SWR_217)
 def test_find_repetitive_tool_pattern_consecutive_runs() -> None:
     transcript = (
         "[tool:read_file] read a.py\n"
@@ -368,7 +368,7 @@ def test_find_repetitive_tool_pattern_consecutive_runs() -> None:
     assert _find_repetitive_tool_pattern(transcript) == "read_file"
 
 
-@verifies(SWR.SWR_137, SWR.SWR_217)
+@verifies(SWR.SWR_217)
 def test_find_repetitive_tool_pattern_no_false_positive_on_frequency() -> None:
     transcript = (
         "[tool:read_file] read a.py\n"
@@ -381,7 +381,7 @@ def test_find_repetitive_tool_pattern_no_false_positive_on_frequency() -> None:
     assert _find_repetitive_tool_pattern(transcript) is None
 
 
-@verifies(SWR.SWR_135, SWR.SWR_137, SWR.SWR_208)
+@verifies(SWR.SWR_135, SWR.SWR_208)
 @pytest.mark.asyncio
 async def test_fallback_does_not_auto_declare_loop_from_raw_counts() -> None:
     llm = MockLLM("invalid json garbage }{")
@@ -402,7 +402,7 @@ async def test_fallback_does_not_auto_declare_loop_from_raw_counts() -> None:
     assert activation.loop_detected is False
 
 
-@verifies(SWR.SWR_137)
+@verifies(SWR.SWR_207, SWR.SWR_222)
 @pytest.mark.asyncio
 async def test_fallback_detects_loop_from_repeated_assistant_messages() -> None:
     llm = MockLLM("invalid json garbage }{")
@@ -424,7 +424,7 @@ async def test_fallback_detects_loop_from_repeated_assistant_messages() -> None:
     assert activation.corrective_message is not None
 
 
-@verifies(SWR.SWR_137, SWR.SWR_212)
+@verifies(SWR.SWR_212)
 @pytest.mark.asyncio
 async def test_fingerprints_cleared_after_activation() -> None:
     session = CircuitBreakerSession(
@@ -453,7 +453,7 @@ async def test_fingerprints_cleared_after_activation() -> None:
 
 
 # ---------------------------------------------------------------------------
-@verifies(SWR.SWR_137, SWR.SWR_216, SWR.SWR_217)
+@verifies(SWR.SWR_216, SWR.SWR_217)
 @pytest.mark.asyncio
 async def test_circuit_breaker_full_activation_completes_within_two_seconds() -> None:
     """REQ-20260414-091500-016: Circuit Breaker activation cycle must
@@ -488,7 +488,7 @@ async def test_circuit_breaker_full_activation_completes_within_two_seconds() ->
     assert elapsed < 2.0, f"Circuit Breaker activation cycle took {elapsed:.3f}s, exceeds 2s NFR"
 
 
-@verifies(SWR.SWR_137, SWR.SWR_221)
+@verifies(SWR.SWR_221)
 @pytest.mark.asyncio
 async def test_circuit_breaker_session_state_does_not_leak_across_sessions() -> None:
     """REQ-20260414-091500-021: per-session state (counters, fingerprints,
@@ -512,7 +512,7 @@ async def test_circuit_breaker_session_state_does_not_leak_across_sessions() -> 
     assert pause_b == [], "circuit-breaker state leaked: session B paused on first tool call"
 
 
-@verifies(SWR.SWR_137, SWR.SWR_203, SWR.SWR_219)
+@verifies(SWR.SWR_203, SWR.SWR_219)
 def test_circuit_breaker_default_thresholds_match_specified_norms() -> None:
     """REQ-003, REQ-019 + REQ-20260417-140000: defaults are
     grounded in production norms and bumped after the false-positive fix.
@@ -554,7 +554,7 @@ async def test_terminal_stuck_activation_uses_distinct_trigger_mode() -> None:
     assert breaker.calls[0]["trigger_mode"] == "terminal-stuck", breaker.calls[0]
 
 
-@verifies(SWR.SWR_133, SWR.SWR_137)
+@verifies(SWR.SWR_133)
 @pytest.mark.asyncio
 async def test_terminal_stuck_corrective_message_resumes_same_session() -> None:
     """REQ-20260414-235403-003: the corrective message returned for a
@@ -609,7 +609,7 @@ def test_scheduler_marks_circuit_breaker_disabled_after_none_build(monkeypatch) 
     assert len(calls) == 1
 
 
-@verifies(SWR.SWR_137, SWR.SWR_222)
+@verifies(SWR.SWR_222)
 def test_distinct_long_edit_actions_do_not_read_as_repetition() -> None:
     session = CircuitBreakerSession(
         CircuitBreakerConfig(

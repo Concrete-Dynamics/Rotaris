@@ -7,7 +7,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer, Slot
 from rotaris_core.reqtocode import SWR, verifies
 
 from rotaris.models.store import WorkspaceStore
@@ -31,6 +31,28 @@ class _BlockingGitService:
         self.store.git_changed.emit()
 
 
+class _StoreObserver(QObject):
+    """A receiver that belongs to the GUI thread, as the real ones do.
+
+    The bridge runs ``refresh()`` on a worker QThread and the service emits
+    ``git_changed`` from there. Every receiver in the app is a QObject slot
+    living in the GUI thread (``chrome.refresh``, ``git._status_reflow.request``
+    and friends), so Qt's auto connection queues the call across the thread
+    boundary. A bare lambda has no thread affinity, so Qt runs it *directly on
+    the worker thread* instead — concurrently with the main thread's event loop,
+    which segfaults PySide perhaps two runs in three.
+    """
+
+    def __init__(self, store: WorkspaceStore) -> None:
+        super().__init__()
+        self._store = store
+        self.seen: list[str] = []
+
+    @Slot()
+    def note(self) -> None:
+        self.seen.append(self._store.branch)
+
+
 @verifies(SWR.SWR_3727)
 def test_startup_git_refresh_keeps_qt_responsive_and_updates_the_store(qtbot) -> None:
     """Productive use: a user can interact with Rotaris while a slow Git checkout is read.
@@ -38,8 +60,8 @@ def test_startup_git_refresh_keeps_qt_responsive_and_updates_the_store(qtbot) ->
     store = WorkspaceStore()
     service = _BlockingGitService(store)
     bridge = GitRefreshBridge(service)  # type: ignore[arg-type]
-    observed: list[str] = []
-    store.git_changed.connect(lambda: observed.append(store.branch))
+    observer = _StoreObserver(store)
+    store.git_changed.connect(observer.note)
 
     assert bridge.start() is True
     assert service.started.wait(timeout=1)
@@ -50,7 +72,7 @@ def test_startup_git_refresh_keeps_qt_responsive_and_updates_the_store(qtbot) ->
     qtbot.waitUntil(lambda: bool(responsive), timeout=500)
 
     service.release.set()
-    qtbot.waitUntil(lambda: observed == ["loaded-after-paint"], timeout=1000)
+    qtbot.waitUntil(lambda: observer.seen == ["loaded-after-paint"], timeout=1000)
     qtbot.waitUntil(lambda: not bridge.running, timeout=1000)
     bridge.shutdown()
 

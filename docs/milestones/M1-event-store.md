@@ -1,10 +1,10 @@
 ---
 milestone: M1
 title: "Event Store and Auditable Learning"
-status: planned
+status: active
 branch: milestone/m1-event-store
 target-version: "0.121.0"
-opened: 2026-08-25
+opened: 2026-08-28
 epics: [SWR-2900]
 requirements: [SWR-1640, SWR-1641, SWR-1642]
 excludes: []

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import QObject, QTimer, Slot
 from rotaris_core.reqtocode import SWR, verifies
+from ui_query import settle
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.git_refresh_bridge import GitRefreshBridge
@@ -73,8 +74,21 @@ def test_startup_git_refresh_keeps_qt_responsive_and_updates_the_store(qtbot) ->
 
     service.release.set()
     qtbot.waitUntil(lambda: observer.seen == ["loaded-after-paint"], timeout=1000)
+    # Drain the queued delivery before the worker thread is allowed to end. The
+    # service emits `git_changed` from that thread, so Qt posts the call across
+    # the boundary; letting the QThread finish and be destroyed while one of its
+    # cross-thread events is still in flight crashes in native code, with no
+    # Python frame to show for it.
+    settle(qtbot)
     qtbot.waitUntil(lambda: not bridge.running, timeout=1000)
     bridge.shutdown()
+    # Drain before leaving. `shutdown()` schedules the QThread's deletion with
+    # deleteLater, and the thread is a *child* of the bridge -- so a test that
+    # returns without spinning the loop leaves a deferred delete pending on an
+    # object Python will collect at some arbitrary later moment, inside another
+    # test's event loop. That double destruction is a segfault, and it is why
+    # this file brought a worker down under `-n auto` while passing on its own.
+    settle(qtbot)
 
 
 @verifies(SWR.SWR_3727)
@@ -92,6 +106,9 @@ def test_startup_git_refresh_is_joined_during_shutdown(qtbot) -> None:
     release.join(timeout=1)
 
     assert bridge.running is False
+    # Same reason as above: let the deferred deletion run while the bridge that
+    # owns the thread is still alive.
+    settle(qtbot)
 
 
 @verifies(SWR.SWR_3715, SWR.SWR_3727)

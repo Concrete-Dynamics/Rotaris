@@ -18,7 +18,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QPoint, QPointF, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QRadioButton,
@@ -102,9 +102,12 @@ def pump_until(predicate: Callable[[], bool], *, timeout: float = 10.0) -> bool:
             return True
         if time.monotonic() > deadline:
             return False
-        QCoreApplication.processEvents()
+        remaining = deadline - time.monotonic()
+        QCoreApplication.processEvents(
+            QEventLoop.ProcessEventsFlag.AllEvents | QEventLoop.ProcessEventsFlag.WaitForMoreEvents,
+            max(1, min(5, int(remaining * 1000))),
+        )
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-        time.sleep(0.005)
 
 
 def wait_until(predicate: Callable[[], bool], *, timeout: float = 10.0, what: str = "") -> None:

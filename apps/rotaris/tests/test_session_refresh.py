@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import QTimer
 from rotaris_core.reqtocode import SWR, verifies
+from ui_query import wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.run_bridge import RunBridge
@@ -52,7 +53,7 @@ def test_refresh_requests_coalesce_without_blocking_qt(
     try:
         for _ in range(10):
             bridge._request_refresh()
-        qtbot.waitUntil(lambda: len(applied) == 2, timeout=3000)
+        wait_until(lambda: len(applied) == 2, timeout=3)
     finally:
         heartbeat.stop()
         bridge.shutdown()

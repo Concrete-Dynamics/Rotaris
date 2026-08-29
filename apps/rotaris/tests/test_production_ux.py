@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QMessageBox, QPushButton
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.tools.todo_state import TodoList, TodoPhase, TodoTask
+from ui_query import wait_until
 
 from rotaris.models import RunUiState, TodoItem, TranscriptEvent, sample_store
 from rotaris.models.state import NoticeSeverity, UiNotice
@@ -50,7 +51,7 @@ def test_workspace_minimum_size_uses_mutually_exclusive_drawers(qtbot) -> None:
 
     assert view.sidebar_panel.isVisible() is False
     assert view.inspector_panel.isVisible() is False
-    qtbot.waitUntil(lambda: view.center_panel.width() >= 850)
+    wait_until(lambda: view.center_panel.width() >= 850, timeout=10.0)
     assert view.center_panel.width() >= 850
     assert view.queue_panel.isVisible() is True
     assert view.queue_scroll.maximumHeight() == 150
@@ -81,7 +82,7 @@ def test_the_context_toolbar_fits_at_the_minimum_window_size(qtbot) -> None:
     # The busiest the strip ever gets: the new-output control only appears when
     # the reader has scrolled away from the tail.
     view.new_output_button.show()
-    qtbot.waitUntil(lambda: view.context_toolbar.width() > 0)
+    wait_until(lambda: view.context_toolbar.width() > 0, timeout=10.0)
 
     toolbar = view.context_toolbar
     clipped = [

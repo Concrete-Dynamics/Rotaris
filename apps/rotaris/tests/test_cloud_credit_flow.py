@@ -25,7 +25,7 @@ from rotaris_core.providers.cloud_account import (
     SettledUsage,
 )
 from rotaris_core.reqtocode import SWR, verifies
-from ui_query import find_by_accessible_name, settle
+from ui_query import find_by_accessible_name, settle, wait_until
 
 from rotaris.models import sample_store
 from rotaris.services.cloud_account_bridge import CloudAccountBridge
@@ -114,7 +114,7 @@ def _open(
     qtbot.waitExposed(window)
     bridge = CloudAccountBridge(reader=reader, parent=window)
     window.start_cloud_credit(bridge)
-    qtbot.waitUntil(lambda: not bridge.running, timeout=5000)
+    wait_until(lambda: not bridge.running, timeout=5)
     settle(qtbot)
     return window
 

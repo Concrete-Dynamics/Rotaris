@@ -31,6 +31,7 @@ from run_wiring import (
     observation_event,
     sdk_events,
 )
+from ui_query import wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
@@ -196,13 +197,13 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
             assert bridge.start("keep working until it is done") is True
 
         # Early: the user is already being shown something.
-        qtbot.waitUntil(lambda: len(store.transcript) > 1, timeout=15_000)
+        wait_until(lambda: len(store.transcript) > 1, timeout=15)
         early_ops = dict(model.operation_counts)
 
         # Late: the last thing the run said is on screen, and the run is still going.
-        qtbot.waitUntil(
+        wait_until(
             lambda: any(f"step {_LAST_MESSAGE}" in event.text for event in store.transcript),
-            timeout=60_000,
+            timeout=60,
         )
 
         assert bridge.running, "every assertion here is about a run that has not ended"
@@ -228,7 +229,7 @@ def test_a_user_follows_a_long_run_and_reopens_it_to_what_they_saw(
         watched = [(event.role, event.text) for event in store.transcript]
     finally:
         released.set()
-        qtbot.waitUntil(lambda: not bridge.running, timeout=30_000)
+        wait_until(lambda: not bridge.running, timeout=30)
         bridge.shutdown()
 
     # And the session agrees. Reopened from disk by a second service over the

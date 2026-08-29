@@ -32,6 +32,7 @@ from ui_query import (
     find_by_accessible_name,
     settle,
     type_text,
+    wait_until,
 )
 
 from rotaris.models.state import NoticeSeverity, ProviderInfo, SessionInfo, UiNotice
@@ -204,7 +205,7 @@ def _start_new_session(
         settle(qtbot)
         return window.dashboard.isVisible()
 
-    qtbot.waitUntil(dashboard_on_screen, timeout=5000)
+    wait_until(dashboard_on_screen, timeout=5)
     click_by_name(qtbot, window.dashboard, "New session", QPushButton)
 
     # A new session lands on the workspace with an empty composer, so the send
@@ -239,11 +240,11 @@ def _switch_to_session(window: MainWindow, qtbot, label: str) -> None:
     # straight through it finds the pane mid-rebuild and reports the switcher
     # missing, which is how this test failed roughly one serial run in three.
     name = f"Switch to session {label}"
-    qtbot.waitUntil(
+    wait_until(
         lambda: bool(
             find_all_by_accessible_name(window.workspace, name, QPushButton, visible_only=True)
         ),
-        timeout=5000,
+        timeout=5,
     )
     click_by_name(qtbot, window.workspace, name, QPushButton)
 
@@ -264,19 +265,19 @@ def test_two_parallel_sessions_run_isolated_and_switch_without_interference(
 
     first_dialog = _start_new_session(window, qtbot, monkeypatch, "task A")
     assert first_dialog.isolation_required is False
-    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 1, timeout=5000)
+    wait_until(lambda: len(coordinator.active_session_ids) == 1, timeout=5)
     session_a = coordinator.focused_session_id
 
     second_dialog = _start_new_session(window, qtbot, monkeypatch, "task B")
     assert second_dialog.isolation_required is True
     assert second_dialog.isolate_checkbox.isChecked() is True
     assert second_dialog.isolate_checkbox.isEnabled() is False
-    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 2, timeout=5000)
+    wait_until(lambda: len(coordinator.active_session_ids) == 2, timeout=5)
     session_b = coordinator.focused_session_id
 
     assert session_a != session_b
     manager = SessionManager(repository)
-    qtbot.waitUntil(lambda: agent.prompts.get(session_b) == "task B", timeout=5000)
+    wait_until(lambda: agent.prompts.get(session_b) == "task B", timeout=5)
     worktree = manager.load_session(session_b).worktree
     assert worktree is not None
     assert Path(worktree.path).is_dir()
@@ -286,10 +287,10 @@ def test_two_parallel_sessions_run_isolated_and_switch_without_interference(
     # Focus each run in turn: distinct transcripts, no lifecycle change. The
     # sidebar rows are addressed by task wording, not session id (SWR-2907).
     _switch_to_session(window, qtbot, "task A")
-    qtbot.waitUntil(lambda: any("task A" in event.text for event in store.transcript), timeout=5000)
+    wait_until(lambda: any("task A" in event.text for event in store.transcript), timeout=5)
     assert not any("task B" in event.text for event in store.transcript)
     _switch_to_session(window, qtbot, "task B")
-    qtbot.waitUntil(lambda: any("task B" in event.text for event in store.transcript), timeout=5000)
+    wait_until(lambda: any("task B" in event.text for event in store.transcript), timeout=5)
     assert not any("task A" in event.text for event in store.transcript)
     assert sorted(coordinator.active_session_ids) == sorted([session_a, session_b])
 
@@ -297,10 +298,10 @@ def test_two_parallel_sessions_run_isolated_and_switch_without_interference(
     # coordinator: the workspace "Cancel run" control routes through a confirmation
     # dialog and cancel_agent("orchestrator"), which is its own untested flow.
     coordinator.cancel()
-    qtbot.waitUntil(lambda: coordinator.active_session_ids == [session_a], timeout=5000)
+    wait_until(lambda: coordinator.active_session_ids == [session_a], timeout=5)
 
     agent.release_all()
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not coordinator.active_session_ids, timeout=5)
     coordinator.shutdown_all()
 
 
@@ -314,7 +315,7 @@ def test_run_rows_read_as_task_wording_with_the_id_kept_reachable(
     window, coordinator, _store = _window(repository, qtbot)
 
     _start_new_session(window, qtbot, monkeypatch, "Fix requirement foobar")
-    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 1, timeout=5000)
+    wait_until(lambda: len(coordinator.active_session_ids) == 1, timeout=5)
     session_id = coordinator.focused_session_id
 
     window.show_view("workspace")
@@ -331,7 +332,7 @@ def test_run_rows_read_as_task_wording_with_the_id_kept_reachable(
     assert session_id in switch.toolTip()
 
     agent.release_all()
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not coordinator.active_session_ids, timeout=5)
     coordinator.shutdown_all()
 
 
@@ -353,10 +354,10 @@ def test_continuing_a_session_after_reopening_shows_the_run_it_starts(
     them — a live run that reads as a hung one."""
     first_window, first_coordinator, _first_store = _window(repository, qtbot)
     _start_new_session(first_window, qtbot, monkeypatch, "first task")
-    qtbot.waitUntil(lambda: len(first_coordinator.active_session_ids) == 1, timeout=5000)
+    wait_until(lambda: len(first_coordinator.active_session_ids) == 1, timeout=5)
     session_id = first_coordinator.focused_session_id
     agent.release(session_id)
-    qtbot.waitUntil(lambda: not first_coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not first_coordinator.active_session_ids, timeout=5)
     first_coordinator.shutdown_all()
     first_window.close()
 
@@ -366,9 +367,9 @@ def test_continuing_a_session_after_reopening_shows_the_run_it_starts(
     # A reopened window has no task wording for the run yet — the label is not
     # persisted — so the row reads as the session id (SWR-2907's tooltip case).
     resume_control = f"Continue session {session_id}"
-    qtbot.waitUntil(
+    wait_until(
         lambda: bool(find_all_by_accessible_name(window.dashboard, resume_control, QPushButton)),
-        timeout=5000,
+        timeout=5,
     )
     click_by_name(qtbot, window.dashboard, resume_control, QPushButton)
 
@@ -381,14 +382,14 @@ def test_continuing_a_session_after_reopening_shows_the_run_it_starts(
 
     # The agent's own line, not the user's echoed prompt: only the projection of
     # the running session can put it in the transcript.
-    qtbot.waitUntil(
+    wait_until(
         lambda: any("working on second task" in event.text for event in store.transcript),
-        timeout=10000,
+        timeout=10,
     )
     assert coordinator.focused_session_id == session_id
 
     agent.release_all()
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not coordinator.active_session_ids, timeout=5)
     coordinator.shutdown_all()
 
 
@@ -404,10 +405,10 @@ def test_continuing_a_session_does_not_inherit_the_previous_runs_live_agents(
     the live counter say nothing true."""
     window, coordinator, store = _window(repository, qtbot)
     _start_new_session(window, qtbot, monkeypatch, "first task")
-    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 1, timeout=5000)
+    wait_until(lambda: len(coordinator.active_session_ids) == 1, timeout=5)
     session_id = coordinator.focused_session_id
     agent.release(session_id)
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not coordinator.active_session_ids, timeout=5)
     # The continuation has to still be running while the assertions run: a
     # session that reports no run settles its agents through SWR-2913, which
     # would make this test pass without reading a single child record.
@@ -440,11 +441,11 @@ def test_continuing_a_session_does_not_inherit_the_previous_runs_live_agents(
     click_by_name(qtbot, window.workspace, "Continue run", QPushButton)
     # The first run's own "Run completed" notice is still standing here, so the
     # evidence that the submission was accepted is the run itself.
-    qtbot.waitUntil(lambda: coordinator.active_session_ids == [session_id], timeout=5000)
+    wait_until(lambda: coordinator.active_session_ids == [session_id], timeout=5)
 
-    qtbot.waitUntil(
+    wait_until(
         lambda: any("working on second task" in event.text for event in store.transcript),
-        timeout=10000,
+        timeout=10,
     )
     ghost = store.agents.get("ghost-agent")
     assert ghost is not None, "the previous run's agent vanished instead of being closed"
@@ -457,7 +458,7 @@ def test_continuing_a_session_does_not_inherit_the_previous_runs_live_agents(
     assert [node.id for node in store.agent_list() if node.is_live] == []
 
     agent.release_all()
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not coordinator.active_session_ids, timeout=5)
     coordinator.shutdown_all()
 
 
@@ -477,17 +478,18 @@ def test_background_completion_notifies_without_disturbing_the_focused_run(
     window, coordinator, store = _window(repository, qtbot)
 
     _start_new_session(window, qtbot, monkeypatch, "task A")
-    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 1, timeout=5000)
+    wait_until(lambda: len(coordinator.active_session_ids) == 1, timeout=5)
     session_a = coordinator.focused_session_id
 
     _start_new_session(window, qtbot, monkeypatch, "task B")
-    qtbot.waitUntil(lambda: len(coordinator.active_session_ids) == 2, timeout=5000)
+    wait_until(lambda: len(coordinator.active_session_ids) == 2, timeout=5)
     session_b = coordinator.focused_session_id
-    qtbot.waitUntil(lambda: any("task B" in event.text for event in store.transcript), timeout=5000)
+    wait_until(lambda: any("task B" in event.text for event in store.transcript), timeout=5)
 
     agent.release(session_a)
-    qtbot.waitUntil(
-        lambda: store.ui.notice is not None and session_a in store.ui.notice.title, timeout=5000
+    wait_until(
+        lambda: store.ui.notice is not None and session_a in store.ui.notice.title,
+        timeout=5,
     )
 
     notice = store.ui.notice
@@ -497,15 +499,15 @@ def test_background_completion_notifies_without_disturbing_the_focused_run(
     assert coordinator.focused_session_id == session_b
     assert any("task B" in event.text for event in store.transcript)
 
-    qtbot.waitUntil(
+    wait_until(
         lambda: any(item.id == session_a and item.status == "completed" for item in store.sessions),
-        timeout=5000,
+        timeout=5,
     )
     focused_rows = [item.id for item in store.sessions if item.focused]
     assert focused_rows == [session_b]
 
     agent.release_all()
-    qtbot.waitUntil(lambda: not coordinator.active_session_ids, timeout=5000)
+    wait_until(lambda: not coordinator.active_session_ids, timeout=5)
     coordinator.shutdown_all()
 
 

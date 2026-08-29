@@ -24,6 +24,7 @@ from rotaris_core.eventstore import event_store_path, reset_event_store_registry
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
 from run_wiring import demo_config
+from ui_query import wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
@@ -109,7 +110,7 @@ def _desktop_run(root: Path, qtbot) -> str:
     try:
         with qtbot.waitSignal(bridge.run_finished, timeout=20_000):
             assert bridge.start(TASK) is True
-        qtbot.waitUntil(lambda: not bridge.running, timeout=10_000)
+        wait_until(lambda: not bridge.running, timeout=10)
     finally:
         bridge.shutdown()
     assert started, "the desktop run never reported a session"

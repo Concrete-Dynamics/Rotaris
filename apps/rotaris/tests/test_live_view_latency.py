@@ -28,6 +28,7 @@ from run_wiring import (
     observation_event,
     sdk_events,
 )
+from ui_query import wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
@@ -214,11 +215,11 @@ def test_a_row_is_visible_within_the_budget_however_long_the_session_is(
     try:
         with qtbot.waitSignal(bridge.run_started, timeout=15_000):
             assert bridge.start("narrate what you are doing") is True
-        qtbot.waitUntil(lambda: len(arrived) == MEASURED_ROWS, timeout=120_000)
+        wait_until(lambda: len(arrived) == MEASURED_ROWS, timeout=120)
         assert bridge.running, "the measurement is of a run in flight"
     finally:
         released.set()
-        qtbot.waitUntil(lambda: not bridge.running, timeout=30_000)
+        wait_until(lambda: not bridge.running, timeout=30)
         bridge.shutdown()
 
     latencies = sorted((arrived[i] - sent[i]) * 1000.0 for i in range(MEASURED_ROWS))
@@ -258,9 +259,9 @@ def test_the_transcript_arrives_without_the_poll(tmp_path, qtbot, monkeypatch) -
     try:
         with qtbot.waitSignal(bridge.run_started, timeout=15_000):
             assert bridge.start("run the tests") is True
-        qtbot.waitUntil(
+        wait_until(
             lambda: any("Task complete." in event.text for event in store.transcript),
-            timeout=10_000,
+            timeout=10,
         )
         texts = "\n".join(f"{event.text} {event.detail}" for event in store.transcript)
         kinds = [event.kind for event in store.transcript]
@@ -276,7 +277,7 @@ def test_the_transcript_arrives_without_the_poll(tmp_path, qtbot, monkeypatch) -
         assert store.run_summary.tool_calls >= 0
     finally:
         released.set()
-        qtbot.waitUntil(lambda: not bridge.running, timeout=15_000)
+        wait_until(lambda: not bridge.running, timeout=15)
         bridge.shutdown()
 
 
@@ -311,7 +312,7 @@ def test_the_run_does_not_shorten_the_persistence_debounce(tmp_path, qtbot, monk
     try:
         with qtbot.waitSignal(bridge.run_finished, timeout=15_000):
             assert bridge.start("run the tests") is True
-        qtbot.waitUntil(lambda: not bridge.running, timeout=10_000)
+        wait_until(lambda: not bridge.running, timeout=10)
     finally:
         bridge.shutdown()
 
@@ -340,7 +341,7 @@ def test_the_final_read_owns_the_transcript_once_the_run_is_over(
     try:
         with qtbot.waitSignal(bridge.run_finished, timeout=15_000):
             assert bridge.start("run the tests") is True
-        qtbot.waitUntil(lambda: not bridge.running, timeout=10_000)
+        wait_until(lambda: not bridge.running, timeout=10)
     finally:
         bridge.shutdown()
 

@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from rotaris_core.config.schema import ModelConfig, PersonaConfig, RotarisConfig
 from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.manager import SessionManager
+from ui_query import wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
@@ -104,7 +105,7 @@ def test_completed_run_stays_usable_while_background_analysis_finishes(tmp_path,
 
     job = _DelayedJob()
     bridge._queue_improvement_job(job)
-    qtbot.waitUntil(job.started.is_set)
+    wait_until(job.started.is_set, timeout=10.0)
 
     assert store.improvement_collection_active is True
     assert window.title_bar.improvement_label.isVisible()
@@ -114,7 +115,7 @@ def test_completed_run_stays_usable_while_background_analysis_finishes(tmp_path,
     assert window.workspace.send_button.isEnabled()
 
     job.release.set()
-    qtbot.waitUntil(lambda: not store.improvement_collection_active)
+    wait_until(lambda: not store.improvement_collection_active, timeout=10.0)
 
     assert service.refreshes == 1
     assert store.ui.notice is not None
@@ -137,7 +138,7 @@ def test_shutdown_cancels_background_analysis_without_notice(tmp_path, qtbot) ->
     job = _DelayedJob()
 
     bridge._queue_improvement_job(job)
-    qtbot.waitUntil(job.started.is_set)
+    wait_until(job.started.is_set, timeout=10.0)
     bridge.shutdown()
 
     assert job.cancelled is True
@@ -186,8 +187,8 @@ def test_task_state_is_persisted_before_rotaris_starts_analysis(
     try:
         with qtbot.waitSignal(bridge.run_finished, timeout=10_000):
             assert bridge.start("finish task")
-        qtbot.waitUntil(lambda: holder["job"].checked.is_set())
-        qtbot.waitUntil(lambda: not store.improvement_collection_active)
+        wait_until(lambda: holder["job"].checked.is_set(), timeout=10.0)
+        wait_until(lambda: not store.improvement_collection_active, timeout=10.0)
     finally:
         bridge.shutdown()
 

@@ -43,6 +43,7 @@ __all__ = [
     "find_by_accessible_name",
     "pump_until",
     "settle",
+    "wait_until",
     "transcript_anchor_point",
     "type_text",
 ]
@@ -104,6 +105,24 @@ def pump_until(predicate: Callable[[], bool], *, timeout: float = 10.0) -> bool:
         QCoreApplication.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         time.sleep(0.005)
+
+
+def wait_until(predicate: Callable[[], bool], *, timeout: float = 10.0, what: str = "") -> None:
+    """`qtbot.waitUntil` without the nested event loop; raises the same way.
+
+    A drop-in for call sites that want the raising contract rather than
+    `pump_until`'s boolean. *timeout* is seconds, not milliseconds, because that
+    is what everything else in this file speaks and a silently-1000x-wrong
+    deadline is not a mistake worth leaving available.
+
+    Why this exists at all is in `pump_until`: `qtbot.waitUntil` re-enters the Qt
+    event loop, and doing that while this suite's worker threads are alive lets
+    Python's cyclic collector free Qt objects those threads are still using.
+    Measured on the full suite under a loaded collector: three crashed workers in
+    ten runs before removing one file's nested waits, none in ten after.
+    """
+    if not pump_until(predicate, timeout=timeout):
+        raise AssertionError(f"timed out after {timeout}s waiting for {what or 'the condition'}")
 
 
 def settle(qtbot: QtBot) -> None:

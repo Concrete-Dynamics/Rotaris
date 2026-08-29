@@ -66,6 +66,7 @@ from ui_query import (
     find_by_accessible_name,
     settle,
     type_text,
+    wait_until,
 )
 
 from rotaris.models.store import WorkspaceStore
@@ -940,7 +941,7 @@ def test_a_user_reviews_a_finished_requirement_and_sees_diff_tests_and_branch(
     workspace.advance("SWR-4106", DeliveryState.READY, DeliveryState.RUNNING, DeliveryState.REVIEW)
     workspace.finish_run("SWR-4106", changed_files=("src/rotaris_core/beta.py",))
     controller, view, pane = _board(qtbot, workspace)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     # The user opens the requirement, then its review, through visible controls.
     view.requirement_activated.emit("SWR-4106")
@@ -1440,7 +1441,7 @@ def test_a_user_is_offered_a_derived_requirement_and_accepting_it_updates_the_st
     assert view is not None
     pane = view.pane(REVIEW_PANE)
     assert isinstance(pane, RequirementReviewView)
-    qtbot.waitUntil(lambda: pane.review is not None and pane.review.available, timeout=60000)
+    wait_until(lambda: pane.review is not None and pane.review.available, timeout=60)
     settle(qtbot)
 
     # The offer is there, and it says what kind of thing it is.

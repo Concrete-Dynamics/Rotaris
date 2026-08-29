@@ -34,7 +34,7 @@ from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.checkpoint_service import CheckpointService
 from rotaris_core.session.liveness import pid_is_alive
 from rotaris_core.session.manager import SessionManager
-from ui_query import click, click_by_name, find_by_accessible_name, settle
+from ui_query import click, click_by_name, find_by_accessible_name, settle, wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.checkpoint_bridge import (
@@ -181,12 +181,12 @@ def _window(qtbot: Any, root: Path, announced: list[str] | None = None) -> MainW
 def _settled_listing(qtbot: Any, window: MainWindow, session_id: str) -> None:
     window.config_service.refresh_sessions()
     settle(qtbot)
-    qtbot.waitUntil(
+    wait_until(
         lambda: (
             window.store.checkpoints.session_id == session_id
             and not window.store.checkpoints.loading
         ),
-        timeout=30_000,
+        timeout=30,
     )
 
 
@@ -197,7 +197,7 @@ def _select_checkpoint(qtbot: Any, window: MainWindow, session_id: str, sequence
     # Choosing a session asks the engine for its checkpoints and the view draws
     # them a turn later, so the listing reaching the store is not the same as
     # the rows being on screen.
-    qtbot.waitUntil(lambda: table.topLevelItemCount() > 0, timeout=15_000)
+    wait_until(lambda: table.topLevelItemCount() > 0, timeout=15)
     for row in range(table.topLevelItemCount()):
         item = table.topLevelItem(row)
         if item.text(0) == str(sequence):
@@ -271,11 +271,11 @@ def test_a_crashed_sessions_rollback_is_offered_again_and_the_repair_is_announce
     seen: dict[str, Any] = {}
     timer = _answer_restore_dialog(qtbot, window, seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)
-    qtbot.waitUntil(lambda: not window._checkpoint_bridge.busy and bool(seen), timeout=30_000)
+    wait_until(lambda: not window._checkpoint_bridge.busy and bool(seen), timeout=30)
     timer.stop()
-    qtbot.waitUntil(
+    wait_until(
         lambda: (root / "alpha.txt").read_text(encoding="utf-8") == "two\n",
-        timeout=30_000,
+        timeout=30,
     )
 
     assert (root / "beta.txt").exists() is False
@@ -308,7 +308,7 @@ def test_a_session_with_a_live_process_is_still_refused_and_told_why(tmp_path, q
 
     # The store already carries the refusal; the button catches up on the view's
     # next redraw, so wait for the reason to reach the control the user reads.
-    qtbot.waitUntil(lambda: RUNNING_SESSION_REASON in button.toolTip(), timeout=15_000)
+    wait_until(lambda: RUNNING_SESSION_REASON in button.toolTip(), timeout=15)
     assert button.isEnabled() is False
     assert RUNNING_SESSION_REASON in button.accessibleDescription()
     assert (root / "alpha.txt").read_text(encoding="utf-8") == "two\n"

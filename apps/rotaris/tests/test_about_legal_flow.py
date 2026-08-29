@@ -15,7 +15,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QPushButton
 from rotaris_core.reqtocode import SWR, verifies
-from ui_query import click_by_name, settle
+from ui_query import click_by_name, settle, wait_until
 
 from rotaris import legal
 from rotaris.models import sample_store
@@ -41,8 +41,9 @@ class _UrlRecorder:
 def _open_about_tab(qtbot: QtBot, window: MainWindow) -> AboutLegalPage:
     window.show_view("settings")
     window.settings.set_active_tab("about")
-    qtbot.waitUntil(
-        lambda: window.settings.tabs.tabText(window.settings.tabs.currentIndex()) == "About"
+    wait_until(
+        lambda: window.settings.tabs.tabText(window.settings.tabs.currentIndex()) == "About",
+        timeout=10.0,
     )
     settle(qtbot)
     page = window.settings.findChild(AboutLegalPage)
@@ -90,6 +91,7 @@ def test_the_command_palette_offers_about_and_legal(qtbot: QtBot) -> None:
     assert commands["about"].label == "About & Legal"
 
     window._show_about_legal()
-    qtbot.waitUntil(
-        lambda: window.settings.tabs.tabText(window.settings.tabs.currentIndex()) == "About"
+    wait_until(
+        lambda: window.settings.tabs.tabText(window.settings.tabs.currentIndex()) == "About",
+        timeout=10.0,
     )

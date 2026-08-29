@@ -26,7 +26,7 @@ from rotaris_core.reqtocode import SWR, verifies
 from rotaris_core.session.checkpoint_restore import CheckpointRestorer, format_preview_lines
 from rotaris_core.session.checkpoint_service import CheckpointService
 from rotaris_core.session.manager import SessionManager
-from ui_query import click, click_by_name, find_by_accessible_name, settle
+from ui_query import click, click_by_name, find_by_accessible_name, settle, wait_until
 
 from rotaris.models.state import (
     CheckpointList,
@@ -208,7 +208,7 @@ def _select_checkpoint(qtbot: Any, window: MainWindow, session_id: str, sequence
     # setCurrentIndex. Wait for the render instead of reading a table that the
     # view has not drawn yet.
     table = window.git.checkpoint_table
-    qtbot.waitUntil(lambda: table.topLevelItemCount() > 0, timeout=15_000)
+    wait_until(lambda: table.topLevelItemCount() > 0, timeout=15)
     settle(qtbot)
     for row in range(table.topLevelItemCount()):
         item = table.topLevelItem(row)
@@ -322,30 +322,30 @@ def test_user_restores_a_session_checkpoint_from_the_git_view(tmp_path, qtbot) -
     window = _window(qtbot, root)
     window.config_service.refresh_sessions()
     settle(qtbot)
-    qtbot.waitUntil(
+    wait_until(
         lambda: (
             window.store.checkpoints.session_id == state.session_id
             and not window.store.checkpoints.loading
         ),
-        timeout=15_000,
+        timeout=15,
     )
 
     assert [row.sequence for row in window.store.checkpoints.rows] == [1, 2, 3]
     assert [row.iteration for row in window.store.checkpoints.rows] == [1, 2, 3]
     # The listing reaching the store is not the same as the view having drawn
     # it: the git view re-renders on the store's change signal, a turn later.
-    qtbot.waitUntil(lambda: window.git.checkpoint_table.topLevelItemCount() == 3, timeout=15_000)
+    wait_until(lambda: window.git.checkpoint_table.topLevelItemCount() == 3, timeout=15)
 
     _select_checkpoint(qtbot, window, state.session_id, 1)
     seen: dict[str, Any] = {}
     timer = _drive_restore_dialog(qtbot, window, force=False, confirm=True, seen=seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)
-    qtbot.waitUntil(lambda: not window._checkpoint_bridge.busy and bool(seen), timeout=30_000)
+    wait_until(lambda: not window._checkpoint_bridge.busy and bool(seen), timeout=30)
     timer.stop()
     assert not seen.get("driver_error"), seen["driver_error"]
-    qtbot.waitUntil(
+    wait_until(
         lambda: (root / "alpha.txt").read_text(encoding="utf-8") == "two\n",
-        timeout=30_000,
+        timeout=30,
     )
 
     assert not (root / "beta.txt").exists()
@@ -370,19 +370,19 @@ def test_uncommitted_work_blocks_a_restore_and_leaves_the_tree_untouched(tmp_pat
     window = _window(qtbot, root)
     window.config_service.refresh_sessions()
     settle(qtbot)
-    qtbot.waitUntil(
+    wait_until(
         lambda: (
             window.store.checkpoints.session_id == state.session_id
             and not window.store.checkpoints.loading
         ),
-        timeout=15_000,
+        timeout=15,
     )
 
     _select_checkpoint(qtbot, window, state.session_id, 1)
     seen: dict[str, Any] = {}
     timer = _drive_restore_dialog(qtbot, window, force=False, confirm=False, seen=seen)
     click_by_name(qtbot, window.git, "Restore selected checkpoint", QPushButton)
-    qtbot.waitUntil(lambda: bool(seen), timeout=30_000)
+    wait_until(lambda: bool(seen), timeout=30)
     timer.stop()
     assert not seen.get("driver_error"), seen["driver_error"]
     settle(qtbot)

@@ -34,7 +34,7 @@ from PySide6.QtWidgets import QLabel, QPushButton
 from rotaris_core.config import loader as config_loader
 from rotaris_core.config.bootstrap import write_minimal_agents_yaml
 from rotaris_core.reqtocode import SWR, verifies
-from ui_query import click_by_name, find_by_accessible_name, settle
+from ui_query import click_by_name, find_by_accessible_name, settle, wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.config_service import ConfigService
@@ -230,7 +230,7 @@ def _modal(window: MainWindow) -> ProjectInitDialog | None:
 
 
 def _await_modal(qtbot: Any, window: MainWindow) -> ProjectInitDialog:
-    qtbot.waitUntil(lambda: _modal(window) is not None, timeout=15_000)
+    wait_until(lambda: _modal(window) is not None, timeout=15)
     modal = _modal(window)
     assert modal is not None
     return modal
@@ -238,11 +238,11 @@ def _await_modal(qtbot: Any, window: MainWindow) -> ProjectInitDialog:
 
 def _await_setup(qtbot: Any, window: MainWindow) -> None:
     """Wait for the background setup to finish and its outcome to be published."""
-    qtbot.waitUntil(
+    wait_until(
         lambda: (
             window._project_init_worker is None and window.store.initialization.running is False
         ),
-        timeout=RUN_TIMEOUT_MS,
+        timeout=RUN_TIMEOUT_MS / 1000,
     )
     settle(qtbot)
 
@@ -503,7 +503,7 @@ def test_a_failed_setup_can_be_deferred_and_run_later_from_the_workspace_action(
     assert reopened.task_ids == (SERENA,), "the deferred task is still unresolved work"
 
     click_by_name(qtbot, reopened, "Initialize project", QPushButton)
-    qtbot.waitUntil(lambda: reopened.state in {"done", "error"}, timeout=RUN_TIMEOUT_MS)
+    wait_until(lambda: reopened.state in {"done", "error"}, timeout=RUN_TIMEOUT_MS / 1000)
     assert reopened.state == "done"
 
     assert _setup_commands(log) == ["project create", "project index", "memories initialize"]

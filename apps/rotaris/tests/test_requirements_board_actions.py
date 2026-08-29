@@ -62,7 +62,7 @@ from rotaris_core.requirements.execution.run_seam import (
 from rotaris_core.requirements.execution.snapshot import ExecutionTransitions, capture_snapshot
 from rotaris_core.requirements.model import CanonicalRequirement, RequirementLifecycle
 from rotaris_core.requirements.registry import RequirementIndex
-from ui_query import find_by_accessible_name, settle
+from ui_query import find_by_accessible_name, settle, wait_until
 
 from rotaris.models.requirements_state import build_board_state
 from rotaris.models.state import NoticeSeverity
@@ -1266,7 +1266,7 @@ def test_a_running_flow_says_which_stage_it_is_on_before_it_ends(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace, runs=starter))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     accepted = controller.move_requirement("SWR-4032", "backlog", "ready")
     assert accepted is not None and accepted.started_work is True
@@ -1276,11 +1276,11 @@ def test_a_running_flow_says_which_stage_it_is_on_before_it_ends(
     worker.start()
     worker.join(timeout=10)
     assert not worker.is_alive()
-    qtbot.waitUntil(
+    wait_until(
         lambda: any(
             item.req_id == "SWR-4032" and "decomposition" in item.reason for item in view.feedback
         ),
-        timeout=5000,
+        timeout=5,
     )
 
     standing = [item for item in view.feedback if item.req_id == "SWR-4032"]
@@ -1311,7 +1311,7 @@ def test_a_run_that_dies_replaces_its_own_acceptance_instead_of_stacking_under_i
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace, runs=starter))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     # A standing refusal for the *other* requirement, so "the same slot" can be
     # told apart from "every slot".
@@ -1328,11 +1328,11 @@ def test_a_run_that_dies_replaces_its_own_acceptance_instead_of_stacking_under_i
     worker.start()
     worker.join(timeout=10)
     assert not worker.is_alive()
-    qtbot.waitUntil(
+    wait_until(
         lambda: any(
             item.req_id == "SWR-4010" and item.severity == "error" for item in view.feedback
         ),
-        timeout=5000,
+        timeout=5,
     )
 
     now = [item for item in view.feedback if item.req_id == "SWR-4010"]
@@ -1362,7 +1362,7 @@ def test_a_run_that_reaches_review_leaves_the_acceptance_the_user_is_reading(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace, runs=starter))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     controller.move_requirement("SWR-4013", "backlog", "ready")
     settle(qtbot)
@@ -1388,7 +1388,7 @@ def test_a_user_drags_a_requirement_to_ready_and_a_run_starts(qtbot, tmp_path: P
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace, runs=runs))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     view.begin_drag("SWR-4004")
     ready = view.column_widget("ready")
@@ -1536,7 +1536,7 @@ def test_unreachable_columns_are_indicated_during_the_drag_in_words(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     view.begin_drag("SWR-4008")
     settle(qtbot)
@@ -1576,7 +1576,7 @@ def test_a_user_skipping_review_is_told_which_conditions_are_unmet(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     card = view.card_widgets["SWR-4009"]
     card.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -2027,12 +2027,12 @@ def test_the_git_view_lands_on_the_branch_and_the_commit_it_was_given(qtbot) -> 
     # land rather than draining the event queue and reading immediately: how
     # much of a 120 ms window a drain clears depends on the machine.
     store.set_git_focus("rotaris/req/swr-4018/unit-1")
-    qtbot.waitUntil(lambda: view.worktree_table.currentItem() is not None, timeout=5_000)
+    wait_until(lambda: view.worktree_table.currentItem() is not None, timeout=5)
     assert view.worktree_table.currentItem().text(0) == "rotaris/req/swr-4018/unit-1"
 
     # The full sha a run records still finds the short hash the history shows.
     store.set_git_focus("c0ffee1abcdef0123456789")
-    qtbot.waitUntil(lambda: view.commit_table.currentItem() is not None, timeout=5_000)
+    wait_until(lambda: view.commit_table.currentItem() is not None, timeout=5)
     assert view.commit_table.currentItem().text(0) == "c0ffee1"
 
     # A branch that has already been merged away selects nothing at all, rather
@@ -2041,11 +2041,11 @@ def test_the_git_view_lands_on_the_branch_and_the_commit_it_was_given(qtbot) -> 
     # and nothing takes its place. Wait for that redraw rather than reading
     # through the coalescer's window at the old selection.
     store.set_git_focus("rotaris/req/gone")
-    qtbot.waitUntil(
+    wait_until(
         lambda: (
             view.commit_table.currentItem() is None and view.worktree_table.currentItem() is None
         ),
-        timeout=5_000,
+        timeout=5,
     )
 
 
@@ -2107,7 +2107,7 @@ def test_every_drop_has_a_keyboard_equivalent(qtbot, tmp_path: Path) -> None:
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace, runs=runs))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     card = view.card_widgets["SWR-4020"]
     card.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -2686,7 +2686,7 @@ def test_the_move_strip_states_the_column_that_is_picked_and_not_a_list(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     view.card_widgets["SWR-4200"].setFocus(Qt.FocusReason.OtherFocusReason)
     settle(qtbot)
@@ -2727,7 +2727,7 @@ def test_a_move_the_board_refuses_says_why_where_the_user_is_looking(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     view.card_widgets["SWR-4201"].setFocus(Qt.FocusReason.OtherFocusReason)
     settle(qtbot)
@@ -2758,7 +2758,7 @@ def test_the_move_strip_says_what_to_do_when_nothing_is_selected(
     controller, view = _board(qtbot, workspace)
     controller.attach_actions(_actions(workspace))
     _evaluate(qtbot, controller)
-    qtbot.waitUntil(lambda: not view.populating, timeout=20000)
+    wait_until(lambda: not view.populating, timeout=20)
 
     assert view.selected_req_id == ""
     assert view.move_label.text() == "Select a requirement on the board to move it (Ctrl+M)"

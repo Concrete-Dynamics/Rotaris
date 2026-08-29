@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QLabel, QPlainTextEdit, QPushButton, QWidget
 from rotaris_core.config.schema import RotarisConfig
 from rotaris_core.init.registry import InitStepResult, InitTaskResult
 from rotaris_core.reqtocode import SWR, verifies
-from ui_query import click_by_name, find_by_accessible_name, settle
+from ui_query import click_by_name, find_by_accessible_name, settle, wait_until
 
 from rotaris.models.store import WorkspaceStore
 from rotaris.services.project_init_service import ProjectInitService
@@ -395,7 +395,7 @@ def test_shutdown_ends_the_worker_without_prompting(qtbot, tmp_path) -> None:
         tasks=[_serena_task(slow), _Task(id="second", label="Second task", run=slow)],
     )
     service.start()
-    qtbot.waitUntil(service.isRunning, timeout=5_000)
+    wait_until(service.isRunning, timeout=5)
 
     assert service.shutdown(timeout_ms=10_000) is True
     assert not service.isRunning()
@@ -532,7 +532,7 @@ def test_initialization_from_the_modal_reaches_a_real_server(qtbot, tmp_path, mo
     try:
         assert find_by_accessible_name(host.dialog, "Serena project setup task").isVisible()
         click_by_name(qtbot, host.dialog, "Initialize project", QPushButton)
-        qtbot.waitUntil(lambda: host.dialog.state == "done", timeout=60_000)
+        wait_until(lambda: host.dialog.state == "done", timeout=60)
     finally:
         host.shutdown()
 

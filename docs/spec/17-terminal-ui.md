@@ -13,6 +13,14 @@ status: retired
 > retained only until its capabilities have been restated as desktop behavior in the domains that own
 > them; the `REQ-TUI` and `REQ-CLI` identifiers are withdrawn and are never reused. Nothing here is
 > implemented.
+>
+> **The `REQ-TUI` series is closed. No further identifier may be added to this document.** A behavior
+> this document once carried is restated under an identifier of the domain that owns it on the
+> desktop, never under a new `REQ-TUI` number. An identifier minted here after the retirement
+> decision is withdrawn on that ground alone. Where a requirement below still cites a withdrawn
+> identifier, the citation resolves through that identifier's withdrawal entry to the desktop
+> requirement named there; the surrounding text is left as drafted rather than rewritten, because
+> nothing in this document is implemented.
 
 ## Overview
 
@@ -305,7 +313,7 @@ Rotaris provides a full-screen interactive terminal user interface (TUI) launche
 - **REQ-TUI-203** — The tool-events visibility toggle governs both transcript tool results and the agents-panel recent-activity feed (a single toggle controls both surfaces).
 - **REQ-TUI-204** — Accessibility: statuses are conveyed with text labels and glyphs, never color alone; all themes preserve the chrome/content visual hierarchy and meet the contrast floors of REQ-TUI-025.
 - **REQ-TUI-205** — What is drawn is fixed by the session state together with the clock reading at the moment of drawing, and by nothing else. Two renders of the same session state taken at the same clock reading and animation phase produce identical output. Nothing outside that pair may influence the result: not the enumeration order of any collection, not randomness, and not the order in which the process happened to receive the state. This holds for the transcript, the command palette, the status bar, the agent tree, the settings screens, and streaming-Markdown output. The only content permitted to differ between two renders of identical state is the content this document defines as advancing with the clock — spinner and braille animation frames, elapsed values, and countdown values — and that content follows from the clock reading alone. Values this document derives from timestamps recorded in session state, such as the root ordering of REQ-TUI-089 and the elapsed figures of REQ-TUI-090, REQ-TUI-097, and REQ-TUI-098, are part of that state and reproduce identically.
-- **REQ-TUI-207** — Terminal baseline: the supported terminal is one that renders UTF-8, offers at least 256 colors, and provides at least 80 columns by 24 rows. Within that baseline every glyph, box character, and color this document names is drawn as specified; no ASCII substitution or monochrome variant is offered, and no capability probe changes what is drawn. Outside the baseline the interface degrades instead of failing: below 80 columns the right rail and status bar are not drawn and the transcript, composer, top bar, and footer take the full width; below 24 rows the transcript shrinks first and the footer is dropped before any other row; at any size the application accepts input and exits normally, and a terminal that cannot render a named glyph produces whatever substitute it chooses without the application crashing or reporting an error.
+- **REQ-TUI-207** — *Withdrawn.* It was minted into a series already declared closed, and the display baseline it fixes belongs to a terminal the product does not have. The desktop equivalent is carried by REQ-SHELL-061, which fixes the minimum window size at which the whole working surface stays usable, together with REQ-SHELL-059 and REQ-SHELL-047, which require the layout to degrade at stated thresholds rather than fail; the contrast floors that made colour legible are carried by REQ-SHELL-145.
 
 ### 28. Consolidated timing and limit constants
 

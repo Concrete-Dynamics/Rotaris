@@ -9,7 +9,7 @@ status: draft
 
 ## Overview
 
-A project keeps its requirements as versioned documents in its own repository. A traceability toolchain compiles those documents into a generated code artifact whose symbols are referenced by annotations on implementing code and covering tests, then checks — at the command line, in the test run, in continuous integration and at commit time — that every approved requirement is implemented and covered, that no annotation names a requirement that no longer exists, that no production module and no test is untraced, and that a requirement whose text changed has had its implementing sites revisited. On top of the same data a graphical board presents every requirement as a card in a column, states the health of the evidence behind it, and lets a user release work, review a result, edit or create a requirement, answer a blocker and schedule a run — with every state change passed to the engine, attributed and recorded, and with nothing ever written by merely looking at the board.
+A project keeps its requirements as versioned documents in its own repository. A traceability toolchain compiles those documents into a generated code artifact whose symbols are referenced by annotations on implementing code and covering tests, then checks — from the desktop application, and in the project's own test run — that every approved requirement is implemented and covered, that no annotation names a requirement that no longer exists, that no production module and no test is untraced, and that a requirement whose text changed has had its implementing sites revisited. On top of the same data a graphical board presents every requirement as a card in a column, states the health of the evidence behind it, and lets a user release work, review a result, edit or create a requirement, answer a blocker and schedule a run — with every state change passed to the engine, attributed and recorded, and with nothing ever written by merely looking at the board.
 
 ## Requirements
 
@@ -43,7 +43,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-012** — A document whose frontmatter carries no requirement-identifier key SHALL be skipped without error.
 
-- **REQ-TRACE-013** — The parser SHALL be self-contained and depend on no third-party YAML, TOML or validation library, so that the commit-time enforcement hook can run without an activated project environment. For the same reason the layout configuration format SHALL be JSON.
+- **REQ-TRACE-013** — The parser SHALL be self-contained and depend on no third-party YAML, TOML or validation library, so that it can run wherever the engine is embedded, without an activated project environment. For the same reason the layout configuration format SHALL be JSON.
 
 ### Frontmatter Schema and Vocabulary
 
@@ -115,7 +115,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Layout Configuration
 
-- **REQ-TRACE-038** — Every location the toolchain needs SHALL be carried in a single layout value that does not change for the duration of a command. Each path in it SHALL be repository-relative, and the caller SHALL resolve it against a repository root. A repository that configures nothing SHALL be given the default layout, whose values are those stated in REQ-TRACE-039, and SHALL behave identically to one that configures those same values explicitly.
+- **REQ-TRACE-038** — Every location the toolchain needs SHALL be carried in a single layout value that does not change for the duration of an operation. Each path in it SHALL be repository-relative, and the caller SHALL resolve it against a repository root. A repository that configures nothing SHALL be given the default layout, whose values are those stated in REQ-TRACE-039, and SHALL behave identically to one that configures those same values explicitly.
 
 - **REQ-TRACE-039** — The layout SHALL carry exactly these thirteen configurable keys, every one of which SHALL have a default, so that the default layout of REQ-TRACE-038 is complete and no key is ever without a value:
   - `requirements_dir` — the store directory; default `docs/requirements`.
@@ -133,7 +133,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - `annotation_conventions` — the project's additional annotation conventions (REQ-TRACE-073), in registration order; default the empty list, the built-in convention being registered ahead of it and never listed here.
   A project SHALL NOT be expected to change `exempt_marker`: the default is intended to be adopted as it stands. Changing it SHALL rewrite the orphan baselines' headers and the diagnostics that quote it on the next baseline update, which is a consequence to be accepted deliberately rather than a reason to avoid the key.
 
-- **REQ-TRACE-040** — The optional layout configuration SHALL be a JSON document at the repository root, whose path MAY be overridden by an explicit command-line option. When the file does not exist the default layout SHALL be returned with no error.
+- **REQ-TRACE-040** — The optional layout configuration SHALL be a JSON document at the repository root. When the file does not exist the default layout SHALL be returned with no error.
 
 - **REQ-TRACE-041** — A configuration file MAY carry the layout keys directly in its top-level object or grouped beneath a `layout` key. Where a `layout` key is present, its object SHALL be the one read. Where a `layout` key is present but holds anything other than an object, loading SHALL fail with an error naming the configuration file.
 
@@ -155,11 +155,11 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-049** — When no candidate satisfies either test anywhere up the chain, discovery SHALL fall back to the current working directory rather than failing.
 
-- **REQ-TRACE-050** — An explicit repository-root option SHALL exist on the command line for callers that already know the root, and SHALL be suppressed from the help output.
+- **REQ-TRACE-050** — *Withdrawn.* The product has no command line, so there is no option to carry a repository root and no help output to suppress it from. A caller that already knows the root still supplies it directly, since every entry point takes one; which root the desktop operations use is fixed by REQ-TRACE-512, and discovery for a caller that does not know it stays with REQ-TRACE-048 and REQ-TRACE-049.
 
 ### Generated Requirement-Symbol Artifact
 
-- **REQ-TRACE-051** — The store SHALL be compiled into a single generated source module at the configured generated path. The module SHALL NEVER be edited by hand, SHALL be excluded from the annotation sweep, and SHALL carry a fixed header that states it is auto-generated, names the store directory it was generated from, and names the exact command that regenerates it.
+- **REQ-TRACE-051** — The store SHALL be compiled into a single generated source module at the configured generated path. The module SHALL NEVER be edited by hand, SHALL be excluded from the annotation sweep, and SHALL carry a fixed header that states it is auto-generated, names the store directory it was generated from, and states how it is regenerated (REQ-TRACE-509).
 
 - **REQ-TRACE-052** — The header SHALL carry linter and formatter suppression directives so that ordinary tooling leaves a generated file alone, and a global fingerprint line carrying a full-length (untruncated) SHA-256 in hexadecimal.
 
@@ -201,7 +201,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-070** — A transitional comment naming a requirement SHALL be recognized and SHALL count as covering it. A legacy identifier written in such a comment SHALL be resolved through the legacy alias table of REQ-TRACE-021. The form is a test-side convention only: an occurrence outside a test root SHALL be discarded and SHALL count towards nothing. The comment's form SHALL be, within any one line: the case-insensitive token `covers:`, then whitespace, then one or more identifiers separated by commas, whitespace, or both, recognition ending at the end of that line. An identifier written there SHALL be either a canonical identifier (REQ-TRACE-022) or a run of one or more hyphen-separated alphanumeric segments, the latter resolved through the legacy alias table of REQ-TRACE-021.
 
-- **REQ-TRACE-071** — A comment-form identifier that resolves to no requirement — the legacy identifier being unknown, or claimed by more than one requirement — SHALL produce a **warning** and never an error, and SHALL therefore not on its own make a command exit non-zero. The warning SHALL name the file, the **1-based** line, and the identifier exactly as written, and SHALL tell the author to write a canonical identifier in its place. The occurrence SHALL be recorded with no requirement number attached to it.
+- **REQ-TRACE-071** — A comment-form identifier that resolves to no requirement — the legacy identifier being unknown, or claimed by more than one requirement — SHALL produce a **warning** and never an error, and SHALL therefore never on its own be reported as a violation. The warning SHALL name the file, the **1-based** line, and the identifier exactly as written, and SHALL tell the author to write a canonical identifier in its place. The occurrence SHALL be recorded with no requirement number attached to it.
 
 - **REQ-TRACE-072** — Direction SHALL determine what a reference counts as:
   - an implementation-trace annotation found in an implementation root counts as an implementation trace and marks its file as traced;
@@ -256,17 +256,17 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-088** — Sweep cost SHALL grow linearly with the amount of source scanned, and a repository of the order of 10^3 source files carrying of the order of 10^4 annotation sites SHALL be swept in about one second. Sites naming several requirements, and sites spread over several lines, SHALL be handled by the ordinary path with no special case. That budget SHALL be measured under the **reference conditions**: one execution thread on a contemporary developer workstation backed by a solid-state disk, with a warm file-system cache, timing the sweep alone — enumeration, reading and matching — and excluding process start-up and the store parse. The linear-growth clause is the binding one: an implementation satisfies this requirement where doubling the amount of source scanned costs about twice as much and a repository of the stated size is swept within the stated time under those conditions.
 
-- **REQ-TRACE-089** — Every command SHALL report the repository as it stands at the moment that command runs. No result SHALL be carried over from an earlier invocation and no stored summary SHALL be consulted in place of reading the files, so an edit made between two invocations SHALL be reflected by the second without anything having to be cleared first, and two invocations over an unchanged repository SHALL report the same thing. How often the work is repeated within one invocation SHALL make no difference to what that invocation reports.
+- **REQ-TRACE-089** — Every operation SHALL report the repository as it stands at the moment that operation runs. No result SHALL be carried over from an earlier invocation and no stored summary SHALL be consulted in place of reading the files, so an edit made between two invocations SHALL be reflected by the second without anything having to be cleared first, and two invocations over an unchanged repository SHALL report the same thing. How often the work is repeated within one invocation SHALL make no difference to what that invocation reports.
 
 ### Verification Pass
 
-- **REQ-TRACE-090** — Verification SHALL be pure: it returns lists of errors and warnings, logs nothing itself, and writes nothing. Plain checking SHALL NEVER write; only the explicit fix and baseline-update options write.
+- **REQ-TRACE-090** — Verification SHALL be pure: it returns lists of errors and warnings, logs nothing itself, and writes nothing. Plain checking SHALL NEVER write; only the explicit regeneration and baseline-update actions of REQ-TRACE-509 and REQ-TRACE-510 write.
 
 - **REQ-TRACE-091** — One verification run SHALL judge every check against one reading of the store and one reading of the repository, so that no two of its findings can describe different states of the same file. A single run SHALL be able to report, together: a stale or missing generated artifact; malformed baseline lines; derived-from integrity failures; references to requirements that no longer exist; deprecated references; missing implementation traces and missing coverage, after baseline suppression; stale baseline entries; unresolved legacy comment references; orphan modules; orphan tests; and the statistics of REQ-TRACE-101. Apart from the short-circuit of REQ-TRACE-092, no check SHALL suppress, delay or alter another, and each SHALL report what it finds whether or not the others found anything. Findings SHALL appear in the returned lists **grouped by check and in the order the checks are listed above** — the generated artifact, malformed baseline lines, derived-from integrity, references to requirements that no longer exist, deprecated references, missing implementation traces, missing coverage, stale baseline entries, unresolved legacy comment references, orphan modules, orphan tests — with each check's own findings contiguous and internally ordered as that check itself specifies. The error list and the warning list SHALL each follow that same grouping, so two implementations cannot interleave the checks differently and both be conformant.
 
 - **REQ-TRACE-092** — Given any parse error, verification SHALL return immediately carrying **only** the parse errors: every other diagnostic for that run is suppressed, because everything downstream depends on a clean parse. Fixing one malformed document MAY therefore reveal a large second wave of violations.
 
-- **REQ-TRACE-093** — A generated artifact that is stale, or that is not there at all, SHALL be reported as an **error** and never as a warning. The message SHALL name the artifact's path and the `generate` invocation that brings it back up to date.
+- **REQ-TRACE-093** — A generated artifact that is stale, or that is not there at all, SHALL be reported as an **error** and never as a warning. The message SHALL name the artifact's path and the regeneration action of REQ-TRACE-509 that brings it back up to date.
 
 - **REQ-TRACE-094** — A reference to a number for which no requirement exists SHALL be an error, emitted once per occurrence, iterated over sorted numbers, naming the file and line, the referenced symbol, and instructing the author either to remove the reference or restore the requirement document. This is the mechanism by which deleting a requirement propagates into the code; at run time the same deletion also surfaces as a missing-attribute failure at every use site.
 
@@ -283,7 +283,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - an origin naming a requirement that does not exist;
   - an origin that is deprecated — a **warning** instructing the author to re-point at the superseding requirement.
 
-- **REQ-TRACE-099** — Every error and every warning SHALL be actionable. Where it concerns a requirement it SHALL name that requirement's identifier, its title and the document declaring it; and in every case it SHALL name the concrete step that resolves it — the annotation to add together with the import it needs, the reference to remove, the baseline entry to prune, or the command to run.
+- **REQ-TRACE-099** — Every error and every warning SHALL be actionable. Where it concerns a requirement it SHALL name that requirement's identifier, its title and the document declaring it; and in every case it SHALL name the concrete step that resolves it — the annotation to add together with the import it needs, the reference to remove, the baseline entry to prune, or the action to take.
 
 - **REQ-TRACE-100** — Every diagnostic SHALL carry a machine-parseable location prefix of the form `<path>.md (<identifier>): <message>`, with the identifier part optional, so a consumer can recover a located, attributable issue. A message that does not match SHALL be retained with no location. This prefix format is a de facto public contract: changing it silently degrades issue attribution in consuming surfaces.
 
@@ -301,7 +301,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-106** — The orphan-code error SHALL name the file, state that it has no trace, and offer all three remedies: trace it to the requirement it serves with the named annotation; author a technical requirement with an origin if none fits; or mark it with the configured exempt marker (quoted verbatim) if it is intentionally trace-free. Results SHALL be returned sorted.
 
-- **REQ-TRACE-107** — An orphan-baseline entry that is now traced, exempt or removed SHALL produce a **warning** naming the entry, the baseline path and the pruning command, emitted for the sorted difference between the baseline and the current orphan set.
+- **REQ-TRACE-107** — An orphan-baseline entry that is now traced, exempt or removed SHALL produce a **warning** naming the entry, the baseline path and the pruning action of REQ-TRACE-510, emitted for the sorted difference between the baseline and the current orphan set.
 
 ### Orphan Tests (Reverse Check: Test to Requirement)
 
@@ -333,19 +333,19 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-120** — An orphan-test entry SHALL match a path with an extension, zero or more `::`-separated class segments, and a final `::`-prefixed test-function segment. A malformed line SHALL name the rejected text and the expected shape. Rendering SHALL be sorted.
 
-- **REQ-TRACE-121** — Every baseline header SHALL state, in the file itself, that the file may only shrink, how the debt is paid off, the exact pruning command, and that entries must never be added for new work.
+- **REQ-TRACE-121** — Every baseline header SHALL state, in the file itself, that the file may only shrink, how the debt is paid off, the exact pruning action, and that entries must never be added for new work.
 
 - **REQ-TRACE-122** — Baseline suppression SHALL be **per flag**, not per requirement: a baseline listing only the trace flag SHALL still let the coverage error through. Every suppressed item SHALL be counted in the statistics.
 
-- **REQ-TRACE-123** — The baseline-update option SHALL rewrite all three baselines in one invocation, in this order: trace/test debt, then orphan modules, then orphan tests. Each SHALL print a notice naming the file written and the resulting entry count.
+- **REQ-TRACE-123** — The baseline-update action SHALL rewrite all three baselines in one invocation, in this order: trace/test debt, then orphan modules, then orphan tests. Each SHALL be reported by a notice naming the file written and the resulting entry count.
 
-- **REQ-TRACE-124** — The debt ratchet SHALL be a **per-identifier intersection**: for each number recorded in the existing baseline, keep only the flags that are both recorded and currently unmet; drop numbers whose intersection is empty. Entries can therefore only ever be removed by this command. Given the baseline file does not exist, the command SHALL bootstrap by recording all current debt once.
+- **REQ-TRACE-124** — The debt ratchet SHALL be a **per-identifier intersection**: for each number recorded in the existing baseline, keep only the flags that are both recorded and currently unmet; drop numbers whose intersection is empty. Entries can therefore only ever be removed by this action. Given the baseline file does not exist, the action SHALL bootstrap by recording all current debt once.
 
 - **REQ-TRACE-125** — The two orphan ratchets SHALL be a plain **set intersection** of recorded and current entries, with the same bootstrap rule when the file is absent.
 
 - **REQ-TRACE-126** — Every baseline write SHALL create the parent directory when missing, SHALL write UTF-8 with LF endings forced on every platform, and SHALL be **atomic** in the manner of REQ-TRACE-061 — a temporary file in the target's own parent directory, then an atomic replace — so that a reader concurrent with a write observes either the whole previous file or the whole new one and never a partial one.
 
-- **REQ-TRACE-127** — Given a baseline entry whose number no longer names an **approved** requirement — whether deleted, or moved back to draft or deprecated — the check SHALL emit a **warning** naming the entry, the baseline path and the pruning command. Given an entry whose flags are now satisfied — because the obligation was relaxed to optional or because the annotation now exists — the check SHALL emit a **warning** naming the satisfied flags sorted and space-joined. Both SHALL be warnings only: a stale baseline SHALL NEVER fail the build.
+- **REQ-TRACE-127** — Given a baseline entry whose number no longer names an **approved** requirement — whether deleted, or moved back to draft or deprecated — the check SHALL emit a **warning** naming the entry, the baseline path and the pruning action. Given an entry whose flags are now satisfied — because the obligation was relaxed to optional or because the annotation now exists — the check SHALL emit a **warning** naming the satisfied flags sorted and space-joined. Both SHALL be warnings only: a stale baseline SHALL NEVER fail the build.
 
 - **REQ-TRACE-128** — Every baseline a single update invocation writes SHALL describe the repository as it stands at that invocation, and the three SHALL be consistent with one another and with the verification performed in the same invocation. An update run a second time over an unchanged repository SHALL leave all three files byte-identical. How much of the work the invocation repeats in order to achieve this SHALL NOT be observable in what it writes or reports.
 
@@ -361,7 +361,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-133** — The tombstone SHALL be written **before** the new generated artifact, so that a crash between the two leaves the identifier recorded rather than forgotten.
 
-- **REQ-TRACE-134** — Reuse rejection SHALL be enforced inside the store parse itself, not in one entry point, so that every command — checking, generating, comparing changes and verifying — refuses a reused identifier. The error SHALL name the source path, the identifier, the retirement date, the old title where one was recorded, and SHALL instruct the author to claim the next free identifier. Given no tombstones exist at all, the check SHALL return immediately.
+- **REQ-TRACE-134** — Reuse rejection SHALL be enforced inside the store parse itself, not in one entry point, so that every operation — checking, generating, comparing changes and verifying — refuses a reused identifier. The error SHALL name the source path, the identifier, the retirement date, the old title where one was recorded, and SHALL instruct the author to claim the next free identifier. Given no tombstones exist at all, the check SHALL return immediately.
 
 - **REQ-TRACE-135** — Tombstone parsing SHALL be deliberately tolerant: a malformed line SHALL be skipped and SHALL NEVER be fatal. The log exists solely to stop identifiers being claimed twice, and dropping a single record after a clumsy manual edit costs the project far less than rendering the whole repository uncheckable. Per line: strip; skip blanks and comments; split on tab; require at least two fields; require the first field to begin case-insensitively with the identifier prefix; require the remainder after the prefix to be all digits. The title is the third field when present, else empty. A later duplicate line for the same number SHALL overwrite an earlier one in the parse result.
 
@@ -377,71 +377,63 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-141** — Editing, renaming or re-titling a requirement SHALL produce **no** tombstone: only disappearance from the store counts as a deletion.
 
-### Command-Line Surface
+### Toolchain Operations
 
-- **REQ-TRACE-142** — The toolchain SHALL expose exactly three subcommands:
-  - `check [--fix] [--update-baseline] [--report-only]` — verify traceability;
-  - `generate` — regenerate the requirement-symbol artifact if stale;
-  - `diff [--base <revision>] [--strict]` — produce a worklist of requirement changes against a base revision.
-  A subcommand SHALL be required; invoking with none SHALL be an argument-parsing usage error exiting **2**.
+- **REQ-TRACE-142** — *Withdrawn.* The product has no command line, so it has no subcommands, no flags and no usage error to exit on. The three capabilities the subcommands carried are re-sited on the desktop: verifying traceability is REQ-TRACE-508, regenerating the requirement-symbol artifact is REQ-TRACE-509, and producing a worklist of requirement changes against a base revision is REQ-TRACE-511.
 
-- **REQ-TRACE-143** — Global options preceding the subcommand SHALL be: an explicit repository-root path (hidden from help), and an explicit layout configuration path whose help states the default location.
+- **REQ-TRACE-143** — *Withdrawn.* There is no invocation to carry global options. Which repository root and which layout configuration an operation reads is fixed by REQ-TRACE-512, which takes both from the workspace the window has open rather than from the user.
 
-- **REQ-TRACE-144** — The options SHALL mean:
-  - `--fix` — regenerate the artifact before verifying, where it is stale;
-  - `--update-baseline` — remove from all three baselines the entries now satisfied, adding none;
-  - `--report-only` — select the reporting enforcement level of REQ-TRACE-504: report every finding exactly as the enforcing level does, but do not fail the invocation on traceability violations;
-  - `--base <revision>` — the revision to compare against; where omitted, the revision the working tree currently sits on;
-  - `--strict` — exit **1** where any requirement's text has changed since the base while no file carrying one of its implementation or coverage sites has changed, drift being as defined in REQ-TRACE-161 and REQ-TRACE-162.
+- **REQ-TRACE-144** — *Withdrawn.* No flag exists to be given a meaning. Four of the five capabilities are carried elsewhere: regenerating before verifying by REQ-TRACE-509, pruning the baselines by REQ-TRACE-510, and the base revision together with the drift finding by REQ-TRACE-511. The fifth, `--report-only`, selected the enforcement level withdrawn with REQ-TRACE-504; the check of REQ-TRACE-508 gates nothing by itself, so the complete non-blocking report that flag had to be asked for is what every check now produces.
 
-- **REQ-TRACE-145** — Exit codes SHALL be exactly:
-  - **0** — success, no violations;
-  - **1** — traceability violations, parse errors, a malformed layout configuration, or unpropagated drift under `diff --strict`;
-  - **2** — any unhandled exception, reported on standard error as an internal-error line carrying the exception's representation.
-  A malformed layout configuration SHALL be classified deliberately as a **user** error (1), not internal (2), and reported on standard error as a configuration-error line. The exception wrapper SHALL enclose both layout loading and command dispatch. These exit codes govern the **command-line surface only**; the graphical board has no entry point and no exit code of its own, and nothing in it SHALL be described in terms of one. Under `--report-only` the traceability-violation cause of exit 1 SHALL NOT apply (REQ-TRACE-504); every other cause SHALL.
+- **REQ-TRACE-145** — *Withdrawn.* Nothing in the product has an exit code, so the observation that the board had none of its own now holds of the whole product. Each classification the codes carried survives as a stated finding: traceability violations and parse errors by REQ-TRACE-508, a malformed layout configuration and an unanticipated failure by REQ-TRACE-512, and unpropagated drift by REQ-TRACE-511.
 
-- **REQ-TRACE-146** — The `check` command SHALL execute in this order:
-  1. with `--fix`, regenerate if stale — on parse errors, print each as a parse-error line to **standard error** and return 1 immediately without attempting verification; when the artifact changed, print a regeneration notice to standard output;
-  2. with `--update-baseline`, rewrite all three baselines;
-  3. verify;
-  4. print warnings to **standard output**;
-  5. print errors to **standard error**;
-  6. print a one-line statistics summary to standard output when statistics are present;
-  7. on any error, print a failure line naming the violation count to standard error and return 1 — or, under `--report-only`, print that same failure line and return 0;
-  8. otherwise print an OK line to standard output and return 0;
-  9. in every case print, on standard output, the line stating which enforcement level was in force (REQ-TRACE-504).
+- **REQ-TRACE-146** — *Withdrawn.* The `check` command no longer exists, and its steps were an ordering of writes to two byte streams. The ordering that remains observable — regenerate, then rewrite the baselines against the fresh parse, then verify — is carried by REQ-TRACE-508; the routing of findings between streams has no successor and needs none.
 
-- **REQ-TRACE-147** — A single `check --fix --update-baseline` invocation SHALL therefore regenerate, re-baseline against the fresh parse, and then verify, in that order, and the lines it emits SHALL be observable in that order **within each stream**: on standard output, the regeneration notice, then the three baseline notices in the order of REQ-TRACE-123, then the warnings, then the statistics line, then the OK line; on standard error, the errors, then the failure line. Relative ordering **between** the two streams SHALL NOT be specified and SHALL NOT be relied upon, since a consumer may redirect them separately.
+- **REQ-TRACE-147** — *Withdrawn.* There are no streams within which to order emitted lines. The operation order it fixed is carried by REQ-TRACE-508, and the order in which findings are presented remains fixed, for every surface alike, by REQ-TRACE-091.
 
-- **REQ-TRACE-148** — The `generate` command SHALL regenerate if stale; on parse errors it SHALL print each as a parse-error line to standard error and return 1. Otherwise it SHALL re-parse and print one line naming the artifact path, stating **which** of "regenerated" or "already up to date" it observed, and the requirement count, then return 0. A no-op run SHALL be distinguishable from a rewriting run in the output.
+- **REQ-TRACE-148** — *Withdrawn.* The regeneration capability, including that a run which rewrote the artifact stays distinguishable from one that found it already up to date, is carried by REQ-TRACE-509.
 
-- **REQ-TRACE-149** — Stream routing SHALL be: standard output carries warnings, statistics, the OK line, regeneration notices, baseline notices and change-comparison lines; standard error carries errors, parse errors, configuration errors, internal errors and failure lines.
+- **REQ-TRACE-149** — *Withdrawn.* There is no standard output and no standard error to route findings between. Errors, warnings, statistics and notices are presented together by REQ-TRACE-508, told apart by what each one is rather than by which stream carried it.
 
-- **REQ-TRACE-150** — Every emitted line SHALL begin with one constant bracketed tool tag, so that the toolchain's output is distinguishable in a mixed log.
+- **REQ-TRACE-150** — *Withdrawn.* The toolchain emits no lines into a mixed log, so there is nothing to tag. Findings are presented as records by REQ-TRACE-508, each already attributed by the location form of REQ-TRACE-100.
 
-- **REQ-TRACE-151** — The statistics line SHALL report, in one line: the requirement count; the approved, traced and test-covered counts in parentheses; and the four baseline-debt counts labelled trace, test, orphan and orphan-test.
+- **REQ-TRACE-151** — *Withdrawn.* The statistics have no line to occupy. Their content is unchanged and still owed: REQ-TRACE-101 fixes the figures and REQ-TRACE-508 requires them to be stated on every check.
 
-- **REQ-TRACE-152** — The toolchain SHALL write **only** under `--fix` (the generated artifact and the retired-identifier log) and `--update-baseline` (the three baselines). Every other invocation SHALL be read-only.
+- **REQ-TRACE-152** — The toolchain SHALL write **only** under the regeneration action of REQ-TRACE-509 (the generated artifact and the retired-identifier log) and the baseline-update action of REQ-TRACE-510 (the three baselines). Every other operation SHALL be read-only.
 
-- **REQ-TRACE-153** — The command-line entry point SHALL depend on the standard library alone, so the continuous-integration gate and the commit-time hook can run it with no dependency installation and no activated project environment.
+- **REQ-TRACE-153** — *Withdrawn.* There is no command-line entry point, and the continuous-integration gate and commit-time hook whose lack of an environment it existed to accommodate are withdrawn with REQ-TRACE-184 and REQ-TRACE-185. The self-containment that is still observable is kept by REQ-TRACE-013, which holds the store parser free of third-party libraries and the layout configuration in JSON.
 
-- **REQ-TRACE-154** — The toolchain SHALL provide no progress reporting and no cancellation of any kind at this layer: no interrupt handling, no progress callback, no partial-result reporting. The only observable progress is the final statistics line and the per-change lines of the comparison command; the scan itself is silent while running. The absence of any time limit, document limit or resource limit on the file-system scan SHALL be a **deliberate decision and not a gap**: the scan is local file input whose cost is bounded by the size of the store and of the configured roots (REQ-TRACE-088, REQ-TRACE-501), a partially completed scan yields nothing a caller could act upon, and the layers that genuinely need to abandon work in flight own their own cancellation (REQ-TRACE-220). The one cost this layer does not itself control is a child process, and that SHALL be bounded by REQ-TRACE-170.
+- **REQ-TRACE-154** — The toolchain SHALL provide no progress reporting and no cancellation of any kind at this layer: no interrupt handling, no progress callback, no partial-result reporting. The only observable progress is the result an operation returns once it has finished; the scan itself reports nothing while running. The absence of any time limit, document limit or resource limit on the file-system scan SHALL be a **deliberate decision and not a gap**: the scan is local file input whose cost is bounded by the size of the store and of the configured roots (REQ-TRACE-088, REQ-TRACE-501), a partially completed scan yields nothing a caller could act upon, and the layers that genuinely need to abandon work in flight own their own cancellation (REQ-TRACE-220). The one cost this layer does not itself control is a child process, and that SHALL be bounded by REQ-TRACE-170.
 
-- **REQ-TRACE-155** — The toolchain SHALL provide no command to add a requirement, renumber, or migrate; authoring is manual against the template, assisted by agent skills rather than by the command line. It SHALL likewise provide **no project-structure detection and no configuration-scaffolding command**: adoption consists of writing the layout configuration of REQ-TRACE-040, or of accepting the default layout of REQ-TRACE-039 unchanged, and the three subcommands of REQ-TRACE-142 are the whole command surface.
+- **REQ-TRACE-155** — The toolchain SHALL provide no operation to add a requirement, renumber, or migrate; authoring is manual against the template, assisted by agent skills, and the one surface that brings a requirement into existence is the creation form of REQ-TRACE-442. It SHALL likewise provide **no project-structure detection and no configuration-scaffolding operation**: adoption consists of writing the layout configuration of REQ-TRACE-040, or of accepting the default layout of REQ-TRACE-039 unchanged, and the four operations of REQ-TRACE-508, REQ-TRACE-509, REQ-TRACE-510 and REQ-TRACE-511 are the whole of what the toolchain offers to be invoked.
 
-- **REQ-TRACE-502** — Concurrent invocations SHALL be safe without any lock, lease or coordination file. Every artifact the toolchain writes — the generated artifact, the three baselines and the retired-identifier log — SHALL be written by the atomic replace of REQ-TRACE-061, REQ-TRACE-126 and REQ-TRACE-137, so a reader concurrent with a writer SHALL observe one complete version of a file and never a partial one, and two concurrent writers SHALL leave one complete file rather than a blend of both. Beyond that, **no invocation SHALL wait for another**: where two invocations race, each SHALL report the repository as it read it, so a check running beside a generate MAY legitimately report the artifact stale even though the other invocation is in the act of refreshing it, and re-running the check afterwards SHALL report it up to date. An invocation SHALL NEVER fail, hang or leave a lock behind because another was running.
+- **REQ-TRACE-502** — Concurrent invocations SHALL be safe without any lock, lease or coordination file. Every artifact the toolchain writes — the generated artifact, the three baselines and the retired-identifier log — SHALL be written by the atomic replace of REQ-TRACE-061, REQ-TRACE-126 and REQ-TRACE-137, so a reader concurrent with a writer SHALL observe one complete version of a file and never a partial one, and two concurrent writers SHALL leave one complete file rather than a blend of both. Beyond that, **no invocation SHALL wait for another**: where two invocations race, each SHALL report the repository as it read it, so a check running beside a regeneration MAY legitimately report the artifact stale even though the other invocation is in the act of refreshing it, and re-running the check afterwards SHALL report it up to date. An invocation SHALL NEVER fail, hang or leave a lock behind because another was running.
 
-- **REQ-TRACE-503** — A store that declares no requirements SHALL be reported, never passed over in silence. Where the parse yields no requirements, `check` SHALL emit a **warning** — not an error — that names the configured store directory and distinguishes three findings using the probe of REQ-TRACE-178: the store directory is absent; it exists but holds no document carrying frontmatter; or it holds documents carrying frontmatter of which none declares a requirement identifier, which is the case that means the documents are of a kind this parser does not read. The warning SHALL name the concrete next step for the finding it reports. With no other violation the invocation SHALL still succeed, since a repository that has not begun writing requirements is not a repository in violation, and the statistics line SHALL report a total of zero.
+- **REQ-TRACE-503** — A store that declares no requirements SHALL be reported, never passed over in silence. Where the parse yields no requirements, the check of REQ-TRACE-508 SHALL emit a **warning** — not an error — that names the configured store directory and distinguishes three findings using the probe of REQ-TRACE-178: the store directory is absent; it exists but holds no document carrying frontmatter; or it holds documents carrying frontmatter of which none declares a requirement identifier, which is the case that means the documents are of a kind this parser does not read. The warning SHALL name the concrete next step for the finding it reports. With no other violation the check SHALL still report the repository as carrying none, since a repository that has not begun writing requirements is not a repository in violation, and the statistics SHALL report a total of zero.
 
-- **REQ-TRACE-504** — Two enforcement levels SHALL exist, selected **only** at the command line: **enforcing**, which is the default, and **reporting**, selected by `check --report-only`. Under the reporting level the verification performed, the findings produced and the lines printed SHALL be identical to the enforcing level in every respect except the exit code: each error SHALL still be printed as an error on standard error, each warning on standard output, and the failure line naming the violation count SHALL still be printed — but the invocation SHALL return **0** for traceability violations. Parse errors and a malformed layout configuration SHALL still return 1 at either level, because those mean the check could not be performed rather than that the repository carries debt. Every `check` invocation SHALL state on standard output which level was in force, so a log can never be read as a clean enforcing run when it was in fact a reporting run. There SHALL be **no configuration key** for the level: it is a property of the invocation and not of the repository, so that a repository cannot disarm its own gate for everybody who runs it. A repository adopting the toolchain for the first time, with no baseline written, SHALL therefore obtain a complete non-blocking coverage report by invoking `check --report-only` before any ratchet exists.
+- **REQ-TRACE-504** — *Withdrawn.* Enforcement levels were selected only at the command line and were observable only in an exit code, and the product has neither. What the reporting level existed to obtain is now unconditional rather than requested: the check of REQ-TRACE-508 performs the whole verification, states every finding, and gates nothing by itself, so a repository adopting the toolchain with no baseline written obtains its complete coverage report from the first check it runs. The decision that a repository may not disarm its own gate is kept there too — no configuration key and no control suppresses a finding.
+
+- **REQ-TRACE-508** — The desktop application SHALL offer a **traceability check** for the workspace it has open, and that check SHALL be where a user reaches the verification pass of REQ-TRACE-090 through REQ-TRACE-101. It SHALL run that pass over one reading of the store and one reading of the repository, and SHALL:
+  - present every error and every warning the pass returns, grouped by check and ordered exactly as REQ-TRACE-091 fixes, each stated as REQ-TRACE-099 requires;
+  - carry each finding's location in the attributable form of REQ-TRACE-100, and make the document or the site it names openable **at its own line** by the route REQ-TRACE-266 already uses;
+  - distinguish an error from a warning by what the finding says about itself, never by where it was written;
+  - state the statistics of REQ-TRACE-101 whether or not anything was found, and state **in words** when the repository carries no violation at all, so that a clean result is never an empty surface;
+  - present parse errors alone when there are any, as REQ-TRACE-092 requires, saying that no other check could be performed.
+  The check SHALL write nothing (REQ-TRACE-090, REQ-TRACE-152) and SHALL **gate nothing by itself**: there SHALL be no control and no configuration key by which a finding can be suppressed or an enforcement level chosen. Where the user asks for a regeneration (REQ-TRACE-509) or a baseline update (REQ-TRACE-510) alongside a check, the operations SHALL be performed in the order regenerate, then rewrite the baselines against the fresh parse, then verify, and each SHALL report what it did. This check SHALL be distinct from the verification of REQ-TRACE-410, which runs the workspace's own check suite and records evidence per requirement; the traceability check records none. It SHALL be reachable from the requirements view and its findings presented there, and the closed pane namespace of REQ-TRACE-375 SHALL be left exactly as it stands.
+
+- **REQ-TRACE-509** — The desktop application SHALL offer a **regeneration** action that brings the generated requirement-symbol artifact up to date for the workspace it has open. It SHALL perform the generation of REQ-TRACE-059 through REQ-TRACE-063 unaltered, including the retirement record that REQ-TRACE-132 and REQ-TRACE-133 require to be written first, and SHALL report the artifact's path, **which** of "regenerated" and "already up to date" it observed, and the requirement count — so that a run which rewrote the artifact is distinguishable from one that found nothing to do. On parse errors it SHALL report each of them, SHALL write nothing (REQ-TRACE-063), and SHALL state that the artifact was left exactly as it stood.
+
+- **REQ-TRACE-510** — The desktop application SHALL offer a **baseline update** that performs REQ-TRACE-123 through REQ-TRACE-129 for the workspace it has open: all three baselines rewritten in the fixed order, only entries now satisfied removed, never one added, and each reported by the notice REQ-TRACE-123 requires. It SHALL be invoked deliberately and SHALL NEVER be performed as a consequence of opening the board, reading it, or running the check of REQ-TRACE-508.
+
+- **REQ-TRACE-512** — Every operation of REQ-TRACE-508 through REQ-TRACE-511 SHALL run against the repository root of **the workspace the window has open**, resolved by REQ-TRACE-048 and REQ-TRACE-049, and against the layout configuration found there (REQ-TRACE-040); neither a root nor a configuration path SHALL be nominated by the user. Each SHALL run **off the interface thread** (REQ-TRACE-337), and at most one operation of a given kind SHALL be in flight for a workspace at a time — a second request SHALL be refused with a stated reason rather than queued or raced. A layout configuration that cannot be read or does not validate SHALL be reported in the terms of REQ-TRACE-046, naming the configuration path and the underlying cause, with **no operation performed and nothing written**; a failure the operation did not anticipate SHALL likewise be **stated**, naming what failed, rather than swallowed or reduced to a bare code. No operation SHALL be started on its own initiative by opening the requirements view or by reading the board (REQ-TRACE-408). These four operations write repository bookkeeping artifacts and **never a delivery record**; they are not board actions, and nothing here SHALL be read as extending the closed action set of REQ-TRACE-382 or as offering a second path by which a delivery state could be persisted (REQ-TRACE-399).
 
 ### Change Comparison Against a Base Revision
 
-- **REQ-TRACE-156** — The comparison command SHALL answer a question the check is structurally incapable of answering. Where a requirement's **prose** is rewritten but every annotation naming it is left in place, verification continues to report success even though the code now implements an older statement. The command SHALL convert such a change into an actionable worklist by comparing each requirement's content hash at a base revision against its hash in the working tree.
+- **REQ-TRACE-156** — The change comparison SHALL answer a question the check is structurally incapable of answering. Where a requirement's **prose** is rewritten but every annotation naming it is left in place, verification continues to report success even though the code now implements an older statement. The comparison SHALL convert such a change into an actionable worklist by comparing each requirement's content hash at a base revision against its hash in the working tree.
 
 - **REQ-TRACE-157** — The "before" state of every requirement SHALL be taken from the **generated artifact as committed at the base revision**, and SHALL NOT be reconstructed by re-reading the requirement documents as they stood at that revision. Only entries in that artifact that are well formed and carry a requirement number SHALL contribute; an entry that cannot be interpreted SHALL be passed over while the remaining entries still contribute. A requirement SHALL therefore be reported as unchanged exactly when the content hash the base artifact records for it equals the hash computed from the working tree, whatever the historical documents contained.
 
-- **REQ-TRACE-158** — Given the base artifact cannot be retrieved, is empty, fails to load, or carries no usable mapping, the base SHALL be reported unavailable: no changes are computed, the rendered output is a single line stating there is no base artifact to compare against, and the exit code stays **0** even under `--strict`. A base revision that exists but at which the generated artifact had not yet been introduced SHALL take exactly this path and SHALL be indistinguishable in behaviour from a base revision that does not exist: in both cases there is no recorded "before" state, and inventing one by re-reading the historical requirement documents is forbidden by REQ-TRACE-157.
+- **REQ-TRACE-158** — Given the base artifact cannot be retrieved, is empty, fails to load, or carries no usable mapping, the base SHALL be reported unavailable: no changes are computed, the comparison states that there is no base artifact to compare against, and nothing is reported as drift. A base revision that exists but at which the generated artifact had not yet been introduced SHALL take exactly this path and SHALL be indistinguishable in behaviour from a base revision that does not exist: in both cases there is no recorded "before" state, and inventing one by re-reading the historical requirement documents is forbidden by REQ-TRACE-157.
 
 - **REQ-TRACE-159** — The changed-file set SHALL be the union of two version-control queries: tracked changes between the base revision and the working tree, and untracked-but-not-ignored files. Each SHALL be merged only when it succeeded; a failing query SHALL contribute nothing rather than aborting. Untracked files SHALL be included so a brand-new implementation or test file counts as touched.
 
@@ -453,19 +445,21 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-163** — The site index SHALL be **all** references in both directions, not the direction-filtered maps, so a coverage annotation in a test root and a trace annotation in an implementation root both count as sites to review.
 
-- **REQ-TRACE-164** — Rendered output SHALL emit, per change, one header line carrying: the upper-cased change kind, the identifier, the quoted title, an optional lifecycle transition suffix emitted only when a transition was recorded **and** differs from the current lifecycle, a fixed obligation text per kind, and a drift marker when drift was found. Indented under it SHALL come one `<file>:<line> (<kind>)` line per site.
+- **REQ-TRACE-164** — Each change SHALL be presented as one entry carrying: the change kind, the identifier, the quoted title, an optional lifecycle transition stated only when a transition was recorded **and** differs from the current lifecycle, a fixed obligation text per kind, and a drift marker when drift was found. Beneath that entry SHALL come one `<file>:<line> (<kind>)` entry per site.
 
 - **REQ-TRACE-165** — Each change kind SHALL carry a fixed obligation text. For **added**: implement the requirement, then attach both annotations. For **removed**: delete each listed reference or point it elsewhere. For **modified**: re-check every site in the list against the rewritten text. For **status**: bring the existing references into line with the requirement's new lifecycle.
 
-- **REQ-TRACE-166** — Given an **added** or **modified** change with no sites, a single indented placeholder line SHALL state that there are no annotation sites yet. Given a **removed** or **status** change with no sites, no indented lines SHALL be printed at all.
+- **REQ-TRACE-166** — Given an **added** or **modified** change with no sites, a single placeholder SHALL state that there are no annotation sites yet. Given a **removed** or **status** change with no sites, no site entries SHALL be presented at all.
 
-- **REQ-TRACE-167** — Given no changes at all, the command SHALL print one line stating there are no requirement changes against the base.
+- **REQ-TRACE-167** — Given no changes at all, the comparison SHALL state that there are no requirement changes against the base.
 
-- **REQ-TRACE-168** — With `--strict`, given a non-empty drift set, the command SHALL print to standard error a failure line naming the number of requirements that changed without their implementing or covering code being updated, instructing the user to propagate the change or update the annotations and then commit the requirement and the code together, and SHALL return 1. Without `--strict`, drift SHALL still be reported but the exit code stays 0.
+- **REQ-TRACE-168** — Given a non-empty drift set, the comparison SHALL state, as a finding distinct from the per-change entries, the number of requirements that changed without their implementing or covering code being updated, and SHALL instruct the user to propagate the change or update the annotations and then commit the requirement and the code together. Drift SHALL always be reported; it is never suppressed and never selected for.
 
-- **REQ-TRACE-169** — The comparison command SHALL parse the store freshly and return parse errors before touching version control at all; on parse errors the rendered output SHALL be suppressed entirely and the exit code SHALL be 1.
+- **REQ-TRACE-169** — The comparison SHALL parse the store freshly and return parse errors before touching version control at all; on parse errors it SHALL present no worklist whatsoever and SHALL report those errors in their place.
 
-- **REQ-TRACE-170** — Version-control invocation at this layer SHALL be a read-only child process rooted at the repository, capturing output, not raising on a non-zero status, and treating an unavailable version-control executable as a failed query with empty output. Every such invocation SHALL be bounded by a **30-second** timeout, the same bound the consumer layer applies (REQ-TRACE-201). An invocation that exceeds it SHALL be terminated and SHALL count as a failed query with empty output, which the surrounding rules already accommodate: the changed-file set simply gains nothing from that query (REQ-TRACE-159), and a base artifact that could not be retrieved is reported as unavailable (REQ-TRACE-158). **No command SHALL be able to block indefinitely on a child process.**
+- **REQ-TRACE-170** — The comparison's version-control queries SHALL each be a read-only child process rooted at the repository, capturing output, not raising on a non-zero status, and treating an unavailable version-control executable as a failed query with empty output. Every such invocation SHALL be bounded by a **30-second** timeout, the same bound the consumer layer applies (REQ-TRACE-201). An invocation that exceeds it SHALL be terminated and SHALL count as a failed query with empty output, which the surrounding rules already accommodate: the changed-file set simply gains nothing from that query (REQ-TRACE-159), and a base artifact that could not be retrieved is reported as unavailable (REQ-TRACE-158). **No operation SHALL be able to block indefinitely on a child process.**
+
+- **REQ-TRACE-511** — The desktop application SHALL offer a **change comparison** against a base revision, and that surface SHALL be where a user reaches REQ-TRACE-156 through REQ-TRACE-170. The base revision SHALL be selectable and SHALL default to the revision the working tree currently sits on. The comparison SHALL present the classified changes of REQ-TRACE-160 in requirement-number order, each carrying the facts of REQ-TRACE-164 and the obligation text of REQ-TRACE-165, with every listed site openable at its own file and line by the route of REQ-TRACE-266. The drift finding of REQ-TRACE-168 SHALL be presented distinctly from the changes themselves, an unavailable base (REQ-TRACE-158) and an absence of changes (REQ-TRACE-167) SHALL each be stated in words, and the comparison SHALL write nothing.
 
 ### Read-Only Coverage Query
 
@@ -493,37 +487,34 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Enforcement Layers
 
-- **REQ-TRACE-181** — Enforcement SHALL be layered so that drift is caught at five different moments: (1) in the editor and at compile time, free of charge, through the generated symbols — a deleted requirement's symbol vanishes and every reference becomes a build error, and a deprecated requirement's symbol carries the language's deprecation marker so every reference warns at the exact spot; (2) a post-compile hook that regenerates if stale and otherwise verifies; (3) meta-tests inside the ordinary test suite, so continuous integration enforces it with no extra configuration; (4) a release or build gate that aborts on verification errors; (5) a commit-time hook versioned in the repository, activated once per clone, and able to run without the heavy toolchain.
+- **REQ-TRACE-181** — Enforcement SHALL be layered so that drift is caught at five different moments: (1) in the editor and at compile time, free of charge, through the generated symbols — a deleted requirement's symbol vanishes and every reference becomes a build error, and a deprecated requirement's symbol carries the language's deprecation marker so every reference warns at the exact spot; (2) the test session's own regeneration (REQ-TRACE-182), which turns an edited requirement into a failure inside that same test run; (3) meta-tests inside the ordinary test suite (REQ-TRACE-183), so that any continuous-integration run of that suite enforces it with no extra configuration; (4) the traceability check of REQ-TRACE-508, together with the board's continuous evaluation (REQ-TRACE-334, REQ-TRACE-347), which states a violation on the requirement's own card as soon as the repository changes; (5) the completion conditions the engine evaluates before a requirement may be recorded as delivered (REQ-TRACE-399, REQ-TRACE-402), which no surface may relax.
 
-- **REQ-TRACE-182** — Before collecting tests, the test session SHALL regenerate the compiled requirement-symbol artifact, so that editing a requirement surfaces as a verification failure within that same test run. It SHALL print a regeneration notice and any parse errors to **standard error**, and SHALL NEVER block collection: any failure SHALL be caught and reported as a skipped-regeneration notice, leaving parse errors for the meta-tests to surface.
+- **REQ-TRACE-182** — Before collecting tests, the test session SHALL regenerate the compiled requirement-symbol artifact, so that editing a requirement surfaces as a verification failure within that same test run. It SHALL report a regeneration notice and any parse errors through the test run's own diagnostic reporting, and SHALL NEVER block collection: any failure SHALL be caught and reported as a skipped-regeneration notice, leaving parse errors for the meta-tests to surface.
 
-- **REQ-TRACE-183** — Meta-tests SHALL assert, over the real repository, that the store parses with zero errors and is non-empty, that the generated artifact is up to date (with a failure message naming the fixing command), and that verification reports **zero errors**. The repository's steady state SHALL therefore be: no violations, only baseline-suppressed debt.
+- **REQ-TRACE-183** — Meta-tests SHALL assert, over the real repository, that the store parses with zero errors and is non-empty, that the generated artifact is up to date (with a failure message naming the regeneration action of REQ-TRACE-509), and that verification reports **zero errors**. The repository's steady state SHALL therefore be: no violations, only baseline-suppressed debt.
 
-- **REQ-TRACE-184** — A continuous-integration workflow SHALL run the plain check on every pull request and on pushes to the default branch and to long-lived integration branch namespaces, so that a long-lived branch has a traceability signal between merges. It SHALL require no dependency installation step.
+- **REQ-TRACE-184** — *Withdrawn.* A continuous-integration workflow enforced traceability by invoking the withdrawn command line, which no longer exists to be invoked. The capability — a repository being told about traceability violations without anyone remembering to look — is carried by the meta-tests of REQ-TRACE-183, which any continuous-integration run of the project's own test suite exercises, and by the desktop check of REQ-TRACE-508 together with the board's continuous evaluation (REQ-TRACE-334, REQ-TRACE-347).
 
-- **REQ-TRACE-185** — A commit-time hook SHALL regenerate the requirement-symbol artifact, stage it, and block the commit on verification errors. It SHALL invoke the same implementation rather than a mirror, so no parity test between two implementations is required. Its staging, blocking and root-discovery behaviour SHALL be:
-  - it SHALL stage exactly the paths the toolchain is itself permitted to write — the generated artifact and the retired-identifier log — and SHALL stage nothing else, so a commit never acquires an unrelated change the author did not select;
-  - it SHALL block on **errors only**. Warnings SHALL be printed and SHALL never decline a commit, so that a deprecated reference or a stale baseline entry reports itself without making the repository uncommittable;
-  - it SHALL locate the repository root by the discovery walk of REQ-TRACE-048 and REQ-TRACE-049, starting from the directory the hook was invoked in, and SHALL require no activated project environment and no dependency installation (REQ-TRACE-153).
+- **REQ-TRACE-185** — *Withdrawn.* A commit-time hook exists only to invoke a command from a shell, and the product offers no command to invoke. The capability it carried — a violation stopping work before it is committed — is carried by REQ-TRACE-508, which states every violation over the repository as it currently stands, by REQ-TRACE-183, which fails the project's own test suite on the same findings, and by REQ-TRACE-402, which refuses to record a requirement as delivered while its text has moved on. The staging behaviour has no successor and needs none: the two paths the toolchain may write are written by REQ-TRACE-509 and REQ-TRACE-510 and are committed by the user like any other change.
 
-- **REQ-TRACE-186** — Convenience build targets MAY wrap the check and the fixing variant, but the contract SHALL be the direct command-line invocation, because the wrapper is not available on every supported platform.
+- **REQ-TRACE-186** — *Withdrawn.* There is no command-line invocation for a build target to wrap and none for a contract to rest on. The operations of REQ-TRACE-508 through REQ-TRACE-511 are the contract, and they are reached the same way on every supported platform.
 
 - **REQ-TRACE-187** — An implementation SHALL be accepted only where all five of these hold:
-  1. the full test suite passes and a standalone `check` exits **0**;
-  2. taking one approved requirement that has no implementation reference and setting `trace: required` on it makes `check` exit **1** with an error naming that requirement and makes the traceability meta-test fail; reverting the edit and regenerating restores both;
+  1. the full test suite passes and the check of REQ-TRACE-508 reports **no violation**;
+  2. taking one approved requirement that has no implementation reference and setting `trace: required` on it makes that check report an error naming that requirement and makes the traceability meta-test fail; reverting the edit and regenerating restores both;
   3. the same exercise with `test: required` on a requirement that has no covering test produces the equivalent error and the equivalent recovery;
-  4. editing only a requirement's prose causes the artifact to be regenerated with a changed content hash at the next compile, test run or `check --fix`, and causes no other failure;
-  5. the commit-time hook, run through the version-control system itself, permits a clean commit and blocks a violating one.
+  4. editing only a requirement's prose causes the artifact to be regenerated with a changed content hash at the next compile, test run or regeneration (REQ-TRACE-509), and causes no other failure;
+  5. a violation introduced while the board is open is stated on that requirement's own card and on the check surface without the application being restarted, and the requirement cannot be recorded as delivered while it stands (REQ-TRACE-402).
 
 ### Authoring and Propagation Workflow
 
-- **REQ-TRACE-188** — Six triggers SHALL each start the propagation procedure: verification reporting errors; a traceability meta-test failing; a missing-attribute failure raised where a symbol was removed; a deprecation warning fired at a reference site; a commit the hook declined; and **any** edit made anywhere under the requirement store.
+- **REQ-TRACE-188** — Five triggers SHALL each start the propagation procedure: verification reporting errors; a traceability meta-test failing; a missing-attribute failure raised where a symbol was removed; a deprecation warning fired at a reference site; and **any** edit made anywhere under the requirement store.
 
-- **REQ-TRACE-189** — The procedure SHALL be, in order: (1) obtain the worklist from `diff`, optionally against a chosen base revision, and read each changed requirement's current text in full rather than its diff; (2) act on each entry according to the obligation its change kind carries (REQ-TRACE-165); (3) regenerate the artifact and run `check`, taking the reported violations as the work queue; (4) visit every reference site the worklist lists, implementation sites and covering tests alike; (5) bring each implementation site into line with the current text, keeping its trace annotation attached to the behavior it names; (6) add or amend covering tests until `check` reports no errors; (7) commit the requirement documents, the generated artifact, the baselines, the implementation and the tests as **one commit**, whose message names the requirement identifier. The procedure is complete when, at that commit, `check` exits **0** and `diff --strict` against the base exits **0**.
+- **REQ-TRACE-189** — The procedure SHALL be, in order: (1) obtain the worklist from the change comparison of REQ-TRACE-511, optionally against a chosen base revision, and read each changed requirement's current text in full rather than its diff; (2) act on each entry according to the obligation its change kind carries (REQ-TRACE-165); (3) regenerate the artifact (REQ-TRACE-509) and run the check of REQ-TRACE-508, taking the reported violations as the work queue; (4) visit every reference site the worklist lists, implementation sites and covering tests alike; (5) bring each implementation site into line with the current text, keeping its trace annotation attached to the behavior it names; (6) add or amend covering tests until the check reports no errors; (7) commit the requirement documents, the generated artifact, the baselines, the implementation and the tests as **one commit**, whose message names the requirement identifier. The procedure is complete when, at that commit, the check of REQ-TRACE-508 reports no violation and the comparison of REQ-TRACE-511 against the base reports no drift.
 
 - **REQ-TRACE-190** — Hard authoring rules SHALL be: never hand-edit the generated artifact; never leave production code or a test untraced, authoring a technical requirement where no product requirement fits; never quiet a violation by stripping annotations, watering down the requirement text, or writing a fresh baseline entry; never reuse or renumber an identifier — deprecate instead of deleting anything ever referenced in code.
 
-- **REQ-TRACE-191** — A requirement's flip to `approved` and the addition of its annotations SHALL land in the **same change**, because an approved requirement without annotations is a verification error unless baselined. When baselined debt is paid, it SHALL be pruned by the baseline-update command.
+- **REQ-TRACE-191** — A requirement's flip to `approved` and the addition of its annotations SHALL land in the **same change**, because an approved requirement without annotations is a verification error unless baselined. When baselined debt is paid, it SHALL be pruned by the baseline-update action of REQ-TRACE-510.
 
 - **REQ-TRACE-192** — New or materially changed **product** requirements SHALL model a test portfolio before implementation, as a table with columns for level, productive scenario, exercised boundary and planned or covering test, and rows for unit, integration and user-flow end-to-end. Every "not applicable" SHALL carry a reason. At least one hermetic end-to-end test through the real public product boundary SHALL carry the coverage annotation for the product requirement. One end-to-end flow MAY be counted as coverage for more than one requirement only where it asserts something substantive about each of them and names every one it claims. **Technical** requirements SHALL instead specify unit or integration coverage suited to the seam they sit on, reaching the originating product flow by way of their origin link; no separate end-to-end test is owed for them.
 
@@ -533,7 +524,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-195** — The epic index table SHALL be maintained by the authoring workflow and by the source write path (a deletion also removes the index row), but SHALL NOT be machine-checked by the verifier and MAY therefore drift from the actual documents without any tool complaining.
 
-- **REQ-TRACE-196** — Human-readable reciprocal navigation lines between a derived requirement and its origin SHALL be treated as convention for readers only. The **forward** frontmatter link SHALL be the single source of truth for the derived relation; the reverse direction SHALL be computed so it cannot silently drift. No tool SHALL validate those navigation lines: a missing, stale or wrong reciprocal line SHALL produce no error and no warning from any command, and their absence SHALL never affect the derived-from integrity checks of REQ-TRACE-098, which read the frontmatter link alone.
+- **REQ-TRACE-196** — Human-readable reciprocal navigation lines between a derived requirement and its origin SHALL be treated as convention for readers only. The **forward** frontmatter link SHALL be the single source of truth for the derived relation; the reverse direction SHALL be computed so it cannot silently drift. No tool SHALL validate those navigation lines: a missing, stale or wrong reciprocal line SHALL produce no error and no warning from any operation, and their absence SHALL never affect the derived-from integrity checks of REQ-TRACE-098, which read the frontmatter link alone.
 
 ### Consumer Integration Contracts
 
@@ -555,7 +546,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-205** — Where the store is read as a requirement source, the result SHALL satisfy: each declared identifier appears exactly once, carrying its identifier, title, lifecycle, type and content hash unchanged from the store; a document declaring several identifiers yields one requirement per identifier, each with that document's hash and with whatever lifecycle its own override block sets; and a workspace holding no store yields **no source at all, and not an error**.
 
-- **REQ-TRACE-206** — A consuming surface SHALL acquire coverage by **calling the library directly** and receiving plain data back. No consuming surface SHALL launch the checking command as a process, and none SHALL interpret its printed output. On this path there is consequently no child process, no exit code to inspect and no text to parse.
+- **REQ-TRACE-206** — A consuming surface SHALL acquire coverage by **calling the library directly** and receiving plain data back. No consuming surface SHALL launch the checking engine as a process, and none SHALL interpret rendered output in place of the data. On this path there is consequently no child process, no exit status to inspect and no text to parse.
 
 - **REQ-TRACE-207** — A sweep performed for a consuming surface SHALL use **the project's own layout**, never the toolchain's built-in defaults, which name this repository's roots and would be wrong for every other one — without which every card in a foreign workspace would show no implementation and no covering test, and a re-derived worklist digest would find nothing and refuse every approval as "the sites have moved".
 
@@ -574,7 +565,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-213** — Progress SHALL be reported as plain values, in two kinds of report:
   - a **phase report** carrying the phase and the number of items that phase will report, where **0** states that the phase is one indivisible step. It SHALL be delivered **before** that phase's first item report, so a consumer always holds the denominator before it receives a position;
   - an **item report** carrying the phase, a label naming the item (a check's name, a requirement's identifier), a **1-based** position, the phase total, an optional detail, and the deadline in seconds currently applying to the item in progress, from which a countdown can be drawn.
-  Where the wait budget is unlimited the deadline field SHALL be **absent** rather than carrying zero, so that a consumer can tell "there is no countdown to draw" from "no time remains". The stored-value convention of REQ-TRACE-467, under which zero denotes an unlimited wait, SHALL be confined to the settings space and SHALL NOT reach this protocol.
+  Where the wait budget is unlimited the deadline field SHALL be **absent** rather than carrying zero, so that a consumer can tell "there is no countdown to draw" from "no time remains". The stored-value convention under which zero denotes an unlimited wait belongs to the configuration setting alone (REQ-CONFIG-126, REQ-TOOLS-055, cited here by REQ-TRACE-467) and SHALL NOT reach this protocol.
 
 - **REQ-TRACE-214** — Both callbacks SHALL happen on the thread running the pass. A host that must touch a user interface SHALL marshal for itself.
 
@@ -584,7 +575,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-217** — A workspace that declares no checks SHALL receive an empty suite **together with a stated reason**, never a fabricated pass. An absence of checking and a clean result are two different findings, and only the second one constitutes evidence.
 
-- **REQ-TRACE-218** — The seam SHALL NOT be shaped like any one surface: it SHALL be a protocol of plain values consumed by **at least two** independent hosts — the desktop worker and the headless verification command. A seam with only one consumer degenerates, without anyone noticing, into that consumer's private implementation detail.
+- **REQ-TRACE-218** — The seam SHALL NOT be shaped like any one surface: it SHALL be a protocol of plain values consumed by **at least two** independent hosts — the desktop worker and a programmatic embedding of the engine, the project's own test suite among them. A seam with only one consumer degenerates, without anyone noticing, into that consumer's private implementation detail.
 
 - **REQ-TRACE-219** — Existing hosts SHALL stay unchanged. The verification seam that a test substitutes for SHALL retain its existing signature, so that a progress-reporting pass and a pass driven by a test double remain one and the same pass. Per-check progress already produced by the lower-level suite runner SHALL be adapted into `checks` items instead of a parallel mechanism being introduced alongside it, and a pass with no host SHALL leave the suite runner on precisely its usual path.
 
@@ -957,7 +948,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-376** — With **every** surface installed, nothing in the area SHALL clip at the minimum window size; every pane SHALL share one stack with the board.
 
-- **REQ-TRACE-377** — **No module of the desktop application SHALL** invoke a requirement-checking or verifier command line, parse its output, or re-compute evidence health, requirement health or epic progress. A guard test SHALL assert that no desktop module spawns such a process or imports its command-line module, and the health values rendered on cards SHALL be asserted identical to the projection's.
+- **REQ-TRACE-377** — **No module of the desktop application SHALL** launch a requirement-checking or verifier process, parse rendered output in place of the data, or re-compute evidence health, requirement health or epic progress. A guard test SHALL assert that no desktop module spawns such a process, and the health values rendered on cards SHALL be asserted identical to the projection's.
 
 - **REQ-TRACE-378** — A board surface SHALL take every engine-derived value already translated, through the bridge and from no other route, and SHALL NOT load the requirement engine while running. Ordering of identifiers on the board SHALL produce, for any set of identifiers, exactly the order the engine produces for that same set.
 
@@ -1183,21 +1174,21 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Runs Started from the Board
 
-- **REQ-TRACE-464** — A unit run launched from the board SHALL be driven by the **same run coordinator** that drives a session the user starts by hand. From the instant it begins it SHALL have a **live handle**, so that the workspace's stop, pause and steer controls operate on it. Approvals and questions it raises SHALL be routed to a person. Closing the application SHALL **cancel** the run rather than leave it orphaned. While the run is still executing, its **session identifier SHALL already have been stored on the run record kept for that requirement** — that being the window in which the board actually needs to be able to open the session — and the identifier SHALL survive an application restart. The run SHALL take over the worktree already provisioned for it and SHALL never provision a second one. A composition assembled without a coordinator — headless invocation, or a test supplying its own agent — SHALL nonetheless execute the unit and report on it exactly as before.
+- **REQ-TRACE-464** — A unit run launched from the board SHALL be driven by the **same run coordinator** that drives a session the user starts by hand. From the instant it begins it SHALL have a **live handle**, so that the workspace's stop, pause and steer controls operate on it. Approvals and questions it raises SHALL be routed to a person. Closing the application SHALL **cancel** the run rather than leave it orphaned. While the run is still executing, its **session identifier SHALL already have been stored on the run record kept for that requirement** — that being the window in which the board actually needs to be able to open the session — and the identifier SHALL survive an application restart. The run SHALL take over the worktree already provisioned for it and SHALL never provision a second one. A composition assembled without a coordinator — a test supplying its own agent, or a programmatic embedding of the engine — SHALL nonetheless execute the unit and report on it exactly as before.
 
 - **REQ-TRACE-465** — A run started from the board SHALL stay under the user's control for the whole of its life: **pause, steer, stop and answer SHALL each operate on it** from the moment it begins until it ends. Stopping SHALL end the run there and then; a board-started run SHALL NEVER be one that can only be brought to an end by waiting for it to finish of its own accord or by closing the application.
 
 - **REQ-TRACE-466** — While a run is **waiting on a person**, every surface showing that requirement SHALL **state that fact and offer the way in**: the card, the requirement's detail view, its row in the queue and its session row in the workspace. Acting on the statement SHALL **bring that session into focus**, which is where the question is answered; the answering interaction itself SHALL NOT be duplicated on the board. The statement SHALL be withdrawn once the run is no longer waiting, whether the wait ended in an answer, a cancellation or a timeout. Its announced form SHALL identify the run to be opened and, where that is known, the unit.
 
-- **REQ-TRACE-467** — The maximum time a run may wait SHALL be governed by **a single setting** that covers **both** approvals and questions. It SHALL be presented as a **fixed** list of stops whose final entry is an unlimited wait; the default SHALL be **the unlimited entry**, and in the stored value space **zero SHALL denote an unlimited wait**. The stops SHALL climb roughly by order of magnitude — 5 minutes (300 s), 10 minutes (600 s), 30 minutes (1800 s), 1 hour (3600 s), 2 hours (7200 s), 5 hours (18000 s), 12 hours (43200 s), 1 day (86400 s), 2 days (172800 s), and unlimited (0). A ladder is used rather than a free numeric entry because the answers that matter differ by factors of ten, not by individual minutes.
+- **REQ-TRACE-467** — The maximum time a run started from the board may wait SHALL be governed by the single setting the configuration surface registers for this purpose, `runtime.approval_timeout_seconds` (REQ-CONFIG-126). This domain relies on that setting for four things and restates none of them: that one budget covers approvals and user questions alike; the value space and the validation applied to it; the value in force when nothing has been configured; and the reading under which a stored zero denotes a wait with no limit (REQ-TOOLS-055, REQ-TOOLS-178). This domain SHALL declare no second setting, no second default, and no value space of its own — in particular no fixed list of stops — so a run started from the board and a run started from the composer can never be given different budgets.
 
-- **REQ-TRACE-468** — Wait-budget read semantics SHALL be: no stored value yields the default; a stored value that is not numeric yields the default, and this SHALL be an explicit decision rather than an artefact of how parsing happens to fail — a corrupted preference file and a deliberate request to wait without limit are distinct findings, even in the case where they happen to produce the same number; a negative value yields the default; and a value the control does not recognize SHALL display as **the default stop** rather than the first entry in the list, so that a control unable to represent the stored value falls back to the conservative choice instead of quietly cutting the wait short. A change SHALL apply to the **next** run started and SHALL NOT affect runs already under way.
+- **REQ-TRACE-468** — What the board does with that budget SHALL be exactly this. It SHALL read the **effective** configured value — the value the layered configuration resolves, which is the registered default where no layer states one (REQ-CONFIG-126) — and SHALL apply no fallback, no clamp and no substitution of its own; a value the configuration surface has already rejected never reaches the board, because rejection happens while configuration is loaded (REQ-TOOLS-055). Where any surface of this domain displays the budget it SHALL render an unlimited wait as an unlimited wait rather than as the number zero, so a reader is never shown "0 seconds" for a wait that has no limit. A change SHALL apply to the **next** run started and SHALL NOT affect runs already under way.
 
 - **REQ-TRACE-469** — **An unlimited wait SHALL remain cancellable.** Stopping the run SHALL immediately release whatever it was blocked on, rather than leaving the caller to sit out the remaining budget.
 
 - **REQ-TRACE-470** — A run started from the board SHALL receive the permissive permission preset **and** the unsandboxed opt-in **together, and both SHALL be confined to that run**. Granting only the preset SHALL NOT count as satisfying this: a run so configured still stops at the first tool that needs approval. The grant SHALL leave the workspace's stored configuration as it stands, and **any other run started from the same process — before it, alongside it or after it — SHALL receive exactly the permissions its own configuration specifies**, the composer's next run included.
 
-- **REQ-TRACE-471** — The elevation SHALL apply **exclusively to runs launched from the board**. A run begun from the composer, from the terminal interface or from the headless command line SHALL retain whichever permission mode its own configuration specifies, and the workspace's stored agent configuration SHALL be left unmodified.
+- **REQ-TRACE-471** — The elevation SHALL apply **exclusively to runs launched from the board**. A run begun from the composer, or from any other surface of the application, SHALL retain whichever permission mode its own configuration specifies, and the workspace's stored agent configuration SHALL be left unmodified.
 
 - **REQ-TRACE-472** — **The elevation SHALL never happen without disclosure.** The **first action within a launch that would result in a run starting** SHALL declare what permissions the run receives, identify the worktree the run is confined to, and provide a way to abandon the operation. **Declining that disclosure SHALL cause nothing whatsoever to happen**: no delivery state written, no flow dispatched, the card untouched in its original column. **Accepting SHALL suppress the disclosure for the remainder of that launch**, and accepting it permanently SHALL suppress it in subsequent launches too. A user who has suppressed it SHALL still be able to find the behaviour described in settings and switch it off there; with it switched off, a board-started run SHALL adopt the workspace's own permission mode exactly as any other run does. **The permissions the run was actually granted SHALL be written onto its session record**, which makes it impossible for the disclosure and the audit trail to tell different stories.
 
@@ -1299,11 +1290,11 @@ A project keeps its requirements as versioned documents in its own repository. A
   | Analysis switched off | the control explains why instead of merely appearing disabled |
   | Workspace cannot host a run when a blocker is cleared | the blocker clears regardless; the reason nothing started is reported on the action's result |
   | Layout configuration unreadable on a consuming path | a warning and an empty sweep; never a reported read failure |
-  | Layout configuration unreadable at the command line | treated as a user error, exit **1**, stated on standard error |
+  | Layout configuration unreadable on a traceability operation | the failure is stated in the terms of REQ-TRACE-046, naming the configuration path and the cause; no operation is performed and nothing is written |
 
 - **REQ-TRACE-499** — A single end-to-end path over the **shipped composition** SHALL be exercisable with no caller-supplied wiring: release, run, review, accept, and notice a subsequent edit.
 
-- **REQ-TRACE-500** — **A trace that no longer holds SHALL break the build.** A reference naming a requirement that has been deleted SHALL fail compilation, and a requirement whose obligations are unmet SHALL fail the check that the post-compile hook, the test suite, the continuous-integration gate and the commit-time hook each run. Keeping requirements and code aligned SHALL rest on no manual coordination step between people: every trigger for propagation SHALL be a build, a test run or a commit.
+- **REQ-TRACE-500** — **A trace that no longer holds SHALL break the build.** A reference naming a requirement that has been deleted SHALL fail compilation, and a requirement whose obligations are unmet SHALL fail the meta-tests the project's own test suite runs (REQ-TRACE-183) and SHALL be stated as a violation by the check of REQ-TRACE-508. Keeping requirements and code aligned SHALL rest on no manual coordination step between people: every trigger for propagation SHALL be a build, a test run, or a change the board observes for itself (REQ-TRACE-334, REQ-TRACE-347).
 
 ## Data & Formats
 
@@ -1353,7 +1344,7 @@ source: <original document path>       # optional provenance
 
 The artifact is a source file in the host language. Its contents appear in this fixed order:
 
-1. A documentation header stating that the file is generated and must not be hand-edited, naming the store directory it was compiled from, and naming the exact command that regenerates it.
+1. A documentation header stating that the file is generated and must not be hand-edited, naming the store directory it was compiled from, and stating how it is regenerated.
 2. A suppression directive for the linter, then one for the formatter.
 3. A comment line carrying a labelled fingerprint whose value is 64 hexadecimal characters (a full, untruncated SHA-256).
 4. The imports: forward-reference support for annotations, the integer-enumeration base, and the metadata record together with the lifecycle enumeration from the hand-written declarations module.
@@ -1366,7 +1357,7 @@ Members appear in ascending number order. The file is written UTF-8 with LF line
 ### Debt baseline
 
 ```
-# <header: shrink-only; the line shape; how to pay debt; the pruning command;
+# <header: shrink-only; the line shape; how to pay debt; the pruning action;
 #  never add entries for new work>
 <PREFIX>-<n> trace
 <PREFIX>-<n> test
@@ -1378,7 +1369,7 @@ Flags sorted and space-joined; entries ascending numerically; blank lines and co
 ### Orphan-module baseline
 
 ```
-# <header: shrink-only; the remedies; the pruning command; quoting the configured exempt marker>
+# <header: shrink-only; the remedies; the pruning action; quoting the configured exempt marker>
 <repository-relative source path>
 ```
 
@@ -1387,7 +1378,7 @@ One path per line; the basename must contain a dot and the line must contain no 
 ### Orphan-test baseline
 
 ```
-# <header: shrink-only; the remedies; the pruning command; quoting the configured exempt marker>
+# <header: shrink-only; the remedies; the pruning action; quoting the configured exempt marker>
 path/to/test_file.<ext>::test_function
 path/to/test_file.<ext>::ClassName::test_method
 ```
@@ -1437,44 +1428,39 @@ Records ascending by number; at least two tab-separated fields required; the tit
 
 The values shown are the defaults; a repository that configures nothing behaves exactly as one that writes all thirteen of them. Keys may also sit at the top level. Unknown keys are an error listing offenders and accepted keys, both sorted. Path values must be non-empty, relative, free of `..`, and are normalized to forward slashes. List-valued keys reject a bare string. `id_prefix` must be uppercase letters and digits, beginning with a letter and carrying no hyphen. `annotation_conventions` is an ordered list of objects carrying exactly the six keys shown, registered after the built-in convention; an expression that does not compile is a configuration error.
 
-### Command-line contract
+### Toolchain operations
 
-```
-<traceability-cli> [--repo-root <path>] [--layout <path>] <command>
+The toolchain offers exactly four operations, every one of them reached from the desktop application and none of them from a shell. There is no invocation, no flag, no stream and no exit status.
 
-  check [--fix] [--update-baseline] [--report-only]
-  generate
-  diff [--base <revision>] [--strict]
-```
+| Operation | What it reports | Writes |
+| --- | --- | --- |
+| Check (REQ-TRACE-508) | errors and warnings grouped and ordered by REQ-TRACE-091, each located per REQ-TRACE-100; the statistics of REQ-TRACE-101; a stated "no violations" result; parse errors alone where the store will not parse | nothing |
+| Regenerate (REQ-TRACE-509) | the artifact path, which of "regenerated" or "already up to date" was observed, the requirement count; parse errors where the store will not parse | the generated artifact and the retired-identifier log |
+| Update baselines (REQ-TRACE-510) | per baseline, the file written and the resulting entry count | the three baselines |
+| Compare against a base (REQ-TRACE-511) | one entry per change with its sites; the drift finding; "no base artifact"; "no requirement changes" | nothing |
 
 | Aspect | Value |
 | --- | --- |
-| Subcommand | required; omitting it is an argument-parsing usage error |
-| `--repo-root` | hidden from help; default is the discovery walk |
-| `--layout` | default: the layout configuration file at the repository root |
-| `--base` default | the current revision |
-| Exit 0 | success, no violations |
-| Exit 1 | violations, parse errors, bad layout configuration, strict drift; under `--report-only`, violations alone no longer produce it |
-| Exit 2 | unhandled exception; also argument-parsing usage errors |
-| stdout | warnings, statistics, the OK line, regeneration notices, baseline notices, comparison lines |
-| stderr | errors, parse errors, configuration errors, internal errors, failure lines |
-| Line prefix | one constant bracketed tool tag on every emitted line |
-| Writes | only `--fix` (generated artifact and retired-identifier log) and `--update-baseline` (three baselines) |
-| Dependencies | standard library only |
+| Repository root | the open workspace's, resolved by the discovery walk; never nominated by the user |
+| Layout configuration | the file at that root; no override path exists |
+| Base revision default | the revision the working tree sits on |
+| Combined order | regenerate, then rewrite the baselines against the fresh parse, then verify |
+| Enforcement | the check gates nothing by itself; no control and no configuration key suppresses a finding |
+| Concurrency | at most one operation of a kind per workspace in flight; a second request is refused with a stated reason |
 
-Distinct output line shapes, all carrying the constant tag: an OK line; a failure line naming a violation count; an error line; a warning line; a parse-error line; a configuration-error line; an internal-error line carrying the exception representation; a regeneration notice naming the artifact path; a generation line naming the artifact path, which of "regenerated" or "already up to date" was observed, and the requirement count; the statistics line; three baseline-written lines each naming a path and an entry count; a "no base artifact to compare against" line; a "no requirement changes" line; per-change header lines; a strict failure line naming the count of unpropagated requirements; an enforcement-level line naming the level in force; and an empty-store warning line naming the store directory and which of the three empty findings holds.
+Distinct results a surface must be able to state: no violations; a violation count; an error; a warning; a parse error; a configuration error naming the configuration path and its cause; an unanticipated failure naming what failed; a regeneration outcome naming the artifact path and which of "regenerated" or "already up to date" was observed together with the requirement count; the three baselines written, each with a path and an entry count; the statistics; "no base artifact to compare against"; "no requirement changes"; the per-change entries; the count of unpropagated requirements; and the empty-store warning naming the store directory and which of the three empty findings holds.
 
-Statistics line fields: total requirements; approved, traced and test-covered counts; and the four baseline-debt counts labelled trace, test, orphan and orphan-test.
+Statistics fields: total requirements; approved, traced and test-covered counts; and the four baseline-debt counts labelled trace, test, orphan and orphan-test.
 
-Change-comparison rendering:
+Change-comparison entry:
 
 ```
-<TAG> <KIND> <identifier> '<title>'[ (<from> -> <to>)]: <obligation text>[  <drift marker>]
+<KIND> <identifier> '<title>'[ (<from> -> <to>)]: <obligation text>[  <drift marker>]
     <file>:<line> (<kind>)
     ...
 ```
 
-with a single indented "no annotation sites yet" placeholder for an added or modified change that has none, and no indented lines at all for a removed or status change that has none.
+with a single "no annotation sites yet" placeholder for an added or modified change that has none, and no site entries at all for a removed or status change that has none.
 
 ### Progress protocol
 
@@ -1549,7 +1535,7 @@ Boolean reads MUST tolerate however the settings backend wrote them: a text back
 | Deprecated-reference site cap | 5, then an "and N more" tail |
 | Orphan-test annotation window slack above the span | 2 lines |
 | Consumer-layer version-control timeout | 30 s |
-| Command-line version-control timeout | 30 s |
+| Change-comparison version-control timeout | 30 s |
 | Minimum supported window | 1000 × 680 |
 | Open column width | minimum 276, maximum 340; margins 10 on every side |
 | Folded rail | 8 characters of its own font wide; 2 heading lines; margin 4 |
@@ -1574,7 +1560,7 @@ Boolean reads MUST tolerate however the settings backend wrote them: a text back
 | Closed-vocabulary / open-vocabulary drop-down width | 240 / 150 |
 | Contrast floors | 3:1 for status marks against the card ground; 4.5:1 for alert text |
 | Relative-age thresholds | under 60 s, under 1 hour, under 1 day, otherwise days |
-| Wait-budget stops (seconds) | 300, 600, 1800, 3600, 7200, 18000, 43200, 86400, 172800, and 0 meaning indefinitely (the default) |
+| Wait budget | not fixed here — `runtime.approval_timeout_seconds` (REQ-CONFIG-126, REQ-TOOLS-055), cited by REQ-TRACE-467 |
 | Sweep scale expectation | order 10^4 annotation sites over order 10^3 files in about 1 s |
 | Virtualisation acceptance | a 300-card column realises fewer than a quarter of its members; the realised count does not grow with column length; revealing a named card realises that card and its band only |
 

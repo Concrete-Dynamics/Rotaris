@@ -20,7 +20,12 @@ settings, MCP integration, the terminal UI, command-line entry points, notificat
 the event stream, and the performance benchmark.
 
 Behavioral target: `ROTARIS-CRW-001` — see [`reference-record.md`](reference-record.md).
-Total: 4,182 requirements. Process and audit history: [`provenance.md`](provenance.md).
+Total: **3,923 requirements** across the nineteen shipping domains. The two retired domains, the
+terminal UI and the command-line entry points, hold a further **444** identifiers; those are counted
+separately and are not part of the shipping total, giving **4,367** identifiers in all. Every count
+includes requirements withdrawn in place, since an identifier is never removed. The per-domain
+figures are in [`../spec/README.md`](../spec/README.md). Process and audit history:
+[`provenance.md`](provenance.md).
 
 ## Clean-room audit status
 
@@ -155,10 +160,15 @@ product decision rather than a design decision are escalated rather than guessed
 
 ## Escalations answered
 
-Open-question resolution escalated two product decisions. Both were answered on 2026-08-30.
+Open-question resolution escalated three product decisions. All three were answered on 2026-08-30,
+and the resolution records carry each answer against the open question it disposes of: OQ 44 in
+[`../spec/resolutions/15-settings-configuration.md`](../spec/resolutions/15-settings-configuration.md),
+OQ 1 in [`../spec/resolutions/17-terminal-ui.md`](../spec/resolutions/17-terminal-ui.md), and OQ 2 in
+[`../spec/resolutions/03-conversation-composer-transcript.md`](../spec/resolutions/03-conversation-composer-transcript.md).
+No open question raised against any specification remains escalated.
 
 | Escalation | Decision |
 |---|---|
 | Default tool servers — which services fill `web_search`, `browser` and `code_intelligence`, and do they ship enabled? | All three are **declared**; only `code_intelligence` is **enabled** by default, being the only one that neither leaves the machine nor needs a credential. The other two are declared with `enabled: false`. Which third-party services fill the roles is left to the implementation. Recorded as REQ-CONFIG-181 and new REQ-CONFIG-465. |
-| Sending a session to the background — detach a live run, or save-and-notify? | **Deferred.** Detaching is not specified. REQ-TUI-152 states stop-persist-and-notify and nothing more — and the terminal UI domain is itself deferred. |
+| Sending a session to the background — detach a live run, or save-and-notify? | **Not specified for the terminal UI.** REQ-TUI-152 states stop-persist-and-notify and nothing more, and the terminal UI domain is itself retired, so nothing further is owed against a `REQ-TUI` identifier. The question does not lapse for the product: detaching a live run is a desktop behavior and is stated by REQ-SESSION-190. |
 | Conversation composer — does it accept image attachments? | **Yes, gated on model capability.** Drag-and-drop and file picker; enabled only for models that announce image input, with the model selection surface refusing a silent selection that would discard attachments. Recorded as REQ-CHAT-169 to REQ-CHAT-174. |

@@ -411,9 +411,9 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-163** — The correction closes in-flight run records as interrupted, with a failure reason stating that no process owned the run any more and that a recovery pass closed it. Worktree, branch, commits and changed files are left as they are.
 
-**REQ-NOTIFY-164** — The delivery item moves from running to blocked, attributed to a system recovery actor, with a run-failure cause and a reason stating that the run's process is gone and naming the ISO timestamp since which nothing has owned the work.
+**REQ-NOTIFY-164** — The correction marks the delivery item **blocked**, attributed to a system recovery actor, with a run-failure cause and a reason stating that the run's process is gone and naming the ISO timestamp since which nothing has owned the work. The item's delivery state does not change: it remains `running`, which is the state it occupied when the process was lost. Marking blocked is not a move along the delivery pipeline, and this domain relies on REQ-TRACE-232 and REQ-TRACE-233 for that — those requirements own the axis, and clearing this blocker therefore returns the card to `running` and to no other state.
 
-**REQ-NOTIFY-165** — The recovery pass produces the same result when run again, and reports one entry per freed requirement naming that requirement, the state it left, the state it was moved to, and the reason recorded under REQ-NOTIFY-164. Those four facts are required; their wording and their arrangement are the implementation's. The report is displayed in the view from which the pass was requested and its detail is copyable under REQ-NOTIFY-038.
+**REQ-NOTIFY-165** — The recovery pass produces the same result when run again, and reports one entry per requirement it corrected naming that requirement, the delivery state it remains in, and the blocking condition recorded under REQ-NOTIFY-164. Those three facts are required; their wording and their arrangement are the implementation's. The report SHALL NOT name a state the requirement was moved to, because none was. The report is displayed in the view from which the pass was requested and its detail is copyable under REQ-NOTIFY-038.
 
 **REQ-NOTIFY-166** — Where a session store cannot be opened, or a liveness probe raises, every session is reported live and no correction is made.
 
@@ -681,7 +681,7 @@ Each is a distinctly typed record in the session timeline or the diagnostics log
 Each is rendered in the desktop surface that requested it. The facts listed are required; phrasing, punctuation, ordering within the report and inflection are the implementation's.
 
 - Machine setup step (REQ-NOTIFY-236, REQ-NOTIFY-265): the tool, the command run, the exit status, the reason.
-- Recovery-pass entry, one per freed requirement (REQ-NOTIFY-165): the requirement, the state it left, the state it was moved to, the reason.
+- Recovery-pass entry, one per requirement corrected (REQ-NOTIFY-165): the requirement, the delivery state it remains in, the blocking condition.
 - Repaired session entry, one per session repaired (REQ-NOTIFY-264): the session, the status it previously carried, that it now reads `interrupted`, the reason it was judged not live. Where nothing was repaired: that no session was left marked as running by a stopped process.
 - Session list row (REQ-NOTIFY-156, REQ-NOTIFY-160): the normalised status, plus a stale marker where the session reads stale and an interrupted marker where its persisted status is `interrupted`.
 - Unit failure (REQ-NOTIFY-174): the requirement, the unit, the attempt number, retries used against the bound, the failure reason, the path at which the work was kept.

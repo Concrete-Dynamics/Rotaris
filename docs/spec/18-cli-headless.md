@@ -13,6 +13,14 @@ status: retired
 > retained only until its capabilities have been restated as desktop behavior in the domains that own
 > them; the `REQ-TUI` and `REQ-CLI` identifiers are withdrawn and are never reused. Nothing here is
 > implemented.
+>
+> **The `REQ-CLI` series is closed. No further identifier may be added to this document.** A behavior
+> this document once carried is restated under an identifier of the domain that owns it on the
+> desktop, never under a new `REQ-CLI` number. An identifier minted here after the retirement
+> decision is withdrawn on that ground alone. Where a requirement below still cites a withdrawn
+> identifier, the citation resolves through that identifier's withdrawal entry to the desktop
+> requirement named there; the surrounding text is left as drafted rather than rewritten, because
+> nothing in this document is implemented.
 
 ## Overview
 
@@ -96,7 +104,7 @@ Any observable divergence outside this list violates this requirement.
 
 **REQ-CLI-028** — Given any of `--isolate`, `--worktree`, or `--worktree-branch` without both `--background` and a task, then stderr receives `Worktree session options require a task with --background.` and the process exits 1.
 
-**REQ-CLI-229** — Given `--background` with no task on the interactive-capable surface, then stderr receives `Error: --background requires a task.`, stdout is empty, no session is created, and the process exits 1. A background run has no interface through which a task could be supplied after it starts, so the invocation cannot be carried out. On the headless surface `--background` carries no meaning of its own (REQ-CLI-047) and this gate never applies: `run` there is governed by REQ-CLI-045 and REQ-CLI-046.
+**REQ-CLI-229** — *Withdrawn.* It was minted into a series already declared closed, and it gates a command-line flag that has no surface. Refusing a launch that names no task is carried by REQ-SESSION-184, which collects the task with the rest of the run request; sending a run to the background, and the refusal when there is no run to send, are carried by REQ-SESSION-190.
 
 ### Configuration Loading and Error Presentation
 
@@ -106,19 +114,7 @@ Any observable divergence outside this list violates this requirement.
 
 **REQ-CLI-031** — A configuration validation message occupies one line and reads `<config path>: <problem>`. The path names the offending value by walking from the root of the configuration document, one dot between segments, so a problem with a named persona is located as `personas.<persona-name>`. The problem is a plain-language phrase addressed to whoever edits the file; it carries no class or type name, no numeric or symbolic error code, and no term belonging to the vocabulary of a schema-checking library. A value the schema requires but the file omits is reported as `missing required field`, giving in full `personas.<persona-name>: missing required field`. REQ-CLI-231 fixes the complete set of problem phrases, `missing required field` among them.
 
-**REQ-CLI-231** — The problem phrase of a configuration validation message (REQ-CLI-031) is drawn from this closed set and from no other; a schema rejection that matches none of these conditions is a defect in the schema rather than a further phrase:
-
-| Condition | Phrase |
-| --- | --- |
-| the schema requires the value and the file omits it | `missing required field` |
-| the value is of the wrong kind | `expected <expected>, found <found>`, where each of `<expected>` and `<found>` is one of the plain words `text`, `whole number`, `number`, `true or false`, `list`, and `mapping` |
-| the file names a key the schema does not define | `unknown field` |
-| the value falls outside the range the schema allows | `value must be <constraint>`, the constraint written in plain words, as in `value must be zero or greater` |
-| the value falls outside a closed choice set | `value must be one of: <choices>`, the choices listed in the order the schema declares them and separated by `, ` |
-| a list the schema requires to hold something is empty | `list must not be empty` |
-| a text value the schema requires to hold something is empty | `value must not be empty` |
-
-Every phrase obeys REQ-CLI-031: it is plain language addressed to whoever edits the file, and it carries no class or type name, no numeric or symbolic error code, and no term belonging to the vocabulary of a schema-checking library. The type words above are the plain words this document fixes, not the names of any implementation's types.
+**REQ-CLI-231** — *Withdrawn.* It was minted into a series already declared closed. Reporting a configuration schema failure to the user — one line per problem, the offending value located by its dotted path, and plain-language wording in place of a schema library's own — is carried by REQ-CONFIG-237, and any closed vocabulary of problem phrases is domain 15's to fix under that requirement rather than this document's.
 
 **REQ-CLI-032** — Given a model entry is missing required fields, then the problem is reported as exactly two messages: `Model '<name>' is incomplete: missing required field(s) '<f1>', '<f2>'.` and `Model entries are full replacements across config scopes, so any override for '<name>' must include '<fields>'.`
 
@@ -193,21 +189,11 @@ Where the text above is not fixed literally, the requirement is on the informati
 
 **REQ-CLI-056** — Given an explicitly supplied `--worktree-branch` that REQ-CLI-230 reduces to the empty string, then the run fails with `Invalid Git branch name: '<branch>'`, quoting the name as it was supplied rather than as it was sanitized. That is the only rejection: every other input REQ-CLI-230 accepts, since its rules leave no other way to produce a name Git refuses.
 
-**REQ-CLI-230** — A branch name, whether supplied by `--worktree-branch` or derived from the session identifier, is sanitized by applying these steps in this order, so the branch a given input produces is predictable from the input alone:
-
-1. leading and trailing whitespace is removed;
-2. every character other than `A`–`Z`, `a`–`z`, `0`–`9`, `.`, `_`, `-`, and `/` is replaced by `-`, one replacement character per replaced character;
-3. each run of `-` is collapsed to a single `-`, each run of `.` to a single `.`, and each run of `/` to a single `/`;
-4. within each `/`-separated segment a leading `.`, a trailing `.`, and a trailing `.lock` are removed, in that order;
-5. every empty segment is dropped, and the segments are rejoined with a single `/`;
-6. leading and trailing `-`, `.`, and `/` are removed from the whole name;
-7. a name longer than 200 characters is cut to its first 200 characters and step 6 is applied again to whatever the cut left at the end.
-
-Letter case is preserved, since Git distinguishes it. The steps are total: any input produces either a name Git accepts or the empty string, and the empty string is the sole failure signal (REQ-CLI-056). `rotaris/session/<session_id>` passes through unchanged, since a session identifier (REQ-CLI-054) contains only characters step 2 keeps.
+**REQ-CLI-230** — *Withdrawn.* It was minted into a series already declared closed. Branch-name normal form, the rules by which a name is rejected, and the `Invalid Git branch name: <value>` refusal are carried by REQ-GIT-009; the slugging of values substituted into a derived name is carried by REQ-GIT-139, and collision suffixing by REQ-GIT-010.
 
 **REQ-CLI-057** — Given the chosen branch name already exists, then creation retries deterministically with suffixes `-2`, `-3`, and so on for at most 50 attempts; on exhaustion the run fails with `Could not find a free branch name for '<branch>' after 50 attempts.` Only name collisions are retried; other Git failures surface immediately.
 
-**REQ-CLI-058** — Created worktrees are placed under a storage path set by `runtime.worktree_storage_path`, whose default value is `worktrees`. A relative value is taken relative to `<workspace>/.rotaris/`, so a worktree created with the default in force is found at `<workspace>/.rotaris/worktrees/<branch-name>` and `git worktree list` reports it there; an absolute value is used as given. Placing worktrees under `.rotaris/` keeps them inside the directory the product already owns and already excludes from version control, so a created worktree never appears as an untracked change in the workspace it was cut from. The directory is created if it does not exist, and a value that names an existing non-directory fails the run under REQ-CLI-060.
+**REQ-CLI-058** — Created worktrees are placed under the isolated-checkout directory named by `worktree_storage_subpath`, which REQ-CONFIG-068 registers and REQ-GIT-073 defaults, and which is the only configuration key naming that directory. This document names no key of its own: the `runtime.worktree_storage_path` it previously named is not a key of the product, and where the two disagreed the registered key governs. With the default in force a worktree is therefore found at `<workspace>/.rotaris/worktrees/<branch-name>` and `git worktree list` reports it there. Placing worktrees under `.rotaris/` keeps them inside the directory the product already owns and already excludes from version control, so a created worktree never appears as an untracked change in the workspace it was cut from. The directory is created if it does not exist, and a value that names an existing non-directory fails the run under REQ-CLI-060.
 
 **REQ-CLI-059** — Given `--worktree PATH`, then the path must already exist and must belong to the same repository as the workspace; otherwise the run fails with `Worktree directory does not exist: <path>` or `Attached path is not a worktree of this workspace repository.`
 
@@ -289,37 +275,9 @@ Letter case is preserved, since Git distinguishes it. The steps are total: any i
 
 **REQ-CLI-094** — Every event round-trips through parsing: an event bearing an additional unrecognized field is still accepted by a version-1 parser, and structured payloads (child report artifacts, token snapshots, cost snapshots) travel as plain serialized data, so reading them requires no product-specific library.
 
-**REQ-CLI-232** — The event types of REQ-CLI-090 that no other requirement specifies carry these payload fields beyond the four of REQ-CLI-088. A field whose value is not known for a given occurrence is present and null rather than absent, so the field set of a type does not vary between occurrences. Every string listed here is redacted under REQ-CLI-095 before serialization. A field described as a token snapshot or a cost snapshot has the same shape as the `tokens` and `cost` fields of REQ-CLI-110.
+**REQ-CLI-232** — *Withdrawn.* It was minted into a series already declared closed. The published event catalog and the payload each type carries are carried by REQ-EVENTS-041 and the per-type guarantees that follow it in the same section, with the field lists themselves fixed in the event catalog of domain 20's data and formats section.
 
-| Event | Payload fields |
-| --- | --- |
-| `iteration.start` | `iteration` (integer, counting from 1), `persona` |
-| `iteration.end` | `iteration`, `status` (one of `completed`, `failed`, `interrupted`), `duration_ms` (whole milliseconds), `tokens` (token snapshot for the iteration) |
-| `child.spawn` | `child_id`, `agent_name`, `persona`, `parent_id` (null where the parent is the run's entry agent), `depth` (integer, counting from 1), `task` |
-| `child.transition` | `child_id`, `from_state`, `to_state`, each state one of `pending`, `running`, `succeeded`, `failed`, `cancelled`, `blocked` |
-| `child.complete` | `child_id`, `status` (one of `succeeded`, `failed`, `cancelled`, `blocked`), `report` (the child's last report artifact reduced to its identifier, agent name, status, and path, or null where it produced none), `duration_ms` |
-| `permission.decision` | `request_id` (the identifier of the `approval.requested` this resolves, null where the decision needed no request), `tool_name`, `rule_id`, `decision` (one of `approve_once`, `approve_session`, `deny`), `resolver` (drawn from the vocabulary of REQ-CLI-209), `reason` |
-| `verifier.result` | `verifier`, `status` (one of `passed`, `failed`, `skipped`, `errored`), `detail`, `duration_ms` |
-| `verifier.progress` | `verifier`, `stage`, `detail` |
-| `usage.update` | `tokens` (token snapshot, cumulative over the run per REQ-CLI-077), `cost` (cost snapshot, cumulative over the run) |
-| `error` | `message`, `fatal` (boolean; true only where this error ends the run), `context` |
-| `hook.start` | `hook_name`, `hook_event` (the lifecycle point that triggered it), `scope` (one of `default`, `global`, `workspace`) |
-| `hook.finish` | `hook_name`, `hook_event`, `outcome` (one of `ok`, `failed`, `timeout`, `blocked`), `duration_ms`, `disabled` (boolean; true only on the occurrence that switched the hook off for the remainder of the session under REQ-CLI-070) |
-| `checkpoint.created` | `sequence` (the number `checkpoints list` reports and `checkpoints restore --sequence` accepts), `label`, `commit` |
-| `checkpoint.restored` | `sequence`, `files_changed` (integer), `safety_sequence` (the sequence of the checkpoint holding the pre-restore state, null where none was needed) |
-| `gate.decision` | `gate`, `decision` (one of `pass`, `block`, `repair`), `reason` |
-| `gate.repair` | `gate`, `attempt` (integer, counting from 1), `outcome` (one of `repaired`, `abandoned`), `detail` |
-
-**REQ-CLI-233** — Every type of REQ-CLI-090 is emitted by the subsystem that owns the behaviour it names, on every run and on both surfaces, whenever that behaviour occurs; none is reserved for a future release, and a consumer may rely on the absence of an event meaning the behaviour did not occur. The emission conditions are:
-
-- `hook.start` and `hook.finish` — once each, paired, for every hook the trust gate permitted to run (REQ-CLI-069); a hook that was withheld produces neither;
-- `checkpoint.created` — once for every checkpoint the run captures, including the iteration checkpoints of REQ-CLI-068 and the safety checkpoint a restore or rollback takes;
-- `checkpoint.restored` — once for every restore that changed the working tree, whether it was requested by `checkpoints restore` or taken as part of an `improvements rollback`;
-- `gate.decision` — once for every evaluation of a gate the run reaches, whatever the decision;
-- `gate.repair` — once for every repair attempt a `repair` decision leads to;
-- `approval.requested` — once before every permission request that starts waiting for a decision (REQ-CLI-209), paired with the `permission.decision` that resolves it.
-
-A run in which none of those behaviours occurs emits none of those events, and that is not a defect.
+**REQ-CLI-233** — *Withdrawn.* It was minted into a series already declared closed. That every catalogued type is emitted whenever the behaviour it names occurs, and the conditions under which each is emitted, are carried by REQ-EVENTS-041 together with REQ-EVENTS-043, REQ-EVENTS-044, REQ-EVENTS-045, REQ-EVENTS-046, REQ-EVENTS-047 and REQ-EVENTS-049.
 
 ### Secret Redaction
 
@@ -412,7 +370,7 @@ The chooser presents these six rows first, in this order, and the identifier a c
 
 **REQ-CLI-128** — Given the unavailable cloud entry is chosen, then login fails with the message `Rotaris Cloud is coming soon.` and exits 1. Given a provider identifier that is in neither the built-in catalog nor the set of configured instances, then login reports it as REQ-CLI-236 requires and exits 2. Given the chooser is cancelled, then the result reports the login as cancelled and the process exits 1, matching the failure exit of REQ-CLI-125.
 
-**REQ-CLI-236** — One report serves every command of this domain that resolves a provider identifier supplied by the caller — `login` (REQ-CLI-128), `logout` (REQ-CLI-155), `models refresh --provider` (REQ-CLI-159), and the `providers` commands that take an identifier. Given an identifier that names neither a built-in catalog entry nor a configured instance, then stderr receives `Unknown provider: '<id>'. Known providers: <list>. OpenAI-compatible instances use ids like 'openai-compatible--my-label'.`, where `<id>` is the identifier as the caller supplied it and `<list>` names every identifier the command would have accepted, and the process exits 2. The exit code is 2 rather than 1 because an unrecognized identifier is a mistake in the invocation rather than an operation that ran and failed, which is the reading REQ-CLI-179 already takes of an addressed object that does not exist. The divergence in wording and exit code among the three drafted forms was a defect; this one supersedes all of them. `providers delete` keeps its own narrower report (REQ-CLI-165), because it refuses a built-in provider that is perfectly well known.
+**REQ-CLI-236** — *Withdrawn.* It was minted into a series already declared closed, and it fixes a process exit code for a surface that no longer exists (REQ-PROVIDER-139). Refusing a provider identifier that names neither a catalog entry nor a configured instance, and naming the identifier that was asked for, are carried by REQ-PROVIDER-142 for sign-in and by REQ-PROVIDER-147 for catalog refresh.
 
 **REQ-CLI-129** — Given both stdin and stdout are terminals, then the chooser is an arrow-key menu whose title carries the suffix "(Use Up/Down, Enter to confirm, Esc to cancel)", navigation wraps around, Enter confirms, Escape or an interrupt or end-of-input cancels, and the cursor is hidden for the duration. Otherwise a numbered prompt (`1) <name>`, `2) <name>`, ...) is used, where empty or invalid input cancels. The headless surface always uses the numbered prompt.
 
@@ -426,17 +384,7 @@ The chooser presents these six rows first, in this order, and the identifier a c
 
 **REQ-CLI-134** — An OpenAI-compatible sign-in collects three values in this order. First a label, which is required; omitting it is reported as `OpenAI-compatible label is required.` and the sign-in fails. Second an endpoint URL, prompted as `Endpoint URL`; an empty answer selects `https://api.openai.com/v1`, the answer is normalized under REQ-CLI-234 before use, and a value REQ-CLI-234 rejects is reported with that requirement's message and the sign-in fails. Third an API key, which is required and is entered without echo.
 
-**REQ-CLI-234** — An endpoint or base URL supplied to any command of this domain is normalized by applying these steps in this order, and the normalized form is what is stored, validated against, and displayed:
-
-1. surrounding whitespace is removed;
-2. where the value carries no `://`, `https://` is prepended, so a bare host is accepted and becomes an `https` URL;
-3. the scheme is compared case-insensitively and must be `http` or `https`; any other scheme is rejected;
-4. the scheme and the host are lowercased, while the path keeps its case;
-5. a port equal to the scheme's default — 80 for `http`, 443 for `https` — is removed, and any other port is kept;
-6. a query string and a fragment are removed;
-7. every trailing `/` is removed from the path, so `https://example.test/v1/` and `https://example.test/v1` normalize alike, while a URL whose path is only `/` normalizes to a bare origin with no path.
-
-A value is rejected when step 3 rejects its scheme, when what remains has no host, or when it cannot be parsed as a URL at all. A value carrying credentials in its authority (a `user:password@host` form) is rejected too rather than being silently stripped, since dropping them would change where the request authenticates. A rejection message names the value as it was supplied and states that it is not a usable `http` or `https` URL; where the rejection was for embedded credentials it states that as the reason and that a key is supplied through the API-key prompt instead. The wording is left to the implementation, which must convey those facts.
+**REQ-CLI-234** — *Withdrawn.* It was minted into a series already declared closed. Normalizing a base URL supplied by the user, refusing one that carries no scheme or host, and deriving the discovery endpoint from it are carried by REQ-PROVIDER-053.
 
 **REQ-CLI-135** — An OpenAI-compatible instance identifier is `openai-compatible--<slug>`, where the slug is the label lowercased with runs of non-alphanumeric characters collapsed to `-`. A label that produces an empty slug is rejected with a message requiring at least one alphanumeric character.
 
@@ -504,7 +452,7 @@ A value is rejected when step 3 rejects its scheme, when what remains has no hos
 
 **REQ-CLI-161** — `providers list` prints one line per known provider — the built-in catalog, plus every entry recorded in the discovery snapshot, plus every instance holding stored credentials — in the form `<provider_id>: <display_name> (<auth_flow>, authenticated|not authenticated[, key=<masked>][, base_url=<url>])`. The `key=` part appears only where a key is stored and the `base_url=` part only where a base URL is recorded. A masked key is rendered under REQ-CLI-235, and no listing ever shows a stored key in full. `<auth_flow>` is `api-key` for the OpenAI-compatible family and for DeepSeek, `device-code` for Copilot, `browser-redirect` for Codex and for the hosted-cloud identifiers, and `api-key` for any other provider.
 
-**REQ-CLI-235** — One masking rule serves every place this document renders a stored secret — provider key listings (REQ-CLI-161), secrets writes and listings (REQ-CLI-168, REQ-CLI-170), and the Tavily shorthand (REQ-CLI-171). A value of more than four characters is rendered as its first two characters, then exactly four `*` characters, then its last two characters, giving a rendering of exactly eight characters. A value of four characters or fewer is rendered as exactly four `*` characters and nothing else. The mask character is `*` in every case; no rendering uses a different character, and the divergence between an asterisk and a dot in the draft was a defect rather than a distinction. Because the mask is a fixed width, a masked rendering discloses neither the length of the value nor any character of it beyond the four it shows, and two values of different lengths can render identically.
+**REQ-CLI-235** — *Withdrawn.* It was minted into a series already declared closed. The single rule by which a stored secret is rendered to the user — four mask characters for a short value, first two characters, mask, last two for a longer one, and no other representation anywhere in the interface — is carried by REQ-PROVIDER-107.
 
 **REQ-CLI-162** — `providers set-key PROVIDER [--api-key KEY] [--no-validate]` prompts `API key` without echo when the key is omitted; refuses providers that do not use API keys with `<name> uses <flow>; use reauth instead.`; validates by attempting discovery unless `--no-validate` is given, refusing with `Validation failed for <name>: <error|no models discovered.>`; reports `Updated API key for <name>.` on success; exits 1 on failure.
 
@@ -586,7 +534,7 @@ A value is rejected when step 3 rejects its scheme, when what remains has no hos
 
 **REQ-CLI-195** — `events export SESSION... [-o/--output PATH]` produces one trajectory document when a single session identifier is given and one batch document covering all of them when several are given. Two conditions are reported as warnings on stderr and neither fails the command: a session holding more than one run, where the warning states that the document covers every one of those runs; and a history from which the store's per-session retention cap discarded lines, where the warning states that events were discarded and that the document therefore covers only part of the run. That cap is set by `runtime.event_retention_per_session`, defaults to 20,000 events per session, and discards the oldest lines first, so a session whose history exceeded the cap exports a document covering only its later events. The value 0 means the history is never trimmed; a negative value is not a permitted configuration value and is reported under REQ-CLI-030. The cap is the one operator-configurable bound of the two this document states — the programmatic delivery buffer of REQ-CLI-218 is fixed. Given `--output PATH`, the documents are written there and `Wrote <N> trajectory document(s) to <path>.` is printed to stderr; given no `--output`, the documents are printed to stdout as pretty-printed JSON with object keys in sorted order. Both conditions exit 0. The multiple-runs warning states that the named session holds more than one run and that the document covers every one of them; the truncated-history warning states that the named session's stored history was trimmed by the retention cap, that the discarded lines were the oldest, and that the document therefore covers only the later part of the run. Each names the session it concerns; the wording is left to the implementation, which must convey those facts. The documents themselves follow REQ-CLI-237.
 
-**REQ-CLI-237** — A trajectory document is a JSON object carrying exactly these fields: `schema_version`, an integer, currently `1`, counted independently of the wire schema version of REQ-CLI-089; `session_id`; `workspace`, the absolute resolved workspace root the session belongs to; `exported_at`, an ISO-8601 timestamp in UTC; `run_count`, the number of runs the document covers; `truncated`, a boolean that is true exactly when the retention cap discarded lines from this session's history, which is the condition the second warning of REQ-CLI-195 reports; `event_count`, the number of entries in `events`; and `events`, an array holding every admitted event object exactly as `evidence/events.jsonl` stored it, in stored order and with no field added, removed, or rewritten. A batch document carries `schema_version`, `exported_at`, `session_count`, and `sessions`, an array of trajectory documents in the order their identifiers were given on the command line; no batch document is produced for a single identifier and no bare trajectory document for several, so the shape follows from the invocation alone. Because `events` holds the stored lines unaltered, a consumer that can read a `stream-json` run can read a trajectory document's events without a second parser (REQ-CLI-193).
+**REQ-CLI-237** — *Withdrawn.* It was minted into a series already declared closed. The self-contained trajectory document, its version number, its summary block and its truncation disclosure are carried by REQ-EVENTS-132, REQ-EVENTS-133, REQ-EVENTS-136 and REQ-EVENTS-140; the batch document that wraps one trajectory per selected session is carried by REQ-EVENTS-144.
 
 **REQ-CLI-196** — The `events` group is available on the headless surface identically, because a CI job with no terminal and only an exit code is the primary consumer of stored histories.
 

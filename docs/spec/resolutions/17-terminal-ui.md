@@ -29,12 +29,12 @@ in the spec's Open Questions section).
 
 | OQ # | Disposition | Decision taken | Requirements touched |
 | --- | --- | --- | --- |
-| 1 | ESCALATED | Whether `/background` should detach a live run into a background process (so the run keeps executing after the TUI releases it) or remain the save-and-notify convenience of REQ-TUI-152. Restated as escalated question 1 in the spec; the requirement keeps its persist-and-notify behavior until the choice is made, with the toast reworded so it no longer advertises an unbuilt feature. | REQ-TUI-152 |
+| 1 | RESOLVED | Answered by the product owner on 2026-08-30 and recorded in [`../../clean-room/specification-gate.md`](../../clean-room/specification-gate.md): detaching a live run is **not specified here**. REQ-TUI-152 states stop-persist-and-notify and nothing more, and this domain is retired, so nothing further is owed against a `REQ-TUI` identifier. The desktop action that does detach a live run — the run continuing in the same process, `execution_status` persisted as `background` at the hand-off, and the refusal when there is no run to send — is carried by REQ-SESSION-190, and is domain 07's to state, not this document's. | REQ-TUI-152 (unchanged); carried on the desktop by REQ-SESSION-190 |
 | 2 | RESOLVED | The right rail is 3:2:2 (agents:info:todo), matching the drafted REQ-TUI-016; 2:1:1 is rejected because the info and todo panels each need more than a quarter of the rail once metric rows, MCP, tools, artifacts, and warnings share the info panel. Both the 7:3 column split and the 3:2:2 rail split are fixed and not configurable. | REQ-TUI-016 |
 | 3 | RESOLVED | The quit grace period is 2.0 s, not 5.0 s: it is the value the user-facing shutdown message, the agent activity text, the countdown of REQ-TUI-129, and the constants list all already state, so 2.0 s is the only reading that leaves the document self-consistent. | REQ-TUI-128, REQ-TUI-129, REQ-TUI-206 (confirmed; no text change) |
 | 4 | RESOLVED | The info panel shows no todo summary block. Todos appear in exactly one place, the todo panel. REQ-TUI-102 now closes the info panel's section list so a future block cannot be added silently. | REQ-TUI-102 |
 | 5 | RESOLVED | Exactly one command-palette surface exists: the modal of REQ-TUI-056. No terminal-framework-native palette is exposed, since a second surface would duplicate entries, own its own focus rules, and break the "opens from leader `p` and the meta-bar segment and from no other affordance" guarantee. | REQ-TUI-056 |
-| 6 | RESOLVED | Cross-emulator appearance is a verification activity, not a specification gap; what the spec owed was a capability baseline. New REQ-TUI-207 states it: a UTF-8 terminal with at least 256 colors and at least 80x24 cells is the supported baseline, glyphs are never substituted with ASCII, and outside the baseline the interface degrades (right rail dropped below 80 columns) without crashing. | REQ-TUI-207 (new) |
+| 6 | RESOLVED | Cross-emulator appearance is a verification activity, not a specification gap; what the draft owed was a capability baseline, and REQ-TUI-207 was minted to state one. That identifier is **withdrawn**: the `REQ-TUI` series was already closed when the resolution pass ran, and a terminal display baseline has no surface in a product that is one desktop window. The equivalent guarantee — a stated minimum size at which the whole working surface stays usable, and a layout that degrades at stated thresholds rather than fails — is carried by REQ-SHELL-061, REQ-SHELL-059 and REQ-SHELL-047, with the contrast floors in REQ-SHELL-145. | REQ-TUI-207 (withdrawn) |
 | 7 | RESOLVED | The OSC 52 fallback keeps reporting success — the sequence cannot be acknowledged, and a failure report would be equally unverified — but its notification must say that the copy was handed to the terminal without confirmation, so the unverified case is distinguishable from a verified tool copy. Wording is left to the implementation. | REQ-TUI-195 |
 | 8 | RESOLVED | Catalog contents and error shapes stay provider-dependent, but the unbounded wait they implied is closed: per-provider runtime discovery is bounded by a 10 s timeout, after which that provider contributes a collected timeout message and the table renders from whatever else resolved. The status line therefore always leaves "Loading provider catalogs…" within a bounded time. | REQ-TUI-157, REQ-TUI-206 |
 | 9 | RESOLVED | The constants of REQ-TUI-206 are normative and no further timing requirement is added; the one substantive gap — backlog behavior under sustained load — is closed in REQ-TUI-080: at most one deferred redraw is ever pending, so update bursts coalesce instead of accumulating. Perceived feel on real hardware is a verification activity. | REQ-TUI-080 |
@@ -75,12 +75,22 @@ in the spec's Open Questions section).
 | 44 | RESOLVED | Modifiers are ignored entirely when matching a chord: any combination of Ctrl, Alt, Shift, and Meta with a mnemonic performs that chord. Only a keystroke whose base character is not a mnemonic falls to the "any other key" rule, so a user holding a modifier from the leader keystroke never silently loses the chord. | REQ-TUI-031 |
 | 45 | RESOLVED | Standard error is never parsed. Outcomes are decided by exit code and stdout alone: exit 0 with non-empty output gives the branch (literal `HEAD` giving `[detached]`), and every other outcome — empty output, any non-zero exit, spawn failure, timeout — hides the branch and its separator. This removes all dependence on an external tool's message wording, version, and locale. | REQ-TUI-193 |
 
-## Escalated to the product owner
+## Escalations answered
 
-One question is restated in the spec's Open Questions section: whether `/background` should detach a live
-run into a background process, or remain a save-and-notify convenience. It is escalated because the
-detaching answer implies a process and ownership model that reaches well beyond this domain and would be
-expensive to reverse once sessions, locks, and event delivery are built around it. Pending that decision,
-REQ-TUI-152 was made internally consistent: the active run is now interrupted gracefully before the
-session is marked `background`, so no streaming preview or unfinished tool entry survives a status the
-rest of the document treats as non-running, and the toast no longer advertises an unbuilt capability.
+One question was escalated: whether `/background` should detach a live run into a background process,
+or remain a save-and-notify convenience. It was answered by the product owner on 2026-08-30 and the
+answer is recorded in [`../../clean-room/specification-gate.md`](../../clean-room/specification-gate.md):
+detaching is not specified here, REQ-TUI-152 states stop-persist-and-notify and nothing more, and this
+domain is retired. No question raised against this document remains open.
+
+REQ-TUI-152 keeps the form the resolution pass gave it: the active run is interrupted gracefully before
+the session is marked `background`, so no streaming preview or unfinished tool entry survives a status
+the rest of the document treats as non-running, and the toast advertises no unbuilt capability. Genuine
+detachment of a live run is a desktop behavior and is stated by REQ-SESSION-190.
+
+## Identifier series closed
+
+`REQ-TUI` is closed and no further identifier may be added to
+[`../17-terminal-ui.md`](../17-terminal-ui.md). REQ-TUI-207, minted by this pass after the retirement
+decision, is withdrawn on that ground (OQ 6); it is the only identifier this pass added, so the series
+ends at REQ-TUI-207 with that entry withdrawn.

@@ -20,12 +20,16 @@ settings, MCP integration, the terminal UI, command-line entry points, notificat
 the event stream, and the performance benchmark.
 
 Behavioral target: `ROTARIS-CRW-001` — see [`reference-record.md`](reference-record.md).
-Total: **3,923 requirements** across the nineteen shipping domains. The two retired domains, the
-terminal UI and the command-line entry points, hold a further **444** identifiers; those are counted
-separately and are not part of the shipping total, giving **4,367** identifiers in all. Every count
-includes requirements withdrawn in place, since an identifier is never removed. The per-domain
-figures are in [`../spec/README.md`](../spec/README.md). Process and audit history:
-[`provenance.md`](provenance.md).
+Total: **3,923 requirement identifiers** across the nineteen shipping domains, of which **233** are
+withdrawn in place, leaving **3,690** that state live behavior. The two retired domains, the
+terminal UI and the command-line entry points, hold a further **444** identifiers, **10** of them
+withdrawn in place; those are counted separately and are not part of the shipping total, giving
+**4,367** identifiers in all, **243** of them withdrawn. Every count is a count of identifiers, not
+of behaviors: an identifier is never removed, so a withdrawn requirement keeps its number and keeps
+being counted, and a total that grew while the graphical-only decision was removing surface grew
+because resolution minted new identifiers to carry the rescued capabilities. The per-domain figures,
+with the withdrawn count beside each, are in [`../spec/README.md`](../spec/README.md). Process and
+audit history: [`provenance.md`](provenance.md).
 
 ## Clean-room audit status
 

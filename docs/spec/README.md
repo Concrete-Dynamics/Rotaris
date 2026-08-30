@@ -7,10 +7,14 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,923** across the 19 shipping domains, plus **444** in the two retired domains
-  (17 and 18), which are counted separately and are not part of the shipping total — **4,367**
-  identifiers in all. Counts include requirements withdrawn in place, since an identifier is never
-  removed.
+- Requirements: **3,923** identifiers across the 19 shipping domains, of which **233** are withdrawn
+  in place, leaving **3,690** that carry live behavior. The two retired domains (17 and 18) hold a
+  further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
+  are not part of the shipping total — **4,367** identifiers in all, **243** of them withdrawn.
+  Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
+  withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
+  was being removed rose because resolution minted new identifiers to carry rescued capabilities,
+  not because more was specified.
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
 
@@ -19,29 +23,33 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 
 ## Domains
 
-| # | Domain | Prefix | Reqs | Priority |
-|---|--------|--------|-----:|----------|
-| 01 | [Multi-Agent Run Orchestration](01-run-orchestration.md) | `REQ-ORCH` | 156 | core |
-| 02 | [Run Monitoring and Steering](02-run-monitoring-steering.md) | `REQ-MONITOR` | 305 | core |
-| 03 | [Conversation, Composer, and Transcript](03-conversation-composer-transcript.md) | `REQ-CHAT` | 174 | core |
-| 04 | [Model Providers, Sign-In, and Model Routing](04-model-providers-auth.md) | `REQ-PROVIDER` | 152 | core |
-| 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 192 | core |
-| 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | core |
-| 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 196 | core |
-| 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 512 | core |
-| 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | core |
-| 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 129 | core |
-| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 157 | secondary |
-| 12 | [Desktop Shell, Navigation, and Window Management](12-desktop-shell-windows.md) | `REQ-SHELL` | 167 | secondary |
-| 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | secondary |
-| 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 175 | secondary |
-| 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 473 | secondary |
-| 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 117 | secondary |
-| 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 207 | **retired** |
-| 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | **retired** |
-| 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | secondary |
-| 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 178 | secondary |
-| 21 | [Installed UI Performance Benchmark Command](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | peripheral |
+| # | Domain | Prefix | Reqs | Withdrawn | Priority |
+|---|--------|--------|-----:|----------:|----------|
+| 01 | [Multi-Agent Run Orchestration](01-run-orchestration.md) | `REQ-ORCH` | 156 | 1 | core |
+| 02 | [Run Monitoring and Steering](02-run-monitoring-steering.md) | `REQ-MONITOR` | 305 | 7 | core |
+| 03 | [Conversation, Composer, and Transcript](03-conversation-composer-transcript.md) | `REQ-CHAT` | 174 | 49 | core |
+| 04 | [Model Providers, Sign-In, and Model Routing](04-model-providers-auth.md) | `REQ-PROVIDER` | 152 | 18 | core |
+| 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 192 | 0 | core |
+| 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | 8 | core |
+| 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 196 | 17 | core |
+| 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 512 | 16 | core |
+| 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | 1 | core |
+| 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 129 | 1 | core |
+| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 157 | 7 | secondary |
+| 12 | [Desktop Shell, Navigation, and Window Management](12-desktop-shell-windows.md) | `REQ-SHELL` | 167 | 4 | secondary |
+| 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | 17 | secondary |
+| 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 175 | 14 | secondary |
+| 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 473 | 16 | secondary |
+| 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 117 | 11 | secondary |
+| 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 207 | 1 | **retired** |
+| 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | 9 | **retired** |
+| 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |
+| 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 178 | 28 | secondary |
+| 21 | [Installed UI Performance Benchmark Command](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | 14 | peripheral |
+
+"Reqs" is the count of identifiers a domain defines; "Withdrawn" is how many of those are withdrawn
+in place, retaining their number while carrying no behavior. Subtracting the second from the first
+gives the live behavior a domain states.
 
 Domains 17 and 18 are **retired**. The product is one Electron desktop application; it has no
 command-line interface and no terminal user interface. Every capability those documents carried

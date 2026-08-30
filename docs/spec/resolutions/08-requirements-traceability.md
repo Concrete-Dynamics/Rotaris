@@ -20,7 +20,12 @@ This record disposes of every open question raised in the draft of
    admits no coherent resolution, the behaviour is omitted rather than reproduced.
 3. **Unbuilt-but-intended behaviour is in scope.** A requirement is not dropped merely because it
    describes intent rather than something known to work.
-4. **Scope — all 21 domains ship in the first release.** Nothing was deferred for scheduling.
+4. **Scope — the product is one Electron desktop application.** It has no command-line interface and
+   no terminal user interface; both were removed, not deferred. Domains 17 and 18 are retired and
+   the `REQ-TUI` and `REQ-CLI` identifiers are withdrawn, so no requirement here cites them. The
+   dispositions below were taken before that decision; the graphical-only sweep further down applies
+   it to this domain. The traceability engine itself is untouched — what was withdrawn is the way a
+   user drove it.
 5. **Message text — information content, not wording.** Human-readable messages are specified by
    what they must convey; exact phrasing is left to the implementation. Exact strings are fixed
    only where they form part of a machine-readable contract.

@@ -19,7 +19,12 @@ recorded on 2026-08-30:
    behavior is omitted rather than reproduced.
 3. **Unbuilt-but-intended behavior is in scope.** A requirement is not dropped merely because it
    describes intent.
-4. **All 21 domains ship in the first release**; nothing is deferred for scheduling reasons.
+4. **The product is one Electron desktop application**; it has no command-line interface and no
+   terminal user interface. This domain is retired — removed, not deferred — and every `REQ-TUI`
+   identifier is withdrawn in place, never renumbered or reused. The dispositions below are kept as
+   the historical record of how the domain stood when they were taken; each capability a user
+   reached through the terminal interface is carried by a desktop requirement in the domain that
+   owns it.
 5. **Message text is specified by information content, not wording**, except where a string is part
    of a machine-readable contract.
 

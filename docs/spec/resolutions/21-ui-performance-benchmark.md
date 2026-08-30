@@ -20,10 +20,11 @@ The product-owner decisions in force while these were resolved:
    coherent with the rest of the document; where no coherent reading exists the behavior is omitted.
 3. **Unbuilt-but-intended behavior is in scope.** No requirement was dropped merely for describing
    intent.
-4. **The product is a single graphical desktop application** with no command-line interface and no
-   terminal user interface. Every requirement whose only surface was a shell invocation is withdrawn,
-   and every capability such a requirement carried is rescued into a desktop-reachable requirement.
-   See the "Graphical-only sweep" below.
+4. **The product is one Electron desktop application.** It has no command-line interface and no
+   terminal user interface — removed, not deferred. Domains 17 and 18 are retired and the `REQ-TUI`
+   and `REQ-CLI` identifiers are withdrawn, so no requirement here cites them. Every requirement
+   whose only surface was a shell invocation is withdrawn, and every capability such a requirement
+   carried is rescued into a desktop-reachable requirement. See the "Graphical-only sweep" below.
 5. **Message text states information content, not wording** — except where a string is part of a
    machine-readable contract (a JSON field name, an enum value, a parseable file format). Open
    questions asking for the exact phrasing of a human-readable message are resolved by fixing what

@@ -23,7 +23,12 @@ The following product-owner decisions of 2026-08-30 governed the dispositions:
    behavior is withdrawn rather than reproduced.
 3. **Unbuilt-but-intended behavior stays in scope.** A requirement is not dropped merely because it
    describes intent.
-4. **All 21 domains ship in the first release.** Nothing was deferred for scheduling reasons.
+4. **The product is one Electron desktop application.** It has no command-line interface and no
+   terminal user interface — removed, not deferred. Domains 17 and 18 are retired and the `REQ-TUI`
+   and `REQ-CLI` identifiers are withdrawn, so no requirement here cites them. See the
+   graphical-only sweep below for what that did to this domain. Configuration that governs the
+   programs the application itself runs is untouched; what was removed is every way a *user* reached
+   this product from a shell or a text-mode screen.
 5. **Message text states required information content, not exact wording**, except where a string is
    part of a machine-readable contract (an event field value, an enum, or a parseable output
    format). Open questions asking only about phrasing, punctuation, or inflection of a human-readable

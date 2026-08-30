@@ -23,7 +23,12 @@ The following product-owner decisions of 2026-08-30 governed the dispositions:
    behavior is withdrawn rather than reproduced.
 3. **Unbuilt-but-intended behavior stays in scope.** A requirement is not dropped merely because it
    describes intent.
-4. **All 21 domains ship in the first release.** Nothing was deferred for scheduling reasons.
+4. **The product is one Electron desktop application.** It has no command-line interface and no
+   terminal user interface — removed, not deferred. Domains 17 and 18 are retired and the `REQ-TUI`
+   and `REQ-CLI` identifiers are withdrawn, so no requirement here cites them. See the
+   graphical-only sweep below for what that did to this domain. Running external programs stays
+   fully in scope: version-control invocations, worktree creation and checkpoint capture are all
+   things the application does, not ways a user drives it.
 5. **Message text states required information content, not exact wording**, except where a string is
    part of a machine-readable contract (an event field value, an enum, or a parseable output
    format). Open questions asking only about phrasing, punctuation, or inflection of a human-readable
@@ -142,3 +147,22 @@ semantics (REQ-GIT-013, REQ-GIT-033, REQ-GIT-141), is unchanged; the lifecycle h
 checkpoints of a hidden integration run (REQ-GIT-131) are unchanged; and the `git config --global`
 lines this domain quotes to the user in REQ-GIT-012 and REQ-GIT-114 are instructions for Git itself,
 displayed in the desktop, not a surface of this product.
+
+### Dispositions this sweep supersedes
+
+Nine rows of the dispositions table were decided against a surface that no longer exists and are read
+as follows. **OQ 8**, **OQ 14** and **OQ 23** stated a three-code exit contract; the codes went with
+REQ-GIT-154, and the distinction they drew — refused before any work, against accepted and then
+refused or failed — is carried without numbers by REQ-GIT-157, so each row's substance stands and
+only its codes do not. **OQ 22** is superseded outright: there is no `--workspace/-w` to default,
+the workspace is the one the window has open (REQ-STARTUP-041, REQ-SHELL-021), and the rule that
+survives the flag is that a workspace names the base checkout whose `.rotaris/sessions/` holds the
+session and never a session's worktree. **OQ 36** is superseded outright: with no command surface
+there is no front end to be the only one of, and REQ-GIT-050's single read path already gives every
+checkpoint surface one answer. **OQ 48** is superseded with REQ-GIT-066: consent to overwrite is an
+explicit control (REQ-GIT-098), so there is no typed reply to trim or case-fold. **OQ 15** stands on
+its merits — the report content and the stale marking are REQ-GIT-160's and REQ-SESSION-182's — and
+only the `sessions --repair` venue is gone. **OQ 11** likewise stands: what the status strip must
+convey is REQ-GIT-161's, REQ-GIT-122's and REQ-SHELL-038's. **OQ 5** is untouched, since the liveness
+probe and the lock file's `host` field (REQ-GIT-093, REQ-GIT-020) never depended on the surface that
+invoked them.

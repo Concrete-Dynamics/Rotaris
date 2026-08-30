@@ -406,7 +406,7 @@ All formats below are externally observable on disk, in the repository, or on th
     issues.json          # recorded warnings/issues (checkpoint_restore refusals, ...)
   worktrees/<session-id>/            # isolated session worktrees (subpath configurable)
   worktrees/integrations/<integration-id>/   # temporary integration worktrees (under the same subpath)
-  requirements/worktrees/...         # requirement-unit worktrees (subpath configurable under requirements/)
+  requirements/worktrees/<unit-id>/  # requirement-unit worktrees; this location is fixed by REQ-GIT-137 and no configuration key names it
   integration.lock       # exclusive-create; JSON {"session_id", "pid", "host", "started_at"}
 ```
 

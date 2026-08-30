@@ -9,7 +9,7 @@ status: draft
 
 ## Overview
 
-This document states what Rotaris shows a user about the progress and outcome of work, and what it does when work does not succeed. It covers the two feedback channels and the rule for choosing between them; the content, identity and lifetime of a persistent notice; the vocabularies of run and child state that reach the screen; the classification of a failed run and the recovery each class offers; the bounded automatic recovery the runtime performs unprompted — provider fallback, quota waiting, transient retry, loop supervision, verification repair; the detection and repair of state left behind by a stopped process; and the obligations of each surface that reports any of this, namely the desktop window, the interactive terminal host, the command-line clients and the session directory on disk.
+This document states what Rotaris shows a user about the progress and outcome of work, and what it does when work does not succeed. It covers the two feedback channels and the rule for choosing between them; the content, identity and lifetime of a persistent notice; the vocabularies of run and child state that reach the screen; the classification of a failed run and the recovery each class offers; the bounded automatic recovery the runtime performs unprompted — provider fallback, quota waiting, transient retry, loop supervision, verification repair; the detection and repair of state left behind by a stopped process; and the obligations of each surface that reports any of this, namely the desktop window and the session directory on disk.
 
 Requirements are grouped by the scope of what they govern, from surfaces shared by everything, through a single run and the calls it makes, through delegated work and its evidence, through recovery of state after a crash, to the requirement-delivery surfaces, the workspace and machine configuration, and the application itself. Numeric values are defaults unless stated otherwise. Where a list has no observable order, it is given alphabetically or by ascending severity.
 
@@ -21,7 +21,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-255** — Where this domain asks whether something is still running — a session's process, the flow owning a requirement, the precondition guarding a worktree integration — and the question cannot be answered, the answer taken is that it is running. No automatic path treats an unanswered liveness question as evidence that work has stopped, and a state entered on such an answer is left only through an explicit repair (REQ-NOTIFY-153, REQ-NOTIFY-161).
 
-**REQ-NOTIFY-256** — Inspecting state never changes it. Every repair is requested rather than automatic, yields the same result when requested again, and is announced through at least one of: a notice, a line of command-line output, a returned sentence, a timeline entry.
+**REQ-NOTIFY-256** — Inspecting state never changes it. Every repair is requested rather than automatic, yields the same result when requested again, and is announced through at least one of: a notice, a transient acknowledgement, a sentence rendered in the view that requested it, a timeline entry.
 
 **REQ-NOTIFY-257** — Verification results, completion-gate decisions, repair decisions and completion-contract fields are written by the execution runtime alone. Values for any of those fields appearing in model-authored output are discarded before a report is stored.
 
@@ -55,7 +55,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 ### A4. Choosing a channel
 
-**REQ-NOTIFY-003** — A transient acknowledgement on its own is sufficient reporting only for an event that is none of the following: a failure, a refusal, an outcome carrying a recovery action. Each of those three is additionally published as a persistent notice and so stays readable after the acknowledgement lifetime of REQ-NOTIFY-011 has elapsed. Any other event may be acknowledged transiently and reported nowhere else.
+**REQ-NOTIFY-003** — A transient acknowledgement on its own is sufficient reporting only for an event that is none of the following: a failure, a refusal, an outcome carrying a recovery action. Each of those three is additionally published as a persistent notice and so stays readable after the acknowledgement lifetime of REQ-NOTIFY-011 has elapsed. This obligation is discharged at publication: the notice surface holds one notice, and a later publication may replace it under REQ-NOTIFY-024. Retrievability afterwards is carried by the record REQ-NOTIFY-268 requires, not by the notice surface. Any other event may be acknowledged transiently and reported nowhere else.
 
 **REQ-NOTIFY-004** — When an operation fails, the input the user supplied to it — a composed prompt among others — is still present and can be submitted again unchanged.
 
@@ -65,47 +65,49 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-011** — A transient acknowledgement takes itself off screen 4200 ms after it becomes visible.
 
-**REQ-NOTIFY-012** — A transient acknowledgement is placed with respect to its host window rather than the screen. It clears the title bar, keeps a non-zero gap from every window edge it approaches, and is drawn over all other content of that window so that nothing covers it. Moving or resizing the window restores the same position relative to the window with no user action.
+**REQ-NOTIFY-012** — A transient acknowledgement is placed with respect to its host window rather than the screen. It anchors to the bottom-right corner of the host window's content area, keeping a 16 px margin from that window's right edge and a 16 px margin from its bottom edge, clears the title bar, and is drawn over all other content of that window so that nothing covers it. Where the host is narrower than the bounded width of REQ-NOTIFY-013 plus those margins, the width is reduced and the margins are kept. Moving or resizing the window restores the same position relative to the window with no user action.
 
-**REQ-NOTIFY-013** — A transient acknowledgement wraps its text within a bounded width: at most 520 px in the single-message form, and 360 px in the stacked form, reduced to the host width less its margins where the host is narrower.
+**REQ-NOTIFY-013** — There is one acknowledgement surface, the stacked one of REQ-NOTIFY-016 through REQ-NOTIFY-022; a lone acknowledgement is that stack holding one member, and no separate single-acknowledgement surface exists. A transient acknowledgement wraps its text within a bounded width: at most 520 px while exactly one is visible, and at most 360 px while two or three are, in each case reduced to the host width less its margins where the host is narrower. A stack growing from one member to two narrows the acknowledgement already standing rather than replacing it or reordering it.
 
-**REQ-NOTIFY-014** — A transient acknowledgement has two presentations, neutral and error, told apart by their borders. Neither fills the acknowledgement's background with a status colour. In every theme offered, the border holds at least 3:1 contrast and the text at least 4.5:1 against the surface behind them. The presentation belongs to the message currently shown: changing theme while an acknowledgement is visible leaves it in the presentation its own message calls for, and an error acknowledgement never repaints as a neutral one.
+**REQ-NOTIFY-014** — A transient acknowledgement has two presentations, neutral and error, told apart by their borders. Both draw a 1 px border on all four sides: the neutral presentation draws it in the surface's ordinary border colour, and the error presentation draws it in the error severity colour and adds a rule down its left edge three times that width in the same colour, matching the persistent-notice treatment of REQ-NOTIFY-035. That left rule is the difference in shape REQ-NOTIFY-258 requires, so the two presentations stay distinguishable where colour is not perceived. Neither fills the acknowledgement's background with a status colour. In every theme offered, the border holds at least 3:1 contrast and the text at least 4.5:1 against the surface behind them. The presentation belongs to the message currently shown: changing theme while an acknowledgement is visible leaves it in the presentation its own message calls for, and an error acknowledgement never repaints as a neutral one.
 
 **REQ-NOTIFY-015** — A transient acknowledgement never takes keyboard focus. One appearing while the user types leaves the caret position and the input focus untouched.
 
-**REQ-NOTIFY-016** — Where acknowledgements stack, three are visible at most; publishing a fourth removes the oldest immediately.
+**REQ-NOTIFY-016** — Three acknowledgements are visible at most; publishing a fourth removes the oldest immediately. Stacking is reached whenever an acknowledgement is published while another is still visible, which is an ordinary condition of the product rather than an optional surface.
 
-**REQ-NOTIFY-017** — In a stack, the newest acknowledgement occupies the slot nearest the anchoring corner and earlier ones move away from it. No existing acknowledgement is reordered or replaced where it stands.
+**REQ-NOTIFY-017** — In a stack, the newest acknowledgement occupies the slot nearest the anchoring corner and earlier ones move away from it: with the bottom-right anchor of REQ-NOTIFY-012 the newest is lowest and earlier ones move upward, separated by an 8 px gap. No existing acknowledgement is reordered or replaced where it stands.
 
 **REQ-NOTIFY-018** — An acknowledgement carries one of four kinds, given here in ascending severity: `info`, `ok`, `warn`, `fail`. The glyph a kind uses is the glyph the corresponding notice severity uses.
 
-**REQ-NOTIFY-019** — An acknowledgement's accessible name is its kind word followed by its title, the kind words being Notice, Done, Warning and Failed. Its body text becomes its accessible description. Kind is never signalled by colour alone.
+**REQ-NOTIFY-019** — An acknowledgement's accessible name conveys its kind word followed by its title, in that order, the kind words being Notice, Done, Warning and Failed. The two are joined so that assistive technology announces them as distinct phrases rather than as one run-on word; the joining text itself is the implementation's and belongs to neither part's own content. Its body text becomes its accessible description. Kind is never signalled by colour alone.
 
 **REQ-NOTIFY-020** — A timeout of zero or less leaves the acknowledgement on screen until something removes it, and the countdown can be restarted. Only the close control accepts interaction. Closing an acknowledgement in the same instant its timer expires removes it once and raises nothing.
 
 **REQ-NOTIFY-021** — The close control's accessible name identifies the acknowledgement it removes. One clear operation removes every visible acknowledgement at once; changing view and shutting down each perform it.
 
-**REQ-NOTIFY-022** — A transient acknowledgement animates into place by default. Where the operating system reports a preference for reduced motion, its first painted frame is already at its final position at full opacity and nothing moves or fades afterwards. That preference changes motion only: the same message appears, it leaves after the same 4200 ms, and no acknowledgement is suppressed, delayed or reordered.
+**REQ-NOTIFY-022** — A transient acknowledgement animates into place by default: it enters by translating in from the window edge it anchors to, which is the right edge under REQ-NOTIFY-012, over 160 ms while its opacity rises from zero to full, and it leaves by the reverse over 120 ms. Where the operating system reports a preference for reduced motion, its first painted frame is already at its final position at full opacity and nothing moves or fades afterwards. That preference changes motion only: the same message appears, it leaves after the same 4200 ms, and no acknowledgement is suppressed, delayed or reordered.
 
 ### A6. Persistent notices: fields, identity and lifetime
 
 **REQ-NOTIFY-023** — A persistent notice carries an identifier; a severity, being one of `info`, `success`, `warning`, `error` in ascending order; a title; a message body, possibly empty; a block of technical detail the user can copy, possibly empty; a `persistent` flag; an action label together with the identifier of the action it invokes, either of which may be empty; and a session identifier, possibly empty. The `persistent` flag has one observable effect, given in REQ-NOTIFY-040: whether a dismiss control is offered. A notice with the flag clear stays on screen exactly as long as one with it set.
 
-**REQ-NOTIFY-024** — One notice is current at any moment, and it is the one published most recently. A publication replaces whatever notice was current, whichever session either concerns, and the replaced notice does not return unprompted. Replacement is a distinct event from clearing: the scoping rules of REQ-NOTIFY-028 and REQ-NOTIFY-029 govern what a starting run clears, and they exempt nothing from being replaced.
+**REQ-NOTIFY-024** — One notice is current at any moment, and it is the one published most recently. A publication replaces whatever notice was current, whichever session either concerns, and the replaced notice does not return unprompted. Replacement is a distinct event from clearing: the scoping rules of REQ-NOTIFY-028 and REQ-NOTIFY-029 govern what a starting run clears, and they exempt nothing from being replaced. Single-slot replacement is canonical and no notice is queued, restored or re-presented; a notice replaced before the user read it stays retrievable only through the record of REQ-NOTIFY-268.
 
-**REQ-NOTIFY-025** — Notice identifiers are unique within an application session and increase monotonically.
+**REQ-NOTIFY-025** — Notice identifiers are unique within an application session and increase monotonically. The notice store belongs to the application process rather than to any window: re-creating the main window within one process neither resets the identifier sequence nor discards the current notice, and the newly created window renders whatever notice is current under REQ-NOTIFY-024. An identifier is unique across every window of that process, so a clear request carrying an identifier under REQ-NOTIFY-026 stays meaningful after a window has been re-created.
 
 **REQ-NOTIFY-026** — A clear request carrying no identifier removes whatever notice is current. A clear request carrying an identifier removes the current notice only where the identifiers match, so dismissing a notice already superseded leaves its successor standing.
 
-**REQ-NOTIFY-027** — A notice outlives the acknowledgement lifetime of REQ-NOTIFY-011 without limit and stays until dismissed or superseded. Notices are not written to disk: no notice published before an application restart appears after it.
+**REQ-NOTIFY-027** — A notice outlives the acknowledgement lifetime of REQ-NOTIFY-011 without limit and stays until dismissed or superseded. Notices are not written to disk: no notice published before an application restart appears after it. An application session is one run of the application process; closing and re-creating a window does not end one, and only ending the process discards the notice store.
 
-**REQ-NOTIFY-033** — A notice raised by work the user did not start appears without the user clicking, refreshing or changing view. Where several notices are published in quick succession, the one on screen once the burst has been delivered is the last published, no earlier publication surfaces after a later one, and no publication in the burst is dropped before reaching the surface.
+**REQ-NOTIFY-033** — A notice raised by work the user did not start appears without the user clicking, refreshing or changing view. Publications are totally ordered: whatever thread or component raises them, they are applied one at a time and in the order they were accepted, each one assigned its identifier under REQ-NOTIFY-025 and its clearing rules applied under REQ-NOTIFY-029 before the next is accepted, so no two publications interleave. Where several are published within one turn of the event loop, every one is applied, the one on screen once the burst has been applied is the last of them, and no earlier publication surfaces after a later one. Painting may be coalesced: a notice superseded within the same turn need never be drawn, and the absence of an intermediate frame is not a failure of this requirement.
+
+**REQ-NOTIFY-268** — Every persistent notice of severity `warning` or `error` is, at publication, additionally recorded as an entry carrying its title, its message body and its technical detail unchanged. Where the notice carries a session identifier, or is unscoped while a run is focused, the entry is written to that session's timeline; where no session applies, it is written to the application diagnostics. Recording precedes rendering, so a notice replaced within the same event-loop turn is still recorded. The entry is therefore what a user reads after a notice was superseded before it could be acted on, and no failure or refusal becomes unreachable through replacement alone. Notices of severity `info` and `success` are not recorded by this requirement.
 
 ### A7. Persistent notices: where and how they are drawn
 
 **REQ-NOTIFY-034** — The application window renders the current notice as a single inline banner at the top of the window, below the title bar. A secondary or popped-out window renders its own banner, and activating an action in that banner is handled identically to activating the same action in the main window.
 
-**REQ-NOTIFY-035** — A persistent notice signals severity with a border and a glyph, never by filling its background with the severity colour. It is bordered on all four sides and carries a rule down its left edge three times that border's width, both in the severity's colour, with the glyph in the severity's text colour. Against the surface behind them, border and left rule hold at least 3:1 contrast, and glyph and body text at least 4.5:1, in every theme offered.
+**REQ-NOTIFY-035** — A persistent notice signals severity with a border and a glyph, never by filling its background with the severity colour. It carries a 1 px border on all four sides and a 3 px rule down its left edge, both in the severity's colour, with the glyph in the severity's text colour. Against the surface behind them, border and left rule hold at least 3:1 contrast, and glyph and body text at least 4.5:1, in every theme offered.
 
 **REQ-NOTIFY-036** — Severity glyphs are `i` for info, `✓` for success, `!` for warning and `×` for error, and are the same glyphs the corresponding acknowledgement kinds use.
 
@@ -117,7 +119,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-040** — A dismiss control appears exactly where the notice's `persistent` flag is set; activating it clears that notice and, under REQ-NOTIFY-026, cannot clear a notice that has since replaced it. A notice with the flag clear offers no dismiss control and cannot be removed by the user directly. No notice leaves on a timer: a notice leaves the surface only by replacement under REQ-NOTIFY-024, by a clear performed under REQ-NOTIFY-029 or REQ-NOTIFY-058, or, where the flag is set, by the user dismissing it.
 
-**REQ-NOTIFY-041** — The banner's accessible name opens with the notice's severity word — `info`, `success`, `warning` or `error` — and continues with its title. Its accessible description is the message body followed by the technical detail; where only one of the two is present the description is that one; where neither is present the banner exposes no accessible description.
+**REQ-NOTIFY-041** — The banner's accessible name opens with the notice's severity word — `info`, `success`, `warning` or `error` — and continues with its title. Its accessible description is the message body followed by the technical detail; where only one of the two is present the description is that one; where neither is present the banner exposes no accessible description. In both the name and the description the parts are joined so that assistive technology announces them as distinct phrases; the joining text is the implementation's and belongs to no part's own content.
 
 **REQ-NOTIFY-042** — Clearing the current notice hides the banner and releases the identifier it held.
 
@@ -133,11 +135,11 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-031** — A run other than the focused one reaching a terminal state that is not a failure raises a persistent notice naming that session and the state it reached, with severity `success` where the state normalises to `completed` and `info` for every other non-failure terminal state. Its body states that the session on screen is unaffected and that the finished session can be opened for review, and it offers an action focusing that session. Publishing it changes neither the focused session nor what the focused view shows, and the session list shows the finished session's new state. A failure of a non-focused run is reported under REQ-NOTIFY-032 and raises nothing under this requirement.
 
-**REQ-NOTIFY-032** — A run other than the focused one that fails raises a persistent notice of severity `warning` naming that session, carrying in its copyable detail the failure text exactly as the run reported it, and offering an action focusing that session. It replaces the completion notice of REQ-NOTIFY-031 rather than accompanying it.
+**REQ-NOTIFY-032** — A run other than the focused one that fails raises a persistent notice of severity `warning` naming that session, carrying in its copyable detail the failure text exactly as the run reported it, and offering an action focusing that session. It replaces the completion notice of REQ-NOTIFY-031 rather than accompanying it. It is the only notice such a failure raises: the classification of REQ-NOTIFY-060 still runs, setting the session's status and fixing the recovery that session will offer, but the classification's own error notice is not published while that session is not focused. Focusing that session publishes the classification notice for it, so the recovery affordances arrive with the focus change under REQ-NOTIFY-030 and two notices about one failure are never on screen at once. This notice's severity is `warning`, not `error`, because the work the user is looking at is unaffected; REQ-NOTIFY-065 governs error notices and does not reach this one.
 
 ### A9. What a notice can offer the user
 
-**REQ-NOTIFY-044** — A notice action comes from a fixed vocabulary, and activating one produces the stated result: focus a named session; initialize or resolve a project; install a pending update; open a named view; open settings at a named tab; open the hosted-cloud account surface; open the library at a named tab; restart after an update has been installed; retry the failed run under REQ-NOTIFY-045; revert a recorded proposal review decision; save settings. An action concerning a particular object — a session, a settings tab, a library tab, a proposal decision — carries that object's identity, and activating it acts on that object without asking the user anything further.
+**REQ-NOTIFY-044** — A notice action comes from a fixed vocabulary, and activating one produces the stated result: focus a named session; open the project-initialization surface for a named workspace; install a pending update; open a named view; open settings at a named category; open the hosted-cloud account surface; open the library at a named tab; restart after an update has been installed; retry the failed run under REQ-NOTIFY-045; revert a recorded proposal review decision; save settings. No action in this vocabulary writes into the user's project: the project action navigates only, and initialization itself is started from the surface it opens, per REQ-NOTIFY-047. The named view is one of the primary views fixed by REQ-SHELL-023, the named settings category is one of the identifiers fixed by REQ-CONFIG-269, and the named library tab is one of the tab names fixed by REQ-LIBRARY-103; this document adds no view, category or tab of its own, and an action naming a value outside the owning domain's vocabulary is not dispatched. An action concerning a particular object — a session, a workspace, a settings category, a library tab, a proposal decision — carries that object's identity, and activating it acts on that object without asking the user anything further.
 
 **REQ-NOTIFY-045** — Activating a retry action resubmits the current composer draft, or the last submitted prompt where the draft is empty.
 
@@ -165,7 +167,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-075** — A model chosen by hand in the recovery dialog that also fails authentication reopens the recovery dialog; the automatic fallback that already failed is not tried again.
 
-**REQ-NOTIFY-076** — The recovery dialog's second path re-authenticates the provider that failed. For key-based providers it offers a masked key field with a save-and-retry control enabled only while the field is non-blank. For browser and device-code providers it gives the instruction to run `rotaris-cli login {provider}` in a terminal and offers a control confirming that re-authentication has been done. Either submits a re-authentication request naming the provider, with an empty key for the external flows.
+**REQ-NOTIFY-076** — The recovery dialog's second path re-authenticates the provider that failed. For key-based providers it offers a masked key field with a save-and-retry control enabled only while the field is non-blank. For browser and device-code providers it starts that provider's own flow in place, on the terms of REQ-NOTIFY-202, and offers a control confirming that re-authentication has been completed. Either submits a re-authentication request naming the provider, with an empty key for the external flows. No path in this dialog directs the user to a shell, a terminal or a separate program.
 
 **REQ-NOTIFY-077** — A key that cannot be stored produces an error acknowledgement naming the storage failure. A run that cannot be restarted after successful re-authentication produces an error acknowledgement stating that.
 
@@ -187,7 +189,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-064** — A failure matching no earlier class raises an error notice stating that the run failed and that the session and the draft were kept, carrying the failure text as detail and offering an action returning to the workspace view.
 
-**REQ-NOTIFY-065** — Every error notice carries severity `error`, has its `persistent` flag set, and carries copyable detail. Producers include checkpoint listing and restore failure, context compression that did not complete, project-initialization failure, prompt-history save failure, run failure, slash-command failure, transcript-clear failure, update-install failure, version-control refresh failure, and worktree creation and deletion failure.
+**REQ-NOTIFY-065** — Every error notice carries severity `error`, has its `persistent` flag set, and carries copyable detail. Producers include checkpoint listing and restore failure, context compression that did not complete, project-initialization failure, prompt-history save failure, run-channel refresh failure, run failure, slash-command failure, transcript-clear failure, update-install failure, version-control refresh failure, and worktree creation and deletion failure. A run-channel refresh failure is reported here and on no other surface; the notice carries the session identifier of the channel that failed, and the values already displayed for that session are left standing rather than blanked, so a refresh that could not be completed never presents as a run with no state. This requirement governs error notices; the attention notice REQ-NOTIFY-032 raises about a run that is not focused is not one of them, and its severity is fixed there.
 
 **REQ-NOTIFY-066** — The composer draft is stored per workspace in the local application settings under the key `workspaces/{workspace_path}/composerDraft`. It survives failure, view changes and application restart, and remains available to the retry action of REQ-NOTIFY-045.
 
@@ -201,47 +203,49 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-105** — More than two consecutive activations with no intervening user instruction end the session. The stop is reported as an escalation naming three facts: the session, the number of consecutive activations, and that repeated looping caused it.
 
-**REQ-NOTIFY-106** — At most 2 seconds pass between a session's recent activity satisfying the criteria of REQ-NOTIFY-108 and the corrective message of REQ-NOTIFY-103 being present in that session's context.
+**REQ-NOTIFY-106** — At most 2 seconds pass between a session's recent activity satisfying the criteria of REQ-NOTIFY-108 and the corrective message of REQ-NOTIFY-103 being present in that session's context. That budget is end to end and binds every step inside it, the classification call included: the classifier is allowed whatever remains of the 2 seconds when it is dispatched, and exceeding that is a failed classification handled by REQ-NOTIFY-109 rather than a missed budget.
 
 **REQ-NOTIFY-107** — Supervision state belongs to one session and is never read or written by another.
 
-**REQ-NOTIFY-108** — A loop is declared primarily from repetition in the recent action sequence: by default, four consecutive actions of the same signature, or a cycle of two to four actions repeating three times. Volume serves only as a backstop, defaulting to 60 tool calls or 60 messages. Two combination modes are configurable: `independent`, the default, in which either signal declares a loop on its own; and `weighted`, in which tool activity weighs 0.6, message activity weighs 0.4, and a combined score of 1.0 declares a loop. At most the 24 most recent events and 8000 characters of transcript are examined.
+**REQ-NOTIFY-108** — An action's signature is a canonical serialisation of what that action did: for a tool call, the tool's name together with its argument object with keys ordered, runs of whitespace collapsed to one space, string values trimmed, and every string value cut to its first 200 characters; for an assistant message, the literal `message` together with the same canonicalisation of its text. Two actions have the same signature exactly where those serialisations are equal, so sameness is decided without interpreting what the action meant. A loop is declared primarily from repetition in the recent action sequence: by default, four consecutive actions of the same signature, or a cycle of two to four actions repeating three times. Volume serves only as a backstop, defaulting to 60 tool calls or 60 messages. Two combination modes are configurable: `independent`, the default, in which either signal declares a loop on its own; and `weighted`, in which tool activity weighs 0.6, message activity weighs 0.4, and a combined score of 1.0 declares a loop. At most the 24 most recent events and 8000 characters of transcript are examined.
 
 **REQ-NOTIFY-109** — Where the classifier call fails, the decision is made from the collected signals alone: a repetition trigger declares a loop; a volume trigger declares a loop only where repeated assistant messages or back-to-back invocations of the same tool corroborate it, and never from the counts by themselves.
 
 **REQ-NOTIFY-110** — A configuration setting turns supervision off. While it is off, a run proceeds with no corrective message injected, no loop escalation, and no supervision entry in the timeline or in diagnostics, and the absence is reported neither as an error nor as a degraded state. A configuration that omits the setting behaves as enabled. Changing the desktop's runtime toggle applies to runs started afterwards; a run already under way is unaffected.
 
-**REQ-NOTIFY-111** — A child task reporting a stuck condition it can recover from does not end as a failure: it receives a corrective instruction and resumes from where it stopped. The third such recovery within one child task escalates on the terms of REQ-NOTIFY-105. A child task reporting a condition it cannot recover from fails immediately, with no corrective attempt. Where no corrective instruction can be composed for a recoverable stuck condition, a fixed instruction addressing a repeated read-then-edit cycle is used in its place and the task continues.
+**REQ-NOTIFY-111** — A child task reporting a stuck condition it can recover from — one of the recovery-eligible conditions listed in REQ-NOTIFY-112 — does not end as a failure: it receives a corrective instruction and resumes from where it stopped. The third such recovery within one child task escalates on the terms of REQ-NOTIFY-105. A child task reporting a condition it cannot recover from fails immediately, with no corrective attempt. Where no corrective instruction can be composed for a recoverable stuck condition, a fixed instruction addressing a repeated read-then-edit cycle is used in its place and the task continues.
 
-**REQ-NOTIFY-112** — Separately from loop supervision, a child task ending in a recovery-eligible outcome receives at most one corrective message about its lack of progress. The count is per child task, so a second such message is never sent to the same child however often the outcome recurs. A child task on an answer-only route receives none.
+**REQ-NOTIFY-112** — An outcome is recovery-eligible exactly where the child did not reach `succeeded` and its last reported condition is one an instruction can address: it produced no output within `runtime.child_stall_timeout`; a single tool call or shell command exceeded its own bound under REQ-NOTIFY-100 while the child's own bound was still unspent; it reported incomplete work with its iteration allowance spent; or it repeated a read-then-edit cycle without producing a commit. Every other outcome is not recovery-eligible and earns no corrective message: `cancelled`; `blocked`; an authentication failure; a quota exhaustion; a refusal by the permission policy; a validation error in the task definition; and the child's own total bound `runtime.child_timeout` being exceeded. Separately from loop supervision, a child task ending in a recovery-eligible outcome receives at most one corrective message about its lack of progress. The count is per child task, so a second such message is never sent to the same child however often the outcome recurs. A child task on an answer-only route receives none.
 
 ### B4. Message limits
 
 **REQ-NOTIFY-244** — `message_limit` accepts a positive integer, or null or zero meaning disabled, which is the default.
 
-**REQ-NOTIFY-245** — The message count increases by one per completed orchestration iteration and is stored in session state, so it survives a crash and a reattachment. Iterations already counted are never put to the user again.
+**REQ-NOTIFY-245** — The message count increases by one per completed orchestration iteration and is stored in session state, so it survives a crash and a later reopening of the session. Iterations already counted are never put to the user again.
 
 **REQ-NOTIFY-246** — The limit is evaluated between iterations. While a run is paused at its limit, no model request is dispatched and no child task is spawned.
 
-**REQ-NOTIFY-247** — The interactive confirmation at the limit states the current count, the limit and the estimated token usage, and offers three actions: continue, bound to `c` and Enter; double the limit, bound to `d`; cancel the run, bound to `x` and Escape.
+**REQ-NOTIFY-247** — *Withdrawn.* Its only surface was a text-mode confirmation addressed by single-key bindings, which this product does not have; the confirmation at the message limit is carried by REQ-NOTIFY-266.
 
-**REQ-NOTIFY-248** — A background run pauses itself at the same boundary: the file `.message_limit_paused` is written in the session directory, the execution status becomes `paused_message_limit`, and the session stays paused indefinitely until reattached. Reattaching presents the confirmation at once, and a command-palette entry for continuing a paused session is enabled only in that state.
+**REQ-NOTIFY-248** — A background run pauses itself at the same boundary: the file `.message_limit_paused` is written in the session directory, the execution status becomes `paused_message_limit`, and the session stays paused indefinitely until the user acts on it. That status presents as `paused` under REQ-NOTIFY-049, so the session reads as paused rather than idle and is not busy under REQ-NOTIFY-050. Focusing such a session presents the confirmation of REQ-NOTIFY-266 at once, and a command-palette entry for continuing a paused session is enabled only in that state.
+
+**REQ-NOTIFY-266** — The confirmation at the message limit is a window-modal dialog belonging to the session that reached the limit. It states the current message count, the limit in force and the estimated token usage the run has accrued, and it offers exactly three choices as controls: continue the run, double the limit, and cancel the run. Initial keyboard focus rests on continuing; Escape performs cancelling the run and marks that control as destructive under REQ-NOTIFY-053. No choice is available by a bare single-letter keystroke. While the dialog stands the run remains paused, no model request is dispatched and no child task is spawned, per REQ-NOTIFY-246. A run other than the focused one reaching its limit raises a persistent `info` notice naming that session and offering an action focusing it, rather than opening the dialog over unrelated work.
 
 ### B5. Quota and usage limits
 
 **REQ-NOTIFY-081** — Usage-limit responses, HTTP 429 among them, are handled during execution and do not reach the user as a raw failure.
 
-**REQ-NOTIFY-082** — Where a model reports a usage limit and another model of the same tier is offered by a different provider, execution continues on that other model without asking the user. Tier is the role recorded for the exhausted model: `small_model`, `medium_model` or `large_model`. A candidate is a model whose recorded role equals the exhausted model's role and whose provider differs from the exhausted model's. Candidates are taken configured-first and then discovered, and a model present in both is considered once.
+**REQ-NOTIFY-082** — Where a model reports a usage limit and another model of the same tier is offered by a different provider, execution continues on that other model without asking the user. Tier is the role recorded for the exhausted model: `small_model`, `medium_model` or `large_model`. A candidate is a model whose recorded role equals the exhausted model's role and whose provider differs from the exhausted model's. Candidates are taken configured-first and then discovered, and a model present in both is considered once. Where the exhausted model carries no recorded role, or carries one outside those three, no candidate can equal it and the candidate set is empty: no role is inferred or guessed for it, no automatic fallback is attempted, and the run enters the wait state of REQ-NOTIFY-083 directly.
 
-**REQ-NOTIFY-083** — Where the fallback model also hits a limit, or where no fallback exists, the run is suspended in a wait state; it does not fail.
+**REQ-NOTIFY-083** — Where the fallback model also hits a limit, or where no fallback exists, the run is suspended in a wait state; it does not fail. The wait is presented, and the user's choices during it are offered, under REQ-NOTIFY-263.
 
 **REQ-NOTIFY-084** — Where the provider supplies retry-after or rate-limit-reset information, the resume time is taken from it, with a floor of 1 second. Accepted forms are an explicit retry-after value carrying a unit suffix for seconds or minutes, and the plain-language phrasing `try again in N <unit>`; minute units are converted to seconds.
 
 **REQ-NOTIFY-085** — With no usable retry-after information, the wait is computed locally and determined entirely by the attempt number, with no randomisation: 60 seconds for the first attempt, doubled for each further attempt, capped at 300 seconds.
 
-**REQ-NOTIFY-086** — While suspended, the interactive host offers three choices and no others: keep waiting, bound to Escape and `W`; change model, bound to `M`; cancel the run, bound to `C`. A help line names all three.
+**REQ-NOTIFY-086** — *Withdrawn.* Its only surface was a full-screen text-mode host addressed by single-key bindings, which this product does not have; the quota-wait decision surface is carried by REQ-NOTIFY-263.
 
-**REQ-NOTIFY-087** — Where auto-resume is permitted, the wait ends by itself once the computed interval has elapsed, and execution retries. Where auto-resume is not permitted, the wait continues until the user decides.
+**REQ-NOTIFY-087** — Where auto-resume is permitted, the wait ends by itself once the computed interval has elapsed, and execution retries. Where auto-resume is not permitted, the wait continues until the user decides, through the choices REQ-NOTIFY-263 offers.
 
 **REQ-NOTIFY-088** — A structured provider quota-exhaustion error — `insufficient_quota` or `insufficient-quota`, or plain-language exhaustion such as an exceeded current quota or a direction to check plan and billing — marks that provider and model exhausted for the rest of the session. Auto-resume onto it is refused, and recovery requires a different eligible model or an explicit choice by the user.
 
@@ -255,11 +259,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-093** — On the desktop, a quota or rate-limit condition that ends a run is reported through the failure classification of REQ-NOTIFY-062 and REQ-NOTIFY-063.
 
+**REQ-NOTIFY-263** — A run suspended in the quota wait of REQ-NOTIFY-083 is presented as waiting, never as failed and never as idle. Its normalised lifecycle state stays `running`, so the run stays busy under REQ-NOTIFY-050 and the composer stays locked under REQ-NOTIFY-051. The run header states that the run is waiting on a provider limit; names the provider and the model whose limit was reached; states whether that provider is marked exhausted under REQ-NOTIFY-088; and, where a resume time is known under REQ-NOTIFY-084 or REQ-NOTIFY-085, counts the remaining time down continuously rather than only when a new event arrives. Where auto-resume is not permitted it states instead that the run resumes only when the user decides. Exactly three choices are offered, as controls in that header and on no other surface: keep waiting, change model, and cancel the run. Changing model opens the model list of REQ-NOTIFY-074 and pins the chosen model for the session under REQ-NOTIFY-089. This holds for every session and not only the focused one, so a background run in a quota wait is visibly waiting without being focused first.
+
 ### B6. Run lifecycle vocabulary and run controls
 
 **REQ-NOTIFY-048** — One normalised lifecycle vocabulary reaches the screen, its members being `cancelled`, `cancelling`, `completed`, `failed`, `idle`, `paused`, `pausing`, `running` and `starting`. A raw backend or persisted status string is never rendered.
 
-**REQ-NOTIFY-049** — A status recorded by a backend or read from persisted state is presented through that vocabulary as follows: a value already in the vocabulary presents as itself; `attached` and `background` present as `running`; `succeeded` and `done` present as `completed`; `error` presents as `failed`; `interrupted` presents as `idle`, consistent with a repaired session presenting as not busy under REQ-NOTIFY-151 and REQ-NOTIFY-160. Any other value presents as `idle`.
+**REQ-NOTIFY-049** — A status recorded by a backend or read from persisted state is presented through that vocabulary as follows: a value already in the vocabulary presents as itself; `attached` and `background` present as `running`; `succeeded` and `done` present as `completed`; `error` presents as `failed`; `paused_message_limit` presents as `paused`, so a run stopped at its message limit reads as paused rather than idle and the continuation offered by REQ-NOTIFY-266 is consistent with what the screen says; `interrupted` presents as `idle`, consistent with a repaired session presenting as not busy under REQ-NOTIFY-151 and REQ-NOTIFY-160. Any other value presents as `idle`.
 
 **REQ-NOTIFY-050** — A run is busy while its normalised state is `starting`, `running`, `pausing` or `cancelling`.
 
@@ -279,7 +285,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-058** — A run starting sets its session status to running, clears any notice that is unscoped or scoped to that same session, records the sandbox verdict for that session, attaches its output streams and shows the workspace view.
 
-**REQ-NOTIFY-059** — The focused run reaching `completed` raises a persistent success notice inviting review of the transcript and the session artifacts, with an action opening the artifacts library. Any other terminal status of the focused run produces only a transient acknowledgement naming that status; the failure detail arrives through the classification of REQ-NOTIFY-060.
+**REQ-NOTIFY-059** — The focused run reaching `completed` raises a persistent success notice inviting review of the transcript and the session artifacts, with an action opening the artifacts library. The terminal members of the vocabulary of REQ-NOTIFY-048 are exactly `cancelled`, `completed` and `failed`. `failed` raises nothing under this requirement; its detail arrives through the classification of REQ-NOTIFY-060. `cancelled` produces only a transient acknowledgement naming that status. A focused run coming to rest in `idle` or `paused`, neither of which is terminal, likewise produces only a transient acknowledgement naming that status, except where another requirement of this document fixes a different report for that condition, as REQ-NOTIFY-266 does at the message limit. Every state a run comes to rest in is therefore reported exactly once.
 
 ### B7. Transient failures and bounded operations
 
@@ -291,11 +297,11 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-097** — Where the transient retry bound is spent, or the failure was never transient, the child task fails as an orchestration outcome in its own right — not as a crash of the scheduler, and not silently.
 
-**REQ-NOTIFY-098** — A provider refusing a requested structured-output format does not fail the operation: the operation completes in the next format that provider accepts, and no error about the refusal reaches the user. Within one run of the application, a format a given model has already refused is not requested from that model again. A restarted application requests the preferred format from that model once more, with no user action.
+**REQ-NOTIFY-098** — Structured output is requested in one fixed order of preference: a provider-native response schema the provider itself enforces; a tool call whose parameters carry the schema; a provider JSON-object mode carrying no schema; and finally a plain text response parsed against the schema. A provider refusing a requested structured-output format does not fail the operation: the operation completes in the next format in that order that provider accepts, and no error about the refusal reaches the user. Where the last format in the order is also refused, the operation fails as an ordinary failure and is reported as one. Within one run of the application, a format a given model has already refused is not requested from that model again. A restarted application requests the preferred format from that model once more, with no user action.
 
 **REQ-NOTIFY-099** — Where a model produces no event within `runtime.llm_response_timeout`, default 120 seconds and no lower than 30, the model is treated as unresponsive and the persona-level fallback model is activated where one is configured. The child task continues rather than being terminated.
 
-**REQ-NOTIFY-100** — Seven operations are bounded independently, and each bound can be changed without changing another: a child task's total run, `runtime.child_timeout`, default 1200 s; a child task producing no output, `runtime.child_stall_timeout`, default 90 s; one tool call, 30 s; one shell command, 100 s; generating a summary, 120 s; a loop-classification call, 20 s; post-run improvement analysis, `runtime.improvement_collector_timeout`, default 60 s. Exceeding a bound ends only the operation that bound governs, and the result is reported as that operation's own timeout rather than as a failure of the run containing it. `runtime.auto_retries_validation` defaults to 0, so by default a validation failure is reported once and the validation is not repeated.
+**REQ-NOTIFY-100** — Seven operations are bounded independently, and each bound can be changed without changing another: a child task's total run, `runtime.child_timeout`, default 1200 s; a child task producing no output, `runtime.child_stall_timeout`, default 90 s; one tool call, `runtime.tool_call_timeout`, default 30 s; one shell command, `runtime.shell_command_timeout`, default 100 s; generating a summary, `runtime.summary_timeout`, default 120 s; a loop-classification call, `runtime.loop_classification_timeout`, default 2 s and never more than what remains of the activation budget of REQ-NOTIFY-106; post-run improvement analysis, `runtime.improvement_collector_timeout`, default 60 s. Exceeding a bound ends only the operation that bound governs, and the result is reported as that operation's own timeout rather than as a failure of the run containing it. `runtime.auto_retries_validation` defaults to 0, so by default a validation failure is reported once and the validation is not repeated.
 
 **REQ-NOTIFY-101** — Where intent classification times out, fails, or returns a value with no mapping, a generic default intent is used and the run continues. Classification failure never stops a run.
 
@@ -353,7 +359,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-136** — A change that weakens a gate — dropping a role, lowering a severity, emptying the suite — is outside the authority of every automatic path and becomes an approval-gated improvement proposal. Repeat proposals for the same change are collapsed into one.
 
-**REQ-NOTIFY-137** — While a workspace declares no quality gate, work still completes, and every report of the run states the gap: the child report records that no gate is established, and the run header and the session summary each display a warning for as long as that holds. Every surface displays the identical sentence, character for character, and no surface composes wording of its own. Two sentences exist: one used where a gate-authoring note was found in the workspace, which cites that note, and one used where none was found. Each states that this workspace has no quality gate and how the user declares one through `verifier.checks`, or states that nothing verified this run.
+**REQ-NOTIFY-137** — While a workspace declares no quality gate, work still completes, and every report of the run states the gap: the child report records that no gate is established, and the run header and the session summary each display a warning for as long as that holds. Every surface displays the identical sentence, character for character, and no surface composes wording of its own. Two sentences exist: one used where a gate-authoring note was found in the workspace, which cites that note, and one used where none was found. A gate-authoring note is exactly the artifact that gate authoring under REQ-NOTIFY-138 wrote into the workspace proposing a quality gate that has not yet been applied; it counts as found where that artifact exists and parses, and nothing else in the workspace counts as one. No file authored by the workspace's own contributors is read for this purpose, so the sentence a user sees never depends on how their repository happens to be documented. Each states that this workspace has no quality gate and how the user declares one through `verifier.checks`, or states that nothing verified this run.
 
 **REQ-NOTIFY-138** — For a workspace with no project yet, the missing-gate warning is empty rather than displayed. Setting `verifier.checks` to an empty list ends the warning permanently; setting it to a non-empty suite ends gate authoring. `verifier.author_gate`, default true, switches gate authoring off; while off, every gate write is routed to an approval proposal.
 
@@ -383,7 +389,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-191** — Preview lines, and the per-path verb in each of them, come from the engine. The presentation layer renders them as given and derives no verb of its own from a status letter.
 
-**REQ-NOTIFY-192** — A request to list checkpoints made while the checkpoint channel is occupied is re-attempted every 150 ms until it can be served, and is not reported as a failure. Preview and restore each display a window-modal progress dialog naming the operation and the checkpoint it concerns, showing indeterminate progress, offering no cancel control, and carrying an accessible name identifying it as checkpoint progress.
+**REQ-NOTIFY-192** — A request to list checkpoints made while the checkpoint channel is occupied is re-attempted every 150 ms for at most 10 seconds, and while it is being re-attempted it is not reported as a failure. Where the channel has not become free within that bound, the request stops and the listing is reported as a failed listing under REQ-NOTIFY-195, its detail stating that the checkpoint channel stayed occupied. The request is never re-attempted without a bound, so the user is never left with an indicator that does not resolve. Preview and restore each display a window-modal progress dialog naming the operation and the checkpoint it concerns, showing indeterminate progress, offering no cancel control, and carrying an accessible name identifying it as checkpoint progress.
 
 **REQ-NOTIFY-193** — Three refusals produce acknowledgements: a restore attempted with no workspace open produces an error acknowledgement saying so; a restore attempted while checkpoints are still being read produces an acknowledgement asking the user to try again shortly; a failed inspection produces an error acknowledgement stating that the checkpoint could not be inspected.
 
@@ -407,7 +413,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-164** — The delivery item moves from running to blocked, attributed to a system recovery actor, with a run-failure cause and a reason stating that the run's process is gone and naming the ISO timestamp since which nothing has owned the work.
 
-**REQ-NOTIFY-165** — The recovery pass produces the same result when run again, and returns one sentence per freed requirement in the form `{requirement_id}: Running → Blocked — {reason}`.
+**REQ-NOTIFY-165** — The recovery pass produces the same result when run again, and reports one entry per freed requirement naming that requirement, the state it left, the state it was moved to, and the reason recorded under REQ-NOTIFY-164. Those four facts are required; their wording and their arrangement are the implementation's. The report is displayed in the view from which the pass was requested and its detail is copyable under REQ-NOTIFY-038.
 
 **REQ-NOTIFY-166** — Where a session store cannot be opened, or a liveness probe raises, every session is reported live and no correction is made.
 
@@ -417,7 +423,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 ### D3. Sessions left by a stopped process: detection
 
-**REQ-NOTIFY-146** — A session whose process stops without writing a terminal execution status keeps the status it last wrote. Until it is repaired it reads as active, and every operation requiring a non-busy session — a checkpoint restore, a worktree integration, a session-list action — sees it as busy.
+**REQ-NOTIFY-146** — A session whose process stops without writing a terminal execution status keeps the status it last wrote. Until it is repaired it reads as active, and every operation requiring a non-busy session — a checkpoint restore, a session-list action — sees it as busy. This states how the unrepaired session reads; it does not state a gate. Worktree integration is the one operation exempt from it, and the integration precondition is bound by REQ-NOTIFY-159 alone.
 
 **REQ-NOTIFY-147** — A session is live exactly where its `lock` file exists and the process id recorded in that file is alive.
 
@@ -435,11 +441,11 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-152** — A repair files a warning-severity diagnostics timeline entry attributed to the system actor, naming the previous status and the reason the session was judged not live, and stating that the status was set to `interrupted`.
 
-**REQ-NOTIFY-153** — A session is repaired only when a repair is requested. Requesting a repair of a session that is live, one already carrying a terminal status, or one whose files cannot be read or written leaves it exactly as it was, and is reported as nothing to do — not as an error, and never through an error notice. Requesting it again after a successful repair changes nothing further. A repair can be requested over a whole workspace at once, in which case every session reading stale is repaired and each repaired session is reported on its own line under REQ-NOTIFY-155.
+**REQ-NOTIFY-153** — A session is repaired only when a repair is requested. Requesting a repair of a session that is live, one already carrying a terminal status, or one whose files cannot be read or written leaves it exactly as it was, and is reported as nothing to do — not as an error, and never through an error notice. Requesting it again after a successful repair changes nothing further. A repair can be requested over a whole workspace at once, in which case every session reading stale is repaired and each repaired session is reported separately under REQ-NOTIFY-264.
 
-**REQ-NOTIFY-155** — Both command-line clients offer `sessions --repair`, described as marking every session whose process died as interrupted so its checkpoints can be restored and its workspace integrated again. It prints one line per repaired session in the form `repaired {id}  {old_status} -> interrupted  ({reason})`, or a single sentence stating that no session was left marked as running by a stopped process.
+**REQ-NOTIFY-155** — *Withdrawn.* Its only surface was a command-line subcommand and a line-oriented output format written for a shell, neither of which this product has; the workspace-wide repair capability and its per-session report are carried by REQ-NOTIFY-264.
 
-**REQ-NOTIFY-156** — The plain session listing appends a stale marker to the status of a stale session.
+**REQ-NOTIFY-156** — The session list marks a stale session as stale, in addition to the status it presents under REQ-NOTIFY-049, so a session left behind by a stopped process is distinguishable from one that never ran without the user opening or querying anything. The marker is not carried by colour alone and is exposed in the row's accessible name.
 
 **REQ-NOTIFY-157** — The desktop treats a stale session as not running and repairs it on the user's action path: where a checkpoint listing shows a session as busy while the process probe reports its process dead, a repair is requested, and is skipped where the repair channel is already busy. On repair, a persistent warning notice states the previous status, the reason, and that the session was marked interrupted so its checkpoints can be restored again, and the session list is refreshed. Afterwards, checkpoints are available, the persisted status reads `interrupted`, and the `lock` file is gone.
 
@@ -447,7 +453,9 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-159** — A stale session does not block a worktree integration: the integration's precondition check does not treat it as busy, and the integration proceeds. That check repairs nothing and writes nothing — after it has run, the session's recorded execution status, its `lock` file and its timeline are exactly as they were.
 
-**REQ-NOTIFY-160** — A repaired session presents as not busy. An interrupted session and one that never ran may present alike in the normalised lifecycle vocabulary.
+**REQ-NOTIFY-160** — A repaired session presents as not busy. In the normalised lifecycle vocabulary an interrupted session and one that never ran both present as `idle`; no member is added to that vocabulary for `interrupted`, so the busy test of REQ-NOTIFY-050 stays over the nine members of REQ-NOTIFY-048. The two are still told apart on the session list, where a session whose persisted execution status is `interrupted` carries a marker saying so, drawn on the same terms as the stale marker of REQ-NOTIFY-156 and never by colour alone.
+
+**REQ-NOTIFY-264** — Repair over a whole workspace is reachable from the session list, which offers one action repairing every session that reads stale, described as marking every session whose process died as interrupted so its checkpoints can be restored and its workspace integrated again. The action reports, for each session it repaired, that session's identity, the status it previously carried and the reason it was judged not live; where it repaired nothing it states that no session was left marked as running by a stopped process, and that is not reported as an error. The report is readable after the action finishes and its detail is copyable under REQ-NOTIFY-038. Its wording is the implementation's; the facts it names are not. Requesting it again immediately afterwards repairs nothing further and reports the same nothing-to-do outcome, per REQ-NOTIFY-153.
 
 ### E1. Board refusals, blockers and standing banners
 
@@ -459,17 +467,17 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-181** — Each standing feedback entry renders as its own persistent banner with its own severity and its own dismiss control, whose accessible name identifies the requirement whose feedback it dismisses.
 
-**REQ-NOTIFY-182** — Five kinds of blocker exist, each with a defined display and a defined way for the user to answer it. A conflict blocker shows both conflicting requirements together and lets the user choose one of them or open either. A decision blocker shows the question and, for each option, what choosing it leads to, and lets the user choose one. A dependency blocker shows what is being waited for and lets the user open it. A person-stated blocker shows the reason that person recorded and lets the user resume from the point at which the block was raised. A run-failure blocker shows the reason the run gave and lets the user open that run.
+**REQ-NOTIFY-182** — Five kinds of blocker exist, each with a defined display and a defined way for the user to answer it. A conflict blocker shows both conflicting requirements together and lets the user choose one of them or open either. A decision blocker shows the question and, for each option, what choosing it leads to, and lets the user choose one. A dependency blocker shows what is being waited for and lets the user open it. A person-stated blocker shows the reason that person recorded and lets the user resume from the point at which the block was raised. A run-failure blocker shows the reason the run gave and lets the user open that run. A blocker whose kind is none of these five is still displayed and is never hidden or presented as unblocked: it shows the reason recorded on it word for word under REQ-NOTIFY-183, states that its kind is not one for which the board defines an answer, and offers exactly one thing to do — opening the requirement it blocks, so the user can act there. It offers no choice, because none is defined for it, and the board invents none.
 
 **REQ-NOTIFY-183** — A blocker's reason, its question and the consequence of each of its options are displayed word for word as supplied, and the board substitutes no wording of its own. Answering a blocker does not itself perform the work: the answer is submitted as an ordinary board change, subject to the same validation and the same refusal feedback as any other board change under REQ-NOTIFY-178. The requirement then resumes from the state recorded when it was blocked.
 
-**REQ-NOTIFY-184** — A blocker offering the user no choice is still displayed, and still offers at least one thing to do: a blocker waiting on a dependency offers to open that dependency, and a run failure with no retries left offers to open the failed run.
+**REQ-NOTIFY-184** — A blocker offering the user no choice is still displayed, and still offers at least one thing to do: a blocker waiting on a dependency offers to open that dependency, a run failure with no retries left offers to open the failed run, and a blocker of an unrecognised kind offers to open the requirement it blocks.
 
 **REQ-NOTIFY-185** — Three further board surfaces exist: a banner listing blocked requirements with a per-row control returning each one; a banner narrating a running board-wide verification pass through the inline progress meter of REQ-NOTIFY-043 with a percentage and a counted label, carrying no action, dismiss or copy control; and a banner offering adoption of newly discovered requirements, whose dismissal means the finding is put away.
 
 **REQ-NOTIFY-186** — The board renders verdicts produced elsewhere and derives none of its own.
 
-**REQ-NOTIFY-187** — Evidence recorded for a requirement reads stale as soon as either value it was recorded against under REQ-NOTIFY-176 stops matching: the recorded commit is no longer the requirement's current commit, or the recorded requirement-text hash differs from the hash of the requirement's current text. Either one alone suffices, so evidence can go stale without the requirement's own text having changed. Stale evidence is never displayed as passing, and detecting it changes the affected requirement's status rather than leaving it untouched.
+**REQ-NOTIFY-187** — Evidence recorded for a requirement reads stale as soon as either value it was recorded against under REQ-NOTIFY-176 stops matching: the recorded commit is no longer the requirement's current commit, or the recorded requirement-text hash differs from the hash of the requirement's current text. Either one alone suffices, so evidence can go stale without the requirement's own text having changed. Stale evidence is never displayed as passing, and detecting it changes the affected requirement's status rather than leaving it untouched: the requirement's delivery state moves to `needs-update` in the vocabulary REQ-TRACE-232 fixes, and it stays there until verification runs again and records fresh evidence. While that re-verification is outstanding the earlier evidence stays on screen marked stale, together with which of the two recorded values stopped matching; it is neither removed nor rewritten, so the user can see what was verified and why it no longer counts.
 
 ### E2. Requirement units: failure and bounded retry
 
@@ -483,9 +491,9 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-173** — Re-queuing a unit for retry increases its retry count and leaves the previous failure reason readable on the unit.
 
-**REQ-NOTIFY-174** — A unit failure produces a single-line message in the form `{requirement}/{unit}: attempt {n} failed ({used}/{limit} retries used) — {reason}; work kept at {worktree_path}`.
+**REQ-NOTIFY-174** — A unit failure produces one message naming six facts: the requirement, the unit, which attempt failed, how many retries of the bound have been used and what the bound is, the failure reason required by REQ-NOTIFY-169, and the path at which the unit's work was kept under REQ-NOTIFY-170. All six are required; their wording and their arrangement are the implementation's. The message is displayed wherever the unit appears and its detail is copyable under REQ-NOTIFY-038.
 
-**REQ-NOTIFY-175** — A unit reads as complete only where every one of the following is recorded as met: its tests were updated and executed; its work is traceable to the requirement it implements; its worktree is clean; its authorship is attributed; and no known drift remains. Values for these supplied in model output are discarded before the result is recorded. A unit whose tool calls the permission policy refused and which produced no commits reads as failed and names the refused tools; it never reads as succeeded. A result meeting some but not all of these conditions names each unmet condition separately.
+**REQ-NOTIFY-175** — A unit reads as complete only where every one of the following is recorded as met: its tests were updated and executed; its work is traceable to the requirement it implements; its worktree is clean; its authorship is attributed; and no known drift remains. Known drift is exactly the staleness conditions of REQ-NOTIFY-187 evaluated against the unit's own recorded evidence — the recorded commit no longer being the requirement's current commit, or the recorded requirement-text hash differing from the hash of the requirement's current text — together with any traceability link the unit recorded that no longer resolves. No known drift remains exactly where none of those holds at the moment the unit's result is recorded. Values for these supplied in model output are discarded before the result is recorded. A unit whose tool calls the permission policy refused and which produced no commits reads as failed and names the refused tools; it never reads as succeeded. A result meeting some but not all of these conditions names each unmet condition separately.
 
 **REQ-NOTIFY-176** — A unit's verification runs against that unit's own worktree rather than the main workspace, so changes made in the main workspace after that worktree was created do not alter the unit's verdict. The evidence recorded names the commit the verification ran against and a hash of the requirement text it verified, and both are readable from that evidence afterwards.
 
@@ -495,13 +503,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-223** — A lifecycle-hook advisory raised during a run becomes a persistent warning notice whose title states that hooks need attention, carrying the engine's message and an action opening hook settings.
 
-**REQ-NOTIFY-224** — Where a workspace declares hooks the user has not reviewed, a persistent warning notice states how many are unreviewed, states that workspace hooks run shell commands supplied by the repository's own authors, states that those hooks stay skipped until the user reviews and allows them, and offers an action opening the review. While that condition holds, the notice is published once. The review dialog never opens by itself at startup; it opens when the user asks for it.
+**REQ-NOTIFY-224** — Where a workspace declares hooks the user has not reviewed, a persistent warning notice states how many are unreviewed, states that workspace hooks run shell commands supplied by the repository's own authors, states that those hooks stay skipped until the user reviews and allows them, and offers an action opening the review. Within one application session the notice is published once for each pair of workspace and declared hook set, the set identified by the fingerprint REQ-HOOKS-092 records: a change to the declared set forms a new pair and publishes again, and a new launch publishes again while the condition still holds. Because notices are not persisted (REQ-NOTIFY-027), nothing about this suppression survives a restart. The review dialog never opens by itself at startup; it opens when the user asks for it.
 
 **REQ-NOTIFY-225** — Both allow and refuse verdicts are persisted, so a refusal holds and the next session does not ask again.
 
 **REQ-NOTIFY-226** — A hook's command text is displayed only inside the review dialog the user opened. It appears in no notice, acknowledgement, tab, tooltip or other surface, and once that dialog is closed it is displayed nowhere.
 
-**REQ-NOTIFY-227** — Hook trust is reported by exactly one of four statements, exactly one of which applies at any moment: the workspace declares no hooks; it declares hooks that have not been reviewed, stating how many under REQ-NOTIFY-224; its hooks have been reviewed and allowed; its hooks have been reviewed and refused. Every surface reporting hook trust uses these four and adds no fifth.
+**REQ-NOTIFY-227** — Hook trust is reported by exactly one of four statements, exactly one of which applies at any moment: the workspace declares no hooks; it declares hooks that have not been reviewed, stating how many under REQ-NOTIFY-224; its hooks have been reviewed and allowed; its hooks have been reviewed and refused. Every surface reporting hook trust uses these four and adds no fifth. A recorded decision covers exactly the hook set it was recorded against, identified by the fingerprint of REQ-HOOKS-092, and adding, removing, altering or reordering a hook invalidates it under REQ-HOOKS-095. A workspace that gains a further hook after a review therefore reports the second statement, over the whole current set, and the count REQ-NOTIFY-224 states is the size of that set rather than of the part added since. No mixed statement exists, because no partial approval exists.
 
 **REQ-NOTIFY-228** — Where a workspace declares no hooks of its own, an acknowledgement states that plainly instead of an empty list being shown.
 
@@ -517,15 +525,19 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-240** — Setup records completed steps and resumes at the first incomplete step after a crash or a cancellation; it runs once, with per-tool top-ups afterwards; it verifies downloads by checksum; and it never requests elevated privileges.
 
-**REQ-NOTIFY-241** — The command-line client mirrors setup headlessly through `rotaris-cli setup`, printing one line per step and exiting with a non-zero status on failure.
+**REQ-NOTIFY-241** — *Withdrawn.* Its only surface was a headless command-line invocation reporting through stdout and an exit status, neither of which this product has; re-running and inspecting machine setup after first run is carried by REQ-NOTIFY-265.
 
 **REQ-NOTIFY-242** — A configured MCP server reports health as one of `checking`, `healthy`, `unknown` or `unreachable`, with a detail string and an optional tool count. Probes run one per server, sequentially, on a background worker, so an unreachable server is one degraded row rather than a settings view that stops responding.
+
+**REQ-NOTIFY-265** — Machine setup is reachable after first run, not only during it. Settings offers a setup surface listing every managed step with its recorded outcome, so a user who chose to carry on without a tool under REQ-NOTIFY-237 can see which feature is degraded and why. Each step offers running it again on its own, on the terms of REQ-NOTIFY-236, and each such run reports the tool, the command, the exit status and the reason within that surface without publishing a notice. Running one step again never re-runs a step that already completed, and the resumable state of REQ-NOTIFY-240 is what the surface reads and updates.
+
+**REQ-NOTIFY-267** — A diagnostics view that cannot read or render its own data reports that within itself and nowhere else. It presents the failure as that region's empty condition under REQ-NOTIFY-006: one plain sentence stating that the session's diagnostics could not be read, the underlying reason in a copyable detail block under REQ-NOTIFY-005 and REQ-NOTIFY-038, and a control re-reading them. It publishes no notice and no acknowledgement, because the user is already looking at the surface that failed. A record it can read but cannot render is skipped and counted rather than failing the view: the remaining records are displayed and one line states how many were unreadable. An empty diagnostics log and an unreadable one are never presented alike.
 
 **REQ-NOTIFY-243** — Each of the following costs one feature rather than the application. A missing or unrenderable brand image is replaced by a drawn single-letter mark. A model absent from the context-length registry has its input passed through untruncated, with no default length invented for it. A demo configuration with no persistence service turns each persistence-touching action into an error acknowledgement stating that the action is unavailable in that mode. Legacy whole-state session files remain loadable. Where a provider SDK's exception types are unavailable, error classification falls back to matching failure text under REQ-NOTIFY-067, REQ-NOTIFY-091 and REQ-NOTIFY-094. A malformed skill definition produces a warning and session startup continues. Streaming Markdown renders partial input as readable text and resolves to the correct final rendering once the remainder arrives. `runtime.terminal_stream_enabled` set false costs the live view while the command still runs and still reports its result. A missing or foreign traceability baseline is reported as there being no baseline.
 
 ### F3. Project initialization
 
-**REQ-NOTIFY-229** — Project initialization presents all six conditions of REQ-NOTIFY-001: never initialized, listing the tasks that are pending; running; resolved with at least one completed task, as the result condition; resolved with nothing pending and nothing applicable, as the empty condition; a recorded last error alongside tasks still pending, as the actionable failure, where the retry offered re-runs exactly those pending tasks and nothing already completed; and an initialization run that itself failed, as the non-actionable failure, reported as a persistent error notice with copyable detail under REQ-NOTIFY-233 and REQ-NOTIFY-235.
+**REQ-NOTIFY-229** — Project initialization presents all six conditions of REQ-NOTIFY-001: never initialized, listing the tasks that are pending; running; resolved with at least one completed task, as the result condition; resolved with nothing pending and nothing applicable, as the empty condition; a recorded last error alongside tasks still pending, as the actionable failure, where the retry offered re-runs exactly those pending tasks and nothing already completed, and is offered inside the project-initialization surface rather than on a notice, a notice concerning initialization offering only the action that opens that surface; and an initialization run that itself failed, as the non-actionable failure, reported as a persistent error notice with copyable detail under REQ-NOTIFY-233 and REQ-NOTIFY-235.
 
 **REQ-NOTIFY-230** — The initialization prompt is raised only for tasks requiring a human answer. Deterministic background tasks never raise it, and it is never raised while initialization is already running.
 
@@ -543,13 +555,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-199** — Local authentication status is checked, and a provider reporting credentials is validated by calling a free capability endpoint — model discovery, or that provider's equivalent — rather than being trusted.
 
-**REQ-NOTIFY-200** — A provider's status indicator reads exactly one of seven states — `checking`, `coming_soon`, `error`, `healthy`, `unauthenticated`, `unknown`, `warning` — each carrying its own text label distinct from the other six, so the state is readable without colour. A provider reads `healthy` only after the capability call of REQ-NOTIFY-199 has succeeded for it within the current check; one not yet checked reads `unknown`; one being checked reads `checking`; one whose credentials the provider rejected reads `unauthenticated`. A stored credential on its own never makes a provider read `healthy`.
+**REQ-NOTIFY-200** — A provider's status indicator reads exactly one of seven states — `checking`, `coming_soon`, `error`, `healthy`, `unauthenticated`, `unknown`, `warning` — each carrying its own text label distinct from the other six, so the state is readable without colour. A provider reads `healthy` only after the capability call of REQ-NOTIFY-199 has succeeded for it within the current check; one not yet checked reads `unknown`; one being checked reads `checking`; one whose credentials the provider rejected reads `unauthenticated`. A stored credential on its own never makes a provider read `healthy`. The remaining three have entry conditions of their own. A provider reads `coming_soon` where the runtime provider catalog of REQ-NOTIFY-210 declares it announced but not yet connectable; no authentication is offered for it and no capability call is made. It reads `error` where the capability call of REQ-NOTIFY-199 could not be completed for a reason other than the provider rejecting the credential — a network failure, a timeout, a malformed response, or a fault the provider reported about itself. It reads `warning` where that call succeeded but the provider is usable only in part: it reported one or more models unavailable under REQ-NOTIFY-205, its subscription or credit read failed under REQ-NOTIFY-207, or it is marked exhausted for the session under REQ-NOTIFY-088. Where more than one condition holds, the state shown is the first that applies in this order: `coming_soon`, `checking`, `unauthenticated`, `error`, `warning`, `healthy`, `unknown`.
 
 **REQ-NOTIFY-201** — Each provider row offers authenticating or re-authenticating and logging out, and logging out is confirmed first.
 
-**REQ-NOTIFY-202** — Authentication uses a modal that either prompts for an API key without echoing it or presents device-code or browser instructions, validates the credential before saving it, and persists discovered models as the command-line login does. Device and browser instructions include the target URL rendered as an activatable link and the code to enter, and state that the browser may have opened already.
+**REQ-NOTIFY-202** — Authentication uses a modal that either prompts for an API key without echoing it or presents device-code or browser instructions, validates the credential before saving it, and persists the models it discovered while validating. Device and browser instructions include the target URL rendered as an activatable link and the code to enter, and state that the browser may have opened already.
 
-**REQ-NOTIFY-203** — Network and authentication work runs off the interface thread. Every exception it raises is surfaced to the user, and failures appear in the provider's own row or in the modal that triggered them, never as an application-level crash and never as a silent no-op.
+**REQ-NOTIFY-203** — Network and authentication work runs off the interface thread. Every exception it raises is surfaced to the user, and failures appear in the provider's own row or in the modal that triggered them, never as an application-level crash and never as a silent no-op. Such a failure names three facts: the provider it concerns; the operation that was attempted, being one of a health check, an authentication, a logout or a model discovery; and the reason, with the provider's or the transport's own text reproduced rather than paraphrased, on the terms of REQ-NOTIFY-005. Those three facts are required; the wording that carries them and their arrangement within the row or the modal are the implementation's.
 
 **REQ-NOTIFY-204** — A status line reporting a failure still reads as a failure after the colour theme changes while it is on screen: both its wording and its failure presentation survive the change, and a visible error is never repainted as an ordinary progress message.
 
@@ -561,7 +573,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-208** — An empty provider list shows a quick-start empty state carrying a per-provider quick-start destination.
 
-**REQ-NOTIFY-209** — Hosted-cloud credit is displayed in each of its four phases — `error`, `loading`, `ready`, `signed_out` — and none of the four renders as blank or as an absence. In the ready phase the balance carries one of four labels: Funded, Out of credit, Overdrawn, Unknown state. A ready balance that cannot fund the next call is displayed as unable to proceed rather than as funded. A failed read displays its technical detail in copyable form rather than a paraphrase of it. The balance is displayed as an absolute amount of credit, never as a percentage or a proportional meter.
+**REQ-NOTIFY-209** — Hosted-cloud credit is displayed in each of its four phases — `error`, `loading`, `ready`, `signed_out` — and none of the four renders as blank or as an absence. In the ready phase the balance carries exactly one of four labels and there is no fifth: Funded where the balance can fund the next call; Out of credit where it is zero, or above zero yet insufficient to fund the next call; Overdrawn where it is below zero; Unknown state where whether it can fund the next call cannot be determined. A ready balance that cannot fund the next call therefore reads Out of credit or Overdrawn and never Funded. A failed read displays its technical detail in copyable form rather than a paraphrase of it. The balance is displayed as an absolute amount of credit, never as a percentage or a proportional meter.
 
 **REQ-NOTIFY-210** — Provider identity used by settings and by the authentication and quota recovery surfaces — connection mode, destination, operator, privacy information — comes from one runtime provider catalog, and from no second list held in the interface.
 
@@ -581,7 +593,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-217** — The update notice's identifier is retained, so dismissing an unrelated notice never records a dismissed version. The dismissed version is recorded before the notice is cleared.
 
-**REQ-NOTIFY-218** — Download progress is reported inside the notice that made the offer: its title names the version being downloaded, and its body states the percentage complete and that the download will be verified against the published checksum when it finishes. Where the total size is unknown, downloaded megabytes are stated instead. Progress text is updated only on whole-percent changes.
+**REQ-NOTIFY-218** — Download progress is reported inside the notice that made the offer: its title names the version being downloaded, and its body states the percentage complete and that the download will be verified against the published checksum when it finishes. Where the total size is unknown, downloaded megabytes are stated instead. Progress text is updated only on whole-percent changes where the total size is known, and only on whole-megabyte changes of the amount downloaded where it is not; in either case a final update is published when the download settles, so the last text shown states the amount actually received rather than the last threshold crossed.
 
 **REQ-NOTIFY-219** — A downloaded update is installed only after its SHA-256 digest has been compared with the digest published for that release in `SHA256SUMS.txt` and the two match. Where they differ, the update stops, the installed application is left exactly as it was, and the failure is reported under REQ-NOTIFY-221. No signature is verified: a matching digest establishes that the download is the published file and nothing about who published it.
 
@@ -630,7 +642,7 @@ Session snapshots and diagnostics live under the main workspace and never inside
 
 ### Notice action vocabulary
 
-A notice action is carried as an opaque identifier chosen by the implementation. The vocabulary it must express is the one given in REQ-NOTIFY-044: focusing a named session, parameterised by session identifier; initializing or resolving a project; installing a pending update and restarting after one; navigating to a named view; opening settings at a named tab, the hook-settings tab included, and saving settings; opening the library at a named tab, artifacts and proposals included; retrying the failed run; reverting a recorded proposal review decision, parameterised by the artifact, the proposal and the prior decision. An action carrying a parameter encodes that parameter alongside the action, so the handler acts without a further lookup.
+A notice action is carried as an opaque identifier chosen by the implementation. The vocabulary it must express is the one given in REQ-NOTIFY-044: focusing a named session, parameterised by session identifier; opening the project-initialization surface, parameterised by workspace; installing a pending update and restarting after one; navigating to a named view, taken from REQ-SHELL-023; opening settings at a named category, taken from REQ-CONFIG-269 and including `hooks` and `models`, and saving settings; opening the library at a named tab, taken from REQ-LIBRARY-103 and including `artifacts` and `proposals`; retrying the failed run; reverting a recorded proposal review decision, parameterised by the artifact, the proposal and the prior decision. An action carrying a parameter encodes that parameter alongside the action, so the handler acts without a further lookup. No action in the vocabulary performs work in the user's project; each either navigates, or acts on application state the user has already agreed to.
 
 ### Status vocabularies
 
@@ -658,22 +670,34 @@ Each is a distinctly typed record in the session timeline or the diagnostics log
 - a post-crash status repair of a session;
 - a provider marked exhausted for the session;
 - a quota-driven model change, and the quota fallback that caused it;
+- a persistent notice of severity `warning` or `error`, recorded under REQ-NOTIFY-268;
 - a repair attempt being scheduled, and repair escalation once the budget is spent;
 - the start of an orchestration iteration;
 - a transient model failure that was retried automatically;
 - verification suite start, per-check start, per-check finish, and suite completion or skipping.
 
-### Command-line output formats
+### Reports whose information content is fixed and whose wording is not
 
-- Headless setup: one line per step; a non-zero exit status on failure.
-- Recovery-pass sentence, one per freed requirement: `{requirement_id}: Running → Blocked — {reason}`.
-- Repaired session line: `repaired {session_id}  {old_status} -> interrupted  ({reason})`; where nothing was repaired, a single sentence stating that no session was left marked as running by a stopped process.
-- Session listing: a stale marker appended to the status of a stale session.
-- Unit failure line: `{requirement}/{unit}: attempt {n} failed ({used}/{limit} retries used) — {reason}; work kept at {worktree_path}`.
+Each is rendered in the desktop surface that requested it. The facts listed are required; phrasing, punctuation, ordering within the report and inflection are the implementation's.
+
+- Machine setup step (REQ-NOTIFY-236, REQ-NOTIFY-265): the tool, the command run, the exit status, the reason.
+- Recovery-pass entry, one per freed requirement (REQ-NOTIFY-165): the requirement, the state it left, the state it was moved to, the reason.
+- Repaired session entry, one per session repaired (REQ-NOTIFY-264): the session, the status it previously carried, that it now reads `interrupted`, the reason it was judged not live. Where nothing was repaired: that no session was left marked as running by a stopped process.
+- Session list row (REQ-NOTIFY-156, REQ-NOTIFY-160): the normalised status, plus a stale marker where the session reads stale and an interrupted marker where its persisted status is `interrupted`.
+- Unit failure (REQ-NOTIFY-174): the requirement, the unit, the attempt number, retries used against the bound, the failure reason, the path at which the work was kept.
 
 ### Retry-after forms accepted from a provider
 
 An explicit retry-after value carrying a unit suffix of `s`, `sec`, `seconds`, `m`, `min` or `minutes`; and the plain-language phrasing `try again in N \<unit\>`. Minutes are converted to seconds, and the effective wait is at least 1 second.
+
+### Structured-output format preference order
+
+Requested in this order, most constrained first; the next format tried after a refusal is the next one below that the model has not already refused within this run of the application (REQ-NOTIFY-098).
+
+1. A provider-native response schema the provider itself enforces.
+2. A tool call whose parameters carry the schema.
+3. A provider JSON-object mode carrying no schema.
+4. A plain text response parsed against the schema.
 
 ### Configuration keys named in this document
 
@@ -687,8 +711,12 @@ An explicit retry-after value carrying a unit suffix of `s`, `sec`, `seconds`, `
 | `runtime.child_timeout` | 1200 s |
 | `runtime.improvement_collector_timeout` | 60 s |
 | `runtime.llm_response_timeout` | 120 s, minimum 30 s |
+| `runtime.loop_classification_timeout` | 2 s, and never more than the activation budget left |
 | `runtime.session_log_level` | WARNING |
+| `runtime.shell_command_timeout` | 100 s |
+| `runtime.summary_timeout` | 120 s |
 | `runtime.terminal_stream_enabled` | true |
+| `runtime.tool_call_timeout` | 30 s |
 | `verifier.author_gate` | true |
 | `verifier.checks` | unset |
 | `verifier.gate_completion` | true |
@@ -711,7 +739,7 @@ Rows are listed alphabetically by behaviour; the order carries no meaning.
 | Child task, total run | 1200 s |
 | Interrupted verification check, grace before abandonment | 5 s |
 | Loop activation cycle, end to end | 2 s |
-| Loop classification call | 20 s |
+| Loop classification call | 2 s, bounded by the remaining activation budget |
 | Loop escalation | more than 2 consecutive activations |
 | Loop repetition trigger | 4 identical action signatures, or a 2–4 action cycle repeated 3 times |
 | Loop volume backstop | 60 tool calls, 60 messages |
@@ -736,49 +764,4 @@ Rows are listed alphabetically by behaviour; the order carries no meaning.
 
 ## Open Questions
 
-### Behaviour not yet settled
-
-1. Rendered outcome where several producers publish a notice within one event-loop turn, beyond newest-wins and the cross-session rule of REQ-NOTIFY-029.
-2. Whether the stacked acknowledgement surface of REQ-NOTIFY-016 through REQ-NOTIFY-022 is reachable in the shipped desktop product, or whether one acknowledgement at a time is all that ships. Both contracts are stated here.
-3. What the desktop shows while a run is suspended in a quota wait under REQ-NOTIFY-083, REQ-NOTIFY-086 and REQ-NOTIFY-087, as distinct from having failed. The wait decision surface is stated for the interactive terminal host only.
-4. Row-level wording of provider failure presentations in settings (REQ-NOTIFY-200, REQ-NOTIFY-203). The status vocabulary and the threading rule are settled; the microcopy is not.
-5. Refresh cadence of update download progress where the server omits a content length (REQ-NOTIFY-218).
-6. What the user sees when the diagnostics view itself cannot read or render its data.
-7. Whether notice identifiers or notice content survive re-creation of the main window within one process (REQ-NOTIFY-025, REQ-NOTIFY-027).
-8. Which terminal run statuses produce the plain transient acknowledgement of REQ-NOTIFY-059 rather than a notice.
-9. The desktop path for a session carrying `paused_message_limit` (REQ-NOTIFY-248).
-10. Which surface reports the run channel's refresh-failure signal.
-11. Whether `interrupted` warrants a presentation of its own rather than presenting as `idle` (REQ-NOTIFY-049, REQ-NOTIFY-160).
-
-### Requirements that contradict one another
-
-12. REQ-NOTIFY-044 places initializing or resolving a project in the notice action vocabulary, and REQ-NOTIFY-229 requires initialization's actionable-failure condition to offer a retry of its pending tasks; REQ-NOTIFY-047 forbids any notice action that writes into the user's project. Which is canonical?
-13. REQ-NOTIFY-003 requires every failure, refusal and recovery-bearing outcome to stay readable, and REQ-NOTIFY-028 treats a notice about another session as unread; REQ-NOTIFY-024 keeps one notice and lets a later publication discard it. Must a replaced notice stay retrievable somewhere, or is single-slot replacement canonical?
-14. REQ-NOTIFY-032 gives a non-focused run's failure severity `warning`, while REQ-NOTIFY-065 requires every error notice, run failure included, to carry severity `error` with the persistent flag set. Also open: whether such a failure additionally produces the classification notice of REQ-NOTIFY-060, and if so which of the two survives on screen under REQ-NOTIFY-024.
-15. REQ-NOTIFY-049 has no entry for `paused_message_limit`, so the status written by REQ-NOTIFY-248 presents as `idle` while the run is paused and a command-palette entry for continuing it is enabled. Should it map to `paused`, to `idle`, or to a value not yet in the vocabulary?
-16. REQ-NOTIFY-106 bounds a whole activation cycle at 2 seconds while REQ-NOTIFY-100 allows the loop-classification call 20 seconds. Is the classifier cut short at the cycle budget and treated as a failed classification under REQ-NOTIFY-109, or does the 2-second bound exclude that call?
-17. REQ-NOTIFY-146 states that an unrepaired stale session is seen as busy by a worktree integration, while REQ-NOTIFY-159 states that a stale session never blocks one. Confirm that REQ-NOTIFY-146 describes the pre-repair reading only and that REQ-NOTIFY-159 binds the integration gate.
-
-### Values left open
-
-18. REQ-NOTIFY-012 — the corner of the host window an acknowledgement anchors to, and the pixel size of its margin from the window edges.
-19. REQ-NOTIFY-014 — which border treatment separates the error presentation of an acknowledgement from the neutral one: colour, weight, and which edges are drawn.
-20. REQ-NOTIFY-022 — the direction and the duration of the default entry animation.
-21. REQ-NOTIFY-035 — the numeric width of a persistent notice's border. Only the 3× ratio of the left rule to that border and the contrast floors are fixed.
-22. REQ-NOTIFY-019 and REQ-NOTIFY-041 — the text joining the severity or kind word to the title in an accessible name, and the body to the technical detail in an accessible description.
-23. REQ-NOTIFY-044 — the full sets of view names, settings-tab names and library-tab names a notice action may target. This document names the workspace view, the artifacts and proposals library tabs, and the model-settings and hook-settings tabs.
-24. REQ-NOTIFY-082 — which tier applies where the model that hit its usage limit has no recorded role of `small_model`, `medium_model` or `large_model`.
-25. REQ-NOTIFY-098 — the ordered set of structured-output formats, and therefore which format is the next one a provider accepts.
-26. REQ-NOTIFY-100 — the configuration key names for the tool-call, shell-command and summary-generation bounds.
-27. REQ-NOTIFY-108 — what constitutes an action signature: which properties of two actions must be equal for repetition detection to count them the same.
-28. REQ-NOTIFY-112 — which child-task outcomes are recovery-eligible, and therefore which earn the single lack-of-progress message.
-29. REQ-NOTIFY-137 — what counts as a gate-authoring note found in the workspace, and therefore which of the two fixed sentences applies.
-30. REQ-NOTIFY-175 — what counts as known drift for the unit completion contract.
-31. REQ-NOTIFY-182 — what the board displays, and what it lets the user do, for a blocker whose kind is none of the five defined kinds.
-32. REQ-NOTIFY-187 — which status a requirement takes when its evidence is found stale, and what the user sees while the resulting re-verification is outstanding.
-33. REQ-NOTIFY-192 — whether the 150 ms re-attempt of a checkpoint listing is bounded, and what the user sees if the channel never becomes free.
-34. REQ-NOTIFY-200 — the conditions under which a provider reads `warning`, `error` or `coming_soon`. Entry conditions are stated for `unknown`, `checking`, `healthy` and `unauthenticated` only.
-35. REQ-NOTIFY-209 — whether a ready balance that cannot fund the next call takes one of the four credit labels or a fifth of its own.
-36. REQ-NOTIFY-224 — the scope over which the unreviewed-hooks notice counts as published once: per workspace, per launch, or per declared set of hooks.
-37. REQ-NOTIFY-227 — which of the four hook-trust statements applies where a workspace gains further hooks after a review, so that some are reviewed and some are not.
-
+None outstanding. Every open question raised in the draft was resolved; see [`resolutions/19-notifications-errors-recovery.md`](resolutions/19-notifications-errors-recovery.md).

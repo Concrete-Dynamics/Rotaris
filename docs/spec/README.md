@@ -5,7 +5,8 @@ the approved input to architecture and implementation work. They describe *what*
 how any other implementation achieves it.
 
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
-- Status: **draft — awaiting Specification Gate approval**
+- Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
+- Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
 - Requirements: **4,182** across 21 domains
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
@@ -33,11 +34,16 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 164 | secondary |
 | 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 460 | secondary |
 | 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 107 | secondary |
-| 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 206 | secondary |
-| 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 228 | secondary |
+| 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 206 | **retired** |
+| 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 228 | **retired** |
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 262 | secondary |
 | 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 167 | secondary |
 | 21 | [Installed UI Performance Benchmark Command](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 109 | peripheral |
+
+Domains 17 and 18 are **retired**. The product is one Electron desktop application; it has no
+command-line interface and no terminal user interface. Every capability those documents carried
+that a user needs is restated as desktop behavior in the domain that owns it, and the
+`REQ-TUI` and `REQ-CLI` identifiers are withdrawn and never reused.
 
 Priority reflects centrality to the product, not implementation order. Implementation order is an
 architecture-gate decision.

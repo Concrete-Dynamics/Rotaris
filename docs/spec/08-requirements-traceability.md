@@ -29,6 +29,8 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-007** — A document's requirement identity SHALL come from its frontmatter, never from its file name or directory. A misnamed file SHALL parse normally; nothing in the toolchain enforces the `<PREFIX>-<n>-<slug>.md` naming convention.
 
+- **REQ-TRACE-501** — Store-parse cost SHALL grow linearly with the number of documents scanned and the number of bytes read, and a store of the order of 10^3 requirement documents SHALL be parsed in about one second under the reference conditions of REQ-TRACE-088. Peak memory SHALL be bounded by the size of the largest single document plus the accumulated metadata records, never by the total prose of the store: a document SHALL be normalized, hashed and reduced to its metadata record before the next document is read, and no phase of the parse SHALL require every document's text to be resident at once.
+
 ### Frontmatter Parsing
 
 - **REQ-TRACE-008** — Frontmatter SHALL be recognized only when the very first line of the document, after stripping surrounding whitespace, is exactly `---`. Scanning SHALL continue until a subsequent line that strips to `---`, which terminates the block.
@@ -53,7 +55,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - `title` — free text.
   - `type` — `product` or `technical`, taken as `product` where the key is absent.
   - `derived-from` — one identifier or a bracketed list; accepted only where `type` is `technical`, and required there.
-  How a key outside this set and outside the provenance set of REQ-TRACE-015 is treated is not settled — see Open Questions.
+  A key outside this set and outside the provenance set of REQ-TRACE-015 SHALL be **carried through untouched and otherwise ignored**: it SHALL produce no error and no warning, SHALL take no part in any check, and SHALL survive a write performed by the source write path, which is required to preserve frontmatter fields the model does not represent (REQ-TRACE-204). Rejecting an unknown key would make that preservation impossible and would turn the addition of one field to a project's own document template into a repository-wide parse failure.
 
 - **REQ-TRACE-015** — The parser SHALL additionally carry, without validating or enforcing them, these provenance fields: a legacy identifier (explicitly NOT unique across documents), a priority, a parent-epic identifier, a date, and an originating document path.
 
@@ -75,7 +77,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Identifier Scheme
 
-- **REQ-TRACE-022** — A requirement identifier SHALL be the project's identifier prefix, a hyphen, and one or more decimal digits, and nothing else. The prefix SHALL be one uppercase token, fixed for the project and identical on every requirement in the store. Numbers SHALL be written without leading zeros and SHALL have no upper bound. A `req-id` value of any other shape SHALL be a parse error naming the document and the value rejected. How the prefix is declared for a project is not stated — see Open Questions.
+- **REQ-TRACE-022** — A requirement identifier SHALL be the project's identifier prefix, a hyphen, and one or more decimal digits, and nothing else. The prefix SHALL be one uppercase token, fixed for the project and identical on every requirement in the store. Numbers SHALL be written without leading zeros and SHALL have no upper bound. A `req-id` value of any other shape SHALL be a parse error naming the document and the value rejected. The prefix SHALL be declared by the `id_prefix` key of the layout configuration (REQ-TRACE-039), whose default is `REQ`; it SHALL NOT be inferred from the documents, because inferring it from the first document scanned would make a typographical error in that one document silently redefine what every other document must say.
 
 - **REQ-TRACE-023** — Identifiers SHALL be globally unique across the whole store. A repeat SHALL produce an error naming the identifier and both claiming documents, and the later claimant SHALL be dropped; because the scan is path-sorted, "first" is deterministic.
 
@@ -109,25 +111,27 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-036** — A requirement's content hash SHALL be the first 16 hexadecimal characters of a SHA-256 over the entire normalized document text, frontmatter and prose included. Touching any byte of the document — including a typographical fix in prose — SHALL change the hash for every identifier the document declares.
 
-- **REQ-TRACE-037** — Two hashes SHALL exist over a requirement and SHALL NOT be exchanged for one another. The store hash of REQ-TRACE-036 is the value baseline suppression and change comparison compare. A canonical hash SHALL also be available which does not move when the frontmatter keys are reordered or the document reformatted, and which differs between two identifiers declared by one document. A consumer SHALL state which of the two it needs, and neither SHALL be accepted where the other was specified. The canonical hash's exact input and length are not stated — see Open Questions.
+- **REQ-TRACE-037** — Two hashes SHALL exist over a requirement and SHALL NOT be exchanged for one another. The store hash of REQ-TRACE-036 is the value baseline suppression and change comparison compare. A canonical hash SHALL also be available which does not move when the frontmatter keys are reordered or the document reformatted, and which differs between two identifiers declared by one document. A consumer SHALL state which of the two it needs, and neither SHALL be accepted where the other was specified. The canonical hash SHALL be the first **32** hexadecimal characters of a SHA-256 taken, for one declared identifier, over a payload of these lines joined with LF in exactly this order: the identifier; the resolved lifecycle; the resolved trace obligation; the resolved test obligation; the resolved type; the comma-joined derived-from identifiers in declaration order; the resolved title; and that identifier's own prose as extracted by REQ-TRACE-198. Every line SHALL be stripped and its interior runs of whitespace collapsed to a single space before joining. The payload is therefore unmoved by a reordering of the frontmatter keys or a reformatting of the document, and differs between two identifiers declared by one document. The two hashes SHALL be distinguishable by length alone — **16** characters for the store hash, **32** for the canonical hash — so that a consumer handed the wrong one can tell.
 
 ### Layout Configuration
 
 - **REQ-TRACE-038** — Every location the toolchain needs SHALL be carried in a single layout value that does not change for the duration of a command. Each path in it SHALL be repository-relative, and the caller SHALL resolve it against a repository root. A repository that configures nothing SHALL be given the default layout, whose values are those stated in REQ-TRACE-039, and SHALL behave identically to one that configures those same values explicitly.
 
-- **REQ-TRACE-039** — The layout SHALL carry exactly these eleven configurable keys:
+- **REQ-TRACE-039** — The layout SHALL carry exactly these thirteen configurable keys, every one of which SHALL have a default, so that the default layout of REQ-TRACE-038 is complete and no key is ever without a value:
   - `requirements_dir` — the store directory; default `docs/requirements`.
-  - `generated_path` — where the compiled requirement-symbol module is written; that file takes no part in the annotation sweep.
-  - `impl_roots` — the roots whose files may carry implementation traces.
-  - `test_roots` — the roots whose files may carry coverage references.
-  - `excused_test_roots` — test roots excused as a whole from the orphan-test check, for suites that exercise a general capability rather than any one requirement and that an ordinary run does not execute.
-  - `baseline_path` — the trace/test debt baseline; by default inside the store directory.
-  - `orphan_baseline_path` — the orphan-module baseline; by default inside the store directory.
-  - `test_orphan_baseline_path` — the orphan-test baseline; by default inside the store directory.
-  - `tombstone_path` — the retired-identifier log; by default inside the store directory.
-  - `exempt_marker` — the comment-shaped token that excuses a module, or a test function, from the reverse check.
+  - `id_prefix` — the project's requirement identifier prefix (REQ-TRACE-022); default `REQ`.
+  - `generated_path` — where the compiled requirement-symbol module is written; that file takes no part in the annotation sweep; default `src/requirement_ids` with the source extension claimed by the built-in annotation convention appended.
+  - `impl_roots` — the roots whose files may carry implementation traces; default the single root `src`.
+  - `test_roots` — the roots whose files may carry coverage references; default the single root `tests`.
+  - `excused_test_roots` — test roots excused as a whole from the orphan-test check, for suites that exercise a general capability rather than any one requirement and that an ordinary run does not execute; default the empty list, since excusing a suite is a decision a project makes deliberately.
+  - `baseline_path` — the trace/test debt baseline; default `debt-baseline.txt` inside the store directory.
+  - `orphan_baseline_path` — the orphan-module baseline; default `orphan-modules.txt` inside the store directory.
+  - `test_orphan_baseline_path` — the orphan-test baseline; default `orphan-tests.txt` inside the store directory.
+  - `tombstone_path` — the retired-identifier log; default `retired-identifiers.tsv` inside the store directory.
+  - `exempt_marker` — the comment-shaped token that excuses a module, or a test function, from the reverse check; default `trace-exempt`, which is deliberately free of any one language's comment punctuation because the marker is matched as a plain substring (REQ-TRACE-105) and must therefore work inside whatever comment syntax the file is written in.
   - `skip_parts` — path components that are never entered or scanned; default `__pycache__`, `.venv`, `fixtures`.
-  Defaults for `generated_path`, `impl_roots`, `test_roots`, `excused_test_roots` and `exempt_marker` are not fixed here — see Open Questions.
+  - `annotation_conventions` — the project's additional annotation conventions (REQ-TRACE-073), in registration order; default the empty list, the built-in convention being registered ahead of it and never listed here.
+  A project SHALL NOT be expected to change `exempt_marker`: the default is intended to be adopted as it stands. Changing it SHALL rewrite the orphan baselines' headers and the diagnostics that quote it on the next baseline update, which is a consequence to be accepted deliberately rather than a reason to avoid the key.
 
 - **REQ-TRACE-040** — The optional layout configuration SHALL be a JSON document at the repository root, whose path MAY be overridden by an explicit command-line option. When the file does not exist the default layout SHALL be returned with no error.
 
@@ -137,9 +141,9 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-043** — Path-valued keys SHALL require a non-empty string (or path) value; backslashes SHALL be normalized to forward slashes; the result SHALL be rejected when absolute or when it contains a `..` segment, with distinct messages for "not a non-empty repository-relative path" and "must be relative and stay inside the repository".
 
-- **REQ-TRACE-044** — List-valued keys SHALL require a list or tuple. A bare string SHALL be rejected with a message stating that a list of repository-relative paths was expected, guarding the common "one path where a list was meant" mistake. `skip_parts` SHALL likewise reject a bare string and SHALL become an unordered set of strings. `exempt_marker` SHALL require a non-empty string.
+- **REQ-TRACE-044** — List-valued keys SHALL require a list or tuple. A bare string SHALL be rejected with a message stating that a list of repository-relative paths was expected, guarding the common "one path where a list was meant" mistake. `skip_parts` SHALL likewise reject a bare string and SHALL become an unordered set of strings. `exempt_marker` SHALL require a non-empty string. `id_prefix` SHALL require a non-empty string of uppercase letters and digits beginning with a letter and containing no hyphen — the hyphen being the identifier's own separator — and any other value SHALL be rejected with a message naming the rejected value and that shape. `annotation_conventions` SHALL require a list whose every member is an object of the shape given in REQ-TRACE-073.
 
-- **REQ-TRACE-045** — Setting only `requirements_dir` SHALL also relocate all four bookkeeping artifacts into the new directory. An explicitly named baseline or log path SHALL still win, regardless of key order in the file: the store-directory move is applied first, then the generated path, then the path-list fields, then the four explicit bookkeeping paths, then the exempt marker, then the skip components.
+- **REQ-TRACE-045** — Setting only `requirements_dir` SHALL also relocate all four bookkeeping artifacts into the new directory. An explicitly named baseline or log path SHALL still win, regardless of key order in the file: the store-directory move is applied first, then the generated path, then the path-list fields, then the four explicit bookkeeping paths, then the exempt marker, then the skip components, then the identifier prefix, then the annotation conventions.
 
 - **REQ-TRACE-046** — A read or parse failure of the layout configuration SHALL produce an error prefixed with the configuration path and stating that the layout configuration cannot be read, including the underlying cause. A top-level JSON value that is not an object SHALL produce an error stating that a JSON object was expected. All validation errors SHALL be re-raised prefixed with the configuration path.
 
@@ -161,7 +165,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-053** — Loading the generated module SHALL make three things available to code that refers to requirements: one integer-valued symbol per requirement the store declares, named after that requirement's identifier and equal in value to its number; a constant naming every requirement whose lifecycle is `deprecated`; and a lookup from requirement number to that requirement's metadata record. Every requirement the store declares SHALL be reachable by all three routes, and a requirement the store does not declare SHALL be reachable by none of them.
 
-- **REQ-TRACE-054** — Each enumeration member SHALL be followed by a documentation string reading `[<status marker>] <title> - <source path>` and then one blank line. The marker SHALL differ per lifecycle value, and the marker for a deprecated requirement SHALL be the longer wording stating that no new references may be added, so that an editor showing the symbol's documentation shows that notice at every use site. The exact marker text for each lifecycle value is not stated — see Open Questions.
+- **REQ-TRACE-054** — Each enumeration member SHALL be followed by a documentation string reading `[<status marker>] <title> - <source path>` and then one blank line. The marker SHALL differ per lifecycle value, and the marker for a deprecated requirement SHALL be the longer wording stating that no new references may be added, so that an editor showing the symbol's documentation shows that notice at every use site. Each lifecycle value SHALL have exactly **one** marker text, constant across every generation so that generation stays deterministic (REQ-TRACE-059), and the three SHALL be distinct from one another. What each must convey is fixed here and the wording is left to the implementation: the `draft` marker conveys that the requirement is not yet approved and that nothing is enforced against it; the `approved` marker conveys that it is approved and carries whatever trace and coverage obligations its flags declare; the `deprecated` marker conveys that it is deprecated and that no new reference may be added, and is the longest of the three.
 
 - **REQ-TRACE-055** — Titles written into the documentation string SHALL be sanitized so that an arbitrary title cannot terminate the string: a triple double-quote SHALL be rewritten to a triple single-quote and backslashes to forward slashes.
 
@@ -195,7 +199,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-069** — Both annotation kinds SHALL check for deprecation at the moment they are applied, looking the numbers up in the generated metadata and emitting a deprecation warning for any deprecated one that names the identifier, the title and the source path, reported at the caller's own source location. The metadata lookup SHALL be lazy and SHALL tolerate the generated artifact not yet existing, so the check is a no-op during bootstrap.
 
-- **REQ-TRACE-070** — A transitional comment naming a requirement SHALL be recognized and SHALL count as covering it. A legacy identifier written in such a comment SHALL be resolved through the legacy alias table of REQ-TRACE-021. The form is a test-side convention only: an occurrence outside a test root SHALL be discarded and SHALL count towards nothing. The comment's exact lexical form is not stated — see Open Questions.
+- **REQ-TRACE-070** — A transitional comment naming a requirement SHALL be recognized and SHALL count as covering it. A legacy identifier written in such a comment SHALL be resolved through the legacy alias table of REQ-TRACE-021. The form is a test-side convention only: an occurrence outside a test root SHALL be discarded and SHALL count towards nothing. The comment's form SHALL be, within any one line: the case-insensitive token `covers:`, then whitespace, then one or more identifiers separated by commas, whitespace, or both, recognition ending at the end of that line. An identifier written there SHALL be either a canonical identifier (REQ-TRACE-022) or a run of one or more hyphen-separated alphanumeric segments, the latter resolved through the legacy alias table of REQ-TRACE-021.
 
 - **REQ-TRACE-071** — A comment-form identifier that resolves to no requirement — the legacy identifier being unknown, or claimed by more than one requirement — SHALL produce a **warning** and never an error, and SHALL therefore not on its own make a command exit non-zero. The warning SHALL name the file, the **1-based** line, and the identifier exactly as written, and SHALL tell the author to write a canonical identifier in its place. The occurrence SHALL be recorded with no requirement number attached to it.
 
@@ -206,17 +210,25 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Annotation Conventions (Language Seam)
 
-- **REQ-TRACE-073** — How a reference is written SHALL be replaceable per language, so that a project whose sources are not in the host language can be swept by the same toolchain. A project SHALL be able to declare, for a language of its own, which file extensions that language owns and how that language spells a requirement reference, an annotation site, a collectable test function and an excused module. Once declared, files carrying those extensions SHALL take part in every check on the same terms as host-language files: their traces SHALL satisfy implementation obligations, their coverage references SHALL satisfy test obligations, their untraced modules and unannotated tests SHALL be reported as orphans, and their sites SHALL appear in the change-comparison worklist. The concrete form of such a declaration is not stated — see Open Questions.
+- **REQ-TRACE-073** — How a reference is written SHALL be replaceable per language, so that a project whose sources are not in the host language can be swept by the same toolchain. A project SHALL be able to declare, for a language of its own, which file extensions that language owns and how that language spells a requirement reference, an annotation site, a collectable test function and an excused module. Once declared, files carrying those extensions SHALL take part in every check on the same terms as host-language files: their traces SHALL satisfy implementation obligations, their coverage references SHALL satisfy test obligations, their untraced modules and unannotated tests SHALL be reported as orphans, and their sites SHALL appear in the change-comparison worklist.
+  A convention SHALL be declared as one entry of the `annotation_conventions` list in the layout configuration (REQ-TRACE-039), each entry being an object carrying exactly these six keys:
+  - `name` — a non-empty string identifying the convention in diagnostics;
+  - `extensions` — a non-empty list of file extensions written with their leading dot, which is what the convention claims (REQ-TRACE-074);
+  - `reference_pattern` — matches one requirement reference and captures the identifier or bare number it names;
+  - `annotation_pattern` — matches a whole annotation site, its argument list included, and captures which of the two annotation kinds it is;
+  - `test_pattern` — matches the declaration of a collectable test function and captures its name;
+  - `exempt_module_pattern` — matches a module this convention excuses from the orphan-module check.
+  Patterns SHALL be regular expressions evaluated against the file's normalized text. A pattern that does not compile SHALL be a configuration error naming the convention, the key and the compilation failure; an entry missing a key, carrying an unrecognized key, or declaring an empty extension list SHALL be a configuration error in the shape of REQ-TRACE-042. Because a pattern-declared convention has no syntax tree to consult, a test function it collects SHALL take the matched line as its whole span — extended above by the same two-line slack as REQ-TRACE-112 — and its node identifier SHALL be `<repository-relative path>::<captured name>` with no class segment; the class-nesting rule of REQ-TRACE-109 SHALL apply to the built-in convention alone.
 
-- **REQ-TRACE-074** — A file SHALL be swept under whichever convention claims its extension. Where two conventions claim the same extension, the one declared earliest SHALL be the one that applies. The set of extensions the toolchain will sweep SHALL be reportable, each extension appearing once however many conventions claim it. Declaring a further convention SHALL leave every already-claimed extension handled exactly as it was.
+- **REQ-TRACE-074** — A file SHALL be swept under whichever convention claims its extension. Where two conventions claim the same extension, the one declared earliest SHALL be the one that applies. Registration SHALL be a single ordered sequence with no simultaneous entries, so "earliest" is always decidable and no further tie-break is needed: the built-in convention of REQ-TRACE-075 occupies position one, and project-declared conventions follow in the order they are written in the layout configuration (REQ-TRACE-073). A later registration claiming an extension an earlier one already claims SHALL be accepted without diagnostic and SHALL simply never be consulted for that extension. The set of extensions the toolchain will sweep SHALL be reportable, each extension appearing once however many conventions claim it. Declaring a further convention SHALL leave every already-claimed extension handled exactly as it was.
 
 - **REQ-TRACE-075** — Exactly one convention SHALL be registered by default, and it SHALL claim the single source extension of the implementation language. A file whose extension no registered convention claims SHALL be passed over completely: it can hold no trace, can never be reported as an orphan module or an orphan test, and contributes no coverage. A repository whose sources are all written in a language no registered convention claims SHALL therefore report no traces at all.
 
 - **REQ-TRACE-076** — The default convention SHALL recognize:
   - a call of either annotation kind, tolerating whitespace and line breaks between the name and the opening parenthesis and an argument list spread over several lines, but **not** an argument list that itself contains a parenthesis;
   - the requirement symbols named inside such a call;
-  - a transitional comment and the identifiers written in it, accepting the canonical prefix and each recognized legacy prefix, in either case followed by one or more hyphen-separated alphanumeric segments.
-  The legacy prefixes are not enumerated here — see Open Questions.
+  - a transitional comment in the form fixed by REQ-TRACE-070, and the identifiers written in it, each being either a canonical identifier or a run of one or more hyphen-separated alphanumeric segments.
+  **No list of legacy prefixes SHALL exist.** A non-canonical token SHALL be resolved solely through the legacy alias table built from the `legacy-id` provenance field (REQ-TRACE-021): a project declares the legacy identifiers it recognizes by writing them on the requirements that inherited them, and a token that resolves to nothing warns under REQ-TRACE-071 rather than being matched against a hard-coded prefix no requirement claims.
 
 - **REQ-TRACE-077** — Given an annotation whose argument list itself contains a call, the sweep SHALL NOT recognize it: the reference does not exist as far as the toolchain is concerned, and no diagnostic is produced. Implementers MUST treat this as a known limitation of the recognition form.
 
@@ -242,7 +254,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-087** — Offset-to-line mapping SHALL be exact at every boundary and SHALL be 1-based. It SHALL be verified exhaustively — at every position from 0 to length+2 over awkward texts including an empty text, a text of only newlines, a text with no trailing newline, and a text with CRLF endings — because the failure mode is an off-by-one at a boundary that sampled tests step over.
 
-- **REQ-TRACE-088** — Sweep cost SHALL grow linearly with the amount of source scanned, and a repository of the order of 10^3 source files carrying of the order of 10^4 annotation sites SHALL be swept in about one second. Sites naming several requirements, and sites spread over several lines, SHALL be handled by the ordinary path with no special case. The machine and conditions this budget is measured against are not stated — see Open Questions.
+- **REQ-TRACE-088** — Sweep cost SHALL grow linearly with the amount of source scanned, and a repository of the order of 10^3 source files carrying of the order of 10^4 annotation sites SHALL be swept in about one second. Sites naming several requirements, and sites spread over several lines, SHALL be handled by the ordinary path with no special case. That budget SHALL be measured under the **reference conditions**: one execution thread on a contemporary developer workstation backed by a solid-state disk, with a warm file-system cache, timing the sweep alone — enumeration, reading and matching — and excluding process start-up and the store parse. The linear-growth clause is the binding one: an implementation satisfies this requirement where doubling the amount of source scanned costs about twice as much and a repository of the stated size is swept within the stated time under those conditions.
 
 - **REQ-TRACE-089** — Every command SHALL report the repository as it stands at the moment that command runs. No result SHALL be carried over from an earlier invocation and no stored summary SHALL be consulted in place of reading the files, so an edit made between two invocations SHALL be reflected by the second without anything having to be cleared first, and two invocations over an unchanged repository SHALL report the same thing. How often the work is repeated within one invocation SHALL make no difference to what that invocation reports.
 
@@ -250,7 +262,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-090** — Verification SHALL be pure: it returns lists of errors and warnings, logs nothing itself, and writes nothing. Plain checking SHALL NEVER write; only the explicit fix and baseline-update options write.
 
-- **REQ-TRACE-091** — One verification run SHALL judge every check against one reading of the store and one reading of the repository, so that no two of its findings can describe different states of the same file. A single run SHALL be able to report, together: a stale or missing generated artifact; malformed baseline lines; derived-from integrity failures; references to requirements that no longer exist; deprecated references; missing implementation traces and missing coverage, after baseline suppression; stale baseline entries; unresolved legacy comment references; orphan modules; orphan tests; and the statistics of REQ-TRACE-101. Apart from the short-circuit of REQ-TRACE-092, no check SHALL suppress, delay or alter another, and each SHALL report what it finds whether or not the others found anything. The relative order in which findings from different checks appear within the returned lists is not stated — see Open Questions.
+- **REQ-TRACE-091** — One verification run SHALL judge every check against one reading of the store and one reading of the repository, so that no two of its findings can describe different states of the same file. A single run SHALL be able to report, together: a stale or missing generated artifact; malformed baseline lines; derived-from integrity failures; references to requirements that no longer exist; deprecated references; missing implementation traces and missing coverage, after baseline suppression; stale baseline entries; unresolved legacy comment references; orphan modules; orphan tests; and the statistics of REQ-TRACE-101. Apart from the short-circuit of REQ-TRACE-092, no check SHALL suppress, delay or alter another, and each SHALL report what it finds whether or not the others found anything. Findings SHALL appear in the returned lists **grouped by check and in the order the checks are listed above** — the generated artifact, malformed baseline lines, derived-from integrity, references to requirements that no longer exist, deprecated references, missing implementation traces, missing coverage, stale baseline entries, unresolved legacy comment references, orphan modules, orphan tests — with each check's own findings contiguous and internally ordered as that check itself specifies. The error list and the warning list SHALL each follow that same grouping, so two implementations cannot interleave the checks differently and both be conformant.
 
 - **REQ-TRACE-092** — Given any parse error, verification SHALL return immediately carrying **only** the parse errors: every other diagnostic for that run is suppressed, because everything downstream depends on a clean parse. Fixing one malformed document MAY therefore reveal a large second wave of violations.
 
@@ -283,7 +295,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-103** — Orphan detection SHALL be per **file**, not per symbol: a module carrying a single trace anywhere in it is not an orphan, however many untraced functions it contains.
 
-- **REQ-TRACE-104** — A module SHALL be excused from the orphan-module check by the first of these that holds: (1) the convention's own module-excuse rule, which for the default convention excuses a module existing only to re-export names declared elsewhere; (2) the sweep already found a trace in that file; (3) the configured exempt marker appears anywhere in the file's text. The generated artifact never reaches this check, having been left out when files were enumerated. The precise test for a re-export-only module is not stated — see Open Questions.
+- **REQ-TRACE-104** — A module SHALL be excused from the orphan-module check by the first of these that holds: (1) the convention's own module-excuse rule, which for the default convention excuses a module existing only to re-export names declared elsewhere; (2) the sweep already found a trace in that file; (3) the configured exempt marker appears anywhere in the file's text. The generated artifact never reaches this check, having been left out when files were enumerated. A module SHALL count as re-export-only when its parsed contents consist of nothing beyond import statements, module-level assignments naming exported symbols, and documentation or bare string-literal statements. Any function declaration, any class declaration, any conditional and any other executable statement SHALL disqualify it. A module whose text cannot be parsed SHALL NOT be excused by this rule, a rule that cannot read a file being in no position to vouch for it. For a project-declared convention the corresponding test SHALL be that convention's own `exempt_module_pattern` (REQ-TRACE-073).
 
 - **REQ-TRACE-105** — The exempt-marker test for a module SHALL be a plain substring search over the whole file text — not a regular expression and not line-anchored. A marker inside a docstring or a string literal therefore also exempts the module.
 
@@ -331,7 +343,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-125** — The two orphan ratchets SHALL be a plain **set intersection** of recorded and current entries, with the same bootstrap rule when the file is absent.
 
-- **REQ-TRACE-126** — Every baseline write SHALL create the parent directory when missing and SHALL write UTF-8 with LF endings forced, on every platform.
+- **REQ-TRACE-126** — Every baseline write SHALL create the parent directory when missing, SHALL write UTF-8 with LF endings forced on every platform, and SHALL be **atomic** in the manner of REQ-TRACE-061 — a temporary file in the target's own parent directory, then an atomic replace — so that a reader concurrent with a write observes either the whole previous file or the whole new one and never a partial one.
 
 - **REQ-TRACE-127** — Given a baseline entry whose number no longer names an **approved** requirement — whether deleted, or moved back to draft or deprecated — the check SHALL emit a **warning** naming the entry, the baseline path and the pruning command. Given an entry whose flags are now satisfied — because the obligation was relaxed to optional or because the annotation now exists — the check SHALL emit a **warning** naming the satisfied flags sorted and space-joined. Both SHALL be warnings only: a stale baseline SHALL NEVER fail the build.
 
@@ -355,7 +367,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-136** — Where a record already exists for an identifier, that record SHALL be kept and the incoming one discarded, so a retirement date once written never moves. A later run, whatever its clock reads, SHALL leave every recorded date as it stands and SHALL add only identifiers retired since, dated by that run.
 
-- **REQ-TRACE-137** — Rendering SHALL emit the header block, then one record per identifier in **ascending number** order, each terminated by a newline, written UTF-8 with LF endings forced, creating the parent directory when missing.
+- **REQ-TRACE-137** — Rendering SHALL emit the header block, then one record per identifier in **ascending number** order, each terminated by a newline, written UTF-8 with LF endings forced, creating the parent directory when missing. The write SHALL be **atomic** in the manner of REQ-TRACE-061, because the log is append-only evidence that cannot be reconstructed from anything else and a half-written log would discard retirements permanently.
 
 - **REQ-TRACE-138** — Retirement detection SHALL recover the requirement numbers and last known titles from the generated artifact as it stood before the regeneration that is about to replace it. A title containing a quote character SHALL be recovered intact. An entry that cannot be interpreted SHALL be passed over while the remaining entries are still recovered, and an artifact that cannot be read at all SHALL yield no entries — so no identifier SHALL be recorded as retired on the strength of a failed read.
 
@@ -368,7 +380,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 ### Command-Line Surface
 
 - **REQ-TRACE-142** — The toolchain SHALL expose exactly three subcommands:
-  - `check [--fix] [--update-baseline]` — verify traceability;
+  - `check [--fix] [--update-baseline] [--report-only]` — verify traceability;
   - `generate` — regenerate the requirement-symbol artifact if stale;
   - `diff [--base <revision>] [--strict]` — produce a worklist of requirement changes against a base revision.
   A subcommand SHALL be required; invoking with none SHALL be an argument-parsing usage error exiting **2**.
@@ -378,6 +390,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-144** — The options SHALL mean:
   - `--fix` — regenerate the artifact before verifying, where it is stale;
   - `--update-baseline` — remove from all three baselines the entries now satisfied, adding none;
+  - `--report-only` — select the reporting enforcement level of REQ-TRACE-504: report every finding exactly as the enforcing level does, but do not fail the invocation on traceability violations;
   - `--base <revision>` — the revision to compare against; where omitted, the revision the working tree currently sits on;
   - `--strict` — exit **1** where any requirement's text has changed since the base while no file carrying one of its implementation or coverage sites has changed, drift being as defined in REQ-TRACE-161 and REQ-TRACE-162.
 
@@ -385,7 +398,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - **0** — success, no violations;
   - **1** — traceability violations, parse errors, a malformed layout configuration, or unpropagated drift under `diff --strict`;
   - **2** — any unhandled exception, reported on standard error as an internal-error line carrying the exception's representation.
-  A malformed layout configuration SHALL be classified deliberately as a **user** error (1), not internal (2), and reported on standard error as a configuration-error line. The exception wrapper SHALL enclose both layout loading and command dispatch.
+  A malformed layout configuration SHALL be classified deliberately as a **user** error (1), not internal (2), and reported on standard error as a configuration-error line. The exception wrapper SHALL enclose both layout loading and command dispatch. These exit codes govern the **command-line surface only**; the graphical board has no entry point and no exit code of its own, and nothing in it SHALL be described in terms of one. Under `--report-only` the traceability-violation cause of exit 1 SHALL NOT apply (REQ-TRACE-504); every other cause SHALL.
 
 - **REQ-TRACE-146** — The `check` command SHALL execute in this order:
   1. with `--fix`, regenerate if stale — on parse errors, print each as a parse-error line to **standard error** and return 1 immediately without attempting verification; when the artifact changed, print a regeneration notice to standard output;
@@ -394,10 +407,11 @@ A project keeps its requirements as versioned documents in its own repository. A
   4. print warnings to **standard output**;
   5. print errors to **standard error**;
   6. print a one-line statistics summary to standard output when statistics are present;
-  7. on any error, print a failure line naming the violation count to standard error and return 1;
-  8. otherwise print an OK line to standard output and return 0.
+  7. on any error, print a failure line naming the violation count to standard error and return 1 — or, under `--report-only`, print that same failure line and return 0;
+  8. otherwise print an OK line to standard output and return 0;
+  9. in every case print, on standard output, the line stating which enforcement level was in force (REQ-TRACE-504).
 
-- **REQ-TRACE-147** — A single `check --fix --update-baseline` invocation SHALL therefore regenerate, re-baseline against the fresh parse, and then verify, in that order.
+- **REQ-TRACE-147** — A single `check --fix --update-baseline` invocation SHALL therefore regenerate, re-baseline against the fresh parse, and then verify, in that order, and the lines it emits SHALL be observable in that order **within each stream**: on standard output, the regeneration notice, then the three baseline notices in the order of REQ-TRACE-123, then the warnings, then the statistics line, then the OK line; on standard error, the errors, then the failure line. Relative ordering **between** the two streams SHALL NOT be specified and SHALL NOT be relied upon, since a consumer may redirect them separately.
 
 - **REQ-TRACE-148** — The `generate` command SHALL regenerate if stale; on parse errors it SHALL print each as a parse-error line to standard error and return 1. Otherwise it SHALL re-parse and print one line naming the artifact path, stating **which** of "regenerated" or "already up to date" it observed, and the requirement count, then return 0. A no-op run SHALL be distinguishable from a rewriting run in the output.
 
@@ -411,9 +425,15 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-153** — The command-line entry point SHALL depend on the standard library alone, so the continuous-integration gate and the commit-time hook can run it with no dependency installation and no activated project environment.
 
-- **REQ-TRACE-154** — The toolchain SHALL provide no progress reporting and no cancellation of any kind at this layer: no timeout on version-control invocations, no interrupt handling, no progress callback, no partial-result reporting. The only observable progress is the final statistics line and the per-change lines of the comparison command; the scan itself is silent while running.
+- **REQ-TRACE-154** — The toolchain SHALL provide no progress reporting and no cancellation of any kind at this layer: no interrupt handling, no progress callback, no partial-result reporting. The only observable progress is the final statistics line and the per-change lines of the comparison command; the scan itself is silent while running. The absence of any time limit, document limit or resource limit on the file-system scan SHALL be a **deliberate decision and not a gap**: the scan is local file input whose cost is bounded by the size of the store and of the configured roots (REQ-TRACE-088, REQ-TRACE-501), a partially completed scan yields nothing a caller could act upon, and the layers that genuinely need to abandon work in flight own their own cancellation (REQ-TRACE-220). The one cost this layer does not itself control is a child process, and that SHALL be bounded by REQ-TRACE-170.
 
-- **REQ-TRACE-155** — The toolchain SHALL provide no command to add a requirement, renumber, or migrate; authoring is manual against the template, assisted by agent skills rather than by the command line.
+- **REQ-TRACE-155** — The toolchain SHALL provide no command to add a requirement, renumber, or migrate; authoring is manual against the template, assisted by agent skills rather than by the command line. It SHALL likewise provide **no project-structure detection and no configuration-scaffolding command**: adoption consists of writing the layout configuration of REQ-TRACE-040, or of accepting the default layout of REQ-TRACE-039 unchanged, and the three subcommands of REQ-TRACE-142 are the whole command surface.
+
+- **REQ-TRACE-502** — Concurrent invocations SHALL be safe without any lock, lease or coordination file. Every artifact the toolchain writes — the generated artifact, the three baselines and the retired-identifier log — SHALL be written by the atomic replace of REQ-TRACE-061, REQ-TRACE-126 and REQ-TRACE-137, so a reader concurrent with a writer SHALL observe one complete version of a file and never a partial one, and two concurrent writers SHALL leave one complete file rather than a blend of both. Beyond that, **no invocation SHALL wait for another**: where two invocations race, each SHALL report the repository as it read it, so a check running beside a generate MAY legitimately report the artifact stale even though the other invocation is in the act of refreshing it, and re-running the check afterwards SHALL report it up to date. An invocation SHALL NEVER fail, hang or leave a lock behind because another was running.
+
+- **REQ-TRACE-503** — A store that declares no requirements SHALL be reported, never passed over in silence. Where the parse yields no requirements, `check` SHALL emit a **warning** — not an error — that names the configured store directory and distinguishes three findings using the probe of REQ-TRACE-178: the store directory is absent; it exists but holds no document carrying frontmatter; or it holds documents carrying frontmatter of which none declares a requirement identifier, which is the case that means the documents are of a kind this parser does not read. The warning SHALL name the concrete next step for the finding it reports. With no other violation the invocation SHALL still succeed, since a repository that has not begun writing requirements is not a repository in violation, and the statistics line SHALL report a total of zero.
+
+- **REQ-TRACE-504** — Two enforcement levels SHALL exist, selected **only** at the command line: **enforcing**, which is the default, and **reporting**, selected by `check --report-only`. Under the reporting level the verification performed, the findings produced and the lines printed SHALL be identical to the enforcing level in every respect except the exit code: each error SHALL still be printed as an error on standard error, each warning on standard output, and the failure line naming the violation count SHALL still be printed — but the invocation SHALL return **0** for traceability violations. Parse errors and a malformed layout configuration SHALL still return 1 at either level, because those mean the check could not be performed rather than that the repository carries debt. Every `check` invocation SHALL state on standard output which level was in force, so a log can never be read as a clean enforcing run when it was in fact a reporting run. There SHALL be **no configuration key** for the level: it is a property of the invocation and not of the repository, so that a repository cannot disarm its own gate for everybody who runs it. A repository adopting the toolchain for the first time, with no baseline written, SHALL therefore obtain a complete non-blocking coverage report by invoking `check --report-only` before any ratchet exists.
 
 ### Change Comparison Against a Base Revision
 
@@ -421,7 +441,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-157** — The "before" state of every requirement SHALL be taken from the **generated artifact as committed at the base revision**, and SHALL NOT be reconstructed by re-reading the requirement documents as they stood at that revision. Only entries in that artifact that are well formed and carry a requirement number SHALL contribute; an entry that cannot be interpreted SHALL be passed over while the remaining entries still contribute. A requirement SHALL therefore be reported as unchanged exactly when the content hash the base artifact records for it equals the hash computed from the working tree, whatever the historical documents contained.
 
-- **REQ-TRACE-158** — Given the base artifact cannot be retrieved, is empty, fails to load, or carries no usable mapping, the base SHALL be reported unavailable: no changes are computed, the rendered output is a single line stating there is no base artifact to compare against, and the exit code stays **0** even under `--strict`.
+- **REQ-TRACE-158** — Given the base artifact cannot be retrieved, is empty, fails to load, or carries no usable mapping, the base SHALL be reported unavailable: no changes are computed, the rendered output is a single line stating there is no base artifact to compare against, and the exit code stays **0** even under `--strict`. A base revision that exists but at which the generated artifact had not yet been introduced SHALL take exactly this path and SHALL be indistinguishable in behaviour from a base revision that does not exist: in both cases there is no recorded "before" state, and inventing one by re-reading the historical requirement documents is forbidden by REQ-TRACE-157.
 
 - **REQ-TRACE-159** — The changed-file set SHALL be the union of two version-control queries: tracked changes between the base revision and the working tree, and untracked-but-not-ignored files. Each SHALL be merged only when it succeeded; a failing query SHALL contribute nothing rather than aborting. Untracked files SHALL be included so a brand-new implementation or test file counts as touched.
 
@@ -445,7 +465,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-169** — The comparison command SHALL parse the store freshly and return parse errors before touching version control at all; on parse errors the rendered output SHALL be suppressed entirely and the exit code SHALL be 1.
 
-- **REQ-TRACE-170** — Version-control invocation at this layer SHALL be a read-only child process rooted at the repository, capturing output, not raising on a non-zero status, and treating an unavailable version-control executable as a failed query with empty output. **No timeout SHALL be set**, so a hung invocation blocks indefinitely; this is a documented gap, not a design goal.
+- **REQ-TRACE-170** — Version-control invocation at this layer SHALL be a read-only child process rooted at the repository, capturing output, not raising on a non-zero status, and treating an unavailable version-control executable as a failed query with empty output. Every such invocation SHALL be bounded by a **30-second** timeout, the same bound the consumer layer applies (REQ-TRACE-201). An invocation that exceeds it SHALL be terminated and SHALL count as a failed query with empty output, which the surrounding rules already accommodate: the changed-file set simply gains nothing from that query (REQ-TRACE-159), and a base artifact that could not be retrieved is reported as unavailable (REQ-TRACE-158). **No command SHALL be able to block indefinitely on a child process.**
 
 ### Read-Only Coverage Query
 
@@ -481,7 +501,10 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-184** — A continuous-integration workflow SHALL run the plain check on every pull request and on pushes to the default branch and to long-lived integration branch namespaces, so that a long-lived branch has a traceability signal between merges. It SHALL require no dependency installation step.
 
-- **REQ-TRACE-185** — A commit-time hook SHALL regenerate the requirement-symbol artifact, stage it, and block the commit on verification errors. It SHALL invoke the same implementation rather than a mirror, so no parity test between two implementations is required.
+- **REQ-TRACE-185** — A commit-time hook SHALL regenerate the requirement-symbol artifact, stage it, and block the commit on verification errors. It SHALL invoke the same implementation rather than a mirror, so no parity test between two implementations is required. Its staging, blocking and root-discovery behaviour SHALL be:
+  - it SHALL stage exactly the paths the toolchain is itself permitted to write — the generated artifact and the retired-identifier log — and SHALL stage nothing else, so a commit never acquires an unrelated change the author did not select;
+  - it SHALL block on **errors only**. Warnings SHALL be printed and SHALL never decline a commit, so that a deprecated reference or a stale baseline entry reports itself without making the repository uncommittable;
+  - it SHALL locate the repository root by the discovery walk of REQ-TRACE-048 and REQ-TRACE-049, starting from the directory the hook was invoked in, and SHALL require no activated project environment and no dependency installation (REQ-TRACE-153).
 
 - **REQ-TRACE-186** — Convenience build targets MAY wrap the check and the fixing variant, but the contract SHALL be the direct command-line invocation, because the wrapper is not available on every supported platform.
 
@@ -510,7 +533,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-195** — The epic index table SHALL be maintained by the authoring workflow and by the source write path (a deletion also removes the index row), but SHALL NOT be machine-checked by the verifier and MAY therefore drift from the actual documents without any tool complaining.
 
-- **REQ-TRACE-196** — Human-readable reciprocal navigation lines between a derived requirement and its origin SHALL be treated as convention for readers only. The **forward** frontmatter link SHALL be the single source of truth for the derived relation; the reverse direction SHALL be computed so it cannot silently drift.
+- **REQ-TRACE-196** — Human-readable reciprocal navigation lines between a derived requirement and its origin SHALL be treated as convention for readers only. The **forward** frontmatter link SHALL be the single source of truth for the derived relation; the reverse direction SHALL be computed so it cannot silently drift. No tool SHALL validate those navigation lines: a missing, stale or wrong reciprocal line SHALL produce no error and no warning from any command, and their absence SHALL never affect the derived-from integrity checks of REQ-TRACE-098, which read the frontmatter link alone.
 
 ### Consumer Integration Contracts
 
@@ -551,7 +574,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-213** — Progress SHALL be reported as plain values, in two kinds of report:
   - a **phase report** carrying the phase and the number of items that phase will report, where **0** states that the phase is one indivisible step. It SHALL be delivered **before** that phase's first item report, so a consumer always holds the denominator before it receives a position;
   - an **item report** carrying the phase, a label naming the item (a check's name, a requirement's identifier), a **1-based** position, the phase total, an optional detail, and the deadline in seconds currently applying to the item in progress, from which a countdown can be drawn.
-  What the deadline field carries where the wait budget is unlimited is not stated — see Open Questions.
+  Where the wait budget is unlimited the deadline field SHALL be **absent** rather than carrying zero, so that a consumer can tell "there is no countdown to draw" from "no time remains". The stored-value convention of REQ-TRACE-467, under which zero denotes an unlimited wait, SHALL be confined to the settings space and SHALL NOT reach this protocol.
 
 - **REQ-TRACE-214** — Both callbacks SHALL happen on the thread running the pass. A host that must touch a user interface SHALL marshal for itself.
 
@@ -577,7 +600,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-224** — A fresh token SHALL be minted for each pass and SHALL NOT be carried over to another. The underlying signal is one-way and never clears, so a shared token would leave every pass after the first one already cancelled the moment it began.
 
-- **REQ-TRACE-225** — Two refresh kinds SHALL exist: a deterministic-rules-only kind that reaches no analyst and creates **no** cancellation token (cards still move, because one propagation rule is owed on every refresh and costs no model call); and an analysing kind that runs every rule including impact analysis, clarification, migration planning and removal analysis, which is the only one worth cancelling. The **analysing** kind SHALL be the default for a caller that says nothing.
+- **REQ-TRACE-225** — Two refresh kinds SHALL exist: a deterministic-rules-only kind that reaches no analyst and creates **no** cancellation token (cards still move, because one propagation rule is owed on every refresh and costs no model call); and an analysing kind that runs every rule including impact analysis, clarification, migration planning and removal analysis, which is the only one worth cancelling. The **analysing** kind SHALL be the default for a caller that says nothing. Neither kind SHALL place a wall-clock bound on the engine read that backs a refresh, and that SHALL be a deliberate decision: the read runs off the interface thread (REQ-TRACE-337) so the surface never blocks, the board states that a refresh is in progress for as long as one is, the last good board stays on screen throughout (REQ-TRACE-338), and every external call the read makes is itself bounded (REQ-TRACE-201). A deterministic refresh SHALL therefore offer no stop control and no timeout; its cost is bounded by the store and the repository it reads.
 
 - **REQ-TRACE-226** — A request to cancel SHALL return false when there is nothing to stop — no token, or nothing in flight — and true after signalling the token.
 
@@ -607,7 +630,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-238** — Column widths SHALL be bounded: an open column SHALL be at least **276** points wide (a card's own minimum plus margins plus its scroll bar) and at most **340**. Spare width SHALL be spent up to the cap and no further, because a card title read across several hundred points is not a card anybody scans. At the minimum window size with every column unfolded, every column SHALL still be at least the minimum and the columns area SHALL report a positive horizontal scroll range.
 
-- **REQ-TRACE-239** — A board carrying several hundred requirements SHALL be displayed without the interface ceasing to respond to input, and the work of displaying it SHALL be bounded by what is on screen rather than by how many requirements the store holds (REQ-TRACE-358). No maximum acceptable interval for that work is stated — see Open Questions.
+- **REQ-TRACE-239** — A board carrying several hundred requirements SHALL be displayed without the interface ceasing to respond to input, and the work of displaying it SHALL be bounded by what is on screen rather than by how many requirements the store holds (REQ-TRACE-358). Putting a board on screen once the engine has answered SHALL occupy the interface thread for no more than **100 ms**, measured at the minimum supported window size under the reference conditions of REQ-TRACE-088, and that figure SHALL NOT grow with the size of the store.
 
 - **REQ-TRACE-240** — The board SHALL surface a **blocked summary** reachable without scrolling any column — positioned above the columns scroll area. It SHALL:
   - carry a heading stating the number of blocked requirements;
@@ -615,6 +638,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - carry every engine reason verbatim in its accessible description;
   - offer two controls per row — first the move that addresses the block (returning the requirement to the state it came from, which is its only legal move), then navigation to the card;
   - on navigation, open the target column if it is folded, select the card and give it focus.
+  The heading SHALL always state the **true total**, however many rows are shown. At most **20** rows SHALL be listed; where more requirements are blocked, one final row SHALL state how many were not listed and SHALL, when activated, filter the board to the blocked requirements, so the remainder stay reachable in a single action. A strip that ran to hundreds of rows would push the columns off the screen it sits above.
 
 - **REQ-TRACE-241** — Blocked presentation SHALL NOT rely on colour alone: text or a glyph SHALL carry the condition too. Whether blocked cards *also* gather into a column of their own SHALL be governed by a display preference; toggling it SHALL leave the delivery model untouched.
 
@@ -658,15 +682,15 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Evidence Indicator
 
-- **REQ-TRACE-258** — Each card SHALL carry an indicator divided into one segment per evidence obligation the requirement owes, ordered as the projection orders them, each segment coloured for that obligation's state: satisfied and verified; recorded but stale or unverified; failing verification; or missing or not owed. The sequence of segment states SHALL equal the sequence of obligation states the projection reports, position for position. The closed set of obligation kinds is not enumerated — see Open Questions.
+- **REQ-TRACE-258** — Each card SHALL carry an indicator divided into one segment per evidence obligation the requirement owes, ordered as the projection orders them, each segment coloured for that obligation's state: satisfied and verified; recorded but stale or unverified; failing verification; or missing or not owed. The sequence of segment states SHALL equal the sequence of obligation states the projection reports, position for position. The set of obligation kinds SHALL be **closed** and SHALL be exactly these three, in this fixed order: `implementation-trace`, owed where the requirement declares `trace: required`; `covering-test`, owed where it declares `test: required`; and `verification`, owed where the requirement is approved and the workspace declares a check suite. A card therefore carries at most three segments, and how many it carries SHALL be predictable from that requirement's own obligation flags and lifecycle. A fourth kind added to the engine SHALL fail the presentation lookup immediately rather than quietly receiving a fallback segment, exactly as REQ-TRACE-446 requires of blocker kinds.
 
 - **REQ-TRACE-259** — The indicator SHALL explicitly **not** be a count of annotations, because a count would read as complete for a requirement whose tests fail. A requirement with complete traces but a failing test SHALL render a failing segment, not a wholly satisfied indicator.
 
 - **REQ-TRACE-260** — Where a requirement owes **no** evidence obligations at all, its indicator SHALL be drawn **empty**, accompanied by a stated reason, and SHALL never resemble a satisfied one. Of everything this widget could render, an indicator that looks complete when in fact nothing was ever owed would mislead the reader most.
 
-- **REQ-TRACE-261** — The indicator's accessible description SHALL name **every segment and its state**, in the form `<Obligation>: <State>`, and the card SHALL print an equivalent summary beside it, so that someone who cannot separate the alert hues reads exactly the same facts. Every indicator colour SHALL meet a **3:1** contrast floor against the card ground.
+- **REQ-TRACE-261** — The indicator's accessible description SHALL name **every segment and its state**, in the form `<Obligation>: <State>`, and the card SHALL print an equivalent summary beside it, so that someone who cannot separate the alert hues reads exactly the same facts. Every indicator colour SHALL meet a **3:1** contrast floor against the card ground. Segment colours SHALL be taken from the **theme's semantic status tokens** — the same tokens the alert severities of REQ-TRACE-247 draw on — and SHALL NEVER be written as literal colour values inside this widget, so that a change of theme reaches the indicator without it being rebuilt (REQ-TRACE-248). The normative constraints on those colours are this contrast floor and the rule that colour never carries a fact on its own; their concrete values belong to the design system rather than to this specification.
 
-- **REQ-TRACE-262** — Each segment SHALL carry its obligation kind, label, state, state label, the obligation's reason when the engine gave one, and whether the obligation level is required.
+- **REQ-TRACE-262** — Each segment SHALL carry its obligation kind, label, state, state label, the obligation's reason when the engine gave one, and whether the obligation level is required. The kind SHALL be one of the three tokens enumerated in REQ-TRACE-258 and the state one of the four states named there.
 
 - **REQ-TRACE-263** — The indicator's segments SHALL be arranged so that no segment overlaps its neighbour, so that the segments taken together close the ring, and so that an angular gap separates each from the next — several obligations reading as several segments rather than as one ring painted in several colours. The first segment SHALL begin at twelve o'clock. A clear margin SHALL be left between the segments and the edge of the indicator, wide enough that the focus indication never paints over a segment.
 
@@ -674,7 +698,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Evidence Detail
 
-- **REQ-TRACE-265** — Activating the indicator SHALL open the evidence view for that requirement. It SHALL contain: each implementation site and each covering test given as a **file and a line**, together with that site's pass state; the most recent verification, reported with its **verdict**, the **commit** it ran against and the **requirement hash** it was taken over; and the records of execution and of integration.
+- **REQ-TRACE-265** — Activating the indicator SHALL open the evidence view for that requirement. It SHALL contain: each implementation site and each covering test given as a **file and a line**, together with that site's pass state; the most recent verification, reported with its **verdict**, the **commit** it ran against and the **requirement hash** it was taken over; and the records of execution and of integration. The site listing SHALL be **complete**: every implementation site and every covering test SHALL be listed, ordered by repository-relative path and then by line, beneath a stated count per kind, and the view SHALL **scroll rather than paginate or truncate** — a site the view declined to show is a site nobody checks.
 
 - **REQ-TRACE-266** — Each listed site SHALL be activatable and SHALL open its file **at its line**, using the projection's own path and line rather than a reconstruction. Each listed run SHALL open the session that produced it. The governing design constraint SHALL be that no more than two actions separate noticing a problem on the board from having the offending file open in front of you.
 
@@ -717,7 +741,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-281** — An epic SHALL be a requirement with children and SHALL behave on the board as a **grouping element**, not a work item someone could drag into a running state.
 
-- **REQ-TRACE-282** — An epic card SHALL summarise its children on five counts: how many children it has; how those children are distributed across the delivery states; the proportion of them carrying an implementation trace; how many runs are executing beneath it; and how many blockers stand against them. Its progress line SHALL read `<done> of <total> requirements done`, the total counting only children that are not deprecated. Where the epic has deprecated children, the line SHALL carry a suffix stating how many were left out, so the child count and the progress total can be reconciled. Whether the traced proportion also excludes deprecated children is not stated — see Open Questions.
+- **REQ-TRACE-282** — An epic card SHALL summarise its children on five counts: how many children it has; how those children are distributed across the delivery states; the proportion of them carrying an implementation trace; how many runs are executing beneath it; and how many blockers stand against them. Its progress line SHALL read `<done> of <total> requirements done`, the total counting only children that are not deprecated. Where the epic has deprecated children, the line SHALL carry a suffix stating how many were left out, so the child count and the progress total can be reconciled. The traced proportion SHALL be computed over the **same population** as the progress total — the children that are not deprecated — so that the two figures printed on one card always describe the same set of requirements.
 
 - **REQ-TRACE-283** — An epic card SHALL expand to its children or filter the board to them, reaching them **without leaving the board**. Filtering to an epic SHALL leave on screen the children **plus the epic itself** as context and nothing from outside the epic, and the filter summary SHALL state that an epic filter is active and name it.
 
@@ -750,15 +774,15 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-295** — Closed axes SHALL emit **every** value, populated or not. Open axes — those whose values the project invents, namely epic and source — SHALL emit only the values the project actually has, sorted by identifier ordering, with an **unset** bucket appended **last** and only when something needs it. A requirement with no value for the chosen axis SHALL land in that stated column rather than disappearing.
 
-- **REQ-TRACE-296** — Axis value derivation per card SHALL be: delivery axis, the card's delivery state; health axis, its health; lifecycle axis, its lifecycle; priority axis, its priority fact case-folded or a literal "none" when absent; source axis, its source fact; epic axis, the card's own identifier when it is an epic, else its epic fact. Each derived value SHALL be assertably equal to the value the engine computes for that card on the same axis over the same projection, so that no axis change can place a card in a column the engine would not have chosen.
+- **REQ-TRACE-296** — Axis value derivation per card SHALL be: delivery axis, the card's delivery state; health axis, its health; lifecycle axis, its lifecycle; priority axis, its priority fact case-folded or a literal "none" when absent; source axis, its source fact; epic axis, the card's own identifier when it is an epic, else its epic fact. Each derived value SHALL be assertably equal to the value the engine computes for that card on the same axis over the same projection, so that no axis change can place a card in a column the engine would not have chosen. It follows — and SHALL be stated as intended behaviour rather than left as a consequence of the rule — that on the epic axis an epic card lands in the column named by its **own** identifier, alongside its own children.
 
 - **REQ-TRACE-297** — **Drag-and-drop SHALL remain a delivery-state action.** On any non-delivery axis a card SHALL NOT be draggable between columns, and the refusal SHALL be **stated rather than silent**. The keyboard move control SHALL keep working on every axis, since it targets delivery states directly. The axis definition SHALL carry a draggable flag encoding this, because dragging into a column of a non-draggable axis would promise a write that cannot happen.
 
 - **REQ-TRACE-298** — The blocked value SHALL keep a **pinned column on the delivery axis** and SHALL be an ordinary value elsewhere.
 
-- **REQ-TRACE-299** — Filters and sort order SHALL compose with every axis unchanged.
+- **REQ-TRACE-299** — Filters and sort order SHALL compose with every axis unchanged. That composition SHALL hold in the degenerate case too: switching the grouping axis to a dimension a filter is already narrowing SHALL **preserve** the filter rather than clearing it, so that the board shows the one populated column that filtered value produces, together with whatever empty columns the axis rules of REQ-TRACE-295 require, and the filter summary SHALL continue to state that a filter is in force. Changing the axis writes nothing and SHALL NEVER alter a filter.
 
-- **REQ-TRACE-300** — Grouping axes whose values the project supplies SHALL stay usable at the column counts a real store produces: over a store of roughly 1500 requirements the epic axis yields on the order of several dozen populated columns, while a closed axis can yield no more than its own vocabulary. The board SHALL therefore remain scrollable, foldable and keyboard-operable with several dozen populated columns on screen. No maximum supported column count is stated — see Open Questions.
+- **REQ-TRACE-300** — Grouping axes whose values the project supplies SHALL stay usable at the column counts a real store produces: over a store of roughly 1500 requirements the epic axis yields on the order of several dozen populated columns, while a closed axis can yield no more than its own vocabulary. The board SHALL therefore remain scrollable, foldable and keyboard-operable with several dozen populated columns on screen. The supported bound SHALL be **100** populated columns: up to that number every guarantee stated in this document holds unchanged. Beyond it the board SHALL still render correctly and remain operable, but no responsiveness budget SHALL be claimed, and the board SHALL NEVER truncate, hide or refuse a column on account of how many there are.
 
 - **REQ-TRACE-301** — Persistence scope SHALL be split deliberately: filter, sort order, grouping axis and the blocked-column display setting are **global** (a property of the person); **column folds are per workspace** (a property of the project); permission and wait preferences are a property of this installation and MUST NOT be written into repository-carried configuration.
 
@@ -777,7 +801,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-306** — The fold decision SHALL be a pure function of the column model and a flag controlling whether emptiness folds: a recorded user decision returns that decision; otherwise the column is folded when the flag is set and the column holds nothing.
 
-- **REQ-TRACE-307** — Clicking a column's **heading** SHALL fold it and clicking the folded **rail** SHALL unfold it. There SHALL be **no separate control** and **no gesture only a mouse can make**. Neither action SHALL write a delivery record.
+- **REQ-TRACE-307** — Clicking a column's **heading** SHALL fold it and clicking the folded **rail** SHALL unfold it. There SHALL be **no separate control** and **no gesture only a mouse can make**. Neither action SHALL write a delivery record. Unfolding SHALL realise the column's visible band (REQ-TRACE-358) **within the same update that unfolds it**, never deferred to a later repaint, so that an expanded column is never observable empty or half-painted; folding SHALL release that column's card widgets in the same update, since a folded column holds none (REQ-TRACE-311).
 
 - **REQ-TRACE-308** — A folded rail SHALL display the **heading and count that the open column would show**, and, where the column is empty, the very same sentence describing what belongs in it — carried on the rail's tooltip and on its accessible description. What folding removes is the cards, never the information.
 
@@ -789,17 +813,17 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-312** — Folds SHALL be remembered **per workspace**, keyed by the workspace's resolved absolute path with a literal fallback key when the board has no workspace. A fold recorded in one workspace SHALL NOT reach another.
 
-- **REQ-TRACE-313** — The persisted fold value SHALL be a **single JSON object string** whose sorted keys map a column key to a boolean. Storing one settings entry per column is not viable: the settings backend reads a path separator as a nesting delimiter, and a column key on the epic or source axis is an arbitrary project-supplied string that may contain one.
+- **REQ-TRACE-313** — The persisted fold value SHALL be a **single JSON object string** whose sorted keys map a column key to a boolean. Storing one settings entry per column is not viable: the settings backend reads a path separator as a nesting delimiter, and a column key on the epic or source axis is an arbitrary project-supplied string that may contain one. Because the value is written whole, concurrent writers SHALL be resolved by **last writer wins**, with no merge, no locking and no reconciliation: a reader SHALL always observe one window's complete set of decisions and never a blend of two. Two windows open on one workspace are therefore expected to overwrite one another's fold decisions, which costs a fold and can never corrupt the stored value.
 
 - **REQ-TRACE-314** — **Only the user's decisions SHALL be stored**, never the resulting fold set — that is what lets both rules coexist.
 
 - **REQ-TRACE-315** — Reading stored fold state SHALL never raise. A stored value that cannot be parsed, or that is not an object, SHALL yield **no folds at all**; a member whose value is not a boolean SHALL be dropped on its own while the rest are kept. A board whose stored value came from a later build SHALL therefore open under the emptiness rule rather than fail to draw.
 
-- **REQ-TRACE-316** — The stored fold set SHALL be **pruned** to the columns the board still has, so a workspace does not accumulate a dead entry per epic or source anybody ever renamed.
+- **REQ-TRACE-316** — The stored fold set SHALL be **pruned** to the columns the board still has, so a workspace does not accumulate a dead entry per epic or source anybody ever renamed. Pruning SHALL be confined to columns whose keys are **project-supplied** — those of the epic and source axes — since that is the only place entries accumulate without bound. A decision recorded against a column of a **closed** vocabulary SHALL be retained even while that column is absent from the board, so that a column withdrawn by a display preference — the blocked column, whose presence the blocked-column setting governs, being the concrete case — comes back carrying the decision the user last made about it.
 
 - **REQ-TRACE-317** — While a dragged card **hovers** a folded column, that column SHALL open, exposing both the drop target itself and the statement of whether it can be reached and why. It SHALL return to its folded form once the drag finishes.
 
-- **REQ-TRACE-318** — From the moment a card is lifted out of its column, **every** rail on the board — not merely the one beneath the pointer — SHALL state its own answer **using the engine's wording unaltered**, and SHALL claim enough width to display that wording for the duration of the drag. A glyph on its own refuses without giving a reason, and putting the reason in a tooltip would confine it to users with a pointer or a screen reader. For the duration of a drag each rail SHALL grow by **1.5** lines of height and SHALL expand to the minimum width of an open column; when the drag finishes the borrowed width SHALL be surrendered **in full**.
+- **REQ-TRACE-318** — From the moment a card is lifted out of its column, **every** rail on the board — not merely the one beneath the pointer — SHALL state its own answer **using the engine's wording unaltered**, and SHALL claim enough width to display that wording for the duration of the drag. A glyph on its own refuses without giving a reason, and putting the reason in a tooltip would confine it to users with a pointer or a screen reader. For the duration of a drag each rail SHALL grow by **1.5** lines of height and SHALL expand to the minimum width of an open column; when the drag finishes the borrowed width SHALL be surrendered **in full**. That widening SHALL NOT be animated: it SHALL take effect in the update that begins the drag and be surrendered in the update that ends it, so the reason is legible for the whole of the drag rather than arriving part-way through it.
 
 - **REQ-TRACE-319** — A folded rail SHALL paint a first-line glyph distinguishing three situations: idle; drag in progress with this column reachable; drag in progress with this column refused. A visible hint label SHALL carry the **full sentence** alongside; the glyph SHALL NOT be allowed to stand alone. On drag cancellation the glyph SHALL return to idle and the rail's accessible description SHALL return to the empty-column sentence.
 
@@ -811,7 +835,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-322** — The board SHALL offer a **graph presentation** centred on one requirement and covering what surrounds it: its relations to other requirements, its implementation sites and its covering tests. **Every node SHALL display its own health**, and the whole graph SHALL be drawn from the projection and nothing else. The rationale to be preserved: during impact analysis, during an audit and on any large or inherited codebase, the question being asked is what depends on this requirement, not which column it currently occupies.
 
-- **REQ-TRACE-323** — Node depth SHALL be **bounded and the bound stated**, never silently truncated. The depth SHALL be clamped to a floor of **1** and a ceiling of **3**, with a default of **2**. The depth control SHALL have that range and initial value, an accessible name naming it as the graph depth, and an accessible description stating how many relation steps around the centre are shown and the maximum.
+- **REQ-TRACE-323** — Node depth SHALL be **bounded and the bound stated**, never silently truncated. The depth SHALL be clamped to a floor of **1** and a ceiling of **3**, with a default of **2**. The depth control SHALL have that range and initial value, an accessible name naming it as the graph depth, and an accessible description stating how many relation steps around the centre are shown and the maximum. The depth selection SHALL **not** be persisted: the graph SHALL open at the default depth every time it is opened, depth being a property of the question being asked at that moment rather than of the person, and the persisted display settings of REQ-TRACE-301 SHALL NOT be extended to cover it.
 
 - **REQ-TRACE-324** — The bound SHALL be stated in one of two forms: when nothing is left unexpanded, that the current depth of the maximum has everything in view fully expanded; otherwise, the current depth of the maximum followed by the identifiers whose relations are not expanded here and an instruction to select one to re-centre on it. That list SHALL name at most **four** identifiers before an "and N more" tail.
 
@@ -832,6 +856,8 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-332** — Traversal SHALL be breadth-first from the centre, one level per iteration up to the bound, with **first-seen depth winning** (a node already placed is not re-added at a deeper level), duplicate edges suppressed, and the walk stopping early when a level reaches nothing new.
 
 - **REQ-TRACE-333** — The graph surface SHALL carry accessible names for the graph itself, for the contents summary, for the statement of the depth bound, for the node area and for the edge list, together with a control back to the board that names the board as its destination. No graph content and no contents summary SHALL be presented before a centre has been chosen, a change of theme included.
+
+- **REQ-TRACE-505** — The graph SHALL be bounded by **node count** as well as by depth, and that bound SHALL be stated rather than silently applied. At most **50** neighbours SHALL be admitted for any one node at any one level, taken in the identifier order of REQ-TRACE-289 so the selection is deterministic and identical on every read of an unchanged project. A node whose neighbours were cut off in this way SHALL be reported among the unexpanded set of REQ-TRACE-324, and the statement of the bound SHALL additionally say how many neighbours were left out and that re-centring on that node brings them into view. Evidence nodes (REQ-TRACE-331) SHALL be admitted under the same per-node bound, implementation sites and covering tests each taken in path-then-line order.
 
 ### Live Refresh and Refresh Kinds
 
@@ -887,13 +913,15 @@ A project keeps its requirements as versioned documents in its own repository. A
   - **no overall percentage SHALL be shown**, and where a phase reports no denominator **no bar SHALL be drawn at all** rather than one invented for the occasion;
   - every control and every meter SHALL carry an accessible name, SHALL state its value as text and not by fill level alone, and SHALL fit within the minimum supported window size.
 
+- **REQ-TRACE-507** — The live-refresh subscription SHALL be a supervised resource. Where it ends, fails, or reports that the repository watcher behind it has stopped delivering, the board SHALL raise a **persistent, actionable notice** naming what stopped and carrying a re-subscribe action named after what it does, SHALL keep the last good board on screen, and SHALL go on stating when it last evaluated (REQ-TRACE-336) so that the age of what is displayed stays visible. The board SHALL NOT poll in place of a subscription, and SHALL NOT infer a dead watcher from silence: an idle repository and a stopped watcher present the identical absence of events, and a board that guessed between them would either cry wolf over a quiet project or conceal a real failure. Re-subscription SHALL be attempted only when asked for — no automatic retry schedule and no backoff — and the explicit re-evaluation control of REQ-TRACE-342 SHALL remain the guaranteed route to a current board, its availability never depending on the subscription being healthy.
+
 ### Board Scaling and Virtualisation
 
 - **REQ-TRACE-358** — The board SHALL construct card widgets **only for cards currently on screen**. Each column SHALL retain the full ordered membership from its model but SHALL build widgets only for the cards lying within its own scroll viewport, extended by a small overscan margin, using the scroll position the column already tracks. Scrolling SHALL **reuse** the existing widgets instead of allocating additional ones.
 
 - **REQ-TRACE-359** — A widget SHALL be **reused rather than torn down and reconstructed**. When one card leaves the realised band, the widget it occupied SHALL be repainted where it stands to show the card that has entered the band, going through **the identical update path** that live refresh uses.
 
-- **REQ-TRACE-360** — A column SHALL keep cards realised for a fixed margin above and below its viewport, so that a wheel step, a page key or a card taller than expected lands on a card that already exists rather than on a gap. Until real measurements exist the column SHALL size its scroll range from an estimate and SHALL adopt the measurements once they do, so that the scroll range and the realised band agree. The number of card widgets the board holds SHALL stay bounded by what the viewport and that margin require: after a filter is widened so that a column's membership grows and then narrowed again, the board SHALL hold no more card widgets than it held before the filter was widened. The size of the margin and of that bound are not stated — see Open Questions.
+- **REQ-TRACE-360** — A column SHALL keep cards realised for a fixed margin above and below its viewport, so that a wheel step, a page key or a card taller than expected lands on a card that already exists rather than on a gap. Until real measurements exist the column SHALL size its scroll range from an estimate and SHALL adopt the measurements once they do, so that the scroll range and the realised band agree. The number of card widgets the board holds SHALL stay bounded by what the viewport and that margin require: after a filter is widened so that a column's membership grows and then narrowed again, the board SHALL hold no more card widgets than it held before the filter was widened. The margin SHALL be **5** cards above and **5** below the viewport band, and the pool of released widgets a column retains for reuse SHALL be capped at **20**; a widget released beyond that cap SHALL be discarded rather than held.
 
 - **REQ-TRACE-361** — Until at least one card in a column has genuinely completed layout, the column SHALL continue to use its height estimate.
 
@@ -907,7 +935,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-366** — The board SHALL publish a **readiness flag** and a **pending count** as observable state, so that a caller can wait for the bands to finish realising.
 
-- **REQ-TRACE-367** — The cost of putting a board on screen SHALL be governed by how much of it is visible, not by how many requirements the store holds. Spreading the construction of every card across successive turns of the event loop SHALL NOT be accepted as satisfying this, since it leaves the total work unchanged. Typing a character into the search box SHALL NOT discard and rebuild the board's cards.
+- **REQ-TRACE-367** — The cost of putting a board on screen SHALL be governed by how much of it is visible, not by how many requirements the store holds. Spreading the construction of every card across successive turns of the event loop SHALL NOT be accepted as satisfying this, since it leaves the total work unchanged. Typing a character into the search box SHALL NOT discard and rebuild the board's cards. One keystroke SHALL cost no board work beyond restarting the debounce timer of REQ-TRACE-363 and painting the character typed, and the recomputation that follows the debounce pause SHALL occupy the interface thread for no more than **100 ms** under the same reference conditions.
 
 ### Surface Composition and Staging
 
@@ -957,11 +985,11 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-387** — Dropping a card onto a column SHALL call the engine's delivery transition, attributing it **to the user as the acting party**, and **whatever the transition entails technically SHALL then execute**: a release begins the execution flow, and an acceptance stores the specification hash that has now been satisfied.
 
-- **REQ-TRACE-388** — The card SHALL show the action **in progress** with a per-action progress label naming what is happening, and then its outcome. **No card SHALL ever come to rest in a state the engine has not agreed to**: an optimistic rendering is permitted while the action is in flight, never as the settled result. A refused or failed transition SHALL return the card to its origin column and change nothing.
+- **REQ-TRACE-388** — The card SHALL show the action **in progress** with a per-action progress label naming what is happening, and then its outcome. **No card SHALL ever come to rest in a state the engine has not agreed to**: an optimistic rendering is permitted while the action is in flight, never as the settled result. A refused or failed transition SHALL return the card to its origin column and change nothing. At most **one** state-changing action per requirement SHALL be in flight at a time: a second action requested for a requirement that already has one pending SHALL be **refused with a stated reason** and SHALL write nothing, rather than being queued behind the first or racing it. No further bound SHALL be placed on how many actions may be in flight across **different** requirements, each being independent and each already adjudicated by the engine.
 
 - **REQ-TRACE-389** — For every action in the confirmation set the **consequence SHALL be stated before it happens**. Each action SHALL have exactly one consequence sentence, naming what it does to the requirement, to the branch and to the worktree, including: that releasing takes a snapshot of the specification, splits it into execution units and begins work inside a worktree of its own; that returning discards nothing already run; that accepting records the delivered specification version and is refused unless every completion condition holds; that re-running starts from the current specification on a new branch and keeps the previous branch and worktree; that sending the agent back places whatever the user wrote into the context given to the following run; that rejecting returns the requirement to ready while keeping unit branches and worktrees for inspection; that holding blocks with the user's stated reason and schedules nothing until it clears; that resuming puts the requirement back into whichever state it was blocked out of — or, where that was a running state, into the released state instead, because asserting that a run is under way is something only the system may do — and that returning to the released state starts the work again with the queue deciding when; that answering a blocker stores the answer, hands it back to the engine and allows the flow to pick up at the point it halted; that editing writes back into the project's own artifact and a delivered requirement then needs an update; that creating follows the chosen source's own identifier and location conventions; that accepting a proposal creates a **permanent** technical requirement in the project's own store with its origin link, unlike an execution unit which outlives nothing; that accepting change-work carries out what the analysis concluded and that nothing runs until the user accepts; and that keeping the worktree leaves the requirement where it is.
 
-- **REQ-TRACE-390** — Every move that can be made by dropping a card SHALL also be available from the keyboard, through a move control reachable by a key chord. The chord SHALL do nothing but place focus on that control; the control itself SHALL **aim at the first delivery state the engine reports as reachable** for the selected requirement and SHALL name which that is. The chord itself is not fixed here — see Open Questions.
+- **REQ-TRACE-390** — Every move that can be made by dropping a card SHALL also be available from the keyboard, through a move control reachable by a key chord. The chord SHALL do nothing but place focus on that control; the control itself SHALL **aim at the first delivery state the engine reports as reachable** for the selected requirement and SHALL name which that is. The chord SHALL be the platform's primary modifier together with `M`. It SHALL be registered through the application's own keybinding surface rather than bound privately by this view, so that a collision with an application-wide binding is settled in one place and the chord stays re-bindable by the user; every sentence that names the chord SHALL name whichever chord is actually in force rather than a fixed one written into the text.
 
 - **REQ-TRACE-391** — The move control SHALL state **one** column, not a list:
   - reachable — a sentence naming the requirement, its source column and the target column, **with the consequence in the sentence itself**, not only behind a hover, and with the label's accessible description equal to its visible text;
@@ -1000,6 +1028,8 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-405** — Every action in the closed set that changes state SHALL write a record carrying four things: **who performed it**, **when**, **which requirement** it applied to, and **that requirement's hash at that instant**. The record SHALL appear in the requirement's history, interleaved there with runs and verifications. An action taken by the scheduler or by an agent SHALL be recorded as such and SHALL be **distinguishable from one taken by a person**. No state-changing action SHALL complete without leaving such a record.
 
 - **REQ-TRACE-406** — The board state SHALL be one value carrying the columns, the queue and the pending and feedback action lists together.
+
+- **REQ-TRACE-506** — Where the requirement an open confirmation prompt refers to leaves the board while that prompt stands — a live refresh having removed it, or another actor having moved it out of the state the action was offered from — the prompt SHALL be **withdrawn without the action being performed**, and a stated notice SHALL name the requirement and say that it is no longer in the state the action was offered for. Nothing SHALL be written, no record SHALL be made and no run SHALL be dispatched. Confirming SHALL NEVER act on a requirement the board no longer holds, and the action SHALL become available again only by being invoked afresh against the requirement as it now stands.
 
 ### Offer Discipline
 
@@ -1066,7 +1096,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Derived Technical Requirement Proposals
 
-- **REQ-TRACE-427** — A technical requirement a run proposes SHALL be **put to the reviewer, and SHALL NOT be written into the store unless the reviewer accepts it**. Proposals from a completed run SHALL be shown on the review of the requirement whose run produced them, alongside the claim side and the measurement side, and SHALL be carried from the run to the review in a file on disk. That file's name, location and format are not stated — see Open Questions.
+- **REQ-TRACE-427** — A technical requirement a run proposes SHALL be **put to the reviewer, and SHALL NOT be written into the store unless the reviewer accepts it**. Proposals from a completed run SHALL be shown on the review of the requirement whose run produced them, alongside the claim side and the measurement side, and SHALL be carried from the run to the review in a file on disk. That file SHALL be named `proposed-requirements.json`, SHALL sit in the run's own artifact directory alongside the requirement's recorded source, and SHALL hold one JSON array of proposal objects, each carrying the proposed title, the proposed description, the origin identifier the proposal derives from, and the execution unit that raised it. It SHALL be written once by the run as it finishes and SHALL be **read and never written** by the review. A file that is absent, empty or unreadable SHALL be reported as the run having put forward no proposals (REQ-TRACE-430) and SHALL NEVER fail the run or the review.
 
 - **REQ-TRACE-428** — The offer SHALL give the proposed title, name its origin, and spell out **in prose** how the two kinds of artifact differ: an execution unit exists only to divide up work and is discarded afterwards, whereas a technical requirement is durable and becomes part of the project's own store.
 
@@ -1193,7 +1223,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-482** — Control wording SHALL be explicit. For automatic scheduling it SHALL say that, when enabled, the system itself picks up the next candidate as capacity becomes available, and that, when disabled, nothing begins until the user releases it. For the stop control it SHALL say that stopping prevents anything new from beginning while work already dispatched continues and completes as usual — and this SHALL be stated **both before the control is used and afterwards**. An empty queue SHALL report that nothing is queued and nothing is executing, together with a hint naming the two ways to put something into it.
 
-- **REQ-TRACE-483** — A workspace that sets none of the queue keys SHALL take the defaults declared by the configuration schema, `requirements.scheduling.mode` taking `manual`. The default concurrency limit is not stated — see Open Questions.
+- **REQ-TRACE-483** — A workspace that sets none of the queue keys SHALL take the defaults declared by the configuration schema, `requirements.scheduling.mode` taking `manual` and the concurrency limit taking **2**. Two is chosen because a release dispatches an unattended run holding full permissions inside a worktree of its own, and two such runs are as many as one person can follow, while a third would mostly compete for the same reviewer's attention. A project wanting more SHALL say so explicitly, and the **engine** — never the control — SHALL enforce whatever it says (REQ-TRACE-481).
 
 ### Keyboard Operability and Accessibility
 
@@ -1201,7 +1231,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-485** — Cards and columns SHALL carry accessible names and descriptions that **communicate state through text rather than colour**. A column's accessible name SHALL identify the column, and its accessible description SHALL include the delivery-state word. A card's accessible description SHALL include the delivery-state word, the token for its health, and the card's rendered health label.
 
-- **REQ-TRACE-486** — On a focused card, the activation key SHALL open the detail view and a stated chord SHALL open the evidence view for that requirement. Card controls SHALL carry accessible names for opening the requirement and for opening its evidence, each naming the requirement.
+- **REQ-TRACE-486** — On a focused card, the activation key SHALL open the detail view and a stated chord — the platform's primary modifier together with `E`, registered and re-bindable exactly as REQ-TRACE-390's is — SHALL open the evidence view for that requirement. Card controls SHALL carry accessible names for opening the requirement and for opening its evidence, each naming the requirement.
 
 - **REQ-TRACE-487** — **Escape SHALL close a pane** and return focus to the control it was opened from. **No pane SHALL strand the focus when it closes**, and focus SHALL never be stranded in a collapsed filter row, a closed detail view or a folded column.
 
@@ -1211,7 +1241,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-490** — A drop-down SHALL be bounded in width by the kind of vocabulary it offers: **240** points where the vocabulary is closed, as it is for sort order, grouping axis and move target, and **150** points where the values come from the project. A value wider than its bound SHALL be elided, and the whole value SHALL remain available through both the tooltip and the accessible description. Where no bound is stated for a drop-down, the open column's maximum width SHALL serve as its ceiling.
 
-- **REQ-TRACE-491** — Exactly one control on the screen SHALL be presented as the primary action. It SHALL be **32** points high while every other control is **24**, so that the two are told apart without being compared side by side. Which control holds that position is not stated — see Open Questions.
+- **REQ-TRACE-491** — Exactly one control on the screen SHALL be presented as the primary action. It SHALL be **32** points high while every other control is **24**, so that the two are told apart without being compared side by side. That position SHALL be held by the board's **plain re-evaluation control** (REQ-TRACE-342) — the one action that is always available, always meaningful and never destructive on a surface whose other writes are made per card. While an analysing refresh is in flight, the **stop** that control has turned into (REQ-TRACE-343) SHALL hold the position in its place, so that exactly one control occupies it at every moment.
 
 - **REQ-TRACE-492** — A complete keyboard-only path SHALL be possible end to end through the real controller, bridge and projection: focus a card (which updates the selected requirement, because focus is selection); open its evidence with the chord; reach the failing test as a keyboard-reachable control whose accessible name states the covering test with its path and line; and return to the board with escape.
 
@@ -1308,16 +1338,16 @@ source: <original document path>       # optional provenance
 
 ### Identifier format
 
-- `<PREFIX>-<digits>` and nothing else, where `<PREFIX>` is one uppercase token fixed for the project. No leading zeros, no upper bound on the number. How the prefix is declared is an open question.
+- `<PREFIX>-<digits>` and nothing else, where `<PREFIX>` is one uppercase token fixed for the project, declared by the layout key `id_prefix` and defaulting to `REQ`. No leading zeros, no upper bound on the number.
 - `x00` is an epic; `x01` upward are that epic's requirements; one hundreds-block per epic.
 - Maps to a generated integer-valued symbol whose value equals the number.
-- Legacy identifier shapes accepted inside transitional comments: the canonical prefix plus the three historical prefixes, each followed by one or more hyphen-separated alphanumeric segments (for example a date-time-sequence form).
+- Transitional coverage comment: the case-insensitive token `covers:` followed by one or more identifiers separated by commas, whitespace, or both, recognized to the end of that line. Each token is either a canonical identifier or a run of one or more hyphen-separated alphanumeric segments; a non-canonical token resolves only through the `legacy-id` alias table, and there is no hard-coded list of legacy prefixes.
 
 ### Hashes
 
 - Store content hash: the first **16** hexadecimal characters of a SHA-256 over the whole normalized document text.
 - Global fingerprint: a full SHA-256 (64 hexadecimal characters) over the newline-joined per-requirement payload `identifier|status|int(trace)|int(test)|title|source_path|content_hash|type|comma-joined derived-from`, requirements in ascending number order.
-- A separate canonical hash exists for consumers that need frontmatter-order and formatting independence and per-identifier distinctness; it is not interchangeable with the store hash.
+- Canonical hash: the first **32** hexadecimal characters of a SHA-256 over the LF-joined payload `identifier`, `status`, `trace`, `test`, `type`, comma-joined `derived-from`, `title`, and that identifier's own prose — each line stripped and its interior whitespace collapsed to single spaces. Frontmatter-order and formatting independent, distinct per declared identifier, and not interchangeable with the store hash; the two are told apart by length.
 
 ### Generated requirement-symbol artifact
 
@@ -1372,7 +1402,7 @@ A path with an extension, zero or more `::`-separated class segments, and a fina
 <PREFIX>-<n><TAB><YYYY-MM-DD><TAB><last known title>
 ```
 
-Records ascending by number; at least two tab-separated fields required; the title field optional; malformed lines skipped silently; the write is **not** atomic.
+Records ascending by number; at least two tab-separated fields required; the title field optional; malformed lines skipped silently; the write is atomic (temporary file in the same parent directory, then an atomic replace).
 
 ### Layout configuration (JSON, at the repository root)
 
@@ -1380,28 +1410,39 @@ Records ascending by number; at least two tab-separated fields required; the tit
 {
   "layout": {
     "requirements_dir": "docs/requirements",
-    "generated_path": "<path to the generated module>",
-    "impl_roots": ["<root>", "..."],
-    "test_roots": ["<root>", "..."],
-    "excused_test_roots": ["<root>", "..."],
-    "baseline_path": "<path>",
-    "orphan_baseline_path": "<path>",
-    "test_orphan_baseline_path": "<path>",
-    "tombstone_path": "<path>",
-    "exempt_marker": "<comment-shaped token>",
-    "skip_parts": ["__pycache__", ".venv", "fixtures"]
+    "id_prefix": "REQ",
+    "generated_path": "src/requirement_ids.<ext>",
+    "impl_roots": ["src"],
+    "test_roots": ["tests"],
+    "excused_test_roots": [],
+    "baseline_path": "docs/requirements/debt-baseline.txt",
+    "orphan_baseline_path": "docs/requirements/orphan-modules.txt",
+    "test_orphan_baseline_path": "docs/requirements/orphan-tests.txt",
+    "tombstone_path": "docs/requirements/retired-identifiers.tsv",
+    "exempt_marker": "trace-exempt",
+    "skip_parts": ["__pycache__", ".venv", "fixtures"],
+    "annotation_conventions": [
+      {
+        "name": "<convention name>",
+        "extensions": [".<ext>", "..."],
+        "reference_pattern": "<expression capturing one identifier or number>",
+        "annotation_pattern": "<expression matching a whole annotation site>",
+        "test_pattern": "<expression capturing a collectable test function name>",
+        "exempt_module_pattern": "<expression matching an excused module>"
+      }
+    ]
   }
 }
 ```
 
-Keys may also sit at the top level. Unknown keys are an error listing offenders and accepted keys, both sorted. Path values must be non-empty, relative, free of `..`, and are normalized to forward slashes. List-valued keys reject a bare string.
+The values shown are the defaults; a repository that configures nothing behaves exactly as one that writes all thirteen of them. Keys may also sit at the top level. Unknown keys are an error listing offenders and accepted keys, both sorted. Path values must be non-empty, relative, free of `..`, and are normalized to forward slashes. List-valued keys reject a bare string. `id_prefix` must be uppercase letters and digits, beginning with a letter and carrying no hyphen. `annotation_conventions` is an ordered list of objects carrying exactly the six keys shown, registered after the built-in convention; an expression that does not compile is a configuration error.
 
 ### Command-line contract
 
 ```
 <traceability-cli> [--repo-root <path>] [--layout <path>] <command>
 
-  check [--fix] [--update-baseline]
+  check [--fix] [--update-baseline] [--report-only]
   generate
   diff [--base <revision>] [--strict]
 ```
@@ -1413,7 +1454,7 @@ Keys may also sit at the top level. Unknown keys are an error listing offenders 
 | `--layout` | default: the layout configuration file at the repository root |
 | `--base` default | the current revision |
 | Exit 0 | success, no violations |
-| Exit 1 | violations, parse errors, bad layout configuration, strict drift |
+| Exit 1 | violations, parse errors, bad layout configuration, strict drift; under `--report-only`, violations alone no longer produce it |
 | Exit 2 | unhandled exception; also argument-parsing usage errors |
 | stdout | warnings, statistics, the OK line, regeneration notices, baseline notices, comparison lines |
 | stderr | errors, parse errors, configuration errors, internal errors, failure lines |
@@ -1421,7 +1462,7 @@ Keys may also sit at the top level. Unknown keys are an error listing offenders 
 | Writes | only `--fix` (generated artifact and retired-identifier log) and `--update-baseline` (three baselines) |
 | Dependencies | standard library only |
 
-Distinct output line shapes, all carrying the constant tag: an OK line; a failure line naming a violation count; an error line; a warning line; a parse-error line; a configuration-error line; an internal-error line carrying the exception representation; a regeneration notice naming the artifact path; a generation line naming the artifact path, which of "regenerated" or "already up to date" was observed, and the requirement count; the statistics line; three baseline-written lines each naming a path and an entry count; a "no base artifact to compare against" line; a "no requirement changes" line; per-change header lines; and a strict failure line naming the count of unpropagated requirements.
+Distinct output line shapes, all carrying the constant tag: an OK line; a failure line naming a violation count; an error line; a warning line; a parse-error line; a configuration-error line; an internal-error line carrying the exception representation; a regeneration notice naming the artifact path; a generation line naming the artifact path, which of "regenerated" or "already up to date" was observed, and the requirement count; the statistics line; three baseline-written lines each naming a path and an entry count; a "no base artifact to compare against" line; a "no requirement changes" line; per-change header lines; a strict failure line naming the count of unpropagated requirements; an enforcement-level line naming the level in force; and an empty-store warning line naming the store directory and which of the three empty findings holds.
 
 Statistics line fields: total requirements; approved, traced and test-covered counts; and the four baseline-debt counts labelled trace, test, orphan and orphan-test.
 
@@ -1440,7 +1481,7 @@ with a single indented "no annotation sites yet" placeholder for an added or mod
 - Phases: `reading`, `checks`, `coverage`, `recording`, `adopting`.
 - Sequences: verification is `reading` then `checks` then `coverage` then `recording`; adoption is `reading` then `checks` then `coverage` then `adopting` then `recording`.
 - Phase report: the phase and the number of items it will report, a total of **0** meaning one indivisible step. It always precedes that phase's first item report.
-- Item report: the phase, a label, a **1-based** position, the phase total, an optional detail, and the deadline in seconds applying to the item in progress.
+- Item report: the phase, a label, a **1-based** position, the phase total, an optional detail, and the deadline in seconds applying to the item in progress — the deadline being **absent** where the wait is unlimited, never zero.
 - Both are delivered on the pass's own thread. With no consumer: no reporting work at all, and an identical report, identical records and identical writes.
 - Throttling: only above **20** items in a phase; minimum publication interval **0.1 s**; a phase change and a phase's last item are always published.
 
@@ -1463,10 +1504,11 @@ with a single indented "no annotation sites yet" placeholder for an added or mod
 - Graph node kinds: `requirement`, `epic`, `implementation`, `test`; an evidence node identifier is `<site kind>:<address>`.
 - Column header text: `<Label> · <count>`. Column keys that are project-supplied identifiers print as-is; other keys are title-cased by splitting on hyphens.
 - Test node identifiers: `path::function` or `path::Class::function`.
+- Evidence obligation kinds, in indicator order: `implementation-trace`, `covering-test`, `verification`.
 - Recorded-evidence states: `satisfied`, `stale`, `failed`.
 - Drag payload: a private application-specific transfer type, never plain text.
 - Observed run branch naming convention: `<product>/req/<identifier>/<unit id>`.
-- Named on-disk files carried between a run and its review: the requirement's recorded source, and the run's proposed technical requirements.
+- Named on-disk files carried between a run and its review: the requirement's recorded source, and the run's proposed technical requirements — `proposed-requirements.json`, a JSON array of proposal objects in the run's artifact directory.
 
 ### Persisted state
 
@@ -1475,7 +1517,7 @@ Workspace configuration (travels with the repository):
 | Key | Values | Default |
 | --- | --- | --- |
 | `requirements.scheduling.mode` | `manual` / `automatic` | `manual` |
-| `requirements.scheduling.*` (concurrency limit) | integer | schema default; control ceiling 64 |
+| `requirements.scheduling.*` (concurrency limit) | integer | `2`; control ceiling 64 |
 | `requirements.change.analyze_changes` | boolean | per schema; when off, the board states why |
 | `requirements.human_in_the_loop.confirm_source_writes` | boolean | per schema; never consulted for an accepted derived-requirement proposal |
 | `runtime.permission_mode` | e.g. `ask` / `autonomous` | `ask`; board runs receive the permissive value for that run only |
@@ -1502,26 +1544,32 @@ Boolean reads MUST tolerate however the settings backend wrote them: a text back
 | Constant | Value |
 | --- | --- |
 | Content hash length | 16 hexadecimal characters |
+| Canonical hash length | 32 hexadecimal characters |
 | Global fingerprint length | 64 hexadecimal characters |
 | Deprecated-reference site cap | 5, then an "and N more" tail |
 | Orphan-test annotation window slack above the span | 2 lines |
 | Consumer-layer version-control timeout | 30 s |
-| Command-line version-control timeout | none (a documented gap) |
+| Command-line version-control timeout | 30 s |
 | Minimum supported window | 1000 × 680 |
 | Open column width | minimum 276, maximum 340; margins 10 on every side |
 | Folded rail | 8 characters of its own font wide; 2 heading lines; margin 4 |
 | Folded rail extra height during a drag | 1.5 lines |
 | Folded column width during a drag | the open-column minimum, 276 |
-| Realised card widgets | the viewport band plus a fixed margin of cards above and below; released widgets retained for reuse up to a fixed bound |
+| Realised card widgets | the viewport band plus a margin of 5 cards above and 5 below; up to 20 released widgets retained per column for reuse |
 | Search debounce | 150 ms |
 | Evaluation retry while a read is in flight | 150 ms |
 | Elapsed-clock redraw interval | 1000 ms |
 | Progress throttle threshold / minimum publication interval | above 20 items / 0.1 s |
-| Graph depth | floor 1, default 2, ceiling 3 |
+| Graph depth | floor 1, default 2, ceiling 3; not persisted |
+| Graph neighbours admitted per node per level | 50, in identifier order, with the omitted count stated |
 | Graph unexpanded-identifier list cap | 4, then an "and N more" tail |
+| Blocked summary rows listed | 20, then a row stating how many more and filtering the board to them |
 | Card dependency list cap | 4, then an "and N more" tail |
 | Refusal-report cap inside a notice | 20 |
 | Concurrency control ceiling | 64 |
+| Default concurrency limit | 2 |
+| Supported populated-column bound on an open axis | 100 |
+| Interface responsiveness budget | 100 ms to put a board on screen once the engine has answered, and 100 ms for the post-debounce filter recomputation |
 | Primary action height / other control height | 32 / 24 |
 | Closed-vocabulary / open-vocabulary drop-down width | 240 / 150 |
 | Contrast floors | 3:1 for status marks against the card ground; 4.5:1 for alert text |
@@ -1532,100 +1580,4 @@ Boolean reads MUST tolerate however the settings backend wrote them: a text back
 
 ## Open Questions
 
-1. The commit-time enforcement hook is described in prose and by requirement text, but its script is absent from the source material, so its exact staging behaviour is unknown: which paths it stages, whether it blocks on warnings as well as errors, and how it locates the repository root without an activated environment.
-
-2. Behaviour of the change-comparison command when the named base revision exists but predates the introduction of the generated artifact is untested; it appears to take the same path as a missing revision, but this is not confirmed by any documented case.
-
-3. The exact interleaving of console output when regeneration and baseline-pruning are requested in the same invocation is inferred from ordering alone; no test or document pins the observable ordering.
-
-4. Behaviour when two annotation conventions claim the same file extension is stated only as "earliest registration wins", with no test or documented example; tie-breaking beyond that is unspecified.
-
-5. Scaling characteristics of the store parse — memory and wall time for very large stores — are uncharacterised; the only recorded performance figures cover the annotation sweep, not the store parse.
-
-6. There is no documented behaviour for concurrent invocations of the checking command against the same repository (for example a hook and a test run racing on the generated artifact); write atomicity is described for one file only, and the retired-identifier log write is not atomic.
-
-7. The intended behaviour when the requirement store directory exists but is empty, versus when it is absent, is distinguished by a probing helper, but the checking command's own reporting for an empty store is not documented.
-
-8. Whether the human-readable reciprocal navigation lines between a derived requirement and its origin are ever validated by any tool is not stated anywhere; the evidence suggests they are convention only, but no test confirms the absence of a check.
-
-9. No documented upper bound, timeout, or resource limit exists for the repository scan; whether that is deliberate policy or an unaddressed gap is not stated.
-
-10. Enforcement-level selection — a non-blocking reporting mode versus the enforcing mode — including its flag name, configuration key, and the required statement of the active level in output, is specified as intended behaviour but not built, so its concrete surface is unknown. The related non-blocking coverage report for a first-adopting repository with no ratchet is likewise specified but absent.
-
-11. Automatic detection of a target project's structure is specified as a proposal-writing step, including the marker files it would consult, but its output shape, conflict handling for multiple detected stacks, and confirmation flow are unbuilt and undocumented beyond the intent.
-
-12. Registration of additional annotation conventions through configuration, and the concrete non-host-language conventions themselves, are specified but unbuilt; only the seam exists. Until then a project in another language cannot satisfy its own traceability obligation.
-
-13. No timeout or cancellation bound was found for the engine read that backs a board refresh; the stoppable pass covers only the model-consulting judgement, so how long a plain refresh may block before the surface reacts is unspecified.
-
-14. Behaviour when two application windows open on the same project concurrently write the same persisted display state (column folds) is not stated; last-writer-wins is assumed but unconfirmed.
-
-15. Whether a hand-made per-column display choice is restored if the column set changes and then changes back within one session is unspecified: the stored choices are pruned to the live column set, so a choice recorded against a column that temporarily disappears may be lost silently. The blocked-column display setting is the concrete case, since switching it off removes that column from the set.
-
-16. The exact moment at which a previously-collapsed column realises its visible band on expansion — immediately versus on the next repaint — was not confirmed.
-
-17. No node-count bound was found for the relationship graph, only a depth bound; a centre element with hundreds of immediate neighbours has no stated truncation or paging behaviour.
-
-18. Whether the evidence detail listing paginates or truncates a very large set of implementation and test sites is unspecified; only the missing-evidence and empty cases are stated.
-
-19. The always-visible blocked summary strip has no stated upper bound on how many entries it lists before it scrolls or truncates.
-
-20. Concrete colour token values behind the indicator segments are not enumerated; only a 3:1 contrast floor against the card ground and a 4.5:1 floor for alert text are stated.
-
-21. Whether the drag-time widening of collapsed rails is animated, and over what duration, is not stated; only that the borrowed width is returned exactly when the drag ends.
-
-22. Behaviour of an open confirmation prompt when the underlying item disappears from the board mid-confirmation — for example because a live refresh removed it — is unspecified.
-
-23. Exit codes are not defined for the board surface: it is a graphical area with no command-line entry point of its own. Only one adjacent headless command is named as a second consumer of the progress protocol, and its exit semantics belong to the command-line domain rather than here.
-
-24. Whether a filter on a grouping dimension is automatically cleared or preserved when the grouping axis is switched to that same dimension is not stated; the two are documented as composing unchanged, but the degenerate overlap case is not covered.
-
-25. The recovery behaviour of the live-refresh subscription itself is unspecified: a failed evaluation is covered, but a repository watcher that stops delivering events entirely has no stated detection, backoff or user-visible signal.
-
-26. Whether the graph presentation persists its depth selection across sessions is unspecified; the display filter, order and grouping axis are documented as persisted, the graph depth is not mentioned.
-
-27. The upper bound on how many pending state-changing operations may be in flight simultaneously from this surface is unspecified, as is what happens if a second operation is requested for an item that already has one pending.
-
-28. Whether an epic card placed on the epic grouping axis lands in the column named by its own identifier — appearing alongside its own children — follows from the axis-value rule but is not stated as intended behaviour anywhere.
-
-29. The exempt marker's default spelling, and whether a project is expected to change it when adopting the toolchain, are not settled; the marker text is embedded verbatim in one baseline header and in two diagnostics, so changing it rewrites those artifacts on the next baseline update.
-
-30. REQ-TRACE-014: how a frontmatter key that is neither one of the seven recognized keys nor one of the provenance keys of REQ-TRACE-015 is treated — silently ignored, warned about, or rejected as a parse error — is not stated.
-
-31. REQ-TRACE-022: how a project declares its identifier prefix is not stated. The layout configuration schema of REQ-TRACE-039 carries no key for it, and no other configuration surface is named.
-
-32. REQ-TRACE-037: the canonical hash is described only by the properties it must have. Its exact input (which normalization is applied, and which parts of the document are included) and its length are undefined, so two implementations would not agree on its value.
-
-33. REQ-TRACE-039: default values are not stated for `generated_path`, `impl_roots`, `test_roots`, `excused_test_roots` or `exempt_marker`, yet REQ-TRACE-038 requires an unconfigured repository to receive a complete default layout. (For the marker specifically see also question 29.)
-
-34. REQ-TRACE-054: the exact status-marker text written into the generated documentation string for each lifecycle value is not stated; only that the deprecated marker is the longer wording forbidding new references.
-
-35. REQ-TRACE-070 and REQ-TRACE-076: the exact lexical form of the transitional coverage comment is not stated, and the recognized legacy identifier prefixes are referred to but never enumerated.
-
-36. REQ-TRACE-088: the machine, repository and conditions against which the one-second sweep budget is measured are not stated, so the budget cannot be checked.
-
-37. REQ-TRACE-104: the precise test by which the default convention decides that a module exists only to re-export names, and is therefore excused from the orphan-module check, is not stated.
-
-38. REQ-TRACE-213: what the item report's deadline field carries when the wait budget is unlimited is not stated. REQ-TRACE-467 stores zero for an unlimited wait, but whether the deadline field carries zero, an absent value, or something else is undetermined.
-
-39. REQ-TRACE-239 and REQ-TRACE-367: no maximum acceptable interval is stated either for putting a board on screen after the engine has answered, or for the work one keystroke in the search box may cost.
-
-40. REQ-TRACE-258 and REQ-TRACE-262: the closed set of evidence obligation kinds is never enumerated, so the number and identity of the indicator's segments cannot be predicted from this specification.
-
-41. REQ-TRACE-282: whether the traced proportion an epic card reports excludes deprecated children, as its progress total explicitly does, is not stated.
-
-42. REQ-TRACE-300: no maximum supported number of populated columns is stated for a grouping axis whose values the project supplies, only that several dozen must remain usable.
-
-43. REQ-TRACE-390 and REQ-TRACE-486: the concrete key chords — the one that focuses the move control, and the one that opens the evidence view from a focused card — are required to exist and to be stated to the user, but are not named here.
-
-44. REQ-TRACE-427: the name, location and format of the on-disk file that carries a run's proposed technical requirements from the run to the review are not stated.
-
-45. REQ-TRACE-483: the default concurrency limit a workspace receives when it configures nothing is not stated; only that the scheduling mode defaults to `manual`.
-
-46. REQ-TRACE-491: which board control occupies the single primary-action position is not stated, so the requirement that exactly one control be presented that way cannot be checked against a named control.
-
-47. REQ-TRACE-073: the concrete form in which a project declares an annotation convention for a language other than the host's is not stated — where the declaration is written, and how it supplies the spelling of a reference, an annotation site, a collectable test function and an excused module. (See also question 12, which records that no such declaration surface exists yet.)
-
-48. REQ-TRACE-091: the relative order in which findings produced by different checks appear within a single run's returned error and warning lists is not stated. Ordering is fixed only within a check (for example, removed-requirement errors iterate sorted numbers), so two implementations could interleave the checks' findings differently and both satisfy this specification.
-
-49. REQ-TRACE-360: neither the size of the margin of cards realised above and below a column's viewport, nor the bound on how many released card widgets are retained for reuse, is stated as a number; only that both are fixed.
+None outstanding. Every open question raised in the draft was resolved; see [`resolutions/08-requirements-traceability.md`](resolutions/08-requirements-traceability.md).

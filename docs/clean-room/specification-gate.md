@@ -1,6 +1,6 @@
 # Specification Gate
 
-**Status: OPEN — awaiting the user's decision.**
+**Status: DECISIONS RECORDED — all five items answered 2026-08-30. Closes on the sufficiency statement once open questions are resolved.**
 
 This gate asks one question: *is the behavioral specification good enough to begin architecture
 design?* It is not asking whether the specification is finished. Specifications are never finished;
@@ -110,13 +110,55 @@ rest.
 
 ## Record of decision
 
-*(To be completed by the user.)*
+Recorded 2026-08-30 from the product owner.
 
 | Item | Decision | Date |
 |------|----------|------|
-| Compatibility ambition | | |
-| Defect policy | | |
-| Unbuilt behavior | | |
-| First-milestone scope | | |
-| Message text policy | | |
-| **Gate** | | |
+| Compatibility ambition | **Behavioral inspiration only.** The stated preference is no compatibility obligation at all: build to these specifications, not toward the behavioral target. No promise of interchangeable formats, command surface, exit codes, or event vocabulary. | 2026-08-30 |
+| Defect policy | **Omit what conflicts.** Resolve internal contradictions as far as they can be resolved. Where sources disagree, a more recent specification wins over an older specification, and a specification wins over observed implementation behavior. What cannot be resolved is dropped rather than reproduced. | 2026-08-30 |
+| Unbuilt behavior | **In scope.** Behavior that exists as intent rather than as working functionality is part of the rewrite. | 2026-08-30 |
+| First-milestone scope | **Revised 2026-08-30: one Electron desktop application, and nothing else.** There is no command-line interface and no terminal user interface — not deferred, removed. Domains 17 and 18 are retired and their identifiers withdrawn; every capability they carried that a user needs is restated as desktop-reachable behavior in the domain that owns it. Any command-line or text-mode surface appearing in another domain is withdrawn on the same terms. | 2026-08-30 |
+| Message text policy | **Confirmed.** Specifications state what a message must convey; exact wording is fixed only where a string is part of a machine-readable contract. | 2026-08-30 |
+| **Gate** | Open pending the sufficiency statement, after open-question resolution. | |
+
+## What these decisions change
+
+**The compatibility surface stops being an obligation.** Every requirement that exists only so the
+rewrite would interoperate with the behavioral target is now optional. Where a name, format, exit
+code, or event vocabulary is weak, the rewrite may improve it; where it is fine, keeping it is a
+convenience, not a contract. This also shrinks the residual clean-room risk recorded above, because
+the strongest reason to preserve reference-shaped detail no longer applies.
+
+**Open questions become design decisions rather than research.** The specifications carry 743 open
+questions across the 21 domains. Most ask what the behavioral target does in an under-determined
+case. Under a behavioral-inspiration mandate that question no longer needs an answer: the product
+owner's decision is that the rewrite chooses. These are therefore resolved on the clean side, with
+no further reference access, by picking the behavior that is most coherent with the surrounding
+requirements — and by omitting behavior whose conflicts cannot be resolved coherently.
+
+**Scope is one desktop application.** The first release is the Electron desktop application and it is
+the only way a user drives this product. The terminal UI and the command-line and headless entry
+points are removed from the product entirely. Unbuilt-but-intended behavior in the remaining domains
+is in scope. Removing an entry point must never remove a capability: where a behavior was reachable
+only from a shell, it is restated as desktop behavior rather than dropped.
+
+This does not stop the product from *running* external programs. Lifecycle hooks, agent tool
+execution, tool servers on the stdio transport, and version-control invocations all remain in scope.
+What is removed is any way for a user to drive this product from a shell or a text-mode interface.
+
+## Open-question resolution pass
+
+Required by the defect policy above and running before the gate closes. Clean-side agents with no
+reference access resolve each domain's open questions, amend the affected requirements to state the
+chosen behavior, and record every decision in `../spec/resolutions/`. Items that genuinely need a
+product decision rather than a design decision are escalated rather than guessed.
+
+## Escalations answered
+
+Open-question resolution escalated two product decisions. Both were answered on 2026-08-30.
+
+| Escalation | Decision |
+|---|---|
+| Default tool servers — which services fill `web_search`, `browser` and `code_intelligence`, and do they ship enabled? | All three are **declared**; only `code_intelligence` is **enabled** by default, being the only one that neither leaves the machine nor needs a credential. The other two are declared with `enabled: false`. Which third-party services fill the roles is left to the implementation. Recorded as REQ-CONFIG-181 and new REQ-CONFIG-465. |
+| Sending a session to the background — detach a live run, or save-and-notify? | **Deferred.** Detaching is not specified. REQ-TUI-152 states stop-persist-and-notify and nothing more — and the terminal UI domain is itself deferred. |
+| Conversation composer — does it accept image attachments? | **Yes, gated on model capability.** Drag-and-drop and file picker; enabled only for models that announce image input, with the model selection surface refusing a silent selection that would discard attachments. Recorded as REQ-CHAT-169 to REQ-CHAT-174. |

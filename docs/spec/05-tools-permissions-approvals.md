@@ -1,0 +1,635 @@
+---
+reference: ROTARIS-CRW-001
+domain: tools-permissions-approvals
+date: 2026-08-29
+status: draft
+---
+
+# Agent Tooling, Terminal Execution, Permissions, and Approvals
+
+## Overview
+
+Every tool call an agent makes — built-in, custom plugin, or MCP — passes through a single permission gate that resolves to allow, ask, or deny before anything executes; asks are answered by an interactive approval prompt or a fail-safe headless policy, denials are returned to the agent as recoverable tool errors, and every decision is recorded to an append-only per-session audit trail with secrets redacted. Around that gate sits a fixed public tool surface (terminal execution with foreground and background sessions, workspace-fenced file and search tools, a local commit tool, task-list, artifact, delegation, and user-question tools), an opt-in OS-level sandbox that refuses to run commands rather than silently falling back, a host-classifying network egress policy for the fetch tool, and three permission-mode presets ordered by restrictiveness with an automatic downgrade for unattended, unsandboxed runs.
+
+## Requirements
+
+### 1. Public Tool Surface and Persona Grants
+
+**REQ-TOOLS-001** — Given a persona configuration file (`agents.yaml`), the set of tool names a persona may declare under `tools:` is exactly: `ask_questions`, `delegate`, `background_output`, `wait_for_tasks`, `haet`, `haet_edit`, `haet_read`, `read_file`, `write_file`, `terminal`, `git_commit`, `todo`, `fetch`, `grep`, `glob`, `artifact_read`, `artifact_list`, `artifact_write`. The name `haet` is an accepted alias that resolves to the same tool as `haet_edit`. Besides these names, an entry under `tools:` may name an MCP server configured for the workspace (REQ-TOOLS-002); no other value is accepted.
+
+**REQ-TOOLS-002** — An entry in a persona's `tools:` list is accepted only when it is one of the public tool names of REQ-TOOLS-001 or the name of an MCP server configured for the workspace. Any other entry fails configuration validation, and the resulting error identifies the persona, the rejected entry, and the accepted public tool names. A persona whose `custom_tools:` plugin registers under a name that persona also declares under `tools:` likewise fails validation, so no persona ever holds two different tools under one name.
+
+**REQ-TOOLS-003** — The verification-gate capabilities of section 22 are outside the public tool surface, and so is any capability not named in REQ-TOOLS-001. No configuration makes them callable by a persona: naming one under `tools:` is rejected like any other unrecognized entry (REQ-TOOLS-002), and no persona's prompt ever lists them among its tools. They are reachable only from the run that maintains the verification gate.
+
+**REQ-TOOLS-004** — Missing tool prerequisites degrade availability rather than failing agent construction: a declared tool whose runtime prerequisite is absent is removed from the agent's tool set, and each removal is recorded with a stable, machine-readable reason code. Reasons that must be distinguishable: delegation tools declared without a delegation runtime; `ask_questions` declared without a user-prompt channel; artifact tools declared without an artifact store; and `artifact_write` declared by a persona that lacks `can_publish_artifacts: true`. The concrete spelling of each code is an implementation choice, provided it is stable and documented.
+
+**REQ-TOOLS-005** — Declaring `delegate` surfaces three tools to the agent — `delegate`, `background_output`, and `wait_for_tasks` — in both the prompt's tool listing and the callable tool set.
+
+**REQ-TOOLS-006** — A persona's declared tool set is narrowed by up to four controls, applied in this order, each able only to remove tools — never to restore one an earlier control removed, and never to add one the persona did not declare:
+
+1. a run-scoped allow-list that applies to the orchestrator (default) persona alone; when one is present the surviving set is the intersection of that list with the persona's declared tools, and no control below it widens the result;
+2. `coordinator_only: true`;
+3. `read_only: true`, which reduces the set to the read-only class of REQ-TOOLS-007;
+4. the per-persona `tool_restrictions` map.
+
+Every removal is logged together with the persona and the control that removed it. Under `coordinator_only: true` the surviving set always contains `delegate`, `background_output`, `wait_for_tasks`, `todo`, `grep`, and `glob`, and never contains `terminal`, `write_file`, `haet_edit`, `haet`, or `git_commit`. Which read tools survive `coordinator_only: true`, and how the run-scoped allow-list is supplied, are Open Questions (11, 12).
+
+**REQ-TOOLS-007** — The read-only tool class is exactly {`grep`, `glob`, `fetch`, `haet_read`, `read_file`, `artifact_read`, `artifact_list`, `artifact_write`}. `artifact_write` is deliberately classified read-only because the artifact store is not part of the workspace. The network tool class is exactly {`fetch`}, a subset of the read-only class, split out so presets can gate network access by host before any blanket read-only allow rule.
+
+**REQ-TOOLS-008** — When a persona requests `terminal`, the behavior specified in sections 10–14 is exactly what serves that name. The registered public name is exactly `terminal`.
+
+**REQ-TOOLS-009** — A tool call is governed by the policy, sandbox specification, egress configuration, and artifact store of the run that issued it, and rebuilding the issuing agent — after a retry, after a resume, or after falling back to a different model — leaves all four unchanged. No call is ever decided under, or executed with, a different run's context. When a call cannot be attributed to a run while more than one run is live, it is refused under REQ-TOOLS-020 with a reason naming the ambiguity rather than being attributed to one of the live runs. The rule-less default of REQ-TOOLS-029 applies only to a call that belongs to no run at all.
+
+**REQ-TOOLS-010** — The tool list rendered into an agent's prompt and the set of tools it can actually invoke are produced from the same resolution, so they are always equal.
+
+### 2. Central Permission Gate
+
+**REQ-TOOLS-011** — Every tool dispatch — built-in, custom plugin, and MCP — passes exactly one central allow/ask/deny gate before execution. There is no ungated dispatch path.
+
+**REQ-TOOLS-012** — The decision vocabulary is {`allow`, `ask`, `deny`}. Policy resolution never raises to the dispatcher, and an `ask` is always resolved through the approval flow first, so the dispatcher only ever handles `allow` or `deny`.
+
+**REQ-TOOLS-013** — A `deny` does not abort the run. It is returned as a tool-result error carrying the original tool-call id so the agent can re-plan. The refusal text is exactly: `Permission denied by rule '<rule_id>'. <reason> The '<tool_name>' call was not executed. Choose a different approach or ask the user to adjust the permission policy.`
+
+**REQ-TOOLS-014** — Loop-control tool names are never gated: `finish`, `finishtool`, `think`, `thinktool`, matched case-insensitively. Such calls resolve to allow with decision source `builtin` and rule id `builtin:meta-tool`.
+
+**REQ-TOOLS-015** — A permission request carries the tool name, the persona, the call's arguments as a name→value mapping, and at most one command facet, which is the value command matchers examine. The facet is the `command` argument when that argument is present and holds a string; failing that, the `url` argument when it is present and holds a string (this is what lets host-scoped rules match `fetch`); otherwise the request has no command facet. The facet is selected purely by argument name, so any tool whose action carries a string `command` argument supplies one — including `write_file`, whose operation name therefore occupies the slot a shell command line would occupy (Open Question 8). When the arguments cannot be rendered at all, the request is formed with an empty argument mapping and no facet, and resolution still yields a decision from tool name and persona alone — a rule constraining arguments, paths, or the command facet cannot match such a request, so no argument-dependent rule can allow it.
+
+**REQ-TOOLS-016** — Two renderings exist and are never substituted for one another. The *request summary* is `<tool>: <redacted command facet>` for a request that has a command facet and `<tool>(<argument keys, sorted, comma-separated>)` for one that does not; apart from the redacted command facet itself it exposes no argument value, only key names. The request summary is what appears as `summary` in audit entries (REQ-TOOLS-079) and in the `permission.decision` and `approval.requested` events (REQ-TOOLS-061, REQ-TOOLS-083), and it is the text quoted in a session rule's description (REQ-TOOLS-024). The *argument summary* of REQ-TOOLS-057 is the other rendering: it lists redacted argument values, and it appears only in the approval payload and the approval dialog — never in an audit entry and never in a stream event.
+
+**REQ-TOOLS-017** — A permission rule may constrain any combination of five facets: tool names (a set, compared case-insensitively), personas, path scope (`inside_workspace` | `outside_workspace`), a command matcher, and an exact argument set. The exact-argument facet matches only when the request's argument mapping and the rule's mapping carry the same set of keys and, for every key, the same textual value; a request carrying an extra key, or missing one the rule names, never matches. A rule fires only when every facet it populates matches; a facet left unpopulated constrains nothing, so a rule populating no facet matches every request. A command matcher that fails while being evaluated leaves its rule unfired and unable to produce an allow, and the resolution falls closed under REQ-TOOLS-020. The textual form used to compare non-string argument values is an Open Question (13).
+
+**REQ-TOOLS-018** — Path-scope evaluation considers only argument keys in {`path`, `file_path`, `filename`, `paths`, `base_path`, `dir`, `directory`} (string or list values). Relative paths resolve against the workspace root. `inside_workspace` fires only when every path argument lands inside the root; `outside_workspace` fires as soon as one path escapes it. A request that supplies none of those argument keys can never satisfy a path-scoped rule. A path that cannot be resolved counts as outside (fail-closed).
+
+**REQ-TOOLS-019** — A policy is an ordered list of rules together with a default decision and a preset name. The first rule in list order whose facets all match decides the call, and no later rule affects that outcome; REQ-TOOLS-041 depends on this ordering. A policy is invalid when its preset name is empty, when any rule id is empty, when two rules carry the same id, or when a rule's outcome falls outside the vocabulary of REQ-TOOLS-012. An invalid policy produces an error naming the defect at the latest when the first call would be decided under it, and it never decides a call.
+
+**REQ-TOOLS-020** — Fail-closed is unconditional: any exception during decision resolution yields rule id `failclosed:unresolvable-policy`, decision source `fail-closed`, and decision `ask` on interactive hosts / `deny` on headless hosts — never `allow`. The reason reads: `The permission policy could not be resolved (<detail>); failing closed to <ask|deny>.`
+
+**REQ-TOOLS-021** — When no rule matches, the preset default applies with rule id `preset:<preset_name>`, decision source `preset`, and reason `No rule matched; permission mode '<name>' defaults to <decision>.`
+
+**REQ-TOOLS-022** — A rule-match reason reads `Rule '<id>' (<description>) resolved '<tool>' to <decision>.` with decision source `rule`, or `session-rule` when the matching rule came from a session approval.
+
+**REQ-TOOLS-023** — Approvals granted for the session are matched before any policy rule, most recent grant first, and they outlive the policy: after the policy is replaced or the permission mode is changed mid-session, every session approval granted earlier still matches exactly the calls it matched before — none is dropped, and none starts matching a call it did not match already. Their rule ids are `session:allow:<n>`, numbered from 1 in grant order.
+
+**REQ-TOOLS-024** — A session approval matches only a call carrying the same tool name (compared case-insensitively), the same persona, and — when the approved call had a command facet — a command facet identical to the approved one character for character, compared before redaction. When the approved call had no command facet, the call must carry the same exact argument set as defined in REQ-TOOLS-017. Consequences a test can check: after `git push origin main` is approved for the session, `git push origin release` from that persona asks again, and `git push origin main` from a different persona asks again. The session rule's description reads `Approved for this session: <request summary>`, using the request summary of REQ-TOOLS-016.
+
+**REQ-TOOLS-025** — When the policy in force is replaced while a run is live, the agent's very next tool call is decided under the replacement, with no restart, no reconnection, and no agent rebuild in between. Decisions already returned keep the outcome they had.
+
+**REQ-TOOLS-026** — If approval resolution raises, or returns another `ask`, the call is denied with source `fail-closed` and a reason ending `Denied because approval resolution failed: <detail>.` or `Denied because approval resolver returned no verdict.` respectively.
+
+**REQ-TOOLS-027** — Every resolved decision, allows included, is recorded to the audit sink. A raising audit sink logs a warning and never breaks dispatch.
+
+**REQ-TOOLS-028** — The decision-source vocabulary recorded in audits and events is exactly: `rule`, `session-rule`, `preset`, `builtin`, `fail-closed`, `user-once`, `user-session`, `user-deny`, `headless-policy`, `timeout`, `cancelled`, `presenter-error`.
+
+**REQ-TOOLS-029** — A call that belongs to no run at all is decided by a rule-less default policy whose default decision is allow and whose preset name is reported as `unrestricted`, and a warning is logged for every decision taken under it. This default is never applied to a call that does belong to a run, and no call is ever decided under a policy belonging to a different run (REQ-TOOLS-009).
+
+**REQ-TOOLS-030** — Changing the permission mode mid-session takes effect for every live agent of the named session and for no agent of any other session. With two sessions running at the same time, a mode change in one leaves the decisions produced by the other session's agents unchanged.
+
+**REQ-TOOLS-031** — Hook ordering invariant: policy first, hooks second. User-configured pre-execution hooks run only on the allow branch; a policy-denied call fires no hook. A blocking pre-execution hook returns the hook's refusal as a tool-result error (fallback text: `Blocked by a pre_tool hook. The call was not executed.`). Post-execution hooks see only calls that actually executed and can only append feedback (attached to the observation's extended content, or as a trailing user message when no observation exists) — they can never block. Hook results handed to post-execution hooks are truncated at 4096 characters.
+
+**REQ-TOOLS-032** — A tool-call payload the model produced that is not well-formed is repaired before dispatch rather than rejected, and repair is attempted before schema validation, so a payload repair makes valid is dispatched as an ordinary call. Three repairs are required: JSON cut off mid-structure is completed by closing the strings, objects, and arrays still open at the cut; a single object supplied where the schema expects an array is read as a one-element array, for the fields `tasks`, `phases`, `files`, `items`, and `test_cases`; and a truncated run-completion payload is recovered as `{"message": <recovered text>}`. What happens to a payload that is still schema-invalid after repair is an Open Question (14).
+
+### 3. Terminal Command-Line Pattern Matching
+
+**REQ-TOOLS-033** — A command pattern is compared token by token, never against the raw text of the command line. Pattern text and command segment are each split under shell tokenization rules, and the *i*-th pattern token must glob-match the *i*-th command token. A pattern whose final token is `*` additionally matches any number of further command tokens, so `rm -rf *` fires on a bare `rm -rf`; a pattern without that trailing `*` matches only a segment with exactly as many tokens as the pattern has. Command tokens are compared case-sensitively. Observable consequences: `git status` does not fire on `git status-check`, and it does not fire on `git STATUS`. Whether case-sensitive comparison is right for the Windows command patterns of REQ-TOOLS-039 on the PowerShell backend of REQ-TOOLS-104 is an Open Question (15).
+
+**REQ-TOOLS-034** — Pattern text that cannot be tokenized, or that is empty, is a policy-construction error raised at policy build time (message pattern: `Command pattern '<text>' is not tokenisable: …` / `… is empty`), so typos fail loudly rather than silently matching nothing.
+
+**REQ-TOOLS-035** — Compound command lines are decomposed on shell operators — `&&`, `||`, `;;`, `;`, `|`, `&`, and newline, longest operator first — respecting single/double quotes and backslash escapes. Each segment is matched independently, so in `git status && rm -rf /` the second segment still triggers the applicable deny rule. The operator that introduced each segment is retained with the segment.
+
+**REQ-TOOLS-036** — A segment is classified "unconfident" (statically unreadable) when any of the following holds: it contains command substitution (`$(…)` or backticks outside single quotes, including inside double quotes); it cannot be tokenized (e.g., unbalanced quotes); it carries no command after redirection stripping; its head is an indirection command ({`eval`, `exec`, `source`, `.`, `xargs`, `env`, `nohup`, `time`} — reason: runs another command through that head); or its head is a shell ({`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `cmd`, `powershell`, `pwsh`}) with a `-c`/`-Command`/`/c`/`/C` argument (inline script) or with no arguments (interactive/script execution). Redirection tokens (`<`, `>`, `>>`, `2>`, `2>>`, `&>`, `1>`, `<<`, `<<<`, and anything beginning with `>` or `<`) end the token stream considered for matching.
+
+**REQ-TOOLS-037** — Decomposing a command line never raises. A line that cannot be parsed at all still yields exactly one segment, classified unconfident, so every input produces at least one segment for the escalation matcher to fire on.
+
+**REQ-TOOLS-038** — Rules may use any of three command matchers, each evaluated over the segments the command line decomposes into under REQ-TOOLS-035:
+- the **pattern matcher** fires when at least one segment matches at least one of the matcher's patterns under the token rules of REQ-TOOLS-033;
+- the **escalation matcher** fires when at least one segment is unconfident under REQ-TOOLS-036, which includes a segment whose text is not blank yet yields no command token;
+- the **pipe-to-shell matcher** fires when a segment whose first token is one of the shell names listed in REQ-TOOLS-036 was introduced by a `|` operator — that is, it consumes the output of the segment before it (the `curl … | sh` shape).
+
+A matcher decides only whether its own rule fires. It cannot stop an earlier rule from firing, cannot alter a decision already reached, and cannot turn a command that matched no rule into an allow; such a command falls through to the preset default (REQ-TOOLS-021).
+
+**REQ-TOOLS-039** — A starter set of nine command rules exists. The five deny rules occupy positions 1–5 of the set and the four ask rules positions 6–9, so within this family a deny is always reached before an ask:
+1. `starter:deny-recursive-delete` (deny), patterns: `rm -rf *`, `rm -fr *`, `rm -Rf *`, `rm -r -f *`, `rm -f -r *`, `rmdir /s *`, `rd /s *`, `del /f *`.
+2. `starter:deny-privilege-escalation` (deny), patterns: `sudo *`, `doas *`, `su *`, `runas *`.
+3. `starter:deny-force-push` (deny), patterns: `git push --force *`, `git push -f *`, `git push --delete *`.
+4. `starter:deny-package-publish` (deny), patterns: `npm publish *`, `yarn publish *`, `pnpm publish *`, `uv publish *`, `twine upload *`, `cargo publish *`, `gh release create *`.
+5. `starter:deny-pipe-to-shell` (deny), using the pipe-to-shell matcher of REQ-TOOLS-038.
+6. `starter:ask-unreadable-command` (ask), using the escalation matcher of REQ-TOOLS-038 — a command whose effect cannot be read from the command line alone.
+7. `starter:ask-history-rewrite` (ask), patterns: `git reset --hard *`, `git clean -fd *`, `git clean -df *`, `git checkout -- *`, `git rebase *`, `git filter-branch *`.
+8. `starter:ask-dependency-install` (ask), patterns: `pip install *`, `uv pip install *`, `uv add *`, `npm install *`, `npm i *`, `yarn add *`, `pnpm add *`, `cargo install *`, `brew install *`, `apt-get install *`.
+9. `starter:ask-container-control` (ask), patterns: `docker *`, `podman *`, `kubectl *`, `systemctl *`, `Remove-Item *`.
+
+Every pattern listed above is matched under the token rules of REQ-TOOLS-033: each listed spelling stands on its own, and a spelling that is not listed does not match by inference. A command line carrying a segment classified unconfident under REQ-TOOLS-036 — one whose flags or structure cannot be read statically — is caught by rule 6 and by no pattern rule.
+
+**REQ-TOOLS-040** — The starter destructive set belongs to the shipped presets only. The rule-less `unrestricted` default of REQ-TOOLS-029 does not carry it.
+
+### 4. Permission Mode Presets
+
+**REQ-TOOLS-041** — Exactly three presets ship: `restricted`, `ask`, `autonomous`. Rule families are composed into each preset in a fixed order — (1) fetch/egress rules, (2) destructive command rules, (3) network-command classification rule, (4) read-only rules. That order is behaviourally load-bearing: resolution stops at the first matching rule (REQ-TOOLS-019), so a narrow family placed after a family that matches more broadly would never be reached.
+
+**REQ-TOOLS-042** — `restricted`: default decision deny. Rules: the fetch pair, all nine destructive rules, `restricted:network-command` (deny, matching the network-command pattern set), `restricted:read-outside-workspace` (ask; read-only tools with paths outside the workspace), `restricted:read-only-tool` (allow). Semantics: in restricted mode the four ask-class starter rules loosen the flat deny into a prompt for those categories.
+
+**REQ-TOOLS-043** — `ask`: default decision ask. Rules: the fetch pair, all nine destructive rules, `ask:network-command` (ask), `ask:read-only-tool` (allow — reads allowed regardless of path).
+
+**REQ-TOOLS-044** — `autonomous`: default decision allow, carrying only the five destructive deny rules and deliberately no ask rules (unattended they would resolve to fail-safe deny; attended they would prompt in the mode chosen to avoid prompts; and an ask would invert the restrictiveness ordering). The workspace file boundary in autonomous mode is enforced by path-fence errors (REQ-TOOLS-129), not prompts.
+
+**REQ-TOOLS-045** — Each supervised preset (`restricted`, `ask`) carries a fetch rule pair ordered ahead of everything else that could match `fetch`: `<preset>:fetch-remote-host` (ask; network tool class; matches URLs whose host is outside the local machine; described as network egress to an outside host) then `<preset>:fetch-local-host` (allow; network access confined to this machine). A URL that cannot be parsed counts as remote and therefore asks.
+
+**REQ-TOOLS-046** — The default preset is `ask`. An unrecognized configured mode name resolves to the strictest preset (`restricted`) with a logged warning; an empty/absent name resolves to the default. Preset resolution never raises.
+
+**REQ-TOOLS-047** — Restrictiveness is totally ordered: `restricted` (0) < `ask` (1) < `autonomous` (2). Startup refuses to proceed if any preset lacks a rank. Rank lookup resolves names exactly like preset resolution (empty → default, unknown → strictest) but silently.
+
+**REQ-TOOLS-048** — At agent construction the requested permission mode is selected as follows. A persona-level `permission_mode` pin takes precedence over an active mid-session override, except that an override at least as restrictive as the pin (by the order of REQ-TOOLS-047) takes precedence over the pin instead — the same direction-sensitive rule that governs live agents in REQ-TOOLS-074. With neither a pin nor an override, `runtime.permission_mode` applies, defaulting to `ask`. The selected name is then put through the downgrade rule of REQ-TOOLS-067 for that agent's own context, and the result is the effective mode.
+
+**REQ-TOOLS-049** — Configuration layers: global user config directory < workspace `.rotaris/` directory. Rule lists replace rather than deep-merge across layers.
+
+### 5. Interactive Approval Flow
+
+**REQ-TOOLS-050** — An `ask` suspends exactly one tool call. Other agents in the session keep running; each wait is identified by its own request id rather than by the conversation it came from.
+
+**REQ-TOOLS-051** — Approval options are exactly: approve once, approve for the session, deny. Wait terminal states are exactly: resolved, cancelled, timed out.
+
+**REQ-TOOLS-052** — Approval responses map to decisions as follows:
+- timeout → deny, source `timeout`, reason ending `Denied because no answer arrived within <N> seconds.`
+- cancelled → deny, source `cancelled`, reason ending `…the approval request was cancelled.`
+- approve once → allow, rule id `approval:once`, source `user-once`, reason `The user approved '<tool>' once (rule '<pending rule>' asked).`
+- approve for session → allow, rule id `approval:session`, source `user-session`, and a session rule is added per REQ-TOOLS-024.
+- deny → deny, source `user-deny`, reason ending `…the user denied the request.`
+
+**REQ-TOOLS-053** — A session counts as interactive exactly when an approval prompt for that session can be put in front of a person. A session that cannot prompt anyone is not interactive and never borrows another session's ability to prompt. Everything handed to the prompt is JSON-serializable in full (REQ-TOOLS-056). Prompting never stalls the rest of the session: while one agent waits for its answer, the session's other agents keep running and can raise approvals of their own. Registering a run-abort hook for a session (REQ-TOOLS-065) neither makes that session interactive nor takes away prompting it already has.
+
+**REQ-TOOLS-054** — Approval wait semantics: creating a wait with an empty request id is rejected; creating a duplicate pending id is rejected with `Approval '<id>' is already pending.`; resolving or cancelling an unknown id reports failure without side effect; waiting on an unknown id resolves cancelled immediately; a request discarded before it was ever shown counts as cancelled; a bulk-cancel releases every waiter (used on run cancellation, shutdown, and host teardown).
+
+**REQ-TOOLS-055** — The approval timeout is `runtime.approval_timeout_seconds`, a float that must be at least 0 and defaults to 300.0 seconds; a negative value is rejected when the configuration is loaded. A value of 0 means the wait never expires by itself, and such a wait is still released by run cancellation, shutdown, or host teardown (REQ-TOOLS-054). The same setting and the same zero-means-indefinite reading govern the user-question wait (REQ-TOOLS-158, REQ-TOOLS-178).
+
+**REQ-TOOLS-056** — The approval payload (rendered by hosts and persisted into session state) carries: `request_id` (hexadecimal UUID), `session_id`, `agent_id` (falling back to persona for display), `persona`, `tool_name`, `command` (secret-redacted), `argument_summary`, `rule_id`, `reason`.
+
+**REQ-TOOLS-057** — The argument summary renders sorted `key=value` lines; any value whose key looks secret is masked outright; all values are redacted; each rendered value is clipped at 240 characters with a trailing `…`; the summary is empty when the request carries a command (the command line is shown instead). The argument summary appears in the approval payload and the approval dialog only; the audit trail's `summary` field is the request summary of REQ-TOOLS-016, and both are produced by the redaction pass of REQ-TOOLS-171, so neither can display an unmasked credential.
+
+**REQ-TOOLS-058** — If presenting the prompt raises, the pending request is discarded and the call is denied with source `presenter-error` and a reason stating the approval request could not be shown.
+
+**REQ-TOOLS-059** — Approval responses can come only from the host UI. Nothing in agent output or tool output can satisfy an approval.
+
+**REQ-TOOLS-060** — Pending approvals are visible in session state as a mapping from request id to payload, written when presented and removed on answer, timeout, or cancellation.
+
+**REQ-TOOLS-061** — Every `ask` — interactive or headless — publishes an `approval.requested` stream event before the wait begins, carrying: `request_id`, `agent_name` (verbatim from the deciding context; empty when unknown, never backfilled from persona), `persona`, `tool_name`, `rule_id`, a redacted `summary`, `resolver` (`"brokered"` | `"headless"`), `timeout_seconds` (null on the headless path, meaning no wait occurs at all), and `unattended_reason` (`"headless-policy"` on the headless path, else empty). A failed event publish never fails the dispatch.
+
+**REQ-TOOLS-062** — A recorded decision carries the approval `request_id` only when it directly resolved a raised approval; pairing is checked strictly (the source must be an approval-resolution source; session id and tool name must match) and any mismatch yields an empty id. Sources eligible to claim a request id: `user-once`, `user-session`, `user-deny`, `headless-policy`, `timeout`, `cancelled`, `presenter-error`, `fail-closed`.
+
+**REQ-TOOLS-063** — The desktop approval prompt is a modal dialog titled "Permission required" whose minimum size is 560×380, containing: the headline `Allow <agent> to run <tool>?`; the requester line `Requested by <agent> (<persona> persona).`; a read-only monospace detail box holding the redacted command facet exactly as the approval payload's `command` field carries it (REQ-TOOLS-056) when the request has a command facet, and otherwise the argument summary of REQ-TOOLS-057, whose accessible description states that credentials are masked and which shows `No arguments were reported for this call.` when there is nothing to display; a fine-print line `Matched rule: <rule_id>` followed by the decision reason; and exactly three buttons — Deny (danger styling), Approve for this session (secondary styling), and Approve once (primary styling, and the dialog's default action). Every way out of the dialog yields one of the three answers of REQ-TOOLS-051: pressing Escape and closing the window each answer Deny, so dismissing the dialog is never read as approval and no exit path leaves the request unanswered. If the chosen answer cannot be delivered to the waiting agent, the dialog stays open with all three buttons disabled and shows a status line saying the answer could not be delivered. Multiple pending requests are shown one at a time, and a request that is answered or cancelled elsewhere while its dialog is open closes that dialog without asking for a second answer; the order in which queued requests are shown is not fixed here (Open Question 6).
+
+**REQ-TOOLS-064** — A host with no approval UI (including the text-mode interface, which registers no approval capability) resolves every `ask` through the headless policy: never a silent allow, never a hang.
+
+### 6. Headless / Unattended Resolution
+
+**REQ-TOOLS-065** — `runtime.headless_approval_policy` ∈ {`deny` (default), `abort`}; unrecognized values behave like `deny`. Under `deny`, the single tool call is refused and the agent may re-plan. Under `abort`, the call is refused and the session's registered abort hook is invoked to stop the run; if no abort hook is registered, a warning is logged and the behavior degrades to `deny`. Reasons state that no approval UI is available in this host (the abort variant adds that the headless approval policy aborts the run); decision source is `headless-policy`.
+
+**REQ-TOOLS-066** — When no approval resolver is wired at all, a built-in fail-safe resolver answers every `ask` with deny, source `headless-policy`, and a reason stating no interactive approval is available so the request was denied fail-safe.
+
+### 7. Effective Mode, Downgrade, and Mid-Session Change
+
+**REQ-TOOLS-067** — A permissive mode (one whose preset default is allow; today only `autonomous`) is downgraded to `ask` for a run that is simultaneously (a) unattended (no interactive approval host), (b) unsandboxed (sandbox not both configured and available), and (c) not opted in via `runtime.allow_unsandboxed_autonomous: true` (default false, per-workspace). `ask` and `restricted` pass through untouched. Unrecognized mode names have already resolved to the strictest preset and are never downgraded. Downgrade evaluation never raises.
+
+**REQ-TOOLS-068** — The downgrade reason shown to the user follows this verbatim pattern: `Permission mode '<requested>' was downgraded to 'ask' for this run: it is unattended (no interactive approval available) and runs without the OS-level sandbox. Set runtime.allow_unsandboxed_autonomous: true in the workspace config to run unattended in '<requested>' mode anyway.`
+
+**REQ-TOOLS-069** — A run is attended exactly when its session can put an approval prompt in front of a person (REQ-TOOLS-053), and unattended otherwise. An attended run keeps the permission mode it asked for. Runs launched in the background from the CLI, headless runs, and runs driven from the text-mode interface cannot prompt anyone, and therefore meet condition (a) of REQ-TOOLS-067.
+
+**REQ-TOOLS-070** — For the downgrade test of REQ-TOOLS-067, a run counts as sandboxed only when `runtime.sandbox_mode` requests a sandbox *and* that sandbox has been proved usable on this host (REQ-TOOLS-119); configuration by itself does not satisfy the test. A sandbox that is requested but not usable therefore counts as unsandboxed for the downgrade while also making the terminal tool refuse to execute commands (REQ-TOOLS-118), so the failure never widens what the run may do. Whether such a run may start at all is an Open Question (17), since REQ-TOOLS-118 also refuses to start a session whose required sandbox is unavailable.
+
+**REQ-TOOLS-071** — At run start the effective mode is announced: session state records the effective permission mode, whether the run is sandboxed, and the sandbox backend name. A downgrade is additionally written to the transcript (live recorder when available, else appended as a system event), to the diagnostics timeline as a `permission_mode_downgraded` event carrying requested and effective mode metadata, and to the log.
+
+**REQ-TOOLS-072** — Before a surface starts an unattended run it computes an advisory string for the workspace. The advisory is informational and never blocks the launch. It is the empty string exactly when the effective mode of an unattended run in that workspace raises no `ask` at all — that is, when no tool call would be routed to the headless resolver that refuses it (REQ-TOOLS-065, REQ-TOOLS-066); today that is the case only when the effective mode is `autonomous`. Otherwise it is non-empty, and it names all three settings that resolve the condition — `runtime.permission_mode` set to `autonomous`, `runtime.allow_unsandboxed_autonomous` set to `true`, and `runtime.sandbox_mode` set to a backend available on this host — and states that a downgrade was applied whenever REQ-TOOLS-067 downgraded the mode.
+
+**REQ-TOOLS-073** — A mid-session mode change has two halves: every live policy context in the session receives the new preset, effective on its next dispatch; and a session-level override records the requested (not effective) mode name for agents built later, which re-resolve the downgrade for their own context. The change itself is re-resolved through the downgrade rule — switching to `autonomous` mid-run on an unattended, unsandboxed session still downgrades.
+
+**REQ-TOOLS-074** — A session-wide mode change applies to an agent whose persona pins `permission_mode` only when the new mode is at least as restrictive as the pin under the order of REQ-TOOLS-047. A change that would loosen such an agent leaves that agent deciding calls under its pin, while still applying to every unpinned agent in the session. The personas the change did not reach are listed alphabetically in the `skipped_personas` field of the mode-change audit entry (REQ-TOOLS-082), in the log line for the change, and in the confirmation shown to the user, so the user can see exactly which agents kept their previous mode.
+
+**REQ-TOOLS-075** — Session mode overrides are per-session: setting one with an empty session id is rejected; lookup never falls back to another session; the override is discarded at run end so a resumed session does not inherit a previous run's switch; a global reset exists for cleanup.
+
+**REQ-TOOLS-076** — Every mode change is audited with source `"user"`; a failed audit write never blocks the change itself.
+
+**REQ-TOOLS-077** — The desktop mode selector lists presets strictest-first (`restricted`, `ask`, `autonomous`), shows the mode currently in effect, and persists the choice to `runtime.permission_mode` in `<workspace>/.rotaris/agents.yaml` (surviving restart; the write flushes other pending settings edits the same way the settings Save action does). Choosing `autonomous` requires an explicit confirmation, and declining restores the previous selection. The selector is usable mid-run — it forwards to the running session per REQ-TOOLS-073 and the transcript announces the change. The effective mode is also visible in the status bar and in the runtime settings page.
+
+### 8. Permission Audit Trail
+
+**REQ-TOOLS-078** — Permission decisions are written to `<workspace>/.rotaris/sessions/<session_id>/evidence/permissions.jsonl`, one JSON object per line, in the order the decisions were taken. Once written, an entry's content is never altered and no entry is ever inserted ahead of an entry already present; the only permitted removal is retention trimming, which keeps the 5000 most recent entries, so beyond that count each new entry displaces the oldest one still held. A reader therefore sees a suffix of the session's decision history, in write order, every retained entry byte-for-byte as it was written.
+
+**REQ-TOOLS-079** — A decision entry carries: `timestamp` (ISO-8601 UTC), `session_id`, `agent_id`, `persona`, `tool_name`, `decision` (`allow`|`ask`|`deny`), `rule_id`, `source` (a decision-source value per REQ-TOOLS-028), `summary` (the request summary of REQ-TOOLS-016 — `<tool>: <redacted command facet>`, or `<tool>(<sorted argument keys>)` for a call with no command facet), `reason`, plus `request_id` only when the decision resolved a raised approval. Beyond the redacted command facet carried inside `summary`, an entry contains no argument values.
+
+**REQ-TOOLS-080** — Every entry lands under the evidence directory of the session whose call was decided, and never under another session's. An agent that serves one session and then another writes each entry under the session it was serving when that decision was taken. Each entry names the agent id and persona of the agent whose call produced it. A decision taken outside every registered session writes no entry and reports no error, so a one-off agent leaves no audit file behind.
+
+**REQ-TOOLS-081** — Per-entry side effects: a `deny` additionally records a `permission_denied` issue (severity warning; actor = agent id or persona; message `Permission denied for <summary or tool>: <reason>`; evidence reference `evidence/permissions.jsonl`; metadata: tool, rule, source, persona). A `user-once`/`user-session` approval emits a `permission_approved` timeline event (`The user approved <summary or tool>`). Every entry also publishes a `permission.decision` event on the session event bus.
+
+**REQ-TOOLS-082** — A mode change writes an entry into the same file as the decision entries, interleaved in write order, so a reader scanning the file top-to-bottom can determine which mode governed any decision by taking the nearest preceding mode-change entry: `{timestamp, event: "permission_mode_change", session_id, agent_id: <source>, requested_mode, effective_mode, previous_mode, source, reason, skipped_personas: [...]}`. `skipped_personas` is always present, including when empty, so an entry that reached every agent is distinguishable from an entry that simply omits the field. An accompanying `permission_mode_changed` timeline event reads `Permission mode changed from '<prev>' to '<effective>'` optionally followed by the reason and, when applicable, `(not applied to persona-pinned agents: a, b)`.
+
+**REQ-TOOLS-083** — The `permission.decision` stream event carries `tool_name`, `decision`, `source`, `rule_id`, `summary` (the request summary of REQ-TOOLS-016), and `request_id`, which is empty whenever the decision was never put to a person — consumers must read an empty `request_id` as unpaired. No published `permission.decision` event ever carries an unmasked credential in `summary`.
+
+### 9. Network Egress Policy and the fetch Tool
+
+**REQ-TOOLS-084** — A host is classified against the denied patterns, then the allowed patterns, then the configured default disposition, and the first of those three that resolves the host determines the outcome. A host matching both an explicit deny entry and a broader allow wildcard is therefore denied. A host that cannot be read (REQ-TOOLS-086) is denied, and a default disposition outside the three accepted values of REQ-TOOLS-088 is treated as `deny`. No unreadable or ambiguous input is ever classified as allowed.
+
+**REQ-TOOLS-085** — Host patterns support exactly one wildcard form: a single leading `*.`. `*.example.com` matches one or more leading labels (`api.example.com`, `a.b.example.com`) but not bare `example.com`, and not a different domain that merely ends with the same characters — matching compares whole DNS labels, never raw substrings. A `*` anywhere else raises an error at pattern build (message naming the pattern and the only supported form) rather than matching literally or silently matching nothing.
+
+**REQ-TOOLS-086** — Host normalization: lower-case; strip user-info, port, IPv6 brackets, and trailing root dot; encode non-ASCII names via IDNA; re-bracket bare IPv6 literals. When no host can be read the result is empty and callers must treat it as unknown — never as permitted.
+
+**REQ-TOOLS-087** — "Local" means genuine loopback only: the names {`localhost`, `localhost.localdomain`, `ip6-localhost`} and loopback IP addresses. Private-range and link-local addresses (e.g., `169.254.169.254`, internal `10.x`) deliberately count as remote — they are exactly what a policy gates. A hostless or unreadable URL counts as remote.
+
+**REQ-TOOLS-088** — Configuration: `runtime.network_egress_policy` ∈ {`allow`, `ask` (default), `deny`}, case-insensitive, with unrecognized values rejected at load and at assignment (settings edits included). `runtime.network_allowed_hosts` / `runtime.network_denied_hosts` are lists of host patterns: whitespace-stripped, lower-cased, blank entries dropped, otherwise stored verbatim.
+
+**REQ-TOOLS-089** — The egress policy carried by a run's fetch tool is always built from that run's own runtime configuration; two runs in one process never lend each other an allow-list. Tightening the configured host lists observably changes the policy the agent's fetch tool enforces. A fully permissive policy exists only as the fallback for callers with no configuration at all.
+
+**REQ-TOOLS-090** — `fetch` classifies a host before any connection to it is opened — for the URL the agent supplied and again for every redirect target — so no request and no redirect ever reaches a host the policy denies, and a permitted host cannot hand the request on to a denied one. A single call follows at most 20 redirect hops; a chain that would exceed that returns failure kind `too_many_redirects`.
+
+**REQ-TOOLS-091** — The `ask` disposition belongs to the permission gate, not the fetch executor: by execution time the gate has already resolved the ask for the host the agent named, and that host is pre-seeded as permitted. A redirect onto an unseen host that classifies as `ask` is refused (there is no way to prompt mid-request) with an instruction to request the final host directly. A redirect staying on an already-permitted host (path change, http→https) is not re-gated.
+
+**REQ-TOOLS-092** — Fetch refusals and failures are machine-readable with stable kinds: `egress_denied` (requested host denied), `egress_redirect_denied` (hop denied or ask-on-hop), `egress_policy_error` (a pattern could not be applied — refused, not ignored), `too_many_redirects`, `timeout`, `network_error`, `http_error` (status ≥ 400, with detail `HTTP request completed with status code <n>.` and the observation marked as an error). Refusals name the blocked host and the governing setting, e.g. `Network egress to <host> was refused: the egress policy (runtime.network_egress_policy) resolves that host to 'deny'.` Error observations include a `[fetch_diagnostic]` JSON block.
+
+**REQ-TOOLS-093** — Fetch action surface: `url` (required), `max_lines` (default 1000), `from_line`/`to_line` (line-range selection), `timeout` (per-call override; otherwise the configured default `runtime.tool_timeout`, default 30 s; with no configuration at all the executor's own fallback is 10.0 s). Observation metadata: `url`, `final_url`, `status_code`, `content_type`, `truncated`. The tool returns raw text (including raw HTML) truncated to `max_lines`; a single call retrieves a single resource.
+
+**REQ-TOOLS-094** — Terminal commands that reach the network are recognized by a set of leading-token patterns evaluated under REQ-TOOLS-033. The set must cover at least: `curl`, `wget`, `ssh`, `scp`, `rsync`, and `nc`; the network subcommands of `git` (`push`, `pull`, `fetch`, `clone`, `remote`, `ls-remote`, `submodule update`); `gh`; and the network verbs of `pip`, `uv`, `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `brew`, `apt`, `apt-get`, and `docker` (`pull` and `push`). Presets attach the recognizer as `<preset>:network-command` — deny in `restricted`, ask in `ask`, absent from `autonomous` — and that rule id is what appears in the refusal text and in the audit entry. The recognizer is a permission decision about the command string, not enforcement: outside the sandbox nothing prevents a command the recognizer misses from reaching the network. Kernel-level egress control for terminal commands exists only inside the sandbox and is a single on/off switch (REQ-TOOLS-117); per-host filtering of terminal traffic is out of scope for this specification. The full pattern list beyond the minimum coverage above is an Open Question (18).
+
+### 10. Terminal Tool — Foreground Execution
+
+**REQ-TOOLS-095** — The tool name is `terminal`. Its annotations declare it not read-only, potentially destructive, non-idempotent, and open-world. Creating it with a nonexistent working directory fails with `working_dir '<d>' is not a valid directory`.
+
+**REQ-TOOLS-096** — Action schema: `command` (string; an empty string polls for more output after a soft pause; with `is_input=true` it may instead be a special key: `C-c`, `C-d`, `C-z`, any `C-<letter>`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `HOME`, `END`, `PGUP`, `PGDN`, `TAB`, `ESC`, `BS`, `ENTER`), `is_input` (bool), `timeout` (float ≥ 0, hard wall-clock), `reset` (bool), `background` (bool), `session_id` (format `ts_XXXXXXXX`), `session_action` (`query`|`kill`|`send_input`|`send_signal`|`list`), `signal` (`SIGTERM`|`SIGINT`|`SIGKILL`|`SIGHUP`), `input_data` (string). One command per call; sequences are expressed with `&&`/`;`.
+
+**REQ-TOOLS-097** — A foreground command is bounded in two ways, and whichever bound is reached first governs the call. (1) A hard wall-clock timeout: the call's own `timeout` when it supplies one, otherwise `runtime.shell_timeout` (default 100 s) for every action that is not keystroke input. On reaching it the entire process tree the command started is terminated, the terminal session is restarted, and the observation of REQ-TOOLS-099 is returned; everything the shell had accumulated — working directory, exported variables, aliases, background jobs — is gone, and the observation says so. (2) A soft pause: when the call supplies no `timeout` and the command has produced no output for the configured no-output window (Open Question 1), the call returns early under REQ-TOOLS-098 with exit code −1 while the process keeps running. Whether the soft pause also applies to a call that did supply an explicit `timeout` is an Open Question (19).
+
+**REQ-TOOLS-098** — A soft-paused call returns exit code −1 with no `failure_kind`, and the process it started keeps running. When nothing had been captured when the pause fired, the observation's detail must state how many seconds passed without stdout (the no-output window of REQ-TOOLS-097), that the process may still be running or may be writing to stderr, and the three moves open to the agent: poll by calling the tool again with an empty `command`, interrupt by sending `C-c` with `is_input=true`, or re-run the command with `2>&1`. Every terminal observation renders an output section — the label `[terminal_output]` followed by the captured text, or by `(no output)` when nothing was captured — and the section is never omitted.
+
+**REQ-TOOLS-099** — Hard-timeout observation contract: `exit_code` 124, `timeout` true, `is_error` true, `failure_kind` `"timeout"`, `timeout_seconds`, `kill_status` ∈ {`session_reset`, `pane_replaced`, `reset_failed`, `replace_failed`}, `session_reinitialized` (bool), `backend`, and a detail stating the command exceeded its timeout, the session was forcibly restarted to terminate the process tree, and shell state was lost (with failure variants embedding the underlying error).
+
+**REQ-TOOLS-100** — Observation `failure_kind` values are exactly {`timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`}; `backend` is stamped on every observation as `single-session` or `tmux-pool`. Every observation carries a `[terminal_diagnostic]` JSON block (sorted keys, null-valued keys dropped) including backend, command, detail, error class, exit code, failure kind, kill status, outcome kind, outcome severity, session-reinitialized, timeout, timeout seconds, warnings, working directory, and session fields when applicable. Output captured before a hard timeout is labeled `[partial_terminal_output]` instead of `[terminal_output]`.
+
+**REQ-TOOLS-101** — Request validation failures return `invalid_request` observations (error class `ValueError`) for: `reset=true` with `is_input=true` (`Cannot use reset=True with is_input=True in the same terminal call.`); `background=true` with `is_input=true` or `reset=true`; `background=true` with an empty command (`A command is required when background=True.`); an unknown `session_action`; and `send_input` without `input_data`.
+
+**REQ-TOOLS-102** — `reset=true` creates a fresh session before running anything. An empty command with reset returns a confirmation observation (text stating the session has been reset and all previous environment variables and session state cleared; command label `[RESET]`; exit code 0). With a command, the reset note is prepended and the command label becomes `[RESET] <command>`.
+
+**REQ-TOOLS-103** — A terminal call always returns either an ordinary observation or a structured error observation; a failure of the pooled backend never surfaces to the agent as a partial or malformed observation. The pool is recovered at most 3 times within a 10-second window; a failure that would require a fourth recovery inside that window returns an `execution_error` observation whose detail reports how many recovery attempts occurred within the 10-second window and that the pooled backend's server may be unreachable. A command that runs to completion clears the attempt count, so a session that recovers is not held out by earlier attempts. Any other failure occurring before the command completes is returned as an `execution_error` observation whose detail states that terminal execution failed before completion and quotes the underlying error.
+
+**REQ-TOOLS-104** — On Windows the terminal runs commands through PowerShell rather than bash, and the tool description says so: it must warn that a bash heredoc never returns and that bash arrays, `[[ … ]]`, and `source` are unavailable, while stating that `&&`, `;`, `2>&1`, and `$env:VAR` work. Availability of this backend is decided solely by whether a supported PowerShell interpreter (`pwsh` or `powershell`) is present on the host, never by how quickly anything on the host responds: two hosts with the same software installed report the same availability whether idle or fully loaded, and a slow host is never reported as lacking PowerShell.
+
+**REQ-TOOLS-105** — Visibility: an executing command is displayed as `$ <command>` in the status pane and as `terminal: $ <command>` in the transcript, with timeout/reset/input flags visible; the action's own rendering is `$ command [timeout: Ns] [reset terminal] [background] [session: id] [action]`.
+
+**REQ-TOOLS-106** — The terminal tool must load and register successfully even when the process's stdout/stderr streams lack an encoding attribute (daemonized or piped launch contexts).
+
+### 11. Terminal Tool — Background Sessions
+
+**REQ-TOOLS-107** — `background=true` spawns the command in its own OS subprocess (shell-interpreted; stdout and stderr merged to a pipe; stdin piped; working directory = the tool's working dir; its own process group on POSIX) and returns immediately with text `Background session started: <ts_XXXXXXXX>` plus the command, `session_status="running"`, and exit code 0. Session ids are `ts_` followed by 8 hexadecimal characters derived from the command and a monotonic timestamp, collision-checked.
+
+**REQ-TOOLS-108** — Limits and defaults: maximum concurrent background sessions from `runtime.shell_max_background_sessions` (default 20, minimum 1) — exceeding it is an `execution_error` reading `Maximum background terminal sessions (<n>) reached. Kill or wait for existing sessions before starting new ones.` Per-session wall-clock timeout defaults to `runtime.shell_background_timeout` (default 3600 s, minimum 1) unless the action supplies one. Output is buffered up to 1 MB per session and truncated silently from the oldest end, with the read cursor adjusted so polling stays consistent.
+
+**REQ-TOOLS-109** — Background termination protocol: SIGTERM, then a grace wait of up to 5 seconds (returning as soon as the process exits), then SIGKILL. A background timeout sets status `timeout` and exit code 124; an explicit kill sets status `killed` and exit code −1. The status vocabulary is exactly {`running`, `completed` (exit 0), `failed` (nonzero), `killed`, `timeout`}.
+
+**REQ-TOOLS-110** — Session actions: `query` (the default when `session_id` is set) returns only output new since the last poll (placeholder `(no new output since last poll)`) plus status and exit code; `kill` returns the final output; `send_input` writes bytes to stdin (result `Sent <n> byte(s) to session <id>.`; a closed pipe logs a warning); `send_signal` sends SIGTERM/SIGINT/SIGKILL/SIGHUP (default SIGTERM; result `Sent <sig> to session <id>.`); `list` needs no session id and returns an aligned text table plus structured entries `{session_id, command, status, exit_code, started_at (ISO-8601)}`, with a per-row status glyph (`▶`/`✓`/`✗`). An unknown session id yields `invalid_request` with `Unknown background session: '<id>'`.
+
+**REQ-TOOLS-111** — Executor teardown kills all background sessions and closes pooled terminal resources; the same cleanup is attempted best-effort on interpreter finalization.
+
+### 12. Terminal Outcome Classification
+
+**REQ-TOOLS-112** — Every terminal observation carries an `outcome_kind` from {`success`, `shell_failure`, `suspicious_success`, `soft_pause`, `timeout`, `invalid_request`, `execution_error`, `background_running`, `background_terminal`, `sandbox_unavailable`} and an `outcome_severity` from {`info`, `warning`, `error`}. The classification is decided by the following tests in order, the first one that applies deciding both fields:
+1. a `failure_kind` is present — `timeout` → `timeout` / error; `invalid_request` → `invalid_request` / warning; `execution_error` → `execution_error` / error; `sandbox_unavailable` → `sandbox_unavailable` / error;
+2. the observation reports a background session — status `running` → `background_running`, any terminal status of REQ-TOOLS-109 → `background_terminal`;
+3. exit code −1 → `soft_pause` / warning;
+4. a non-zero exit code → `shell_failure` / error;
+5. exit code 0 with at least one output-derived warning from REQ-TOOLS-113 → `suspicious_success` / warning;
+6. otherwise → `success` / info.
+
+The severities attached to `background_running` and `background_terminal` are an Open Question (20).
+
+**REQ-TOOLS-113** — Three independent checks run over the output of a command that exited 0. Each contributes at most one warning, and one or more warnings makes the observation `suspicious_success`:
+- **Literal failure markers**, searched case-insensitively anywhere in the output, in this fixed order: `Traceback (most recent call last):`, `ERROR: file or directory not found`, `no tests ran`, `AssertionError`, `FAILED ` (the trailing space is part of the marker). The earliest marker in that order that is present produces the single marker warning, whose text names the marker that matched; further markers present in the same output add nothing.
+- **A reported error count**: a line of the form `Found <n> error` or `Found <n> errors` where `<n>` is not zero. `Found 0 errors` must not warn. Whether this line is matched case-insensitively is an Open Question (21).
+- **A test-runner failure banner**: a line consisting of one or more `=` characters, then text, then one or more `=` characters, whose text contains `failed` case-insensitively.
+
+Independently of exit code, a pipeline check adds the warning `Pipeline command may have hidden an upstream failure exit code.` when the command line contains `|` and the output contains, case-insensitively, any of `error:`, `failed`, `traceback`, or `no tests ran`. That warning is the only output-derived warning a non-zero-exit (`shell_failure`) observation can carry. Warnings are de-duplicated with the first occurrence keeping its position, and the resulting list appears both in the observation's `warnings` field and in the `[terminal_diagnostic]` block.
+
+### 13. OS-Level Sandbox
+
+**REQ-TOOLS-114** — The sandbox is opt-in per session: `runtime.sandbox_mode` ∈ {`off` (default), `workspace-write`, `read-only`}, case-insensitive. A YAML bare `off` parsed as boolean false is coerced to the string `"off"`. Unrecognized values are rejected at load and at assignment — never assumed off. The desktop session dialog offers a per-session toggle; the headless CLI is configuration-driven only (no launch flag).
+
+**REQ-TOOLS-115** — Platform backends: macOS uses the system sandbox facility (backend name `seatbelt`); Linux and WSL2 use bubblewrap (backend name `bubblewrap`); native Windows has no backend and reports unavailable with remediation text directing the user to run inside a WSL2 distribution with bubblewrap installed, or to leave the sandbox off. Sandboxing is per-command wrapping of the command string; no containers are involved.
+
+**REQ-TOOLS-116** — Writability model: `workspace-write` makes the workspace (or its active worktree) plus `runtime.sandbox_writable_roots` writable and the rest of the filesystem read-only; `read-only` makes nothing writable except temporary directories. `.git` and `.rotaris` stay read-only even when they sit inside a writable root, and no setting can turn that exclusion off — write access to either directory would let a run break out of, or quietly widen, its own confinement (repository hook scripts execute outside the sandbox; the configuration directory is what decides the sandbox's boundaries in the first place). Entries in `runtime.sandbox_writable_roots` must be absolute paths (POSIX or Windows spelling); a relative entry is rejected with `runtime.sandbox_writable_roots entry '<e>' must be an absolute path`.
+
+**REQ-TOOLS-117** — Network inside the sandbox is closed by default; `runtime.sandbox_allow_network: true` opens it. The switch is binary — no per-host filtering for sandboxed terminal commands.
+
+**REQ-TOOLS-118** — There is no silent fallback, structurally: if the sandbox cannot wrap a command, the command is not run. At session start, a session that requires an unavailable sandbox fails to start with reason and remediation. At command time, the terminal returns a `sandbox_unavailable` observation instead of executing, with exit code 126 ("found but could not be executed" — preventing the classifier from calling it a success) and detail `This session requires the OS-level sandbox, but the command could not be sandboxed and was therefore not run: <error>`. This refusal is not retryable into an unsandboxed execution path.
+
+**REQ-TOOLS-119** — Sandbox availability is established by exercising the sandbox, never inferred from configuration: the check confirms the host platform, then the presence of the backend executable, then runs one throwaway command through exactly the wrapping that real commands go through. A trial is abandoned after 5.0 seconds. Only a clear success yields "available"; a timeout, an error, or a result that cannot be read yields "unavailable". Within one process the verdict never changes, and asking for it concurrently returns the same verdict as asking once. Three distinguishable reason-and-remediation pairs exist — unsupported platform, missing backend executable, and failed trial — and on Linux the failed-trial remediation names the kernel restriction on unprivileged user namespaces.
+
+**REQ-TOOLS-120** — Wrapping scope: only actions that introduce a new command string are wrapped — including `background=true` spawns (otherwise one flag would escape the sandbox). Keystroke input, empty output polls, and session-control actions (`list`/`query`/`kill`/`send_input`/`send_signal`) are not wrapped. `background` outranks `session_id` in both dispatch and wrap decisions, so supplying both cannot spawn unsandboxed. Retries wrap the original action exactly once — wrappers never nest.
+
+**REQ-TOOLS-121** — The command echoed back in a sandboxed observation is the command string the agent supplied, not the wrapped form that was actually executed. The wrapper's own argument list (profile text, launcher flags) never appears in agent-visible output, so the agent cannot mistake wrapper mechanics for part of its own command and try to edit them on a retry.
+
+**REQ-TOOLS-122** — Sandbox launch failures are re-labeled: an observation from a wrapped command with a nonzero exit, no prior failure kind, and output consisting only of sandbox-launcher-prefixed lines (`bwrap:`, `sandbox-exec:`, `sandbox_apply:`) is re-stamped `sandbox_unavailable` (error, with detail stating the sandbox failed to start so the command did not run and this is a host problem). Requiring every line to match the launcher prefix keeps failing test suites from reading as broken sandboxes. Background sessions receive the same re-read at `query`/`kill` time, since a spawn returns before the launcher can fail.
+
+**REQ-TOOLS-123** — Sandboxed execution environment guarantees: standard temporary locations and basic device files remain usable in both modes; the wrapper never changes the working directory (the persistent shell owns the current directory as agent state). A documented, deliberate artifact of the carve-out mechanism on Linux: an empty `.git/` directory may appear inside a writable root that had none.
+
+**REQ-TOOLS-124** — The sandbox specification is resolved afresh for each call, from the configuration belonging to the run that issued the call and from the conversation's actual working directory (worktree-aware). The "configured and available" verdict is reported identically by the session state snapshot (`sandboxed` flag and backend name), the workspace badge in the UI, and the `session.start` stream event's `sandboxed` field.
+
+**REQ-TOOLS-125** — Sandbox status feeds the permission downgrade (REQ-TOOLS-067/070). The status is reported as a pair: an active flag, true only when the sandbox is both requested and proved usable, and a backend name, which is the backend's name when active and the empty string otherwise.
+
+### 14. Terminal Live Streaming
+
+**REQ-TOOLS-126** — Streaming configuration: `runtime.terminal_stream_enabled` (default true; disabling costs the live view, never the command), `runtime.terminal_stream_interval_ms` (default 100, valid range 20–2000; output sampling period), `runtime.terminal_stream_buffer_kb` (default 256, valid range 0–8192; per-stream replay buffer, 0 disables replay).
+
+**REQ-TOOLS-127** — A foreground command's live output is published on a stream named `fg:<scope>`, where `<scope>` is the identifier of the run the command belongs to, or the literal `root` when the command belongs to no run. A background session publishes on `bg:<session_id>` using its `ts_XXXXXXXX` id. Frames are typed `delta` (the text appended since the previous frame), `screen` (a complete replacement of the displayed text), or `meta`. Streaming changes nothing the agent sees: with or without a consumer attached, and whether or not publishing succeeds, the command still runs to completion and the observation returned is identical — the only detectable difference is whether a live preview existed. A completed foreground stream ends with a `screen` frame whose text equals the observation's final output text, so the live view finishes on the same text the observation reports rather than on a partial capture, and the stream is then closed carrying the command's exit code.
+
+**REQ-TOOLS-128** — Displays can talk back through a registered stream-control channel — send-keys, resize, and interrupt for foreground; send-keys, interrupt (SIGINT), and kill for background — without knowing what drives the stream. A stream info record carries the command, a running flag, start time, exit code, and a `truncated` flag set once replay frames were dropped.
+
+### 15. Workspace File Tools and the Path Fence
+
+**REQ-TOOLS-129** — A central workspace-boundary check governs file access: relative paths resolve against the workspace root; the candidate is resolved to its real path (following symlinks and junctions, so a link that escapes the root resolves outside and is rejected); a path outside the root fails with `Path '<resolved>' is outside workspace root '<root>'` unless the outside-workspace opt-out is enabled.
+
+**REQ-TOOLS-130** — The opt-out is `runtime.allow_outside_workspace` (default false), settable via configuration or the CLI flag `--unsafe-outside-workspace` on both CLI front ends. It governs the file tools and the permission gate's workspace-root scoping.
+
+**REQ-TOOLS-131** — The desktop status strip always shows a file-access flag: `workspace-scoped` normally, `outside-workspace!` when the opt-out is on, with tooltip/accessible text explaining whether agents may read and write outside the workspace folder.
+
+**REQ-TOOLS-132** — `read_file` and `write_file` share the following behavior. A location designated an additional read-only root can be read even though it lies outside the fence of REQ-TOOLS-129, and every write to one is refused; the exception covers reads only. A file counts as binary when a NUL byte appears within its first 8192 bytes. Text is decoded as UTF-8 and, failing that, as latin-1, so a read never fails for encoding reasons alone. Content hashes reported to callers are SHA-256. A write is atomic: a reader running concurrently with a write sees either the whole previous content or the whole new content, never a partial file, and a write interrupted part-way leaves the previous content in place. For each path the 10 most recent writes stay available to `undo` (REQ-TOOLS-135). How an additional read-only root is designated is an Open Question (22).
+
+**REQ-TOOLS-133** — Read-before-write: editing a file never read through this engine instance is rejected with `You must read <rel> before editing it. Call read_file(path="<rel>") first, then retry your edit.` Every successful write records the new content as read, so consecutive edits work.
+
+**REQ-TOOLS-134** — `read_file` contract: accepts `path` (with `file_path` accepted as an alias), `offset` (1-based, default 1), `limit` (default 2000 lines), and `grep` (regex filter, with `grep_context` default 3; matching lines prefixed `>`, groups separated by `---`, headed by `N match(es) for '<pattern>':` or `No matches for pattern …`). Content is returned line-numbered (`N: line`) with a metadata header `[path: … | total_lines: … | shown: lines A-B | truncated: true]`. Output is capped at 30,000 characters with a continuation hint `(Output capped at ~30000 chars. <n> more lines. Use offset=<k> to continue.)`. Reading a directory returns an entry listing (subdirectories suffixed `/`, entries whose name is one of the ignore components of REQ-TOOLS-140 skipped, `(empty directory)` placeholder). Binary files are rejected (`Binary file (<n> bytes). Cannot display content.`). A missing path returns a recovery message containing a listing of the parent directory and up to 5 close-match suggestions — names scoring at least 0.45 in similarity to the requested name; the similarity function is an Open Question (23).
+
+**REQ-TOOLS-135** — `write_file` operations: `create` (fails if the file exists: `File already exists: <p>. Use 'overwrite' or 'edit'.`), `edit` (old-string/new-string; identical strings rejected), `overwrite` (requires an existing, previously read file), `insert` (`insert_line` ≥ 0, 0 = beginning; a line beyond the file length is rejected), `undo` (pops the per-path undo stack; `No edit history for <p>.` when empty). Success messages report lines changed/created/inserted/replaced. Every success carries a structured diff payload for UI rendering that is excluded from model-visible content.
+
+**REQ-TOOLS-136** — Edit matching runs four levels, and the first level that produces any match decides the outcome: (1) exact; (2) exact after trailing whitespace is stripped from every line on both sides; (3) exact after one and the same leading-whitespace prefix is added to or removed from every line of the candidate, so a block differing only by a uniform indentation shift still matches; (4) fuzzy — the single best-scoring window of the same number of lines, accepted only at similarity ≥ 0.85. A match above level 1 is flagged in the result (`Match level: <level>`; a fuzzy match adds `(similarity: 0.NN)` and `Verify the result.`). When no level matches, the message names the levels tried and the file's line count and suggests a fresh read or `overwrite`. When a level matches more than once, the result is `Found <n> occurrences of old_str at lines <a, b, …>` with guidance to add surrounding context or set replace-all. Replace-all replaces every exact occurrence as plain text. The similarity function behind the 0.85 threshold, and the tie-break between two equally scoring windows, are Open Questions (23).
+
+**REQ-TOOLS-137** — The hash-anchored read and edit tools (`haet_read`, `haet_edit`, and the alias `haet`) enforce the same workspace fence as REQ-TOOLS-129 and honor the same `runtime.allow_outside_workspace` opt-out. Their record of which files have been read is scoped to the workspace root and shared by every run in that workspace, so a file read during one run can be edited by a later run without being read again. Their action surface — parameter names, the meaning of the anchoring hash, and their failure messages — is an Open Question (24).
+
+### 16. Search Tools (grep, glob)
+
+**REQ-TOOLS-138** — Both search tools are read-only, workspace-confined, and use no shell or network. `grep` accepts `pattern` (regex; an invalid pattern returns `Invalid regex pattern: <detail>`), `paths` (a list; a singular `path` key and a bare-string `paths` value are normalized), and `max_matches` (default 100). Output is one `file:line:content` line per match, or `No matches found`.
+
+**REQ-TOOLS-139** — Search scan filters (applying to grep scans and glob): non-files and symlinks are skipped; paths outside the workspace and paths containing a hard-coded ignore component are skipped; the workspace's `.gitignore` is honored when gitignore support is available (directories pruned during traversal, files filtered); files over 2 MiB are skipped; probably-binary files (NUL within the first 1024 bytes) are skipped. Tools that act on one named file (`read_file`, `haet_read`) skip the gitignore filter entirely: naming a path explicitly is treated as the caller's decision, and the file is served even when the workspace ignores it.
+
+**REQ-TOOLS-140** — The hard-coded ignore components are: `.git`, `.hg`, `.svn`, `.idea`, `.vscode`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.tox`, `.venv`, `__pycache__`, `dist`, `venv`, `node_modules`, `.pnpm`, `.next`, `.nuxt`, `coverage`, `.turbo`, `cache`, `build`, `out`, `target`, `.nx`, `.rotaris`.
+
+**REQ-TOOLS-141** — `glob` accepts `pattern` (e.g., `**/*.py`) and `base_path` (a relative directory; a base outside the workspace or not a directory is silently ignored and the workspace root used). Results are workspace-relative POSIX paths, deduplicated and sorted alphabetically, or `No files found`. Absolute path patterns are relativized to the workspace or dropped. Observable results (filters, format, ordering, caps) are identical whether or not an external search accelerator is present on the host.
+
+### 17. Local Commit Tool
+
+**REQ-TOOLS-142** — `git_commit` accepts `message` (required) and `files` (optional list). With no file list, all tracked changes are staged; with a list, every path is validated against the workspace (an escaping path errors with `Path escapes workspace: <p>`) and staged explicitly in workspace-relative POSIX form. The tool is local-only: no push, no remote interaction ever.
+
+**REQ-TOOLS-143** — Failure surfaces: not inside a git repository is detected up front; staging failures pass through the underlying error output; nothing staged errors with `No changes to commit.` plus a hint listing modified tracked files and untracked files with `Pass these paths in the files field or use files=null to stage all tracked changes.` (or noting the working tree is clean); commit and revision-resolution failures pass through underlying output. A success observation carries `commit_sha` (the new HEAD) and `files_staged` (the staged file list).
+
+### 18. Task-List Tool (todo)
+
+**REQ-TOOLS-144** — Operations are exactly `replace`, `add_phase`, `add_task`, `update`, `remove_task`; an unknown operation errors with `Unsupported operation: <op>`. Phases contain ordered tasks; both carry stable auto-generated 8-hex-character ids; names need not be unique; targeting is always by id. Task states: `PENDING`, `IN_PROGRESS`, `COMPLETED`, `ABANDONED`.
+
+**REQ-TOOLS-145** — At most one task may be `IN_PROGRESS` at a time, enforced both when marking a task and on wholesale state changes; the violation message is `Only one task can be IN_PROGRESS at a time. Active task: <id> (<name>). Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`
+
+**REQ-TOOLS-146** — `replace` protects finished work: tasks already `COMPLETED` or `ABANDONED` are restored by id over whatever the incoming list says. (Whether the in-progress task must also be protected is unresolved — see Open Questions.)
+
+**REQ-TOOLS-147** — Ergonomics: `add_task` accepts a nested task payload or flat fields (`title` accepted as an alias for `name`); a missing phase or task id errors with a hint enumerating the available phases/tasks; a no-op `update` is an error (`Todo update made no changes…`). Every observation appends a rendered `Todo state:` summary (phases, tasks with `[STATUS]` markers, descriptions compacted to 80 characters). The list is session-scoped, persisted with session state, and shown in the UI as the run's primary progress display.
+
+### 19. Artifact Tools
+
+**REQ-TOOLS-148** — `artifact_read(id_or_slug, sections=[])` returns the full Markdown body by default; `sections` may filter to any of `summary`, `key_findings`, `snippets`, `highlights`, `files`. An unknown reference errors with `Artifact not found: <ref>`. Reading marks the artifact as consumed by the reading persona.
+
+**REQ-TOOLS-149** — `artifact_list(artifact_kind?, persona?, tags[], limit=20 (range 1–200), include_superseded=false)` renders one line per artifact in the form `- <id> [<slug>] persona=<p> status=<s> tags=[…] — <title>`. The tag filter is an AND-match over the closed vocabulary of REQ-TOOLS-150: an artifact is listed only if it carries every requested tag. Superseded artifacts are omitted unless `include_superseded` is true. With no results the output is `No artifacts found.` The order of the rendered lines, and what happens for a `limit` outside 1–200, are Open Questions (25).
+
+**REQ-TOOLS-150** — `artifact_write(slug, title, body, tags[], supersedes?)`: the tag vocabulary is closed — {`research`, `planning`, `implementation`, `review`, `verification`, `errors`} — and invalid tags are rejected with the valid list. `supersedes` marks an older artifact obsolete (still readable, hidden from default listings). The result reads `Published artifact <art_id> (slug: <slug>).` The writing agent's identity (persona, canonical name, task id) is attributed to the artifact. The tool is only available when the persona has `can_publish_artifacts: true`.
+
+**REQ-TOOLS-151** — Artifact ids use the shape `art_` followed by 8 hexadecimal characters, referenced consistently across delegation attachments and tool descriptions.
+
+### 20. Delegation Tools
+
+**REQ-TOOLS-152** — `delegate` accepts these action fields:
+- `persona` (required) — the target persona; the aliases `coder` → `coding-agent` and `playwright` → `ui-verifier` are accepted, and an unknown value is rejected with a message listing the known personas and the supported aliases;
+- `task_name` (required);
+- `task` (required) — the instruction text, carrying the labeled sections TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT;
+- `depends_on` — `bg_XXXXXXXX` task ids that must all finish successfully before the child starts; each upstream task's summary and key findings appear in the child's payload;
+- `inherited_context` — ids of already-completed sibling tasks whose reports are carried into the child without imposing any ordering; an id naming a failed or unfinished task is ignored, and an id referring to nothing rejects the call;
+- `category` ∈ {`quick`, `deep`, `planning`, `research`} — a routing hint, not a model name;
+- `session_id` — reuse a previous delegation's session for a retry or a follow-up;
+- `run_in_background` (default true) — the call does not block, and a system notification is injected into the caller's conversation when the child finishes;
+- `attach_artifacts` — artifact ids or slugs whose full bodies are placed at the head of the child's payload (REQ-TOOLS-154); an id that resolves to nothing produces a warning instead of a rejection, and when the attached bodies exceed the payload size budget the surplus artifacts are dropped whole — the caller's `task` text is never truncated to make room — and the observation warns how many attachments were dropped for size;
+- `suppress_auto_context` — omits the automatic index of prior sibling artifacts; a persona-level setting can force the same omission.
+
+The payload size budget that decides when attachments are dropped is an Open Question (26).
+
+**REQ-TOOLS-153** — The `delegate` observation carries `canonical_name` (the child's name after de-duplication), `status` ∈ {`queued`, `waiting_on_dependencies`, `waiting_on_model_slot`, `rejected`}, `task_id` in the `bg_XXXXXXXX` shape, and a human-readable message that includes any alias resolution and any attachment warning. When the target model has no free slot the task is enqueued rather than rejected, and the message names the model and how many of its slots are in use: `Task queued (waiting for model slot: model '<m>', a/b active). Will start automatically when a slot opens.` Whether — and at which point — a successful delegation suspends the parent conversation, and how that interacts with `run_in_background: true`, is an Open Question (27).
+
+**REQ-TOOLS-154** — The child's payload is assembled in this observable order: (1) a workspace-root prefix giving the absolute workspace path and instructing the child to treat any other absolute path it encounters as stale; (2) for the acceptance persona only, a verifier-evidence prefix — and a delegation to that persona is refused outright while the verification gate is failing; (3) the baseline sibling-artifact index, unless suppressed under REQ-TOOLS-152; (4) the full bodies of attached artifacts; (5) the inherited-context block; (6) the caller's `task` text. Which persona is the acceptance persona, and what the verifier-evidence prefix contains, are Open Questions (28).
+
+**REQ-TOOLS-155** — `background_output(task_id, detail_level='summary'|'verbatim')` statuses: `ok` (a report with agent/persona, status, summary, artifacts, key findings, and last reply; verbatim detail adds the exact last reply, touched files, highlighted paths, and snippets), `still_running` (`Task <id> is still running (state: <state>).`), `not_found`. Results are parent-scoped: a task whose parent is not the caller reads as `not_found` — an agent can fetch only its own children's results.
+
+**REQ-TOOLS-156** — `wait_for_tasks(task_ids=[])`: an empty list means all of the caller's own active background children. An agent cannot wait for its own task (`An agent cannot wait for its own task.`) nor for anything but its direct children (`An agent can wait only for its direct child tasks.`). If everything requested is already terminal, the call returns immediately (zero-delay path); otherwise the parent conversation is paused non-blockingly and resumed with a structured summary when the tasks finish.
+
+### 21. User-Question Tool (ask_questions)
+
+**REQ-TOOLS-157** — An `ask_questions` action carries 1 to 10 steps. Each step has an id that is unique within the action, a title that is not empty, an optional description, 0 to 8 options whose labels are not empty, and `allow_freeform` (default true). A step that offers no options with `allow_freeform` false is rejected. Every one of these violations is reported as a validation error when the action is constructed, before any prompt reaches the user.
+
+**REQ-TOOLS-158** — Execution blocks on the user-prompt channel up to a response timeout (default 300 s, from runtime configuration). Outcomes: an answers mapping (`step_id → {selected_option, freeform_text}`, rendered under a `## User Answers` heading); cancelled (`Questions were cancelled.` — covering user cancellation, run stop, a reentrant second prompt, a presenter failure with the prompt discarded, and contexts with no conversation); or timed out (`User did not respond within <N> seconds.`). Only one prompt may be pending per conversation (reentrancy guard).
+
+### 22. Verification-Gate Capabilities (Outside the Public Tool Surface)
+
+**REQ-TOOLS-159** — A probe capability checks a candidate verification command before the real suite is ever run. It takes the command, the role it would fill (`test`, `typecheck`, `lint`, or `other`), and a working directory, and it answers with exactly one verdict from `verified`, `empty`, `unavailable`, `undecidable`, rendered as a single line of the form `'<cmd>': <verdict> — <note>`. The working directory is resolved beneath the workspace root; one that would escape the workspace tree is ignored without an error and the workspace root is used instead. A probe is bounded by a default timeout of 30 s. What distinguishes an `unavailable` verdict from an `undecidable` one is an Open Question (29).
+
+**REQ-TOOLS-160** — The verification-gate check set has exactly one writer: a capability taking the proposed set of checks and a reason for the change. It declines in-band — as an ordinary reply the caller reads, never as a retryable error — in three cases, and the decline says which case applies:
+- no reason was supplied — the decline asks for one and states that the reason is what the user is shown when their gate changes;
+- the proposed suite is not valid — the decline says so and quotes the validation failure;
+- the change is one the caller may not make on its own, namely removing the only check for a role, demoting a blocking check to advisory, or emptying the suite — the decline gives the specific reason, states that such a change has to go through an approval-gated proposal instead, and instructs the caller to report it and stop rather than pursue the same outcome another way.
+
+Every write and every decline is recorded so the run that owns the gate can report it. This capability and the probe of REQ-TOOLS-159 are outside the public tool surface (REQ-TOOLS-003) and are available only to the run that maintains the gate. Where writes and declines are recorded is an Open Question (30).
+
+### 23. Custom Tool Plugins
+
+**REQ-TOOLS-161** — A persona lists custom tools as file paths under the `custom_tools:` key of its `agents.yaml` entry; each listed file is loaded when that persona's agent is built. A plugin file must define exactly one tool definition, which registers under that tool's own name. A file defining no tool definition fails with a typed error naming the path; an import failure fails with an error naming the path and the underlying cause.
+
+**REQ-TOOLS-162** — Duplicate registered plugin tool names after configuration resolution are a startup error.
+
+**REQ-TOOLS-163** — A plugin executes inside the host process and therefore holds exactly the operating-system privileges that process holds; plugin code gets no confinement of its own. Plugins are treated as stateless, and every argument and return value must be expressible as JSON (or as a declared schema type). Plugin exceptions become structured tool errors (type and message to the model; stack traces to debug logs only). Plugin dispatch still passes the central permission gate (REQ-TOOLS-011).
+
+**REQ-TOOLS-164** — Observed load-failure behavior at agent construction: a missing custom tool path or a load failure logs a warning and skips that tool, leaving the agent otherwise functional. A stricter fail-fast-at-startup alternative is equally defensible; this specification does not settle the question (see Open Questions). An implementation must pick one behavior and document it.
+
+**REQ-TOOLS-165** — The desktop settings customization page shows three read-only inventory tabs: Instructions (the workspace instruction files `AGENTS.md` and `AGENTS.override.md` when present, source labeled `workspace`); Plugins (subtitle "Discovered tool plugins": every `*.py` file under `<workspace>/.rotaris/plugins`, sorted, name = filename stem, source `workspace`, full path shown as description and tooltip); Tools (every built-in public tool name, sorted alphabetically, source `built-in`, runtime target name as description). Each tab shows an empty-state placeholder when it has no entries. (Whether folder-listed plugins were also meant to auto-load is an Open Question.)
+
+### 24. MCP Server Grants and Per-Persona Narrowing
+
+**REQ-TOOLS-166** — A persona names MCP servers (`mcp_servers`); an optional `mcp_tools` mapping narrows each server to an allow-list of original tool names. No entry (or the field unset) grants the whole server surface. A server's own disabled-tools list applies on top — a denial always wins over a grant.
+
+**REQ-TOOLS-167** — The prompt renderer and the runtime tool provider resolve MCP grants through the same logic, so the MCP tools listed in the prompt equal the MCP tools the model can call.
+
+**REQ-TOOLS-168** — A grant in `mcp_tools` matches a tool the server ships when the shipped name equals the granted name, or equals the granted name carrying one of the provider prefixes `<server>_`, `mcp-<server>-`, or `mcp__<server>__`. The prefixed spellings are extra candidates only — the unprefixed original name always remains a match. A grant naming a tool the server does not ship is logged once per process and never fails the run. A grant naming a server the persona was not given is a configuration-validation error.
+
+**REQ-TOOLS-169** — MCP server resolution for a persona: unknown server names warn; servers can be disabled through a user toggle store; a server whose command is not on PATH is excluded with a once-per-process warning surfaced to the UI and session issues; tool-discovery failures are likewise surfaced as warnings, not crashes.
+
+**REQ-TOOLS-170** — MCP secrets come from `secrets.yaml` (global config directory and `<workspace>/.rotaris/`, merged with the workspace winning per key). Stored secrets override shell environment variables; `${VAR}` placeholders expand from the environment and are omitted entirely when the variable is unset.
+
+### 25. Secret Redaction
+
+**REQ-TOOLS-171** — One shared redaction pass backs the approval prompt, the audit log, and the event stream, so the three surfaces can never drift. It applies four ordered layers: (1) `key=value` / `key: value` assignments with secret-looking keys; (2) `--flag value` pairs with secret-looking flags; (3) `Bearer`/`Basic`/`token` credential schemes; (4) a value-shape sweep for the known credential prefixes `ghp_`, `ghs_`, `ghu_`, `gho_`, `sk-`, `sk_`, `iv1.`, `eyj`, recognized only where the prefix begins at a token boundary, so an ordinary word that merely contains one of those sequences is left alone. Whether the prefix comparison ignores case — which decides whether a JWT beginning `eyJ` is caught by the `eyj` prefix — is an Open Question (31). The mask is `***`. Masking replaces the credential value alone; the program name, subcommands, and flag names around it survive unchanged, so whoever reads the prompt or the audit line can still tell what was about to run. Redaction is idempotent — re-running over redacted text changes nothing.
+
+**REQ-TOOLS-172** — A key name counts as secret-looking when, after splitting the name on underscores and comparing case-insensitively, one of its whole segments is `key`, `keys`, `token`, `tokens`, `secret`, `secrets`, `password`, `passwords`, `passwd`, `credential`, `credentials`, or `auth`; `api_key` and `api_keys` are therefore covered by the `key`/`keys` segments. Because whole segments must match, `GITHUB_TOKEN`, `AWS_SECRET_ACCESS_KEY`, and `MY_PASSWORD` are secret-looking while a `keyboard_layout` variable and a `--secretly-verbose` flag are not. When the key itself is secret-looking, its entire value is masked in argument summaries and in stream event arguments, not merely the credential-shaped part of it. Whether hyphen-delimited flag names such as `--api-key` are segmented the same way is an Open Question (32).
+
+**REQ-TOOLS-173** — Every published stream event that carries tool arguments or a permission summary carries them redacted: the arguments on `tool.start` and the summaries on `permission.decision` and `approval.requested` never contain an unmasked credential, no matter how the event was assembled or which of its fields were set last. Values are rendered as strings and clipped at 240 characters.
+
+**REQ-TOOLS-174** — The desktop status strip permanently displays a `redaction: always on` flag with an explanation that anything resembling a credential is masked before it reaches a model or the transcript.
+
+### 26. Cross-Cutting Ordering, Isolation, and Lifecycle
+
+**REQ-TOOLS-175** — Dispatch order per tool call: (1) permission resolution (never raises; ask brokered to approval or headless policy), (2) on allow — pre-execution hooks (may block), (3) tool execution, (4) post-execution hooks (feedback only), (5) observation normalization and diagnostics. A deny or hook block returns a tool-result error event and the run continues.
+
+**REQ-TOOLS-176** — Permission state never crosses a session or run boundary, and nothing falls back from one session or run to another when its own state is missing. Observable consequences: an approval answered in one session's window never authorizes a call in another session; the decisions of one run never appear in another run's audit trail; a mode change in one session never alters what another session's agents may do; and a call that cannot be attributed to a run never borrows a live run's sandbox specification or egress configuration (REQ-TOOLS-009, REQ-TOOLS-029). A session's permission state can be discarded and reset explicitly, and after a discard no earlier state of that session influences a later decision.
+
+**REQ-TOOLS-177** — Teardown ordering: discarding a session's approval host cancels all waiting approvals (waiters resolve cancelled → deny); run or scheduler stop releases blocked calls the same way; discarding the session's mode override at run end prevents a resumed session from inheriting a mid-run switch.
+
+**REQ-TOOLS-178** — The approval wait and the user-question wait share one budget, `runtime.approval_timeout_seconds` (default 300 s), and one reading of zero: a configured `0` waits indefinitely, and a negative value is rejected when the configuration is loaded (REQ-TOOLS-055). "Wait for me" therefore means the same thing on both barriers.
+
+**REQ-TOOLS-179** — Exit-code contract across the terminal surface: 124 = hard timeout (foreground and background); 126 = sandbox unavailable (the command never ran); −1 = soft pause (foreground) or killed (background); 0/nonzero = the command's real outcome.
+
+**REQ-TOOLS-180** — Run completion signalling: agents are constructed with no built-in run-termination tool. A run terminates when the agent produces a message addressed to the user and requests no tool call in that same turn; that message is then exposed as the child's final response, giving delegation a deterministic handoff value. The never-gated names of REQ-TOOLS-014 are retained for personas/providers that still surface such a tool. Correction prompts describe the observable behavior (ending the turn), never a tool name.
+
+### 27. Event-Stream Integration
+
+**REQ-TOOLS-181** — The `session.start` event carries `permission_mode` (the effective preset) and `sandboxed` (the configured-and-available verdict). `tool.start`/`tool.finish` events carry redacted arguments and outcome/duration. `permission.decision` and `approval.requested` are emitted with redacted summaries per REQ-TOOLS-061/083.
+
+**REQ-TOOLS-182** — The event envelope carries `schema_version`, `event`, an ISO-8601 UTC `timestamp`, and `session_id`. Consumers must ignore unknown fields for forward compatibility.
+
+**REQ-TOOLS-183** — Consumers pair approvals to decisions by `request_id` and must treat an empty request id as unpaired. (Whether the decision-side event ever carries a non-empty id on a live stream is an Open Question; pairing currently rides the `approval.requested` side.)
+
+### 28. Desktop and CLI Surfaces
+
+**REQ-TOOLS-184** — The desktop status strip permanently shows, with explanatory tooltips whose wording mirrors the settings pages: `mode: <preset>`, the workspace-scope flag (REQ-TOOLS-131), `redaction: always on`, an optional armed-state indicator, an `unsaved settings` flag, and a background-session count (`<n> bg session(s)`).
+
+**REQ-TOOLS-185** — Approval visibility beyond the dialog: a pending-approval row remains visible on a live run's monitor; pending approvals are projected into the transcript; the pending-approval store emits updates only on change; queued requests display serially; an answer travels to the waiting agent; a session observer publishes and clears pending approvals.
+
+**REQ-TOOLS-186** — The runtime settings page exposes sandbox mode, network egress policy, and permission mode under an explicit Save/Discard flow, and an operator-set egress value demonstrably reaches the live run's policy.
+
+## Data & Formats
+
+### On-disk layout (workspace-observable)
+
+- `<workspace>/.rotaris/agents.yaml` — workspace configuration, including all `runtime.*` keys below; the desktop mode selector persists `runtime.permission_mode` here.
+- `secrets.yaml` — in the global config directory and `<workspace>/.rotaris/`; MCP secrets; atomically written; `.rotaris/` is auto-appended to the workspace `.gitignore`.
+- `<workspace>/.rotaris/sessions/<session_id>/evidence/permissions.jsonl` — permission decisions and mode changes, append-only JSON lines, ring-capped at 5000.
+- `<workspace>/.rotaris/sessions/<session_id>/evidence/tool-calls.jsonl` — tool-call outcomes (including terminal outcome kinds and warnings), same ring-cap family (5000).
+- Session evidence issues (`permission_denied` kind) and timeline events (`permission_approved`, `permission_mode_changed`, `permission_mode_downgraded`).
+- Session state snapshot (recorded for audit visibility in the session's run-configuration record): `permission_mode` (effective preset at run start; empty on pre-feature snapshots), `sandboxed` (bool), `sandbox_backend` (`seatbelt`/`bubblewrap`/empty), `pending_approvals` (live map keyed by request id), the task list, and transcript events including any downgrade notice.
+- `<workspace>/.rotaris/plugins/*.py` — the designated workspace plugin folder listed by the settings inventory.
+
+### Record shapes
+
+Permission decision entry (JSON lines):
+`timestamp` (ISO-8601 UTC), `session_id`, `agent_id`, `persona`, `tool_name`, `decision` (`allow|ask|deny`), `rule_id`, `source` (one of the 12 decision-source values), `summary` (the redacted request summary of REQ-TOOLS-016), `reason`, optional `request_id` (only when an approval was raised). Carries no argument values beyond the redacted command facet inside `summary`.
+
+Mode-change entry (same file):
+`{timestamp, event: "permission_mode_change", session_id, agent_id, requested_mode, effective_mode, previous_mode, source, reason, skipped_personas: [...]}` — `skipped_personas` present even when empty.
+
+Approval payload:
+`{request_id (hex UUID), session_id, agent_id, persona, tool_name, command (redacted), argument_summary, rule_id, reason}`.
+
+Stream events (envelope: `schema_version`, `event`, `timestamp` ISO-8601 UTC, `session_id`; unknown fields ignored):
+- `approval.requested`: `request_id`, `agent_name` (may be empty), `persona`, `tool_name`, `rule_id`, `summary` (redacted), `resolver` (`"brokered"|"headless"`), `timeout_seconds` (nullable), `unattended_reason`.
+- `permission.decision`: `request_id` (empty = unpaired), `tool_name`, `decision`, `source`, `rule_id`, `summary` (re-redacted on construction/assignment).
+- `session.start`: includes `permission_mode`, `sandboxed`.
+- `tool.start` / `tool.finish`: redacted arguments (values clipped at 240 chars), outcome, duration.
+
+Terminal observation extras:
+- `[terminal_diagnostic]` JSON block (sorted keys, nulls dropped): backend, command, detail, error_class, exit_code, failure_kind, kill_status, outcome_kind, outcome_severity, session_reinitialized, timeout, timeout_seconds, warnings, working_dir, session fields when applicable.
+- Output section labels: `[terminal_output]`, `[partial_terminal_output]` (timed-out), `(no output)` placeholder, `[RESET]` command label.
+- Background list entries: `{session_id, command, status, exit_code, started_at (ISO-8601)}` plus an aligned text table with `▶/✓/✗` status glyphs.
+- Fetch error observations: `[fetch_diagnostic]` JSON block; observation metadata `url`, `final_url`, `status_code`, `content_type`, `truncated`.
+
+Identifier formats:
+- Terminal background session ids: `ts_` + 8 hex characters.
+- Delegated task ids: `bg_` + 8 hex characters.
+- Artifact ids: `art_` + 8 hex characters.
+- Task-list phase/task ids: 8 hex characters.
+- Approval request ids: hexadecimal UUID.
+- Session approval rule ids: `session:allow:<n>` (1-based). Other rule-id spellings: `builtin:meta-tool`, `preset:<preset_name>`, `failclosed:unresolvable-policy`, `approval:once`, `approval:session`, `starter:*` (nine spellings per REQ-TOOLS-039), `<preset>:fetch-remote-host`, `<preset>:fetch-local-host`, `<preset>:network-command`, `restricted:read-outside-workspace`, `restricted:read-only-tool`, `ask:read-only-tool`.
+
+### Configuration key reference (behavioral defaults)
+
+| Key | Values / type | Default | Notes |
+|---|---|---|---|
+| `runtime.permission_mode` | `restricted`\|`ask`\|`autonomous` | `ask` | unknown → `restricted` with warning; a per-persona `permission_mode` pin wins over a session override unless that override is at least as restrictive as the pin (REQ-TOOLS-048, REQ-TOOLS-074) |
+| `runtime.allow_unsandboxed_autonomous` | bool | `false` | per-workspace opt-in to unattended permissive mode without sandbox |
+| `runtime.headless_approval_policy` | `deny`\|`abort` | `deny` | unrecognized behaves as `deny` |
+| `runtime.approval_timeout_seconds` | float ≥ 0 | `300.0` | `0` = wait indefinitely; shared with user-question waits |
+| `runtime.allow_outside_workspace` | bool | `false` | CLI flag `--unsafe-outside-workspace` sets it for the run |
+| `runtime.sandbox_mode` | `off`\|`workspace-write`\|`read-only` | `off` | case-insensitive; YAML bare `off` coerced; unknown rejected |
+| `runtime.sandbox_writable_roots` | absolute paths | `[]` | relative entries rejected |
+| `runtime.sandbox_allow_network` | bool | `false` | binary switch |
+| `runtime.network_egress_policy` | `allow`\|`ask`\|`deny` | `ask` | case-insensitive; unknown rejected at load and assignment |
+| `runtime.network_allowed_hosts` / `runtime.network_denied_hosts` | host-pattern lists | `[]` | trimmed, lower-cased, blanks dropped |
+| `runtime.shell_timeout` | int (seconds) | `100` | default foreground hard timeout |
+| `runtime.shell_max_background_sessions` | int ≥ 1 | `20` | |
+| `runtime.shell_background_timeout` | int ≥ 1 (seconds) | `3600` | |
+| `runtime.tool_timeout` | int (seconds) | `30` | fetch default; bare executor fallback 10.0 s |
+| `runtime.terminal_stream_enabled` | bool | `true` | disabling costs the live view only |
+| `runtime.terminal_stream_interval_ms` | int 20–2000 | `100` | |
+| `runtime.terminal_stream_buffer_kb` | int 0–8192 | `256` | `0` disables replay |
+
+Persona-level tool controls: `tools`, `custom_tools`, `mcp_servers`, `mcp_tools` (per-server grant), `coordinator_only`, `read_only`, `tool_restrictions`, `can_publish_artifacts`, `skip_auto_sibling_context`, `permission_mode`, `delegates_to`.
+
+Config layering: global user config directory < workspace `.rotaris/`; rule lists replace rather than merge.
+
+### Limits and timing inventory (defaults)
+
+| Quantity | Value |
+|---|---|
+| Approval timeout / user-question timeout | 300 s (0 = indefinite) |
+| Foreground shell hard timeout | 100 s |
+| Background session timeout | 3600 s |
+| Background kill grace | 5 s (upper bound) |
+| Sandbox trial timeout | 5 s |
+| Pooled-terminal recovery | 3 attempts / 10 s window |
+| Fetch timeout | 30 s configured / 10 s bare fallback |
+| Redirect cap | 20 |
+| Verification probe timeout | 30 s |
+| Stream sample interval | 100 ms |
+| Background output buffer | 1 MB/session (oldest-first truncation) |
+| Stream replay buffer | 256 KiB/stream (0–8 MiB) |
+| Audit ring / tool-call ring | 5000 entries each |
+| read_file cap | 30,000 chars / 2000 lines default |
+| Search scan file cap | 2 MiB |
+| Binary sniff | 8192 B (file engine) / 1024 B (search) |
+| Argument/stream value preview | 240 chars |
+| Hook result truncation | 4096 chars |
+| Undo history per path | 10 entries |
+| grep max matches | 100 |
+| fetch max lines | 1000 |
+| Max background sessions | 20 |
+| Artifact list limit | 20 (1–200) |
+| User-question shape | ≤ 10 steps × ≤ 8 options |
+| Delegation fan-out | max children 20 / active 6 / depth 3 |
+| Exit codes | 124 timeout; 126 sandbox-unavailable (never ran); −1 soft pause / killed |
+
+## Open Questions
+
+1. The exact no-output soft-pause window and the maximum captured output size for foreground terminal commands are not fixed by this specification; they depend on the chosen execution library and are rendered into the tool description at runtime. An implementation must choose and document concrete values.
+2. OS-level sandbox enforcement is specified but not yet demonstrated end to end on either supported platform. An implementation must plan real end-to-end verification on both platforms rather than relying on simulated tests alone.
+3. Whether custom tools found in the designated plugin folder should load automatically at startup is undecided. Today only per-persona `custom_tools:` file paths load, while the settings UI still lists the folder's contents. Pick one model and make the UI match it.
+4. Whether a live consumer can pair a permission decision back to the approval prompt using the decision event's pairing id is unconfirmed; pairing currently relies on the request-side event.
+5. Two behaviors are specified inconsistently and must be settled: whether a wholesale task-list replace also protects the in-progress task (only completed/abandoned tasks are protected today), and whether an unloadable custom tool fails the session or is warned about and skipped.
+6. Live UI timing behavior (approval dialog queueing under many concurrent prompts, modal focus/stacking, status-strip refresh cadence) is under-specified and should be pinned by observation.
+7. Two incompatible characterisations of the most permissive mode are in circulation: one in which a path outside the workspace raises an approval prompt, and one in which the preset carries no path-scoped ask rule at all and the workspace boundary surfaces only as a path-fence error from the file tools. This specification describes the latter; the intended formulation should be decided explicitly.
+8. REQ-TOOLS-015: the file-writing tool's operation-name field (values like "create"/"edit"/"overwrite") lands in the command-facet slot a shell command line would occupy, because the facet is chosen by argument name. No rule specified here matches those strings, but a custom matcher would see them; whether that is intended should be decided.
+9. Custom plugin tools pass the permission gate but do not receive the per-run policy-bearing context (sandbox specification, egress configuration, artifact store) that built-in tools receive; whether that difference is intended is unresolved.
+10. Whether pooled terminal sessions may execute in parallel while single-session terminals are serialized is unconfirmed and needs runtime measurement.
+11. REQ-TOOLS-006: under `coordinator_only: true`, do the persona's read-class tools (`read_file`, `haet_read`, `fetch`, `artifact_read`, `artifact_list`) survive? The requirement fixes only which tools must survive and which must be removed.
+12. REQ-TOOLS-006: how is the run-scoped tool allow-list that narrows the orchestrator (default) persona supplied — a configuration key, a launch parameter, or something derived per request — and what happens when it names a tool that persona never declared?
+13. REQ-TOOLS-017: what textual form is used when an exact-argument rule compares a non-string argument value (number, boolean, null, list, nested object)? Two implementations that render `1` versus `1.0`, or `true` versus `True`, will match different requests.
+14. REQ-TOOLS-032: when repair cannot produce a schema-valid tool-call payload, is the call returned to the model as a recoverable tool error, retried, or does it end the run?
+15. REQ-TOOLS-033 / REQ-TOOLS-039 / REQ-TOOLS-104: command tokens are compared case-sensitively, yet the starter rules carry Windows spellings (`rmdir /s *`, `rd /s *`, `del /f *`, `Remove-Item *`) and Windows executes commands through PowerShell, where command names are not case-sensitive. Which is canonical — case-sensitive matching on every platform, or case folding on the PowerShell backend?
+16. REQ-TOOLS-002 / REQ-TOOLS-169: REQ-TOOLS-002 makes any unrecognized `tools:` entry — including an MCP server name that is not configured for the workspace — a configuration-validation failure, while REQ-TOOLS-169 says an unknown MCP server name only produces a warning. Which is canonical? Settle at the same time which key grants a server (`tools:` per REQ-TOOLS-001, or `mcp_servers` per REQ-TOOLS-166) and which key REQ-TOOLS-168's "a server the persona was not given" refers to.
+17. REQ-TOOLS-070 / REQ-TOOLS-118: REQ-TOOLS-118 refuses to start a session whose required sandbox is unavailable, which would make REQ-TOOLS-070's "requested but not usable" case unreachable at run time. Which is canonical — the session refuses to start, or it starts unsandboxed with every terminal command refused and the permission mode downgraded?
+18. REQ-TOOLS-094: the full leading-token pattern set of the network-command recognizer, beyond the minimum coverage the requirement lists.
+19. REQ-TOOLS-097: does the no-output soft pause also apply to a foreground call that supplied an explicit `timeout`, or does an explicit `timeout` suppress it?
+20. REQ-TOOLS-112: which `outcome_severity` attaches to `background_running`, and which to `background_terminal`?
+21. REQ-TOOLS-113: is the reported-error-count line (`Found <n> error` / `Found <n> errors`) matched case-insensitively, as the literal markers and the banner text are?
+22. REQ-TOOLS-132: how is an additional read-only root — readable outside the workspace fence, never writable — designated? A configuration key, a CLI flag, and a built-in list are all consistent with the text as written.
+23. REQ-TOOLS-134 / REQ-TOOLS-136: which similarity function produces the 0.85 fuzzy-edit threshold and the 0.45 filename-suggestion cutoff, and how is a tie between two equally scoring fuzzy windows broken? Without a named function neither threshold is reproducible across implementations.
+24. REQ-TOOLS-137: the action surface of `haet_read` and `haet_edit` — parameter names, how the anchoring hash is computed and what it covers, and the failure message when the hash no longer matches the file on disk.
+25. REQ-TOOLS-149: in what order does `artifact_list` render its lines, and is a `limit` outside 1–200 clamped or rejected?
+26. REQ-TOOLS-152: what is the payload size budget above which attached artifact bodies are dropped, and in what order are surplus attachments dropped?
+27. REQ-TOOLS-153: does a successful `delegate` suspend the parent conversation, and if so at what point, given that `run_in_background` defaults to true and is specified as non-blocking?
+28. REQ-TOOLS-154: which persona is the acceptance persona whose payload receives the verifier-evidence prefix, and what does that prefix contain?
+29. REQ-TOOLS-159: what distinguishes the probe verdict `unavailable` from `undecidable`?
+30. REQ-TOOLS-160: where are verification-gate writes and declines recorded — which evidence file or timeline — and in what record shape?
+31. REQ-TOOLS-171: is the credential-prefix sweep case-insensitive? The listed `eyj` prefix only catches a JWT (`eyJ…`) if it is.
+32. REQ-TOOLS-172: are hyphen-delimited names such as a `--api-key` flag segmented on hyphens as well as underscores for the secret-looking test? Layer 2 of REQ-TOOLS-171 matches flag names, which are conventionally hyphenated.

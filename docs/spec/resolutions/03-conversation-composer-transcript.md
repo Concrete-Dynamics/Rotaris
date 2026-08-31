@@ -118,7 +118,7 @@ run-orchestration decision, not a composer one, and no requirement in this domai
 | REQ-CHAT-137 | Mouse selection, right-click copy, clipboard failure text | REQ-CHAT-075 (amended to cover pointer selection and to report a refused copy) |
 | REQ-CHAT-138 | Reasoning-header hit tracking | REQ-CHAT-076 |
 | REQ-CHAT-139 | `transcript.max_in_memory_events`, `transcript.archive_page_size` | **REQ-CHAT-165** (new) — residency is product behaviour, not configuration |
-| REQ-CHAT-140 | `transcript_archive.jsonl` and page sentinels | **REQ-CHAT-165** (new) — paging against the session record, no second on-disk format |
+| REQ-CHAT-140 | `transcript_archive.jsonl` and page sentinels | **REQ-CHAT-165** (new) — paging against the session record, this domain adding no on-disk format of its own. The archive file itself was later confirmed as the sessions domain's: REQ-SESSION-192 and REQ-SESSION-131 own `state/transcript_archive.jsonl` and its paging |
 | REQ-CHAT-141 | Scroll-up archive paging | **REQ-CHAT-165** (new) |
 | REQ-CHAT-142 | 120 ms refresh interval, scroll restoration | REQ-CHAT-063, REQ-CHAT-071 |
 | REQ-CHAT-143 | Terminal search modal, proportional scrolling | REQ-CHAT-074 — which navigates to the matched row exactly |
@@ -132,9 +132,14 @@ run-orchestration decision, not a composer one, and no requirement in this domai
 | REQ-CHAT-151 | Palette screen with shortcut cheat sheet | REQ-CHAT-028 (palette mirroring), REQ-CHAT-002 (F1 keyboard help) |
 | REQ-CHAT-152 | Leader / desktop-shortcut boundary and command fallback | REQ-CHAT-028 |
 
-Three on-disk formats disappeared with the terminal frontend and were removed from Data & Formats:
-`<workspace>/.rotaris/prompt_history.json`, `~/.config/rotaris/prompt_stash.json`, and
+Three on-disk formats disappeared with the terminal frontend and were removed from this document's
+Data & Formats: `<workspace>/.rotaris/prompt_history.json`, `~/.config/rotaris/prompt_stash.json`, and
 `<session_dir>/state/transcript_archive.jsonl`. One was added: the prompt roots of REQ-CHAT-160.
+The third of those three was superseded: `state/transcript_archive.jsonl` is not a terminal artifact
+and survives as part of the session record, owned by the sessions domain — REQ-SESSION-192 bounds the
+live transcript file and evicts older rows into it, and REQ-SESSION-131 fixes its append-only page
+format. This domain states no on-disk format for it and none of its own; REQ-CHAT-165 states only that
+released rows are brought back on demand, and the rows it pages against are the ones domain 07 keeps.
 The `agents.yaml` row now names only the `display` section, and the settings-storage row is
 restated as the desktop preference store of REQ-CONFIG-405. The nine section headings covering
 `REQ-CHAT-104` … `REQ-CHAT-152` are marked withdrawn in place rather than deleted, so the

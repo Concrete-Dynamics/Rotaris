@@ -454,7 +454,7 @@ Values default to empty string, `0`, `null`, or an empty container unless noted.
 | `iteration.start` | `iteration` (int), `task` |
 | `iteration.end` | `iteration` (int), `outcome`, `summary` |
 | `child.spawn` | `child_id`, `agent_name`, `task` |
-| `child.transition` | `child_id`, `from_state`, `to_state` |
+| `child.transition` | `child_id`, `from_state`, `to_state` (each one child state of REQ-MONITOR-014, the pair being a move the table of REQ-MONITOR-300 permits; this document holds no copy of either) |
 | `child.complete` | `child_id`, `report` (object or null) |
 | `tool.start` | `tool_name`, `call_id`, `arguments` (string→string map; masked and clipped) |
 | `tool.finish` | `tool_name`, `call_id`, `status` (`ok` \| `failed` \| `blocked`, per REQ-MONITOR-105), `duration_ms` (float or null), `error` (string or null) |

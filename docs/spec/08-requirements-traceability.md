@@ -1510,7 +1510,7 @@ Workspace configuration (travels with the repository):
 | `runtime.allow_unsandboxed_autonomous` | boolean | the second half of the board-run elevation |
 | requirement source configuration | — | which sources exist, which declare the create capability, which are writable |
 
-Person- and installation-level preferences (stay on this machine):
+Person- and installation-level preferences (stay on this machine). They live in the per-user desktop preference store, whose key set REQ-SHELL-006 registers. This domain owns what each of them means; the type and default of `requirements/fullPermissionRuns`, `requirements/fullPermissionNoticeSuppressed` and `requirements/answerWaitSeconds` are registered by REQ-CONFIG-405 and are repeated below only as the values this domain relies on:
 
 | Key | Default |
 | --- | --- |

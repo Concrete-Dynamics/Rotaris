@@ -59,6 +59,50 @@ Judges were also asked whether remediation had over-corrected. Several restored 
 that earlier scrubbing had vagued out. A specification scrubbed into uselessness is a failure, not a
 pass.
 
+## Reconciliation after resolution
+
+Open-question resolution ran one isolated agent per domain, each with only its own specification in
+front of it. An audit of the resolved set found the predictable consequence of that isolation: wherever
+two domains touched the same vocabulary, key, derivation or on-disk file, each agent had written its
+own domain's requirement as the authoritative one and restated the other's content rather than citing
+it. The terminal run-result vocabulary was defined in three documents. The stop-reason set existed
+twice, once as prose reasons and once as snake_case tokens. One timeout bound was registered under two
+key names, one isolated-checkout directory under two, and one transcript archive file had two homes.
+
+Three reconciliation rounds settled every conflict, and settled them all the same way: as an
+owner/follower pair. One requirement is named the product's single definition of the thing and says so
+in its own text, naming its citers where that list is short enough to be useful; every other
+requirement that needs it cites that identifier and states what it relies on it for, and holds no copy
+of the content — a restated copy being what produced each of these conflicts in the first place.
+
+The owners assigned:
+
+| Owner | What it is the single definition of |
+|---|---|
+| REQ-ORCH-082 | End-of-run summarization (cited by REQ-SESSION-074) |
+| REQ-ORCH-083 | The terminal run-result vocabulary (cited by REQ-MONITOR-028, REQ-SESSION-187, REQ-EVENTS-026) |
+| REQ-ORCH-137 | The stop reasons for which no improvement pass is collected (cited by REQ-LIBRARY-032) |
+| REQ-MONITOR-300 | The delegated-child state machine, over the state set of REQ-MONITOR-014 |
+| REQ-MONITOR-301 | The closed stop-reason set and its total mapping onto the terminal run result (cited by REQ-ORCH-083, REQ-SESSION-077, REQ-EVENTS-027) |
+| REQ-SESSION-073 | The persisted `execution_status` vocabulary |
+| REQ-SESSION-076 | The derivation of a run result from an execution status |
+| REQ-SESSION-131, REQ-SESSION-192 | Bounded transcript residency and the evicted-page archive file (cited by REQ-CHAT-165) |
+| REQ-TOOLS-061 | The approval-request event and its `resolver` and `unattended_reason` vocabularies (cited by REQ-EVENTS-049) |
+| REQ-TOOLS-153, REQ-TOOLS-156 | What a `delegate` call returns, and the wait for delegated tasks |
+| REQ-SANDBOX-048 | The confinement-mode vocabulary (cited by REQ-TOOLS-114, REQ-SHELL-125, REQ-CONFIG-127) |
+| REQ-PROVIDER-121 | Money arithmetic and rendering |
+| REQ-NOTIFY-200 | The provider status vocabulary, its entry conditions and its precedence order (cited by REQ-PROVIDER-118, REQ-CONFIG-368) |
+| REQ-LIBRARY-089 | The artifact tag vocabulary and its normalisation |
+| REQ-GIT-137 | Where requirement-unit checkouts live, and that no configuration key names that location |
+| REQ-CONFIG-068, REQ-CONFIG-194 | The one key that names a session worktree's storage subpath, and the absence of any key for the requirement-unit one |
+| REQ-CONFIG-231 | The public tool-name registry and its per-tool capability declarations (cited by REQ-ORCH-016, REQ-ORCH-028, REQ-CONFIG-104, REQ-CONFIG-105) |
+
+The resolution records in `../spec/resolutions/` were corrected rather than rewritten. A disposition
+that a later round overturned still states what was decided and why, and then names what superseded
+it — so the account of how a decision was reached survives the decision itself being replaced. That
+matters for this repository specifically: the reasoning in those records is the clean-side derivation,
+and deleting it would leave the current requirement with no visible provenance.
+
 ## Standing constraints on what comes next
 
 Implementation agents will receive the approved specifications, approved architecture decisions,

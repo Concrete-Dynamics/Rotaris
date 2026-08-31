@@ -14,7 +14,11 @@ how any other implementation achieves it.
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
-  not because more was specified.
+  not because more was specified. Every figure below is a count of the requirement definitions in
+  each file, re-taken after the post-resolution reconciliation rounds (see
+  [`../clean-room/provenance.md`](../clean-room/provenance.md)); each domain's identifiers run
+  contiguously from 1 to its total, with no gap, no duplicate, and no number defined in more than
+  one place.
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
 

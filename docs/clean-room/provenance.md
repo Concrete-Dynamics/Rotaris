@@ -69,13 +69,27 @@ it. The terminal run-result vocabulary was defined in three documents. The stop-
 twice, once as prose reasons and once as snake_case tokens. One timeout bound was registered under two
 key names, one isolated-checkout directory under two, and one transcript archive file had two homes.
 
-Three reconciliation rounds settled every conflict, and settled them all the same way: as an
+Four reconciliation rounds settled every conflict, and settled them all the same way: as an
 owner/follower pair. One requirement is named the product's single definition of the thing and says so
 in its own text, naming its citers where that list is short enough to be useful; every other
 requirement that needs it cites that identifier and states what it relies on it for, and holds no copy
 of the content — a restated copy being what produced each of these conflicts in the first place.
 
-The owners assigned:
+Four rounds were needed because of how the specifications were written, not because the editing was
+careless. Twenty-one documents were drafted in parallel by independent agents, and each stated for
+itself every vocabulary, key, bound and on-disk file its own requirements depended on — that is what
+made each document readable on its own, and it is also why the same closed set was declared in two,
+three and in some cases four places. No single audit sees every declaration of a set at once:
+reducing one document's copy to a citation is what exposes the next copy, so each round found
+duplication the previous round's fixes had made visible and went a level deeper than the round before
+it. The first three rounds settled the vocabularies several domains produced values of — run
+results, execution statuses, stop reasons, delegation and approval surfaces, and the on-disk files
+and configuration keys two domains had each claimed. The fourth settled the constants, schemas and
+closed sets that only one domain produces but several documents had restated: permission-mode
+presets, sandbox and egress keys, the hook event vocabulary and hook entry schema, two desktop-shell
+figures, MCP discovery locations, and the transient acknowledgement surface.
+
+The owners assigned in the first three rounds:
 
 | Owner | What it is the single definition of |
 |---|---|
@@ -88,14 +102,64 @@ The owners assigned:
 | REQ-SESSION-076 | The derivation of a run result from an execution status |
 | REQ-SESSION-131, REQ-SESSION-192 | Bounded transcript residency and the evicted-page archive file (cited by REQ-CHAT-165) |
 | REQ-TOOLS-061 | The approval-request event and its `resolver` and `unattended_reason` vocabularies (cited by REQ-EVENTS-049) |
-| REQ-TOOLS-153, REQ-TOOLS-156 | What a `delegate` call returns, and the wait for delegated tasks |
+| REQ-TOOLS-153, REQ-TOOLS-156 | What a `delegate` call returns (cited by REQ-ORCH-033, REQ-ORCH-037), and the wait for delegated tasks (cited by REQ-ORCH-037, REQ-ORCH-057, REQ-ORCH-062) |
 | REQ-SANDBOX-048 | The confinement-mode vocabulary (cited by REQ-TOOLS-114, REQ-SHELL-125, REQ-CONFIG-127) |
-| REQ-PROVIDER-121 | Money arithmetic and rendering |
+| REQ-PROVIDER-121 | Money arithmetic and rendering, for the model-providers domain — the requirement claims that domain and no more |
 | REQ-NOTIFY-200 | The provider status vocabulary, its entry conditions and its precedence order (cited by REQ-PROVIDER-118, REQ-CONFIG-368) |
 | REQ-LIBRARY-089 | The artifact tag vocabulary and its normalisation |
 | REQ-GIT-137 | Where requirement-unit checkouts live, and that no configuration key names that location |
 | REQ-CONFIG-068, REQ-CONFIG-194 | The one key that names a session worktree's storage subpath, and the absence of any key for the requirement-unit one |
-| REQ-CONFIG-231 | The public tool-name registry and its per-tool capability declarations (cited by REQ-ORCH-016, REQ-ORCH-028, REQ-CONFIG-104, REQ-CONFIG-105) |
+| REQ-CONFIG-231 | The referential-validation rule for `models:` and the role fields — which messages are produced, the order they are produced in, and that a rejected tool name is reported with the accepted names sorted (cited by REQ-ORCH-016, REQ-ORCH-028, REQ-ORCH-153, REQ-CONFIG-104, REQ-CONFIG-105). It does not own the tool-name registry: it reads the accepted set from the tools-and-permissions domain and says so in its own text |
+
+The owners assigned in the fourth round:
+
+| Owner | What it is the single definition of |
+|---|---|
+| REQ-ORCH-116 | The completion-gate decision — its three values, where the gate is applied, and its override of the classifier (cited by REQ-NOTIFY-128, REQ-EVENTS-055, REQ-LIBRARY-027, REQ-LIBRARY-028) |
+| REQ-ORCH-123 | The closed five-value check-outcome vocabulary (cited by REQ-NOTIFY-142, REQ-EVENTS-054, REQ-SESSION-129) |
+| REQ-TOOLS-041 | The permission-mode preset vocabulary (cited by REQ-CONFIG-122, REQ-CONFIG-324, REQ-SANDBOX-046, REQ-SANDBOX-053) |
+| REQ-TOOLS-046 | How a configured mode name resolves to a preset, and the shipped default (cited by REQ-CONFIG-122, REQ-SANDBOX-046, REQ-WORKSPACE-022) |
+| REQ-TOOLS-047 | The restrictiveness ordering of the presets (cited by REQ-CONFIG-122, REQ-SANDBOX-046, REQ-SANDBOX-106) |
+| REQ-TOOLS-067 | The downgrade of a permissive mode, its three conditions and what it leaves alone (cited by REQ-CONFIG-124, REQ-SANDBOX-099, REQ-WORKSPACE-022) |
+| REQ-TOOLS-094 | The closed catalogue of leading-token command patterns (cited by REQ-SANDBOX-043) |
+| REQ-GIT-015 | The worktree binding record and its closed `merge_status` vocabulary (cited by REQ-SESSION-018) |
+| REQ-HOOKS-001 | The hook event vocabulary and its division into two families (cited by REQ-CONFIG-157, REQ-EVENTS-048) |
+| REQ-HOOKS-008 | The hook entry schema — field set, types, which fields are required, defaults (cited by REQ-CONFIG-154, REQ-CONFIG-156) |
+| REQ-HOOKS-025 | Hook matcher evaluation, with REQ-HOOKS-027 and REQ-HOOKS-029 (cited by REQ-CONFIG-156) |
+| REQ-HOOKS-037 | The per-stream cap on captured hook output (cited by REQ-CONFIG-157) |
+| REQ-HOOKS-091 | The workspace hook fingerprint — no document outside domain 09 cites it yet |
+| REQ-HOOKS-139 | The numeric bounds on hook work — no document outside domain 09 cites it yet |
+| REQ-SANDBOX-001 | The egress disposition vocabulary and its shipped default, with REQ-SANDBOX-002 and REQ-SANDBOX-017 (cited by REQ-CONFIG-128, REQ-CONFIG-301) |
+| REQ-SANDBOX-003 | The two host-list keys, their normalization, and that a denial outranks an allow, with REQ-SANDBOX-004 and REQ-SANDBOX-014 (cited by REQ-CONFIG-128) |
+| REQ-SANDBOX-050 | `runtime.sandbox_writable_roots`, its default and its entry rules (cited by REQ-CONFIG-127) |
+| REQ-SANDBOX-051 | `runtime.sandbox_allow_network` and its default (cited by REQ-CONFIG-127) |
+| REQ-SHELL-011 | The shared first-paint deferral interval (cited by REQ-SHELL-013, REQ-STARTUP-044) |
+| REQ-SHELL-047 | The status strip's responsive-elision thresholds (cited by REQ-WORKSPACE-021, REQ-WORKSPACE-153) |
+| REQ-MCP-017 | Where `.mcp.json` auto-discovery looks (cited by REQ-CONFIG-008, REQ-CONFIG-009, REQ-WORKSPACE-037) |
+| REQ-NOTIFY-011 | The transient acknowledgement lifetime (cited by REQ-SHELL-112, REQ-SHELL-167) |
+| REQ-NOTIFY-012 | Where a transient acknowledgement is placed (cited by REQ-SHELL-112) |
+| REQ-NOTIFY-013 | The transient acknowledgement surface itself (cited by REQ-SHELL-112, REQ-SHELL-113, REQ-SHELL-167) |
+| REQ-NOTIFY-022 | Acknowledgement motion (cited by REQ-SHELL-113, REQ-SHELL-136, REQ-SHELL-167) |
+
+Every citation named in both tables was checked against the follower's own text when this record was
+written; a pairing is listed here only where the follower carries the owner's identifier. Two pairings
+in the first table had been recorded before the follower carried the citation — REQ-CONFIG-127
+against REQ-SANDBOX-048, and REQ-CHAT-165 against REQ-SESSION-131 and REQ-SESSION-192 — and both
+followers were amended in the fourth round, so the rows now state what the files hold. Two further
+rows claimed more ownership than the requirement itself claims and were narrowed to it. The check is
+worth repeating whenever a round adds owners: a reconciliation that is recorded as done and is not is
+worse than one that was never attempted.
+
+Two things this round did not close, recorded so the account is not read as complete. The tool-name
+registry is not yet an owner/follower pair. REQ-TOOLS-001 states the accepted set of public tool
+names; REQ-CONFIG-231 correctly declines to own that set and points at the tools-and-permissions
+domain, but names no requirement there; and REQ-ORCH-016 and REQ-ORCH-028 cite REQ-CONFIG-231 for
+per-tool capability declarations — which tool reads workspace files, which writes them, which runs
+commands — that no requirement in any domain states. And four owners name citers whose text does not
+carry the owner's identifier: REQ-NOTIFY-011 names REQ-SHELL-113 and REQ-STARTUP-054, REQ-HOOKS-091
+names REQ-WORKSPACE-117, REQ-SANDBOX-050 names REQ-TOOLS-116, and REQ-SANDBOX-051 names
+REQ-TOOLS-117. All five of those requirements exist; none of them references the owner. Both items
+belong to the next round, and neither is claimed as settled by the tables above.
 
 The resolution records in `../spec/resolutions/` were corrected rather than rewritten. A disposition
 that a later round overturned still states what was decided and why, and then names what superseded

@@ -51,7 +51,7 @@ Rotaris can give each agent session a Git worktree of its own, so two concurrent
 
 ### Session State and Persistence
 
-- **REQ-GIT-015** — A session's durable worktree binding SHALL persist: worktree path, branch, base branch, base revision, a created-by-session flag (default true), a merge status (vocabulary exactly `ready`, `integrating`, `merged`, `merge_failed`; default `ready`), and an optional integration session id (default absent).
+- **REQ-GIT-015** — A session's durable worktree binding SHALL persist: worktree path, branch, base branch, base revision, a created-by-session flag (default true), a merge status (vocabulary exactly `ready`, `integrating`, `merged`, `merge_failed`; default `ready`), and an optional integration session id (default absent). This requirement is the product's single definition of the worktree binding record — those seven fields, the closed `merge_status` vocabulary, and every default — because this domain is what creates a binding (REQ-GIT-010, REQ-GIT-011, REQ-GIT-022) and what advances its merge status through integration (REQ-GIT-083, REQ-GIT-133). No requirement in any domain SHALL hold a second copy of those fields, that vocabulary, or those defaults; a requirement that needs them SHALL cite this one and state only what it adds. Its citers are REQ-GIT-018, which writes the record into `metadata.json`, and REQ-SESSION-018, which carries it in the session record.
 
 - **REQ-GIT-016** — Each persisted checkpoint record SHALL carry: sequence (integer), Git ref name, commit id, creation timestamp, iteration number (default 0 when not produced by the iteration loop), attributed child-agent name (default empty), the list of file paths that differ between the checkpoint and its parent commit, and a kind (vocabulary exactly `iteration`, `pre_restore`, `manual`; default `iteration`).
 
@@ -419,7 +419,7 @@ All formats below are externally observable on disk, in the repository, or on th
 
 ### Persisted records (behavioral schemas)
 
-- Worktree binding: `path` (string), `branch` (string), `base_branch` (string), `base_revision` (string), `created_by_session` (bool, default true), `merge_status` (`ready` | `integrating` | `merged` | `merge_failed`, default `ready`), `integration_session_id` (string or null).
+- Worktree binding: the record REQ-GIT-015 defines. That requirement is normative for the field set, the `merge_status` vocabulary and the defaults; this line names the record only so the layout above can refer to it.
 - Checkpoint record: `sequence` (int), `ref` (string), `commit` (string), `created_at` (timestamp), `iteration` (int, default 0), `child_name` (string, default empty), `files` (list of paths changed relative to the parent commit), `kind` (`iteration` | `pre_restore` | `manual`).
 - Session record (checkpoint-related fields only): `checkpoint_count` (int), `last_restored_sequence` (int or null, default null — REQ-GIT-155).
 

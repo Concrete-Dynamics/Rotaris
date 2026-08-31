@@ -15,7 +15,7 @@ how any other implementation achieves it.
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
   not because more was specified. Every figure below is a count of the requirement definitions in
-  each file, re-taken after the post-resolution reconciliation rounds (see
+  each file, re-taken after the fourth and last post-resolution reconciliation round (see
   [`../clean-room/provenance.md`](../clean-room/provenance.md)); each domain's identifiers run
   contiguously from 1 to its total, with no gap, no duplicate, and no number defined in more than
   one place.
@@ -49,7 +49,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | 9 | **retired** |
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |
 | 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 178 | 28 | secondary |
-| 21 | [Installed UI Performance Benchmark Command](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | 14 | peripheral |
+| 21 | [UI Performance Benchmark](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | 14 | peripheral |
 
 "Reqs" is the count of identifiers a domain defines; "Withdrawn" is how many of those are withdrawn
 in place, retaining their number while carrying no behavior. Subtracting the second from the first

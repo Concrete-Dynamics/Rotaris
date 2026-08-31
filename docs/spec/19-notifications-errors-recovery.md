@@ -85,7 +85,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-021** — The close control's accessible name identifies the acknowledgement it removes. One clear operation removes every visible acknowledgement at once; changing view and shutting down each perform it.
 
-**REQ-NOTIFY-022** — A transient acknowledgement animates into place by default: it enters by translating in from the window edge it anchors to, which is the right edge under REQ-NOTIFY-012, over 12 px and 160 ms while its opacity rises from zero to full, and it leaves by the reverse over 120 ms. The travel distance and the two durations are motion tokens of the active theme (REQ-SHELL-129) and the figures given here are the default theme's, so a theme declaring different ones is followed; the shape of the movement — the edge it comes from, the opacity rise, and the reversal on leaving — is not a theme's to change. Where the operating system reports a preference for reduced motion, its first painted frame is already at its final position at full opacity and nothing moves or fades afterwards. That preference changes motion only: the same message appears, it leaves after the same 4200 ms, and no acknowledgement is suppressed, delayed or reordered. This requirement is the product's single definition of acknowledgement motion: a document that describes how an acknowledgement arrives or leaves cites this identifier rather than restating a direction, a distance or a duration.
+**REQ-NOTIFY-022** — A transient acknowledgement animates into place by default: it enters by translating in from the window edge it anchors to, which is the right edge under REQ-NOTIFY-012, over 12 px and 160 ms while its opacity rises from zero to full, and it leaves by the reverse over 120 ms. The travel distance and the two durations are motion tokens of the active theme (REQ-SHELL-129) and the figures given here are the default theme's, so a theme declaring different ones is followed; the shape of the movement — the edge it comes from, the opacity rise, and the reversal on leaving — is not a theme's to change. Where reduced motion is in force — which is resolved by REQ-SHELL-135 and not by any rule of this document's own — its first painted frame is already at its final position at full opacity and nothing moves or fades afterwards. Reduced motion changes motion only: the same message appears, it leaves after the same 4200 ms, and no acknowledgement is suppressed, delayed or reordered. This requirement is the product's single definition of acknowledgement motion: a document that describes how an acknowledgement arrives or leaves cites this identifier rather than restating a direction, a distance or a duration.
 
 ### A6. Persistent notices: fields, identity and lifetime
 
@@ -191,7 +191,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-065** — Every error notice carries severity `error`, has its `persistent` flag set, and carries copyable detail. Producers include checkpoint listing and restore failure, context compression that did not complete, project-initialization failure, prompt-history save failure, run-channel refresh failure, run failure, slash-command failure, transcript-clear failure, update-install failure, version-control refresh failure, and worktree creation and deletion failure. A run-channel refresh failure is reported here and on no other surface; the notice carries the session identifier of the channel that failed, and the values already displayed for that session are left standing rather than blanked, so a refresh that could not be completed never presents as a run with no state. This requirement governs error notices; the attention notice REQ-NOTIFY-032 raises about a run that is not focused is not one of them, and its severity is fixed there.
 
-**REQ-NOTIFY-066** — The composer draft is stored per workspace in the local application settings under the key `workspaces/{workspace_path}/composerDraft`. It survives failure, view changes and application restart, and remains available to the retry action of REQ-NOTIFY-045.
+**REQ-NOTIFY-066** — The composer draft is stored per workspace under the registered preference key `workspaces/{workspace-key}/composerDraft`, whose spelling belongs to the closed registry REQ-SHELL-006 makes and whose default and write behaviour are REQ-SHELL-159's; this domain restates none of them. What this domain relies on is that the draft outlives a run failure, a view change and an application restart, so it remains available to the retry action of REQ-NOTIFY-045.
 
 ### B3. Loop and stuck-state supervision
 
@@ -207,7 +207,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-107** — Supervision state belongs to one session and is never read or written by another.
 
-**REQ-NOTIFY-108** — An action's signature is a canonical serialisation of what that action did: for a tool call, the tool's name together with its argument object with keys ordered, runs of whitespace collapsed to one space, string values trimmed, and every string value cut to its first 200 characters; for an assistant message, the literal `message` together with the same canonicalisation of its text. Two actions have the same signature exactly where those serialisations are equal, so sameness is decided without interpreting what the action meant. A loop is declared primarily from repetition in the recent action sequence: by default, four consecutive actions of the same signature, or a cycle of two to four actions repeating three times. Volume serves only as a backstop, defaulting to 60 tool calls or 60 messages. Two combination modes are configurable: `independent`, the default, in which either signal declares a loop on its own; and `weighted`, in which tool activity weighs 0.6, message activity weighs 0.4, and a combined score of 1.0 declares a loop. At most the 24 most recent events and 8000 characters of transcript are examined.
+**REQ-NOTIFY-108** — Whether two of an agent's actions count as the same action, and the repetition, cycle and volume triggers that fire from that comparison together with the order they are evaluated in, are fixed by REQ-ORCH-101. This domain relies on that requirement and states no comparison rule, no trigger, no threshold and no evaluation order of its own. What it relies on in particular is that no part of an action's content is disregarded when two actions are compared: two long tool calls differing only near the end of their arguments are different actions, and no truncation and no normalisation of the compared text may make them the same. An agent's assistant messages count as actions for this purpose alongside its tool calls, compared by their full text on those same terms. The default figures behind the triggers — the repetition and cycle counts, the volume backstop, the two combination modes and their weights, the recent-event window and the length of transcript examined — are REQ-ORCH-100's, and this document holds no copy of any of them. Where supervision reads a session's recent activity it reads it on those terms and on no others.
 
 **REQ-NOTIFY-109** — Where the classifier call fails, the decision is made from the collected signals alone: a repetition trigger declares a loop; a volume trigger declares a loop only where repeated assistant messages or back-to-back invocations of the same tool corroborate it, and never from the counts by themselves.
 
@@ -219,7 +219,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 ### B4. Message limits
 
-**REQ-NOTIFY-244** — `message_limit` accepts a positive integer, or null or zero meaning disabled, which is the default.
+**REQ-NOTIFY-244** — The value space and default of `message_limit` are registered by REQ-CONFIG-112; this domain cites that registration and states no value space and no default of its own. What it relies on is that the key may carry no limit at all and does so by default: where it carries none, no run is paused at a limit, no background run writes the marker of REQ-NOTIFY-248, and the confirmation of REQ-NOTIFY-266 is never raised.
 
 **REQ-NOTIFY-245** — The message count increases by one per completed orchestration iteration and is stored in session state, so it survives a crash and a later reopening of the session. Iterations already counted are never put to the user again.
 
@@ -389,7 +389,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-191** — Preview lines, and the per-path verb in each of them, come from the engine. The presentation layer renders them as given and derives no verb of its own from a status letter.
 
-**REQ-NOTIFY-192** — A request to list checkpoints made while the checkpoint channel is occupied is re-attempted every 150 ms for at most 10 seconds, and while it is being re-attempted it is not reported as a failure. Where the channel has not become free within that bound, the request stops and the listing is reported as a failed listing under REQ-NOTIFY-195, its detail stating that the checkpoint channel stayed occupied. The request is never re-attempted without a bound, so the user is never left with an indicator that does not resolve. Preview and restore each display a window-modal progress dialog naming the operation and the checkpoint it concerns, showing indeterminate progress, offering no cancel control, and carrying an accessible name identifying it as checkpoint progress.
+**REQ-NOTIFY-192** — A request to list checkpoints made while the checkpoint channel is occupied is re-attempted on the cadence REQ-SHELL-156 fixes, which this domain cites rather than restating, for at most 10 seconds, and while it is being re-attempted it is not reported as a failure. Where the channel has not become free within that bound, the request stops and the listing is reported as a failed listing under REQ-NOTIFY-195, its detail stating that the checkpoint channel stayed occupied. The request is never re-attempted without a bound, so the user is never left with an indicator that does not resolve. Preview and restore each display a window-modal progress dialog naming the operation and the checkpoint it concerns, showing indeterminate progress, offering no cancel control, and carrying an accessible name identifying it as checkpoint progress.
 
 **REQ-NOTIFY-193** — Three refusals produce acknowledgements: a restore attempted with no workspace open produces an error acknowledgement saying so; a restore attempted while checkpoints are still being read produces an acknowledgement asking the user to try again shortly; a failed inspection produces an error acknowledgement stating that the checkpoint could not be inspected.
 
@@ -688,11 +688,11 @@ Requested in this order, most constrained first; the next format tried after a r
 
 ### Configuration keys named in this document
 
-The layered YAML configuration surface, and each key's registered type and default, belong to the settings-and-configuration specification; this table names the keys this document's behaviour reads and states no default of its own. Where a value below and that specification's registration of the same key disagree, the registration governs.
+The layered YAML configuration surface, and each key's registered type and default, belong to the settings-and-configuration specification; this table names the keys this document's behaviour reads and restates each registered default for convenience only, holding no default of its own. Where a value below and that specification's registration of the same key disagree, the registration governs.
 
 | Key | Default |
 | --- | --- |
-| `message_limit` | null or 0, meaning disabled |
+| `message_limit` | no limit set (REQ-CONFIG-112) |
 | `requirements.execution.retry_limit` | 1, giving 2 attempts |
 | `runtime.auto_retries_transient` | 1 |
 | `runtime.auto_retries_validation` | 0 |
@@ -716,42 +716,42 @@ The per-workspace composer draft is not a key of that surface at all: it is a ke
 
 ### Consolidated thresholds and timings
 
-Rows are listed alphabetically by behaviour; the order carries no meaning. Each figure is the one fixed by the requirement of this document that states it, except where a row names another document's identifier: that row is a citation and this table holds no copy of the figure behind it.
+Rows are listed alphabetically by behaviour; the order carries no meaning. Every figure below is fixed by the requirement named beside it and is restated here for convenience only; where this table and that requirement differ, the requirement governs. Where the requirement named beside a row belongs to another document, this table holds no copy of the figure at all and the row is a citation.
 
-| Behaviour | Value |
-| --- | --- |
-| Abandoned requirement flow, grace period | 15 minutes |
-| Acknowledgement entry / exit motion, default theme | 12 px over 160 ms / the reverse over 120 ms |
-| Acknowledgement lifetime | 4200 ms |
-| Acknowledgement width, single form / stacked form | at most 520 px / 360 px |
-| Acknowledgements visible at once, stacked form | 3 |
-| Checkpoint listing re-attempt while the channel is busy | per REQ-SHELL-156 |
-| Child task, no output produced | 90 s |
-| Child task, total run | 1200 s |
-| Interrupted verification check, grace before abandonment | 5 s |
-| Loop activation cycle, end to end | 2 s |
-| Loop classification call | 2 s, bounded by the remaining activation budget |
-| Loop escalation | more than 2 consecutive activations |
-| Loop repetition trigger | 4 identical action signatures, or a 2–4 action cycle repeated 3 times |
-| Loop volume backstop | 60 tool calls, 60 messages |
-| Model response, fallback trigger | 120 s, minimum 30 s |
-| Post-run improvement analysis | 60 s |
-| Provider-supplied retry-after | overrides local backoff, minimum 1 s |
-| Quota wait, base / cap / growth | 60 s / 300 s / doubling per attempt |
-| Requirement unit retries | 1 retry, giving 2 attempts |
-| Session polling, followed session / owned-session reconcile | 750 ms / 2000 ms |
-| Shell command | 100 s |
-| Stall-recovery messages per child task | 1 |
-| Summary generation | 120 s |
-| Tool call | 30 s |
-| Transcript row-growth publish throttle | 50 ms; new rows publish immediately |
-| Transient auto-retries / delay per retry | 1 / attempt number in seconds, capped at 2 s |
-| Update check | at most 10 s |
-| Validation auto-retries | 0 |
-| Verification, per check | 600 s |
-| Verification, whole suite | 900 s |
-| Verification repair attempts | 2 |
-| Window close after installer hand-off | 1200 ms |
+| Behaviour | Value | Fixed by |
+| --- | --- | --- |
+| Abandoned requirement flow, grace period | 15 minutes | REQ-NOTIFY-162 |
+| Acknowledgement entry / exit motion, default theme | 12 px over 160 ms / the reverse over 120 ms | REQ-NOTIFY-022 |
+| Acknowledgement lifetime | 4200 ms | REQ-NOTIFY-011 |
+| Acknowledgement width, single form / stacked form | at most 520 px / 360 px | REQ-NOTIFY-013 |
+| Acknowledgements visible at once, stacked form | 3 | REQ-NOTIFY-016 |
+| Checkpoint listing re-attempt while the channel is busy | cadence per REQ-SHELL-156; the whole re-attempt bounded at 10 s | REQ-SHELL-156 (cadence), REQ-NOTIFY-192 (bound) |
+| Child task, no output produced | 90 s | REQ-NOTIFY-100 |
+| Child task, total run | 1200 s | REQ-NOTIFY-100 |
+| Interrupted verification check, grace before abandonment | 5 s | REQ-NOTIFY-143 |
+| Loop activation cycle, end to end | 2 s | REQ-NOTIFY-106 |
+| Loop classification call | 2 s, bounded by the remaining activation budget | REQ-NOTIFY-100 |
+| Loop escalation | more than 2 consecutive activations | REQ-NOTIFY-105 |
+| Loop repetition and cycle triggers | as REQ-ORCH-101 fixes them, at REQ-ORCH-100's defaults | REQ-ORCH-101, REQ-ORCH-100 |
+| Loop volume backstop | as REQ-ORCH-101 fixes it, at REQ-ORCH-100's defaults | REQ-ORCH-101, REQ-ORCH-100 |
+| Model response, fallback trigger | 120 s, minimum 30 s | REQ-NOTIFY-099 |
+| Post-run improvement analysis | 60 s | REQ-NOTIFY-100 |
+| Provider-supplied retry-after | overrides local backoff, minimum 1 s | REQ-NOTIFY-084 |
+| Quota wait, base / cap / growth | 60 s / 300 s / doubling per attempt | REQ-NOTIFY-085 |
+| Requirement unit retries | 1 retry, giving 2 attempts | REQ-NOTIFY-171 |
+| Session polling, followed session / owned-session reconcile | as REQ-MONITOR-287 fixes them | REQ-MONITOR-287, with the switch between them REQ-MONITOR-288 |
+| Shell command | 100 s | REQ-NOTIFY-100 |
+| Stall-recovery messages per child task | 1 | REQ-NOTIFY-112 |
+| Summary generation | 120 s | REQ-NOTIFY-100 |
+| Tool call | 30 s | REQ-NOTIFY-100 |
+| Transcript row-growth publish throttle | as REQ-MONITOR-287 fixes it | REQ-MONITOR-219, REQ-MONITOR-287 |
+| Transient auto-retries / delay per retry | 1 / attempt number in seconds, capped at 2 s | REQ-NOTIFY-096 |
+| Update check | at most 10 s | REQ-NOTIFY-212 |
+| Validation auto-retries | 0 | REQ-NOTIFY-100 |
+| Verification, per check | 600 s | REQ-NOTIFY-144 |
+| Verification, whole suite | 900 s | REQ-NOTIFY-144 |
+| Verification repair attempts | 2 | REQ-NOTIFY-133 |
+| Window close after installer hand-off | 1200 ms | REQ-NOTIFY-222 |
 
 ## Open Questions
 

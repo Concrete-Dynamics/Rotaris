@@ -15,7 +15,7 @@ The product integrates external MCP (Model Context Protocol) servers as tool pro
 
 ### Server Configuration Model
 
-- **REQ-MCP-001** — A server entry SHALL support exactly these fields with these defaults: `type` (one of `"stdio"`, `"http"`, `"sse"`; default `"stdio"`), `command` (string, optional), `args` (list of strings, default empty), `env` (string-to-string map, default empty), `cwd` (string, optional), `url` (string, optional), `headers` (string-to-string map, optional), `request_timeout` (integer seconds, optional), `disabled_tools` (list of strings, default empty), `tool_name_map` (string-to-string map, default empty), and `tools` — an optional static tool-metadata list, default empty, whose entries carry a required `name` and a `description` defaulting to `""`.
+- **REQ-MCP-001** — A server entry SHALL support exactly these fields with these defaults: `type` (one of `"stdio"`, `"http"`, `"sse"`; default `"stdio"`), `command` (string, optional), `args` (list of strings, default empty), `env` (string-to-string map, default empty), `cwd` (string, optional), `url` (string, optional), `headers` (string-to-string map, optional), `request_timeout` (integer seconds, optional), `disabled_tools` (list of strings, default empty), `tool_name_map` (string-to-string map, default empty), `tools` — an optional static tool-metadata list, default empty, whose entries carry a required `name` and a `description` defaulting to `""` — and `enabled` (boolean, default `true`). What `enabled` does once the entry resolves is fixed by REQ-CONFIG-465, which this requirement relies on for that behavior and does not restate; the field is named in this set because the set is closed, and a schema declaring "exactly these fields" while a field four requirements require is declared only elsewhere is wrong rather than narrower.
 
   This requirement is the product's single definition of the tool-server entry schema — the field set, each field's name, its type, whether it is optional, and its default. A document that presents, validates, stores, merges, or documents a server entry SHALL cite this identifier rather than restating any of those, and a field a surface needs is added here rather than declared elsewhere. What a citing document may add is where the entry is written and what its scope does with it; it may not hold a second copy of the field list, and a shorter list elsewhere is a stale copy rather than a narrower schema.
 
@@ -236,7 +236,7 @@ The product integrates external MCP (Model Context Protocol) servers as tool pro
 
 - **REQ-MCP-080** — *Withdrawn.* A modal text-mode screen was its only surface; reading a server's merged secrets with every value masked is carried by REQ-MCP-109 and editing them is carried by REQ-MCP-110.
 
-- **REQ-MCP-081** — One masking rule SHALL be used wherever a stored secret value is rendered: a value of 4 characters or fewer SHALL render as one `·` (U+00B7) per character of the value; a longer value SHALL render as its first 2 characters, then one `·` per remaining middle character (length − 4 of them), then its last 2 characters. The rendered string SHALL therefore always have exactly as many characters as the value it masks. A raw stored secret value SHALL never appear in a log line, a notification, a rendered list or table, an exported document, or any other rendering the product produces. A zero-length value never reaches this rule: the product refuses to store one (REQ-MCP-084) and a zero-length value found in a hand-edited file is skipped at load (REQ-MCP-082), so the rule's shortest input is one character.
+- **REQ-MCP-081** — Wherever a stored secret value is rendered it SHALL be replaced by the mask REQ-TOOLS-171 fixes, and this domain holds no second definition of that mask. What this requirement relies on REQ-TOOLS-171 for is the mask itself: one fixed marker, identical on every surface, carrying no character of the value it replaced and no indication of that value's length, so two masked secrets of different lengths are indistinguishable and neither a credential nor its size can be inferred from a rendering. What this requirement adds is that the substitution is **unconditional** for a value read out of the secrets store of REQ-MCP-082: it SHALL NOT depend on the entry's key being secret-looking (REQ-TOOLS-172) or on the value carrying a recognized credential prefix, because a value's presence in that store is already what establishes it as a credential. A raw stored secret value SHALL never appear in a log line, a notification, a rendered list or table, an exported document, or any other rendering the product produces. A zero-length value never reaches this rule: the product refuses to store one (REQ-MCP-084) and a zero-length value found in a hand-edited file is skipped at load (REQ-MCP-082), so no rendering ever shows a mask standing for a value that is not there.
 
 - **REQ-MCP-108** — MCP server management SHALL have exactly one venue: the `mcp` settings category of REQ-CONFIG-269, inside the Settings view of REQ-SHELL-023. That category SHALL hold the server list of REQ-MCP-091, the health probe of REQ-MCP-092, the secrets surface of REQ-MCP-109 and REQ-MCP-110, the search-key control of REQ-MCP-111 and the machine-setup action of REQ-MCP-112, and no other surface of the product SHALL offer a second way to enable, disable, probe or hold secrets for a server. Opening it SHALL be an action of the one vocabulary of REQ-SHELL-048, so it appears in the command palette, the keyboard-help dialog and the composer's slash catalogue alike, under a label naming MCP servers and a description saying it manages them. Every control the category holds SHALL be keyboard-reachable and fully labelled at the minimum window size (REQ-SHELL-022), and every state it shows SHALL be readable as text and never by colour alone (REQ-SHELL-149). The category SHALL open, and every control within it SHALL respond, within the product's 100 ms interface responsiveness budget; work that cannot finish inside it — probing (REQ-MCP-092), setup (REQ-MCP-112) — SHALL show its progress rather than block.
 
@@ -363,7 +363,7 @@ my-server:
   API_KEY: "value"
 ```
 
-Atomic writes; malformed content loads as empty; workspace beats global per key. An empty key or an empty value is skipped at load and refused at write, so masking's shortest input is one character. Every rendering of a stored secret value is masked by REQ-MCP-081, which is normative for that rule and which this line does not restate; it is the display masking of a stored secret and is a different rule from the credential redaction REQ-TOOLS-171 applies to command lines and argument summaries.
+Atomic writes; malformed content loads as empty; workspace beats global per key. An empty key or an empty value is skipped at load and refused at write, so masking's shortest input is one character. Every rendering of a stored secret value is masked by REQ-MCP-081, which this line does not restate. That requirement takes the mask itself from REQ-TOOLS-171, the product's single definition of it, and adds only that a value read out of this store is masked unconditionally; there is one mask across the product, not one for stored secrets and another for command lines and argument summaries.
 
 ### Ordering
 
@@ -388,21 +388,24 @@ Ids `warm:<family>:<package>` (families: uvx, npx), labels `Warm <package>`, cap
 
 ### Timing and pinning constants
 
-| Constant | Value |
-|---|---|
-| Tool discovery timeout | 30 s |
-| Health probe timeout | 8 s |
-| Discovery bound beyond the discovery timeout | +5 s |
-| Post-connect hook budget (`lsp` init / binding probe) | 15 s |
-| Session connect-and-list budget (default) | 30 s |
-| Web-search per-tool-call timeout | 600 s |
-| Per-tool-call default when `request_timeout` is unset | 300 s |
-| Warning toast auto-dismiss | 8 s |
-| Project setup step budgets (create / index / memories) | 300 / 1800 / 120 s |
-| Setup poll interval | 0.25 s |
-| Setup terminate grace | 5 s |
-| `browser` package pin | exact `MAJOR.MINOR.PATCH`; the string itself is the implementation's, recorded once and cross-checked against the setup manifest (REQ-MCP-010, REQ-MCP-095) |
-| `code_intelligence` runtime pin | exact `MAJOR.MINOR.PATCH`; recorded in the binding manifest (REQ-MCP-011, REQ-MCP-116) |
+Each value below is fixed by the requirement named beside it and is gathered here only so the whole
+set can be read at once; where this table and a defining requirement differ, the requirement governs.
+
+| Constant | Value | Defined by |
+|---|---|---|
+| Tool discovery timeout | 30 s | REQ-MCP-046 |
+| Health probe timeout | 8 s | REQ-MCP-054 |
+| Discovery bound beyond the discovery timeout | +5 s | REQ-MCP-053 |
+| Post-connect hook budget (`lsp` init / binding probe) | 15 s | REQ-MCP-070 (`lsp` init), REQ-MCP-071 (binding probe) |
+| Session connect-and-list budget (default) | 30 s | REQ-MCP-069 |
+| Web-search per-tool-call timeout | 600 s | REQ-MCP-010 |
+| Per-tool-call default when `request_timeout` is unset | 300 s | REQ-MCP-003 |
+| Warning toast auto-dismiss | 8 s | REQ-MCP-044 |
+| Project setup step budgets (create / index / memories) | 300 / 1800 / 120 s | REQ-MCP-099 |
+| Setup poll interval | 0.25 s | REQ-MCP-099 |
+| Setup terminate grace | 5 s | REQ-MCP-099 |
+| `browser` package pin | exact `MAJOR.MINOR.PATCH`; the string itself is the implementation's, recorded once and cross-checked against the setup manifest | REQ-MCP-010, REQ-MCP-095 |
+| `code_intelligence` runtime pin | exact `MAJOR.MINOR.PATCH`; recorded in the binding manifest | REQ-MCP-011, REQ-MCP-116 |
 
 ## Open Questions
 

@@ -17,6 +17,15 @@ Every tool call an agent makes — built-in, custom plugin, or MCP — passes th
 
 **REQ-TOOLS-001** — Given a persona configuration file (`agents.yaml`), the set of tool names a persona may declare under `tools:` is exactly: `ask_questions`, `delegate`, `background_output`, `wait_for_tasks`, `haet`, `haet_edit`, `haet_read`, `read_file`, `write_file`, `terminal`, `git_commit`, `todo`, `fetch`, `grep`, `glob`, `artifact_read`, `artifact_list`, `artifact_write`. The name `haet` is an accepted alias that resolves to the same tool as `haet_edit`. No other value is accepted. In particular `tools:` never names an MCP server: MCP surfaces are granted only through the persona's `mcp_servers` key and narrowed only through `mcp_tools` (REQ-TOOLS-166), so exactly one key grants a server and `tools:` carries public tool names alone.
 
+Every name in that registry additionally carries a **capability declaration**, and this requirement is the product's single definition of it: the registry declares, for each name, three independent facets — whether the tool **reads workspace files**, whether it **writes workspace files**, and whether it **runs commands** — each either declared or not declared, so that a rule anywhere in the product can be resolved against what a tool does rather than against a name list that has to be kept in step by hand. The declaration is a property of the tool and never of the content it is handed: `terminal` declares running commands whatever the command it is given happens to do, and a command that writes a file does not make `terminal` a writer of workspace files. The declarations are:
+
+- reads workspace files: `read_file`, `write_file`, `haet_read`, `haet_edit`, `haet`, `grep`, `glob`, `git_commit`;
+- writes workspace files: `write_file`, `haet_edit`, `haet`, `git_commit`;
+- runs commands: `terminal`;
+- declaring none of the three: `ask_questions`, `delegate`, `background_output`, `wait_for_tasks`, `todo`, `fetch`, `artifact_read`, `artifact_list`, `artifact_write` — each reaches the user, another agent, the network, or the artifact store, and none of those is the workspace file tree (REQ-TOOLS-007).
+
+`git_commit` declares both reading and writing workspace files because it records a commit in the repository that lives inside the workspace, even though it leaves the working tree's contents alone (REQ-TOOLS-142). A name added to this registry later carries its own declaration from the moment it is added, so a requirement resolved against the declaration needs no amendment when the registry grows. A tool that is not a member of this registry — a custom plugin tool (section 23) or a tool published by an MCP server (section 24) — carries no declaration at all, and a facet is never inferred from its name, its description, or anything the tool says about itself. An undeclared tool is read fail-closed, in the direction of the rule reading it: a rule that grants or widens on the strength of a declared facet treats an undeclared tool as declaring nothing and does not grant it, while a rule that withholds, refuses, or blocks on the strength of a declared facet treats an undeclared tool as declaring all three and withholds, refuses, or blocks it. A requirement in any other domain that needs the declaration cites this requirement and states only what it does with it; no requirement in any other domain holds a second copy of the facets or of the per-tool declarations above.
+
 **REQ-TOOLS-002** — An entry in a persona's `tools:` list is accepted only when it is one of the public tool names of REQ-TOOLS-001. Any other entry fails configuration validation, and the resulting error identifies the persona, the rejected entry, and the accepted public tool names. An entry that names a server configured for the workspace fails like any other unrecognized entry, and its error additionally says that MCP servers are granted through `mcp_servers`. A persona whose `custom_tools:` plugin registers under a name that persona also declares under `tools:` likewise fails validation, so no persona ever holds two different tools under one name.
 
 **REQ-TOOLS-003** — The verification-gate capabilities of section 22 are outside the public tool surface, and so is any capability not named in REQ-TOOLS-001. No configuration makes them callable by a persona: naming one under `tools:` is rejected like any other unrecognized entry (REQ-TOOLS-002), and no persona's prompt ever lists them among its tools. They are reachable only from the run that maintains the verification gate.
@@ -37,6 +46,8 @@ Every removal is logged together with the persona and the control that removed i
 The run-scoped allow-list is a field of the run configuration produced when a run is started from the desktop interface, recorded in that session's run-configuration record. It is per-run: it has no configuration-file key, no other source, and is absent by default, in which case it narrows nothing. A name in the list that the orchestrator persona never declared is ignored — the control is an intersection and can only remove — and every such name is logged once for the run, so a typo is visible without ever widening what the run may do.
 
 **REQ-TOOLS-007** — The read-only tool class is exactly {`grep`, `glob`, `fetch`, `haet_read`, `read_file`, `artifact_read`, `artifact_list`, `artifact_write`}. `artifact_write` is deliberately classified read-only because the artifact store is not part of the workspace. The network tool class is exactly {`fetch`}, a subset of the read-only class, split out so presets can gate network access by host before any blanket read-only allow rule.
+
+Both classes are stated against the capability declaration of REQ-TOOLS-001 and are held consistent with it: no member of the read-only class declares writing workspace files or running commands, and no name that declares either is ever a member of it, so a name added to the registry declaring one of those two is outside the class by construction rather than by a second decision. The network class is defined by where the tool sends a request and not by any of the three facets — `fetch` declares none of them, the network not being the workspace file tree — which is why the two classes overlap without either being derivable from the other. Membership of a class is not itself a facet: the classes say what a preset may allow in bulk, while the declaration says what a tool does, and a requirement needing one of them cites the requirement that fixes it rather than reading it off the other.
 
 **REQ-TOOLS-008** — When a persona requests `terminal`, the behavior specified in sections 10–14 is exactly what serves that name. The registered public name is exactly `terminal`.
 
@@ -86,7 +97,7 @@ The run-scoped allow-list is a field of the run configuration produced when a ru
 
 **REQ-TOOLS-030** — Changing the permission mode mid-session takes effect for every live agent of the named session and for no agent of any other session. With two sessions running at the same time, a mode change in one leaves the decisions produced by the other session's agents unchanged.
 
-**REQ-TOOLS-031** — Hook ordering invariant: policy first, hooks second. User-configured pre-execution hooks run only on the allow branch; a policy-denied call fires no hook. A blocking pre-execution hook returns the hook's refusal as a tool-result error (fallback text: `Blocked by a pre_tool hook. The call was not executed.`). Post-execution hooks see only calls that actually executed and can only append feedback (attached to the observation's extended content, or as a trailing user message when no observation exists) — they can never block. Hook results handed to post-execution hooks are truncated at 4096 characters.
+**REQ-TOOLS-031** — Hook ordering invariant: policy first, hooks second. User-configured pre-execution hooks run only on the allow branch; a policy-denied call fires no hook. A blocking pre-execution hook returns the hook's refusal as a tool-result error (fallback text: `Blocked by a pre_tool hook. The call was not executed.`). Post-execution hooks see only calls that actually executed and can only append feedback (attached to the observation's extended content, or as a trailing user message when no observation exists) — they can never block. The tool result handed to a post-execution hook is truncated at the cap REQ-HOOKS-066 fixes, which this domain does not restate; what it relies on that requirement for is that the cap is applied before the hook sees the result, so a hook never receives an untruncated observation this domain produced.
 
 **REQ-TOOLS-032** — A tool-call payload the model produced that is not well-formed is repaired before dispatch rather than rejected, and repair is attempted before schema validation, so a payload repair makes valid is dispatched as an ordinary call. Three repairs are required: JSON cut off mid-structure is completed by closing the strings, objects, and arrays still open at the cut; a single object supplied where the schema expects an array is read as a one-element array, for the fields `tasks`, `phases`, `files`, `items`, and `test_cases`; and a truncated run-completion payload is recovered as `{"message": <recovered text>}`. A payload still schema-invalid after repair is returned to the model as a recoverable tool-result error carrying the original tool-call id — the same shape a policy denial takes in REQ-TOOLS-013 — naming the tool and the schema violation and asking for a corrected re-issue. The call is not executed, the host never silently re-sends it, and the run is never ended by it; re-planning is the model's business, exactly as it is after a deny.
 
@@ -284,7 +295,7 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 
 **REQ-TOOLS-105** — Visibility: an executing command is displayed as `$ <command>` in the status pane and as `terminal: $ <command>` in the transcript, with timeout/reset/input flags visible; the action's own rendering is `$ command [timeout: Ns] [reset terminal] [background] [session: id] [action]`.
 
-**REQ-TOOLS-106** — The terminal tool must load and register successfully even when the process's stdout/stderr streams lack an encoding attribute (daemonized or piped launch contexts).
+**REQ-TOOLS-106** — The terminal tool must load and register successfully however the application process was started and whatever that process's own standard output and standard error are attached to — a console, a pipe, or nothing at all — and whether or not those streams report a character encoding. What the agent observes is identical in every one of those cases: the same tool surface and the same observations. A launch context in which the application's own streams carry no encoding information is never a reason for the tool to be missing from an agent's tool set (REQ-TOOLS-004), and never changes the encoding of anything the tool captures from a command it runs.
 
 **REQ-TOOLS-187** — Foreground terminal concurrency is fixed by the shell session, not by the backend. Each terminal session runs at most one foreground command at a time: a second foreground call against a session whose previous foreground command has not returned waits for it, so a session's shell state (working directory, exported variables) is never mutated by two commands at once. Terminal sessions belonging to different agents run their foreground commands concurrently, bounded only by host resources. This holds identically on the `single-session` and `tmux-pool` backends of REQ-TOOLS-100: an observer comparing the two on the same sequence of calls sees the same ordering, the same observations, and the same shell state, and the backend name is the only difference. Background sessions (section 11) are unaffected — they never occupy a terminal session and always run concurrently, up to `runtime.shell_max_background_sessions`.
 
@@ -298,7 +309,7 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 
 **REQ-TOOLS-110** — Session actions: `query` (the default when `session_id` is set) returns only output new since the last poll (placeholder `(no new output since last poll)`) plus status and exit code; `kill` returns the final output; `send_input` writes bytes to stdin (result `Sent <n> byte(s) to session <id>.`; a closed pipe logs a warning); `send_signal` sends SIGTERM/SIGINT/SIGKILL/SIGHUP (default SIGTERM; result `Sent <sig> to session <id>.`); `list` needs no session id and returns an aligned text table plus structured entries `{session_id, command, status, exit_code, started_at (ISO-8601)}`, with a per-row status glyph (`▶`/`✓`/`✗`). An unknown session id yields `invalid_request` with `Unknown background session: '<id>'`.
 
-**REQ-TOOLS-111** — Executor teardown kills all background sessions and closes pooled terminal resources; the same cleanup is attempted best-effort on interpreter finalization.
+**REQ-TOOLS-111** — Executor teardown kills all background sessions and closes pooled terminal resources. The same cleanup is attempted, best-effort, while the application process that owns those sessions is shutting down, whatever ends it. The user observes the same outcome either way: once the application has exited, no background command it started on the user's behalf is still running and no terminal resource it opened is still held.
 
 ### 12. Terminal Outcome Classification
 
@@ -502,13 +513,17 @@ Every write and every decline is recorded so the run that owns the gate can repo
 
 ### 25. Secret Redaction
 
-**REQ-TOOLS-171** — One shared redaction pass backs every surface on which text that might carry a credential is rendered or persisted — the approval prompt, the audit log, the event stream, application log files, user-visible error text, persisted documents, and lifecycle-hook payloads — so those surfaces can never drift; none of them carries redaction rules of its own. This requirement is the product's single definition of the redaction algorithm, of the mask, and of the credential value-prefix list, and no requirement in any other domain holds a second copy of any of the three: a requirement that needs one of them cites this one and states only what it adds.
+**REQ-TOOLS-171** — One shared redaction pass backs every surface on which text that might carry a credential is rendered or persisted — the approval prompt, the audit log, the event stream, application log files, user-visible error text, persisted documents, and lifecycle-hook payloads — so those surfaces can never drift; none of them carries redaction rules of its own. This requirement is the product's single definition of the redaction algorithm, of the redaction marker, of the stored-secret display mask, and of the credential value-prefix list, and no requirement in any other domain holds a second copy of any of the four: a requirement that needs one of them cites this one and states only what it adds.
 
 The pass applies four ordered layers: (1) `key=value` / `key: value` assignments with secret-looking keys; (2) `--flag value` pairs with secret-looking flags; (3) the value following one of the credential scheme keywords `Bearer`, `Basic`, or `token`, the keywords compared without regard to case so that `bearer`, `BASIC` and `Token` trigger masking exactly as `Bearer`, `Basic` and `token` do; (4) a value-shape sweep for the known credential prefixes `ghp_`, `ghs_`, `ghu_`, `gho_`, `sk-`, `sk_`, `iv1.`, `eyj`, recognized only where the prefix begins at a token boundary, so an ordinary word that merely contains one of those sequences is left alone while a value written as `Bearer ghp_…` is still caught. The prefix comparison ignores letter case, so a JWT beginning `eyJ` is caught by the `eyj` prefix and `GHP_…` is caught by `ghp_`; a masking rule that changing capitalization could evade would be no rule at all. Token-boundary recognition is unaffected by that.
 
 In layers (1), (2) and (3) the replaced value extends over exactly one value token and no further: where the value opens with a single or a double quote it ends at the matching closing quote and the quote characters themselves are retained around the mask; otherwise it ends at the first whitespace character following it, or at the end of the string where none follows. `--token abc def` therefore masks to `--token *** def`, `password: a b` masks to `password: *** b`, and `password: "a b"` masks to `password: "***"`.
 
 The mask is `***`: one fixed marker, identical on every surface, carrying no character of the value it replaced and no indication of that value's length, so neither a credential nor its size can be inferred from redacted text. Masking replaces the credential value alone; the program name, subcommands, and flag names around it survive unchanged, so whoever reads the prompt or the audit line can still tell what was about to run — `Bearer sk-live-1` becomes `Bearer ***` and `Bearer` stays legible. The key names of REQ-TOOLS-172 and the value prefixes of layer (4) are the complete set this pass recognizes: an implementation recognizing exactly those and nothing further is conformant, and no further name, prefix, or resemblance-based heuristic is added, so a string carrying none of them is guaranteed to reach its destination unaltered. Redaction is idempotent — re-running over redacted text changes nothing.
+
+A secret the user themselves supplied and the product stored — a provider API key, a pasted subscription token, a tool-server secret — is additionally *shown back* to that user, which the redaction marker cannot serve: a marker carrying nothing at all would leave the user unable to tell which of their keys is stored. One **display mask** covers every such rendering. A stored secret value of 4 characters or fewer renders as `****`; a longer value renders as its first 2 characters, then `****`, then its last 2 characters (for example `sk****10`). The masked middle is that fixed four-character mark whatever the value's length, so a rendering is 4 characters for a short value and 8 characters for every other one and never discloses how long the stored value is — a rendering whose length tracked the secret's length would leak the one property of a credential its owner most easily recognizes, and no surface produces one. A value of zero length never reaches the mask, because a surface that stores secrets refuses to store one.
+
+The display mask and the redaction marker are two different things and are never substituted for one another. The marker replaces a credential found in text that was on its way somewhere else — a log line, an audit entry, an event, a prompt — and reveals no character of it. The display mask is the deliberate rendering of a value the user stored on purpose, and it is the only rendering of a stored secret that any user interface ever shows: no surface reveals a stored secret in clear, and none renders one by any other rule. A requirement that needs the display mask cites this one and states only where it applies and what it adds.
 
 **REQ-TOOLS-172** — A key name is reduced to segments by stripping any leading run of `-` and then splitting what remains on every run of characters that is neither a letter nor a digit. The name counts as secret-looking when one of those whole segments, compared case-insensitively, is `key`, `keys`, `apikey`, `apikeys`, `token`, `tokens`, `secret`, `secrets`, `password`, `passwords`, `passwd`, `credential`, `credentials`, `auth`, `authorization`, or `bearer`. This requirement is the product's single definition of that test; no requirement in any other domain holds a second copy of it, and a requirement that needs the test cites this one and states only what it adds.
 
@@ -560,9 +575,9 @@ When the key itself is secret-looking, its entire value is masked wherever the r
 
 - `<workspace>/.rotaris/agents.yaml` — workspace configuration, including all `runtime.*` keys below; the desktop mode selector persists `runtime.permission_mode` here.
 - `secrets.yaml` — in the global config directory and `<workspace>/.rotaris/`; MCP secrets; atomically written; `.rotaris/` is auto-appended to the workspace `.gitignore`.
-- `<workspace>/.rotaris/sessions/<session_id>/evidence/permissions.jsonl` — permission decisions and mode changes, append-only JSON lines, ring-capped at 5000.
-- `<workspace>/.rotaris/sessions/<session_id>/evidence/tool-calls.jsonl` — tool-call outcomes (including terminal outcome kinds and warnings), same ring-cap family (5000).
-- `<workspace>/.rotaris/sessions/<session_id>/evidence/verification-gate.jsonl` — verification-gate writes and declines (REQ-TOOLS-190), same ring-cap family (5000).
+- `<workspace>/.rotaris/sessions/<session_id>/evidence/permissions.jsonl` — permission decisions and mode changes, append-only JSON lines, ring-capped at 5000 (REQ-TOOLS-078).
+- `<workspace>/.rotaris/sessions/<session_id>/evidence/tool-calls.jsonl` — tool-call outcomes (including terminal outcome kinds and warnings); its ring cap is not fixed here and is REQ-SESSION-133's.
+- `<workspace>/.rotaris/sessions/<session_id>/evidence/verification-gate.jsonl` — verification-gate writes and declines, ring-capped at 5000 (REQ-TOOLS-190).
 - Session evidence issues (`permission_denied` kind) and timeline events (`permission_approved`, `permission_mode_changed`, `permission_mode_downgraded`).
 - Session state snapshot (recorded for audit visibility in the session's run-configuration record): `permission_mode` (effective preset at run start; empty on pre-feature snapshots), `sandboxed` (bool), `sandbox_backend` (`seatbelt`/`bubblewrap`/empty), `pending_approvals` (live map keyed by request id), the task list, and transcript events including any downgrade notice.
 - `<workspace>/.rotaris/plugins/*.py` — the designated workspace plugin folder listed by the settings inventory.
@@ -603,26 +618,28 @@ Identifier formats:
 
 ### Configuration key reference (behavioral defaults)
 
+Every figure below is fixed by the requirement named beside it and is restated here for reading convenience only; where a cell and the requirement that owns the figure differ, the requirement governs.
+
 | Key | Values / type | Default | Notes |
 |---|---|---|---|
-| `runtime.permission_mode` | `restricted`\|`ask`\|`autonomous` | `ask` | unknown → `restricted` with warning; a per-persona `permission_mode` pin wins over a session override unless that override is at least as restrictive as the pin (REQ-TOOLS-048, REQ-TOOLS-074) |
-| `runtime.allow_unsandboxed_autonomous` | bool | `false` | per-workspace opt-in to unattended permissive mode without sandbox |
-| `runtime.headless_approval_policy` | `deny`\|`abort` | `deny` | unrecognized behaves as `deny` |
+| `runtime.permission_mode` | not restated — REQ-TOOLS-041 | not restated — REQ-TOOLS-046 | vocabulary REQ-TOOLS-041's, shipped default and the resolution of an unrecognized name REQ-TOOLS-046's; a per-persona `permission_mode` pin wins over a session override unless that override is at least as restrictive as the pin (REQ-TOOLS-048, REQ-TOOLS-074) |
+| `runtime.allow_unsandboxed_autonomous` | bool | `false` (REQ-TOOLS-067) | per-workspace opt-in to unattended permissive mode without sandbox; the key is one of the three conditions of REQ-TOOLS-067 and nothing more |
+| `runtime.headless_approval_policy` | `deny`\|`abort` (REQ-TOOLS-065) | `deny` (REQ-TOOLS-065) | unrecognized behaves as `deny` |
 | `runtime.approval_timeout_seconds` | not restated — REQ-CONFIG-126 | not restated — REQ-CONFIG-126 | the key, its value space, its default and its reading of `0` are REQ-CONFIG-126's, relied on by REQ-TOOLS-055 and REQ-TOOLS-178; shared with user-question waits |
-| `runtime.allow_outside_workspace` | bool | `false` | set through the YAML surface or the confirmed desktop control of REQ-TOOLS-191; no launch-time override exists |
-| `runtime.additional_read_only_roots` | absolute paths | `[]` | readable outside the fence, never writable (REQ-TOOLS-132); relative entries rejected |
+| `runtime.allow_outside_workspace` | bool | `false` (REQ-TOOLS-130) | set through the YAML surface or the confirmed desktop control of REQ-TOOLS-191; no launch-time override exists |
+| `runtime.additional_read_only_roots` | absolute paths (REQ-TOOLS-132) | `[]` (REQ-TOOLS-132) | readable outside the fence, never writable; relative entries rejected; registered in `runtime:` by REQ-CONFIG-468 |
 | `runtime.sandbox_mode` | not restated — REQ-SANDBOX-048 | not restated — REQ-SANDBOX-048 | the vocabulary, the default and the validation are REQ-SANDBOX-048's; REQ-TOOLS-114 adds the per-session selector and the absence of any launch-time override |
 | `runtime.sandbox_writable_roots` | not restated — REQ-SANDBOX-050 | not restated — REQ-SANDBOX-050 | the key, its default and its entry rules are REQ-SANDBOX-050's; REQ-TOOLS-116 adds the writability model that consumes it |
 | `runtime.sandbox_allow_network` | not restated — REQ-SANDBOX-051 | not restated — REQ-SANDBOX-051 | REQ-TOOLS-117 adds only that the switch is binary for terminal commands |
 | `runtime.network_egress_policy` | not restated — REQ-SANDBOX-001 | not restated — REQ-SANDBOX-001 | value space, default and spelling match are REQ-SANDBOX-001's and REQ-SANDBOX-002's (REQ-TOOLS-088) |
 | `runtime.network_allowed_hosts` / `runtime.network_denied_hosts` | not restated — REQ-SANDBOX-003 | not restated — REQ-SANDBOX-003 | defaults, normalization and the rule that a denial wins are REQ-SANDBOX-003's and REQ-SANDBOX-004's (REQ-TOOLS-088) |
-| `runtime.shell_command_timeout` | int (seconds) | `100` | default foreground hard timeout (REQ-CONFIG-116) |
-| `runtime.shell_max_background_sessions` | int ≥ 1 | `20` | |
-| `runtime.shell_background_timeout` | int ≥ 1 (seconds) | `3600` | |
-| `runtime.tool_call_timeout` | int (seconds) | `30` | fetch default (REQ-CONFIG-115); bare executor fallback 10.0 s |
-| `runtime.terminal_stream_enabled` | bool | `true` | disabling costs the live view only |
-| `runtime.terminal_stream_interval_ms` | int 20–2000 | `100` | |
-| `runtime.terminal_stream_buffer_kb` | int 0–8192 | `256` | `0` disables replay |
+| `runtime.shell_command_timeout` | int (seconds) | not restated — REQ-CONFIG-116 | the key's name and default are REQ-CONFIG-116's over REQ-NOTIFY-100's; REQ-TOOLS-097 adds only that it is the foreground hard timeout for an action that is not keystroke input |
+| `runtime.shell_max_background_sessions` | int ≥ 1 | `20` (REQ-TOOLS-108) | registered in `runtime:` by REQ-CONFIG-116 |
+| `runtime.shell_background_timeout` | int ≥ 1 (seconds) | `3600` (REQ-TOOLS-108) | registered in `runtime:` by REQ-CONFIG-116 |
+| `runtime.tool_call_timeout` | int (seconds) | not restated — REQ-CONFIG-115 | the fetch default; the whole precedence chain, the bare-executor fallback included, is REQ-SANDBOX-021's (REQ-TOOLS-093) |
+| `runtime.terminal_stream_enabled` | bool | `true` (REQ-TOOLS-126) | disabling costs the live view only |
+| `runtime.terminal_stream_interval_ms` | int 20–2000 | `100` (REQ-TOOLS-126) | |
+| `runtime.terminal_stream_buffer_kb` | int 0–8192 | `256` (REQ-TOOLS-126) | `0` disables replay |
 
 Persona-level tool controls: `tools`, `custom_tools`, `mcp_servers`, `mcp_tools` (per-server grant), `coordinator_only`, `read_only`, `tool_restrictions`, `can_publish_artifacts`, `skip_auto_sibling_context`, `permission_mode`, `delegates_to`. Each field's type, default and merge behavior are REQ-CONFIG-098 to REQ-CONFIG-110's and are not restated here; what this domain fixes is what each control removes from the resolved tool set (REQ-TOOLS-006).
 
@@ -630,37 +647,40 @@ Config layering: not restated here — REQ-CONFIG-031 and REQ-CONFIG-449. What t
 
 ### Limits and timing inventory (defaults)
 
-| Quantity | Value |
-|---|---|
-| Approval timeout / user-question timeout | not fixed here — REQ-CONFIG-126 (REQ-TOOLS-055, REQ-TOOLS-178) |
-| Foreground shell hard timeout | 100 s |
-| Foreground no-output soft-pause window | 30 s (only when the call supplies no `timeout`) |
-| Foreground captured output cap | 100,000 chars/call (oldest-first truncation) |
-| Background session timeout | 3600 s |
-| Background kill grace | 5 s (upper bound) |
-| Sandbox trial timeout | 5 s |
-| Pooled-terminal recovery | 3 attempts / 10 s window |
-| Fetch timeout | 30 s configured / 10 s bare fallback |
-| Redirect cap | 20 |
-| Verification probe timeout | 30 s |
-| Stream sample interval | 100 ms |
-| Background output buffer | 1 MB/session (oldest-first truncation) |
-| Stream replay buffer | 256 KiB/stream (0–8 MiB) |
-| Audit ring / tool-call ring / verification-gate ring | 5000 entries each |
-| read_file cap | 30,000 chars / 2000 lines default |
-| Search scan file cap | 2 MiB |
-| Binary sniff | 8192 B (file engine) / 1024 B (search) |
-| Argument/stream value preview | 240 chars |
-| Hook result truncation | 4096 chars |
-| Undo history per path | 10 entries |
-| grep max matches | 100 |
-| fetch max lines | 1000 |
-| Max background sessions | 20 |
-| Artifact list limit | 20 (1–200, out-of-range clamped) |
-| Delegation attached-artifact budget | 100,000 chars (whole bodies dropped from the first that overflows) |
-| User-question shape | ≤ 10 steps × ≤ 8 options |
-| Delegation fan-out | max children 20 / active 6 / depth 3 |
-| Exit codes | 124 timeout; 126 sandbox-unavailable (never ran); −1 soft pause / killed |
+Every figure below is fixed by the requirement named beside it and is restated here for reading convenience only; where a row and the requirement that owns the figure differ, the requirement governs. A row whose value reads "not fixed here" names the owner instead, because the figure belongs to another domain and is not duplicated.
+
+| Quantity | Value | Fixed by |
+|---|---|---|
+| Approval timeout / user-question timeout | not fixed here | REQ-CONFIG-126 (REQ-TOOLS-055, REQ-TOOLS-178) |
+| Foreground shell hard timeout | not fixed here | REQ-CONFIG-116 (REQ-TOOLS-097) |
+| Foreground no-output soft-pause window | 30 s (only when the call supplies no `timeout`) | REQ-TOOLS-097 |
+| Foreground captured output cap | 100,000 chars/call (oldest-first truncation) | REQ-TOOLS-097 |
+| Background session timeout | 3600 s | REQ-TOOLS-108 |
+| Background kill grace | 5 s (upper bound) | REQ-TOOLS-109 |
+| Sandbox trial timeout | not fixed here | REQ-SANDBOX-069 (REQ-TOOLS-119) |
+| Pooled-terminal recovery | 3 attempts / 10 s window | REQ-TOOLS-103 |
+| Fetch timeout | not fixed here | REQ-SANDBOX-021 over REQ-CONFIG-115 (REQ-TOOLS-093) |
+| Redirect cap | not fixed here | REQ-SANDBOX-024 (REQ-TOOLS-090) |
+| Verification probe timeout | 30 s | REQ-TOOLS-159 |
+| Stream sample interval | 100 ms | REQ-TOOLS-126 |
+| Background output buffer | 1 MB/session (oldest-first truncation) | REQ-TOOLS-108 |
+| Stream replay buffer | 256 KiB/stream (0–8 MiB) | REQ-TOOLS-126 |
+| Audit ring / verification-gate ring | 5000 entries each | REQ-TOOLS-078, REQ-TOOLS-190 |
+| Tool-call ring | not fixed here | REQ-SESSION-133 |
+| read_file cap | 30,000 chars / 2000 lines default | REQ-TOOLS-134 |
+| Search scan file cap | 2 MiB | REQ-TOOLS-139 |
+| Binary sniff | 8192 B (file engine) / 1024 B (search) | REQ-TOOLS-132, REQ-TOOLS-139 |
+| Argument/stream value preview | 240 chars | REQ-TOOLS-057, REQ-TOOLS-173 |
+| Hook result truncation | not fixed here | REQ-HOOKS-066 (REQ-TOOLS-031) |
+| Undo history per path | 10 entries | REQ-TOOLS-132 |
+| grep max matches | 100 | REQ-TOOLS-138 |
+| fetch max lines | 1000 | REQ-SANDBOX-020 (REQ-TOOLS-093) |
+| Max background sessions | 20 | REQ-TOOLS-108 |
+| Artifact list limit | 20 (1–200, out-of-range clamped) | REQ-TOOLS-149 |
+| Delegation attached-artifact budget | 100,000 chars (whole bodies dropped from the first that overflows) | REQ-TOOLS-152 |
+| User-question shape | ≤ 10 steps × ≤ 8 options | REQ-TOOLS-157 |
+| Delegation fan-out | not fixed here | REQ-CONFIG-112 (`max_children`, `max_active_children`, `max_depth`) |
+| Exit codes | 124 timeout; 126 sandbox-unavailable (never ran); −1 soft pause / killed | REQ-TOOLS-179 |
 
 ## Open Questions
 

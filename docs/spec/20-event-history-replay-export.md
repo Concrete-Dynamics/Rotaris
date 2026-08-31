@@ -404,7 +404,7 @@ capabilities this section once carried are reachable from the desktop interface 
 
 **REQ-EVENTS-166** — Decoding one event line, reading a whole stored history, or reading an exported trajectory document MUST require nothing beyond a standard JSON parser and this specification: no part of the agent runtime, no configuration loading, no network access, and no access to the workspace the run took place in. A stored history or an exported document copied to another machine MUST yield every field of every event when read there with a stock JSON parser.
 
-**REQ-EVENTS-167** — The default wait for a human approval MUST be 300 seconds, and this value MUST be visible to consumers as the timeout field on `approval.requested`.
+**REQ-EVENTS-167** — The wait for a human approval is not this document's to fix: its configuration key, its value space, its default, and the reading of a configured `0` are REQ-CONFIG-126's, and this document holds no copy of any of them. What this document requires is that the wait in force for a request MUST be visible to a consumer as the `timeout_seconds` field on `approval.requested`, so that a consumer reading the wire learns how long the request will be held without consulting the configuration — and, per REQ-EVENTS-049, that the field is null exactly on the resolver that never waits.
 
 **REQ-EVENTS-177** — The verification-gate log of REQ-TOOLS-190 MUST NOT gain an event type in the catalog of REQ-EVENTS-041. Every write and every decline it records is an attempt an agent made through a tool, and is therefore already observable on the stream as the `tool.start` / `tool.finish` pair of REQ-EVENTS-057 for that call, with the decline carried as that call's failure; the gate's own reasoning — its `outcome`, `decline_case`, `reason`, `checks` and `detail` — stays durable in `<session_dir>/evidence/verification-gate.jsonl` and in the timeline entry that requirement also writes. A consumer needing that detail MUST read the evidence file rather than expect a wire event, and MUST NOT treat the absence of such an event as evidence that no gate decision was taken. This is a deliberate exclusion, not an omission: the catalog stays at the 23 types of REQ-EVENTS-041.
 
@@ -515,22 +515,24 @@ Files are written pretty-printed (sorted keys, two-space indent) with a trailing
 
 ### Bounds and constants
 
-| Value | Meaning |
-| --- | --- |
-| `1` | event schema version |
-| `1` | trajectory document version |
-| `"1"` | programmatic consumer API version |
-| 16,000 chars | transcript-row string limit, trailing `…` |
-| 240 chars | tool-argument value limit, trailing `…` (clipped values are 241 chars) |
-| `***` | mask literal |
-| 20,000 | default of `runtime.event_retention_per_session`, registered by REQ-CONFIG-473; the behavior of the cap it sets is REQ-EVENTS-091's, and `0` never trims |
-| cap ÷ 8 | headroom permitted above the cap before a trim rewrite runs |
-| 200 chars | reader warning excerpt limit |
-| 110 chars | history-row detail limit, trailing `…` (clipped details are 111 chars) |
-| 1024 | pending-event buffer for a programmatic consumer |
-| 300.0 s | default approval wait, surfaced as `timeout_seconds` |
-| 5 s | bound on delivering one event to one live consumer before it is detached (REQ-EVENTS-165) |
-| 100 ms | bound on reflecting a filter change on an already-read history (REQ-EVENTS-175) |
+Every figure below is a restatement of the requirement named beside it, which is where it is fixed; where a row states that this document fixes no figure, the named requirement is the only place the value is stated and this table holds no copy of it.
+
+| Value | Meaning | Fixed by |
+| --- | --- | --- |
+| `1` | event schema version | REQ-EVENTS-038 |
+| `1` | trajectory document version | REQ-EVENTS-133 |
+| `"1"` | programmatic consumer API version | REQ-EVENTS-164 |
+| 16,000 chars | transcript-row string limit, trailing `…` | REQ-EVENTS-063 |
+| 240 chars | tool-argument value limit, trailing `…` (clipped values are 241 chars) | REQ-EVENTS-061 |
+| `***` | mask literal | REQ-EVENTS-059 |
+| not fixed here | default of `runtime.event_retention_per_session`, and the reading of `0` as never trimming | REQ-CONFIG-473; the behavior of the cap it sets is REQ-EVENTS-091's |
+| cap ÷ 8 | headroom permitted above the cap before a trim rewrite runs | REQ-EVENTS-091 |
+| 200 chars | reader warning excerpt limit | REQ-EVENTS-106 |
+| 110 chars | history-row detail limit, trailing `…` (clipped details are 111 chars) | REQ-EVENTS-170 |
+| 1024 | pending-event buffer for a programmatic consumer | REQ-EVENTS-164 |
+| not fixed here | the approval wait surfaced as `timeout_seconds` | REQ-CONFIG-126; its appearance on the wire is REQ-EVENTS-167's |
+| 5 s | bound on delivering one event to one live consumer before it is detached | REQ-EVENTS-165 |
+| 100 ms | bound on reflecting a filter change on an already-read history | REQ-EVENTS-175 |
 
 ### Read-damage warning reasons
 

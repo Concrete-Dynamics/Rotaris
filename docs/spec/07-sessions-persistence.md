@@ -218,7 +218,7 @@ Every run persists its complete observable state under a per-session directory i
 ### 18. Durable Per-Session Event History
 
 - **REQ-SESSION-143** — The event history lives at `<session_dir>/evidence/events.jsonl`, holding one serialized wire event per line, ordered as emitted. Each stored line MUST reproduce, byte for byte, what the live stream emitted for that event, so that replaying from disk and subscribing to a running session are interchangeable inputs to one consumer. The truncation sidecar is `evidence/events.meta.json`.
-- **REQ-SESSION-144** — The default event cap MUST be 20,000 events, with trim slack of cap ÷ 8. Were there no slack, each event added once the cap is reached would force a full-file rewrite; the slack amortizes that down to about one full rewrite for every cap ÷ 8 events appended. A cap below 8 has no slack and is enforced exactly. A trim keeps the newest cap-many lines, rewrites atomically, recounts from the file afterwards (honest even if something else appended), updates counters only after a successful rewrite, and records `{truncated: true, dropped_events (cumulative across runs), max_events, last_trimmed_at}` in the sidecar. A null cap disables trimming (tooling only); a non-positive cap MUST be rejected as invalid (a configured 0 asks for an empty history, not an unlimited one, and MUST NOT be reinterpreted).
+- **REQ-SESSION-144** — The event history is capped, and neither the cap nor the trim is this domain's to fix. The configuration key, its default, its value space, the rejection of a negative value, and the meaning of a configured `0` are REQ-CONFIG-473's. How a trim is performed — the headroom permitted above the cap before a trim runs, which lines a trim keeps, that it counts from the file's current contents rather than from a carried-over figure, that it replaces the file in one atomic step, and that a trim which did not complete leaves the previous contents in force, records a warning, and is not reflected in the truncation marker — is REQ-EVENTS-091's. This domain holds no copy of the cap, of the headroom figure, or of the trim rule, and states no second reading of a cap of `0`. What it adds is where the record of a trim lives in a session directory and what a reader of that directory may conclude from it: the truncation sidecar is `<session_dir>/evidence/events.meta.json` (REQ-SESSION-143), it exists only once a trim has dropped lines (REQ-SESSION-002), and its absence MUST read as no events having been dropped rather than as an unknown figure — which is what lets `truncated` and `dropped_events` be reported as `false` and `0` for an intact history (REQ-SESSION-153) and lets a listing state a session's dropped count (REQ-SESSION-188).
 - **REQ-SESSION-145** — The history writer MUST never fail a run: each entry point turns exceptions into logged warnings and signals the outcome through its return value; an event that cannot be serialized is discarded with a warning; a line containing an embedded newline or carriage return is refused (one event = one line); appends MUST NOT allow platform text-mode newline translation to mix line endings with the atomic-rewrite path.
 - **REQ-SESSION-146** — Event-history bindings are per session id: a new registration replaces the previous one, lookup never falls through to a different session — history from one run must never be written into another run's file — and storing without a binding is a silent no-op.
 - **REQ-SESSION-147** — Persistence MUST happen before forwarding to the caller's event consumer (a tee), so an event that a failing consumer never receives is nevertheless recorded on disk. Detaching the history genuinely stops persistence even for a sink reference that escaped.
@@ -326,7 +326,7 @@ All formats below are externally observable: they are files a user can open and 
 
 ### Session id
 
-`YYYYMMDD-HHMMSS-` + 12 lowercase hex characters; regex `^\d{8}-\d{6}-[0-9a-f]{12}$`. The directory name equals the id. Ids are never reused.
+`YYYYMMDD-HHMMSS-` + 12 lowercase hex characters; regex `^\d{8}-\d{6}-[0-9a-f]{12}$`. The directory name equals the id. Ids are never reused (REQ-SESSION-009, REQ-SESSION-012).
 
 ### Resumable state (`state/resume.json`)
 
@@ -338,11 +338,11 @@ Checkpoint entry: the persisted checkpoint record of REQ-GIT-016 — its field s
 
 ### Listing metadata (`metadata.json`)
 
-Exactly: `session_id`, `created_at`, `updated_at` (ISO strings), `execution_status`, `schema_version`, `internal`, `worktree` (record or null), `checkpoint_count`, `task_title`, `requirement_id`, `unit_id`, `awaiting_input`. Reader defaults: `checkpoint_count` 0, `task_title` falls back to the session id, attribution empty, `awaiting_input` false.
+Exactly: `session_id`, `created_at`, `updated_at` (ISO strings), `execution_status`, `schema_version`, `internal`, `worktree` (record or null), `checkpoint_count`, `task_title`, `requirement_id`, `unit_id`, `awaiting_input`. Reader defaults: `checkpoint_count` 0, `task_title` falls back to the session id, attribution empty, `awaiting_input` false. The key set and those defaults are fixed by REQ-SESSION-030.
 
 ### Status vocabulary and run outcomes
 
-- Active statuses (assert an in-progress run): `starting`, `running`, `background`, `waiting`, `pausing`, `cancelling`.
+- Active statuses (assert an in-progress run): `starting`, `running`, `background`, `waiting`, `pausing`, `cancelling` (REQ-SESSION-055).
 - Terminal/idle/blocked statuses: `idle`, `paused`, `paused_message_limit`, `awaiting_plan_decision`, `completed`, `failed`, `stopped`, `interrupted` (repair-only). Together with the six active values this set is the whole closed vocabulary (REQ-SESSION-073), which is the single definition every other document cites.
 - Stop reasons and their classification: REQ-MONITOR-301 (this domain restates neither, REQ-SESSION-077).
 - Child terminal states: the terminal subset REQ-MONITOR-300 declares absorbing, over the state set of REQ-MONITOR-014; this document holds no copy of either.
@@ -361,37 +361,39 @@ Edit diffs persist separately keyed `diff_id = "<agent>:<tool_event_key>"` and m
 
 ### Timeline, issues, tool calls, permissions
 
-- Timeline line: `{id: 12 hex, timestamp: UTC ISO, type, severity (default info), actor, message, metadata}`; durable line first, derived wire event second.
-- Issue: `{id: 12 hex, timestamp, kind, severity, actor, message, evidence_ref, metadata}`.
-- Tool call: `{timestamp, agent_name, tool_name, call_id, status, elapsed_ms, is_error}` + optional `args`, `result`, `outcome_kind`, `exit_code`, `failure_kind`, `warnings`; error-path args/result truncated to 2000 chars.
-- Permission decision: `{timestamp, session_id, agent_id, persona, tool_name, decision, rule_id, source, summary, reason, request_id?}`; mode change: `{event: "permission_mode_change", requested_mode, effective_mode, previous_mode, source, reason, skipped_personas}`.
+- Timeline line: `{id: 12 hex, timestamp: UTC ISO, type, severity (default info), actor, message, metadata}`; durable line first, derived wire event second (REQ-SESSION-134).
+- Issue: `{id: 12 hex, timestamp, kind, severity, actor, message, evidence_ref, metadata}` (REQ-SESSION-135).
+- Tool call: `{timestamp, agent_name, tool_name, call_id, status, elapsed_ms, is_error}` + optional `args`, `result`, `outcome_kind`, `exit_code`, `failure_kind`, `warnings`; error-path args/result truncated to 2000 chars (REQ-SESSION-136).
+- Permission decision: `{timestamp, session_id, agent_id, persona, tool_name, decision, rule_id, source, summary, reason, request_id?}`; mode change: `{event: "permission_mode_change", requested_mode, effective_mode, previous_mode, source, reason, skipped_personas}` (REQ-SESSION-137).
 - Repair timeline entry: type `session.interrupted_recovered`, severity `warning`, actor `rotaris`, message `Session was still marked '<status>' but <reason>; status set to 'interrupted'.`, metadata `{previous_execution_status, execution_status, reason}`.
 
 ### Trajectory export document
 
-`trajectory_version: 1`; identity (session id, task, workspace as the run reported it); permission mode; started/ended; status; stop reason; duration; `truncated`/`dropped_events`; recomputed summary (event/unknown/warning counts, `runs` = count of `session.start` boundaries, iterations, tool calls/failures, permission decisions/denials, verifier runs/failures, child agents, errors/fatal errors, per-type counts, tokens, cost); raw stored events (redaction inherited from the wire schema; unknown types intact).
+The document's content is fixed by REQ-SESSION-153 and its top-level key names by REQ-SESSION-193; the outline below restates neither and is given so the file's shape is readable beside the rest of this section. `trajectory_version: 1`; identity (session id, task, workspace as the run reported it); permission mode; started/ended; status; stop reason; duration; `truncated`/`dropped_events`; recomputed summary (event/unknown/warning counts, `runs` = count of `session.start` boundaries, iterations, tool calls/failures, permission decisions/denials, verifier runs/failures, child agents, errors/fatal errors, per-type counts, tokens, cost); raw stored events (redaction inherited from the wire schema; unknown types intact).
 
 ### Concrete constants
 
-| Constant | Value |
-| --- | --- |
-| State schema version | 1 |
-| Save debounce window | 10.0 s |
-| Cancel grace before hard cancel | 30.0 s |
-| Atomic-write retry (Windows access denied) | 5 attempts; backoff 0.05/0.1/0.2/0.4/0.8 s |
-| Event history cap / trim slack | 20,000 events / cap ÷ 8 |
-| Stale-lock reap attempts | 1 reap, 2 create attempts total |
-| Diagnostics ring caps | issues 500; tool calls 5000; model inputs 5000; context selections 2000; permissions 5000; report validations 2000; memory 2000 |
-| Transcript caps | detail 400; full text 2000; full detail 8000; thinking 4000 chars |
-| Live transcript window | 5000 rows, older rows evicted to the archive |
-| Transcript archive page size | 50 events |
-| Truncation marker | `...`, counted inside the cap (REQ-SESSION-194) |
-| Follow-up payload budgets | 6 events; 700 chars/event; 3200 chars history; 20 todos; 5 iterations; 700 chars/item; 6000 chars latest artifact; 8000 chars artifact baseline; 80-char titles |
-| Summary task line cap | 240 chars |
-| Reader warning excerpt cap | 200 chars |
-| Replay compact payload cap | 110 chars |
-| Slowest tools reported | 10 in metrics; 5 in summary |
-| Debounced write volume | at most 12 state writes per minute per `running`/`idle` session |
+Every figure below is a restatement of the requirement named beside it, which is where it is fixed; where a row states that this domain fixes no figure, the named requirement is the only place the value is stated and this table holds no copy of it.
+
+| Constant | Value | Fixed by |
+| --- | --- | --- |
+| State schema version | 1 | REQ-SESSION-013 |
+| Save debounce window | 10.0 s | REQ-SESSION-067, REQ-SESSION-071 |
+| Cancel grace before hard cancel | 30.0 s | REQ-SESSION-092 |
+| Atomic-write retry (Windows access denied) | 5 attempts; backoff 0.05/0.1/0.2/0.4/0.8 s | REQ-SESSION-033 |
+| Event history cap / trim slack | not fixed by this domain | REQ-CONFIG-473 (the cap), REQ-EVENTS-091 (the headroom and the trim); consumed here by REQ-SESSION-144 |
+| Stale-lock reap attempts | 1 reap, 2 create attempts total | REQ-SESSION-047 |
+| Diagnostics ring caps | issues 500; tool calls 5000; model inputs 5000; context selections 2000; permissions 5000; report validations 2000; memory 2000 | REQ-SESSION-133 |
+| Transcript caps | detail 400; full text 2000; full detail 8000; thinking 4000 chars | REQ-SESSION-122 |
+| Live transcript window | 5000 rows, older rows evicted to the archive | REQ-SESSION-192 |
+| Transcript archive page size | 50 events | REQ-SESSION-131 |
+| Truncation marker | `...`, counted inside the cap | REQ-SESSION-194 |
+| Follow-up payload budgets | 6 events; 700 chars/event; 3200 chars history; 20 todos; 5 iterations; 700 chars/item; 6000 chars latest artifact; 8000 chars artifact baseline; 80-char titles | REQ-SESSION-115 |
+| Summary task line cap | 240 chars | REQ-SESSION-140 |
+| Reader warning excerpt cap | 200 chars | REQ-SESSION-148, over the reader-warning rule of REQ-EVENTS-106 |
+| Replay compact payload cap | 110 chars | REQ-SESSION-188, under the marking rule of REQ-SESSION-194 |
+| Slowest tools reported | 10 in metrics; 5 in summary | REQ-SESSION-139, REQ-SESSION-140 |
+| Debounced write volume | at most 12 state writes per minute per `running`/`idle` session | REQ-SESSION-071 |
 
 ## Open Questions
 

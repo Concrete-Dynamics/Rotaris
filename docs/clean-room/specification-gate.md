@@ -20,22 +20,29 @@ settings, MCP integration, the terminal UI, command-line entry points, notificat
 the event stream, and the performance benchmark.
 
 Behavioral target: `ROTARIS-CRW-001` — see [`reference-record.md`](reference-record.md).
-Total: **3,925 requirement identifiers** across the nineteen shipping domains, of which **236** are
-withdrawn in place, leaving **3,689** that state live behavior. The two retired domains, the
+Total: **3,930 requirement identifiers** across the nineteen shipping domains, of which **237** are
+withdrawn in place, leaving **3,693** that state live behavior. The two retired domains, the
 terminal UI and the command-line entry points, hold a further **444** identifiers, **10** of them
 withdrawn in place; those are counted separately and are not part of the shipping total, giving
-**4,369** identifiers in all, **246** of them withdrawn. Every count is a count of identifiers, not
+**4,374** identifiers in all, **247** of them withdrawn. Every count is a count of identifiers, not
 of behaviors: an identifier is never removed, so a withdrawn requirement keeps its number and keeps
 being counted, and a total that grew while the graphical-only decision was removing surface grew
 because resolution minted new identifiers to carry the rescued capabilities. These totals were
-re-taken from the requirement definitions in each file after the fifth and last of the
+re-taken from the requirement definitions in each file after the sixth and last of the
 post-resolution reconciliation rounds described in [`provenance.md`](provenance.md). The first four
 rounds left every total where it stood: naming an owner for a contested vocabulary and turning the
 other statements of it into citations removes duplicated content without minting or retiring an
 identifier. The fifth moved one domain's, because it did more than deduplicate — domain 11 withdrew
 three identifiers that specified a different product and minted two, REQ-STARTUP-158 and
-REQ-STARTUP-159, to carry the behavior underneath them. That is the whole of the change from the
-previously recorded 3,923 and 233. The per-domain figures,
+REQ-STARTUP-159, to carry the behavior underneath them, taking the recorded figures from 3,923 and
+233 to 3,925 and 236. The sixth moved three domains', for the opposite reason: it was looking for
+obligations no requirement carried, and every one it found had to be written. Domain 11 withdrew
+REQ-STARTUP-144, whose subject was a public marketing website rather than this product, and minted
+REQ-STARTUP-160 to carry as application behavior the network disclosure that requirement had placed
+on a page; domain 12 minted REQ-SHELL-168 for the plan-gate and run surfaces domain 01's resolution
+record had assigned it and no round had executed; and domain 15 minted REQ-CONFIG-474 through
+REQ-CONFIG-476 for three configuration keys the same record had said the settings domain would need.
+That is the whole of the change from 3,925 and 236. The per-domain figures,
 with the withdrawn count beside each, are in [`../spec/README.md`](../spec/README.md). Process and
 audit history: [`provenance.md`](provenance.md).
 
@@ -192,6 +199,14 @@ reconciliation round; three of its requirements had stated the publication model
 self-containment claim resting on it, in terms of one language ecosystem's interpreter and packages,
 which describes a different product. They are withdrawn, and the behavior underneath two of them is
 carried technology-neutrally by REQ-STARTUP-158 and REQ-STARTUP-159.
+
+The same boundary reached one requirement further in the sixth round. REQ-STARTUP-144 bound the
+content, translation, operability and link structure of a public marketing download page, and
+gated a release on that page having been reviewed. A website is not this product, and a behavioral
+specification for an application cannot bind one; the requirement is withdrawn. What it was
+protecting is a real obligation and is now stated as behavior of the application: REQ-STARTUP-160
+requires the product to disclose, on a surface readable with all outbound network access blocked and
+never behind a dismissal, what it contacts, when, and what those requests never carry.
 
 ## Open-question resolution pass
 

@@ -164,8 +164,8 @@ A run takes one top-level user task and executes it through an autonomous, itera
 ### 16. Loop Supervision (Hidden)
 
 - **REQ-ORCH-099** — Loop supervision MUST be invisible: the supervisor is not a role, is never registered or listed, has no observable side effect when no loop is detected, and its corrective messages read as natural user instructions that never mention monitoring, detection, or injection.
-- **REQ-ORCH-100** — Supervisor defaults MUST be: classifier model `gpt-4o-mini`; classifier timeout 20.0 s; activation mode `independent` (alternative: `weighted`); tool-call threshold 60; message-count threshold 60; weights 0.6 (tools) / 0.4 (messages) with target score 1.0; recent-event window 24; transcript excerpt cap 8000 characters; repetition threshold 4; cycle threshold 3; enabled true. These are the canonical values: the fingerprint-based repetition and cycle triggers of REQ-ORCH-101 are the primary detection path, the raw-count thresholds are the backstop behind them, and no activation-cycle latency budget is fixed — a supervisor activation pauses one child and never bounds the run, so its cost is governed by the classifier timeout alone.
-- **REQ-ORCH-101** — For each observed child event, triggers MUST be evaluated in this order, and the first that fires wins: (1) repetition — the same action observed 4 times in a row fires "repeated action"; (2) cycles — a repeating sequence of 2 to 4 distinct actions, observed 3 times over, fires "repeated cycle"; (3) raw counts — in `weighted` mode a score of (tool calls / tool threshold)·0.6 + (messages / message threshold)·0.4 reaching 1.0 fires, and in `independent` mode either count reaching its own threshold fires on its own. Two actions count as the same action only when their tool name and the whole of their arguments are identical: no part of the argument content may be disregarded when comparing, so two long edits differing only near their end MUST be treated as different actions. Only the most recent events, up to the configured event window (default 24), are considered.
+- **REQ-ORCH-100** — Supervisor defaults MUST be: activation mode `independent` (alternative: `weighted`); tool-call threshold 60; message-count threshold 60; weights 0.6 (tools) / 0.4 (messages) with target score 1.0; recent-event window 24; transcript excerpt cap 8000 characters; repetition threshold 4; cycle threshold 3; enabled true. These are the canonical values: the fingerprint-based repetition and cycle triggers of REQ-ORCH-101 are the primary detection path and the raw-count thresholds are the backstop behind them. Two of the supervisor's settings are deliberately not fixed here. The classifier model MUST NOT be a model identity named by this document: its default is the `small_model` capability slot of REQ-PROVIDER-088, resolved by that requirement's own rules, so a deployment resolves the classifier from its own configured catalogue and no third party's model name is shipped as a default. The bound on one loop-classification call is likewise not this domain's: it is the registered configuration key `runtime.loop_classification_timeout`, whose value, value space, and default are REQ-CONFIG-467's. This domain states no bound of its own on a classification call and none on an activation cycle.
+- **REQ-ORCH-101** — For each observed child event, triggers MUST be evaluated in this order, and the first that fires wins: (1) repetition — the same action observed 4 times in a row fires "repeated action"; (2) cycles — a repeating sequence of 2 to 4 distinct actions, observed 3 times over, fires "repeated cycle"; (3) raw counts — in `weighted` mode a score of (tool calls / tool threshold)·0.6 + (messages / message threshold)·0.4 reaching 1.0 fires, and in `independent` mode either count reaching its own threshold fires on its own. Two actions count as the same action only when their tool name and the whole of their arguments are identical: no part of the argument content may be disregarded when comparing, so two long edits differing only near their end MUST be treated as different actions. This requirement is the product's single definition of when two agent actions count as the same action. A document that needs to decide sameness — for repetition detection, for cycle detection, or for any count of repeated work — cites this identifier and holds no rule of its own, and no rule anywhere may decide sameness from a prefix, an excerpt, a normalized rendering, or any bounded number of characters of an argument, because each of those makes the two long edits above compare equal, which this requirement forbids. Only the most recent events, up to the configured event window (default 24), are considered.
 - **REQ-ORCH-102** — On trigger, the supervisor MUST snapshot the pending activation, increment the consecutive-activation counter, and pause the child. If the counter exceeds 2 (the third activation without an intervening user instruction), it MUST escalate regardless of classification, with an escalation signal carrying session id, activation count, and a repeated-loop reason. Otherwise an LLM classifier judges whether a loop exists over the recent transcript tail (bounded by the event window and character cap).
 - **REQ-ORCH-103** — The classifier contract is JSON `{loop_detected: bool, reason, corrective_message}` where the corrective message is at most 90 words, in natural user voice, and redirects to a different concrete approach or asks for a viability assessment, drawing on the transcript (dynamic, never templated). `loop_detected = false` MUST result in an invisible no-op resume.
 - **REQ-ORCH-104** — Classifier failure or timeout MUST fall back on evidence: for repetition/cycle triggers, always declare a loop with a deterministic "pause and reassess" message naming the circled tool and a path anchor; for raw-count triggers, declare a loop only from repeated identical assistant messages (last 3 normalized-equal) or ≥ 4 consecutive same-tool calls — never from counts alone; for stuck-mode triggers, ALWAYS recover with a deterministic corrective message, overriding even a classifier that declined recovery.
@@ -247,8 +247,8 @@ All formats below are externally observable (on disk, in transcripts, in tool ob
 
 ### Task identifiers
 
-- Task id: `bg_` followed by 8 lowercase hex characters; regex `^bg_[0-9a-f]{8}$`; unique per session; assigned at spawn for every child.
-- Canonical task names: character set `[A-Za-z0-9_.-]`, max 80 characters (longer names truncated with an 8-hex-character digest suffix), per-parent uniqueness via `_<n>` suffixes.
+- Task id: `bg_` followed by 8 lowercase hex characters; regex `^bg_[0-9a-f]{8}$`; unique per session; assigned at spawn for every child (REQ-ORCH-036).
+- Canonical task names: character set `[A-Za-z0-9_.-]`, max 80 characters (longer names truncated with an 8-hex-character digest suffix), per-parent uniqueness via `_<n>` suffixes (REQ-ORCH-044, REQ-ORCH-045).
 
 ### Delegation observation (model-visible)
 
@@ -299,59 +299,63 @@ Under `<workspace>/.rotaris/sessions/<session_id>/`:
 
 ### Intent categories
 
-`explicit_trivial`, `question`, `exploration`, `problem_resolution`, `single_file_change`, `small_feature`, `moderate_feature`, `large_feature`, `refactor`, `architectural`, `requirements`, `whole_project`, `ambiguous`. Fallback: `moderate_feature`.
+`explicit_trivial`, `question`, `exploration`, `problem_resolution`, `single_file_change`, `small_feature`, `moderate_feature`, `large_feature`, `refactor`, `architectural`, `requirements`, `whole_project`, `ambiguous`. Fallback: `moderate_feature`. The taxonomy and its fallback are fixed by REQ-ORCH-006 and REQ-ORCH-007.
 
 ### Playbook slots and budget tiers
 
-Slots (render order): `ROUTE`, `AUTONOMY`, `RESEARCH`, `CHUNKING`, `VERIFY`, `ARTIFACT`, `OUTPUT`, `BUDGET`. Budget clamps: tight = {active 2, total 6, depth 2}; normal = {active 4, total 12, depth 3}; wide = no clamp. Run overrides: `swarm`, `single`.
+Slots (render order): `ROUTE`, `AUTONOMY`, `RESEARCH`, `CHUNKING`, `VERIFY`, `ARTIFACT`, `OUTPUT`, `BUDGET` (REQ-ORCH-020). Budget clamps: tight = {active 2, total 6, depth 2}; normal = {active 4, total 12, depth 3}; wide = no clamp (REQ-ORCH-024). Run overrides: `swarm`, `single` (REQ-ORCH-025).
 
 ### Loop-supervisor classifier response
 
-JSON object `{loop_detected: bool, reason: string, corrective_message: string}`; corrective message ≤ 90 words.
+JSON object `{loop_detected: bool, reason: string, corrective_message: string}`; corrective message ≤ 90 words (REQ-ORCH-103).
 
 ### Configuration defaults (consolidated)
 
-| Setting (behavioral name) | Default |
-|---|---|
-| Max total children per iteration | 20 |
-| Max active children | 6 |
-| Max delegation depth | 3 |
-| Max iterations | 20 |
-| Per-task consecutive-retry limit | 3 |
-| Child hard timeout | 1200 s |
-| Child stall threshold | 90 s |
-| Unresponsive-model threshold | 120 s (min 30) |
-| Model HTTP timeout | 120 s |
-| Shell command timeout | 100 s |
-| Max background shell sessions | 20 |
-| Background shell timeout | 3600 s |
-| Generic tool timeout | 30 s |
-| Summary timeout | 120 s |
-| Improvement-collector timeout / enabled | 60 s / true |
-| Transient retries / validation retries | 1 / 0 |
-| Completion classification enabled | true |
-| Relentless mode / max cycles / audit timeout | false / 3 / 60 s |
-| Run-start mode | `auto` |
-| Graceful-pause tool deadline | 30 s (range 5–120) |
-| Shutdown drain timeout | 120 s (0 disables) |
-| Message limit | null (disabled) |
-| Session log level | WARNING |
-| Provider-native agent loop | enabled |
-| Intent-classification timeout / prompt cap | 8.0 s / 4000 chars |
-| Completion-classifier timeout | 15 s |
-| Per-check timeout / suite timeout / probe timeout | 600 s / 900 s / 30 s |
-| Check-skip grace period | 5 s |
-| Subproject detection depth / max roots | 3 levels / 25 |
-| Gate completion / gate authoring | true / true |
-| Max repair attempts | 2 |
-| Supervisor: model / classifier timeout / mode | gpt-4o-mini / 20 s / independent |
-| Supervisor: tool & message thresholds / weights / target | 60 & 60 / 0.6 & 0.4 / 1.0 |
-| Supervisor: event window / transcript cap | 24 / 8000 chars |
-| Supervisor: repetition / cycle thresholds / enabled | 4 / 3 / true |
-| Per-model parallelism | declared by the model's provider catalogue entry (REQ-MONITOR-021, REQ-ORCH-050); uncapped where that entry declares nothing |
-| Per-model retry count | provider default 5 |
-| Quota backoff | 60·2^(n−1) s, cap 300 s; Retry-After honored, min 1 s |
-| Content caps | resume detail 4000; repair context 6000; summarizer transcript 12000 (2000/event); supervisor transcript 8000; classification status reason 180 |
+Every figure in this table is a restatement of the requirement named beside it, which is where that figure is fixed; where a row states that this domain fixes no figure, the named requirement is the only place the value is stated and this table holds no copy of it.
+
+| Setting (behavioral name) | Default | Fixed by |
+|---|---|---|
+| Max total children per iteration | 20 | REQ-ORCH-046 |
+| Max active children | 6 | REQ-ORCH-046 |
+| Max delegation depth | 3 | REQ-ORCH-046 |
+| Max iterations | 20 | REQ-ORCH-070 |
+| Per-task consecutive-retry limit | 3 | REQ-ORCH-077 |
+| Child hard timeout | 1200 s | REQ-ORCH-088 |
+| Child stall threshold | 90 s | REQ-ORCH-089 |
+| Unresponsive-model threshold | 120 s (min 30) | REQ-ORCH-090, REQ-ORCH-143 |
+| Model HTTP timeout | not fixed by this domain | REQ-CONFIG-115 (`model_timeout`); overridable per model per REQ-ORCH-145 |
+| Shell command timeout | not fixed by this domain | REQ-CONFIG-116 |
+| Max background shell sessions | not fixed by this domain | REQ-CONFIG-116 |
+| Background shell timeout | not fixed by this domain | REQ-CONFIG-116 |
+| Generic tool timeout | not fixed by this domain | REQ-CONFIG-115 (`tool_call_timeout`) |
+| Summary timeout | 120 s | REQ-ORCH-110 |
+| Improvement-collector timeout / enabled | 60 s / true | REQ-ORCH-137 |
+| Transient retries / validation retries | 1 / 0 | REQ-ORCH-092 |
+| Completion classification enabled | true | REQ-ORCH-113 |
+| Relentless mode / max cycles / audit timeout | false / 3 / 60 s | REQ-ORCH-079 |
+| Run-start mode | `auto` | REQ-ORCH-152 |
+| Graceful-pause tool deadline | 30 s (range 5–120) | REQ-ORCH-134, REQ-ORCH-143 |
+| Shutdown drain timeout | 120 s (0 disables) | REQ-ORCH-080 |
+| Message limit | null (disabled) | REQ-ORCH-084 |
+| Session log level | not fixed by this domain | REQ-CONFIG-121, applied to the session log by REQ-SESSION-142 |
+| Provider-native agent loop | enabled | REQ-ORCH-146 |
+| Intent-classification timeout / prompt cap | 8.0 s / 4000 chars | REQ-ORCH-008 |
+| Completion-classifier timeout | 15 s | REQ-ORCH-113 |
+| Per-check timeout / suite timeout / probe timeout | 600 s / 900 s / 30 s | REQ-ORCH-124 |
+| Check-skip grace period | 5 s | REQ-ORCH-128 |
+| Subproject detection depth / max roots | 3 levels / 25 | REQ-ORCH-122 |
+| Gate completion / gate authoring | true / true | REQ-ORCH-117, REQ-ORCH-126 |
+| Max repair attempts | 2 | REQ-ORCH-118 |
+| Supervisor: classifier model | not fixed by this domain, and never a model identity | the `small_model` capability slot of REQ-PROVIDER-088 (REQ-ORCH-100) |
+| Supervisor: loop-classification call bound | not fixed by this domain | `runtime.loop_classification_timeout`, REQ-CONFIG-467 (REQ-ORCH-100) |
+| Supervisor: activation mode | independent | REQ-ORCH-100 |
+| Supervisor: tool & message thresholds / weights / target | 60 & 60 / 0.6 & 0.4 / 1.0 | REQ-ORCH-100 |
+| Supervisor: event window / transcript cap | 24 / 8000 chars | REQ-ORCH-100 |
+| Supervisor: repetition / cycle thresholds / enabled | 4 / 3 / true | REQ-ORCH-100, REQ-ORCH-101 |
+| Per-model parallelism | declared by the model's provider catalogue entry; uncapped where that entry declares nothing | REQ-MONITOR-021, REQ-ORCH-050 |
+| Per-model retry count | provider default 5 | REQ-ORCH-145 |
+| Quota backoff | 60·2^(n−1) s, cap 300 s; Retry-After honored, min 1 s | REQ-ORCH-091 |
+| Content caps | resume detail 4000; repair context 6000; summarizer transcript 12000 (2000/event); supervisor transcript 8000; classification status reason 180 | REQ-ORCH-060, REQ-ORCH-119, REQ-ORCH-110, REQ-ORCH-100, REQ-ORCH-014 |
 
 ## Open Questions
 

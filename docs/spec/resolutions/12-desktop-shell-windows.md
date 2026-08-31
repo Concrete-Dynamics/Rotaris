@@ -46,7 +46,15 @@ source was consulted.
 New requirements added by these resolutions: **REQ-SHELL-162** and **REQ-SHELL-163** (rescued
 capabilities, see the sweep below), and **REQ-SHELL-164** through **REQ-SHELL-167** (open questions
 9, 11, 12 and 13). Four requirements — REQ-SHELL-001 through REQ-SHELL-004 — are withdrawn. No
-requirement identifier was renumbered, reused, or deleted. Of the 36 open questions raised in the
+requirement identifier was renumbered, reused, or deleted. **The sixth reconciliation round added
+one further requirement, REQ-SHELL-168**, which was not raised by an open question: domain 01's
+resolution record had recorded the plan gate (REQ-ORCH-153, REQ-ORCH-154) and the surface set closed
+by REQ-ORCH-155 as new obligations on this domain, and no round between that record and the sixth
+executed them. REQ-SHELL-168 states that this window hosts those surfaces, that each is presented
+inside the primary view its run belongs to and offers its actions in the one action vocabulary of
+REQ-SHELL-048, that this document holds no copy of what any of them must convey, that window-level
+Escape does not answer the gate, and that a session waiting at the gate is not an active run for the
+close guard of REQ-SHELL-119. Of the 36 open questions raised in the
 draft, 34 are resolved, 2 are moot, none are omitted, and none are escalated. The "Open Questions"
 section of the specification is consequently empty of outstanding items.
 
@@ -55,6 +63,11 @@ section of the specification is consequently empty of outstanding items.
 Five requirements in the draft had a command line as their only observable surface. Each is
 withdrawn in place; every capability that reached the user through it is carried by a
 desktop-reachable requirement, two of which are new.
+
+*Count corrected on re-verification: four **requirement identifiers** are withdrawn here —
+REQ-SHELL-001 through REQ-SHELL-004 — and the table's fifth row is a Data & Formats block, not a
+requirement. The domain's withdrawn count is four throughout, and that is the figure the index and
+the gate document carry.*
 
 | Withdrawn | What it specified | Capability now carried by |
 | --- | --- | --- |

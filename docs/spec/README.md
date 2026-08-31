@@ -7,15 +7,15 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,925** identifiers across the 19 shipping domains, of which **236** are withdrawn
-  in place, leaving **3,689** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,930** identifiers across the 19 shipping domains, of which **237** are withdrawn
+  in place, leaving **3,693** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,369** identifiers in all, **246** of them withdrawn.
+  are not part of the shipping total — **4,374** identifiers in all, **247** of them withdrawn.
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
   not because more was specified. Every figure below is a count of the requirement definitions in
-  each file, re-taken after the fifth and last post-resolution reconciliation round (see
+  each file, re-taken after the sixth and last post-resolution reconciliation round (see
   [`../clean-room/provenance.md`](../clean-room/provenance.md)); each domain's identifiers run
   contiguously from 1 to its total, with no gap, no duplicate, and no number defined in more than
   one place.
@@ -39,11 +39,11 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 512 | 16 | core |
 | 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | 1 | core |
 | 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 129 | 1 | core |
-| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 159 | 10 | secondary |
-| 12 | [Desktop Shell, Navigation, and Window Management](12-desktop-shell-windows.md) | `REQ-SHELL` | 167 | 4 | secondary |
+| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 160 | 11 | secondary |
+| 12 | [Desktop Shell, Navigation, and Window Management](12-desktop-shell-windows.md) | `REQ-SHELL` | 168 | 4 | secondary |
 | 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | 17 | secondary |
 | 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 175 | 14 | secondary |
-| 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 473 | 16 | secondary |
+| 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 476 | 16 | secondary |
 | 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 117 | 11 | secondary |
 | 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 207 | 1 | **retired** |
 | 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | 9 | **retired** |

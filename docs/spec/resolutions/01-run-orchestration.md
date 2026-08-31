@@ -141,13 +141,40 @@ application layer that embeds this engine rather than an entry point, and is lef
 - **Tool capability declarations.** REQ-ORCH-016, REQ-ORCH-028 and REQ-ORCH-153 resolve the
   direct-work bundle, the definition of an implementation delegation, and the plan gate's spawn
   restriction against the per-tool declarations of the public tool-name registry (REQ-CONFIG-231).
+  **The owner named here is the wrong one, and has been since the fifth reconciliation round.**
+  REQ-CONFIG-231 states in its own text that it fixes the referential-validation rule alone and owns
+  no capability, and until the sixth round no requirement in any domain stated the classification
+  these three read. The sixth round put it in REQ-TOOLS-001, which now declares the three facets —
+  reads workspace files, writes workspace files, runs commands — as part of the registry it owns.
+  These three requirements have not yet been re-pointed at it and still cite REQ-CONFIG-231; that
+  belongs to the next round and is recorded as open in `../../clean-room/provenance.md`.
 - **New configuration settings.** Four settings are added to this domain's table and will need
   entries in the settings domain: the per-task consecutive-retry limit (default 3), the relentless
   audit timeout (default 60 s), the run-start mode (default `auto`), and the per-check
   `failure_pattern`.
+  **Executed in the sixth reconciliation round, five rounds after it was written.** Three of the four
+  needed a key in domain 15 and had none: `task_consecutive_retry_limit` is now REQ-CONFIG-474,
+  `relentless_audit_timeout` REQ-CONFIG-475, and the run-start mode key REQ-CONFIG-476, each
+  registering the key, its type and its default and holding no copy of the rule here that consumes
+  it. The fourth needed nothing there — `failure_pattern` is a field of a check declaration, which
+  this domain states itself. A sentence in a resolution record saying another domain "will need" a
+  requirement is not a requirement, and nothing in the first five rounds was looking for one.
 - **New vocabulary.** The timeline-event vocabulary gains `plan_gate_opened` and
   `plan_gate_resolved`; the issue-kind vocabulary gains `model_override_rejected`; the session
   execution status gains `awaiting_plan_decision`. Domains consuming this domain's diagnostics
   should expect all three.
+  **Checked in the sixth reconciliation round, and only one of the three was owed anywhere else.**
+  The session execution status is REQ-SESSION-073's closed vocabulary, so `awaiting_plan_decision`
+  had to be admitted there and is: domain 07 carries it, and REQ-SESSION-076 maps it. The
+  timeline-event and issue-kind vocabularies are this domain's own and no other document enumerates
+  either, so `plan_gate_opened`, `plan_gate_resolved` and `model_override_rejected` were owed to
+  nobody. "Domains should expect" was the wrong form of words for the one obligation that was real.
 - **New surfaces.** The plan gate (REQ-ORCH-153, REQ-ORCH-154) and the surface set closed by
   REQ-ORCH-155 are new obligations on the desktop shell domain, within the views of REQ-SHELL-023.
+  **Executed in the sixth reconciliation round.** REQ-SHELL-168 is the shell domain's answering
+  requirement: it states that this window hosts those surfaces, that each is presented inside the
+  primary view the run belongs to and offers its actions in the one action vocabulary of
+  REQ-SHELL-048, that it holds no copy of what each surface must convey, that window-level Escape
+  never answers the gate, and that a session waiting at the gate is not an active run for the close
+  guard of REQ-SHELL-119. Between this record and that round the obligation was recorded and
+  unanswered.

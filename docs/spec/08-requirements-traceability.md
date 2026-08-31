@@ -129,7 +129,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - `test_orphan_baseline_path` — the orphan-test baseline; default `orphan-tests.txt` inside the store directory.
   - `tombstone_path` — the retired-identifier log; default `retired-identifiers.tsv` inside the store directory.
   - `exempt_marker` — the comment-shaped token that excuses a module, or a test function, from the reverse check; default `trace-exempt`, which is deliberately free of any one language's comment punctuation because the marker is matched as a plain substring (REQ-TRACE-105) and must therefore work inside whatever comment syntax the file is written in.
-  - `skip_parts` — path components that are never entered or scanned; default `__pycache__`, `.venv`, `fixtures`.
+  - `skip_parts` — path components that are never entered or scanned; default `fixtures` together with the two directory names under which the implementation language's own toolchain places its generated caches and its installed dependencies. What is observable is fixed however those two are spelled: no file beneath a skipped component is parsed, can carry a trace, can be reported as an orphan module or an orphan test, or contributes coverage. Those two names are properties of the implementation language rather than of this product's behavior and are therefore left to the implementation, which SHALL supply exactly those two and no third; `fixtures` is fixed here.
   - `annotation_conventions` — the project's additional annotation conventions (REQ-TRACE-073), in registration order; default the empty list, the built-in convention being registered ahead of it and never listed here.
   A project SHALL NOT be expected to change `exempt_marker`: the default is intended to be adopted as it stands. Changing it SHALL rewrite the orphan baselines' headers and the diagnostics that quote it on the next baseline update, which is a consequence to be accepted deliberately rather than a reason to avoid the key.
 
@@ -617,7 +617,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 - **REQ-TRACE-236** — A column holding nothing SHALL say what would belong in it rather than showing bare space. On the delivery axis the sentence SHALL be specific to the column; on every other axis a single sentence covering the axis SHALL serve each of its columns.
 
-- **REQ-TRACE-237** — At the supported minimum window size of **1000 × 680** no column, card or header SHALL clip and no action SHALL become unreachable. The columns area SHALL scroll **horizontally** rather than clipping; each column SHALL scroll **vertically**.
+- **REQ-TRACE-237** — At the minimum window size REQ-SHELL-022 fixes — which this requirement relies on for the figure and does not restate — no column, card or header SHALL clip and no action SHALL become unreachable. The columns area SHALL scroll **horizontally** rather than clipping; each column SHALL scroll **vertically**.
 
 - **REQ-TRACE-238** — Column widths SHALL be bounded: an open column SHALL be at least **276** points wide (a card's own minimum plus margins plus its scroll bar) and at most **340**. Spare width SHALL be spent up to the cap and no further, because a card title read across several hundred points is not a card anybody scans. At the minimum window size with every column unfolded, every column SHALL still be at least the minimum and the columns area SHALL report a positive horizontal scroll range.
 
@@ -1347,7 +1347,7 @@ The artifact is a source file in the host language. Its contents appear in this 
 1. A documentation header stating that the file is generated and must not be hand-edited, naming the store directory it was compiled from, and stating how it is regenerated.
 2. A suppression directive for the linter, then one for the formatter.
 3. A comment line carrying a labelled fingerprint whose value is 64 hexadecimal characters (a full, untruncated SHA-256).
-4. The imports: forward-reference support for annotations, the integer-enumeration base, and the metadata record together with the lifecycle enumeration from the hand-written declarations module.
+4. Whatever the host language requires in order for the items below to resolve: the integer-enumeration base the enumeration is built on, and the metadata record together with the lifecycle enumeration, both of which the hand-written declarations module defines and this artifact only refers to. The artifact declares no type of its own here; what a reader can observe is that those names resolve to the hand-written declarations and to nothing this file introduced.
 5. One integer-valued enumeration, holding one member per requirement in ascending number order. Each member's name is the requirement identifier with its separator replaced by an underscore, its value is the requirement number, and it is followed by a documentation string reading `[<status marker>] <title> - <source path>` and then a blank line.
 6. A constant holding the frozen set of deprecated members. It is emitted even when nothing is deprecated, in which case it is an empty set; otherwise it spans several lines.
 7. A constant holding a mapping from requirement number to a metadata record. Each record is built by a positional call whose arguments are, in order: identifier, number, lifecycle, title, source path, trace-required flag, test-required flag, content hash, type, and the derived-from tuple.
@@ -1411,7 +1411,7 @@ Records ascending by number; at least two tab-separated fields required; the tit
     "test_orphan_baseline_path": "docs/requirements/orphan-tests.txt",
     "tombstone_path": "docs/requirements/retired-identifiers.tsv",
     "exempt_marker": "trace-exempt",
-    "skip_parts": ["__pycache__", ".venv", "fixtures"],
+    "skip_parts": ["<generated-cache directory>", "<installed-dependency directory>", "fixtures"],
     "annotation_conventions": [
       {
         "name": "<convention name>",
@@ -1426,7 +1426,7 @@ Records ascending by number; at least two tab-separated fields required; the tit
 }
 ```
 
-The values shown are the defaults; a repository that configures nothing behaves exactly as one that writes all thirteen of them. Keys may also sit at the top level. Unknown keys are an error listing offenders and accepted keys, both sorted. Path values must be non-empty, relative, free of `..`, and are normalized to forward slashes. List-valued keys reject a bare string. `id_prefix` must be uppercase letters and digits, beginning with a letter and carrying no hyphen. `annotation_conventions` is an ordered list of objects carrying exactly the six keys shown, registered after the built-in convention; an expression that does not compile is a configuration error.
+The values shown are the defaults; a repository that configures nothing behaves exactly as one that writes all thirteen of them. The two placeholder entries in `skip_parts`, like the source extension in `generated_path`, stand for names REQ-TRACE-039 leaves to the implementation language's toolchain; `fixtures` is the one component name that requirement fixes. Keys may also sit at the top level. Unknown keys are an error listing offenders and accepted keys, both sorted. Path values must be non-empty, relative, free of `..`, and are normalized to forward slashes. List-valued keys reject a bare string. `id_prefix` must be uppercase letters and digits, beginning with a letter and carrying no hyphen. `annotation_conventions` is an ordered list of objects carrying exactly the six keys shown, registered after the built-in convention; an expression that does not compile is a configuration error.
 
 ### Toolchain operations
 
@@ -1448,11 +1448,11 @@ The toolchain offers exactly four operations, every one of them reached from the
 | Enforcement | the check gates nothing by itself; no control and no configuration key suppresses a finding |
 | Concurrency | at most one operation of a kind per workspace in flight; a second request is refused with a stated reason |
 
-Distinct results a surface must be able to state: no violations; a violation count; an error; a warning; a parse error; a configuration error naming the configuration path and its cause; an unanticipated failure naming what failed; a regeneration outcome naming the artifact path and which of "regenerated" or "already up to date" was observed together with the requirement count; the three baselines written, each with a path and an entry count; the statistics; "no base artifact to compare against"; "no requirement changes"; the per-change entries; the count of unpropagated requirements; and the empty-store warning naming the store directory and which of the three empty findings holds.
+Distinct results a surface must be able to state, each of them required by the operation named in the table above and none of them fixed here: no violations; a violation count; an error; a warning; a parse error; a configuration error naming the configuration path and its cause (REQ-TRACE-046, REQ-TRACE-512); an unanticipated failure naming what failed (REQ-TRACE-512); a regeneration outcome naming the artifact path and which of "regenerated" or "already up to date" was observed together with the requirement count (REQ-TRACE-509); the three baselines written, each with a path and an entry count (REQ-TRACE-510); the statistics (REQ-TRACE-101); "no base artifact to compare against" (REQ-TRACE-158); "no requirement changes" (REQ-TRACE-167); the per-change entries (REQ-TRACE-164); the count of unpropagated requirements; and the empty-store warning naming the store directory and which of the three empty findings holds.
 
-Statistics fields: total requirements; approved, traced and test-covered counts; and the four baseline-debt counts labelled trace, test, orphan and orphan-test.
+Statistics fields (REQ-TRACE-101): total requirements; approved, traced and test-covered counts; and the four baseline-debt counts labelled trace, test, orphan and orphan-test.
 
-Change-comparison entry:
+Change-comparison entry, whose fields are REQ-TRACE-164's, whose obligation text per kind is REQ-TRACE-165's, and whose empty-site cases are REQ-TRACE-166's:
 
 ```
 <KIND> <identifier> '<title>'[ (<from> -> <to>)]: <obligation text>[  <drift marker>]
@@ -1464,49 +1464,59 @@ with a single "no annotation sites yet" placeholder for an added or modified cha
 
 ### Progress protocol
 
-- Phases: `reading`, `checks`, `coverage`, `recording`, `adopting`.
-- Sequences: verification is `reading` then `checks` then `coverage` then `recording`; adoption is `reading` then `checks` then `coverage` then `adopting` then `recording`.
-- Phase report: the phase and the number of items it will report, a total of **0** meaning one indivisible step. It always precedes that phase's first item report.
-- Item report: the phase, a label, a **1-based** position, the phase total, an optional detail, and the deadline in seconds applying to the item in progress — the deadline being **absent** where the wait is unlimited, never zero.
-- Both are delivered on the pass's own thread. With no consumer: no reporting work at all, and an identical report, identical records and identical writes.
-- Throttling: only above **20** items in a phase; minimum publication interval **0.1 s**; a phase change and a phase's last item are always published.
+Each line below is fixed by the requirement named beside it; this summary fixes nothing of its own.
+
+- Phases: `reading`, `checks`, `coverage`, `recording`, `adopting` — the closed set of REQ-TRACE-210.
+- Sequences: verification is `reading` then `checks` then `coverage` then `recording`; adoption is `reading` then `checks` then `coverage` then `adopting` then `recording` (REQ-TRACE-211).
+- Phase report: the phase and the number of items it will report, a total of **0** meaning one indivisible step. It always precedes that phase's first item report (REQ-TRACE-213).
+- Item report: the phase, a label, a **1-based** position, the phase total, an optional detail, and the deadline in seconds applying to the item in progress — the deadline being **absent** where the wait is unlimited, never zero (REQ-TRACE-213).
+- Both are delivered on the pass's own thread (REQ-TRACE-214). With no consumer: no reporting work at all, and an identical report, identical records and identical writes (REQ-TRACE-215).
+- Throttling: only above **20** items in a phase; minimum publication interval **0.1 s**; a phase change and a phase's last item are always published (REQ-TRACE-351).
 
 ### Board tokens
 
-- Delivery columns: `backlog`, `ready`, `running`, `review`, `needs-update`, `done`; plus `blocked`, which is a condition rather than a stage of progress.
-- Grouping axes: `delivery` (default), `health`, `lifecycle`, `epic`, `priority`, `source`.
-- Sort orders: priority-then-identifier (default), identifier, health-then-identifier.
-- Priority order: `Critical`, `High`, `Normal`, `Low`, then everything else.
-- Health tokens: `healthy`, `needs-update`, `incomplete-traceability`, `verification-failed`, `blocked`, `superseded`, `deprecated`.
-- Board actions: `release`, `return`, `accept`, `rerun`, `send-back`, `reject`, `hold`, `resume`, `answer-blocker`, `edit`, `create`, `accept-proposal`, `accept-change-work`, `keep-worktree`.
-- Blocker kinds: `dependency`, `conflict`, `decision`, `run-failure`, `stated`.
-- Blocker answer paths: choose, navigate, `resume` (the path described as clearing the blocker), inspect.
-- Relation tokens: `parent`, `children`, `derived-from`, `derived-requirements`, `supersedes`, `superseded-by`, `depends-on`, `blocks`, `refines`, `refined-by`, `conflicts-with`, `related-to`.
-- Detail sections: `requirement`, `relations`, `execution`, `traceability`, `verification`.
-- Review element keys, in order: agent summary; reported risks; completion claim; checks run; verification; changed files; traceability changes; unmet completion conditions; specification version; execution units; branch and worktree; proposals. Sides: claim, measurement, work.
-- Review decision order: accept, rerun, send-back, edit, reject, keep-worktree.
-- Queue controls: automatic, concurrency, stop, start.
-- Pane keys: `review`, `queue`, `editor`, `create`, `blockers`; view identifier `requirements`; cross-view navigation targets: the workspace view and the version-control view.
-- Graph node kinds: `requirement`, `epic`, `implementation`, `test`; an evidence node identifier is `<site kind>:<address>`.
-- Column header text: `<Label> · <count>`. Column keys that are project-supplied identifiers print as-is; other keys are title-cased by splitting on hyphens.
-- Test node identifiers: `path::function` or `path::Class::function`.
-- Evidence obligation kinds, in indicator order: `implementation-trace`, `covering-test`, `verification`.
-- Recorded-evidence states: `satisfied`, `stale`, `failed`.
-- Drag payload: a private application-specific transfer type, never plain text.
+Each vocabulary below is closed by the requirement named beside it; this list holds no second copy of
+any of them and adds nothing to any of them.
+
+- Delivery columns: `backlog`, `ready`, `running`, `review`, `needs-update`, `done` (REQ-TRACE-232); plus `blocked`, which is a condition rather than a stage of progress (REQ-TRACE-241).
+- Grouping axes: `delivery` (default), `health`, `lifecycle`, `epic`, `priority`, `source` (REQ-TRACE-293).
+- Sort orders: priority-then-identifier (default), identifier, health-then-identifier (REQ-TRACE-287).
+- Priority order: `Critical`, `High`, `Normal`, `Low`, then everything else (REQ-TRACE-288).
+- Health tokens: `healthy`, `needs-update`, `incomplete-traceability`, `verification-failed`, `blocked`, `superseded`, `deprecated` (REQ-TRACE-252).
+- Board actions: `release`, `return`, `accept`, `rerun`, `send-back`, `reject`, `hold`, `resume`, `answer-blocker`, `edit`, `create`, `accept-proposal`, `accept-change-work`, `keep-worktree` (REQ-TRACE-382).
+- Blocker kinds: `dependency`, `conflict`, `decision`, `run-failure`, `stated` (REQ-TRACE-446).
+- Blocker answer paths: choose, navigate, `resume` (the path described as clearing the blocker), inspect (REQ-TRACE-448).
+- Relation tokens: `parent`, `children`, `derived-from`, `derived-requirements`, `supersedes`, `superseded-by`, `depends-on`, `blocks`, `refines`, `refined-by`, `conflicts-with`, `related-to` (REQ-TRACE-274).
+- Detail sections: `requirement`, `relations`, `execution`, `traceability`, `verification` (REQ-TRACE-271).
+- Review element keys, in order: agent summary; reported risks; completion claim; checks run; verification; changed files; traceability changes; unmet completion conditions; specification version; execution units; branch and worktree; proposals. Sides: claim, measurement, work (REQ-TRACE-420).
+- Review decision order: accept, rerun, send-back, edit, reject, keep-worktree (REQ-TRACE-422).
+- Queue controls: automatic, concurrency, stop, start (REQ-TRACE-479).
+- Pane keys: `review`, `queue`, `editor`, `create`, `blockers` (REQ-TRACE-375); view identifier `requirements`; cross-view navigation targets: the workspace view and the version-control view (REQ-TRACE-475).
+- Graph node kinds: `requirement`, `epic`, `implementation`, `test` (REQ-TRACE-326); an evidence node identifier is `<site kind>:<address>` (REQ-TRACE-331).
+- Column header text: `<Label> · <count>`. Column keys that are project-supplied identifiers print as-is; other keys are title-cased by splitting on hyphens (REQ-TRACE-234).
+- Test node identifiers: `path::function` or `path::Class::function` (REQ-TRACE-111).
+- Evidence obligation kinds, in indicator order: `implementation-trace`, `covering-test`, `verification` (REQ-TRACE-258).
+- Recorded-evidence states: `satisfied`, `stale`, `failed` (REQ-TRACE-270).
+- Drag payload: a private application-specific transfer type, never plain text (REQ-TRACE-396).
 - Run branch naming: the branch a unit run occupies is named by the requirement-execution `branch_template` REQ-GIT-074 defines, which is normative for the template, its placeholders and its default; this document restates neither and observes only that a unit's branch is derived from the requirement identifier and the unit id.
 - Named on-disk files carried between a run and its review: the requirement's recorded source, and the run's proposed technical requirements — `proposed-requirements.json`, a JSON array of proposal objects in the run's artifact directory.
 
 ### Persisted state
 
-Workspace configuration (travels with the repository):
+Workspace configuration (travels with the repository). Every key below is registered by the settings
+domain, which fixes its name, type and default; this table holds no second copy of any of them and
+names only what this domain relies on each for. The scheduling keys are REQ-CONFIG-196's, the
+human-in-the-loop and change-analysis keys REQ-CONFIG-198's, `permission_mode` REQ-CONFIG-122's and
+`allow_unsandboxed_autonomous` REQ-CONFIG-124's, with the two together forming the elevation
+REQ-CONFIG-411 defines:
 
-| Key | Values | Default |
+| Key | Values | What this domain relies on it for |
 | --- | --- | --- |
-| `requirements.scheduling.mode` | `manual` / `automatic` | `manual` |
-| `requirements.scheduling.*` (concurrency limit) | integer | `2`; control ceiling 64 |
-| `requirements.change.analyze_changes` | boolean | per schema; when off, the board states why |
-| `requirements.human_in_the_loop.confirm_source_writes` | boolean | per schema; never consulted for an accepted derived-requirement proposal |
-| `runtime.permission_mode` | e.g. `ask` / `autonomous` | `ask`; board runs receive the permissive value for that run only |
+| `requirements.scheduling.mode` | `manual` / `automatic` | whether the queue picks the next candidate up on its own (REQ-TRACE-483) |
+| `requirements.scheduling.*` (concurrency limit) | integer | how many units run at once; the control's own input ceiling of 64 is REQ-TRACE-481's and is not this key's |
+| `requirements.change.analyze_changes` | boolean | when off, the board states why change analysis produced nothing |
+| `requirements.human_in_the_loop.confirm_source_writes` | boolean | never consulted for an accepted derived-requirement proposal |
+| `runtime.permission_mode` | e.g. `ask` / `autonomous` | board runs receive the permissive value for that run only |
 | `runtime.allow_unsandboxed_autonomous` | boolean | the second half of the board-run elevation |
 | requirement source configuration | — | which sources exist, which declare the create capability, which are writable |
 
@@ -1527,42 +1537,46 @@ Boolean reads MUST tolerate however the settings backend wrote them: a text back
 
 ### Numeric constants
 
-| Constant | Value |
-| --- | --- |
-| Content hash length | 16 hexadecimal characters |
-| Canonical hash length | 32 hexadecimal characters |
-| Global fingerprint length | 64 hexadecimal characters |
-| Deprecated-reference site cap | 5, then an "and N more" tail |
-| Orphan-test annotation window slack above the span | 2 lines |
-| Consumer-layer version-control timeout | 30 s |
-| Change-comparison version-control timeout | 30 s |
-| Minimum supported window | 1000 × 680 |
-| Open column width | minimum 276, maximum 340; margins 10 on every side |
-| Folded rail | 8 characters of its own font wide; 2 heading lines; margin 4 |
-| Folded rail extra height during a drag | 1.5 lines |
-| Folded column width during a drag | the open-column minimum, 276 |
-| Realised card widgets | the viewport band plus a margin of 5 cards above and 5 below; up to 20 released widgets retained per column for reuse |
-| Search debounce | 150 ms |
-| Evaluation retry while a read is in flight | 150 ms |
-| Elapsed-clock redraw interval | 1000 ms |
-| Progress throttle threshold / minimum publication interval | above 20 items / 0.1 s |
-| Graph depth | floor 1, default 2, ceiling 3; not persisted |
-| Graph neighbours admitted per node per level | 50, in identifier order, with the omitted count stated |
-| Graph unexpanded-identifier list cap | 4, then an "and N more" tail |
-| Blocked summary rows listed | 20, then a row stating how many more and filtering the board to them |
-| Card dependency list cap | 4, then an "and N more" tail |
-| Refusal-report cap inside a notice | 20 |
-| Concurrency control ceiling | 64 |
-| Default concurrency limit | 2 |
-| Supported populated-column bound on an open axis | 100 |
-| Interface responsiveness budget | 100 ms to put a board on screen once the engine has answered, and 100 ms for the post-debounce filter recomputation |
-| Primary action height / other control height | 32 / 24 |
-| Closed-vocabulary / open-vocabulary drop-down width | 240 / 150 |
-| Contrast floors | 3:1 for status marks against the card ground; 4.5:1 for alert text |
-| Relative-age thresholds | under 60 s, under 1 hour, under 1 day, otherwise days |
-| Wait budget | not fixed here — `runtime.approval_timeout_seconds` (REQ-CONFIG-126, REQ-TOOLS-055), cited by REQ-TRACE-467 |
-| Sweep scale expectation | order 10^4 annotation sites over order 10^3 files in about 1 s |
-| Virtualisation acceptance | a 300-card column realises fewer than a quarter of its members; the realised count does not grow with column length; revealing a named card realises that card and its band only |
+Every figure below is fixed by the requirement named beside it and is gathered here only so the whole
+set can be checked at once; this table fixes nothing of its own, and where it and a defining
+requirement differ, the requirement governs.
+
+| Constant | Value | Defined by |
+| --- | --- | --- |
+| Content hash length | 16 hexadecimal characters | REQ-TRACE-036, REQ-TRACE-037 |
+| Canonical hash length | 32 hexadecimal characters | REQ-TRACE-037 |
+| Global fingerprint length | 64 hexadecimal characters | REQ-TRACE-052, REQ-TRACE-058 — the length of an untruncated SHA-256 in hexadecimal, which is what those two require |
+| Deprecated-reference site cap | 5, then an "and N more" tail | REQ-TRACE-095 |
+| Orphan-test annotation window slack above the span | 2 lines | REQ-TRACE-112 |
+| Consumer-layer version-control timeout | 30 s | REQ-TRACE-201 |
+| Change-comparison version-control timeout | 30 s | REQ-TRACE-170 |
+| Minimum supported window | 1000 × 680 | REQ-SHELL-022, which fixes the figure; REQ-TRACE-237 states what this domain guarantees at it |
+| Open column width | minimum 276, maximum 340; margins 10 on every side | REQ-TRACE-238 (the two widths), REQ-TRACE-310 (the margin) |
+| Folded rail | 8 characters of its own font wide; 2 heading lines; margin 4 | REQ-TRACE-310 (width and margin), REQ-TRACE-309 (heading lines) |
+| Folded rail extra height during a drag | 1.5 lines | REQ-TRACE-318 |
+| Folded column width during a drag | the open-column minimum, 276 | REQ-TRACE-318, over the minimum REQ-TRACE-238 fixes |
+| Realised card widgets | the viewport band plus a margin of 5 cards above and 5 below; up to 20 released widgets retained per column for reuse | REQ-TRACE-360 |
+| Search debounce | 150 ms | REQ-TRACE-363 |
+| Evaluation retry while a read is in flight | 150 ms | REQ-TRACE-350 |
+| Elapsed-clock redraw interval | 1000 ms | REQ-TRACE-352 |
+| Progress throttle threshold / minimum publication interval | above 20 items / 0.1 s | REQ-TRACE-351 |
+| Graph depth | floor 1, default 2, ceiling 3; not persisted | REQ-TRACE-323 |
+| Graph neighbours admitted per node per level | 50, in identifier order, with the omitted count stated | REQ-TRACE-505 |
+| Graph unexpanded-identifier list cap | 4, then an "and N more" tail | REQ-TRACE-324 |
+| Blocked summary rows listed | 20, then a row stating how many more and filtering the board to them | REQ-TRACE-240 |
+| Card dependency list cap | 4, then an "and N more" tail | REQ-TRACE-243 |
+| Refusal-report cap inside a notice | 20 | REQ-TRACE-415 |
+| Concurrency control ceiling | 64 | REQ-TRACE-481 |
+| Default concurrency limit | 2 | REQ-CONFIG-196, which registers the key and its default; REQ-TRACE-483 states that a workspace setting none of the queue keys takes it |
+| Supported populated-column bound on an open axis | 100 | REQ-TRACE-300 |
+| Interface responsiveness budget | 100 ms to put a board on screen once the engine has answered, and 100 ms for the post-debounce filter recomputation | REQ-TRACE-239 (board on screen), REQ-TRACE-367 (post-debounce recomputation) |
+| Primary action height / other control height | 32 / 24 | REQ-TRACE-491 |
+| Closed-vocabulary / open-vocabulary drop-down width | 240 / 150 | REQ-TRACE-490 |
+| Contrast floors | 3:1 for status marks against the card ground; 4.5:1 for alert text | REQ-TRACE-261 (status marks), REQ-TRACE-247 (alert text) |
+| Relative-age thresholds | under 60 s, under 1 hour, under 1 day, otherwise days | REQ-TRACE-250 |
+| Wait budget | not fixed here — `runtime.approval_timeout_seconds` (REQ-CONFIG-126, REQ-TOOLS-055), cited by REQ-TRACE-467 | REQ-CONFIG-126 |
+| Sweep scale expectation | order 10^4 annotation sites over order 10^3 files in about 1 s | REQ-TRACE-088, whose reference conditions are part of the figure |
+| Virtualisation acceptance | a 300-card column realises fewer than a quarter of its members; the realised count does not grow with column length; revealing a named card realises that card and its band only | REQ-TRACE-365 |
 
 ## Open Questions
 

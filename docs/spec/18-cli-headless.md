@@ -414,7 +414,7 @@ The chooser presents these six rows first, in this order, and the identifier a c
 
 **REQ-CLI-147** — Token writes are atomic (write to a temporary file in the same directory, then replace), so a crash never leaves a partially written credential file. A token file that cannot be read degrades to "no stored credentials" with a logged warning rather than failing the command.
 
-**REQ-CLI-148** — Credential and configuration directories left by the product's previous name are adopted once by renaming them to the current names when the current path does not yet exist, so existing sign-ins keep working. A failed rename leaves the legacy directory untouched and emits a warning.
+**REQ-CLI-148** — *Superseded by a product-wide rule; nothing here is required.* It described adopting credential and configuration directories left by an earlier or differently named product. The product adopts no such directory and creates its own on first use, a clean-room product having no earlier directory to migrate from (REQ-STARTUP-145). Credential storage is otherwise as REQ-CLI-146 and REQ-CLI-147 describe.
 
 ### Headless Prompt Conventions
 
@@ -592,7 +592,7 @@ A request that is later left unanswered until its deadline therefore carries a b
 
 **REQ-CLI-211** — The global configuration directory (on Linux `~/.config/rotaris/`) holds `agents.yaml`, `project_settings.yaml` (the provider and model discovery snapshot written by login and refresh), `secrets.yaml` when the global scope is used, and a `tools/` directory. The workspace layer at `<workspace>/.rotaris/` holds `agents.yaml`, `models.yml`, `secrets.yaml`, `tools/`, `sessions/<session_id>/`, and `improvement_artifacts/`.
 
-**REQ-CLI-212** — Legacy workspace directories left by the product's previous name (a `.geraet-ai` directory in a workspace, and the corresponding legacy global configuration and data directories) are renamed once to their current equivalents when the current path does not already exist; a failed rename leaves the legacy directory in place with a warning.
+**REQ-CLI-212** — *Superseded by a product-wide rule; nothing here is required.* It described renaming per-workspace, per-user configuration and data directories left by an earlier or differently named product. The product adopts no such directory and creates its own on first use (REQ-STARTUP-145). The directories that do exist are those of REQ-CLI-211.
 
 **REQ-CLI-213** — A session directory contains: a schema-versioned JSON state snapshot; a `lock` file recording the identifier of the owning process and the time the lock was taken; `run.log`; `summary.md`; `evidence/debug.log`; `evidence/events.jsonl`, the persisted wire stream; `evidence/permissions.jsonl`; `evidence/tool-calls.jsonl`, a local diagnostic record of tool arguments as invoked, which is not part of the published wire schema — it carries whatever fields diagnosis needs and no consumer may rely on its shape — but to which the redaction of REQ-CLI-095 does apply, so a credential is no more readable there than in a published event; and, once a message-limit pause has occurred, the `.message_limit_paused` marker file.
 

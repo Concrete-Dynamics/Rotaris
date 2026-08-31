@@ -62,6 +62,22 @@ shell-surface clause of its own once the console scripts are gone: it is a distr
 the document already classifies an installation made through it as never updatable
 (REQ-STARTUP-106), which is unchanged.
 
+**Superseded by the fifth reconciliation round.** That disposition was right about the sweep — the
+publication channel carried no shell surface, so the graphical-only decision had no claim on it — but
+it kept two requirements that a later round found to be wrong on a different ground. Packaging and
+distribution technology is an architecture decision, not a behavioral requirement: which runtime the
+product embeds, how many artifacts a release produces, and which ecosystem's package index serves
+them are not things a user observes. Stated in terms of one language ecosystem's interpreter and
+packages, REQ-STARTUP-001, REQ-STARTUP-012 and REQ-STARTUP-036 specified a different product, and all
+three are now **withdrawn in place**. What a user does observe is preserved and is now stated
+technology-neutrally: REQ-STARTUP-158 fixes that a release carries exactly one product version which
+every artifact of it declares and reports, guarded before build by REQ-STARTUP-028; REQ-STARTUP-159
+fixes that what the user installs is self-contained and starts on a supported baseline with nothing
+else installed and all outbound network blocked, with the true release version on the About surface.
+REQ-STARTUP-036 had nothing left to rescue — the artifact set is REQ-STARTUP-031's and the prerelease
+case is REQ-STARTUP-029's and REQ-STARTUP-034's. REQ-STARTUP-106, which classifies an installation
+not made from a released standalone artifact as never updatable, is unaffected and still stands.
+
 ### Requirements withdrawn, and where the capability went
 
 | Withdrawn | What its surface was | Capability now carried by |
@@ -80,7 +96,8 @@ the document already classifies an installation made through it as never updatab
 REQ-STARTUP-002 (console, headless and benchmark executables struck — the benchmark capability is
 carried by REQ-UIBENCH-110 and REQ-UIBENCH-111, which make it a built-in desktop capability);
 REQ-STARTUP-008 (targets reduced to the desktop binary, and the command declared maintainer-side);
-REQ-STARTUP-012 (`--version` clause replaced by the About surface);
+REQ-STARTUP-012 (`--version` clause replaced by the About surface — the requirement was later
+withdrawn in full, see the supersession note above);
 REQ-STARTUP-013 and REQ-STARTUP-031 (console archives removed as an artifact kind);
 REQ-STARTUP-015 (self-invocation flag replaced by the REQ-MCP-033 sentinel);
 REQ-STARTUP-024 (the AppImage `Exec` argument restated as a folder the desktop environment hands
@@ -142,6 +159,8 @@ by adopting a vocabulary another domain had already fixed.
 | REQ-STARTUP-155 | Cross-cutting invariants | Open question 1 — the three startup and setup timing bounds, and an explicit statement of what is deliberately unbounded |
 | REQ-STARTUP-156 | Release pipeline | Open question 5 — the closed set of release-acceptance criteria, and the rule that externally owned behavior is never a gate. Also carries the platform-scope half of open question 9 |
 | REQ-STARTUP-157 | Opt-in diagnostics | Open question 16 — the diagnostics files are a private, self-describing format: names implementation-chosen and stable within a schema version, units fixed |
+| REQ-STARTUP-158 | Product identity | Fifth reconciliation round — carries the one-version-per-release rule that REQ-STARTUP-001 stated in ecosystem-packaging terms, with no claim about the form the product is packaged in or the channel it is published through |
+| REQ-STARTUP-159 | Product identity | Fifth reconciliation round — carries the self-containment claim that REQ-STARTUP-012 stated in ecosystem terms, technology-neutrally: same platform baseline, same blocked network, same first paint, same true release version on the About surface, same run-time data assets resolving from what was installed |
 
 ## Cross-domain reconciliations recorded here
 

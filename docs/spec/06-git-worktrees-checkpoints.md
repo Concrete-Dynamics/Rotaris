@@ -51,9 +51,9 @@ Rotaris can give each agent session a Git worktree of its own, so two concurrent
 
 ### Session State and Persistence
 
-- **REQ-GIT-015** — A session's durable worktree binding SHALL persist: worktree path, branch, base branch, base revision, a created-by-session flag (default true), a merge status (vocabulary exactly `ready`, `integrating`, `merged`, `merge_failed`; default `ready`), and an optional integration session id (default absent). This requirement is the product's single definition of the worktree binding record — those seven fields, the closed `merge_status` vocabulary, and every default — because this domain is what creates a binding (REQ-GIT-010, REQ-GIT-011, REQ-GIT-022) and what advances its merge status through integration (REQ-GIT-083, REQ-GIT-133). No requirement in any domain SHALL hold a second copy of those fields, that vocabulary, or those defaults; a requirement that needs them SHALL cite this one and state only what it adds. Its citers are REQ-GIT-018, which writes the record into `metadata.json`, and REQ-SESSION-018, which carries it in the session record.
+- **REQ-GIT-015** — A session's durable worktree binding SHALL persist: worktree path, branch, base branch, base revision, a created-by-session flag (default true), a merge status (vocabulary exactly `ready`, `integrating`, `merged`, `merge_failed`; default `ready`), and an optional integration session id (default absent). This requirement is the product's single definition of the worktree binding record — those seven fields, the closed `merge_status` vocabulary, and every default — because this domain is what creates a binding (REQ-GIT-010, REQ-GIT-011, REQ-GIT-022) and what advances its merge status through integration (REQ-GIT-083, REQ-GIT-133). No requirement in any domain SHALL hold a second copy of those fields, that vocabulary, or those defaults; a requirement that needs them SHALL cite this one and state only what it adds.
 
-- **REQ-GIT-016** — Each persisted checkpoint record SHALL carry: sequence (integer), Git ref name, commit id, creation timestamp, iteration number (default 0 when not produced by the iteration loop), attributed child-agent name (default empty), the list of file paths that differ between the checkpoint and its parent commit, and a kind (vocabulary exactly `iteration`, `pre_restore`, `manual`; default `iteration`).
+- **REQ-GIT-016** — Each persisted checkpoint record SHALL carry: sequence (integer), Git ref name, commit id, creation timestamp, iteration number (default 0 when not produced by the iteration loop), attributed child-agent name (default empty), the list of file paths that differ between the checkpoint and its parent commit, and a kind, whose vocabulary is the one REQ-GIT-067 closes and which this requirement does not restate, defaulting to the `iteration` member of it.
 
 - **REQ-GIT-017** — Session snapshots recorded before worktrees or checkpoints existed SHALL remain loadable: a missing worktree binding loads as "no worktree" and a missing checkpoint list loads as empty. An absence is reported as an absence; no substitute value is invented for those older runs.
 
@@ -181,9 +181,11 @@ Rotaris can give each agent session a Git worktree of its own, so two concurrent
 
 ### Event Stream Contracts
 
-- **REQ-GIT-067** — A `checkpoint.created` event SHALL carry: sequence, ref, kind (`iteration` | `pre_restore` | `manual`), iteration, and a COUNT of changed paths — never the paths themselves, so an event's size stays independent of how large the change was. It is published only after the snapshot and timeline entry are durably written; a publication failure is logged and never affects the checkpoint. Pre-restore safety checkpoints are also published as `checkpoint.created` with kind `pre_restore`.
+- **REQ-GIT-067** — A `checkpoint.created` event SHALL carry exactly these five fields and no others: `sequence`, the integer sequence of the checkpoint, which climbs monotonically within a session (REQ-GIT-046); `ref`, the checkpoint's Git ref name; `kind`, drawn from the closed vocabulary `iteration`, `pre_restore`, `manual`; `iteration`, an integer that is `0` for a checkpoint not produced by the iteration loop (REQ-GIT-016); and `changed_paths`, a COUNT of the changed paths and never the paths themselves, so an event's size stays independent of how large the change was. It is published only after the snapshot and timeline entry are durably written; a publication failure is logged and never affects the checkpoint. Pre-restore safety checkpoints are also published as `checkpoint.created` with kind `pre_restore`.
 
-- **REQ-GIT-068** — A `checkpoint.restored` event SHALL carry: sequence, a restored boolean, an optional safety sequence, a changed-paths count (0 on refusal), and the blocked reason. Exactly one such event is published per restore attempt, including refusals. A refused restore can still carry a safety sequence (safety checkpoint succeeded, then the restore failed) — consumers must read the field, never infer it from the restored flag.
+  This requirement is the product's single definition of the `checkpoint.created` payload — its field set, each field's name and meaning, and the closed `kind` vocabulary. A document that publishes, records, exports, or documents that event SHALL cite this identifier rather than restating any of those, and a field a consumer needs is added here rather than declared elsewhere.
+
+- **REQ-GIT-068** — A `checkpoint.restored` event SHALL carry exactly these five fields and no others: `sequence`, the integer sequence of the checkpoint the restore targeted; `restored`, a boolean; `safety_sequence`, the integer sequence of the safety checkpoint or null when none was recorded; `changed_paths`, a count that is `0` on refusal; and `blocked_reason`, the refusal's reason, empty on success. Exactly one such event is published per restore attempt, including refusals. A refused restore can still carry a safety sequence (safety checkpoint succeeded, then the restore failed) — consumers must read the field, never infer it from the restored flag. This requirement is the product's single definition of the `checkpoint.restored` payload and its field set; a document that publishes, records, exports, or documents that event SHALL cite this identifier rather than restating it.
 
 ### Session Deletion and Ref Lifecycle
 
@@ -420,7 +422,7 @@ All formats below are externally observable on disk, in the repository, or on th
 ### Persisted records (behavioral schemas)
 
 - Worktree binding: the record REQ-GIT-015 defines. That requirement is normative for the field set, the `merge_status` vocabulary and the defaults; this line names the record only so the layout above can refer to it.
-- Checkpoint record: `sequence` (int), `ref` (string), `commit` (string), `created_at` (timestamp), `iteration` (int, default 0), `child_name` (string, default empty), `files` (list of paths changed relative to the parent commit), `kind` (`iteration` | `pre_restore` | `manual`).
+- Checkpoint record: the record REQ-GIT-016 defines, which is normative for the field set and the defaults; its `kind` takes the vocabulary REQ-GIT-067 closes. The names by which the fields are written are `sequence` (int), `ref` (string), `commit` (string), `created_at` (timestamp), `iteration` (int, default 0), `child_name` (string, default empty), `files` (list of paths changed relative to the parent commit), and `kind`.
 - Session record (checkpoint-related fields only): `checkpoint_count` (int), `last_restored_sequence` (int or null, default null — REQ-GIT-155).
 
 ### Commit message formats (fixed identity `rotaris <rotaris@local>`)
@@ -432,8 +434,8 @@ All formats below are externally observable on disk, in the repository, or on th
 
 ### Event shapes (stored event stream)
 
-- `checkpoint.created`: `sequence`, `ref`, `kind`, `iteration`, `changed_paths` (count, never the path list).
-- `checkpoint.restored`: `sequence`, `restored` (bool), `safety_sequence` (int or null — may be set even when `restored` is false), `changed_paths` (count, 0 on refusal), `blocked_reason` (string).
+- `checkpoint.created`: the payload REQ-GIT-067 defines. That requirement is normative for the field set, each field's name and meaning, and the closed `kind` vocabulary; this line names the event only so the stream can be located here.
+- `checkpoint.restored`: the payload REQ-GIT-068 defines, which is normative for its field set and for the rule that `safety_sequence` may be set even when `restored` is false; this line adds nothing to it.
 
 ### Shared textual formats
 

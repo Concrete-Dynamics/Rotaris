@@ -133,7 +133,7 @@ A project keeps its requirements as versioned documents in its own repository. A
   - `annotation_conventions` — the project's additional annotation conventions (REQ-TRACE-073), in registration order; default the empty list, the built-in convention being registered ahead of it and never listed here.
   A project SHALL NOT be expected to change `exempt_marker`: the default is intended to be adopted as it stands. Changing it SHALL rewrite the orphan baselines' headers and the diagnostics that quote it on the next baseline update, which is a consequence to be accepted deliberately rather than a reason to avoid the key.
 
-- **REQ-TRACE-040** — The optional layout configuration SHALL be a JSON document at the repository root. When the file does not exist the default layout SHALL be returned with no error.
+- **REQ-TRACE-040** — The optional layout configuration SHALL be a JSON document named `rotaris-traceability.json`, located directly at the repository root and nowhere else. That name is fixed: no key, preference, or other surface renames it or nominates a second location for it, and a file of that name in a subdirectory is not a layout configuration. This requirement is the product's single definition of the file's name and location; a document that reads, reports, or looks for the layout configuration SHALL cite this identifier rather than naming the file a second time. When the file does not exist the default layout SHALL be returned with no error.
 
 - **REQ-TRACE-041** — A configuration file MAY carry the layout keys directly in its top-level object or grouped beneath a `layout` key. Where a `layout` key is present, its object SHALL be the one read. Where a `layout` key is present but holds anything other than an object, loading SHALL fail with an error naming the configuration file.
 
@@ -151,7 +151,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 
 ### Repository Root Discovery
 
-- **REQ-TRACE-048** — Repository-root discovery SHALL walk upward from a starting directory and return the first candidate where either (a) the layout configuration file exists as a file — a directory carrying it wins outright — or (b) the store directory exists AND at least one configured implementation root exists as a directory under that candidate. Within each candidate, (a) SHALL be tested before (b). The walk SHALL be innermost-first, so a nested repository carrying a configuration file beats an enclosing one.
+- **REQ-TRACE-048** — Repository-root discovery SHALL walk upward from a starting directory and return the first candidate where either (a) the layout configuration file REQ-TRACE-040 names exists as a file — a directory carrying it wins outright — or (b) the store directory exists AND at least one configured implementation root exists as a directory under that candidate. Within each candidate, (a) SHALL be tested before (b). The walk SHALL be innermost-first, so a nested repository carrying a configuration file beats an enclosing one.
 
 - **REQ-TRACE-049** — When no candidate satisfies either test anywhere up the chain, discovery SHALL fall back to the current working directory rather than failing.
 
@@ -1395,7 +1395,7 @@ A path with an extension, zero or more `::`-separated class segments, and a fina
 
 Records ascending by number; at least two tab-separated fields required; the title field optional; malformed lines skipped silently; the write is atomic (temporary file in the same parent directory, then an atomic replace).
 
-### Layout configuration (JSON, at the repository root)
+### Layout configuration (`rotaris-traceability.json`, at the repository root — REQ-TRACE-040)
 
 ```json
 {
@@ -1442,7 +1442,7 @@ The toolchain offers exactly four operations, every one of them reached from the
 | Aspect | Value |
 | --- | --- |
 | Repository root | the open workspace's, resolved by the discovery walk; never nominated by the user |
-| Layout configuration | the file at that root; no override path exists |
+| Layout configuration | `rotaris-traceability.json` at that root (REQ-TRACE-040); no override path exists |
 | Base revision default | the revision the working tree sits on |
 | Combined order | regenerate, then rewrite the baselines against the fresh parse, then verify |
 | Enforcement | the check gates nothing by itself; no control and no configuration key suppresses a finding |
@@ -1493,7 +1493,7 @@ with a single "no annotation sites yet" placeholder for an added or modified cha
 - Evidence obligation kinds, in indicator order: `implementation-trace`, `covering-test`, `verification`.
 - Recorded-evidence states: `satisfied`, `stale`, `failed`.
 - Drag payload: a private application-specific transfer type, never plain text.
-- Observed run branch naming convention: `<product>/req/<identifier>/<unit id>`.
+- Run branch naming: the branch a unit run occupies is named by the requirement-execution `branch_template` REQ-GIT-074 defines, which is normative for the template, its placeholders and its default; this document restates neither and observes only that a unit's branch is derived from the requirement identifier and the unit id.
 - Named on-disk files carried between a run and its review: the requirement's recorded source, and the run's proposed technical requirements — `proposed-requirements.json`, a JSON array of proposal objects in the run's artifact directory.
 
 ### Persisted state

@@ -63,11 +63,11 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 ### A5. Transient acknowledgements
 
-**REQ-NOTIFY-011** — A transient acknowledgement takes itself off screen 4200 ms after it becomes visible. This requirement is the product's single definition of the acknowledgement lifetime: a document that needs to say how long a transient acknowledgement stays on screen cites this identifier rather than restating the figure, and REQ-SHELL-112, REQ-SHELL-113 and REQ-STARTUP-054 do so. No surface declares a transient lifetime of its own; the only departure from it is the non-expiring case of REQ-NOTIFY-020.
+**REQ-NOTIFY-011** — A transient acknowledgement takes itself off screen 4200 ms after it becomes visible. This requirement is the product's single definition of the acknowledgement lifetime: a document that needs to say how long a transient acknowledgement stays on screen cites this identifier rather than restating the figure. No surface declares a transient lifetime of its own; the only departure from it is the non-expiring case of REQ-NOTIFY-020.
 
-**REQ-NOTIFY-012** — A transient acknowledgement is placed with respect to its host window rather than the screen. It anchors to the bottom-right corner of the host window's content area, keeping a 16 px margin from that window's right edge and a 16 px margin from its bottom edge, clears the title bar, and is drawn over all other content of that window so that nothing covers it. Where the host is narrower than the bounded width of REQ-NOTIFY-013 plus those margins, the width is reduced and the margins are kept. Moving or resizing the window restores the same position relative to the window with no user action. This requirement is the product's single definition of where a transient acknowledgement is placed — the corner it anchors to, the margins it keeps, the fact that it is drawn over all other content of its host, and the narrowing that happens where the host is too narrow: a document that shows acknowledgements cites this identifier rather than restating any of them, and REQ-SHELL-112 does so, contributing only which window is the host. No surface anchors an acknowledgement to a corner of its own.
+**REQ-NOTIFY-012** — A transient acknowledgement is placed with respect to its host window rather than the screen. It anchors to the bottom-right corner of the host window's content area, keeping a 16 px margin from that window's right edge and a 16 px margin from its bottom edge, clears the title bar, and is drawn over all other content of that window so that nothing covers it. Where the host is narrower than the bounded width of REQ-NOTIFY-013 plus those margins, the width is reduced and the margins are kept. Moving or resizing the window restores the same position relative to the window with no user action. This requirement is the product's single definition of where a transient acknowledgement is placed — the corner it anchors to, the margins it keeps, the fact that it is drawn over all other content of its host, and the narrowing that happens where the host is too narrow: a document that shows acknowledgements cites this identifier rather than restating any of them, contributing only which window is the host. No surface anchors an acknowledgement to a corner of its own.
 
-**REQ-NOTIFY-013** — There is one acknowledgement surface, the stacked one of REQ-NOTIFY-016 through REQ-NOTIFY-022; a lone acknowledgement is that stack holding one member, and no separate single-acknowledgement surface exists. A transient acknowledgement wraps its text within a bounded width: at most 520 px while exactly one is visible, and at most 360 px while two or three are, in each case reduced to the host width less its margins where the host is narrower. A stack growing from one member to two narrows the acknowledgement already standing rather than replacing it or reordering it. This requirement is the product's single definition of the transient acknowledgement surface itself: there is one such surface in the product, its structure and its bounded widths are stated here, and a document that raises a transient acknowledgement cites this identifier rather than declaring a surface, a stack, or a width of its own. Its citers are REQ-SHELL-112 and REQ-SHELL-113, which place it in the main window and record that the window has no second transient surface. A surface that needs different behaviour extends this requirement rather than adding a second acknowledgement surface beside it.
+**REQ-NOTIFY-013** — There is one acknowledgement surface, the stacked one of REQ-NOTIFY-016 through REQ-NOTIFY-022; a lone acknowledgement is that stack holding one member, and no separate single-acknowledgement surface exists. A transient acknowledgement wraps its text within a bounded width: at most 520 px while exactly one is visible, and at most 360 px while two or three are, in each case reduced to the host width less its margins where the host is narrower. A stack growing from one member to two narrows the acknowledgement already standing rather than replacing it or reordering it. This requirement is the product's single definition of the transient acknowledgement surface itself: there is one such surface in the product, its structure and its bounded widths are stated here, and a document that raises a transient acknowledgement cites this identifier rather than declaring a surface, a stack, or a width of its own. A surface that needs different behaviour extends this requirement rather than adding a second acknowledgement surface beside it.
 
 **REQ-NOTIFY-014** — A transient acknowledgement has two presentations, neutral and error, told apart by their borders. Both draw a 1 px border on all four sides: the neutral presentation draws it in the surface's ordinary border colour, and the error presentation draws it in the error severity colour and adds a rule down its left edge three times that width in the same colour, matching the persistent-notice treatment of REQ-NOTIFY-035. That left rule is the difference in shape REQ-NOTIFY-258 requires, so the two presentations stay distinguishable where colour is not perceived. Neither fills the acknowledgement's background with a status colour. In every theme offered, the border holds at least 3:1 contrast and the text at least 4.5:1 against the surface behind them. The presentation belongs to the message currently shown: changing theme while an acknowledgement is visible leaves it in the presentation its own message calls for, and an error acknowledgement never repaints as a neutral one.
 
@@ -85,7 +85,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-021** — The close control's accessible name identifies the acknowledgement it removes. One clear operation removes every visible acknowledgement at once; changing view and shutting down each perform it.
 
-**REQ-NOTIFY-022** — A transient acknowledgement animates into place by default: it enters by translating in from the window edge it anchors to, which is the right edge under REQ-NOTIFY-012, over 12 px and 160 ms while its opacity rises from zero to full, and it leaves by the reverse over 120 ms. The travel distance and the two durations are motion tokens of the active theme (REQ-SHELL-129) and the figures given here are the default theme's, so a theme declaring different ones is followed; the shape of the movement — the edge it comes from, the opacity rise, and the reversal on leaving — is not a theme's to change. Where the operating system reports a preference for reduced motion, its first painted frame is already at its final position at full opacity and nothing moves or fades afterwards. That preference changes motion only: the same message appears, it leaves after the same 4200 ms, and no acknowledgement is suppressed, delayed or reordered. This requirement is the product's single definition of acknowledgement motion: a document that describes how an acknowledgement arrives or leaves cites this identifier rather than restating a direction, a distance or a duration, and REQ-SHELL-113 does so.
+**REQ-NOTIFY-022** — A transient acknowledgement animates into place by default: it enters by translating in from the window edge it anchors to, which is the right edge under REQ-NOTIFY-012, over 12 px and 160 ms while its opacity rises from zero to full, and it leaves by the reverse over 120 ms. The travel distance and the two durations are motion tokens of the active theme (REQ-SHELL-129) and the figures given here are the default theme's, so a theme declaring different ones is followed; the shape of the movement — the edge it comes from, the opacity rise, and the reversal on leaving — is not a theme's to change. Where the operating system reports a preference for reduced motion, its first painted frame is already at its final position at full opacity and nothing moves or fades afterwards. That preference changes motion only: the same message appears, it leaves after the same 4200 ms, and no acknowledgement is suppressed, delayed or reordered. This requirement is the product's single definition of acknowledgement motion: a document that describes how an acknowledgement arrives or leaves cites this identifier rather than restating a direction, a distance or a duration.
 
 ### A6. Persistent notices: fields, identity and lifetime
 
@@ -503,13 +503,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-223** — A lifecycle-hook advisory raised during a run becomes a persistent warning notice whose title states that hooks need attention, carrying the engine's message and an action opening hook settings.
 
-**REQ-NOTIFY-224** — Where a workspace declares hooks the user has not reviewed, a persistent warning notice states how many are unreviewed, states that workspace hooks run shell commands supplied by the repository's own authors, states that those hooks stay skipped until the user reviews and allows them, and offers an action opening the review. Within one application session the notice is published once for each pair of workspace and declared hook set, the set identified by the fingerprint REQ-HOOKS-092 records: a change to the declared set forms a new pair and publishes again, and a new launch publishes again while the condition still holds. Because notices are not persisted (REQ-NOTIFY-027), nothing about this suppression survives a restart. The review dialog never opens by itself at startup; it opens when the user asks for it.
+**REQ-NOTIFY-224** — Where a workspace declares hooks the user has not reviewed, a persistent warning notice states how many are unreviewed, states that workspace hooks run shell commands supplied by the repository's own authors, states that those hooks stay skipped until the user reviews and allows them, and offers an action opening the review. Within one application session the notice is published once for each pair of workspace and declared hook set, the set identified by the workspace hook fingerprint of REQ-HOOKS-091, which this document cites and holds no copy of: a change to the declared set forms a new pair and publishes again, and a new launch publishes again while the condition still holds. Because notices are not persisted (REQ-NOTIFY-027), nothing about this suppression survives a restart. The review dialog never opens by itself at startup; it opens when the user asks for it.
 
 **REQ-NOTIFY-225** — Both allow and refuse verdicts are persisted, so a refusal holds and the next session does not ask again.
 
 **REQ-NOTIFY-226** — A hook's command text is displayed only inside the review dialog the user opened. It appears in no notice, acknowledgement, tab, tooltip or other surface, and once that dialog is closed it is displayed nowhere.
 
-**REQ-NOTIFY-227** — Hook trust is reported by exactly one of four statements, exactly one of which applies at any moment: the workspace declares no hooks; it declares hooks that have not been reviewed, stating how many under REQ-NOTIFY-224; its hooks have been reviewed and allowed; its hooks have been reviewed and refused. Every surface reporting hook trust uses these four and adds no fifth. A recorded decision covers exactly the hook set it was recorded against, identified by the fingerprint of REQ-HOOKS-092, and adding, removing, altering or reordering a hook invalidates it under REQ-HOOKS-095. A workspace that gains a further hook after a review therefore reports the second statement, over the whole current set, and the count REQ-NOTIFY-224 states is the size of that set rather than of the part added since. No mixed statement exists, because no partial approval exists.
+**REQ-NOTIFY-227** — Hook trust is reported by exactly one of four statements, exactly one of which applies at any moment: the workspace declares no hooks; it declares hooks that have not been reviewed, stating how many under REQ-NOTIFY-224; its hooks have been reviewed and allowed; its hooks have been reviewed and refused. Every surface reporting hook trust uses these four and adds no fifth. A recorded decision covers exactly the hook set it was recorded against, identified by the fingerprint of REQ-HOOKS-091, and adding, removing, altering or reordering a hook invalidates it under REQ-HOOKS-095. A workspace that gains a further hook after a review therefore reports the second statement, over the whole current set, and the count REQ-NOTIFY-224 states is the size of that set rather than of the part added since. No mixed statement exists, because no partial approval exists.
 
 **REQ-NOTIFY-228** — Where a workspace declares no hooks of its own, an acknowledgement states that plainly instead of an empty list being shown.
 
@@ -527,7 +527,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-241** — *Withdrawn.* Its only surface was a headless command-line invocation reporting through stdout and an exit status, neither of which this product has; re-running and inspecting machine setup after first run is carried by REQ-NOTIFY-265.
 
-**REQ-NOTIFY-242** — A configured MCP server reports health as one of `checking`, `healthy`, `unknown` or `unreachable`, with a detail string and an optional tool count. Probes run one per server, sequentially, on a background worker, so an unreachable server is one degraded row rather than a settings view that stops responding.
+**REQ-NOTIFY-242** — A configured MCP server reports health over the four-state vocabulary REQ-CONFIG-353 fixes, which this document cites and holds no copy of, with a detail string and an optional tool count. Probes run one per server, sequentially, on a background worker, so an unreachable server is one degraded row rather than a settings view that stops responding.
 
 **REQ-NOTIFY-265** — Machine setup is reachable after first run, not only during it. Settings offers a setup surface listing every managed step with its recorded outcome, so a user who chose to carry on without a tool under REQ-NOTIFY-237 can see which feature is degraded and why. Each step offers running it again on its own, on the terms of REQ-NOTIFY-236, and each such run reports the tool, the command, the exit status and the reason within that surface without publishing a notice. Running one step again never re-runs a step that already completed, and the resumable state of REQ-NOTIFY-240 is what the surface reads and updates.
 
@@ -555,7 +555,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-199** — Local authentication status is checked, and a provider reporting credentials is validated by calling a free capability endpoint — model discovery, or that provider's equivalent — rather than being trusted.
 
-**REQ-NOTIFY-200** — A provider's status indicator reads exactly one of seven states — `checking`, `coming_soon`, `error`, `healthy`, `unauthenticated`, `unknown`, `warning` — each carrying its own text label distinct from the other six, so the state is readable without colour. A provider reads `healthy` only after the capability call of REQ-NOTIFY-199 has succeeded for it within the current check; one not yet checked reads `unknown`; one being checked reads `checking`; one whose credentials the provider rejected reads `unauthenticated`. A stored credential on its own never makes a provider read `healthy`. The remaining three have entry conditions of their own. A provider reads `coming_soon` where the runtime provider catalog of REQ-NOTIFY-210 declares it announced but not yet connectable; no authentication is offered for it and no capability call is made. It reads `error` where the capability call of REQ-NOTIFY-199 could not be completed for a reason other than the provider rejecting the credential — a network failure, a timeout, a malformed response, or a fault the provider reported about itself. It reads `warning` where that call succeeded but the provider is usable only in part: it reported one or more models unavailable under REQ-NOTIFY-205, its subscription or credit read failed under REQ-NOTIFY-207, or it is marked exhausted for the session under REQ-NOTIFY-088. Where more than one condition holds, the state shown is the first that applies in this order: `coming_soon`, `checking`, `unauthenticated`, `error`, `warning`, `healthy`, `unknown`. This requirement is the product's single definition of the provider status vocabulary, of its entry conditions and of that precedence order: a document that needs to name a provider status cites this identifier rather than restating the set, and a condition needing a status of its own extends this list rather than minting a value elsewhere. Its citers are REQ-PROVIDER-118, which decides a provider's status from a health check, and REQ-CONFIG-368, which presents that status in settings. No surface may show a provider status outside these seven.
+**REQ-NOTIFY-200** — A provider's status indicator reads exactly one of seven states — `checking`, `coming_soon`, `error`, `healthy`, `unauthenticated`, `unknown`, `warning` — each carrying its own text label distinct from the other six, so the state is readable without colour. A provider reads `healthy` only after the capability call of REQ-NOTIFY-199 has succeeded for it within the current check; one not yet checked reads `unknown`; one being checked reads `checking`; one whose credentials the provider rejected reads `unauthenticated`. A stored credential on its own never makes a provider read `healthy`. The remaining three have entry conditions of their own. A provider reads `coming_soon` where the runtime provider catalog of REQ-NOTIFY-210 declares it announced but not yet connectable; no authentication is offered for it and no capability call is made. It reads `error` where the capability call of REQ-NOTIFY-199 could not be completed for a reason other than the provider rejecting the credential — a network failure, a timeout, a malformed response, or a fault the provider reported about itself. It reads `warning` where that call succeeded but the provider is usable only in part: it reported one or more models unavailable under REQ-NOTIFY-205, its subscription or credit read failed under REQ-NOTIFY-207, or it is marked exhausted for the session under REQ-NOTIFY-088. Where more than one condition holds, the state shown is the first that applies in this order: `coming_soon`, `checking`, `unauthenticated`, `error`, `warning`, `healthy`, `unknown`. This requirement is the product's single definition of the provider status vocabulary, of its entry conditions and of that precedence order: a document that needs to name a provider status cites this identifier rather than restating the set, and a condition needing a status of its own extends this list rather than minting a value elsewhere. No surface may show a provider status outside these seven.
 
 **REQ-NOTIFY-201** — Each provider row offers authenticating or re-authenticating and logging out, and logging out is confirmed first.
 
@@ -619,26 +619,13 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 ### Session directory contents
 
-Paths are listed alphabetically; the order carries no meaning.
+Not a layout this document defines. Which names a session directory holds, when each appears and what each carries are fixed by REQ-SESSION-002 to REQ-SESSION-004; the lock file's shape and the liveness test taken over it by REQ-SESSION-046 and REQ-SESSION-056; and the marker a background run paused at its message limit leaves by REQ-SESSION-107. This document holds no copy of any of them.
 
-| Path | Content |
-| --- | --- |
-| `.message_limit_paused` | Present while a background run is paused at its message limit |
-| `evidence/` | Raw debug and conversation logs; a run log path is retained as a compatibility pointer |
-| `evidence/verifier/` | Full output of every verification check |
-| `issues.json` | Diagnostics issues with severity, message and metadata |
-| `lock` | JSON object carrying a process id and an acquisition timestamp; its presence plus a live process id defines liveness |
-| `metadata.json` | Session metadata, execution status included |
-| `metrics.json` | Session metrics |
-| `state/` | Split state files: resume state, run configuration, transcript for display |
-| `summary.md` | Human-readable session summary |
-| `timeline.jsonl` | Compact JSON-lines event timeline |
-
-Session snapshots and diagnostics live under the main workspace and never inside a worktree. Legacy whole-state session files remain loadable; new sessions do not write them. The per-session debug log level defaults to WARNING.
+What this document relies on that layout for is: that a session's diagnostics issues and its timeline outlive the process that wrote them, so a run whose notices no one was watching can still be accounted for afterwards; that the full output of every verification check is retained beside them under `evidence/verifier/`, which is what the evidence surfaces of section C3 read; and that session snapshots and diagnostics live under the main workspace and never inside a worktree, so integrating or discarding a worktree never takes them with it. The per-session debug log level defaults to WARNING (`runtime.session_log_level`).
 
 ### Persistent notice shape
 
-`{ id, severity: info|success|warning|error, title, message, details, persistent: bool, action_label, action_id, session_id }`. `details` is the copyable technical block. An empty `session_id` scopes the notice to the focused run.
+The field set and each field's meaning are fixed by REQ-NOTIFY-023, which this appendix illustrates rather than restates: `{ id, severity, title, message, details, persistent, action_label, action_id, session_id }`, where `details` is the copyable technical block and an empty `session_id` scopes the notice to the focused run (REQ-NOTIFY-028).
 
 ### Notice action vocabulary
 
@@ -650,17 +637,17 @@ Members are listed alphabetically except where a severity ordering is stated.
 
 - Normalised run lifecycle: `cancelling`, `completed`, `failed`, `idle`, `paused`, `pausing`, `running`, `starting`, `stopped` (REQ-NOTIFY-048; `cancelled` is withdrawn from this vocabulary and `stopped` holds its place).
 - Persisted execution statuses treated as active: the set fixed by REQ-SESSION-055 over the closed vocabulary of REQ-SESSION-073; this document holds no copy of it. Post-crash repair writes `interrupted`, which is outside that set. A background run paused at its message limit carries `paused_message_limit`.
-- Terminal child states: `blocked`, `cancelled`, `failed`, `succeeded`.
-- Transcript tool row status: `blocked`, `failed`, `ok`, `running`.
-- Notice severity, ascending: `info`, `success`, `warning`, `error`. Acknowledgement kind, ascending: `info`, `ok`, `warn`, `fail`.
+- Terminal child states: the terminal members of the delegated-child state set of REQ-MONITOR-014, cited as REQ-ORCH-041; this document holds no copy of them.
+- Transcript tool row status: the vocabulary of REQ-MONITOR-105; this document holds no copy of it.
+- Notice severity, ascending: `info`, `success`, `warning`, `error` (REQ-NOTIFY-023). Acknowledgement kind, ascending: `info`, `ok`, `warn`, `fail` (REQ-NOTIFY-018).
 - Verification verdict: `failed`, `passed`, `skipped` (REQ-NOTIFY-126). Check outcome: the closed five-value set of REQ-ORCH-123, which is the single definition of it; this document holds no copy and renders it under REQ-NOTIFY-142. Completion gate decision: the closed set of REQ-ORCH-116, which is the single definition of it; this document holds no copy and cites it from REQ-NOTIFY-128.
-- Provider status: `checking`, `coming_soon`, `error`, `healthy`, `unauthenticated`, `unknown`, `warning` (REQ-NOTIFY-200, the single definition of this vocabulary, its entry conditions and its precedence order; REQ-PROVIDER-118 and REQ-CONFIG-368 cite it and hold no copy).
-- Hosted-cloud credit phase: `error`, `loading`, `ready`, `signed_out`. Credit label: Funded, Out of credit, Overdrawn, Unknown state.
-- MCP server health: `checking`, `healthy`, `unknown`, `unreachable`.
+- Provider status: `checking`, `coming_soon`, `error`, `healthy`, `unauthenticated`, `unknown`, `warning` (REQ-NOTIFY-200, the single definition of this vocabulary, its entry conditions and its precedence order).
+- Hosted-cloud credit phase, describing the state of this document's own fetch rather than the account: `error`, `loading`, `ready`, `signed_out`. The account's own credit states are the four of REQ-PROVIDER-130, of which this document holds no copy; it renders each as one readable label — Funded, Out of credit, Overdrawn, Unknown state.
+- MCP server health: the four-state vocabulary of REQ-CONFIG-353, cited from REQ-NOTIFY-242; this document holds no copy of it.
 
 ### Report artifact read by a parent in place of a child transcript
 
-Typed JSON requiring at least `agent_name`, `persona` and `status`, optionally carrying verification evidence with its verdict and per-check results, gate state, and repair decision. Those optional fields are set by the execution runtime alone and are stripped from model output.
+Not a schema this document defines. The report's shape is REQ-ORCH-109's, and the status it carries is one member of the child-report status vocabulary REQ-ORCH-112 is the single definition of; this document holds no copy of either. What this document relies on is that verification evidence with its verdict and per-check results, the gate state, and the repair decision are set by the execution runtime alone and are stripped from model output, so a report a parent reads in place of a transcript cannot have been talked into clearing its own gate.
 
 ### Timeline and diagnostics entries produced by this domain
 
@@ -701,6 +688,8 @@ Requested in this order, most constrained first; the next format tried after a r
 
 ### Configuration keys named in this document
 
+The layered YAML configuration surface, and each key's registered type and default, belong to the settings-and-configuration specification; this table names the keys this document's behaviour reads and states no default of its own. Where a value below and that specification's registration of the same key disagree, the registration governs.
+
 | Key | Default |
 | --- | --- |
 | `message_limit` | null or 0, meaning disabled |
@@ -722,11 +711,12 @@ Requested in this order, most constrained first; the next format tried after a r
 | `verifier.gate_completion` | true |
 | `verifier.max_repair_attempts` | 2 |
 | `verifier.suite_timeout` | 900 s |
-| `workspaces/{workspace_path}/composerDraft` | empty |
+
+The per-workspace composer draft is not a key of that surface at all: it is a key of the per-user preference store whose registry REQ-SHELL-006 closes, and its default and write behaviour are REQ-SHELL-159's.
 
 ### Consolidated thresholds and timings
 
-Rows are listed alphabetically by behaviour; the order carries no meaning.
+Rows are listed alphabetically by behaviour; the order carries no meaning. Each figure is the one fixed by the requirement of this document that states it, except where a row names another document's identifier: that row is a citation and this table holds no copy of the figure behind it.
 
 | Behaviour | Value |
 | --- | --- |
@@ -735,7 +725,7 @@ Rows are listed alphabetically by behaviour; the order carries no meaning.
 | Acknowledgement lifetime | 4200 ms |
 | Acknowledgement width, single form / stacked form | at most 520 px / 360 px |
 | Acknowledgements visible at once, stacked form | 3 |
-| Checkpoint listing re-attempt while the channel is busy | 150 ms |
+| Checkpoint listing re-attempt while the channel is busy | per REQ-SHELL-156 |
 | Child task, no output produced | 90 s |
 | Child task, total run | 1200 s |
 | Interrupted verification check, grace before abandonment | 5 s |

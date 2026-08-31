@@ -69,13 +69,22 @@ it. The terminal run-result vocabulary was defined in three documents. The stop-
 twice, once as prose reasons and once as snake_case tokens. One timeout bound was registered under two
 key names, one isolated-checkout directory under two, and one transcript archive file had two homes.
 
-Four reconciliation rounds settled every conflict, and settled them all the same way: as an
+Five reconciliation rounds settled every conflict, and settled them all the same way: as an
 owner/follower pair. One requirement is named the product's single definition of the thing and says so
-in its own text, naming its citers where that list is short enough to be useful; every other
-requirement that needs it cites that identifier and states what it relies on it for, and holds no copy
-of the content — a restated copy being what produced each of these conflicts in the first place.
+in its own text; every other requirement that needs it cites that identifier and states what it relies
+on it for, and holds no copy of the content — a restated copy being what produced each of these
+conflicts in the first place.
 
-Four rounds were needed because of how the specifications were written, not because the editing was
+An owner does **not** enumerate its citers. The first four rounds had owners carry a list of the
+requirements citing them, on the reasoning that a short list is useful to a reader; that was a
+mistake, and the fifth round struck those lists — all but two, which are recorded as open below. A
+citer list is a second copy of a fact that
+already lives in the follower, so it went stale in both directions — owners naming requirements that
+were never amended to cite them, and followers citing owners whose lists did not mention them. The
+two tables below are now the single index of ownership for the specification set, and the only place
+a pairing is recorded.
+
+Five rounds were needed because of how the specifications were written, not because the editing was
 careless. Twenty-one documents were drafted in parallel by independent agents, and each stated for
 itself every vocabulary, key, bound and on-disk file its own requirements depended on — that is what
 made each document readable on its own, and it is also why the same closed set was declared in two,
@@ -88,6 +97,38 @@ and configuration keys two domains had each claimed. The fourth settled the cons
 closed sets that only one domain produces but several documents had restated: permission-mode
 presets, sandbox and egress keys, the hook event vocabulary and hook entry schema, two desktop-shell
 figures, MCP discovery locations, and the transient acknowledgement surface.
+
+The fifth found the same defect in two places the first four had not reached, and one defect of a
+different kind.
+
+It went another level into the requirement bodies. The workspace domain was still restating the
+skipped-hooks notice wording, the review dialog, the trust-status statements and the Settings hooks
+table that the lifecycle-hooks domain owns; those requirements now cite REQ-HOOKS-091 through
+REQ-HOOKS-108 and carry only what they add.
+
+It then found the same duplication in the **Data & Formats** appendices, which the earlier rounds had
+read as description rather than as normative statement and had therefore not swept. Appendices were
+carrying second copies of schemas owned elsewhere — the canonical hook-set digest payload, the
+hook-trust file, a per-user preference key — each of which is now a citation of the requirement that
+fixes it.
+
+And it withdrew three requirements that duplicated nothing but specified a different product. Domain
+11 stated its publication model, and the self-containment claim resting on it, in terms of one
+language ecosystem's interpreter and packages. How the product is packaged and published is an
+architecture decision rather than behavior a user observes, so REQ-STARTUP-001, REQ-STARTUP-012 and
+REQ-STARTUP-036 are withdrawn in place; the behavior underneath two of them is carried
+technology-neutrally by REQ-STARTUP-158 and REQ-STARTUP-159, and the third had nothing left to
+rescue. This is the only round that changed a total.
+
+None of this is a mark against the drafting, and it should not be read as one. It is what
+twenty-one specifications written in parallel cost. They converge by successive reconciliation, each
+round exposing the duplication the previous round's fixes made visible, and five rounds is the price
+of the parallelism that produced them.
+
+Each row names the owner, what it is the single definition of, and the requirements verified to
+cite it. The lists are not cross-reference indexes: a requirement may mention an owner's identifier
+without being a follower of it, and many do. What is recorded here is the pairings reconciliation
+established.
 
 The owners assigned in the first three rounds:
 
@@ -109,7 +150,7 @@ The owners assigned in the first three rounds:
 | REQ-LIBRARY-089 | The artifact tag vocabulary and its normalisation |
 | REQ-GIT-137 | Where requirement-unit checkouts live, and that no configuration key names that location |
 | REQ-CONFIG-068, REQ-CONFIG-194 | The one key that names a session worktree's storage subpath, and the absence of any key for the requirement-unit one |
-| REQ-CONFIG-231 | The referential-validation rule for `models:` and the role fields — which messages are produced, the order they are produced in, and that a rejected tool name is reported with the accepted names sorted (cited by REQ-ORCH-016, REQ-ORCH-028, REQ-ORCH-153, REQ-CONFIG-104, REQ-CONFIG-105). It does not own the tool-name registry: it reads the accepted set from the tools-and-permissions domain and says so in its own text |
+| REQ-CONFIG-231 | The referential-validation rule for `models:` and the role fields — which messages are produced, the order they are produced in, and that a rejected tool name is reported with the accepted names sorted (cited by REQ-ORCH-016, REQ-ORCH-028, REQ-ORCH-153, REQ-CONFIG-465). It does not own the tool-name registry: it reads the accepted set from the tools-and-permissions domain and says so in its own text |
 
 The owners assigned in the fourth round:
 
@@ -141,25 +182,68 @@ The owners assigned in the fourth round:
 | REQ-NOTIFY-013 | The transient acknowledgement surface itself (cited by REQ-SHELL-112, REQ-SHELL-113, REQ-SHELL-167) |
 | REQ-NOTIFY-022 | Acknowledgement motion (cited by REQ-SHELL-113, REQ-SHELL-136, REQ-SHELL-167) |
 
-Every citation named in both tables was checked against the follower's own text when this record was
-written; a pairing is listed here only where the follower carries the owner's identifier. Two pairings
-in the first table had been recorded before the follower carried the citation — REQ-CONFIG-127
-against REQ-SANDBOX-048, and REQ-CHAT-165 against REQ-SESSION-131 and REQ-SESSION-192 — and both
-followers were amended in the fourth round, so the rows now state what the files hold. Two further
-rows claimed more ownership than the requirement itself claims and were narrowed to it. The check is
-worth repeating whenever a round adds owners: a reconciliation that is recorded as done and is not is
-worse than one that was never attempted.
+Both tables were re-verified in the fifth round, row by row and citer by citer, against the files
+themselves: each owner was read for the sentence declaring it the single definition, and each named
+citer was read for the owner's identifier.
 
-Two things this round did not close, recorded so the account is not read as complete. The tool-name
-registry is not yet an owner/follower pair. REQ-TOOLS-001 states the accepted set of public tool
-names; REQ-CONFIG-231 correctly declines to own that set and points at the tools-and-permissions
-domain, but names no requirement there; and REQ-ORCH-016 and REQ-ORCH-028 cite REQ-CONFIG-231 for
-per-tool capability declarations — which tool reads workspace files, which writes them, which runs
-commands — that no requirement in any domain states. And four owners name citers whose text does not
-carry the owner's identifier: REQ-NOTIFY-011 names REQ-SHELL-113 and REQ-STARTUP-054, REQ-HOOKS-091
-names REQ-WORKSPACE-117, REQ-SANDBOX-050 names REQ-TOOLS-116, and REQ-SANDBOX-051 names
-REQ-TOOLS-117. All five of those requirements exist; none of them references the owner. Both items
-belong to the next round, and neither is claimed as settled by the tables above.
+One row overstated what had been done, in a way the earlier check could not have caught.
+REQ-CONFIG-231 was recorded as cited by REQ-CONFIG-104 and REQ-CONFIG-105. Both did carry the
+identifier when the row was written, but not as followers of what the row says REQ-CONFIG-231 owns:
+they cited it for the public tool-name registry's per-tool capability declarations, which
+REQ-CONFIG-231 explicitly declines to own, rather than for the referential-validation rule that it
+does. The fifth round re-pointed both at the domain that does own what they rely on — REQ-CONFIG-104
+now cites REQ-TOOLS-006 and REQ-TOOLS-001, REQ-CONFIG-105 cites REQ-TOOLS-007 and REQ-TOOLS-006 —
+which leaves the recorded pairing naming nothing at all. Nothing was duplicated at any point, so no
+content was ever at risk; what was wrong was the record. The row now names the requirements that do
+carry the citation and do rely on the validation rule: REQ-ORCH-016, REQ-ORCH-028, REQ-ORCH-153 and
+REQ-CONFIG-465.
+
+Every other pairing in both tables was found present in the follower's own text. What that check
+establishes is that the follower carries the owner's identifier. That the follower cites it *for the
+thing the owner owns* was read on each row rather than machine-checked, and REQ-CONFIG-231 is the
+reason to say so: an identifier can be present and still be the wrong pairing.
+
+Two earlier corrections stand as previously recorded. REQ-CONFIG-127 against REQ-SANDBOX-048, and
+REQ-CHAT-165 against REQ-SESSION-131 and REQ-SESSION-192, had each been recorded before the follower
+carried the citation; both followers were amended in the fourth round, so those rows state what the
+files hold. Two further rows had claimed more ownership than the requirement itself claims and were
+narrowed to it.
+
+The check is worth repeating whenever a round adds owners, and — as this round showed — it is worth
+repeating on rows nobody touched. A reconciliation that is recorded as done and is not is worse than
+one that was never attempted.
+
+Four things are open, recorded so this account is not read as complete.
+
+The tool-name registry is now an owner/follower pair, but is not yet in the tables. REQ-TOOLS-001
+states the accepted set of public tool names, REQ-CONFIG-231 reads that set from it by identifier
+rather than restating it, and REQ-CONFIG-104 and REQ-CONFIG-105 do the same. What REQ-TOOLS-001 does
+not yet carry is the sentence declaring it the single definition, so the pairing is real in the files
+but not yet declared in the owner.
+
+The per-tool capability declarations that three requirements depend on are stated nowhere.
+REQ-ORCH-016 resolves its direct-work bundle from "every tool the public tool-name registry declares
+as reading workspace files, writing workspace files, or running commands", REQ-ORCH-028 measures
+exclusive implementation ownership by which tools the registry declares as writing workspace files,
+and REQ-ORCH-153 gates plan mode on the same declarations. All three cite REQ-CONFIG-231, which
+declines to own the registry, and REQ-TOOLS-001 lists names without classifying them. No requirement
+in any domain states the classification these three read.
+
+Two owners carry no sentence declaring them the single definition, so their ownership is recorded
+here and nowhere else: REQ-MONITOR-301, for the closed stop-reason set and its mapping onto the
+terminal run result, and REQ-TOOLS-061, for the approval-request event and its `resolver` and
+`unattended_reason` vocabularies. REQ-CONFIG-068 carries none either, but does not need one: the
+declaration for that pair sits in REQ-CONFIG-194, which names it.
+
+Two citer lists survived the fifth round's sweep, in REQ-TOOLS-153 and REQ-TOOLS-156, and one of
+them is already stale in the way the rule anticipates: REQ-TOOLS-153 names REQ-ORCH-050 among the
+run-orchestration requirements that cite it, and REQ-ORCH-050 does not. Separately, REQ-TOOLS-116 and
+REQ-TOOLS-117 hold copies of what REQ-SANDBOX-050 and REQ-SANDBOX-051 own — the absolute-path rule
+and its message for `runtime.sandbox_writable_roots`, and the `runtime.sandbox_allow_network`
+default — without citing either owner, while REQ-SANDBOX-050 cites REQ-TOOLS-116 for the message
+shape, so the direction of ownership between those four is not yet settled.
+
+All four belong to the next round, and none is claimed as settled by the tables above.
 
 The resolution records in `../spec/resolutions/` were corrected rather than rewritten. A disposition
 that a later round overturned still states what was decided and why, and then names what superseded

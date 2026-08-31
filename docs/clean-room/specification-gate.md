@@ -20,19 +20,22 @@ settings, MCP integration, the terminal UI, command-line entry points, notificat
 the event stream, and the performance benchmark.
 
 Behavioral target: `ROTARIS-CRW-001` — see [`reference-record.md`](reference-record.md).
-Total: **3,923 requirement identifiers** across the nineteen shipping domains, of which **233** are
-withdrawn in place, leaving **3,690** that state live behavior. The two retired domains, the
+Total: **3,925 requirement identifiers** across the nineteen shipping domains, of which **236** are
+withdrawn in place, leaving **3,689** that state live behavior. The two retired domains, the
 terminal UI and the command-line entry points, hold a further **444** identifiers, **10** of them
 withdrawn in place; those are counted separately and are not part of the shipping total, giving
-**4,367** identifiers in all, **243** of them withdrawn. Every count is a count of identifiers, not
+**4,369** identifiers in all, **246** of them withdrawn. Every count is a count of identifiers, not
 of behaviors: an identifier is never removed, so a withdrawn requirement keeps its number and keeps
 being counted, and a total that grew while the graphical-only decision was removing surface grew
 because resolution minted new identifiers to carry the rescued capabilities. These totals were
-re-taken from the requirement definitions in each file after the fourth and last of the
-post-resolution reconciliation rounds described in [`provenance.md`](provenance.md), and were
-unchanged by any of the four: reconciliation named an owner for each contested vocabulary and turned
-the other statements of it into citations, which removes duplicated content without minting or
-retiring an identifier. The per-domain figures,
+re-taken from the requirement definitions in each file after the fifth and last of the
+post-resolution reconciliation rounds described in [`provenance.md`](provenance.md). The first four
+rounds left every total where it stood: naming an owner for a contested vocabulary and turning the
+other statements of it into citations removes duplicated content without minting or retiring an
+identifier. The fifth moved one domain's, because it did more than deduplicate — domain 11 withdrew
+three identifiers that specified a different product and minted two, REQ-STARTUP-158 and
+REQ-STARTUP-159, to carry the behavior underneath them. That is the whole of the change from the
+previously recorded 3,923 and 233. The per-domain figures,
 with the withdrawn count beside each, are in [`../spec/README.md`](../spec/README.md). Process and
 audit history: [`provenance.md`](provenance.md).
 
@@ -131,7 +134,7 @@ Recorded 2026-08-30 from the product owner.
 | Compatibility ambition | **Behavioral inspiration only.** The stated preference is no compatibility obligation at all: build to these specifications, not toward the behavioral target. No promise of interchangeable formats, command surface, exit codes, or event vocabulary. | 2026-08-30 |
 | Defect policy | **Omit what conflicts.** Resolve internal contradictions as far as they can be resolved. Where sources disagree, a more recent specification wins over an older specification, and a specification wins over observed implementation behavior. What cannot be resolved is dropped rather than reproduced. | 2026-08-30 |
 | Unbuilt behavior | **In scope.** Behavior that exists as intent rather than as working functionality is part of the rewrite. | 2026-08-30 |
-| First-milestone scope | **Revised 2026-08-30: one Electron desktop application, and nothing else.** There is no command-line interface and no terminal user interface — not deferred, removed. Domains 17 and 18 are retired and their identifiers withdrawn; every capability they carried that a user needs is restated as desktop-reachable behavior in the domain that owns it. Any command-line or text-mode surface appearing in another domain is withdrawn on the same terms. | 2026-08-30 |
+| First-milestone scope | **Revised 2026-08-30: one Electron desktop application, and nothing else.** There is no command-line interface and no terminal user interface — not deferred, removed. Domains 17 and 18 are retired and their identifiers withdrawn; every capability they carried that a user needs is restated as desktop-reachable behavior in the domain that owns it. A surface in another domain is withdrawn on the same terms and reaches exactly as far: what goes is a way for a **user to drive this product** from a shell. The product *running* programs on the user's behalf is untouched. The rule is stated in full under *What these decisions change*. | 2026-08-30 |
 | Message text policy | **Confirmed.** Specifications state what a message must convey; exact wording is fixed only where a string is part of a machine-readable contract. | 2026-08-30 |
 | **Gate** | Open pending the sufficiency statement, after open-question resolution. | |
 
@@ -156,9 +159,39 @@ points are removed from the product entirely. Unbuilt-but-intended behavior in t
 is in scope. Removing an entry point must never remove a capability: where a behavior was reachable
 only from a shell, it is restated as desktop behavior rather than dropped.
 
-This does not stop the product from *running* external programs. Lifecycle hooks, agent tool
-execution, tool servers on the stdio transport, and version-control invocations all remain in scope.
-What is removed is any way for a user to drive this product from a shell or a text-mode interface.
+**The rule is about who is driving, not about text on a screen.** What the decision removes is a way
+for a *user* to drive this product from outside its window: a command-line entry point to the
+application, the argument vocabulary and subcommands behind it, the process exit codes it would set,
+the script-oriented output streams it would write for another program to parse, and a full-screen
+text-mode frontend standing in for the desktop window. Nothing else is removed by it.
+
+What the product does *on the user's behalf* is fully in scope, and is a large part of what the
+product is for. The agent's terminal execution and the commands it runs, lifecycle hooks (domain 09),
+tool servers on the stdio transport (domain 16), version-control invocations (domain 06), child
+processes the application starts for itself, and the maintainer-side build and release pipeline —
+automation reporting to automation, not a surface the shipped product exposes to anyone who installs
+it — all remain. So does the terminal surface the desktop window itself carries: the live terminal
+preview embedded in a transcript row, the terminal pop-out window, its character grid, take-control
+input, and stream state and audit (REQ-SHELL-079 to REQ-SHELL-111 and REQ-SHELL-166). That surface is
+the application showing a user what it ran and letting the user intervene in it; it is not a way to
+drive the application from a shell. An earlier reading took the decision to withdraw it. That reading
+was wrong and has been corrected.
+
+A domain applies this rule by asking one question of a requirement: does it exist so that a user can
+operate the product from outside the window? If not, it stays.
+
+**Packaging and distribution technology is an architecture decision, not a behavioral requirement.**
+How the product is built, bundled, signed, and published — which runtime it embeds, how many
+artifacts a release produces, which ecosystem's package index serves it — is not behavior a user
+observes, and is settled at the Architecture Gate rather than here. What a specification may fix is
+the observable consequence: that a release carries exactly one product version and every artifact of
+that release declares and reports it, that what the user installs is self-contained and starts on a
+supported machine with nothing else installed and all outbound network blocked, and that the About
+surface reports the true release version. Domain 11 was rewritten on that basis in the fifth
+reconciliation round; three of its requirements had stated the publication model, and the
+self-containment claim resting on it, in terms of one language ecosystem's interpreter and packages,
+which describes a different product. They are withdrawn, and the behavior underneath two of them is
+carried technology-neutrally by REQ-STARTUP-158 and REQ-STARTUP-159.
 
 ## Open-question resolution pass
 

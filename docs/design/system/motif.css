@@ -1,0 +1,15 @@
+/* Grids and a three-axis coordinate mark — the brand's one graphic flourish. */
+.rt-grid-bg{
+background-image:linear-gradient(to right, var(--rt-border) 1px, transparent 1px),linear-gradient(to bottom, var(--rt-border) 1px, transparent 1px);
+background-size:var(--rt-grid-unit) var(--rt-grid-unit);
+background-position:-1px -1px;
+}
+.rt-dot-grid-bg{
+background-image:radial-gradient(var(--rt-border-strong) 1px, transparent 1px);
+background-size:var(--rt-grid-unit) var(--rt-grid-unit);
+}
+/* A rule that fades to transparent at both ends over one grid unit, rather than stopping cleanly. */
+.rt-fade-rule{height:1px;border:0;margin:var(--rt-space-4) 0;background:linear-gradient(to right, transparent, var(--rt-divider) var(--rt-grid-unit), var(--rt-divider) calc(100% - var(--rt-grid-unit)), transparent)}
+/* The coordinate-axis mark: three short strokes from one origin, each an axis color — waiting / running / done. Decorative device only, never a stand-in logo. */
+.rt-axis-mark{display:inline-block;flex:none}
+.rt-axis-mark circle{fill:var(--rt-text)}

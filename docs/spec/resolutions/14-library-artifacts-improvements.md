@@ -7,6 +7,32 @@ status: resolved
 
 # Resolution Record — Domain 14, Library, Artifacts, and Improvement Proposals
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **Row 33** resolves the Windows retry ladder for the improvement store — "the attempt count is
+>   contractual and so is the total bound; all 5 attempts must complete within 1 second". REQ-LIBRARY-043
+>   no longer states any ladder, because no writer outside this application can reach a record in this
+>   store. **This row must not be cited as evidence that a ladder survives anywhere:** OQ-44 forbids
+>   borrowing a neighbouring store's constants to pretend one exists. The corpus states exactly one ladder,
+>   REQ-SESSION-033's, and it governs the session summary file alone.
+> - **Row 8** — the read-modify-write disposition stands; the **accepted interleaving loss it closed on
+>   does not**. Under **ESC-18** the read-modify-write takes effect as one indivisible step, so two
+>   genuinely interleaved review decisions on different proposals can no longer lose one another. ESC-3's
+>   last-writer-wins semantics on the **same** proposal are untouched.
+> - Any row treating `<workspace>/.rotaris/improvement_artifacts/<artifact_id>.json`, the
+>   `history/<artifact_id>/<version>.json` layout, `rotaris-prompts.json` or `<session_dir>/artifacts/` as
+>   settled file layouts now describes withdrawn mechanism. Every guarantee attached to those layouts was
+>   re-homed before the mechanism went; see REQ-LIBRARY-042, -043, -047, -049, -087 and -138.
+
+
 This record disposes of every open question raised in the draft of
 [`../14-library-artifacts-improvements.md`](../14-library-artifacts-improvements.md) (requirement
 prefix `REQ-LIBRARY`). The body of that specification has been amended so that each decision below

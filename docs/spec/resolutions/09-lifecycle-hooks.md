@@ -7,6 +7,28 @@ status: resolved
 
 # Resolution Record — Domain 09, User-Defined Lifecycle Hook Commands
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **OQ 26** resolves the masking-channel list and justifies it with "the session directory is readable by
+>   anyone who can look inside it". That premise is gone; **the masking is not**. Under **SR-4** the reason
+>   is restated and is at least as strong: the launch audit and the timeline outlive the run, are readable
+>   by anything that can reach the store, and are carried into the export of REQ-SESSION-199, so a
+>   credential must never be recorded in them in the first place (REQ-HOOKS-118, REQ-HOOKS-119,
+>   REQ-HOOKS-133). All six channels stand and none was dropped.
+> - `<workspace>/.rotaris/hook-trust.json` (REQ-HOOKS-096) **stays a file** and no ruling moves it. It is
+>   a per-workspace security decision, not high-volume, queried or transactional. That it travels with a
+>   synchronised or cloned workspace, and therefore carries a trust decision to a machine that never made
+>   it, is a live question no ruling has answered.
+
+
 This record disposes of every open question raised in the draft of
 [`../09-lifecycle-hooks.md`](../09-lifecycle-hooks.md) (domain 09, requirement prefix `REQ-HOOKS`).
 The body of that specification has been amended so that each decision below is stated normatively in

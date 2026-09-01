@@ -7,6 +7,22 @@ status: resolved
 
 # Resolution Record — Domain 18, Command-Line and Headless Entry Points
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - This record belongs to a **retired** domain and nothing in it is normative. Its dispositions that assert
+>   `evidence/debug.log`, `evidence/tool-calls.jsonl`, `<workspace>/.rotaris/sessions/` directory listing or
+>   the presence of `<session_dir>/.message_limit_paused` describe a layout the corpus has withdrawn
+>   (REQ-SESSION-002 to REQ-SESSION-004, REQ-EVENTS-079). None of them is a surviving contract.
+
+
 This record disposes of every open question raised in the draft of
 [`18-cli-headless.md`](../18-cli-headless.md) (requirement prefix `REQ-CLI`).
 

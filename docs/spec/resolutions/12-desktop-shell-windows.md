@@ -7,6 +7,25 @@ status: resolved
 
 # Resolution Record — Domain 12, Desktop Shell, Navigation, and Window Management
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - Any disposition locating **prompt history and stash** at a file under `<workspace>/.rotaris/` is
+>   superseded: they are held in the durable store the application keeps for the workspace
+>   (REQ-LIBRARY-138, REQ-SHELL-157). The per-workspace scoping, the caps, the no-partial-state guarantee
+>   and the "Could not save prompt history" degradation all stand.
+> - **OQ 36**'s 400 ms composer-draft debounce is **unaffected**. It is a preference-store write, not a
+>   session save, and is recorded here only so it is not confused with the persistence debounce SR-4
+>   withdrew.
+
+
 This record disposes of every open question raised in the draft of
 [`../12-desktop-shell-windows.md`](../12-desktop-shell-windows.md) (requirement prefix `REQ-SHELL`).
 The body of that specification has been amended so that each decision below is stated normatively in

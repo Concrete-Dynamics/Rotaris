@@ -7,6 +7,29 @@ status: resolved
 
 # Open-Question Resolutions — Settings and Configuration
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - Any row settling the **requirement delivery store**'s directory, or the default of
+>   `requirements.delivery.store_subpath`, is superseded. Delivery records are rows (**SR-4**), the key is
+>   withdrawn as a recognized field, and a file that still states it is a hard load failure under
+>   REQ-CONFIG-183, following REQ-CONFIG-194's precedent for `worktree_subpath` (REQ-CONFIG-192).
+> - Configuration itself is **not** affected and is not a candidate for the same move. REQ-CONFIG-477 now
+>   states the boundary and its four grounds, so a later reader must argue against them rather than
+>   discover that nothing forbids the migration.
+> - **ESC-2 (preserve comments on configuration write-back) is ruled and still unmade.** REQ-CONFIG-252
+>   continues to state that comments and formatting are lost. ESC-1 (REQ-CONFIG-288, the composer's
+>   permission-mode write path) appears to be in the same position. Neither was in scope for the storage
+>   passes and neither is closed.
+
+
 This record disposes of every open question raised in the draft of
 [`../15-settings-configuration.md`](../15-settings-configuration.md) (domain 15, requirement prefix
 `REQ-CONFIG`). The body of that specification has been amended so that each decision below is stated

@@ -7,18 +7,31 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,930** identifiers across the 19 shipping domains, of which **237** are withdrawn
-  in place, leaving **3,693** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,941** identifiers across the 19 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,683** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,374** identifiers in all, **247** of them withdrawn.
+  are not part of the shipping total — **4,385** identifiers in all, **268** of them withdrawn.
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
   not because more was specified. Every figure below is a count of the requirement definitions in
-  each file, re-taken after the sixth and last post-resolution reconciliation round (see
+  each file, re-taken after the **storage-ruling round**, which followed the structural-ruling round
+  and the sixth post-resolution reconciliation round (see
   [`../clean-room/provenance.md`](../clean-room/provenance.md)); each domain's identifiers run
   contiguously from 1 to its total, with no gap, no duplicate, and no number defined in more than
   one place.
+  - The **structural-ruling round** applied SR-1 to SR-3 — one running instance, no session
+    observable in a process this application does not own, and no polling. It withdrew 15
+    identifiers and minted 4, so live behavior fell by 11 while the identifier space grew by 4.
+  - The **storage-ruling round** applied SR-4 to SR-8 and ESC-11, ESC-13, ESC-15, ESC-16 and
+    ESC-18, recorded in [`../architecture/owner-decisions.md`](../architecture/owner-decisions.md).
+    Session-owned data moved from a fixed directory layout into a machine-local durable store, the
+    export obligation widened from the event history to five records, the onefile portable gained a
+    launch preparation, and two defects were corrected. It withdrew 6 identifiers and minted 7, so
+    the identifier space grew by 7 and live behavior grew by 1 — the first round in this
+    specification's history in which live behavior did not fall. Nothing behavioural was withdrawn
+    with a mechanism: every guarantee carried by a withdrawn layout was re-homed to a named
+    requirement first, and the re-homings are enumerated in `provenance.md`.
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
 
@@ -30,25 +43,25 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | # | Domain | Prefix | Reqs | Withdrawn | Priority |
 |---|--------|--------|-----:|----------:|----------|
 | 01 | [Multi-Agent Run Orchestration](01-run-orchestration.md) | `REQ-ORCH` | 156 | 1 | core |
-| 02 | [Run Monitoring and Steering](02-run-monitoring-steering.md) | `REQ-MONITOR` | 305 | 7 | core |
+| 02 | [Run Monitoring and Steering](02-run-monitoring-steering.md) | `REQ-MONITOR` | 305 | 12 | core |
 | 03 | [Conversation, Composer, and Transcript](03-conversation-composer-transcript.md) | `REQ-CHAT` | 174 | 49 | core |
 | 04 | [Model Providers, Sign-In, and Model Routing](04-model-providers-auth.md) | `REQ-PROVIDER` | 152 | 18 | core |
 | 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 192 | 0 | core |
 | 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | 8 | core |
-| 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 196 | 17 | core |
-| 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 512 | 16 | core |
+| 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 199 | 22 | core |
+| 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 513 | 16 | core |
 | 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | 1 | core |
 | 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 129 | 1 | core |
-| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 160 | 11 | secondary |
+| 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 166 | 11 | secondary |
 | 12 | [Desktop Shell, Navigation, and Window Management](12-desktop-shell-windows.md) | `REQ-SHELL` | 168 | 4 | secondary |
 | 13 | [Workspace Handling, Context Injection, and Project Onboarding](13-workspace-context-onboarding.md) | `REQ-WORKSPACE` | 153 | 17 | secondary |
 | 14 | [Library, Artifacts, and Improvement Proposals](14-library-artifacts-improvements.md) | `REQ-LIBRARY` | 175 | 14 | secondary |
-| 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 476 | 16 | secondary |
+| 15 | [Settings and Configuration](15-settings-configuration.md) | `REQ-CONFIG` | 477 | 16 | secondary |
 | 16 | [MCP Server Integration](16-mcp-integration.md) | `REQ-MCP` | 117 | 11 | secondary |
 | 17 | [Interactive Terminal UI](17-terminal-ui.md) | `REQ-TUI` | 207 | 1 | **retired** |
 | 18 | [Command-Line and Headless Entry Points](18-cli-headless.md) | `REQ-CLI` | 237 | 9 | **retired** |
 | 19 | [Notifications, Error Handling, and Recovery](19-notifications-errors-recovery.md) | `REQ-NOTIFY` | 268 | 4 | secondary |
-| 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 178 | 28 | secondary |
+| 20 | [Machine-Readable Event Stream, Replay, and Trajectory Export](20-event-history-replay-export.md) | `REQ-EVENTS` | 178 | 39 | secondary |
 | 21 | [UI Performance Benchmark](21-ui-performance-benchmark.md) | `REQ-UIBENCH` | 119 | 14 | peripheral |
 
 "Reqs" is the count of identifiers a domain defines; "Withdrawn" is how many of those are withdrawn

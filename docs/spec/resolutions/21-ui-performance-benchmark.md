@@ -7,6 +7,34 @@ status: resolved
 
 # Resolution Record — Domain 21, UI Performance Benchmark
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **OQ 7** — "capture supports exactly the layouts the sessions domain defines". That disposition is the
+>   right one and now points somewhere else: there is no layout, and capture reads the session's resumable
+>   state plus three optional bulk parts on the precedence of REQ-SESSION-036 (REQ-UIBENCH-015). The
+>   principle — capture follows the sessions domain and never defines a second route — is preserved
+>   verbatim.
+> - **OQ 16** — "a symbolic link beneath `SESSION_DIR` contributes nothing to `source_checksum`, whatever
+>   it points at, and is never traversed". There is no directory to walk and no link to follow.
+>   `source_checksum` is now taken over the canonical serialization of the session's own recorded state
+>   (REQ-UIBENCH-019). Both properties the link rule bought are kept by construction: nothing outside the
+>   session can enter the digest, and no cycle can be entered.
+> - **ESC-13 is ruled and its amendment is not yet applied.** If OQ-28 resolves to the framework-neutral
+>   reading, REQ-UIBENCH-054 is relaxed; the canvas is refused outright either way. The amendment is
+>   drafted and deliberately withheld until OQ-28 is resolved.
+> - The benchmark's **own outputs** — `fixture.json`, `iteration-NNN.jsonl`, `summary.json`, `summary.md` —
+>   are unaffected. They are material a developer reads with stock tools, which is exactly what SR-4 keeps
+>   as files.
+
+
 This record disposes of every open question raised in the draft of
 [`../21-ui-performance-benchmark.md`](../21-ui-performance-benchmark.md) (requirement prefix
 `REQ-UIBENCH`), and records the graphical-only sweep applied to that draft first.

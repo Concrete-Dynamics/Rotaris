@@ -7,6 +7,29 @@ status: resolved
 
 # Resolution Record — Domain 02, Run Monitoring and Steering
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - Every disposition that reasons about the **session directory layout** — the metadata file a listing
+>   reads, the split state files, the append-only evidence file readable from a byte offset — describes a
+>   layout withdrawn by **SR-4**. REQ-MONITOR-233 to REQ-MONITOR-237 now state record kinds and no paths,
+>   and REQ-MONITOR-236 is withdrawn with the legacy combined snapshot file it restated (REQ-SESSION-005).
+> - Any disposition that treats the **ten-second persistence debounce** as a fixed cost this domain observes
+>   is superseded: the debounce is withdrawn outright (REQ-SESSION-067). A save is durable when it is
+>   requested. This is what makes REQ-MONITOR-218 (publish a new row immediately) and REQ-MONITOR-221
+>   (persist before publishing) simultaneously satisfiable, which they previously were not.
+> - **REQ-MONITOR-299**'s entry-by-entry session-directory comparison is withdrawn as a conformance-test
+>   methodology encoded as a product requirement. The behavioural guarantee it carried — an unwatched run
+>   leaves everything a watched run leaves — is kept and now compares record *kinds*.
+
+
 This record disposes of every open question raised in the draft of
 [`../02-run-monitoring-steering.md`](../02-run-monitoring-steering.md) (requirement prefix
 `REQ-MONITOR`), and records the graphical-only sweep applied to that draft. The body of the
@@ -59,7 +82,7 @@ is carried by a desktop-reachable requirement, four of them new.
 
 | Withdrawn | What it specified | Capability now carried by |
 | --- | --- | --- |
-| REQ-MONITOR-001 | Indistinguishability of a graphical launch and a command-line launch — same session files, same lifecycle event kinds, same persisted status, same terminal result, same process exit code | **REQ-MONITOR-299** (new) — the same parity obligation restated over the venues that still exist: the focused window's own process versus a separate worker process (background run, worktree run, run owned by a second window). The exit-code clause is gone with the shell. |
+| REQ-MONITOR-001 | Indistinguishability of a graphical launch and a command-line launch — same session files, same lifecycle event kinds, same persisted status, same terminal result, same process exit code | **REQ-MONITOR-299** (new) — the same parity obligation restated over the venues that still exist. The exit-code clause is gone with the shell. *Corrected under SR-2:* the venues were listed here as "the focused window's own process versus a separate worker process (background run, worktree run, run owned by a second window)". A run owned by a second window is not a separate execution venue — every window belongs to the one instance and every run executes in that instance's run host — and REQ-MONITOR-299 as amended compares how a run was *started* and what is *watching* it, not where it executes. |
 | REQ-MONITOR-095 | A `compress` command in the terminal interface: help text, no arguments, case-insensitive match, autocomplete entry, start/completion/no-agents/per-failure reporting | REQ-MONITOR-090 (run-header manual compress), REQ-MONITOR-091 (no-agents refusal), REQ-MONITOR-093 (in-progress message), REQ-MONITOR-094 (completion count and partial-failure listing) and REQ-MONITOR-097 (command-palette entry). Every reporting obligation of the withdrawn requirement already has a desktop carrier. REQ-MONITOR-096 was rewritten to bind manual compression however it is requested rather than to bind a command. |
 | REQ-MONITOR-196 | A terminal-interface quota-exhaustion modal with two body variants and the choices keep waiting / cancel the run / change model now | **REQ-MONITOR-303** (new) — the desktop quota-wait decision surface, carrying the same three choices, both body variants, and the model picker, plus the obligations that follow from it being a window rather than a full-screen text mode (non-blocking, reachable again after dismissal, one per waiting session). |
 | REQ-MONITOR-277 | A terminal-interface live list of active sub-agents with name, role, tool-call count and elapsed time | REQ-MONITOR-116 as amended — the overview's active-now card now carries the role (REQ-ORCH-028) and the tool-call count alongside the dot, name, activity and elapsed time it already carried — together with REQ-MONITOR-107 and REQ-MONITOR-111 for the live clock. |
@@ -79,8 +102,11 @@ for a cancellation. **REQ-MONITOR-033** replaces the `Error: ` text prefix — a
 an explicit failed-before-start marker carried as a field, and **REQ-MONITOR-264** cites that marker.
 **REQ-MONITOR-107** loses its terminal-interface framing and its text-row composition, keeping the
 measurement rule that every surface showing an elapsed figure obeys. **REQ-MONITOR-243** and
-**REQ-MONITOR-248** name the out-of-process venues that still exist instead of a command-line run and
-a headless job. **REQ-MONITOR-279** and **REQ-MONITOR-281** are restated surface-neutrally. The
+**REQ-MONITOR-248** name the venues that still exist instead of a command-line run and a headless
+job. *Corrected under SR-2:* this record described those as "out-of-process **observation** venues".
+They are not, and now say so: they are kinds of *run* — foreground, background, worktree, window
+closed — all inside the one running instance, all observed by the same published updates. Both
+requirements survive; only this record's account of why they say what they say was wrong. **REQ-MONITOR-279** and **REQ-MONITOR-281** are restated surface-neutrally. The
 § 31 heading became "Agent navigation, run warnings, and quitting during a run", and the
 Data & Formats blocks lost the exit-code column and the terminal-interface qualifier on the
 per-agent metric row.
@@ -105,7 +131,7 @@ per-agent metric row.
 | 14 | RESOLVED | The 300-line bound applies to the generated summary alone. The whole-context reading is incoherent with REQ-MONITOR-084, which requires the system prompt, tool definitions, original request, todos, and the preserved recent turns to survive character for character or one for one — a bound over all of that would have to truncate something the same document forbids truncating. With the scope narrowed, REQ-MONITOR-083's escape clause raising the bound to fit an oversized request became unnecessary and was struck. | REQ-MONITOR-083 |
 | 15 | RESOLVED | Order fixed at: system prompt and tool definitions, original request, compression summary, todo items, preserved recent turns — turns last, immediately before the next model call, in their original relative order. Last because that is where a conversation naturally continues; putting the summary after the verbatim turns would have the model read a paraphrase of old work after reading the current work. The todos sit between the summary and the turns, keeping REQ-MONITOR-084's existing "placed after the summary" intact. | REQ-MONITOR-084 |
 | 16 | RESOLVED | A reasoning row is collapsed by default to a fixed 6 text lines showing the most recently received text, so a live row scrolls with the stream instead of growing without bound, and carries an expand control that reveals every character received. Expanding is display-only. The elapsed and token figures stay computed over all characters received whether displayed or not, so collapsing and expanding never move either number — which is what the original requirement's parenthesis was protecting. | REQ-MONITOR-109 |
-| 17 | RESOLVED | The deadline is a duration in whole seconds measured from the recorded start timestamp, never an absolute instant. A duration is the only form that stays meaningful to a reader that did not take the reading — a resumed session, or an out-of-process viewer (§ 26) — which is the deciding argument. On expiry the check in flight ends with outcome `timeout`, which REQ-MONITOR-106 already maps to row status `failed`; the suite then continues with the next check and the run is not stopped by the timeout alone. | REQ-MONITOR-155, Data & Formats (verification state) |
+| 17 | RESOLVED | The deadline is a duration in whole seconds measured from the recorded start timestamp, never an absolute instant. A duration is the only form that stays meaningful to a reader that did not take the reading, which is the deciding argument. *Corrected under SR-2:* two such readers were named here, "a resumed session, or an out-of-process viewer (§ 26)". The second no longer exists — no surface observes a run from outside the instance executing it — and REQ-MONITOR-155 is amended to rest on the first alone. The decision is unaffected: a resumed session carries it on its own, since the reader that reopens a session took none of its readings. On expiry the check in flight ends with outcome `timeout`, which REQ-MONITOR-106 already maps to row status `failed`; the suite then continues with the next check and the run is not stopped by the timeout alone. | REQ-MONITOR-155, Data & Formats (verification state) |
 | 18 | RESOLVED | Per the message-text decision, with the machine-contract parts fixed. The reading must convey the amount used and the allowance as two separately identifiable figures in the same unit; where that unit is money it is computed and rendered by the single money-arithmetic rule of REQ-PROVIDER-121, and where it is a count it carries thousands separators. The detail caption must convey when the allowance next resets and, where the provider states it, the length of the window covered; where the provider supplies no reset information the caption says the reset time is not known rather than disappearing. Wording and separators are the implementation's. The 60% warning tint is now explicitly paired with text (REQ-SHELL-149). | REQ-MONITOR-181 |
 | 19 | RESOLVED | 5 seconds per provider, with a fixed settling overhead of at most 1 second on top, whatever the number of providers configured. 5 seconds was taken from the provider domain's own subscription-usage fetch timeout rather than invented here, so one figure governs the call and the surface waiting on it. A provider that has not answered within its timeout settles as a degraded row (REQ-MONITOR-183) instead of holding the card open. | REQ-MONITOR-182, REQ-MONITOR-287 |
 | 20 | RESOLVED | Tier is not derived in this domain at all: a model's tier is the tier alias it resolves through (REQ-CONFIG-070, REQ-CONFIG-071), exactly as REQ-ORCH-019 defines it, so no parallel rule exists. A model that resolves through no tier alias has no tier, is never an automatic fallback candidate, and may still be chosen explicitly. Candidates are offered in the order their models are declared in the configuration: deterministic, reproducible across runs, under the user's own control, and needing no price data — which REQ-MONITOR-166 already admits may be unknown. | REQ-MONITOR-193 |

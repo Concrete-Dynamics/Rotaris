@@ -7,6 +7,31 @@ status: resolved
 
 # Resolution Record — Domain 11, Application Startup, Distribution, and Updates
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **OQ 1** — "the onefile Windows portable executable gets no allowance for being a single file". That
+>   still holds for the steady state, but the record now **understates** the requirement: under **SR-7**
+>   REQ-STARTUP-155 carries a first-run exemption, and "first run" means the first run of a given artifact
+>   **version**, on a machine, for that user — not per flavour and not first run ever.
+> - **OQ 5** — the closed set of release-acceptance criteria, each "decidable inside the pipeline or on a
+>   machine the release owner controls". That phrase is precisely the defect **ESC-11** identified: a gate
+>   run on a controlled machine can pass while REQ-STARTUP-024's unmodified baseline fails. REQ-STARTUP-156
+>   now requires four conditions to be established before a pass may be recorded, and a check that cannot
+>   establish them is recorded not-performed and fails the gate. **Do not cite this row as licensing the
+>   weaker gate.**
+> - **OQ 14** — the Windows installed/portable discriminator resolves "the running executable" inside the
+>   InstallDir path. Under SR-7 the running image may sit in a launch preparation, so the test now resolves
+>   **the artifact the launch started from** (REQ-STARTUP-106, REQ-STARTUP-165).
+
+
 This record disposes of every open question raised in the draft of
 [`../11-startup-distribution-updates.md`](../11-startup-distribution-updates.md) (requirement prefix
 `REQ-STARTUP`). The body of that specification has been amended so that each decision below is

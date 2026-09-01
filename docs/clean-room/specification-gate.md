@@ -1,6 +1,7 @@
 # Specification Gate
 
-**Status: DECISIONS RECORDED — all five items answered 2026-08-30. Closes on the sufficiency statement once open questions are resolved.**
+**Status: CLOSED 2026-08-31 — the specification is approved as sufficient, and architecture design is
+authorized. Implementation remains unauthorized until the Architecture Gate closes.**
 
 This gate asks one question: *is the behavioral specification good enough to begin architecture
 design?* It is not asking whether the specification is finished. Specifications are never finished;
@@ -143,7 +144,93 @@ Recorded 2026-08-30 from the product owner.
 | Unbuilt behavior | **In scope.** Behavior that exists as intent rather than as working functionality is part of the rewrite. | 2026-08-30 |
 | First-milestone scope | **Revised 2026-08-30: one Electron desktop application, and nothing else.** There is no command-line interface and no terminal user interface — not deferred, removed. Domains 17 and 18 are retired and their identifiers withdrawn; every capability they carried that a user needs is restated as desktop-reachable behavior in the domain that owns it. A surface in another domain is withdrawn on the same terms and reaches exactly as far: what goes is a way for a **user to drive this product** from a shell. The product *running* programs on the user's behalf is untouched. The rule is stated in full under *What these decisions change*. | 2026-08-30 |
 | Message text policy | **Confirmed.** Specifications state what a message must convey; exact wording is fixed only where a string is part of a machine-readable contract. | 2026-08-30 |
-| **Gate** | Open pending the sufficiency statement, after open-question resolution. | |
+| **Gate** | **CLOSED — approved 2026-08-31.** The product owner reviewed the converged specification and directed that architecture design begin. | 2026-08-31 |
+
+## Gate closed
+
+The specification is approved as sufficient to begin architecture design. Implementation remains
+unauthorized: the Architecture Gate must be approved separately before any production code is
+written.
+
+State at closure: 3,697 live shipping requirements across nineteen domains (3,930 identifiers
+including 233 withdrawn in place), plus 444 identifiers in the two retired domains. Every open
+question raised in the draft is disposed of, with the decision recorded in
+[`../spec/resolutions/`](../spec/resolutions/). An independent read-only audit judged the set fit to
+build from, on the grounds that nothing remaining requires re-deciding what the product is, what any
+vocabulary contains, or what any requirement means.
+
+### Amendments after closure
+
+**The figures above are the state at closure and are now superseded.** The specification has been
+amended since, under the standing direction recorded in
+[`../architecture/owner-decisions.md`](../architecture/owner-decisions.md), which extends the
+divergence latitude this gate granted for *behavioural* conflicts to *structural* ones: a requirement
+that exists because of a process model this product does not have is a candidate for amendment rather
+than a constraint to design around.
+
+This gate's approval is **not** withdrawn or re-opened by those amendments. What it approved was that
+the specification was sufficient to design from; that judgment stands. But a reader must not treat the
+closure figures, or the phrase "approved as sufficient", as describing the corpus as it exists today.
+`../spec/README.md` carries the current counts and is the authority for them.
+
+Amendments made under the standing direction so far, in two rounds. The **structural-ruling round**
+applied SR-1 to SR-3; the **storage-ruling round** applied SR-4 to SR-8 and ESC-11, ESC-13, ESC-15,
+ESC-16 and ESC-18. Both are recorded in detail in [`provenance.md`](provenance.md).
+
+| Ruling | Status | Effect on the specification |
+|---|---|---|
+| SR-1 — one running instance | Applied | Four identifiers minted in domain 11 for single-instance launch behaviour |
+| SR-2 — a run this application does not own cannot be viewed | Applied | The live tail-following protocol withdrawn across domains 02, 07 and 20 |
+| SR-3 — no polling | Applied | Both poll cadences withdrawn, replaced by sequence-numbered updates with gap detection. REQ-SESSION-071's no-polling rule now has no exception, and the new exports are explicitly forbidden from becoming one |
+| SR-4 — a database for what only the application reads | Applied | The fixed session-directory layout is withdrawn (REQ-SESSION-003, REQ-SESSION-004, REQ-SESSION-010) together with the fixed event-history paths (REQ-EVENTS-079, REQ-EVENTS-093) and the legacy-snapshot restatement (REQ-MONITOR-236). Sessions, event history, timeline, evidence, the permission audit, the checkpoint index, delivery records and the improvement library become records; configuration, personas, model slots, the requirement documents, the baselines, the generated symbol artifact, the tombstone log, the session log, the session summary and provider credentials stay files; artifact, attachment, image and check-output **bodies** stay files referenced by record. The ten-second persistence debounce is withdrawn outright, which is what makes REQ-MONITOR-218 and REQ-MONITOR-221 simultaneously satisfiable. Two new requirements state the file/store boundary so it cannot be eroded later: REQ-CONFIG-477 and REQ-TRACE-513 |
+| SR-5 — a workspace held by another machine is refused | Applied | REQ-SESSION-048 becomes the single definition of what a lock refusal must convey, and must say the workspace is open on another machine rather than report a lock conflict. Refinement 2 is minted as REQ-STARTUP-166: shared or synchronised storage is detected **directly** and warned about, on every path that opens a workspace, refusing nothing |
+| SR-6 — the export obligation covers every record a user could previously read | Applied | REQ-EVENTS-166 becomes the single definition of what an export must guarantee. REQ-SESSION-199 is minted for the timeline, the issues record, the metrics document and the permission audit; REQ-SESSION-189 and REQ-EVENTS-172 carry the event history. REQ-SESSION-191's reveal action survives for the log, the summary and artifact bodies. Each export is explicitly **not a channel** onto a live run |
+| SR-7 — the onefile portable extracts once to a cache | Applied | REQ-STARTUP-165 minted for the launch preparation. REQ-STARTUP-013 and REQ-STARTUP-031 are unchanged; REQ-STARTUP-155 gains a first-run exemption defined as the first run of a given artifact **version**. REQ-STARTUP-106, REQ-STARTUP-115 and REQ-STARTUP-125 now take both the flavour classification and the update target from the artifact the launch started from, never from the running image |
+| SR-8 — REQ-ORCH-155's 100 ms is a percentile | Applied | Stated as a 95th percentile, with the rule that a single update beyond 100 ms is not by itself non-conformant, and the percentile written out so this figure and REQ-MONITOR-222's are read the same way |
+| ESC-11 — the release gate tests the wrong machine | Applied | REQ-STARTUP-156 now requires four conditions to be established before a pass may be recorded, widens from one artifact per platform key to every published artifact of that key, and requires two observed runs for a self-preparing artifact. A check that cannot establish the conditions is recorded not-performed and **fails** the gate |
+| ESC-13 — the benchmark invariant against screen-reader access | **Conditional, deliberately not applied** | The canvas is refused outright, which needs no amendment. The relaxation of REQ-UIBENCH-054 is contingent on OQ-28 resolving to the framework-neutral reading; the amendment is drafted and withheld until it does. Recorded in `../spec/resolutions/21-ui-performance-benchmark.md` |
+| ESC-14 — corrections to SR-4's own reasoning | Applied | The withdrawn OQ-41 claim is not relied on anywhere. REQ-TRACE-513 states positively that no store's concurrency properties reach the four traceability artifacts, so the withdrawn reasoning cannot be re-derived |
+| ESC-15 — the store is machine-local | Applied | REQ-SESSION-197 (the workspace identifier) and REQ-SESSION-198 (the machine-local store) minted. The store is **not** at `<workspace>/.rotaris/workspace.db`; it is located by a stable identifier that travels with the workspace. A workspace on a share or in a sync folder is fully usable |
+| ESC-16 — a store that will not open means no run | Applied | REQ-SESSION-089 and REQ-EVENTS-084 both amended, and they agree: the session refuses to start, on REQ-EVENTS-021's terms, with the store's own reported reason carried unaltered |
+| ESC-18 — ESC-3 has been overtaken | Applied | REQ-LIBRARY-042's read-modify-write takes effect as one indivisible step; the closing concession records the accepted defect as withdrawn *as unreachable, not as unimportant*, and states that no guarantee has been relaxed. ESC-3's last-writer-wins semantics on the same proposal are untouched |
+| ESC-1 — the composer's permission-mode write path | **Ruled and unmade** | REQ-CONFIG-288 still states the shared save path. Not in scope for either round |
+| ESC-2 — preserve comments on configuration write-back | **Ruled and unmade** | REQ-CONFIG-252 still states that comments and formatting are lost. Not in scope for either round |
+
+**Where the specification and the architecture record still disagree.** SR-4's amendments are no
+longer outstanding, but agreement has not been reached, because the amendments moved the specification
+and the architecture record has not yet caught up. Three disagreements are known and are consequences
+of this round rather than defects in it:
+
+1. **ADR-0058 places the workspace store at `<workspace>/.rotaris/workspace.db`.** ESC-15 reverses
+   that. REQ-SESSION-198 requires the store to be machine-local always, located by REQ-SESSION-197's
+   workspace identifier and never by path. The ADR's consequence 3 — "a workspace on a network share
+   is degraded, not merely slow" — is now **false**, and it is the most user-visible thing the ADR
+   still gets wrong. The ruling itself says the ADR must be rewritten.
+2. **ADR-0003 states that files are the system of record and there is no database anywhere in the
+   product.** SR-4 reverses that in part. The ADR also needs a row for the workspace identifier, which
+   is the one file whose loss orphans a user's history, and its worked example 3 needs to say where
+   the session log and summary now live.
+3. **ADR-0004's per-store policy table, ADR-0008 and ADR-0009** each cite a mechanism this round
+   dissolved: the retry-schedule field, REQ-SESSION-132's create-if-missing initialization, and the
+   claim that REQ-EVENTS-084's attach failure "becomes unreachable" — the amended requirement gives it
+   a definite, user-visible outcome instead.
+
+Neither the Architecture Gate nor any implementation authorization can be granted until the two
+records agree. The specification side of that work is now complete; the architecture side is not.
+
+Five minor defects remain open and are recorded in [`provenance.md`](provenance.md). All are pointer
+defects — a citation naming the wrong requirement, or an owner missing its single-definition
+sentence — where the behavior is unambiguous and only the signpost is wrong.
+
+Two questions were answered in opposite directions by two resolution passes and are deliberately
+left to the product owner rather than averaged, because each answer is coherent within its own
+domain: whether a truncation marker counts inside or outside a character cap, and whether the
+run-type vocabulary holds two values or three.
+
+The clean-room residual recorded above stands: fifteen files carry short verbatim runs flagged as
+minor concerns. The behavioral-inspiration-only decision reduces the exposure, because no
+interoperability argument now requires reference-shaped detail to be preserved. It does not
+eliminate it.
 
 ## What these decisions change
 

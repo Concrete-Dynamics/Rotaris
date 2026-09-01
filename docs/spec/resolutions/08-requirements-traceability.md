@@ -7,6 +7,28 @@ status: resolved
 
 # Open-Question Resolutions — Domain 08, Requirements Board and Traceability
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **Row 6 is still valid and is recorded here so it is not swept up with the rest.** It resolves "no
+>   locking, leases or coordination files; every artifact the toolchain writes is written by atomic
+>   replace". REQ-TRACE-513 keeps the requirement documents, the three baselines, the generated symbol
+>   artifact and the retired-identifier log as **plain files in the user's own repository**, so this
+>   disposition survives untouched and no store's concurrency properties reach those four artifacts.
+> - **ESC-14 withdrew SR-4's claim that the database dissolves OQ-41.** It does not: those artifacts never
+>   reach any store. What narrows the defect is **SR-1** (one running instance), which removes the
+>   unbounded concurrent processes the defect rested on. A residue remains, recorded as OQ-44: no
+>   requirement in the corpus now states a Windows retry ladder for these four files, and REQ-TRACE-061
+>   requires a failed replace to be re-raised.
+
+
 This record disposes of every open question raised in the draft of
 [`08-requirements-traceability.md`](../08-requirements-traceability.md) (requirement prefix
 `REQ-TRACE`). It was produced under the product-owner decisions recorded on 2026-08-30:

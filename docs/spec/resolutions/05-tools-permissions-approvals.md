@@ -7,6 +7,28 @@ status: resolved
 
 # Resolution Record — Domain 05, Agent Tooling, Terminal Execution, Permissions, and Approvals
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **OQ 30** resolves the verification-gate evidence as "a new per-session evidence file,
+>   `<workspace>/.rotaris/sessions/<session_id>/evidence/verification-gate.jsonl`, one JSON object per
+>   line". Under **SR-4** it is a durable record, not a file, and REQ-TOOLS-190 now fixes its content and
+>   ordering and no path. Everything the disposition decided stands: one entry per attempt, a decline
+>   exactly as durable as a write, never altered, never reordered, capped at 5000.
+> - Any disposition locating the **permission audit** at `evidence/permissions.jsonl` is superseded by
+>   REQ-TOOLS-078 and REQ-SESSION-137. The audit's integrity properties are unchanged, and under **SR-6**
+>   they are now also obligations on its **export**: order preserved, nothing omitted, and a statement of
+>   how many entries the retention cap dropped (REQ-SESSION-199). This is the record SR-6 cared about most,
+>   because it is the one a user reads when they do not trust the interface's own rendering.
+
+
 This record disposes of every open question raised in the draft of
 [`../05-tools-permissions-approvals.md`](../05-tools-permissions-approvals.md) (domain 05,
 requirement prefix `REQ-TOOLS`). The body of that specification has been amended so that each

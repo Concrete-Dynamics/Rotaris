@@ -7,6 +7,30 @@ status: resolved
 
 # Open-Question Resolutions — Git Integration, Worktrees, and Checkpoints
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **OQ 10** and **OQ 14** reason about the session **lock file** and its `host` field. The lock is now a
+>   record held with the session (REQ-SESSION-046, REQ-GIT-020); the `pid`/`host`/`acquired_at` field set,
+>   the single-retry reap, and the resolve-ambiguity-toward-live rule are all unchanged. What changed is the
+>   medium and, under **SR-5**, what a refusal must **convey**: where the lock names another machine the
+>   refusal must say the session is held by a different machine, not report a lock conflict
+>   (REQ-SESSION-048). Under **ESC-15** a foreign-host lock is no longer the ordinary consequence of shared
+>   storage but evidence that the session store itself is reachable from more than one machine.
+> - **OQ 23**'s "no session directory and no lock are created" is now "no session record and no lock are
+>   created". The refusal semantics are unchanged.
+> - The **integration lock** (REQ-GIT-128) deliberately stays a file at `<workspace>/.rotaris/`. It is the
+>   one lock in the product that is not machine-local, because what it protects is the user's own base
+>   repository, which travels with the workspace.
+
+
 This record disposes of every open question raised in the draft of
 [`../06-git-worktrees-checkpoints.md`](../06-git-worktrees-checkpoints.md) (domain 06, requirement
 prefix `REQ-GIT`). The body of that specification has been amended so that each decision below is

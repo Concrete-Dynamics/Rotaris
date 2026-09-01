@@ -13,6 +13,14 @@ status: retired
 > retained only until its capabilities have been restated as desktop behavior in the domains that own
 > them; the `REQ-TUI` and `REQ-CLI` identifiers are withdrawn and are never reused. Nothing here is
 > implemented.
+
+> **Storage note, 2026-09-01.** This document still describes a session as a directory of files under
+> `.rotaris/sessions/<session-id>/`, with line-delimited evidence files and marker files. That layout is
+> withdrawn corpus-wide (REQ-SESSION-003, REQ-SESSION-004, REQ-EVENTS-079): a session is a record in a
+> durable machine-local store (REQ-SESSION-001, REQ-SESSION-198), the closed set of files a session still
+> keeps is REQ-SESSION-002's, and a user obtains the records outside this application through the exports
+> of REQ-SESSION-189 and REQ-SESSION-199. Nothing in this retired document is normative and none of its
+> file references is to be read as a surviving contract.
 >
 > **The `REQ-TUI` series is closed. No further identifier may be added to this document.** A behavior
 > this document once carried is restated under an identifier of the domain that owns it on the

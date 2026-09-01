@@ -7,6 +7,29 @@ status: resolved
 
 # Resolution Record — Domain 01, Multi-Agent Run Orchestration
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - **OQ 3** — records "the product's 100 ms budget: a state change the run has recorded appears on these
+>   surfaces within 100 ms" with no percentile. Under **SR-8** that figure is a **95th percentile**
+>   (REQ-ORCH-155). A single update beyond 100 ms is not by itself non-conformant. The absolute reading is
+>   not merely expensive but unsatisfiable in principle, so it was never the intended one.
+> - **The note on REQ-ORCH-087** records only the "in background mode" → "where no view is attached"
+>   rewrite. The `.message_limit_paused` signal file that requirement also wrote is now gone under **SR-4**:
+>   the durably recorded execution status `paused_message_limit` is the whole of the signal, and no marker
+>   is written anywhere for another process to find (REQ-ORCH-087, REQ-SESSION-107, REQ-NOTIFY-248).
+> - Any disposition below that locates a check's full output, a child transcript or an artifact body by a
+>   path under a session directory describes a layout that no longer exists. The guarantees survive in
+>   REQ-ORCH-123, REQ-ORCH-140 and REQ-ORCH-149; the paths do not.
+
+
 This record disposes of every open question raised in the draft of
 [`../01-run-orchestration.md`](../01-run-orchestration.md) (domain 01, requirement prefix
 `REQ-ORCH`). The body of that specification has been amended so that each decision below is stated

@@ -7,6 +7,32 @@ status: resolved
 
 # Resolution Record — Domain 03, Conversation, Composer, and Transcript
 
+
+> ## Superseded by the storage rulings (2026-09-01)
+>
+> The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and
+> **ESC-18** (`../../architecture/owner-decisions.md`) moved session-owned data out of files and into a
+> machine-local durable store, made the workspace store machine-local, extended the export obligation, and
+> corrected two defects. Dispositions below that were **argued from the file-based model** are recorded
+> here as superseded so no future reader treats a stale rationale as settled. **Each disposition's outcome
+> stands unless this block says otherwise; what changed is the reasoning, the medium, or the vocabulary.**
+>
+> - The **REQ-CHAT-140** row and the two paragraphs about `<session_dir>/state/transcript_archive.jsonl`
+>   name a file that no longer exists. The capability is unchanged: rows past the resident bound are
+>   released in whole pages of 50, retained unaltered, and paged back with their indexes preserved
+>   (REQ-SESSION-131, REQ-SESSION-192). Only the vocabulary moves — "archive"/"eviction" become
+>   "retained released pages"/"release" — and REQ-CHAT-165 has been re-pointed accordingly.
+> - **OQ 16** and the **REQ-CHAT-111 / REQ-CHAT-112** rows settle the serialization of
+>   `<workspace>/.rotaris/rotaris-prompts.json` — two-space indentation, key order `history` then `stash`,
+>   both keys always emitted. That file is withdrawn under **SR-4**: saved prompts are held in the durable
+>   store the application keeps for the workspace (REQ-LIBRARY-138), and REQ-CHAT-045 now fixes no path and
+>   no document format. The **per-workspace scoping**, the 200/100 caps, blank-dropping on load, the
+>   unreadable-reads-as-empty rule and the "Could not save prompt history" notice all stand.
+> - The **REQ-CHAT-173** row places image attachments "under the session directory". Attachment and image
+>   **bodies** are still files on disk, referenced from the record; the closed set they belong to is
+>   REQ-SESSION-002's and they are held with the store rather than inside the workspace (REQ-SESSION-198).
+
+
 This record disposes of every open question raised in the draft of
 [`../03-conversation-composer-transcript.md`](../03-conversation-composer-transcript.md)
 (requirement prefix `REQ-CHAT`). The body of that specification has been amended so that each

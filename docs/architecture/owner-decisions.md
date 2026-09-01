@@ -1,0 +1,695 @@
+# Product-owner decisions on the architecture record
+
+- **Status:** decided. These are rulings by the product owner, not proposals.
+- **Date:** 2026-08-31
+- **Scope:** escalations ESC-1 to ESC-10 as raised in [`open-questions.md`](open-questions.md), plus two
+  contradictions found inside the approved design material during its import, plus the structural rulings
+  recorded at the end of this document, plus ESC-11 to ESC-18, delegated by the owner to the clean-room
+  manager and ruled on 2026-08-31. **Every escalation raised against the architecture record is now
+  ruled.** Where a ruling is contingent on an unrun spike, the contingency is stated in the ruling.
+
+Escalations are cited by number *and* by content, because `open-questions.md` is being revised and the
+numbering may shift. Where a ruling requires a requirement to be amended, that is noted explicitly: the
+amendment is authorised by this record but is not yet made.
+
+---
+
+## Design-material contradictions
+
+**Motion tokens.** `docs/design/system/tokens/effects.css` governs: `--rt-duration-fast` 90 ms,
+`--rt-duration` 160 ms, `--rt-duration-slow` 240 ms, `--rt-shift` 3 px. The values documented in
+`guidelines/motion-tokens.html` (100 / 180 / 260 ms, 4 px) and repeated in prose in `guidelines/motion.html`
+are corrected to match. The design brief already declares token names normative and `styles.css` the single
+entry point, so the stylesheet is the artifact every component was built against; the guideline is
+documentation that drifted.
+
+**`Card.accented`.** The shipped CSS governs: the variant recolours the kicker to accent and draws no left
+rule. `Card.d.ts` and `TableCard.d.ts`, which document "the 2px accent left rule", are corrected.
+
+Beyond preferring the artifact over its documentation, a 2 px accent left rule on cards would sit one pixel
+away from the 3 px left rule that `REQ-NOTIFY-034` to `REQ-NOTIFY-043` reserve for **severity** on the
+persistent notice banner and `REQ-NOTIFY-019` reserves for error presentation on toasts. Two near-identical
+left rules carrying different meanings is a worse outcome than no left rule.
+
+---
+
+## Escalations
+
+### ESC-1 — the shared save path between Settings and the composer's permission-mode control
+
+**Decided: the composer control writes only its own key**, through the scoped per-field writer that already
+exists for this shape of write. Pending Settings edits stay pending.
+
+`REQ-CONFIG-288` states the current coupling and then explicitly hands the decision over. The coupling is
+preserved nowhere: choosing a permission mode must not commit unrelated pending edits, because the surprise
+lands in a security-relevant control. The decision must not break `REQ-CONFIG-423` or `REQ-CONFIG-418`.
+
+### ESC-2 — configuration write-back and comments
+
+**Decided: preserve comments.**
+
+`REQ-CONFIG-252` states that comments and formatting are lost. A spike run for the DATA proposal showed the
+document API recommended for the tri-state model keeps comments, layout and key order through a targeted
+edit, and that only parse-then-re-emit loses them — so preserving them is *less* work than deliberately
+discarding them, and it saves the user the comment header the bootstrap itself wrote (`REQ-CONFIG-025`).
+
+This departs from a stated observable, which the compatibility ruling recorded in the Specification Gate
+permits: the target is behavioural inspiration, not conformance to the reference. `REQ-CONFIG-252` is
+amended. Key order preserved and never alphabetised (`REQ-CONFIG-248`) is unaffected.
+
+### ESC-3 — silent loss of a review decision under last-writer-wins
+
+**Decided: match the specification.** Silent loss on the ordinary write path; the stated report on the undo
+path (`REQ-LIBRARY-116`) and where an action's target is no longer present (`REQ-LIBRARY-173`).
+
+`REQ-LIBRARY-042` fixes the semantics and accepts the consequence deliberately. Adding a refusal to every
+write where the specification has none is a larger change than the defect warrants.
+
+### ESC-4 — a workspace with no version-control repository has no undo
+
+**Decided: accept the gap as specified.**
+
+`REQ-GIT-044` resolves an unmanageable tree to disabled and `REQ-LIBRARY-163` requires such a workspace to
+lose only the rollback capability. A content-addressed snapshot store of our own was assessed and rejected
+in ADR-0039 because `REQ-GIT-029` requires checkpoints to be ordinary commit objects and `REQ-GIT-060`
+requires overwritten content to be retrievable from the safety checkpoint's commit. A second snapshot
+mechanism with its own restore semantics is not worth the divergence.
+
+### ESC-5 — the pooled terminal backend
+
+**Decided: ship one backend.** The pooled name and its two `kill_status` values are withdrawn; the backend
+field is kept for forward compatibility.
+
+The vocabulary is closed at two values and pooled-recovery behaviour is specified in detail, but nothing
+states when a pooled backend is used, whether it must exist, or what selects it. It would also be POSIX-only
+while Windows mandates a different shell, and the two backends are required to be observationally identical
+apart from the name. `REQ-TOOLS-099`, `REQ-TOOLS-100`, `REQ-TOOLS-103` and `REQ-TOOLS-187` are amended.
+
+### ESC-6 — Windows users get no confinement
+
+**Decided: accept the specification for the first release**, and document it plainly on the settings surface
+and in the launch advisory rather than only in a remediation string.
+
+`REQ-SANDBOX-065` closes the platform set at two identifiers and forbids adding one; `REQ-SANDBOX-048`
+forbids an opportunistic mode. A Windows user therefore runs every agent command unconfined, and an
+unattended permissive run on Windows is always downgraded unless the opt-out key is set.
+
+**This ruling is provisionally revisited** under the structural-soundness review (see below): running an
+autonomous agent unconfined on the product's most common desktop platform is exactly the kind of inherited
+constraint that review exists to challenge. Admitting a third platform identifier extends
+`REQ-SANDBOX-127`'s real-host conformance obligation to a third continuous-integration platform, which is
+the real cost.
+
+### ESC-7 — the plugin language
+
+**Decided: change the plugin language** to modules the host can genuinely import in-process. `REQ-TOOLS-165`
+and the workspace layout are amended; the `*.py` extension is withdrawn.
+
+`REQ-TOOLS-163` requires plugins to execute "inside the host process with exactly that process's OS
+privileges", and ADR-0001 chose TypeScript on Node. Changing the language is the **only** option that
+satisfies `REQ-TOOLS-163` as written, and it costs nothing in bundle size or supply chain. Bundling an
+interpreter in a sidecar would cost tens of megabytes, a second signing and update surface, and a fifth
+process kind, in exchange for preserving a file extension.
+
+### ESC-8 — what the update path establishes
+
+**Decided: sign the checksums manifest with a key shipped in the application.**
+
+`REQ-STARTUP-021`, `REQ-STARTUP-023` and `REQ-STARTUP-123` leave binaries deliberately unsigned, so the
+update path establishes *what* was downloaded and nothing about *who* published it, over the same connection
+the download came from. Signing the manifest gives publisher authenticity for updates, is materially cheaper
+than full code signing and notarization, and does not change first-launch platform warnings. The signing key
+and its rotation story are an architecture obligation, recorded against ADR-0054.
+
+### ESC-9 — session retention
+
+**Decided: leave retention unbounded and add the derived read index** ADR-0003 keeps as a named escape
+hatch, outside the sessions tree and never on a correctness path.
+
+Nothing is ever deleted, so no user loses history; the session browser and history surface stay inside
+`REQ-SHELL-150`'s 100 ms gesture budget. This is purely an architecture decision and forecloses neither an
+unbounded-and-slow product nor a later user-visible retention preference.
+
+### ESC-10 — controlling a run owned by a second application instance
+
+**Decided: refuse the control, with a reason naming the owning process.**
+
+Consistent with `REQ-MONITOR-005`'s "a `false` outcome states the operation did not happen" and with
+`REQ-SESSION-183`'s existing pid and host vocabulary, and it requires no new mechanism. A filesystem control
+mailbox is rejected outright: the session-directory root is closed by `REQ-SESSION-001`, and a command
+channel over the filesystem is a pattern this product does not adopt.
+
+**Superseded in part** — see below. Under the single-instance ruling, a second application instance holding
+a session ceases to exist as a normal case, and this refusal becomes a defence against a state that should
+not arise rather than a routine user-visible behaviour.
+
+---
+
+## Standing direction: inherited structure is not a reason
+
+The product owner has directed that patterns carried over from the reference product's shape are to be
+challenged rather than reproduced:
+
+> If we are already rewriting my Rotaris app, there is no need to take over bad structural decisions,
+> communication patterns and architectural choices.
+
+This is a **standing amendment to the requirement-amendment policy**. Where a requirement encodes a
+structural choice that follows from the reference product being a multi-process command-line and terminal
+tool, and this product is one graphical desktop application, the requirement is a candidate for amendment
+rather than a constraint to design around. The Specification Gate already permits divergence for behavioural
+conflicts; this extends the same latitude to structural ones.
+
+It does **not** license divergence for convenience, for implementation difficulty, or from requirements that
+encode a genuine product behaviour the owner wants. The test is whether the requirement exists because of a
+process model this product does not have.
+
+---
+
+## Structural rulings under the standing direction
+
+The first three findings of that direction, ruled on 2026-08-31. Together they remove filesystem-mediated
+communication from the product entirely. Files remain the system of record; they are no longer a transport.
+
+### SR-1 — one running instance
+
+**Decided: a second launch of the application surfaces the running instance rather than starting a rival
+process.** Multiple workspaces and multiple windows remain fully supported; they are windows of the one
+instance.
+
+This is the root change. `REQ-SESSION-159` named three cases in which a session runs in a process other
+than the one displaying it — a second window of this application, another instance opened on the same
+workspace, and a run detached into the background. Under the architecture's process topology the first and
+third are already inside one process tree and reach the session over the internal channels. Only the second
+required the filesystem, and it no longer occurs.
+
+### SR-2 — a run this application does not own cannot be viewed
+
+**Decided: a session is either live and owned by this application's run host, or it is not running and
+exists as a persisted record.** There is no third condition. A session that is not live is opened from its
+record and may be continued.
+
+A session left behind by a crash or a force-quit is *stale*, not foreign: the existing lock-reap path
+(`REQ-SESSION-047`, `REQ-SESSION-058`, `REQ-SESSION-183`) settles it, after which it opens as an ordinary
+persisted session. Nothing becomes permanently unreachable — a session is unreachable only while another
+process is running it, and no other process can now be running it.
+
+This withdraws the live tail-following protocol: the resumable byte-offset read, the restart flag, the
+truncation-marker dropped-count comparison, the placeholder-row gap filling and the re-seed-without-
+observable-empty rule. `REQ-SESSION-159`'s closing guarantee — that following a session and reopening it
+afterwards produce identical transcripts — becomes trivially true, because only one derivation remains.
+
+**The event journal is unaffected.** `evidence/events.jsonl` stays byte-identical to the wire
+(`REQ-EVENTS-079`, `REQ-EVENTS-080`), stays comparable as a file by conformance requirements
+(`REQ-EVENTS-166`, `REQ-MONITOR-299`), and is now the durable anchor for the persist-before-publish rule.
+What is withdrawn is the protocol for *following* it live from another process, not the file.
+
+### SR-3 — no polling
+
+**Decided: the polling cadences are withdrawn.** `REQ-MONITOR-287`'s 750 ms foreign poll goes with the
+feature it served. `REQ-MONITOR-288`'s 2000 ms local reconcile poll is replaced by **monotonic per-session
+sequence numbers on view updates, with gap detection**: a surface that observes a gap knows immediately it
+missed an update and reconciles from a whole-state read.
+
+That is strictly stronger than the poll it replaces — detection is immediate rather than up to two seconds
+late, and it costs nothing while nothing is lost. It also composes with the existing rule that an apply
+stage which cannot correctly apply an increment declines it and re-renders from a whole read.
+
+`REQ-SESSION-071` already forbids re-reading persisted state on a timer as a way to follow a run. That rule
+now has no exception.
+
+**On the diagnosis:** polling here is not an artifact of an implementation language. It is an artifact of a
+*process model*. Independent processes sharing only a filesystem have no channel to push over, so they
+poll. This is the signature to look for in the remaining audit: wherever the record assumes two processes
+that cannot talk to each other, there is a fossil.
+
+### SR-4 — a database is the store for what only the application reads
+
+**Decided: the product uses a database for application-owned session data, and files for everything a
+human, another tool, or version control is meant to read.** ADR-0003's "files are the system of record;
+there is no database anywhere in the product" is reversed in part and rewritten.
+
+**The principle, which is what makes this decidable later rather than a list to memorise:**
+
+> A **file** when a human or another tool is meant to read or edit it, or when version control must
+> track it. A **database row** when only the application reads it and it is high-volume, queried, or
+> transactional.
+
+| What | Where |
+|---|---|
+| Sessions: metadata, session state, transcript rows, the event history, the timeline, evidence, the permission audit, the delegated-child ledger, the checkpoint index, delivery records, the improvement library | **database, one per workspace** |
+| Configuration, personas, model slots — the things a user edits, and whose comments matter (ESC-2) | **YAML under `.rotaris/`, visible to version control** |
+| Requirement documents, the generated symbol artifact, baselines, the tombstone log | **plain files in the user's own repository** — their versioned material, unchanged |
+| Global configuration, the discovery snapshot, desktop preferences | **per-user configuration and data directories** |
+| Artifacts, attachments, images | **on disk, referenced by row — never stored as blobs** |
+| Provider credentials | **individual protected files.** `REQ-PROVIDER-016` requires `0600` plus an explicit Windows access-control list, read back. That is a filesystem guarantee a row cannot make |
+
+**The event history stays exportable.** `REQ-EVENTS-166` requires a stored history to yield every field to
+a stock parser on a machine with none of this product's code present. That obligation is honoured by an
+**export**, not by the write path: the user can always get their history out in a plain line-delimited
+format. What is withdrawn is line-delimited JSON as the *runtime write path*, not the guarantee.
+
+**Why, in one paragraph.** Three of the four arguments that produced the no-database verdict do not survive
+inspection. `REQ-CONFIG-192`'s unmigrated-record rule is an argument about *configuration*, which stays in
+files. `REQ-MONITOR-299`'s entry-by-entry directory comparison is a conformance-test methodology encoded as
+a product requirement, and a fossil under the standing direction. "A database is a second copy that can
+disagree with the contract copy" assumes its own conclusion — it is only true if the files are kept as
+well. And `REQ-TRACE-502` is not satisfied by the file design either: OQ-41 records that on Windows an
+ordinary *reader* blocks an atomic replace, and under `REQ-GIT-145`'s unbounded concurrency those read
+windows overlap continuously, so a regeneration fails "because another invocation was running" in the
+requirement's own words.
+
+> **Correction, 2026-08-31.** An earlier version of this ruling concluded that the defect "is unreachable
+> in a store whose readers do not block its writers", and listed OQ-41 among what the database dissolves.
+> **That reasoning is wrong and must not be cited.** The artifacts `REQ-TRACE-502` governs — the
+> requirement documents, the baselines, the generated symbol artifact and the tombstone log — are the
+> user's version-controlled material and stay **files** under this ruling's own table. They never reach
+> the database, so the database's concurrency properties do not touch them.
+>
+> The conclusion is nearly right by a different route: **SR-1** removes the premise the defect rested on.
+> Unbounded concurrent *processes* on one workspace can no longer exist, so the overlapping read windows
+> that made retry exhaustion continuous are gone. That is a sharp **narrowing, not a dissolution**, and a
+> residue remains — a user-visible failure in a user-initiated action on Windows, recorded as ESC-14 and
+> OQ-44. What survives as an argument here is only that objection 1 was never a good reason to keep
+> files. It is not a claim that the database fixes it.
+
+**What this dissolves rather than fixes:** the writer's-handle discipline of ADR-0004 rule 3 and constraint
+D-28; the compaction paths that rename over a held append handle; the truncation marker and the byte-offset
+restart detection; the two incompatible retry ladders of OQ-11; and the ten-second debounce that made
+persist-before-publish collide with `REQ-MONITOR-218`, since rows are written individually rather than by
+rewriting a whole file. **Not OQ-41** — see the correction above.
+
+**What it costs, recorded so it is not discovered later:** ADR-0003 and ADR-0004 are foundational and
+everything numbered above them inherits the change. On the specification side it withdraws or amends the
+fixed session-directory layout and the line-delimited byte-format requirements — a second amendment pass.
+And a database file is a single corruption domain where per-session directories lost one session at a
+time; scoping the database per workspace bounds the blast radius, and that must be **stated in the
+decision record rather than assumed**.
+
+### SR-5 — a workspace held by another machine is refused, and that refusal is a safety feature
+
+**Decided: refusal is intended.** SR-1's "one running instance" is one instance *per machine*. A workspace
+on shared or synchronised storage, opened from a second machine, presents a session lock naming a host
+this instance cannot probe. It cannot prove the lock unheld, so it does not reap it: the session is
+refused as a pre-run failure that does not steal the holder's lock, reporting the session identifier with
+the process identifier and host the lock records (`REQ-SESSION-083`), with explicit release as the only
+remedy (`REQ-SESSION-183`).
+
+The host field of `REQ-SESSION-046`, the cross-host vocabulary of `REQ-SESSION-054` and
+`REQ-SESSION-056`, the explicit-release path of `REQ-SESSION-183`, and `REQ-GIT-093` **all stay**.
+
+**Why this is not merely tolerated.** The question was raised before SR-4 was applied, and SR-4 changes
+the answer. A database on network or file-synchronised storage is a well-known corruption vector, because
+the locking primitives such a store depends on are not reliable there. Detecting that a workspace is held
+by another machine therefore stops being an awkward edge case and becomes a **safety check**. Declaring
+the configuration unsupported and shrinking the host vocabulary would mean the product no longer detects
+the situation at all — and a silently corrupted workspace database is a far worse outcome for a user than
+a loud refusal.
+
+**On SR-2's "nothing is ever unreachable".** That statement is qualified rather than contradicted: a
+session is unreachable only while another owner holds it, which is the same rule that has always applied.
+What is new is that the other owner may be on a machine whose liveness this instance cannot establish, so
+the refusal cannot be resolved by reaping and requires a person.
+
+**Two refinements adopted with this ruling.** The first follows from it directly; the second is an
+addition, recorded separately so it can be reversed on its own:
+
+1. The refusal must convey **what is actually wrong** — that the workspace is open on another machine —
+   rather than reporting a lock conflict and leaving the user to infer it from a host name.
+2. **New:** the product should detect shared or synchronised storage *directly* rather than only
+   noticing it when a lock collides, and warn about it. Under SR-4 the risk is to the workspace database
+   itself and is not limited to sessions another machine happens to be running. This needs a new
+   requirement and is not merely an amendment.
+
+### SR-6 — the export obligation covers every record a user could previously read for themselves
+
+**Decided (ESC-17): extend the export.** SR-4 gave the event history an export in a stock, line-delimited
+format so `REQ-EVENTS-166`'s guarantee survived the move off files. That same obligation now covers **the
+timeline, the issues file, the metrics document and the permission audit**, each in a format a stock tool
+can read, and each reachable whether or not the session is live.
+
+**Why this and not the reduction.** `REQ-SESSION-191` currently keeps these reachable by revealing the
+session directory in the platform's file manager — an affordance that means nothing once the records are
+rows. Without an export, moving them into the database is a straight reduction in what a user owns about
+their own runs. That matters most for the **permission audit**, which is exactly the record a user
+consults *when they do not trust this application's rendering of events*. An audit log only this
+application can read is a materially weaker audit log, and no amount of good faith in the renderer
+substitutes for being able to check.
+
+Widening the export is cheap: the mechanism already exists for the event history, and it is the same
+obligation applied to four more record kinds rather than a new one.
+
+**Consequences.**
+
+- `REQ-SESSION-191` needs amendment. Its "reveals the session directory in the platform's file manager"
+  action no longer reaches the timeline, issues, metrics or audit records, and the requirement must state
+  the export in its place. `evidence/debug.log` stays a file (ADR-0003's worked examples place it there,
+  citing `REQ-SESSION-142`), so the log half of the requirement survives unchanged.
+- The export must not itself become a way to observe a live run, which `REQ-SESSION-071` forbids on a
+  timer and SR-2 forbids through a second derivation. It is a user-initiated action producing a file, not
+  a channel.
+- The permission audit's export inherits the audit's own integrity obligations: whatever ordering and
+  append-only character the record has in the store must be evident in what is exported, or the export
+  is decorative.
+
+---
+
+## Escalations ESC-11 to ESC-18 — ruled 2026-08-31
+
+Delegated by the product owner to the clean-room manager. Where a ruling is contingent on a measurement
+that has not been taken, the contingency is stated rather than hidden.
+
+### ESC-11 — the Linux artifact's runtime
+
+**Decided: ship on the stable line with the runtime pinned explicitly (option 2); if that line does not
+permit pinning, ship on the pre-release line (option 1).** Options 3 and 4 are refused — option 3
+contradicts `REQ-STARTUP-024` as written, and option 4 is forbidden by `REQ-STARTUP-031`'s closed
+four-artifact set. Spike 12 establishes whether pinning is possible; it is a choice between 2 and 1, not a
+reopening.
+
+The deciding argument is not packaging convenience. The legacy image runtime **disables the shell's own
+process sandbox unconditionally** on a distribution that restricts unprivileged user namespaces, where the
+static runtime disables it only where namespaces are genuinely unavailable. ADR-0002 makes the sandboxed
+renderer load-bearing: the transcript renders Markdown a model wrote and the terminal grid renders bytes an
+arbitrary process wrote. "Linux users get that surface unsandboxed" is a **different product**, not a build
+flag.
+
+**Separately, and independent of which option is taken:** `REQ-STARTUP-156`'s release gate runs on a
+machine the release owner controls, not on the unmodified baseline `REQ-STARTUP-024` names — so the gate
+can pass while the requirement fails. That is a defect in the gate regardless of this ruling and must be
+amended.
+
+### ESC-12 — the tool-server protocol era floor
+
+**Decided: the 2.x line with the pre-2026 offered-version entries retained (option 1).** This is ADR-0033's
+own recommendation and it gives the widest server compatibility.
+
+The stated cost — resting the product's tool story on a major release that is one month old — is real but
+recoverable, and it decays with time. The alternatives are not: option 3 breaks every 2025-era server a
+user already has, and option 2 makes current-era servers present as servers offering **no tools** rather
+than as an error, which is the worst possible failure presentation. What a user observes differs under all
+three and the choice is not cheaply reversible once configurations exist, so prefer the one that breaks
+nothing.
+
+### ESC-13 — the benchmark invariant against screen-reader access
+
+**Decided: accessibility wins, and this is ruled now rather than left conditional on OQ-28.** If OQ-28
+resolves to the framework-neutral reading, then `REQ-UIBENCH-054` is **relaxed** (option 2). The canvas
+(option 3) is refused outright.
+
+A canvas forfeits native text selection, keyboard navigation and per-row accessible names — all hard
+requirements (`REQ-CHAT-075`, `REQ-CHAT-077`, `REQ-CHAT-065`, `REQ-SHELL-144`) — and its failure mode is
+that a screen-reader user cannot read the conversation. `REQ-UIBENCH-088` makes the element-count
+invariants **informational** under either reading. Trading a blind user's access to the product for an
+informational benchmark number is not a trade this product makes, at any exchange rate.
+
+**This ruling de-blocks OQ-28.** That question stops being existential for ADR-0045 and becomes what it
+should have been: a definitional question about how a number is counted, whose answer changes a benchmark
+field and nothing a user can see.
+
+### ESC-14 — corrections to SR-4's own reasoning
+
+**Decided: option 1, correct the paragraph. Already actioned** — see the correction block inside SR-4
+above. The decision stands on the three arguments that hold; the OQ-41 claim is withdrawn and the
+`REQ-CONFIG-192` phrasing tightened. Nothing about the storage decision changes.
+
+### ESC-15 — a workspace on a network share or in a cloud-sync folder
+
+**Decided: the workspace database is stored machine-locally and always, keyed by a workspace identifier
+that travels with the workspace.** It does not live at `<workspace>/.rotaris/workspace.db`.
+
+**This reverses ADR-0058's scope decision and that ADR must be rewritten accordingly.**
+
+The problem is not slowness. Write-ahead logging is unsupported on network filesystems, so the store opens
+read-only; acquiring a session lock is now a write; therefore **no session in that workspace can start at
+all**. Under the file design the workspace worked, merely slowly. This is the single most likely way a real
+user meets an SR-4 regression, and a corporate user may be in this position by default without knowing it.
+
+**Why relocate always rather than only on detection.** Detecting "this directory is inside a sync client's
+tree" is unreliable — OneDrive and Dropbox folders look like ordinary directories, and detection would have
+to be maintained against every client. A conditional path also means two storage layouts to build, test and
+support. Always-local is one layout that is always correct.
+
+**Why this is coherent rather than a workaround.** SR-5 already established that sessions are effectively
+machine-bound: a session held by another machine is refused because its liveness cannot be established. A
+machine-local session store is the honest expression of a property the product already has. Meanwhile the
+user's own material — the repository, the requirement documents, the configuration — stays exactly where
+they put it and synchronises perfectly well, because syncing a git repository is ordinary and syncing a
+live database file is not.
+
+**The cost, and its mitigation.** A machine-local store does not travel with the workspace, so moving or
+renaming a workspace folder would orphan its sessions. Mitigated by writing a small, stable, human-readable
+**workspace identifier** into `.rotaris/`, which *does* travel with the workspace and synchronise. The
+database is located by that identifier, not by path. Moving the folder keeps the sessions; two machines
+holding the same synchronised workspace each keep their own local session history, which is correct under
+SR-5 rather than a compromise.
+
+Spike 19 is retained, but its question changes: it no longer asks whether a synced workspace is usable, but
+whether anything *else* the product writes into `.rotaris/` misbehaves on synchronised storage.
+
+### ESC-16 — a store that will not open means no run at all
+
+**Decided: accept the refusal.** The session refuses to start, with a stated reason naming the store and
+the engine's own error. `REQ-SESSION-089` and `REQ-EVENTS-084` are amended.
+
+`REQ-SESSION-089` requires a run to proceed with a logged warning when the durable event store cannot
+open. That partial-failure mode no longer exists, because the event store, the session state and the lock
+are now one object — there is no longer a coherent state in which the run has somewhere to record itself
+but not somewhere to be recorded. Running while quietly unable to persist anything, and reporting that as
+a warning, is a worse outcome for a user than not starting: it produces work whose record cannot be
+recovered.
+
+### ESC-18 — ESC-3 has been overtaken
+
+**Decided: accept the improvement.** Under a transaction, `REQ-LIBRARY-042`'s read-modify-write becomes
+atomic and two genuinely interleaved review decisions can no longer lose one another.
+
+ESC-3 was ruled "match the specification: silent loss on the ordinary write path". Every guarantee
+`REQ-LIBRARY-042` states still holds; what has become unreachable is the *defect* the requirement
+accepted. Reintroducing a race in order to remain bug-compatible is not a thing this product does, and the
+compatibility ruling recorded in the Specification Gate does not ask for it. `REQ-LIBRARY-042`'s closing
+concession is amended to record that the store now makes the interleaving impossible.
+
+### SR-7 — the onefile portable extracts once to a cache
+
+**Decided: the single-file Windows portable extracts to a cache on first run and launches from that cache
+thereafter.** `REQ-STARTUP-013`'s single-executable observable and `REQ-STARTUP-031`'s closed artifact set
+are **unchanged**. `REQ-STARTUP-155` gains a stated first-run exemption for onefile artifacts.
+
+**The evidence.** Spike 17 measured first paint on the portable at **13,287–19,580 ms** against a 5,000 ms
+budget, at every bundle weight tested **including a zero-payload build**, with no packaging setting that
+closes the gap (deflate 7,433 ms; uncompressed 5,307 ms). The same payload installed as a directory tree
+paints in **664–1,561 ms**, and 1,232–1,593 ms with a cold cache from a path never launched before. The
+Electron runtime is not the problem; re-extracting an archive on every launch is.
+
+**Why this option.** The alternatives each surrender something the specification deliberately fixes.
+Amending the budget needs at least **17.5 s**, which is not a product anyone wants. Amending
+`REQ-STARTUP-013` and `REQ-STARTUP-031` gives up "a single executable file that runs with no support tree
+beside it", which is the whole observable a portable exists to provide. Extract-once keeps both and pays
+the cost exactly once, which is also what users already expect from portable applications.
+
+**What must be decided with it, and is:**
+
+- **The cache lives in the per-user local application data directory, never beside the executable.** A
+  portable artifact must run from read-only or removable media — that is its purpose — so a cache beside
+  the executable defeats the artifact. This is consistent with ESC-15's ruling that machine-local state
+  belongs in machine-local storage.
+- **Keyed by artifact version and content digest**, so a new version extracts fresh rather than running
+  stale code, and a superseded cache is identifiable for reclamation.
+- **A partial, corrupt or unreadable cache re-extracts** rather than failing. Extraction is the recovery
+  path, so it must never be the failure path.
+- **"First run" means first run of a given artifact version**, and the exemption `REQ-STARTUP-155` gains
+  must say so, or a reader will take it to mean first run ever.
+- **Self-update is unaffected in intent but not in mechanism.** `REQ-STARTUP-106` and `REQ-STARTUP-125`
+  target the running executable file. Spike 15 already established that under the portable flavour
+  `process.execPath` points into the extraction directory rather than at the artifact; under a cache it
+  points into the cache. The artifact is identified by the packaging tool's own portable-executable
+  environment variable, not by `execPath`. This must be stated in ADR-0054 rather than discovered.
+
+**Spike 20 is required before the gate:** the cached-launch figure, the cost of the version check on the
+fast path, and cache invalidation across an update. The 0.7 s file-copy baseline says the target is
+reachable; it has not been measured on this mechanism.
+
+### SR-8 — REQ-ORCH-155's 100 ms is a percentile, not an absolute bound
+
+**Decided: read as a p95, and amend the requirement to say so.**
+
+Spike 10 measured the whole-session-update path at **p95 5.95 ms** unloaded and 7.81 ms under 65.5 MB/s of
+terminal frames — 8× to 40× inside the budget. Read as an *absolute* bound the same data fails: 24 of
+9,000 samples exceeded 100 ms, worst 125 ms unloaded. The requirement states no percentile, so the spike
+reported both readings and declined to choose.
+
+The absolute reading is not merely expensive, it is **unsatisfiable in principle**. No userspace program on
+a preemptive multitasking operating system can bound the latency of every sample over an unbounded run:
+scheduler preemption, garbage collection and paging are all outside the application's control. A
+requirement that cannot be met by any implementation is not a requirement, it is a defect. The percentile
+reading is therefore the only coherent one, and it is met with a wide margin.
+
+The amendment must state the percentile explicitly rather than leave it inferred, since `REQ-MONITOR-222`
+already states one and the silence in `REQ-ORCH-155` reads as deliberate contrast.
+
+### SR-9 — two gaps the specification pass exposed in SR-4 and SR-6
+
+Both were found by tracing guarantees rather than requirements, and neither is covered by an earlier
+ruling.
+
+**(a) The export list was too short by SR-6's own reasoning. Extended.** Improvement artifacts were
+readable JSON under `.rotaris/improvement_artifacts/`, and delivery records were readable files under
+`.rotaris/requirements/`. SR-4 makes both rows, and neither had an export. SR-6's argument — that moving
+records a user could previously read for themselves into rows is a straight reduction in what a user owns
+about their own runs — reaches these two exactly as it reaches the permission audit. The improvement store
+additionally carries the recorded version history `REQ-LIBRARY-168` calls "the audit trail the write path
+keeps", which is the same phrase that made the permission audit SR-6's strongest case.
+
+**Both gain an export on the same terms as the four in SR-6.** This is an extension of SR-6 to cases its
+reasoning already covered, not a new decision.
+
+**(b) A machine-local store changes what a backup protects, and nothing tells the user. New requirement.**
+Under the file design, backing up or synchronising a workspace backed up its session history. Under
+ESC-15 it does not: the workspace travels, the sessions stay on the machine. The exports are now the only
+way a user carries history anywhere durable.
+
+This was never stated as a requirement, so nothing was strictly lost — but it is a **new user-visible
+property that nobody owns**, and the failure mode is a user who backs up their workspace, restores it, and
+discovers their session history was never in it. A requirement is minted so the product states the
+property rather than letting a user infer it from an absence.
+
+**This is the minimum honest fix and it is deliberately not the only option.** If the product owner would
+rather solve it structurally — a configurable store location, or an explicit backup action covering the
+whole store rather than per-record exports — that is a larger decision and this ruling does not foreclose
+it. Recorded as reversible.
+
+---
+
+## Escalations ESC-19 to ESC-21 — ruled 2026-09-01, against comparative evidence
+
+The product owner asked for these to be decided by comparison with how other coding harnesses solve the
+same problems, rather than from first principles. Seven were examined: Claude Code, Codex CLI, Cursor CLI,
+Amp, opencode, pi and Hermes. Sources are listed at the end of this section.
+
+### What the field actually does
+
+| Harness | Where session history lives | Format | How a project is keyed |
+|---|---|---|---|
+| Claude Code | `~/.claude/projects/<encoded-path>/*.jsonl` | line-delimited JSON | **encoded absolute path** |
+| Codex CLI | `~/.codex/sessions/<date>/rollout-*.jsonl` | JSONL **plus a SQLite index** | generated id, no project key |
+| Cursor CLI | `~/.cursor/chats/<id>/<uuid>/store.db` | **SQLite** | generated ids |
+| Amp | `~/.local/share/amp/threads/*.json` + server | JSON, server-authoritative | thread id |
+| opencode | `~/.local/share/opencode/opencode.db`, `%LOCALAPPDATA%` on Windows | **SQLite, WAL** | **a `project` row in the database** |
+| pi | `~/.pi/agent/sessions/--<cwd>--/*.jsonl` | JSONL | **encoded absolute path** |
+| Hermes | `~/.hermes/state.db` | **SQLite, WAL, FTS5** | session rows |
+
+**Three findings, all of which bear on decisions this record has already taken.**
+
+**Machine-local is universal.** Not one of the seven stores session history inside the user's project.
+ESC-15 is not a deviation; it is what every comparable product does. opencode uses `%LOCALAPPDATA%` on
+Windows — the same non-roaming location ADR-0058 chose, and for the same reason.
+
+**SQLite is the majority and the direction of travel.** Four of seven use it, and three of those *migrated
+to it*: opencode moved from JSON files to SQLite, Hermes replaced per-session JSONL with `state.db`, and
+Codex added a SQLite index beside its rollouts. Hermes runs WAL "with fallback behaviour for filesystems
+that cannot support WAL coordination" — the precise hazard ESC-15 identified. SR-4 is the consensus
+position, not an experiment.
+
+**The path-keyed tools have a documented, filed, painful bug — and we have already avoided it.** Claude
+Code issues #33634 and #33636 record sessions being lost when a project directory is moved or renamed; one
+user lost 63 sessions across 10 projects after reorganising repositories, and *even changing a folder
+name's case* orphans everything. Roo Code has the identical defect, and the fix its users ask for is "a
+stable `.rooprojectid` file". That is exactly what ADR-0058 already decided — a random identifier in
+`.rotaris/`, deliberately not derived from the path. **This record solved the field's most-complained-of
+storage defect before shipping.** That is a decision to protect against a later simplification, not to
+revisit.
+
+### ESC-19 — the backup disclosure
+
+**Decided: option 1 *and* half of option 2. Mint the disclosure requirement, and add a whole-store backup
+and restore action. The configurable store location is REFUSED.**
+
+The comparison splits option 2 into two separable things, and they have opposite evidence.
+
+**A whole-store backup action is proven and cheap.** Hermes ships `hermes sessions backup`, built on the
+store engine's own online-backup facility so it is correct *while the application is running* and safe
+under write-ahead logging. It also keeps `backups/` and `state-snapshots/`. This is the right shape and we
+should copy it. It does not violate `REQ-SESSION-199`'s no-duplicate-export rule, because it is a
+different artifact for a different purpose: an **export** is readable by other tools, a **backup** is
+restorable by us. Per-record exports were never a backup story and SR-9(b) was right that the product
+currently has none.
+
+**A configurable store location is offered by nobody, and would re-create ESC-15.** No comparable product
+lets a user relocate the session *data* store. What several offer — `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
+`PI_CODING_AGENT_DIR` — relocates the whole configuration directory, and the comparative survey flags
+these as a hazard precisely because they "silently relocate stores" into places like Dropbox and iCloud. A
+user pointing our store at a share reproduces the total outage ESC-15 exists to prevent. Refused.
+
+**Therefore ADR-0058's location decision does NOT reopen.** The condition the registrar attached to that
+reopening — taking the structural option — is not met, because the half of it that was worth taking does
+not move the store.
+
+### ESC-20 — the export list, and where SR-6's reasoning stops
+
+**Decided: mint SR-9(a)'s two exports, and draw the boundary on redaction safety rather than on
+readership.**
+
+`REQ-TOOLS-190` currently stops the list with a *readership* argument: "that only this application reads it
+is why it is a record rather than a file the user is offered." That is the wrong test, and SR-6's own
+reasoning defeats it — SR-6 exists precisely because records only this application reads are still records
+a user owns.
+
+**The right test is safety, and the record already states it.** The permission audit exports safely
+*because* `REQ-TOOLS-079` gives its entries no argument values. `REQ-SESSION-136`'s tool-call evidence
+deliberately holds **unredacted** arguments and must never gain an export, under any later widening. The
+comparison confirms this is the field's live hazard: Codex rollouts are documented as carrying "prompts,
+command output, file paths, code, and accidental secrets", and opencode's export command ships a
+`--sanitize` flag for exactly this reason.
+
+So: **a record gains an export when it carries no unredacted user or tool content, and does not when it
+does.** Under that rule `REQ-TOOLS-190`'s verification-gate record gains one, and `REQ-SESSION-136` never
+does. That is the boundary SR-6 lacked, stated once.
+
+### ESC-21 — the integration lock on synchronised storage
+
+**Decided in direction, with strength pending spike 19: the product must not promise cross-machine mutual
+exclusion it cannot enforce.**
+
+There is no field precedent to borrow — every harness surveyed is single-machine, and the one with
+multi-device continuity (Amp) achieves it with a server, which this product does not have and does not
+want. So this is ours to reason about rather than to copy.
+
+Exclusive create is a genuine primitive on a network filesystem and is **not** one inside a
+file-synchronisation client's tree, because such clients replicate after the fact and both machines can
+succeed. `REQ-GIT-128` keeps the integration lock a file specifically so a second machine meets the same
+lock; on synchronised storage that guarantee is false rather than weak.
+
+The ruling: the integration operation must **detect** the condition and refuse rather than proceed under a
+lock that does not lock. This composes with SR-5, which already requires synchronised storage to be
+detected directly. Spike 19 decides whether refusal is the right strength or whether a warning suffices;
+it does not reopen the direction.
+
+### A consequence for ADR-0058 the comparison surfaced
+
+opencode's ecosystem records `better-sqlite3` **failing silently under an Electron runtime** through a
+native-module ABI mismatch, with the error swallowed. ADR-0058 chose `better-sqlite3`. The build toolchain
+must rebuild it against the Electron ABI (ADR-0056), and a store that cannot load must fail **loudly** on
+`REQ-SESSION-089`'s terms rather than be caught and degraded. Recorded so it is designed for rather than
+discovered.
+
+### Sources
+
+- [Where Six AI Coding CLIs Store Your Session Logs](https://allaboutcoding.ghinda.com/where-ai-coding-clis-store-session-logs/)
+- [Session Storage | Hermes Agent](https://hermes-agent.nousresearch.com/docs/developer-guide/session-storage/)
+- [Storage and Database | sst/opencode | DeepWiki](https://deepwiki.com/sst/opencode/2.9-storage-and-database)
+- [Rollout Persistence and Replay | openai/codex | DeepWiki](https://deepwiki.com/openai/codex/3.5.2-rollout-persistence-and-replay)
+- [Sessions lost when project directory is moved or renamed · anthropics/claude-code#33634](https://github.com/anthropics/claude-code/issues/33634)
+- [Sessions lost when project directory is moved or renamed · anthropics/claude-code#33636](https://github.com/anthropics/claude-code/issues/33636)
+- [Chat history keyed to absolute project path · RooCodeInc/Roo-Code#6618](https://github.com/RooCodeInc/Roo-Code/issues/6618)
+- [Codex session logs grow to 700MB-2GB · openai/codex#24948](https://github.com/openai/codex/issues/24948)
+
+### Consequences to carry
+
+- `REQ-MONITOR-013` **survives, clarified rather than withdrawn.** Its "a run executing in a different
+  process" now unambiguously means the run host as against the window — which the architecture had already
+  concluded the specification implied.
+- **ESC-10 is dissolved.** There is no second instance whose control must be refused. The refusal remains
+  as a defence against a state that should not arise, not as routine behaviour.
+- The crash domain concentrates. This sharpens the objection the record already preserves from the DATA
+  architect against ADR-0002: a run-host crash loses every in-flight run at once. Named here so it is not
+  discovered later.

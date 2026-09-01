@@ -1,0 +1,164 @@
+# ADR-0033 — The MCP client: the official SDK's protocol layer, our own stdio transport
+
+- **Status:** proposed
+- **Date:** 2026-08-31
+- **Origin:** MODEL (ADR-MODEL-08)
+- **Depends on:** ADR-0001, ADR-0002, ADR-0026
+- **Requires two spikes before the gate closes.**
+- **Contains an escalation.**
+
+## Context
+
+Three transports are required — `stdio`, streamable HTTP, and server-sent events — under one vocabulary
+(`REQ-MCP-001`, `REQ-MCP-043`).
+
+`REQ-MCP-066` and `REQ-MCP-067`: **exactly one shared connection per server per session and, for
+`stdio`, exactly one server process**, stated as an observable a test can count.
+
+`REQ-MCP-113` is unusually explicit and is stated as a host condition to be tested negatively: the
+application is a graphical process owning no console whose own standard streams may be absent, closed
+or not usable pipes. **The product creates the child's three standard streams itself for every launch,
+never inherits or reuses the parent's, never requires a console to exist, and never allocates or shows
+one — no console window at any point.** The same rule applies on every platform and to the reserved
+token's child, which is the application's own executable.
+
+Timeouts are layered and explicit: per-call 300 s by default and 600 s for one shipped entry
+(`REQ-MCP-003`, `REQ-CONFIG-181`); discovery 30 s with a hard 35 s outer bound that must hold **for
+every caller and every surface** and must not delay process exit past it (`REQ-MCP-046`,
+`REQ-MCP-053`); probes 8 s (`REQ-MCP-054`); post-connect hooks 15 s (`REQ-MCP-070`, `REQ-MCP-071`).
+`REQ-MCP-003` measures the per-call allowance "from the dispatch of the call to the receipt of its
+result".
+
+`REQ-MCP-068`: concurrent calls over one connection must **all** complete, each receiving its own
+response, and **the session keeps emitting its events while a call is outstanding** — `tool.start` is
+observable before the call returns and every other catalogue event is emitted at its normal point,
+however many calls are outstanding. This forbids serialising a connection behind a mutex and forbids
+blocking the event pump on a tool call.
+
+`REQ-MCP-060` and `REQ-MCP-062`: a mid-connection tool-list change must be observed and may only ever
+**narrow** the callable set. `REQ-MCP-048` and `REQ-MCP-051`: discovery must return an empty list rather
+than raising on any connection, protocol or timeout error, and a teardown error *after* the list
+arrived is ignored and logged at debug while one *before* is a failure. `REQ-MCP-052` drops entries with
+an empty or non-string name.
+
+**What was checked.** Context7, the official MCP TypeScript SDK's own documentation, and the npm
+registry, 2026-08-31. The SDK is MIT and ships as **two lines**: `@modelcontextprotocol/sdk` 1.30.0,
+and a 2.0.0 released 2026-07-27 that splits into `@modelcontextprotocol/client`,
+`@modelcontextprotocol/server` and `@modelcontextprotocol/node`. On both lines the client accepts any
+object implementing the transport interface — `start`, `send`, `close`, and `onmessage`, `onerror`,
+`onclose` — and the package exports `ReadBuffer`, `serializeMessage` and `deserializeMessage` for
+newline-delimited framing, with a documented custom-transport guide. Request options are exactly
+`onprogress`, `signal`, `timeout`, `resetTimeoutOnProgress`, `maxTotalTimeout` and
+`allowInputRequired`, with a 60 s default request timeout. The stdio server parameters are exactly
+`command`, `args`, `env`, `stderr`, `cwd` and a buffer size — **there is no passthrough for spawn
+options**, so hiding a console window and controlling stream ownership are not reachable through them.
+
+**The two lines differ in the one place this record cares about.** 1.30.0's latest protocol version is
+`2025-11-25` and its client options carry **no negotiation control at all**. The 2.x line adds the
+2026-07-28 era and with it a documented `versionNegotiation` client option — a mode plus a probe timeout
+and retry count — together with a `supportedProtocolVersions` list that shapes which eras are offered.
+Under `mode: 'auto'` the SDK's **own** stdio transport "executes the probe on a short-lived sibling
+process spawned with identical parameters", reaped once the era is determined; the same documentation
+advises that spawn-per-invocation stdio clients should not default to `'auto'` for exactly that reason.
+Note that the sibling-probe policy is stated for the SDK's standard stdio transport, which this record
+replaces — what a *custom* transport does under negotiation is not documented and is part of spike 3.
+
+## Alternatives considered
+
+**A — The official SDK wholesale, including its stdio transport.**
+
+*For:* least code; protocol version negotiation, capability handling, notification dispatch and schema
+validation are maintained upstream; new protocol revisions arrive as a dependency bump.
+*Against:* two of its behaviours collide with stated observables. The **sibling-process probe** means a
+single logical connection can transiently spawn **two** processes, which sits badly with
+`REQ-MCP-067`'s countable one-process guarantee and doubles the launch cost of the bundled runtime. And
+because the stdio parameters expose no spawn options, `REQ-MCP-113`'s guarantees — that *we* create the
+three streams and that no console window appears at any point — are not things we can assert; they
+become properties of a dependency's internals. `REQ-MCP-113` is written to be tested negatively, and a
+design that cannot state where the spawn happens cannot pass that test honestly.
+
+**B — A hand-written JSON-RPC client over our own transports.**
+
+*For:* total control; every timing and process obligation is ours to state; no surprise from an
+upstream negotiation policy.
+*Against:* MCP is a moving protocol with version negotiation, capability declaration, notification
+semantics and an evolving schema. Re-implementing that is real work whose failure mode is
+**incompatibility with servers we do not control** — the exact thing consumed-contract discipline
+cannot save us from, because here we are the *client* of a protocol, not a consumer of a payload. It
+also loses the SDK's schema validation, which is doing quiet work behind `REQ-MCP-052`.
+
+**C — The SDK's client and protocol layer, with our own transport for `stdio` and the SDK's for the two
+remote transports.** Chosen.
+
+## Decision
+
+**Alternative C, on the official SDK's 2.x line — `@modelcontextprotocol/client` (MIT).** The
+version-line criterion is `REQ-MCP-067`: pinning negotiation to an explicit mode is what keeps the
+process count at literally one, `versionNegotiation` is the control that does the pinning, and that
+control exists only on 2.x. The 1.x line would satisfy `REQ-MCP-067` by having no negotiation to pin,
+at the cost of not speaking the current protocol era at all — see the escalation.
+
+The split falls exactly along the line the requirements draw: **protocol behaviour** — handshake,
+negotiation, request correlation, notification dispatch, schema validation — is the SDK's and is not
+something the specification constrains; **process behaviour** — who spawns, with which stdio
+configuration, with which environment, with a hidden window, and how it is killed — is precisely what
+`REQ-MCP-113`, `REQ-MCP-067` and `REQ-MCP-099` constrain, and it becomes ours.
+
+- **`OwnedStdioTransport`** spawns with all three streams piped and the console window suppressed,
+  never inheriting the parent's descriptors, capturing the child's error stream to the log **after
+  redaction** (ADR-0007), framing with the SDK's exported read buffer and serialiser, and owning
+  termination — terminate, 5-second grace, force-kill, whole process tree on Windows. **That
+  termination primitive is shared** with the setup child processes of `REQ-MCP-099` and with the
+  external-runtime backend of ADR-0026.
+- **The SDK's own transports for HTTP and server-sent events**, since `REQ-MCP-037` explicitly does not
+  probe remote reachability at configuration time and there is no process obligation to own.
+- **Timeouts are passed explicitly at every call site**, never left to the SDK's default: 300 s or the
+  entry's `request_timeout` for tool calls, 30 s for discovery with a maximum-total-timeout giving the
+  35 s outer bound, 8 s for probes, 15 s for post-connect hooks. **Reset-on-progress is not enabled for
+  tool calls**, because `REQ-MCP-003` measures the allowance from dispatch to result and progress
+  notifications must not extend it.
+- **Version negotiation is pinned to an explicit mode** rather than left on `'auto'`, so no sibling
+  probe process is spawned and `REQ-MCP-067`'s process count stays literally one. **The offered-versions
+  list retains its pre-2026 entries**, because dropping them makes a connection to a server that speaks
+  only an older era fail outright, and `REQ-MCP-048` requires discovery to degrade to an empty list
+  rather than to raise — a distinction a user reads as "my server stopped working".
+
+## Escalation — which protocol era floor the product ships with
+
+The SDK line is not only a dependency choice; it decides **which of a user's existing tool servers
+connect**. The 2.x line is one month old at the time of writing and is the only line that speaks the
+2026-07-28 era or exposes the negotiation control this decision needs; the 1.x line is the longer-lived
+one and tops out at the `2025-11-25` era with no negotiation surface. The options are: **(a)** the 2.x
+line with pre-2026 entries retained — the widest server compatibility, at the cost of depending on a
+young major for the product's entire tool story; **(b)** the 1.x line — a settled dependency, but
+servers that speak only the current era are unreachable and, under `REQ-MCP-048`, present to the user as
+servers offering no tools; **(c)** the 2.x line with pre-2026 entries dropped, which is simpler and
+breaks every 2025-era server the user already has. **The record recommends (a)** and flags it because
+the choice is not reversible cheaply once configurations exist, and because what a user observes — which
+servers work — differs under all three.
+
+## Consequences accepted
+
+1. We own a transport. It is roughly one file plus a process-supervision helper shared with two other
+   call sites, and it is where three hard requirements are satisfied, so it earns its keep.
+2. Pinning negotiation may need revisiting as the protocol moves; that is a dependency-bump-shaped
+   cost, not a redesign. **Spike required:** confirm that pinning does not break servers that only
+   speak the newer negotiation, against at least one modern and one legacy server — and, since the
+   sibling-probe policy is documented for the SDK's own stdio transport rather than for ours, establish
+   what negotiation does over `OwnedStdioTransport` before assuming the pin is even needed there.
+3. **Spike required:** console-window suppression must be **verified, not assumed**. The runtime's
+   documented default does not hide a window, and a graphical-subsystem process spawning a console
+   application is exactly the case where one appears. `REQ-MCP-113` makes "no console window at any
+   point" observable, so this needs an actual on-Windows check against a packaged build, not a code
+   reading.
+4. Nothing serialises concurrent calls on one client, and the event pump never awaits a tool call.
+   `REQ-MCP-068` makes that observable through `tool.start` appearing before the call returns, so it
+   belongs in the conformance suite rather than in a comment.
+
+## Revisit if
+
+The negotiation spike shows pinning is unworkable; or the SDK gains spawn-option passthrough on its
+stdio transport covering window suppression and stream ownership, which would make alternative A viable
+and reduce our surface; or the offered-versions list acquires a pre-2026 floor upstream, which would
+turn the escalation's option (c) into the only one available and make it a compatibility announcement
+rather than a choice.

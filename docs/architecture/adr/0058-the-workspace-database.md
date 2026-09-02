@@ -35,6 +35,12 @@
   layout: the conversion is now a step rather than an assumption, and `origin.txt` is written by the restore,
   having been absent from every restored store. **None of the three corrections has been run**; that is IC-1
   in `../implementation-conditions.md`, and consequence 17 is why it exists.
+- **Re-measured:** 2026-09-02, `../spikes/corrected-restore-rerun.md`, discharging **IC-1**. All three
+  corrections above were run for the first time and **all five experiments pass, with every counterfactual
+  reproducing the original defect**. Two wording refinements were owed and are applied in place: the
+  aside-name's claim is the rename rather than a create, and the D6 correction's load-bearing half is the
+  counter rather than the granularity. **The corrections are now measured rather than argued**; consequence
+  17 stands unchanged, and its estimate now rests on three mechanisms rather than being tested by a fourth.
 - **Authority:** `owner-decisions.md` SR-4 (the store), **ESC-15** (machine-local, keyed by a workspace
   identifier), ESC-16 (a store that will not open means no run), ESC-18, SR-9(b), **ESC-19** (the backup
   and restore action; the configurable store location refused), **ESC-20** (the export boundary is
@@ -1275,6 +1281,12 @@ reordering that reads more tidily is the failure this section has already had.**
    and must be treated as one.** The refusal names the run host as unresponsive rather than naming a live
    session, because what is known is that the question was not answered.
 
+   3a-measured. *(`../spikes/corrected-restore-rerun.md`, 2026-09-02.)* Against a run host that
+   acknowledges the refusal and then ignores the close entirely, the bound terminated the action in
+   **2,008–2,020 ms** in 10 of 10, **refused** in 10 of 10, left the target byte-identical in 10 of 10 and
+   left no staging copy behind. Against the same condition without the bound, spike 22 measured no result
+   and no error inside a 15,000 ms watchdog.
+
    3b. **The run host's refusal to start runs is a lease, not a state it enters.** *(Added 2026-09-02, the
    other half of D3.)* Step 4a releases the run host on a refusal the workspace service reaches, and that
    is not enough, because the measured dual failure has no workspace service left to reach it: kill the
@@ -1299,6 +1311,23 @@ reordering that reads more tidily is the failure this section has already had.**
    refusing is a workspace in which no session can ever start again, with the store held by nobody and
    nothing in the sequence that would ever clear it; that state has been measured, from the other direction,
    and it persists for the life of the instance.
+   4-measured. *(`../spikes/corrected-restore-rerun.md`, 2026-09-02, discharging IC-1.)* A run admitted
+   inside step 1's window, taking its lock **after** step 2 had already passed and before step 3
+   acknowledged — the exact position of the run spike 22 measured being destroyed. **The second evaluation
+   caught it in 30 of 30**, at 0.23 / 0.42 / 1.27 ms; the restore abandoned in 30 of 30; the sessions
+   already in the store were unchanged in 30 of 30; no displaced store and no staging copy were left behind
+   in 30 of 30; **the raced session and every row it had written survived in 30 of 30**; and step 4a's
+   release returned the run host to accepting runs, with its store re-opened, in 30 of 30. **The
+   counterfactual is what makes this evidence**: the identical race against the mechanism with step 4
+   removed completed the restore in 10 of 10 and destroyed the raced session and all of its rows in 10 of
+   10. Step 4 is not defence in depth; it is the step that does the work.
+
+   3b-measured. *(`../spikes/corrected-restore-rerun.md`, 2026-09-02.)* With the run host told to refuse,
+   its store closed, and the workspace service then dying with nothing left to release it: a launch was
+   refused while the lease held in 10 of 10, **accepted once the lease expired in 10 of 10**, and the run
+   host re-opened the store by itself in 10 of 10. Spike 22 measured this state persisting for the life of
+   the instance. The lease is the exit.
+
 5. The workspace service **closes its own connection**. Both closes are now acknowledged and nothing has
    moved.
 6. The artifact is expanded into a sibling staging directory in the same parent, in full, and **arranged
@@ -1319,14 +1348,22 @@ reordering that reads more tidily is the failure this section has already had.**
    `-wal`, and only after a clean close does it hold `workspace.db` alone. **This step is not hygiene and
    not redundant with step 5. Deleting it as a duplicate close reproduces, exactly, the defect that made this
    mechanism fail every time it was run.**
-8. `<identifier>` → `<identifier>.displaced-<UTC timestamp>`. **The timestamp is milliseconds, and the name
-   is taken by a create that fails if it is already there.** *(Granularity stated 2026-09-02, defect D6.)*
-   At second granularity two displacements inside one second collide and this step fails `EPERM` in **30 of
-   30** — a one-word omission that stops the mechanism dead. Milliseconds do not make a collision
-   impossible, so the granularity is not the guarantee: the name is claimed by an exclusive create and, if
-   that create finds the name taken, a decimal counter is appended and the claim retried, up to a small
-   fixed number of attempts, after which the restore is refused with nothing moved. **A name assumed unique
-   is not unique**, and this is the same rule ADR-0004 applies to any other name the product mints. The
+8. `<identifier>` → `<identifier>.displaced-<UTC timestamp>`. **The timestamp is milliseconds, and the
+   rename onto that name is itself the claim.** *(Granularity stated 2026-09-02, defect D6; the claim
+   corrected from "an exclusive create" on the same date after measurement.)* At second granularity two
+   displacements inside one second collide and this step fails `EPERM` in **30 of 30** — a one-word omission
+   that stops the mechanism dead. Milliseconds do not make a collision impossible, so **the granularity is
+   not the guarantee**: where the rename fails because the name is taken, a decimal counter is appended and
+   the claim retried, up to a small fixed number of attempts, after which the restore is refused with nothing
+   moved. **A name assumed unique is not unique**, and this is the same rule ADR-0004 applies to any other
+   name the product mints. **No separate create is needed and none should be added** —
+   `../spikes/corrected-restore-rerun.md` measured that a directory cannot be renamed onto an existing
+   directory here, so the rename fails on a taken name rather than merging into it; writing this as a create
+   invites a create-then-rename pair, which has a gap between its two halves that the single rename does not.
+   **The counter is the load-bearing half.** Forced to collide, the corrected name needed the counter in
+   **30 of 30** and kept both displaced stores, openable and distinguishable; the pre-correction name —
+   second granularity, bare rename, no counter — failed `EPERM` in **30 of 30** and lost a displaced store
+   every time. The
    stamp's granularity binds every name of this shape in this record, not only this one: the recovery
    ladder's displaced store and the reversal's `.obstruction-` aside both reuse it deliberately, so it is
    fixed once here and inherited rather than restated three times and drifting.
@@ -1388,6 +1425,16 @@ be at least as robust as the step it undoes.** A reversal that works only when n
 reversal — it is a second copy of the failing step, sharing its assumptions, and it will be exercised for
 the first time on the one day it is needed. Anything added to a forward path to survive this platform
 belongs in the path that undoes it.
+
+**The reversal has now been run against the case it exists for, and it holds.**
+*(`../spikes/corrected-restore-rerun.md`, 2026-09-02, discharging IC-1.)* With the install rename forced to
+fail on an occupied name — the family in which the old reversal failed with the identical error —
+displace-then-rename returned the target store **byte-identical in 30 of 30**, re-openable in 30 of 30, and
+reached a store directory holding no database in **0 of 30**. R1 cost 3.15–3.75 ms and the whole reversal
+6.43–7.36 ms. The counterfactual was run in the same harness: the single-rename reversal failed `EPERM` in
+10 of 10 and reached the forbidden end state in 10 of 10, with the error naming both paths each time. **Two
+leftovers, not one, were observed on every corrected run**: the `.obstruction-` aside this reversal mints,
+which is intended and kept, and the staging copy, which is defect D5 and is still open.
 
 **And the end state that must not be reachable, named so that it is testable: a store directory that exists
 and holds no database.** The old reversal produced precisely that, in 20 of 20 observations, and it is not a

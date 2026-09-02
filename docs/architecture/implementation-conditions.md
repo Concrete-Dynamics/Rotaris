@@ -21,6 +21,17 @@ it, and where the result goes.
 
 ## IC-1 — the corrected restore is re-measured before its implementation is signed off
 
+> **DISCHARGED 2026-09-02.** Run as `../spikes/corrected-restore-rerun.md`. **All five experiments pass and
+> every counterfactual reproduces the original defect**: the second liveness evaluation caught the raced run
+> 30 of 30 and removing it destroyed the session 10 of 10; displace-then-rename returned the target
+> byte-identical 30 of 30 where the single-rename reversal reached the forbidden empty-store-directory state
+> 10 of 10; the bound refused in 2,008–2,020 ms where the unbounded handshake had returned nothing inside
+> 15,000 ms; the lease re-admitted runs 10 of 10 where the state had persisted for the life of the instance;
+> and the aside-name's counter was needed in 30 of 30 forced collisions, where the pre-correction name lost a
+> displaced store 30 of 30. Two wording refinements are owed to ADR-0058 and are applied. **The condition is
+> met; the entry is kept rather than deleted, because what it required is now evidence.**
+
+
 **Set by:** GD-3, 2026-09-02. **Binds:** the first implementation of the store restore of ADR-0058 and
 `REQ-SESSION-201`. **Discharged into:** a dated spike report in `docs/architecture/spikes/`, and a note on
 ADR-0058.

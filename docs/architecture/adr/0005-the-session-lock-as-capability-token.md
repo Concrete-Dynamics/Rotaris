@@ -8,6 +8,12 @@
 - **Revised:** 2026-09-02, to carry **ESC-21**. `REQ-GIT-128` and `REQ-GIT-124` have since been amended and
   they now decide what this record previously described as an unconnected hazard; the paragraph that said
   "no requirement currently connects the two" is **withdrawn and must not be cited**.
+- **Revised again:** 2026-09-02. **Consequence 11's lock-row correction has been run, with its
+  counterfactual, and is confirmed.** The consequence now states what was measured instead of predicting
+  what would happen, and its subjunctive is retired. Nothing else in this record changes and no decision in
+  it moves.
+- **Evidence:** `../spikes/backup-restore-mechanism.md` (2026-09-02), for consequence 11. Every figure it
+  contributes below is a measurement; none is estimated.
 - **Authority:** `owner-decisions.md` SR-1, SR-4, **ESC-15**, **ESC-21**; the amended `REQ-SESSION-046`,
   `REQ-GIT-020`, `REQ-GIT-124` and `REQ-GIT-128`, which have settled what this ADR previously had to decide
 - **Origin:** RUNTIME (ADR-RUNTIME-07, including a Windows spike), DATA (constraints C2, C3)
@@ -440,9 +446,10 @@ locks is not needed to have it, because the record already does.
     those rows name this `host`, their pids probe dead, and the ordinary reap and repair settle them with
     no new concept. Restored on a different machine they name a foreign `host`, which `REQ-SESSION-056`
     resolves toward live and `REQ-SESSION-047` never reaps, so every session that was running at backup
-    time would arrive permanently unreachable and would need `REQ-SESSION-183`'s explicit, per-session,
+    time arrives permanently unreachable and needs `REQ-SESSION-183`'s explicit, per-session,
     user-confirmed release — turning a recovery into a chore proportional to how busy the machine was
-    when it died.
+    when it died. *(That sentence stood in the conditional until 2026-09-02. It is now indicative, because
+    the case has been run: see the measurement below.)*
 
     **The correction is one line and it belongs to the lock rules, so it is stated here:** a restore
     **drops lock rows whose `host` is not this machine**, and keeps the ones that name it. Restoring a
@@ -454,6 +461,30 @@ locks is not needed to have it, because the record already does.
     carry the pid `REQ-SESSION-059` wants a stale report to name. ADR-0058 owns where this sits in the
     restore sequence and requires the pre-restore summary to say how many sessions will arrive needing
     repair, so the correction is disclosed rather than silent.
+
+    **Confirmed by measurement, 2026-09-02, against its own counterfactual**
+    (`../spikes/backup-restore-mechanism.md`). A backup was taken with two sessions mid-run —
+    `execution_status = running`, lock rows held — and restored into a world where those rows named a
+    different machine. **With the correction applied:** both foreign-host rows dropped, both sessions
+    arrived `running` with no lock, `live=false`, `stale=true`, and the ordinary explicit repair settled
+    both to `interrupted`. **With the correction disabled against the same world:** both arrived holding a
+    lock naming `DEAD-LAPTOP-7`, `live=true`, `stale=false`, **not repairable**, reachable only one at a
+    time through `REQ-SESSION-183`. Terminal sessions were untouched either way, and rows naming this
+    machine were kept and probed dead, so `REQ-SESSION-059` still had the pid to name. **The rule was
+    written for a case nobody had run; the case has now been run, and both halves of it behave as the rule
+    says.** That is worth stating rather than assuming: three defects were found in the same restore
+    mechanism on the same measurement pass (ADR-0058, consequence 17), so this rule's survival is evidence
+    and not a formality — it is the part of that mechanism that was reasoned correctly, and the reasoning
+    that produced it is the reasoning to imitate.
+
+    **What this rule does not cover, stated so the confirmation is not over-read.** It drops foreign-host
+    rows on the way **in**, from the artifact. It says nothing about a foreign-host row already sitting in
+    the **target** store — and measured, one such row makes that target permanently unrestorable, because
+    `REQ-SESSION-056` resolves it toward live, `REQ-SESSION-047` never reaps it, and the restore is refused
+    while anything in the target is live. A machine rename produces that condition for every lock row at
+    once, which `REQ-SESSION-054` calls "a state that should not arise". Nothing here closes that, and the
+    remedy — if the owner wants one — is a rule about the *target*, belonging with the ordinary reap and
+    with `REQ-SESSION-183`, not an extension of this one.
 
 ## Revisit if
 

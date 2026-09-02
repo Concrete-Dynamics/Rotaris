@@ -17,14 +17,24 @@
   strongest durability setting is what makes a terminal status readable by another process. One new hazard
   is recorded that no version of this record considered — a store reached through two path spellings — and
   ESC-26's confirmed-establishment path is built.
+- **Revised a third time:** 2026-09-02, against `../spikes/backup-restore-mechanism.md`, which ran the
+  restore end to end for the first time. **Every decision the restore section takes survives. Three defects
+  in its mechanism do not, and each is corrected in place below with the measurement that found it**, because
+  all three are the kind a later simplification would put back. The three: the staging store was opened and
+  no step closed it, so the install rename could not run at all (0 of 30); the live-session gate was
+  evaluated before the run host was told to refuse runs and nothing re-checked, which destroyed a live
+  session and every row it had written; and the reversal was a single rename onto a name whose occupancy is
+  the commonest reason the step it reverses had just failed. Consequence 17 records what three such findings
+  in a row imply about the parts of this record nobody has run.
 - **Authority:** `owner-decisions.md` SR-4 (the store), **ESC-15** (machine-local, keyed by a workspace
   identifier), ESC-16 (a store that will not open means no run), ESC-18, SR-9(b), **ESC-19** (the backup
   and restore action; the configurable store location refused), **ESC-20** (the export boundary is
   redaction safety), **ESC-26** (a restore may establish the workspace identifier on explicit
   confirmation, and no other path ever may). All decided, not proposed.
-- **Evidence:** `../spikes/remote-and-synchronised-storage.md` (2026-09-02) and
-  `../spikes/commit-on-the-publish-path.md` (2026-09-02). Every figure quoted below is from one of those
-  two and is a measurement; none is estimated.
+- **Evidence:** `../spikes/remote-and-synchronised-storage.md` (2026-09-02),
+  `../spikes/commit-on-the-publish-path.md` (2026-09-02) and `../spikes/backup-restore-mechanism.md`
+  (2026-09-02). Every figure quoted below is from one of those three and is a measurement; none is
+  estimated.
 - **Depends on:** ADR-0001, ADR-0002, ADR-0003
 - **Constrains:** ADR-0004, ADR-0005, ADR-0008, ADR-0009, ADR-0024, ADR-0039, ADR-0041, ADR-0042, ADR-0046
 
@@ -1050,6 +1060,26 @@ reader may observe one." That is met by doing every check before the first mutat
    Liveness is `REQ-SESSION-056` through ADR-0005's single predicate; a second implementation here is the
    `REQ-SESSION-171` defect.
 
+**Gate 3 has a position as well as a predicate, and it was the position that was wrong. Corrected
+2026-09-02, and the correction cost a live session to find.** The predicate is right and is unchanged:
+measured 30 of 30, it refuses a lock naming this machine whose pid is alive, refuses a lock naming another
+machine, and admits a lock this machine can prove dead. What the record had wrong is *where* it ran. As
+written, gate 3 was evaluated here, in the read-only phase, and the run host was told to refuse runs only
+afterwards, as part of the close request. **Measured: a run launched in the window between the two was
+admitted, took the lock, began writing at `REQ-MONITOR-219`'s twenty rows a second, was asked to close
+mid-write, complied — and had its session and every row it had written destroyed by the swap.** Nothing
+re-checked. That is the state ADR-0002 consequence 11's own closing sentence says cannot arise — "the run
+host is never asked to give up a store it is actively writing" — and it is exactly what `REQ-SESSION-201`
+forbids.
+
+**So this evaluation is kept and demoted, and the evaluations the swap relies on move into the swap.** It is
+kept because it is cheap — 3.1 to 3.8 ms measured at every store size, against gate 1's 52 ms to 1.2 s — and
+because refusing here means a restore that cannot proceed is refused before a user is asked to confirm
+anything, and before the identifier question below is put to them. It is demoted because **a gate evaluated
+while launches are still being admitted is a statement about the past**, and by the time anything moves it
+has expired. It must never be cited as the check that makes the swap safe. Steps 1, 2 and 4 of the swap
+below carry that, and the reason each of them sits where it does is written there.
+
 **Then the identifier. Three cases, decided by what the workspace carries and never by what the artifact
 would prefer.**
 
@@ -1196,29 +1226,113 @@ forever on any machine but the original (`REQ-SESSION-056`, `REQ-SESSION-047`), 
 `REQ-SESSION-183`'s explicit release once per session. The count is disclosed in the pre-restore summary,
 so the correction is stated and not silent.
 
-**The swap, and the one window that is not atomic.** No connection may be open on the target while it is
-replaced. The Windows writer-handle spike is the evidence: a rename over a file with a held descriptor
-failed in every one of 115 attempts, and here there are three such files (`workspace.db`, `-wal`, `-shm`)
-across two processes.
+**The swap, and the one window that is not atomic.** No connection may be open on **either** directory a
+rename touches — not the one being renamed, and not the one being renamed onto. *(Corrected 2026-09-02. The
+rule read "No connection may be open on the target while it is replaced", and that phrasing is precisely
+what let the whole mechanism fail: the staging store is not the target until the rename it is blocking has
+happened, so the rule was satisfied and the restore still could not complete. See step 7.)* The Windows
+writer-handle spike is the evidence for files — a rename over a file with a held descriptor failed in every
+one of 115 attempts, and here there are three such files (`workspace.db`, `-wal`, `-shm`) across two
+processes. `../spikes/backup-restore-mechanism.md` is the evidence one level up: a **directory** holding a
+single open handle cannot be renamed at all, 0 of 30 in every shape tried — a plain descriptor, a connection
+in this process, a connection in another process, and a process's current directory alike.
 
-1. The workspace service asks the run host to close its connection for this identifier and to refuse runs
-   against it; both closes are acknowledged before anything moves (ADR-0002 consequence 11).
-2. The artifact is expanded into a sibling staging directory in the same parent, in full, and the expanded
+**The order below is the mechanism, and several steps exist only because of where they sit. It has now been
+run, and the three things it got wrong were all orderings and omissions rather than predicates. A
+reordering that reads more tidily is the failure this section has already had.**
+
+1. The workspace service tells the run host to **refuse new runs** against this identifier. Only that; the
+   close is not asked for yet, because a close must not be asked of a run that liveness has not yet cleared.
+2. **Liveness is judged, with the refusal in force** — gate 3's predicate, against the target store, on the
+   workspace service's own still-open connection. If any session is live the restore is abandoned here, by
+   4a, with nothing moved.
+3. The run host **closes its connection** for this identifier and acknowledges (ADR-0002 consequence 11).
+   The workspace service still holds its own.
+4. **Liveness is judged a second time**, after that acknowledgement and before the workspace service gives
+   up its own connection — which is the only place it can be judged, because judging it needs an open
+   connection and step 5 closes the last one. **This is the evaluation the swap rests on.** Step 1's
+   instruction is not instantaneous: until the run host acknowledges, launches are still being admitted, and
+   a run admitted in that window holds a lock and is mid-write. Measured, that run's session and all of its
+   rows were destroyed by the swap. Here it is caught instead, at a cost of 3.1 to 3.8 ms.
+
+   4a. **If either evaluation refuses, the restore is abandoned before any mutation** — nothing renamed,
+   nothing expanded, nothing written, the target store byte-identical — the refusal names the sessions found
+   live, and **the run host is released**: told that it may accept runs again and, if step 3 has already
+   closed it, told to re-open. The release is not optional and is not tidiness. A run host left closed and
+   refusing is a workspace in which no session can ever start again, with the store held by nobody and
+   nothing in the sequence that would ever clear it; that state has been measured, from the other direction,
+   and it persists for the life of the instance.
+5. The workspace service **closes its own connection**. Both closes are now acknowledged and nothing has
+   moved.
+6. The artifact is expanded into a sibling staging directory in the same parent, in full, and the expanded
    store is **opened read-write once there** — which performs any log recovery and lets the integrity check
-   run against the thing that will actually be used rather than against the copy inside the container.
-3. `<identifier>` → `<identifier>.displaced-<UTC timestamp>`.
-4. staging → `<identifier>`.
-5. Both processes re-open; migrations run in the workspace service exactly as at any other open; the run
-   host is told the workspace is open again.
+   run against the thing that will actually be used rather than against the copy inside the container. That
+   reason is unchanged, and it is why the open is deliberate rather than incidental.
+7. **The staging connection is closed.** *(Added 2026-09-02. Without this step the restore fails in 30 of 30
+   attempts and the feature does not work at all.)* Step 6's open is what makes step 9 impossible: staging is
+   the directory step 9 renames, and on this platform a directory holding an open handle cannot be renamed —
+   `EPERM`, 30 of 30, against 30 of 30 succeeding with the connection closed first. This is ADR-0004 rule 1
+   one level up: replace-by-rename "fails against *any* open handle on the target", and the reason the rule
+   above did not reach it is that staging is not the target yet. The close is also what makes the directory
+   renameable rather than merely tidy — measured, an open store directory holds `workspace.db`, `-shm` and
+   `-wal`, and only after a clean close does it hold `workspace.db` alone. **This step is not hygiene and
+   not redundant with step 5. Deleting it as a duplicate close reproduces, exactly, the defect that made this
+   mechanism fail every time it was run.**
+8. `<identifier>` → `<identifier>.displaced-<UTC timestamp>`.
+9. staging → `<identifier>`.
+10. Both processes re-open; migrations run in the workspace service exactly as at any other open; the run
+    host is told the workspace is open again and may accept runs.
 
-**Steps 3 and 4 are two renames and no platform offers a primitive that makes them one. The record says so
+**Steps 8 and 9 are two renames and no platform offers a primitive that makes them one. The record says so
 rather than implying atomicity.** What a reader observes between them is that the store directory is
-**absent** — and this record already fixes what that means: a workspace for which this machine holds no
-store lists no sessions, which `REQ-SESSION-043` makes an ordinary state and not an error. So the worst
-observable in the gap is an empty list, in a window whose store is closed anyway; it is not a corrupt store
-and not a half-restored one, which is what the requirement actually forbids. If step 4 fails after step 3
-succeeded, step 3 is reversed before the failure is reported; if the reversal also fails, the failure names
-both directory paths so a person can finish a rename the product could not.
+**absent** — now measured, in 20 of 20 observations that caught the gap, which is 3 to 5 ms wide at every
+store size from 68 KB to 313 MB, and never once anything mixed — and this record already fixes what that
+means: a workspace for which this machine holds no store lists no sessions, which `REQ-SESSION-043` makes an
+ordinary state and not an error. So the worst observable in the gap is an empty list, in a window whose
+store is closed anyway; it is not a corrupt store and not a half-restored one, which is what the requirement
+actually forbids.
+
+**The reversal, rewritten 2026-09-02, because as written it failed in exactly the case it exists for.** If
+step 9 fails after step 8 succeeded, step 8 is reversed before the failure is reported. This record
+previously made that reversal a single rename of `<identifier>.displaced-<stamp>` back to `<identifier>` —
+and step 9 has two failure families: a handle held inside staging, which leaves the target name free, and
+**an occupied target name**, which does not. In the second family the reversal renames onto the very name
+whose occupancy failed step 9, and it fails with the identical error. Measured, `EPERM` both times, and the
+end state was a store directory holding no database, the real store sitting under a timestamped name, and
+the workspace service's re-open throwing `unable to open database file`. **This record had written "if the
+reversal also fails" as though it were a rarer, independent event. It is neither: on this platform the two
+failures are the same failure, and the family that guarantees both is half the failure space.**
+
+**So the reversal takes the same displace-then-rename shape the forward path already needs on this
+platform.** It is two renames for the same reason steps 8 and 9 are two:
+
+  R1. If `<identifier>` exists, it is renamed aside to `<identifier>.obstruction-<the same UTC timestamp
+  step 8 used>`. The same stamp deliberately: the two leftovers of one failed restore are then legible as a
+  pair, and the reversal mints no second name whose freshness would have to be argued separately. The
+  obstruction is kept, never deleted — the product does not know what it is, and this record's rule that the
+  application never deletes a store applies with more force to a directory it cannot identify.
+
+  R2. `<identifier>.displaced-<stamp>` → `<identifier>`, which now renames onto a name that does not exist,
+  and a rename onto a free name succeeded in 30 of 30 attempts.
+
+**The rule this is an instance of, written out because it generalises past this mechanism: a reversal must
+be at least as robust as the step it undoes.** A reversal that works only when nothing went wrong is not a
+reversal — it is a second copy of the failing step, sharing its assumptions, and it will be exercised for
+the first time on the one day it is needed. Anything added to a forward path to survive this platform
+belongs in the path that undoes it.
+
+**And the end state that must not be reachable, named so that it is testable: a store directory that exists
+and holds no database.** The old reversal produced precisely that, in 20 of 20 observations, and it is not a
+gap of milliseconds but the durable state the user is left in — it survives the failure, the re-open and the
+restart. `REQ-SESSION-043` fixes what an *absent* store directory means and no requirement fixes what a
+present, empty one means, so every reader in the product would meet a state nothing describes and nothing
+was written for. R1 removes it: after a reversal the store directory either holds the store or does not
+exist, and those are the only two states this record admits.
+
+**The last resort survives untouched, because it is what stands between a failure and a lost store.** If R1
+itself cannot run — the obstruction holds a handle of its own — the failure names both directory paths so a
+person can finish a rename the product could not. That text was specified before it was ever run, it worked
+when it was, and it was the only reason the measured end state was recoverable by hand at all.
 
 **Two things a restore never does.** It never runs by itself — not at startup, not on finding an artifact,
 not as a repair, and **not as a step of the recovery ladder below**, which may *name* it as a remedy the
@@ -1471,6 +1585,12 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    swap is two renames rather than one. The observable in the gap is an absent store directory, which
    `REQ-SESSION-043` already makes an ordinary state — so the failure mode is an empty session list, not a
    corrupt store. Accepted deliberately in preference to inventing an atomicity no platform provides.
+   **Measured 2026-09-02 and true as claimed**: 20 of 20 observations that caught the gap saw the store
+   directory absent and never anything mixed, and the gap is 3 to 5 ms whatever the store weighs. It was
+   also measured to be *not* the worst observable, and that is the part this consequence must not be read
+   as covering on its own: a failed reversal left a store directory present and empty, durably, in 20 of 20
+   occupied-name failures. That state is now excluded by the reversal's displace step rather than by luck,
+   and the exclusion is a correctness property of the reversal and not a nicety of it.
 8. **Restoring on a machine other than the one that took the backup changes which sessions need repair.**
    Foreign-host lock rows are dropped on the way in (ADR-0005), so every session that was live when the
    backup was taken arrives stale and needs the ordinary explicit repair. That is a correct outcome, it is
@@ -1522,6 +1642,33 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     route by which `PRAGMA synchronous` silently fails to apply. Both belong in the thin data-access module
     alternative B exists to keep swappable, and both are the kind of thing that is rediscovered as an
     intermittent crash if it is not written down.
+17. **Three mechanisms in the architecture record have now been built for the first time, and every one of
+    them contained a defect that no amount of reading had caught. That is the number, and it belongs here.**
+    ADR-0054's commit step, which renamed a prepared directory onto an existing one — a thing this platform
+    does not do, so a damaged preparation was never repaired and one case launched to no window at all.
+    ADR-0054's completeness check, which passed a preparation whose image was damaged, after which the
+    launch produced nothing. And this record's restore, which could not complete at all, destroyed a live
+    session through a gate evaluated too early, and reversed itself with the same call that had just failed.
+    Each was found on first execution and none by review. Each is corrected in place, here or in the record
+    that owns it.
+
+    **What that licenses and what it does not.** Three of three is a sample of three and it is the only
+    sample this project has, so it is the best available estimate of how much of what remains unmeasured is
+    wrong, and the estimate is not small. It does not license measuring everything; that is not available.
+    It settles two narrower things. First, **a mechanism this record describes and nobody has executed is
+    not evidence that the mechanism works**, and must not be cited as though the writing were the testing —
+    every one of these three read correctly to everyone who read it, including the readers who wrote it.
+    Second, **when one of them is built and does not work, the defect and its measurement belong in the
+    record in place**, rather than being repaired quietly in code, because the reason for a fix is the only
+    thing that stops the next reader removing it. Every correction in the restore section above is written
+    that way for that reason.
+
+    **One instance is worth carrying by itself, because it is the same fact found twice.** ADR-0054's commit
+    step and this record's reversal failed on one identical platform property — a directory cannot be
+    renamed onto a name that already exists, not even an empty one — discovered independently, in two
+    records, by two measurements, neither of which was looking for it. The displace-then-rename shape is now
+    in both. A third mechanism in this product that renames a directory onto a name that might be occupied
+    has the same defect and has simply not been run yet.
 
 ## Revisit if
 

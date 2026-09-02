@@ -176,7 +176,7 @@ the specification was sufficient to design from; that judgment stands. But a rea
 closure figures, or the phrase "approved as sufficient", as describing the corpus as it exists today.
 `../spec/README.md` carries the current counts and is the authority for them.
 
-Amendments made under the standing direction so far, in **six** rounds. The **structural-ruling round**
+Amendments made under the standing direction so far, in **seven** rounds. The **structural-ruling round**
 applied SR-1 to SR-3; the **storage-ruling round** applied SR-4 to SR-8 and ESC-11, ESC-13, ESC-15,
 ESC-16 and ESC-18; the **ruling-application round** of 2026-09-01 applied everything that was ruled and
 never made — ESC-1, ESC-2, ESC-5, ESC-6, ESC-7, ESC-8, ESC-13's withheld half, ESC-19, ESC-20, ESC-21
@@ -187,18 +187,31 @@ architecture pass returned after reading the amended corpus closely enough to im
 measurements exposed. The **platform-defect round** of 2026-09-02 answered a second architecture pass —
 eight measurements against the target platform — which named **three defects that would each cause a
 conformant implementation to be built wrong and that no test would find**, and applied the seven owner
-rulings of that date: **ESC-22, ESC-24 and ESC-27 to ESC-31**. All six are recorded in detail in
-[`provenance.md`](provenance.md).
+rulings of that date: **ESC-22, ESC-24 and ESC-27 to ESC-31**. The **restore-measurement round** of
+2026-09-02 answered the first execution of `REQ-SESSION-201`'s restore, which found **two defects in the
+requirement itself** and one state no requirement described. **The first six are recorded in detail in
+[`provenance.md`](provenance.md); the seventh is recorded here and not yet there**, together with the count
+change it produced, and that file is not this document's to edit.
 
-**Current figures, superseding the closure figures above:** **3,952** identifiers across the nineteen
-shipping domains, **258** withdrawn in place, **3,694** stating live behaviour; plus **444** identifiers
-in the two retired domains, **10** of them withdrawn — **4,396** identifiers in all, **268** of them
+**Current figures, superseding the closure figures above:** **3,953** identifiers across the nineteen
+shipping domains, **258** withdrawn in place, **3,695** stating live behaviour; plus **444** identifiers
+in the two retired domains, **10** of them withdrawn — **4,397** identifiers in all, **268** of them
 withdrawn. The ruling-application round minted seven identifiers and withdrew none; the
 defect-correction round minted one (`REQ-CONFIG-478`) and withdrew none; the measurement round minted one
 (`REQ-EVENTS-179`) and withdrew none; the platform-defect round minted two (`REQ-MONITOR-306`,
-`REQ-SHELL-169`) and withdrew none. **No requirement's strength was reduced in any of the last three
-rounds**, and live behaviour grew by one, one and two respectively.
-[`../spec/README.md`](../spec/README.md) carries the per-domain breakdown and remains the authority.
+`REQ-SHELL-169`) and withdrew none; the restore-measurement round minted one (`REQ-SESSION-202`) and
+withdrew none. **No requirement's strength was reduced in any of the last four rounds**, and live
+behaviour grew by one, one, two and one respectively.
+
+***One record-hygiene item is outstanding and is stated here rather than left to be discovered.***
+[`../spec/README.md`](../spec/README.md) carries the per-domain breakdown and remains the authority for
+it, and **it is one requirement behind**: its header still reads 3,952 / 3,694 / 4,396 and its domain-07
+row still reads **201** where the domain now holds **202**. The delta is exactly `REQ-SESSION-202` and
+nothing else — a new live requirement, not a withdrawal, minted contiguously after `REQ-SESSION-201`, so
+the withdrawn counts (258 / 10 / 268) are unchanged and the README's "contiguously from 1 to its total, no
+gap, no duplicate" invariant holds. The file was left alone deliberately: it is shared across the working
+fleet and a concurrent edit to it would have collided. **The figures in this paragraph are the corpus as it
+stands; the spec README's are the corpus before this round.**
 
 **All three build-wrong defects the architecture named are closed, and this round created none.**
 (1) `REQ-STARTUP-145` now states which per-user location is meant, once and at the definition, and states
@@ -210,6 +223,111 @@ sentence is now three separately citable clauses, in which blocking is absolutel
 recorded events must eventually be observable, and a measurable scheduling cost is expressly not a
 violation. Two of the three were closed at the **definition** rather than at the dependents, which is
 what makes them stay closed.
+
+**The restore-measurement round, and it is the first round a specification defect was found by RUNNING
+something.** `REQ-SESSION-201`'s restore had been decided on paper and never executed. On 2026-09-02 it was
+built and measured (`../architecture/spikes/backup-restore-mechanism.md`), and **two of the three defects
+that surfaced were defects in the requirement rather than in the architecture that implemented it.** That
+distinction is the whole reason this round is recorded separately: an architecture record can be wrong
+about a mechanism without the specification being wrong about the behaviour, and here the specification was
+wrong too.
+
+***Defect 1 — `REQ-SESSION-201`'s refusal-while-live was satisfiable by a conformant implementation that
+destroys a session.*** The clause read "a restore MUST be refused while any session in the target store is
+live". That attaches *refused* to the **decision to begin**, and one evaluation at the request discharges
+it. Nothing re-checked and nothing forbade proceeding once begun. **The predicate itself was correct in 30
+of 30** — it refuses a live lock, admits one the machine proves dead, refuses one naming another machine —
+and a session was destroyed anyway: a run launched after the answer took the lock, wrote at twenty rows a
+second, and was replaced whole. The neighbouring clauses do not close it. "Leave the store exactly as it
+was" governs a restore that **fails**, and this one succeeded. "No partly restored store" governs the
+installation, which was whole. "Never silently merges" comes closest, and an implementer can still say the
+session arrived after "the target store" was evaluated — which is precisely the defect. **Fixed:** the
+requirement now states that *the refusal holds for the whole of the restore and not only at the moment it is
+asked for* — from the answer until the restore completes or is abandoned, no session in the target may
+become live, and where one has, the restore MUST be refused rather than carried through. **Which end of the
+window is closed is deliberately left to the implementation**; what is fixed is that there is no window into
+which a run may be admitted. The requirement states the observable and does not decide architecture.
+
+***Defect 2 — the same clause did not forbid the step that PRECEDES the loss, so it was testable only
+after data was lost.*** Every step of the measured sequence but the last was permitted by the requirement
+as written: the gate passes, the run host is told to refuse and close, the live run complies, and the swap
+destroys it. **Fixed:** *a restore never disturbs a live session* — it MUST NOT stop, cancel, interrupt or
+require a run that is under way to give up the store it is recording into. That is the restore-side
+counterpart of the backup's existing not-pause, not-delay, not-throttle, not-disturb obligation, and it
+makes the remedy on finding a live session **refusal**, never clearing it out of the way. *A run that is
+asked to stand aside and whose record is then replaced has been destroyed by the restore whether or not it
+complied.*
+
+***Defect 3 — `REQ-SESSION-043` answered by listing cases, and the list was incomplete.*** It named two
+states, answered both with an empty list, and left a third answered by nothing: a place for a workspace's
+durable session store exists and **no store is in it** — reachable, durably, in 20 of 20 of the measured
+failures. **`REQ-SESSION-202` is minted** and decides it: that condition reads as **a store that could not
+be opened**, not as "no store". It resolves into `REQ-EVENTS-084`'s refusal by the route domain 07 already
+owns, so domain 20 needed no edit. It fixes four things. **(a)** The product MUST NOT put a new store there
+and MUST NOT report the workspace as holding no sessions. **(b)** It is reported and refused as any other
+unopenable store is, and the report MUST say what was actually **found** — because no store is present to
+give a reason of its own, `REQ-SESSION-089`'s "the store's own reason, unaltered" has **no referent here and
+a reason MUST NOT be invented** to fill the slot. **(c)** The product MUST NOT resolve it by itself: an
+action that establishes a new store there is one the user takes deliberately, told what was found and that
+it recovers nothing — never automatic, never a default, never a side effect of starting a run or of opening
+or preparing a workspace. **(d)** Its boundaries are stated: nothing kept at all stays `REQ-SESSION-043`'s
+ordinary empty state; a place that is itself absent is an absence and not this condition, **including
+mid-restore**; and a present store holding no sessions still lists empty. `REQ-SESSION-043` gained the
+matching boundary sentence, on the same pattern `REQ-EVENTS-084` and `REQ-EVENTS-179` already use: its
+empty answer is owed only where nothing is kept for the workspace at all, because an empty list asserts
+that this workspace has no sessions here when what is true is that the product cannot tell.
+
+***A finding about the specification's own strongest check, recorded because it is not visible from that
+check's text.*** `REQ-EVENTS-179` is this corpus's statement that a store must be **proved** rather than
+trusted, and **it passes cleanly against a store that is not there.** Its remedy is an operation that reads
+and writes the store's own contents, and that operation is answered perfectly by the empty store the
+attempt itself brought into being. The pair yields a rule worth stating once: **what must be established
+before a store is used is not only that it works, but that it is the store this machine already had.**
+`REQ-SESSION-202` states the limit and covers the case from the sessions side; **a reciprocal boundary
+sentence in `REQ-EVENTS-179` would make the pair self-evident and was not written**, so if domain 20's
+owner tightens 179 without knowing about 202, or a reader takes 179 as the complete answer to "is this store
+usable", the gap reopens.
+
+**One silence was confirmed and written down rather than only confirmed.** Nothing bounds how long a
+restore takes, and that is a decision rather than an omission — the premise being that the restore is
+refused while anything is live, which defect 1's fix makes firmer. It is now recorded in the requirement in
+those terms, because a later reader meeting the backup's timing obligations and no restore counterpart would
+otherwise either invent a budget or, worse, conclude that a restore may run alongside a live session because
+nothing says it may not. The measured store-unavailable window is **64 ms to 1.45 s** over 68 KB to 313 MB
+and exceeds no budget the specification states, because the specification states none.
+
+**One requirement was amended, one was minted, one gained a boundary sentence, and nothing was withdrawn.**
+Amended: `REQ-SESSION-201`. Minted: `REQ-SESSION-202`. Boundary sentence: `REQ-SESSION-043`. The round is
+recorded in [`../spec/resolutions/07-sessions-persistence.md`](../spec/resolutions/07-sessions-persistence.md)
+as a dated amendment, and **no prior disposition was reversed.**
+
+***Three things this round did not close, stated so none of them is absorbed.*** **(1)** A lock row naming
+another machine makes the target store **permanently unrestorable**, and it is a real domain-07 gap with no
+owner: `REQ-SESSION-056` makes a foreign-host lock live by construction, `REQ-SESSION-047` never reaps it,
+`REQ-SESSION-201` refuses while any session is live, and `REQ-SESSION-183`'s explicit per-session release is
+the only clearing action — while foreign-host rows are dropped on the way **in** from the artifact and never
+from the **target**. A machine rename creates the condition for every session at once, and defect 1's
+durative fix makes it bite harder rather than less. **It needs an assigned decision.** **(2)** The transient
+empty list during a restore is preserved **by decision, not oversight**: while the store's place is
+momentarily absent, `REQ-SESSION-043` still answers "empty list", so a reader refreshing in that window sees
+an empty list for a workspace with history. The architecture relies on that answer; `REQ-SESSION-202` names
+it as an explicit boundary so nobody closes it by accident, and covering the window is a separate decision
+that is not free. **(3)** Whether domains 12 and 19 have anywhere to **report** `REQ-SESSION-202`'s
+condition was not verified. It routes through existing obligations, but a store-level condition is not a
+session-level one and the session browser's error vocabulary may have no shape for "the place exists and the
+store is not in it".
+
+***What this round says about how the remaining defects are likely to be found, and it is narrower and more
+useful than "mechanisms have bugs".*** **Neither gap closed here was in what a requirement SAYS.** One was
+in **when** an obligation is evaluated — `REQ-SESSION-201` read as a test rather than as a condition — and
+the other in **which states** a requirement enumerates — `REQ-SESSION-043` listing cases and leaving the
+residue undefined. **Both are invisible to review of the words, and both appeared on first execution.** If
+that generalises, the corpus's remaining exposure is concentrated in two shapes: requirements phrased as
+"*X is refused while Y*", which should be read for whether the condition is durative or a single test; and
+requirements phrased as **a list of cases**, which are only as good as the list and should be read for
+whether they partition their subject or merely enumerate part of it. **A deliberate sweep for those two
+shapes would cost less than waiting for each mechanism's first run to find them one at a time**, and it is
+recommended rather than performed here.
 
 **The measurement round, and what it turned on.** Four architectural measurements were taken on the
 target platform on 2026-09-02 — a store on remote and synchronised storage, the transaction commit on the

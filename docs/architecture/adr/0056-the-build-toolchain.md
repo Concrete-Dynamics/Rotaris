@@ -10,6 +10,10 @@
   native modules against the Electron binary interface, for every target, proved at build time. ESC-21's
   comparison surfaced the store binding failing silently under an Electron runtime through an ABI
   mismatch, and the owner recorded that as this record's to design for rather than to discover.
+- **Revised:** 2026-09-02, second time, against defect **D10**. Rule 1 gains 1a: the rebuild's exit status
+  is not evidence anything was rebuilt. `electron-rebuild` against the chosen store binding exits 0, prints
+  success and produces no compiled binary, and the binding's loader would prefer a prebuilt one over
+  anything built beside it. **Rule 4's load is no longer one check among several; it is the check.**
 - **Origin:** UI (ADR-UI-15)
 - **Depends on:** ADR-0001, ADR-0002, ADR-0020, ADR-0044, ADR-0053, ADR-0054, ADR-0058
 - **Governed by:** `owner-decisions.md` SR-7, and the consequence for ADR-0058 recorded with ESC-21
@@ -242,6 +246,27 @@ than as advice because the whole point is that none of them may be left to a def
    as a diff rather than as an absence. Prebuilt binaries are refused: compilation is forced from source
    so that what ships was built against the Electron this release pins and not against whatever a
    registry had.
+
+   1a. **The rebuild's exit status is not evidence that anything was rebuilt, and rule 1 is not discharged
+   by running the tool.** *(Added 2026-09-02, defect D10.)* Measured against ADR-0058's chosen store
+   binding: `electron-rebuild` **exits 0, prints success, and produces no `.node` at all**, because that
+   package's own build configuration skips its sources whenever a prebuilt binary is present — so "refuse
+   prebuilt binaries, compile from source" was configured, reported as done, and did not happen. The
+   loader would have ignored the result in any case: the binding's own entry point prefers a binary under
+   `prebuilds/<platform>-<arch>` over anything built beside it, so even a successful compile would not have
+   been the file that loads. **A build step that reads "rebuild the native bindings against the Electron
+   interface" and trusts the exit status has verified nothing**, which is the exact shape of swallowed
+   failure rule 5 forbids at runtime, appearing in the build instead. The rule is therefore discharged by
+   evidence about the artifact and not about the command: for each binding, the build establishes that a
+   compiled binary exists, that it is newer than the rebuild step, and that it is the file the loader
+   actually resolves — rule 4's load is what confirms the last of those, and rule 4 is now the only thing
+   standing between an unloadable binding and a release. It was written as one check among several; it is
+   the check.
+
+   **Harmless today, and that is the point.** This binding is built against a stable ABI and its prebuilt
+   binary happens to be the correct one, so the artifact works. That is luck rather than the check working,
+   and it is exactly the condition under which a silent failure survives review — everything passes, and
+   nothing was tested.
 2. **The interface is the Electron one, and there is exactly one of it per platform and architecture.**
    Not the host Node's — the spike records them as different builds on the same machine, v24.11.0 against
    the runtime's 24.19.0, which is the condition the mismatch needs. And not two, despite ADR-0002 having

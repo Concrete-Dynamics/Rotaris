@@ -26,6 +26,15 @@
   session and every row it had written; and the reversal was a single rename onto a name whose occupancy is
   the commonest reason the step it reverses had just failed. Consequence 17 records what three such findings
   in a row imply about the parts of this record nobody has run.
+- **Revised a fourth time:** 2026-09-02, against the three build-wrong defects spike 22 left open in this
+  record. **D3** the unbounded close handshake: bounded at 2,000 ms with **expiry taking the abandonment
+  path**, since an unanswered close is indistinguishable from a run host still writing, and step 1's refusal
+  made a **lease the run host expires itself**, because the measured dual failure leaves no workspace service
+  alive to release it. **D6** the displaced-store stamp: milliseconds, claimed by an exclusive create with a
+  counter on collision — granularity is not uniqueness. **D7** the container layout becoming the store
+  layout: the conversion is now a step rather than an assumption, and `origin.txt` is written by the restore,
+  having been absent from every restored store. **None of the three corrections has been run**; that is IC-1
+  in `../implementation-conditions.md`, and consequence 17 is why it exists.
 - **Authority:** `owner-decisions.md` SR-4 (the store), **ESC-15** (machine-local, keyed by a workspace
   identifier), ESC-16 (a store that will not open means no run), ESC-18, SR-9(b), **ESC-19** (the backup
   and restore action; the configurable store location refused), **ESC-20** (the export boundary is
@@ -1248,6 +1257,34 @@ reordering that reads more tidily is the failure this section has already had.**
    4a, with nothing moved.
 3. The run host **closes its connection** for this identifier and acknowledges (ADR-0002 consequence 11).
    The workspace service still holds its own.
+
+   3a. **That acknowledgement is bounded, and the bound's expiry refuses the restore rather than
+   proceeding without it.** *(Added 2026-09-02, defect D3.)* As written, steps 1 and 3 stated the
+   acknowledgements and neither stated a deadline; measured twice — the run host deaf, and the run host
+   exited without answering — the workspace service produced **no result and no error inside a 15,000 ms
+   watchdog**, while the application kept running and a window kept painting. A user sees a restore that
+   never finishes and never fails, which is the one outcome worse than a refusal. The bound is **2,000 ms**
+   from the instruction being sent, which is three orders of magnitude above the acknowledgement's measured
+   cost and is a deadline for a process that has stopped answering rather than a budget for a slow one.
+
+   **Expiry takes 4a and nothing else.** This is the whole of the correction and it is not obvious: a bound
+   alone makes the defect worse, not better. Measured with a 2,000 ms bound and the service proceeding on
+   expiry, step 9's rename failed `EPERM` — because the connection the run host never closed is still open
+   on the directory being renamed onto — so the restore failed later, after mutation, in the one place this
+   mechanism has no good failure. **An unanswered close is indistinguishable from a run host still writing,
+   and must be treated as one.** The refusal names the run host as unresponsive rather than naming a live
+   session, because what is known is that the question was not answered.
+
+   3b. **The run host's refusal to start runs is a lease, not a state it enters.** *(Added 2026-09-02, the
+   other half of D3.)* Step 4a releases the run host on a refusal the workspace service reaches, and that
+   is not enough, because the measured dual failure has no workspace service left to reach it: kill the
+   workspace service after step 3 and **the run host stays closed and refuses every launch for ever, with
+   the store held by nobody and nothing in the sequence that would ever clear it.** So step 1's instruction
+   carries an expiry the run host itself enforces — **30,000 ms**, generous against the whole action's
+   measured 2.67 s at 313 MB — after which the run host resumes accepting runs on its own. The workspace
+   service renews it if a restore is genuinely still running. The asymmetry is deliberate: a restore that
+   takes longer than expected is renewed and costs nothing, and a workspace service that has died releases
+   the workspace by doing nothing at all, which is the only behaviour available to a process that is gone.
 4. **Liveness is judged a second time**, after that acknowledgement and before the workspace service gives
    up its own connection — which is the only place it can be judged, because judging it needs an open
    connection and step 5 closes the last one. **This is the evaluation the swap rests on.** Step 1's
@@ -1264,10 +1301,14 @@ reordering that reads more tidily is the failure this section has already had.**
    and it persists for the life of the instance.
 5. The workspace service **closes its own connection**. Both closes are now acknowledged and nothing has
    moved.
-6. The artifact is expanded into a sibling staging directory in the same parent, in full, and the expanded
-   store is **opened read-write once there** — which performs any log recovery and lets the integrity check
-   run against the thing that will actually be used rather than against the copy inside the container. That
-   reason is unchanged, and it is why the open is deliberate rather than incidental.
+6. The artifact is expanded into a sibling staging directory in the same parent, in full, and **arranged
+   into the store's own layout there** — the container's names are the container's and the store's names are
+   this ADR's, and step 9a states what that conversion covers. The expanded store is then **opened
+   read-write once there** — which performs any log recovery and lets the integrity check run against the
+   thing that will actually be used rather than against the copy inside the container. That reason is
+   unchanged, and it is why the open is deliberate rather than incidental. *("In full" originally stood
+   alone here and step 9 renamed the result into place; read exactly as written that installs the
+   container's layout as the store's. See step 9.)*
 7. **The staging connection is closed.** *(Added 2026-09-02. Without this step the restore fails in 30 of 30
    attempts and the feature does not work at all.)* Step 6's open is what makes step 9 impossible: staging is
    the directory step 9 renames, and on this platform a directory holding an open handle cannot be renamed —
@@ -1278,8 +1319,35 @@ reordering that reads more tidily is the failure this section has already had.**
    `-wal`, and only after a clean close does it hold `workspace.db` alone. **This step is not hygiene and
    not redundant with step 5. Deleting it as a duplicate close reproduces, exactly, the defect that made this
    mechanism fail every time it was run.**
-8. `<identifier>` → `<identifier>.displaced-<UTC timestamp>`.
-9. staging → `<identifier>`.
+8. `<identifier>` → `<identifier>.displaced-<UTC timestamp>`. **The timestamp is milliseconds, and the name
+   is taken by a create that fails if it is already there.** *(Granularity stated 2026-09-02, defect D6.)*
+   At second granularity two displacements inside one second collide and this step fails `EPERM` in **30 of
+   30** — a one-word omission that stops the mechanism dead. Milliseconds do not make a collision
+   impossible, so the granularity is not the guarantee: the name is claimed by an exclusive create and, if
+   that create finds the name taken, a decimal counter is appended and the claim retried, up to a small
+   fixed number of attempts, after which the restore is refused with nothing moved. **A name assumed unique
+   is not unique**, and this is the same rule ADR-0004 applies to any other name the product mints. The
+   stamp's granularity binds every name of this shape in this record, not only this one: the recovery
+   ladder's displaced store and the reversal's `.obstruction-` aside both reuse it deliberately, so it is
+   fixed once here and inherited rather than restated three times and drifting.
+9. staging → `<identifier>`. **What is renamed is a store in the store's layout, which is not the layout the
+   artifact carries.** *(Corrected 2026-09-02, defect D7.)* Step 6 said the artifact is expanded "in full"
+   and this step made the expansion the store, which — read exactly as written, and it was — produces a
+   restored store holding `store.db` where the layout block fixes `workspace.db`, with `manifest.json`
+   sitting inside the live store after every successful restore. The container's layout is the container's,
+   the store's layout is fixed by this ADR, and **the restore converts between them rather than assuming
+   they are the same**: staging is arranged into the store layout before this rename, the manifest and
+   anything else belonging to the container stay outside the store, and the rename installs a directory that
+   is already a valid store. The measured harness had to insert this conversion as an unspecified step to
+   proceed at all, which is the plainest possible evidence that the record was missing one.
+
+   9a. **`origin.txt` is written by the restore, because it is correctly not in the artifact.** The store's
+   record of which project it belongs to is machine-local metadata and the backup is right to exclude it —
+   but nothing put it back, so it was absent from **every** restored store, and it is the reclamation
+   surface's only means of saying which project a store belongs to. A restore that produces a store the
+   reclamation surface cannot describe has produced an orphan on the recovery path. It is written from the
+   workspace the restore was initiated for, before step 9's rename, so the installed directory is complete
+   at the moment it becomes the store.
 10. Both processes re-open; migrations run in the workspace service exactly as at any other open; the run
     host is told the workspace is open again and may accept runs.
 

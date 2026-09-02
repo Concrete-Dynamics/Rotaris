@@ -1362,6 +1362,16 @@ into A and B by kind. **The balance has moved**: the specification side is now n
 
 #### A. DEFECTS — things that are wrong now, that no measurement will fix, and that a builder would inherit
 
+> **DEFECT-CLOSURE ROUND, 2026-09-02. All four build-wrong defects in this list are now closed, and the
+> fifth item adjacent to them is closed with them.** What follows records each one where it was raised,
+> with the correction beside the measurement, rather than deleting the entry — this record's rule since the
+> first mechanism defect was found. **The class is empty: no defect in this list would now cause a
+> conformant implementation to be built wrong.** Closed here: **D9** the foreign-host lock row (both halves
+> — the root cause in `REQ-SESSION-046` and the restore deadlock in `REQ-SESSION-201`), **D3** the
+> unbounded close handshake, **D6** the timestamp granularity, **D7** the container layout becoming the
+> store layout, and **D10** the build check that verified nothing. Still open and **not** in the build-wrong
+> class: D5, D8, D11 and the two carried-over architecture items at 10 and 11 below.
+
 **A1. The specification side, which is nearly clear, and this pass verified each closure against the
 requirement text rather than against any round's own report.** The three defects this section named on
 2026-09-02 as the ones that would each cause a conformant implementation to be built wrong are **all
@@ -1406,9 +1416,8 @@ are closed by the amendment recorded in
 
 **What remains on the specification side is one real gap and a bundle of surface silences.**
 
-1. **A lock row naming another machine makes a workspace's store permanently unrestorable, and nobody owns
-   the decision. THIS IS THE ONE REMAINING SPECIFICATION DEFECT THAT WOULD CAUSE A CONFORMANT
-   IMPLEMENTATION TO BE BUILT WRONG.** Four requirements compose into it and each is individually correct:
+1. **A lock row naming another machine makes a workspace's store permanently unrestorable. CLOSED
+   2026-09-02, at both ends. It was the last specification defect in the build-wrong class.** Four requirements compose into it and each is individually correct:
    `REQ-SESSION-056` makes a lock naming another machine **live by construction**, `REQ-SESSION-047` never
    reaps it, `REQ-SESSION-201` refuses a restore while any session in the target is live, and
    `REQ-SESSION-183`'s explicit, per-session, user-confirmed release is the only action that clears one.
@@ -1439,7 +1448,7 @@ are closed by the amendment recorded in
 the first execution of `REQ-SESSION-201`'s restore — and are stated with the measurement rather than the
 argument, because every one of them survived being read.
 
-3. **THE CLOSE HANDSHAKE HAS NO BOUND AND DOES NOT TERMINATE. Build-wrong.** ADR-0058's step 1 says both
+3. **THE CLOSE HANDSHAKE HAS NO BOUND AND DOES NOT TERMINATE. CLOSED 2026-09-02.** ADR-0058's step 1 says both
    closes are acknowledged before anything moves and says nothing about their not coming; ADR-0002
    consequence 11 states the capability and states no deadline. **Measured, twice: with the run host deaf,
    and with the run host exited without answering, the workspace service produced no result and no error
@@ -1452,14 +1461,14 @@ argument, because every one of them survived being read.
    by nobody and nothing in the sequence that will ever tell it to re-open. ADR-0058's new abandonment step
    releases the run host on a **refusal**; it does not reach either of these. *(D3. What is owed is not only
    that a bound exists but what expiry does.)*
-4. **THE DISPLACED-STORE TIMESTAMP HAS NO STATED GRANULARITY, AND AT SECONDS IT IS A HARD FAILURE OF THE
+4. **CLOSED 2026-09-02. THE DISPLACED-STORE TIMESTAMP HAD NO STATED GRANULARITY, AND AT SECONDS IT IS A HARD FAILURE OF THE
    FIRST MUTATING STEP. Build-wrong, and it is one word.** ADR-0058 says the store is "renamed with a UTC
    timestamp" and fixes nothing else; **cut to seconds, two displacements inside one second collide and the
    rename fails `EPERM` in 30 of 30.** The corrected reversal's aside-name reuses the same stamp
    deliberately rather than minting a second one, so it inherits whatever this decision lands on — which
    means fixing it once fixes both, and leaving it unfixed leaves both wrong. The recovery ladder uses the
    same name shape. *(D6.)*
-5. **THE ARTIFACT'S CONTAINER LAYOUT BECOMES THE STORE'S LAYOUT. Build-wrong, and it was measured on every
+5. **CLOSED 2026-09-02. THE ARTIFACT'S CONTAINER LAYOUT BECAME THE STORE'S LAYOUT — measured on every
    successful run.** Step 2 expands the artifact "in full" into staging and the install rename makes staging
    the store. Read literally — and it was implemented literally — the restored store then holds `store.db`
    where the layout block fixes `workspace.db`, and **`manifest.json` sits inside the live store**. The
@@ -1480,7 +1489,7 @@ argument, because every one of them survived being read.
    The data is unchanged and no row is written, so the *intent* holds; the literal claim does not, and a
    **refused** restore leaves the target directory different from how it found it. *(D8. Harmless to the
    data; a false sentence in a record that is cited for exactly this kind of guarantee.)*
-8. **`electron-rebuild` against the chosen store binding reports success, compiles nothing, and the loader
+8. **CLOSED 2026-09-02. `electron-rebuild` against the chosen store binding reports success, compiles nothing, and the loader
    would ignore the result if it did. Build-wrong, in the build rather than in the product.** Measured:
    every invocation exited 0 and printed `✔ Rebuild Complete`; **none produced a `.node`**, because the
    package's own `binding.gyp` skips its sources while a prebuild is present; and `lib/binding.js` tries
@@ -1522,6 +1531,58 @@ blocked on a measurement, and **none of them was visible to any reading of the r
 **Four would cause a conformant implementation to be built wrong** — items 1, 3, 4 and 5 — and **item 8
 would cause a build to certify something it never checked**, which is a different and quieter failure.
 Items 6, 7, 9, 10 and 11 are real and are not in that class.
+
+**A3. How each build-wrong defect was closed, 2026-09-02.** Each entry above keeps its measurement; this
+says what changed and where, so the two can be read against each other. **None of these is re-measured
+yet**, which is the whole content of IC-1 in [`implementation-conditions.md`](implementation-conditions.md)
+and of the three-for-three finding below.
+
+- **D9, item 1 — closed at the root and at the deadlock, because either alone leaves the defect.**
+  `REQ-SESSION-046` now fixes **what supplies `host`**: an identifier the product mints once for this
+  machine and keeps where the store lives, never the operating-system name or anything a user or
+  administrator can change, and **renaming a machine must not change it**. That removes the mass case
+  entirely — the field was described as "stable" and left unsourced, and the obvious source is the one
+  thing that is not. `REQ-SESSION-054`'s inference that a foreign host is evidence of a store reachable
+  from two machines is sound only under that fix, and now says so. Separately, `REQ-SESSION-201` no longer
+  lets such a row block recovery: the refusal exists to stop contention with a run that is **writing**, and
+  a lock naming another machine is not one on this machine. Those rows are reported **together, as one
+  condition**, and the user may confirm and proceed — never per-session clearing as a precondition, and
+  never a bare refusal. **The confirmation states the risk and not only the condition**: if the store
+  genuinely is reachable elsewhere, a run there may be writing now. The deadlock was that the recovery
+  action for a broken store was blocked by exactly the records it was about to replace.
+- **D3, item 3 — closed as a bound, an expiry semantic, and a lease, and the second of those is the part
+  that is not obvious.** ADR-0058 gains steps 3a and 3b. The acknowledgement is bounded at **2,000 ms**,
+  and **expiry takes the abandonment path**: an unanswered close is indistinguishable from a run host still
+  writing and is treated as one. A bound that proceeds on expiry was measured to fail at the rename
+  instead — later, after mutation, in the one place the mechanism has no good failure. The dual state is
+  closed by making step 1's refusal a **lease the run host expires by itself** at 30,000 ms, renewed while
+  a restore is genuinely running; a workspace service that has died then releases the workspace by doing
+  nothing, which is the only behaviour available to a process that is gone. ADR-0002 consequence 11 now
+  states all three obligations from its own side rather than having them carried by ADR-0058 alone.
+- **D6, item 4 — closed as granularity plus a claim, because granularity alone is not a guarantee.**
+  The stamp is milliseconds, and the name is taken by an **exclusive create** that fails if it is already
+  there, with a decimal counter appended and retried on collision. A name assumed unique is not unique.
+  Fixed once and inherited by the recovery ladder's displaced store and the reversal's `.obstruction-`
+  aside, both of which reuse the same shape deliberately.
+- **D7, item 5 — closed by making the conversion a step instead of an assumption.** The container's layout
+  is the container's and the store's is this record's; staging is arranged into the store layout **before**
+  the install rename, and the manifest stays outside the store. The measured harness had to insert exactly
+  this conversion to proceed, which is the plainest evidence the record was missing one. **`origin.txt` is
+  now written by the restore** (step 9a) — correctly absent from the artifact, absent from every restored
+  store, and the reclamation surface's only way to say which project a store belongs to. A restore that
+  produced a store the reclamation surface cannot describe was producing an orphan on the recovery path.
+- **D10, item 8 — closed by discharging the obligation against the artifact rather than against the
+  command.** ADR-0056 rule 1 gains 1a: the rebuild's exit status is not evidence anything was rebuilt. The
+  build establishes that a compiled binary exists, is newer than the rebuild step, and **is the file the
+  loader actually resolves** — the last confirmed by rule 4's load. Rule 4 was written as one check among
+  several and is now the entire check, which is why it is also part of IC-3.
+
+**What this leaves in category A.** D5 (nothing deletes or knows about the leftover staging copy, now two
+leftover kinds), D8 (the three gates are not read-only at the filesystem level — the liveness gate creates
+`-shm` and `-wal` in the target, so a refused restore leaves the target changed), D11 (the `.displaced-`
+suffix's +35 characters against the store engine's path thresholds, not reachable at the shipped location),
+and the two carried-over architecture items at 10 and 11. **None is in the build-wrong class**, and each is
+stated above with what it costs.
 
 #### B. MEASUREMENTS STILL OWED — and whether any of them is a gate condition
 
@@ -1653,6 +1714,15 @@ rather than by the ones that were written down.
 **Four, and stating them as merely "outstanding" understates what it takes to clear them. They need
 infrastructure.**
 
+> **DEFERRED TO HARDWARE, 2026-09-02, by owner ruling GD-5.** All four remain **owed** and none is
+> closed. They cannot be discharged on the machine this record was produced on, and they are now
+> recorded as **IC-3** in [`implementation-conditions.md`](implementation-conditions.md) so that they
+> bind the work rather than sitting in a verdict category. Deferral is a fact about available machines
+> and not a judgement that they will pass: **every one of them is in the class of things this record
+> has never executed**, and every mechanism taken from paper to first execution has held a defect no
+> reading caught. An implementation that reaches a Linux or macOS artifact before IC-3 is discharged is
+> shipping on an untested platform.
+
 1. **Spike 12 — the Linux image's runtime on an unmodified baseline installation.** Needs a Linux machine
    that has never had the legacy FUSE library installed. ESC-11 is ruled and applied; what spike 12 decides
    is which of the ruling's two options the release actually takes, and it stays undecided until such a host
@@ -1776,28 +1846,41 @@ three times out of three where argument met execution, execution won.**
 
 #### The verdict
 
-**The architecture record is not ready for the Architecture Gate, and the reasons are enumerable rather
-than diffuse. Every measurement that can be taken on this host has now been taken.** What has changed since
-the last version of this verdict is not the amount of work outstanding but **which side of the record carries
-it**: the specification is nearly clear and the architecture is not.
+**The build-wrong defect class is empty. What stands between this record and the Architecture Gate is now
+four obligations that need a machine nobody has here, and one re-measurement — not a defect anybody has
+found.** Every measurement that can be taken on this host has been taken, and every defect that would cause
+a conformant implementation to be built wrong has been closed at its definition.
 
 - ***Every measurement any record named as a gate condition has been taken.*** SR-7's clause was discharged
   by spike 20; ADR-0058's own open item on the commit by spike 21; and spike 22 — the item this verdict
   previously called the gate blocker on the architecture side — **has been run**. **No remaining measurement
   is a stated gate condition** (category B).
-- ***The specification side now carries ONE defect that would cause a conformant implementation to be built
-  wrong***, and it is list A item 1: a lock row naming another machine makes a workspace's store permanently
-  unrestorable, produced for every session at once by a machine rename, clearable only one session at a time
-  by a user who must know to do it. Four individually-correct requirements compose into it. It has no owner.
-  The three that stood here before — `REQ-STARTUP-145`, `REQ-TRACE-061`, `REQ-EVENTS-098` — are **all closed
-  at the definition**, and each closure was verified against the requirement text by this pass rather than
-  taken from any round's report.
-- ***The architecture side now carries THREE***, all from the first execution of a mechanism this record had
-  decided: the close handshake that does not terminate (list A item 3), the displaced-store timestamp with no
-  stated granularity, which is a hard failure of the first mutating step at second resolution (item 4), and
-  the artifact's container layout becoming the store's layout, which was measured in **every** successful
-  restore and which costs the restored store its `origin.txt` (item 5). **A fourth would cause a build to
-  certify something it never checked** (item 8, the rebuild that compiles nothing).
+- ***The specification side carries no build-wrong defect.*** The one that stood here — a lock row naming
+  another machine making a store permanently unrestorable — was closed on 2026-09-02 at both ends: at the
+  root, by fixing what supplies `REQ-SESSION-046`'s `host` so that renaming a machine cannot produce the
+  condition at all, and at the deadlock, by letting `REQ-SESSION-201` report such rows together and proceed
+  on a confirmation that states the risk. The three that stood before those — `REQ-STARTUP-145`,
+  `REQ-TRACE-061`, `REQ-EVENTS-098` — are all closed at the definition, each verified against the
+  requirement text rather than taken from a round's report.
+- ***The architecture side carries no build-wrong defect either.*** The three from spike 22 are closed:
+  the close handshake now has a bound whose **expiry refuses rather than proceeds**, and a lease the run
+  host expires by itself so the dual failure has an exit; the displaced-store name is milliseconds **plus an
+  exclusive create**, because granularity alone is not uniqueness; and the artifact's container layout is
+  converted into the store's layout as a step rather than assumed identical, with `origin.txt` written by
+  the restore. The build check that certified nothing (item 8) is closed with them. **Three defects remain
+  open in category A and none is in this class** — D5, D8 and D11 — alongside the two carried-over
+  architecture items.
+- ***What is left is category C, and it is now a hardware question rather than a record question.*** Four
+  obligations need a clean Ubuntu host, a macOS host, and the three release runners. **Owner ruling GD-5
+  defers them to a machine that exists and does not waive them**; they are IC-3. One of them grew this
+  round rather than waiting: ADR-0056's build-time load proof was always the only check that catches an
+  unloadable store binding, and defect D10 established that the rebuild it confirms exits 0 while compiling
+  nothing. It is now the entire check.
+- ***And one thing this record should not be allowed to forget about itself: none of the corrections above
+  has been run.*** They are, as this is written, exactly the paper reasoning the next point says is not
+  evidence. That is IC-1, and it is a condition on implementing the restore rather than on the gate — by
+  ruling GD-3, which created the register it lives in after checking that no such register existed.
+
 - ***Three mechanisms decided on paper have now been implemented for the first time and every one held a
   defect no reading caught.*** That is the section above and it is deliberately not a footnote. It blocks
   nothing by itself. It is the best available estimate of what the unmeasured remainder holds, and the

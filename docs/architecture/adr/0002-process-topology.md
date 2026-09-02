@@ -10,6 +10,11 @@
 - **Revised:** 2026-09-02, to **settle** the workspace-identity question this record previously left as a
   correction owed, and to place two allocations ESC-19 and ESC-21 create: who takes the whole-store
   backup, and who owns `REQ-STARTUP-166`'s storage classification.
+- **Revised:** 2026-09-02, second time, against defect **D3**. Consequence 11 gains the three obligations
+  it created and did not state — the refusal to start runs must be in force **before** liveness is judged;
+  every acknowledgement is bounded and expiry **refuses** rather than proceeds; and the refusal is a lease
+  the run host expires by itself, because a process that has died cannot release anything. All three were
+  being carried by ADR-0058 alone, which is the wrong place for properties of this capability.
 - **Origin:** RUNTIME (ADR-RUNTIME-01), EXEC (ADR-EXEC-01), DATA (ADR-DATA-08), UI (ADR-UI-01, ADR-UI-05), MODEL (ADR-MODEL-05, ADR-MODEL-12)
 - **Depends on:** ADR-0001
 - **Governed by:** `owner-decisions.md` SR-1, SR-4, SR-8, ESC-15, **ESC-19**, **ESC-21**
@@ -451,6 +456,28 @@ sandboxed renderer cannot hold a port at all.
     and it is stated here rather than discovered in ADR-0058. `REQ-SESSION-201` bounds it: a restore is
     refused while any session in the target store is live, so the run host is never asked to give up a
     store it is actively writing.
+
+    **Three obligations this consequence created and did not state, added 2026-09-02 after the mechanism
+    was built and measured.** All three were being carried by ADR-0058 alone, which is the wrong place for
+    them: they are properties of this capability, and the next mechanism to use it would have to rediscover
+    each one.
+
+    (a) **The refusal to start runs must be in force before liveness is judged, not after.** "Refused while
+    any session is live" is a statement about an instant unless something stops new runs arriving, and the
+    instruction to refuse is not instantaneous. Measured: a run admitted between the instruction and its
+    acknowledgement took the lock, wrote at twenty rows a second, and had its session and every row
+    destroyed by the swap. The ordering is the protection; the predicate was correct in 30 of 30.
+
+    (b) **Every acknowledgement in this exchange is bounded, and expiry refuses rather than proceeds.** With
+    the run host deaf, and with the run host exited without answering, the caller produced no result and no
+    error inside a 15,000 ms watchdog, twice — the application still running, a window still painting. An
+    unanswered close is indistinguishable from a run host still writing and must be treated as one;
+    proceeding on expiry was measured to fail later, after mutation, which is strictly worse than refusing.
+
+    (c) **"Refuse to start a run against that identifier" is a lease the run host expires by itself, not a
+    state it enters.** Otherwise the failure has no exit: kill the caller after the run host has closed, and
+    the run host refuses every launch for the life of the instance with the store held by nobody. A process
+    that has died cannot release anything, so the release cannot depend on it.
 
 12. **A cross-process conformance measurement must calibrate its clocks.** `performance.timeOrigin` is
     not a shared epoch across this topology's processes: the run-host-to-renderer offset ranged over

@@ -75,3 +75,35 @@ theme mechanism in particular is buildable and testable with placeholder values,
 corrections and asserts contrast from rendered pixels rather than depending on which values are present.
 
 **What is no longer blocked by the reference.** OQ-31, the Markdown dialect, was ruled without it by GD-1.
+
+---
+
+## IC-3 — the Linux and macOS build-host obligations, deferred to hardware
+
+**Set by:** GD-5, 2026-09-02. **Binds:** any release artifact for Linux or macOS, and the store binding's
+acceptance on any platform. **Discharged into:** dated spike reports and a note on the ADR each obligation
+belongs to.
+
+**Why it is here rather than in the gate verdict.** These four cannot be closed on the machine this record
+was produced on. Deferring them to a machine that exists is a scheduling fact; leaving them in a verdict
+category is how an obligation becomes a paragraph nobody owns. They remain owed and none of them is smaller
+for being written here.
+
+1. **Spike 12 — the Linux artifact's runtime on a host that has never had the legacy FUSE library
+   installed.** Decides which of ESC-11's two applied options the release takes. The measurement's whole
+   content is the never-had-it condition, which a machine cannot reach by uninstalling.
+2. **Spike 17's macOS and Linux platform keys.** `REQ-STARTUP-155` binds all four artifacts; two were built.
+3. **ADR-0056's build-time load proof on all three release runners.** This one grew rather than waited. It
+   was always the only check that catches an unloadable store binding, and defect D10 established that the
+   rebuild it confirms **exits 0 while compiling nothing**, and that the binding's loader prefers a prebuilt
+   binary over anything built beside it. Rule 4 is now the entire check rather than one of several, and it
+   must be shown constructible on each runner rather than assumed.
+4. **The instance claim on macOS and Linux.** SR-1 made this entirely ours on three platforms and it is
+   measured on one. `REQ-STARTUP-156`'s release gate does not require launching the entry point twice on one
+   user account, which is the check that would catch a failure.
+
+**What deferral is not.** It is not a judgement that these will pass. Every one of them is in the class of
+things this record has never executed, and every mechanism this record has taken from paper to first
+execution has held a defect no reading caught — three for three. **An implementation that reaches a Linux or
+macOS artifact before this condition is discharged is shipping on an untested platform.**
+

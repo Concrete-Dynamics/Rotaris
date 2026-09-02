@@ -959,3 +959,39 @@ something that is already true — the cheapest kind to satisfy and the easiest 
 leaving it unspecified is precisely the shape that produced `REQ-SESSION-043`'s defect: a requirement that
 enumerates cases and leaves the residue undefined. That shape has now cost this record twice, and it was
 invisible to review of the words both times.
+
+### GD-5 — the Linux and macOS build-host obligations are deferred to hardware, not waived
+
+**Decided, 2026-09-02: the obligations that need a machine this record does not have are deferred until one
+is available, and they remain owed.** They are recorded as **IC-3** in `implementation-conditions.md` rather
+than as gate items, on the same principle as GD-3: an obligation that cannot be discharged here does not
+become smaller by being called something else, so it is written where it binds the work rather than left in
+a verdict category that will be read once and closed.
+
+**What is deferred**, and none of it can be closed by reasoning on this machine:
+
+- **Spike 12** — the Linux artifact's runtime on a host that has never had the legacy FUSE library
+  installed. It decides which of ESC-11's two applied options the release takes, and the whole point of the
+  measurement is a machine that has never had the library, which this one cannot become by uninstalling it.
+- **Spike 17's macOS and Linux platform keys.** `REQ-STARTUP-155` binds all four artifacts and only the two
+  Windows ones were built.
+- **ADR-0056's build-time load proof on all three release runners.** This one **grew** rather than merely
+  waiting: it was always the only check in the record that catches an unloadable store binding, and defect
+  D10 then established that the rebuild it was meant to confirm reports success while compiling nothing and
+  that the loader would ignore the result anyway. It is no longer one check among several. It must be shown
+  constructible on each runner, not assumed.
+- **The instance claim on macOS and Linux.** SR-1 made single-instance behaviour entirely ours on three
+  platforms and it has been measured on one. `REQ-STARTUP-156`'s release gate does not require launching
+  the entry point twice on one user account, which is the check that would catch a failure here.
+
+**What deferral does not mean.** It does not mean these are lower risk than the measured items — the
+opposite is the record's own experience. Three mechanisms in this record went from paper to first execution
+and every one held a defect no reading had caught, and **all four of these obligations are in the class of
+things that have never been executed at all**. Deferring them is a decision about when a machine is
+available, not a judgement that they will pass. Any implementation that reaches a Linux or macOS artifact
+before IC-3 is discharged is shipping on an untested platform and the record says so here so that nobody
+has to infer it.
+
+**What it does mean for the gate.** The Architecture Gate's category C is unchanged by this ruling: these
+four remain open, and this ruling relocates them rather than closing them. Whether the gate closes with
+category C outstanding is a separate decision and is the owner's.

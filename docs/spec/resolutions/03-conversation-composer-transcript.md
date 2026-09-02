@@ -33,6 +33,47 @@ status: resolved
 >   REQ-SESSION-002's and they are held with the store rather than inside the workspace (REQ-SESSION-198).
 
 
+> ## Amendment, 2026-09-02 — REQ-CHAT-055's measurement point is fixed
+>
+> The architecture pass that read the amended specification closely enough to implement it reported that
+> **REQ-CHAT-055 gives opposite verdicts on the same build under its two available readings**, and that
+> the difference is forced rather than incidental. "Appending a row MUST cost no more than it does on an
+> empty transcript" is met exactly on the to-paint reading — apply-to-paint p50 **13.8–13.9 ms at every
+> total-row count from 0 to 10,000**, in both scroll variants, across 2,520 measurements whose worst
+> single observation was 34.2 ms — and fails on the strict synchronous reading, **1.4 ms on an empty
+> transcript against 2.7 ms at 10,000 rows**. The 1.3 ms difference is **0.65 % of the 200 ms budget**,
+> does not appear in the to-paint figure at all, and is the `O(n)` scan a **whole-transcript assignment**
+> forces at the view boundary — which REQ-UIBENCH-055, REQ-UIBENCH-057 and REQ-UIBENCH-058 all mandate by
+> handing the interface the entire transcript on every update. See ADR-0045 consequence 6, ADR-0046, and
+> `architecture/spikes/renderer-invariance-and-benchmark-cadence.md` §5.
+>
+> **REQ-CHAT-055 is amended in place to say which reading governs: the to-paint one.** Cost is measured
+> from the moment an update is applied to the moment the interface has finished showing its effect — the
+> instant REQ-UIBENCH-051 and REQ-UIBENCH-119 already close a phase's timing on, and the instant
+> REQ-CHAT-157's budget is measured to. Every clause of the requirement is read at that one point,
+> including the append comparison. Work inside an update that scales with the total row count is not
+> forbidden in itself and is forbidden to the extent that it moves that figure; a residue that never
+> reaches it is not a violation, and a figure that grows with total rows fails however small its steps
+> are argued to be. **The synchronous reading is not merely deprecated — a conformance test written
+> against it is testing something the requirement does not state.**
+>
+> **Why this reading and not the other.** The requirement's own subject is what a person waits for: its
+> budget clause defers to REQ-CHAT-157, which states the budget as output appearing *on screen*. The
+> synchronous call boundary is an internal seam a user cannot observe and that no other requirement in
+> this domain measures anything against. Choosing it would also make the requirement unsatisfiable by any
+> implementation the benchmark domain's own phases permit, which is the same defect SR-8 identified in
+> REQ-ORCH-155 and resolved the same way: a reading no admissible build can meet is not a requirement.
+>
+> **REQ-CHAT-154 is amended to cite REQ-CHAT-055 rather than restate the rule**, since it carried the
+> same "cost proportional to what changed, not to the transcript's length" sentence with the same
+> ambiguity and would otherwise have preserved the reading this amendment closes.
+>
+> **Left for domain 21, and not decided here.** Nothing in `REQ-UIBENCH-*` measures an append on an empty
+> transcript against an append at a thousand-plus rows, so the comparison this requirement now fixes has
+> no phase that produces it; and REQ-UIBENCH-055, -057 and -058's whole-transcript assignment is what
+> forces the residue this amendment declines to charge against a build. Both are that domain's to settle.
+
+
 This record disposes of every open question raised in the draft of
 [`../03-conversation-composer-transcript.md`](../03-conversation-composer-transcript.md)
 (requirement prefix `REQ-CHAT`). The body of that specification has been amended so that each

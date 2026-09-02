@@ -548,8 +548,8 @@ exists. REQ-CONFIG-192 keeps its identifier and its five other fields.
 |---|---|
 | REQ-SESSION-197 | The **workspace identifier**. Written into the workspace's `.rotaris/`, human-readable, minted once, never changed by move, rename, copy, sync or version. The store is located by it and never by path. ESC-15 invents the thing; nothing in the corpus previously named it |
 | REQ-SESSION-198 | The **machine-local store**: always machine-local, never conditional on detection; a workspace on a share or in a sync folder is fully usable; a session recorded on one machine never appears on another; per-session files are held with the store; a store that will not open is not worked around |
-| REQ-SESSION-199 | The **SR-6 export obligation** over the timeline, the issues record, the metrics document and the permission audit. Cited by REQ-SESSION-191, REQ-SESSION-133, REQ-SESSION-137, REQ-SESSION-139, REQ-SESSION-140, REQ-ORCH-139, REQ-MONITOR-287, REQ-TOOLS-078, REQ-SANDBOX-112, REQ-GIT-062, REQ-HOOKS-102 and REQ-HOOKS-133 |
-| REQ-STARTUP-165 | The **launch preparation** of SR-7: where it lives, what it is keyed by, that an unusable one is redone silently, that it needs no network, and that the **artifact** rather than the preparation is the update target |
+| REQ-SESSION-199 | The **SR-6 export obligation** over the timeline, the issues record, the metrics document and the permission audit. Cited by REQ-SESSION-191, REQ-SESSION-133, REQ-SESSION-137, REQ-SESSION-139, REQ-SESSION-140, REQ-ORCH-139, REQ-MONITOR-287, REQ-TOOLS-078, REQ-SANDBOX-112, REQ-GIT-062, REQ-HOOKS-102 and REQ-HOOKS-133 — and, since the ruling-application round, by REQ-TOOLS-190, REQ-LIBRARY-176 and REQ-TRACE-514, which are **not** among the four records it names and cite it for the *terms* rather than for membership |
+| REQ-STARTUP-165 | The **launch preparation** of SR-7: where it lives, what it is keyed by, that an unusable one is redone silently **and that one which cannot be made at all is reported once after paint and exempt from the first-paint bound** (clause (c), added in the ruling-application round), that it needs no network, and that the **artifact** rather than the preparation is the update target |
 | REQ-STARTUP-166 | **Direct detection of shared or synchronised storage, and the warning.** SR-5 refinement 2. It warns and refuses nothing, needs no preference key, and must never be presented as or in place of the per-session refusal of REQ-SESSION-083 and REQ-SESSION-183 |
 | REQ-CONFIG-477 | That **configuration must be held as files** and must not be migrated into a store only this application can read, with four independently sufficient grounds |
 | REQ-TRACE-513 | That the **requirement documents, the three baselines, the generated symbol artifact and the retired-identifier log** stay plain files in the user's own repository — and, consequently, that REQ-TRACE-502's concurrency obligation stays live over them and no store's concurrency control may be cited as discharging it |
@@ -560,7 +560,7 @@ exists. REQ-CONFIG-192 keeps its identifier and its five other fields.
 |---|---|
 | REQ-SESSION-048 | What a **lock refusal must convey**, in both the same-machine case (another run in this application holds it, naming the pid) and the other-machine case (the session is held by a different machine, when, that liveness cannot be established, and that the store being reachable from more than one machine is the condition to resolve). Cited by REQ-SESSION-083, REQ-SESSION-183, REQ-GIT-020 and REQ-MONITOR-240. The content was previously duplicated across 048 and 083 with no owner |
 | REQ-SESSION-033 | The **Windows replacement ladder** — 5 attempts, all within 1 second of the first. It is now the only place in the corpus that states one, and it declares itself so. It governs the session summary file, which every save rewrites (ADR-0003 worked example 1) |
-| REQ-EVENTS-166 | What an **export of a session record must guarantee**, for domain 20 and for every other domain. It names the two exports that must exist and states the guarantee in full for both. Cited within domain 20 by REQ-EVENTS-132, REQ-EVENTS-163, REQ-EVENTS-172, REQ-EVENTS-178; across domains by REQ-SESSION-189, REQ-SESSION-199 and REQ-TOOLS-078 |
+| REQ-EVENTS-166 | What an **export of a session record must guarantee**, for domain 20 and for every other domain. It names the two exports that must exist and states the guarantee in full for both. Cited within domain 20 by REQ-EVENTS-132, REQ-EVENTS-163, REQ-EVENTS-172, REQ-EVENTS-178; across domains by REQ-SESSION-189, REQ-SESSION-199 and REQ-TOOLS-078 — and, since the ruling-application round, by REQ-TOOLS-190, REQ-LIBRARY-176 and REQ-TRACE-514. It remains the **sole** statement of the guarantee: every one of those citers applies it and none restates it |
 | REQ-EVENTS-090 | The **line-delimited record terminator**, now unambiguously the export format's rather than a claim about stored bytes. Cited by REQ-EVENTS-089, REQ-EVENTS-172, REQ-SESSION-145 |
 | REQ-EVENTS-092 with REQ-EVENTS-094 | The **truncation record**, jointly and solely, now that REQ-EVENTS-093 is withdrawn: the four facts, their indivisibility with the trim, that absence reads as zero, and accumulation over a session id that is never reset |
 | REQ-STARTUP-155 | The **first-run exemption** and the definition of "first run" — first run of a given artifact **version**, on a machine, for that user |
@@ -642,6 +642,9 @@ on is the retained released pages, and both documents now use that vocabulary.
   design, backing up or syncing a workspace backed up its session history. It no longer does. The exports
   of REQ-SESSION-189 and REQ-SESSION-199 are now the only way a user carries their history anywhere
   durable. Correct under SR-5; worth a deliberate decision rather than a discovery.
+  **Closed in the ruling-application round.** ESC-19 took SR-9(b)'s option 1 *and* half of option 2:
+  REQ-SESSION-200 owns the disclosure and REQ-SESSION-201 owns a whole-store backup and restore. The
+  configurable store location is refused, so ADR-0058's location decision does not reopen.
 - **A workspace identifier that is lost or duplicated is an unrecoverable history loss the product cannot
   detect.** REQ-SESSION-197 forbids minting over a readable identifier and requires an unreadable one to
   be reported rather than overwritten. The copied-workspace case — two workspaces sharing one identifier
@@ -656,15 +659,431 @@ on is the retained released pages, and both documents now use that vocabulary.
   and delivery records were readable files; both are now rows and neither has an export. The argument
   that reaches the four named records reaches these two identically. Not minted, because no ruling covers
   them.
+  **Closed in the ruling-application round.** ESC-20 ruled SR-9(a)'s two exports in: REQ-LIBRARY-176 and
+  REQ-TRACE-514 are minted. The same ruling replaced the *readership* test with a **redaction-safety**
+  test and gave the verification-gate record an export as well, so the list is now closed by a stated
+  rule rather than by an enumeration that could go short again.
 - **ESC-2 and ESC-1 are ruled and unmade.** REQ-CONFIG-252 still states that comments and formatting are
   lost on configuration write-back; REQ-CONFIG-288 still states the shared save path. Neither was in
   scope for the storage passes.
+  **Both closed in the ruling-application round.** REQ-CONFIG-252 now states that comments, formatting
+  and layout are preserved, and is the single statement of that discipline for every writer of
+  `agents.yaml`. REQ-CONFIG-288 now records the decision against the coupling: the composer's control
+  writes its own key and commits nothing else.
 - **`hook-trust.json` carries a security decision that travels with a synchronised or cloned workspace.**
   REQ-HOOKS-096 keeps it as a file and no ruling moves it. That a workspace copied to a second machine
   brings a trust decision that machine never made is unaddressed.
 - **REQ-SESSION-016 and REQ-SESSION-138 disagree about when the launch audit is recorded** — "at session
   start" against "once by run startup, after worktree binding and the sandbox verdict". This predates the
   round and OQ 12's disposition sides with 138; the requirements still disagree.
+  **Closed in the ruling-application round, in favour of REQ-SESSION-138**, which is what the
+  architecture record already implements. REQ-SESSION-016 hands the timing over and keeps the two-place
+  recording, the five facts, their defaults, the moments each is stamped on the session state, and the
+  no-backfill rule. "At session start" is not a defensible alternative reading but an unsatisfiable one:
+  two of the five facts are not knowable until the sandbox verdict of REQ-SESSION-086. That argument is
+  recorded inside the requirement so the question cannot be reopened on a reading of the words alone.
+
+## The ruling-application round
+
+A ninth round, and the first whose purpose was to close a **class** of defect rather than a set of
+instances. Several product-owner rulings authorised specification amendments that were recorded and then
+never made, because no workflow was ever scoped to apply them: the pooled terminal backend was still
+specified after ESC-5 withdrew it, the plugin file extension was still fixed in four places after ESC-7
+withdrew it, and REQ-CONFIG-288 and REQ-CONFIG-252 still stated in the present tense the behaviour ESC-1
+and ESC-2 refused. Nobody noticed for two days. The round therefore applied the outstanding amendments
+**and** swept every ruling — ESC-1 to ESC-21 and SR-1 to SR-9 — against the corpus, so that the answer to
+"which rulings are unlanded?" is a check that can be repeated rather than a memory.
+
+Five agents worked in parallel on ten domain files — 05 with 10; 11 with 06; 07 with 20; and 15, 14, 08
+with 21 — and a fifth pass reconciled them, swept the eleven remaining domains, and carried the
+consequences into `resolutions/`, this file, the specification index and the Specification Gate.
+
+**Rulings applied in this round:** **ESC-1**, **ESC-2**, **ESC-5**, **ESC-6**, **ESC-7**, **ESC-8**,
+**ESC-13** (its withheld half), **ESC-19**, **ESC-20**, **ESC-21**, and the ESC-11 gate follow-through.
+**SR-9(a)** and **SR-9(b)** are discharged. Every other ruling was checked and found already applied.
+
+**What was withdrawn.** No identifier. Every withdrawal in this round is at clause or vocabulary level,
+and each is recorded *in place* inside the requirement that carried it rather than deleted silently,
+because a conformance-test author who has seen an earlier draft needs to be told a value is gone rather
+than left to wonder.
+
+| Withdrawn | Where it lived | What survived it, and where |
+|---|---|---|
+| The terminal backend name `tmux-pool` | REQ-TOOLS-100 | The `backend` **field** is kept for forward compatibility, with the consumer rule made explicit: the single value shipped today is not a closed vocabulary |
+| `kill_status` values `pane_replaced` and `replace_failed` | REQ-TOOLS-099 | The two values of the one kill path this product has, `session_reset` and `reset_failed` |
+| The pooled-recovery ladder — 3 recoveries in a rolling 10-second window, the fourth-recovery `execution_error` naming an unreachable pool server, the clear-on-completion rule | REQ-TOOLS-103, and a restated figure in the limits table | The guarantee, which was never the ladder's: every call returns an ordinary or a structured error observation and never a partial or malformed one, **whatever the backend is and however it failed** |
+| The two-backend observational-parity clause | REQ-TOOLS-187 | Restated forward: because the rule attaches to the shell session and not to the backend, a backend added in a later release cannot change foreground concurrency |
+| The `*.py` plugin extension | REQ-TOOLS-165, the domain 05 workspace layout, REQ-CONFIG-277, the domain 15 workspace layout | A stronger, technology-neutral discovery rule: the inventory lists exactly the set `custom_tools:` can load, so it never advertises a file the loader would reject nor hides one it would accept |
+| REQ-TOOLS-190's **readership** argument for withholding an export | REQ-TOOLS-190, and again in the domain 05 Data & Formats preamble | The redaction-safety test that replaces it, stated once and owned there |
+| REQ-SESSION-069's exact log line `Dropped a stale session write for <id>: …` | REQ-SESSION-069 | Last-requested-wins with its worked case, and the per-session scoping rule — neither of which REQ-SESSION-173 carries. An explicit instruction that no conformance test may look for the withdrawn string |
+| REQ-EVENTS-029's comparative conclusion that the history is the more complete of a session's two records | REQ-EVENTS-029 | The crash-completeness property itself, verbatim, plus the negation stated so the conclusion cannot be re-derived |
+| REQ-EVENTS-081's "a run driven by a programmatic embedding of the engine" | REQ-EVENTS-081 | The enumeration now cites REQ-SESSION-080's closed set; the guarantee is explicitly stated not to be narrowed by the shorter list, which matters because REQ-EVENTS-001, -002 and -014 were withdrawn **into** this requirement |
+| The same phantom run path, in four more places | REQ-HOOKS-083, REQ-HOOKS-089, REQ-TRACE-218, REQ-TRACE-464 | Found by sweeping the corpus for the defect rather than the instance, once REQ-EVENTS-081 exposed it. All four had substituted "a programmatic embedding of the engine" for a withdrawn shell venue during the graphical-only sweep, which put a host the product does not have (REQ-EVENTS-178) on the far side of a comparison — making the comparison vacuous in each case. The two hooks requirements now state the guarantee against REQ-SESSION-080's closed set, with the trust gate declared a property of the run and never of the surface; REQ-TRACE-218's second independent host is the project's own test suite, which it already named, with the added test that a suite reaching the seam only through the desktop worker is not a second consumer; REQ-TRACE-464's clause is about a composition lacking a coordinator and holds for any such composition. No guarantee is narrowed in any of the four, and each says so |
+| REQ-SESSION-016's "at session start" timing claim | REQ-SESSION-016 | REQ-SESSION-138 as sole owner of the timing; the state-stamping moments are now stated explicitly, which "at session start" had been the only thing to say |
+| REQ-UIBENCH-054's element-count invariant | REQ-UIBENCH-054 | A bound on the count's variation across two comparisons, carried by a new `widgets_samples` field at REQ-UIBENCH-058's existing 11 indices, plus the retained absolute that a later record below the `construct_window` figure is a defect |
+| REQ-UIBENCH-118's and REQ-UIBENCH-099's claim to state the only absolute threshold | both | The accurate distinction: 100 ms is fixed rather than comparative, and the benchmark enforces none of the three because all seven booleans are informational (REQ-UIBENCH-088) |
+| REQ-UIBENCH-119's "no invariant reads it" | REQ-UIBENCH-119 | The informational character it was protecting, restated accurately: no threshold, never fails an operation |
+| REQ-CONFIG-288's cross-surface save coupling | REQ-CONFIG-288 | The requirement's own demand that "a rewrite must decide about this cross-surface coupling explicitly", now discharged as a recorded decision rather than a deletion |
+| REQ-STARTUP-123's "does not establish who produced the artifact" | REQ-STARTUP-123 | The transfer-integrity guarantee, preserved verbatim; the four hash-failure sentences are untouched because REQ-STARTUP-120 consumes them as a contract |
+| REQ-SANDBOX-101's "only the presence of that channel is tested" | REQ-SANDBOX-101 | The half that was right — presence is not answering — split out and pointed at its two real owners, while the half that was wrong is corrected to REQ-TOOLS-053's capability test |
+
+**What was minted.** Seven identifiers.
+
+| Minted | What it owns |
+|---|---|
+| REQ-SANDBOX-130 | The **plain no-confinement disclosure** of ESC-6. One fact — this host cannot confine anything, so every agent command runs with the account's own privileges and no `runtime.sandbox_mode` value changes that — required on **two** surfaces: beside REQ-SANDBOX-116's availability label without the user having to select a mode first, and on REQ-SANDBOX-119's launch dialog before the run begins, for attended and unattended sessions alike and also when REQ-SANDBOX-107's advisory is empty. Text, never colour (REQ-SHELL-149). Adds no capability and moves no verdict |
+| REQ-STARTUP-167 | **Publisher authenticity for updates** (ESC-8), and the single definition of that vocabulary. Every artifact carries the verification counterpart of the signing key within itself and resolves it with no download (REQ-STARTUP-159); the trusted set is fixed when the build is produced and nothing at run time adds to, replaces or disables it, because a trust anchor a network can replace establishes nothing; what this establishes and what it does not; and that there is no override by which an unverified update installs |
+| REQ-STARTUP-168 | **Key rotation stated behaviourally**, as the ruling required. A build trusts a *set*; a release is signed with a key carried by every artifact it may be offered to, decidable before publishing and decided at the REQ-STARTUP-156 gate; a key withdrawn before that can be satisfied strands self-update for the affected installations, which keep working and refuse rather than install unverified; a withdrawn key signs no further release and ships in no later build. Nothing about key generation, custody or transfer is specified |
+| REQ-SESSION-200 | The **backup disclosure** of SR-9(b) as re-affirmed by ESC-19. The product states, itself, that backing up, copying, cloning or synchronising a workspace does not carry that workspace's session history; names what is outside such a backup and what is carried; says where the two remedies are; and may not be delivered only inside a failure or remediation message, because a user who has already restored a workspace and found no history in it has been told too late |
+| REQ-SESSION-201 | The **whole-store backup and restore** of ESC-19. One artifact over the store and the per-session files held with it; a destination chosen through the platform's save dialog; valid while runs are live and yielding a state a reader could have observed at one moment; restored only when explicitly asked for, never automatically, never silently merged, refused while any session in the target store is live, and carrying the workspace identifier it was taken from |
+| REQ-LIBRARY-176 | The **improvement store exports** of SR-9(a), including the recorded version history REQ-LIBRARY-168 calls "the audit trail the write path keeps", exported as an audit with pruning disclosed |
+| REQ-TRACE-514 | The **delivery store exports** of SR-9(a), including each transition's acting party, time and stated reason, and an override's grounds. Explicitly **not** a fifth toolchain operation, and explicitly carrying the delivery store's own retired ids and never the toolchain's retired-identifier log |
+
+**Owners this round assigns.**
+
+| Owner | What it is the single definition of |
+|---|---|
+| REQ-TOOLS-161 | What a **plugin file is** — a module the host process can load and call directly — and the rule that no programming language, runtime, packaging form or file extension is fixed here or anywhere else in the specification, and that no requirement may reintroduce one by naming a file suffix in passing. REQ-TOOLS-165, the domain 05 workspace layout, REQ-CONFIG-277 and the domain 15 workspace layout are all followers |
+| REQ-TOOLS-190 | The **export-eligibility test**: a record gains an export when it carries no unredacted user or tool content, and does not gain one when it does. It also holds the one absolute exclusion — REQ-SESSION-136's tool-call evidence record must never gain an export, and a future requirement proposing one is in conflict with this requirement and must be refused rather than reconciled. REQ-EVENTS-163 and REQ-LIBRARY-176 are followers; REQ-SESSION-199 and REQ-EVENTS-166 remain the owners of the export *obligation* and *guarantee* respectively, which this requirement cites rather than restates |
+| REQ-TOOLS-100 | The **`backend` field**, and the fact that exactly one terminal backend ships. Recorded so that a later pass does not re-close the vocabulary. REQ-TOOLS-099 and REQ-TOOLS-187 are citers |
+| REQ-CONFIG-252 | The **write-back preservation discipline** for `agents.yaml` — comments, formatting and layout preserved by every writer of it. Before this round no requirement owned it and one requirement denied it. REQ-CONFIG-441 cites it; it applies to REQ-CONFIG-248, REQ-CONFIG-256 and REQ-CONFIG-027 |
+| REQ-CONFIG-288 | How the **composer's permission-mode control writes** — one key, through the scoped per-field writer, committing nothing else. It was an open decision handed to a rewrite; it is now a definition. Cited by REQ-CONFIG-328, REQ-CONFIG-423 and REQ-CONFIG-441 |
+| REQ-STARTUP-167 | **Publisher authenticity for updates**, declared so in its own text; other documents cite it rather than restate it |
+| REQ-SESSION-138 | **When the launch audit is recorded.** REQ-SESSION-016 and REQ-SANDBOX-108 are followers. This closes a disagreement the previous round recorded and could not settle |
+| REQ-UIBENCH-050 | The **two structural counting rules**, with the framework-neutral reading now stated as operative in the requirement rather than inferred from a resolution row. REQ-UIBENCH-054 remains the owner of the rule REQ-UIBENCH-085 reports |
+| REQ-SANDBOX-130 | The **no-confinement disclosure**; REQ-SANDBOX-116 is a citer |
+
+**Followership recorded rather than assumed.** REQ-SANDBOX-101 now says in its own text that it holds no
+second copy of the attended test and follows REQ-TOOLS-053. REQ-SESSION-201 says in its own text why it
+does not violate REQ-SESSION-199's no-duplicate rule — an export is a record rendered so that software
+knowing nothing about this product can read it, a backup is the store rendered so that this product can
+put it back — and REQ-SESSION-199 gained the matching clause from the export side, so the boundary is
+stated from both directions.
+
+**Guarantees checked before their mechanisms were rewritten.** The standing rule bit at five points and
+changed what was done at all five.
+
+- *REQ-TOOLS-103's well-formed-observation guarantee.* Scoped to "a failure of the pooled backend"
+  before; generalised rather than deleted, with a sentence in the text telling the next reader that the
+  ladder went and the guarantee stayed.
+- *REQ-TOOLS-165's discovery filter.* The `*.py` filter was doing real work — it decided what the
+  inventory lists. Deleting it without replacement would have left the tab undefined; the replacement is
+  strictly stronger, because an extension filter can list a file the loader rejects.
+- *REQ-SESSION-069's ordering guarantee.* REQ-SESSION-173 states last-requested-wins as a cross-cutting
+  invariant but carries neither the running-before-completed worked case nor the per-session scoping
+  rule, so both stay in REQ-SESSION-069 and the owner/follower relation is now explicit.
+- *REQ-UIBENCH-054's no-accumulation guarantee.* Relaxing to a comparison between phase records alone
+  would have deleted it: with one record per phase and content changing between phases, a leak confined
+  to `tail_replacements_1000` is indistinguishable from content having been drawn. The guarantee is
+  carried by sampling `widgets` at the 11 indices the phase already samples `rss` at.
+- *REQ-STARTUP-165(f)'s indistinguishability guarantee.* A run started from a preparation is still
+  behaviourally indistinguishable from any other; only the **silence** rule is narrowed, and it is
+  narrowed by naming the one outcome it does not cover rather than by carving an exception out of (f).
+
+**Two contradictions between the parallel agents' grants, adjudicated in the reconciling pass.** Both
+were instances of the same failure mode: a ruling whose two halves lived in two documents owned by two
+agents, so neither could close it.
+
+1. *ESC-7 in domain 15.* The domain 05 agent withdrew the `*.py` extension; REQ-CONFIG-277 and the
+   domain 15 workspace layout still stated it, and the domain 15 agent was not scoped to ESC-7. Both are
+   now followers of REQ-TOOLS-161 and hold no second definition.
+2. *ESC-20 in domain 20.* REQ-EVENTS-163's "their exports (REQ-EVENTS-166) are equally distinct" read as
+   granting an export to the tool-call evidence record — the exact widening REQ-TOOLS-190 now forbids,
+   sitting in another document. It is narrowed, and now states which records on its list have an export
+   and which never will.
+
+A third instance was caught inside a single grant and is recorded because it is the same pattern:
+REQ-TOOLS-077 stated ESC-1's refused coupling in domain 05, where the agent holding ESC-1 could not
+reach it.
+
+**Still open after this round.**
+
+- **The architecture record has not caught up with ESC-19, ESC-20 or ESC-21**, and is not expected to
+  have: those three were ruled on 2026-09-01 against comparative evidence and the architecture pass that
+  carries them has not run. This is a separate pass, not a defect in this one.
+- **`docs/architecture/proposals/runtime.md` constraint C3.6 still mandates REQ-SESSION-069's withdrawn
+  log line verbatim, as a HARD constraint.** It is the only place in the repository that still requires
+  the string. Until it is corrected an implementer working from the proposal will produce a message the
+  specification now forbids, and the two documents disagree invisibly unless both are read.
+- **ADR-0020 and `proposals/exec.md` still carry ESC-5 as an open escalation**, with constraint C-74
+  stating the four-value `kill_status` set and the two-name backend vocabulary the specification has
+  withdrawn.
+- **REQ-SESSION-201 has no architecture home.** ADR-0058 says nothing about backup or restore. The
+  hardest unaddressed part is not the store but the **per-session files** held with it, which no store
+  engine's online-backup facility covers and which REQ-SESSION-200 names as outside a workspace backup.
+- **The backup artifact is a new exfiltration surface and nothing requires it to be protected at rest.**
+  One file holding every session's unredacted tool-call arguments, the full permission audit and every
+  artifact body, for a whole workspace, which a user will naturally put on removable media or a cloud
+  drive. REQ-SESSION-201 requires the contents to be disclosed where the action is offered; encryption
+  and passphrase were deliberately not invented in a requirement.
+- **REQ-STARTUP-168(c) accepts in writing that a compromised signing key strands an installed
+  population's ability to self-update** until each user downloads by hand. That is the honest consequence
+  of shipping the trust anchor inside the artifact and refusing any run-time path to change it, but it is
+  a real user-visible cost the owner has not explicitly ruled on.
+- **ESC-8's signature protects the update path only.** A user downloading by hand from the release page
+  still gets an unsigned binary and can check only its digest; REQ-STARTUP-035's verification hint was
+  deliberately not extended, because doing so would require naming a signature-verification tool and
+  therefore a technology.
+- **Domain 14 states no redaction obligation over an improvement-artifact evidence entry's excerpt**,
+  which REQ-LIBRARY-010 allows to hold quoted source text. ESC-20 rules the export in explicitly and
+  gives its ground, so the export is applied; but the general test it states is not obviously satisfied
+  by an excerpt, and closing that would be a new obligation needing a ruling.
+- **REQ-SESSION-200's surface is under-constrained by design.** It is anchored to REQ-SESSION-182's
+  session-management place, which is the only surface domain 07 owns. A user who never opens that surface
+  and simply backs up their machine may still miss it. ESC-6's precedent for the analogous gap was two
+  surfaces; a second one here would be a requirement in domain 13 or domain 15.
+- **ESC-21's refusal has an availability cost.** A user whose repository legitimately lives in a
+  synchronisation client's tree, working alone on one machine, cannot integrate worktrees at all even
+  though nothing is contended, and the remedy the message offers is "move your repository". The
+  requirement marks the strength as under review, which is what spike 19 weighs.
+- **REQ-STARTUP-165(c)'s notice is the first thing in the product that reports anything about a launch
+  preparation**, against a requirement whose preamble says preparations are invisible. It is bounded as
+  tightly as it can be, and if the owner's intent was invisibility without exception this is the
+  amendment to reverse — at the cost of the 13–19 second unexplained launch spike 17 measured.
+- **Spike 19's retained scope should be widened in writing.** ESC-15 redirected it to "whether anything
+  else the product writes into `.rotaris/` misbehaves on synchronised storage"; ESC-21 gives it a second,
+  distinct question — refusal against warning for the integration lock — and REQ-GIT-128 now names it.
+
+## The defect-correction round
+
+A tenth round, 2026-09-02, and the first driven by a reader outside the specification. An architecture
+pass read the amended corpus closely enough to implement it and returned **twelve defects**: ten the
+specification's, two the architecture's own. Four were named as defects that would cause a conformant
+implementation to be **built wrong**, and none of the four is discovered by testing. That is the
+strongest kind of finding this process can produce — the specification was not merely under-determined,
+it said two incompatible things in places where a builder has to pick one — and it is worth recording
+that every one of the four was found by trying to build from the document rather than by re-reading it.
+
+Four agents worked in parallel on nine domain files — 06 with 11; 07 with 20; 08 with 14; and 15, 04
+with 03 — and a fifth pass swept the remaining twelve domains, reconciled the two machine-readable
+contracts across the whole corpus, and carried the consequences into `resolutions/`, this file, the
+specification index and the Specification Gate.
+
+**One identifier minted, none withdrawn.** `REQ-CONFIG-478` owns what a fatal configuration load
+failure conveys and how a user recovers from it. Three clause-level withdrawals were made and each is
+recorded *in place* with the withdrawn text quoted rather than deleted.
+
+### The rule this round was run on
+
+**A machine-readable contract has exactly one home.** Two of the twelve defects were the same defect:
+a document shape stated in two requirements that had drifted apart. The round did not fix the two
+instances and stop. It gave each contract a single owning requirement that says so in its own text,
+turned every other statement of it in the corpus into a citation, and recorded as withdrawn — with the
+literal quoted and an explicit instruction that no conformance test may look for it — every spelling
+that lost. The sweep covered follower requirements, Data & Formats tables and resolution logs, in the
+retired domains as well as the shipping ones, because a retired document that fixes a rival key
+inventory is a rival key inventory.
+
+### Ownership recorded by this round
+
+| Owner | What it is now the single definition of | Citers |
+|---|---|---|
+| `REQ-GIT-128` | Both integration-lock refusal texts — `Another worktree integration is already running.` for a busy lock and `Could not acquire worktree integration lock.` for an unreapable one — and that there is **one** already-running refusal serving both the precondition check and a failed acquisition | `REQ-GIT-124`, `REQ-GIT-145`, `REQ-GIT-151` |
+| `REQ-STARTUP-163` | When two directory strings name the same directory: what is resolved, what is deliberately not reconciled, and the bounded cost of not reconciling it. **Not** the definition of workspace identity, which is `REQ-SESSION-197`'s and is never derived from a path | `REQ-STARTUP-041`(a), `REQ-STARTUP-052`, `REQ-SHELL-010`, `REQ-SHELL-021`, `REQ-HOOKS-092`, `REQ-HOOKS-097` |
+| `REQ-STARTUP-165`(c) | The run-scoped placement and its closed set of two permitted locations; (d)'s prohibition names it as its single exception | `REQ-STARTUP-150`, `REQ-STARTUP-151`, `REQ-STARTUP-152`, `REQ-STARTUP-159`, domain 11 Data & Formats |
+| `REQ-EVENTS-144` | The batch trajectory wrapper: its closed three-key inventory `trajectory_version`, `count`, `trajectories`; that `count` equals the element count of `trajectories`; that the documents travel unaltered in selection order; and that the inventory is exhaustive | `REQ-SESSION-189`, `REQ-SESSION-193`, `REQ-EVENTS-173`, the Data & Formats tables of domains 07, 18 and 20, and domain 18's `REQ-CLI-237` withdrawal |
+| `REQ-EVENTS-056` | The record locator: its form `<record kind>#<record id>`; the closed record-kind token set `issues`, `permission_audit`, `tool_call_evidence`; the obligation that a named kind's own requirement supply a stable, non-reused, entry-distinguishing identifier; the resolution rule through an export and the stated consequence where a kind has none; and the prohibition on any export dereferencing a locator | `REQ-SESSION-135`, `REQ-SESSION-199`, `REQ-TOOLS-079`, `REQ-TOOLS-081`, the Data & Formats tables of domains 05, 07 and 20 |
+| `REQ-TOOLS-079` | The identifier of a permission-audit entry — the only place it may be fixed, on `REQ-EVENTS-056`'s instruction. Where that identifier lives is deliberately left open (ESC-31) | `REQ-EVENTS-056`, `REQ-TOOLS-081`, `REQ-SESSION-199` |
+| `REQ-TRACE-089` | The index write carve-out, bounded by four named tests — confinement, observable inertness, no budget relief, and being a precondition of nothing — in addition to the consulted-versus-validated distinction it already owned. **This requirement must not be edited casually**: narrowing it silently changes `REQ-TRACE-090`, `REQ-TRACE-152` and `REQ-TRACE-408` together | `REQ-TRACE-090`, `REQ-TRACE-152`, `REQ-TRACE-408`, `REQ-TRACE-513` |
+| `REQ-TRACE-405` | The delivery store's retention-disclosure obligation: retain enough to state how many history entries retention dropped | `REQ-TRACE-514` |
+| `REQ-LIBRARY-052` | The improvement store's retention-disclosure obligation, scoped to **pruning only** | `REQ-LIBRARY-176` |
+| `REQ-CONFIG-478` | What a fatal configuration load failure conveys and what recovers from it, including the withdrawn-key case. `REQ-CONFIG-237`, `REQ-CONFIG-018`, `REQ-CONFIG-019`, `REQ-CONFIG-462` and `REQ-CONFIG-239` add to rather than replace its floor | `REQ-CONFIG-183`, `REQ-CONFIG-192`, `REQ-CONFIG-194`, `REQ-CONFIG-233` |
+| `REQ-CHAT-055` | The measurement point at which transcript update cost is read — the moment the interface has finished showing the update, and expressly not the duration of the synchronous call | `REQ-CHAT-154` |
+
+`REQ-SESSION-133` was used as the **model** for the two retention-disclosure obligations and was
+deliberately not made their owner. It owns the session retention caps, not a general cross-domain
+principle; three stores each owning their own obligation is correct, and one owner with two
+cross-domain followers would have been wrong. Recording that here stops a later reader collapsing the
+three into one.
+
+`REQ-PROVIDER-063` keeps its identifier and changed only its location: the Copilot gateway staging
+directory is out of the workspace and under the per-user data directory, keyed by the workspace
+identifier `REQ-SESSION-197` fixes and never by a path. Nothing was withdrawn with the move — the
+environment variable name, both file names and the exact shape of `api-key.json` are preserved
+character for character, because those are the third-party contract and the directory's own name never
+was one.
+
+### Vocabulary minted
+
+Three record-kind tokens, fixed by `REQ-EVENTS-056` and closed at three: `issues` (already in the
+corpus), `permission_audit`, `tool_call_evidence`. The third is deliberately **not** `tool_calls`,
+because that string is already a summary count in the trajectory document (`REQ-EVENTS-136`) and in the
+metrics document (`REQ-SESSION-139`), and a token that reads like a document key in the same exported
+material is the confusion a machine-readable contract exists to prevent. Each token names the record,
+not the thing recorded. Admitting a fourth is an amendment to `REQ-EVENTS-056` and to nothing else.
+
+### Withdrawn at clause level, recorded in place
+
+- `REQ-SESSION-189`'s batch wrapper inventory `{"trajectory_version": 1, "sessions": [<document>, …]}`
+  and its "carries no fields of its own beyond them" clause. Survived by `REQ-EVENTS-144`'s equally
+  closed inventory, which carries the version key, the array key, selection order, closure and the
+  consumer-compatibility rationale — checked clause by clause before the literal was removed. **No
+  conformance test may look for a `sessions` key on a batch document.**
+- `REQ-GIT-124`'s spelling of the busy integration-lock refusal, `A worktree integration is already
+  running.` It occurs nowhere in the corpus; `Another worktree integration is already running.` occurs
+  exactly once, in its owner. `REQ-GIT-124`'s four refusal conditions and its ordering rationale are
+  intact and its closing "when none of the four applies" still counts correctly.
+- The two export-document shapes the retired domain 18 fixed in its Data & Formats section — a
+  trajectory document as `schema_version`, `session_id`, `workspace`, `exported_at`, `run_count`,
+  `truncated`, `event_count`, `events`, and a batch document as `schema_version`, `exported_at`,
+  `session_count`, `sessions`. Both cited `REQ-CLI-237`, which the same document had already withdrawn,
+  and both disagreed with the live owners on every key name that differs. The withdrawal is recorded in
+  the document and in `resolutions/18-cli-headless.md` row 36, whose surviving half — the content of the
+  two export warnings — is called out so it is not lost with the shapes.
+
+### Narrowings, and what was checked before each
+
+- `REQ-EVENTS-056`'s promise that a locator resolves "whether the consumer reads it through this
+  application or through the export of that record kind" was unconditionally false for a kind with no
+  export, which is the case the tool-call evidence record depends on. Narrowed to kinds that have an
+  export, with the no-export case stated as the **intended** outcome that must not be closed by
+  widening an export. Nothing was lost: the guarantee was undeliverable for the one kind it excluded.
+- `REQ-TRACE-090`'s purity was preserved by an **observability** test rather than by carving out a class
+  of writes, so the exception cannot grow: anything an index write could reach that a user or another
+  tool can see is outside it by construction. "Verification SHALL be pure … writes nothing" and "Plain
+  checking SHALL NEVER write" stand word for word.
+- `REQ-CHAT-055` settles a reading, not a budget. It fixes no figure, threshold or tolerance that
+  `REQ-CHAT-157` does not already fix, and `REQ-CHAT-154` now cites it rather than carrying the same
+  ambiguity.
+- `REQ-STARTUP-043`'s parenthetical is stated to be a closed list of the activities that requirement
+  constrains — neither an enumeration of everything a shown window then does, nor permission for an
+  unnamed activity to precede the show. `REQ-WORKSPACE-014` already enumerated the same four and already
+  deferred, so the closed reading was in the corpus before it was stated.
+
+### What this round did not settle
+
+- **ESC-26 is untouched and remains with the product owner.** `REQ-SESSION-197` and `REQ-SESSION-201`
+  were not amended, and nothing in this round pre-empts either option the escalation offers.
+  `REQ-STARTUP-163` cites `REQ-SESSION-197` only to state a boundary — path identity is not workspace
+  identity — which decides nothing the escalation asks.
+- **Five product decisions were raised rather than taken** (ESC-27 to ESC-31), enumerated in the
+  Specification Gate. Each changes what a user sees, which is why none was decided by an editor.
+- **The second half of the tenth defect is open.** Nothing says which per-user data location is meant
+  on a platform offering both a roaming and a machine-local one. `REQ-SESSION-198`, `REQ-STARTUP-165`(a),
+  `REQ-PROVIDER-014` and `REQ-PROVIDER-063` each state machine-local for themselves, so the corpus is
+  satisfiable and no build that reads them is wrong; the silence sits in `REQ-STARTUP-145`, and closing
+  it is one clause.
+- **No requirement places the workspace-store open after the window is shown.** `REQ-STARTUP-043` was
+  believed to, and after this round demonstrably does not. Whether such a requirement should exist is
+  domain 07's, and it may be architecture's choice rather than a specification gap, since
+  `REQ-STARTUP-155`'s first-paint bound already constrains the outcome on either side of the show.
+
+## The measurement round
+
+An eleventh round, 2026-09-02, and the first driven by **measurement** rather than by reading. Four
+architectural spikes were run on the target platform — a store on remote and synchronised storage, the
+transaction commit on the publish path, the prepared portable's launch, and presenter liveness with the
+single-instance claim. **Every product-owner ruling survived.** What the round did to the specification is
+narrow and is recorded here in full, because the round's *architecture*-side output was much larger than
+its specification-side output and a reader could easily assume the reverse.
+
+**One identifier minted, none withdrawn, five amended in place. Live behaviour grew by one and no
+requirement's strength was reduced.** Minted: `REQ-EVENTS-179`. Amended: `REQ-SESSION-197`,
+`REQ-SESSION-201`, `REQ-SESSION-089`, `REQ-EVENTS-084`, `REQ-EVENTS-088`. Counts move from 3,949 / 258 /
+3,691 to **3,950 / 258 / 3,692** on the shipping side, and from 4,393 to **4,394** in all. The two retired
+domains are untouched.
+
+### ESC-26 applied, and how the exception was written so it cannot be widened
+
+The owner ruled ESC-26 on 2026-09-01: `REQ-SESSION-197` gains one narrow exception — a restore MAY
+establish the workspace identifier when the user explicitly confirms it, and no other action ever may.
+**The whole exception is stated in `REQ-SESSION-197`**, because that is where the absolute rule lives and
+where a later reader looking to widen it will be standing; `REQ-SESSION-201` carries only a pointer, which
+is not decorative, because a reader of the restore action would otherwise not know the confirmation
+exists. That follows the rule the defect-correction round was run on: **a machine-readable contract, and a
+behavioural one, has exactly one home.**
+
+Three choices in the drafting were aimed at a later reader rather than at an implementer, and they are
+recorded because they are the part a compression pass would remove first.
+
+- The requirement **names the specific paths that do not gain the exception** — opening or preparing a
+  workspace, `REQ-SESSION-060`'s explicit repair, a migration, an update, a later convenience — rather
+  than only saying "no other path".
+- It says the exception is **unavailable unless every one of the five conditions holds**, so it cannot be
+  adopted in part.
+- It closes with **why** it is confined: the rule it excepts protects against a folder moved, renamed,
+  copied or merely spelled differently, which is constant, while the recovery arises once in a workspace's
+  life if it arises at all — so relaxing the rule generally would trade a constant protection for a rare
+  recovery. **An implementation that finds this exception useful anywhere else has drawn the wrong lesson
+  from it.**
+
+That reasoning is stated in **product terms** rather than by citing the comparative survey of other
+harnesses that produced it, because a specification states observable behaviour and its reasons, not
+evidence about other products.
+
+### The gap a measurement exposed, and why it needed a requirement rather than an ADR
+
+`REQ-EVENTS-084` governed a store that could not be **opened**. `REQ-EVENTS-088` governed a write failing
+**during** a run. The storage measurement found that in every failing configuration the store **opened
+successfully**, reported itself not read-only, and threw on the first statement after — a case belonging
+to neither as written, and reproducible 30 times out of 30. The report's own verdict row recorded it as
+"INCONCLUSIVE, and a gap is exposed" and asked for an owner.
+
+`REQ-EVENTS-179` is that owner. A store that reports itself open is not yet known to be usable and MUST be
+**established as usable** before the run starts. **Nothing the store reports about itself is sufficient
+evidence** — it may report the open a success, report itself writable, return every setting read back
+exactly as applied, create the further files it keeps alongside itself at their expected sizes, and still
+fail on the next operation, and may fail on that operation every time while everything after it succeeds.
+The check MUST be an operation that reads and writes the store's own contents — a write made and then
+undone, so nothing is added — and MUST NOT be a reading back of what the store says about its state. It
+sits where `REQ-EVENTS-035` puts establishing the store and runs before `REQ-EVENTS-087` creates the
+history. Where it fails, the store counts as one that could not be opened and `REQ-EVENTS-084` governs
+unaltered. **And the failure MUST NOT be retried into success, swallowed, or reduced to a warning: exactly
+one attempt, its outcome decides, and a store that fails and then works still refuses the run.**
+
+Two things about the drafting are worth recording. **No engine is named.** The measured facts were
+engine-specific — a journal-mode pragma returning and reading back as set, a shared-memory index file
+created at a particular size, a specific error on the next statement — and they are stated as observables
+any implementation of any store must satisfy. And **the hardest clause is the no-retry one**, because it
+forbids the thing that makes the symptom go away: the measurement found 30 of 30 opens throwing on the
+first statement followed by 6,000 of 6,000 commits succeeding, so the store works if you simply try again.
+The reason is written into the requirement — retrying yields a product that runs on storage it has already
+been told is unsound, with no later moment at which it can say so — precisely so the clause is not read as
+excessive caution. **It is the only clause in this round whose violation looks like success, and it should
+have a conformance test.**
+
+### What this round checked and deliberately did not change
+
+- **`REQ-SESSION-070` needed no amendment and none was made.** A measurement read a terminal status back
+  immediately at the weaker durability setting, across two operating-system processes and two different
+  bindings. The requirement is already stated purely as **readability** — it names no durability level, no
+  sync setting and no power-loss survival — and its trailing "durable" is this specification's own sense,
+  fixed by `REQ-SESSION-067` and by `REQ-SESSION-034`'s crash-loss budget, which is explicitly about a
+  killed process and a half-written record rather than a power cut. **The false reason is not in the
+  specification; it is in an architecture record, and it has been corrected there.** No clarifying note
+  was added, because that would be an amendment where none was needed and it would put the correction one
+  document away from the error.
+- **`REQ-SESSION-198` needed no amendment** even though a measurement disproved the mechanism the ruling
+  behind it stated. The requirement states the machine-local rule **as a rule**, not as a consequence of
+  that mechanism, and explicitly forbids making the store's location conditional on detection — which the
+  measurement supports, detection being real and cheap for providers that register with the platform and
+  blind to those that do not.
+- **`REQ-SESSION-200`'s disclosure was left alone.** Its sentence that the identifier travels with the
+  workspace "so a workspace moved, renamed or restored on this machine finds its own sessions again" is
+  still true; a reader now has to reach `REQ-SESSION-201` and `REQ-SESSION-197` to learn that restoring
+  onto a **different** machine is also complete, via the confirmed exception. That is a one-clause
+  amendment if the owner wants the disclosure to carry it, and it was judged sprawl rather than a defect.
+
+### What this round did not settle
+
+- **Five product decisions raised by the defect-correction round remain unruled** — ESC-27 to ESC-31.
+  Nothing in this round reads on any of them.
+- **One conformance property fails in one configuration and no requirement states the rule that prevents
+  it.** Where one store file is reached through two path spellings on one machine, two writers each report
+  full success while up to 95 % of committed rows vanish with a clean integrity check, and
+  `REQ-EVENTS-098`'s non-blocking property fails there. Under `REQ-SESSION-198` the store is machine-local
+  so the configuration should not arise — but nothing in the specification states that the store's
+  location must resolve to **one canonical spelling**. The architecture now states it as a rule and as a
+  constraint; whether a requirement should is domain 07's or domain 20's.
+- **`REQ-EVENTS-098`'s "a reader MUST NOT be able to delay or block the writer" is unsatisfiable on its
+  literal reading.** A compliant reader measurably raises the writer's commit latency while never blocking
+  it, and no store can offer no scheduling effect. The requirement's own following sentence fixes the
+  sense as *blocking*, and the architecture record takes that reading and names it as a reading — but a
+  conformance test written from the literal words fails every possible implementation. Reported, not
+  amended: which of the two is meant is a decision, not an editorial fix.
+- **`REQ-EVENTS-179`'s probe has not itself been measured.** The measurement established that only a write
+  detects the condition; it did not measure what a made-and-undone write costs on the startup path, and
+  `REQ-EVENTS-035` puts establishing the store before any part of run start-up can fail.
 
 ## Standing constraints on what comes next
 

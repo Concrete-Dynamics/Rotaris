@@ -254,14 +254,30 @@ does not answer questions about the user's repository; only the files do.**
    file rows in the table are machine-local (the session log, the summary, artifact bodies) and one is
    per-user (credentials). Under `REQ-SESSION-198` that is deliberate. The practical consequence is
    SR-9(b)'s: **backing up the workspace no longer backs up the session history, and it no longer backs up
-   the artifact bodies either.** The exports are what a user carries anywhere durable. ADR-0058 owns the
-   recovery story; the disclosure SR-9(b) ruled is not yet in the specification.
-8. **ESC-2 is ruled but not yet made, and this record must not read as though it were.** `REQ-CONFIG-252`
-   still states that comments and formatting are lost through the startup-preference write. The ruling to
-   preserve them stands and the specification gate records it as unmade. Where the argument for
-   configuration-as-a-file needs a citation today, `REQ-CONFIG-477` ground 1 supplies a stronger one that is
-   in force: a file carries the keys this release does not understand, and `REQ-CONFIG-040`,
-   `REQ-CONFIG-233`, `REQ-CONFIG-442` and `REQ-CONFIG-458` require every writer not to discard them.
+   the artifact bodies either.** ADR-0058 owns the recovery story.
+
+   ***Citation corrected 2026-09-02. Two sentences here were false and must not be cited.*** They read:
+   "The exports are what a user carries anywhere durable" and "the disclosure SR-9(b) ruled is not yet in
+   the specification." Both requirements now exist. `REQ-SESSION-200` is the disclosure, and it is
+   substantial — it names what sits outside a workspace backup, names what *is* carried alongside it,
+   names both remedies, requires reachability from `REQ-SESSION-182`, and forbids delivery only inside a
+   failure message. `REQ-SESSION-201` is a whole-store backup and restore, and it is what a user carries
+   anywhere durable; an export is *readable* where a backup is not, and the two requirements each forbid
+   being collapsed into the other.
+8. **ESC-2 has landed and this record no longer needs its workaround.** ***Corrected 2026-09-02.*** This
+   consequence read: "ESC-2 is ruled but not yet made, and this record must not read as though it were.
+   `REQ-CONFIG-252` still states that comments and formatting are lost through the startup-preference
+   write." **That is now false and must not be cited.** `REQ-CONFIG-252` states preservation in terms —
+   "**Comments and formatting are preserved**", the write is "a targeted edit of the existing document
+   rather than a re-emission of the whole of it", and "the earlier statement that comments and formatting
+   are lost is withdrawn" — and it states the discipline once for all four writers of `agents.yaml`
+   (`REQ-CONFIG-027`, `REQ-CONFIG-248`, `REQ-CONFIG-256`, `REQ-CONFIG-441`) rather than repeating it in
+   each. The fallback argument this consequence reached for stands on its own merits and is kept, because
+   it is stronger rather than merely available: `REQ-CONFIG-477` ground 1 is that a file carries the keys
+   this release does not understand, and `REQ-CONFIG-040`, `REQ-CONFIG-233`, `REQ-CONFIG-442` and
+   `REQ-CONFIG-458` require every writer not to discard them — which, as `REQ-CONFIG-252` now observes, is
+   the same discipline: "a writer that preserves an unrecognized key but discarded the comment explaining
+   it would honour the letter of that rule and defeat its purpose."
 
 ## Revisit if
 
@@ -269,6 +285,13 @@ A requirement appears that puts something a human must read, or version control 
 which would now be a change to `REQ-CONFIG-477` or `REQ-TRACE-513` rather than to this ADR. Or a requirement
 requires a session's stored history to be a file at a fixed path in its own right rather than an exportable
 one. Or the corruption domain of consequence 1 is measured to be a real user cost — in which case the split
-ADR-0058 records under *Revisit if* is the first thing to reach for, not a return to files. Or the product
-owner takes SR-9(b)'s larger option and makes the store's location the user's choice, which would put a
-fourth kind of "where" in the table.
+ADR-0058 records under *Revisit if* is the first thing to reach for, not a return to files.
+
+***One clause of this Revisit-if is discharged and is retired with its text preserved (2026-09-02).*** It
+read: "Or the product owner takes SR-9(b)'s larger option and makes the store's location the user's
+choice, which would put a fourth kind of 'where' in the table." **That cannot now happen.** ESC-19 split
+SR-9(b)'s larger option in two and answered the halves in opposite directions: the whole-store backup is
+taken (`REQ-SESSION-201`), and a user-configurable store location is **refused**, on the comparative
+ground that no surveyed product offers one and that the variables which come closest are a documented
+hazard for silently relocating stores into synchronised folders — which would hand the user ESC-15's
+total outage. The table stays at three kinds of "where".

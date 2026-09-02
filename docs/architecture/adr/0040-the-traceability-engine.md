@@ -2,31 +2,88 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-08-31, under `owner-decisions.md` SR-1, SR-3 and SR-4
+- **Revised:** 2026-09-02, under `owner-decisions.md` SR-1, SR-3, SR-4 and ESC-14, and against the
+  specification as amended — `REQ-TRACE-513` (new), `REQ-TRACE-089` (index clause, new),
+  `REQ-TRACE-514` (new, ADR-0041's)
 - **Origin:** DATA (ADR-DATA-06)
 - **Depends on:** ADR-0001, ADR-0002, ADR-0003, ADR-0038
+- **Evidence:** `spikes/windows-writer-handle-compaction.md` §3.1–3.2
 
-> **Summary of what the rulings change here.** The store does not move: requirement documents, the
-> generated symbol artifact, the three baselines and the retired-identifier log are all **plain files in
-> the user's own repository**, which is where SR-4's table puts them and where SR-4's principle puts
-> them. What does change is the population of concurrent invocations — SR-1 collapses it to one process
-> plus the project's own test session — and that is enough to reach most of `REQ-TRACE-502` and to
-> narrow OQ-41 to a case a third of the size. It is **not** enough to close it, and this record says so
-> rather than claiming otherwise.
+> **Summary of what changed, and it is two things pulling in opposite directions.** The store still does
+> not move — `REQ-TRACE-513` now states as a requirement that the requirement documents, the generated
+> symbol artifact, the three baselines and the retired-identifier log **SHALL be plain files in the
+> user's own repository and SHALL NOT be moved into any store the application keeps for itself**, on
+> four independently sufficient grounds. That closes the placement question against the record's own
+> earlier hedging. But `REQ-TRACE-089`, which this ADR treated as an absolute prohibition on any derived
+> state, has been amended to **permit an index** — held anywhere, including in the application's own
+> store — subject to exactly one distinction: an index that is *consulted* is forbidden, an index that
+> is *validated against the files* is allowed. `REQ-TRACE-513` closes with the same permission and no
+> other: "what MAY be held in a store is an **index** over these files, on the terms `REQ-TRACE-089`
+> fixes and on no others."
+>
+> So alternative C is not refused wholesale any more, and this record must say which half of it survives
+> and which does not. Specific 7 is rewritten to be that boundary rather than a blanket. `REQ-TRACE-502`
+> is unchanged, and OQ-41 is unchanged in kind: SR-1 narrows it sharply, SR-4 does not dissolve it, and
+> `REQ-TRACE-513` now makes that non-dissolution a requirement rather than this record's objection.
 
 ## Context
 
-`REQ-TRACE-089` is the decisive constraint and is stated in the plainest language in its domain: "Every
-operation shall report the repository as it stands at the moment that operation runs. **No result shall
-be carried over from an earlier invocation and no stored summary shall be consulted in place of reading
-the files**, so an edit made between two invocations shall be reflected by the second without anything
-having to be cleared first, and two invocations over an unchanged repository shall report the same
-thing. How often the work is repeated within one invocation shall make no difference to what that
-invocation reports." `REQ-TRACE-173` accepts the consequence explicitly: "querying N requirements one at
-a time costs N full scans — a documented cost". `REQ-TRACE-152` limits the toolchain's writes to two
-named actions, **so there is nowhere an index could legally live**. `REQ-TRACE-203` is explicit that
+`REQ-TRACE-089` is the decisive constraint and its first paragraph is stated in the plainest language in
+its domain: "Every operation shall report the repository as it stands at the moment that operation runs.
+**No result shall be carried over from an earlier invocation and no stored summary shall be consulted in
+place of reading the files**, so an edit made between two invocations shall be reflected by the second
+without anything having to be cleared first, and two invocations over an unchanged repository shall
+report the same thing. How often the work is repeated within one invocation shall make no difference to
+what that invocation reports." `REQ-TRACE-173` accepts the consequence explicitly: "querying N
+requirements one at a time costs N full scans — a documented cost". `REQ-TRACE-203` is explicit that
 "scanning is therefore not incremental by default". `REQ-TRACE-090` and `REQ-TRACE-408` forbid a read
 path from writing at all.
+
+**`REQ-TRACE-089`'s second paragraph is new and it changes what this record may conclude.** It must be
+read in full, because every clause of it is load-bearing:
+
+> An **index** over the store and the repository — held wherever the application likes, including in a
+> store it keeps for itself — is permitted, and exactly one distinction decides whether a given index is
+> admissible. An index that is **consulted** is forbidden: if what an operation reports can depend on
+> what the index last recorded, then a stale index and a current one are indistinguishable to the
+> caller, and the guarantee above is gone however accurate the index usually is. An index that is
+> **validated** is allowed: it is checked against the files themselves before any answer is given, and
+> it is rebuilt from the files wherever that check fails or cannot be completed, so every answer still
+> comes from the files and the index decides only how much work was avoided in producing it. The
+> distinction is behavioural and SHALL be testable exactly as stated: with the application still open,
+> change a requirement document, a baseline, the generated artifact or the retired-identifier log by any
+> means at all — including means the application has no way to observe, such as a checkout of another
+> revision, an edit by another program, or a restored backup — and the very next operation SHALL report
+> the changed repository, with nothing to clear and no action by the user. An index that cannot meet
+> that test is being consulted, whatever it is called, and SHALL NOT be used. Nothing here weakens
+> `REQ-TRACE-091`'s rule that one verification run judges every check against one reading of the store
+> and one reading of the repository.
+
+`REQ-TRACE-513` is the placement requirement and did not exist when this record was written. It fixes
+the four artifacts as "plain files in the user's own repository" that "SHALL NOT be moved into any store
+the application keeps for itself", recorded "so that relocating them is a change someone has to argue
+for rather than an optimisation that can be made while every other requirement still appears satisfied".
+Its four grounds are worth having in one place because between them they answer most of what a later
+reader will ask: the documents are **the user's versioned material and the product is a guest in it**
+(authored by hand and by the creation surface, never by a migration — `REQ-TRACE-155`, `REQ-TRACE-442`;
+baselines carrying headers written for a person — `REQ-TRACE-121`; the retired-identifier log parsed
+tolerantly precisely because people edit it by hand — `REQ-TRACE-130`, `REQ-TRACE-135`);
+**version-control history is load-bearing**, because the change comparison takes each requirement's
+"before" from the generated artifact **as committed at the base revision** and is forbidden to
+reconstruct it any other way (`REQ-TRACE-157`, `REQ-TRACE-158`); **the generated artifact is imported by
+the user's own program** (`REQ-TRACE-053`), and "a record in a store cannot be imported by the
+repository's code"; and **a shrink-only ratchet and an append-only log earn their value in a diff**
+(`REQ-TRACE-116`, `REQ-TRACE-130`) — adding a baseline entry by hand is forbidden by a rule "enforceable
+by people reading a diff and by nothing else". Two consequences the requirement attaches are this
+record's: the concurrency obligation of `REQ-TRACE-502` **stays live over all four**, and "no property
+of a store's concurrency control may be cited as discharging it"; and the only thing that may be held in
+a store is an index, on `REQ-TRACE-089`'s terms and no others.
+
+`REQ-TRACE-152` limits the toolchain's writes to two named actions — the regeneration of
+`REQ-TRACE-509` and the baseline update of `REQ-TRACE-510` — "every other operation SHALL be read-only".
+This record previously read that as "so there is nowhere an index could legally live". That reading is
+now wrong and the correction is stated in alternative C: `REQ-TRACE-152`'s subject is what the toolchain
+writes **in the repository**, and an index is not there.
 
 `REQ-TRACE-501` fixes the cost of the store parse: linear in documents and bytes, roughly a thousand
 requirement documents in about one second, and — the sharper half — "**peak memory shall be bounded by
@@ -141,28 +198,63 @@ values are shared freely — `REQ-TRACE-091` requires one reading of each to ser
 `REQ-TRACE-128` says how much of the work the invocation repeats shall not be observable. Between
 invocations, nothing is retained.
 
-**C — Index the parsed store in the workspace database (new under SR-4).** The obvious thing to try
-once a database exists, and it must be refused explicitly rather than by silence, because it is the
-single most likely accidental regression in this area.
+**C — Move the parsed store into the workspace database as a second definition of the requirement set.**
+The obvious thing to try once a database exists, and still refused. *Against, and each is independently
+sufficient:* the requirement documents are **the project's own Markdown under the project's version
+control**, written back "into the original artifact — the project's own file, never a local copy"
+(`REQ-TRACE-434`), and `REQ-TRACE-513` now forbids the move outright rather than leaving it to a
+principle. A parsed copy in rows that anything reads *as the requirement set* is a **second definition
+of it**, which `REQ-TRACE-197` forbids in terms — "any additional frontmatter reader would amount to a
+rival definition of the repository's requirement set, and the two definitions would diverge as soon as
+the document format changed."
 
-*Against, and each is independently sufficient:* the requirement documents are **the project's own
-Markdown under the project's version control**, written back "into the original artifact — the project's
-own file, never a local copy" (`REQ-TRACE-434`), so SR-4's principle places them in files without
-argument. A parsed copy in rows is a **second definition of the requirement set**, which
-`REQ-TRACE-197` forbids in terms. Maintaining the index is a **write**, and `REQ-TRACE-090` and
-`REQ-TRACE-408` require every read path to write nothing. And detecting the index's staleness cheaply
-requires consulting exactly the **stored summary `REQ-TRACE-089` forbids consulting**. Alternative C
-does not fail on performance; it fails on four separate stated observables.
+> **What this record used to say here, and why one third of it is now wrong.** The previous version
+> listed a fourth objection: "detecting the index's staleness cheaply requires consulting exactly the
+> **stored summary `REQ-TRACE-089` forbids consulting**", and concluded that C "fails on four separate
+> stated observables". It also read `REQ-TRACE-152` as leaving "nowhere an index could legally live",
+> and `REQ-TRACE-090`/`REQ-TRACE-408` as forbidding the index's own maintenance write.
+>
+> **The argument was sound and its premise has been removed.** `REQ-TRACE-089` now says an index is
+> permitted and says exactly what makes one admissible. Read against the amendment, the old objection
+> proves something narrower and still true: an index cannot be validated *cheaply*. The requirement
+> agrees — it requires the check to be "against the files themselves", names a restored backup and a
+> checkout of another revision as changes "the application has no way to observe", and thereby rules out
+> every cheap validator anyone would reach for first. A modification time is not a validator, because a
+> restore can preserve one. A size is not a validator. A file-system watcher is not a validator, because
+> the requirement's test is that the change may arrive by means the application cannot observe. What
+> survives as an argument is a **cost** statement, not a prohibition, and it is carried into alternative
+> E where it belongs.
+>
+> `REQ-TRACE-152`'s "nowhere an index could legally live" was a misreading. Its subject is what the
+> toolchain writes **into the repository**; `REQ-TRACE-513` confirms that framing by naming exactly the
+> repository artifacts and then permitting an index elsewhere. The `REQ-TRACE-090`/`REQ-TRACE-408`
+> objection is *not* fully answered and is carried into alternative E as a live tension rather than
+> resolved here.
+
+**E — A validated index, on `REQ-TRACE-089`'s terms.** *Newly available, and not adopted now.* Distinct
+from C in the only way that matters: nothing ever reads the index **as an answer**. It is offered a
+freshly-read file and either recognises it or does not, and what it saves is interpretation — frontmatter
+parsing, prose extraction, derived-from closure, and above all the project-supplied regular-expression
+matching of `REQ-TRACE-073`, which is the one phase of the sweep that no requirement bounds
+(`REQ-TRACE-154`, consequence 4). What it cannot save is **reading**, because every admissible validator
+is over content. This record fixes E's shape so that it cannot be built wrongly later, and declines to
+build it now (see specific 7 and *Revisit if*): `REQ-TRACE-088` and `REQ-TRACE-501` are the budgets, no
+measurement says they are missed, and an accelerator adopted before its need is demonstrated is an
+accelerator whose correctness nobody is motivated to keep.
 
 **D — Keep the artifacts as files but hold a coordination record for them in the database.** A lock in
 a table is still a lock: `REQ-TRACE-502`'s opening clause refuses "any lock, lease or coordination
 file", and a row is a coordination record whatever it is stored in. It would also make the toolchain
-undeployable in a project's test session, which has no workspace database. Refused.
+undeployable in a project's test session, which has no workspace database. `REQ-TRACE-513` adds a second
+refusal that is independent of the first: "no property of a store's concurrency control may be cited as
+discharging" `REQ-TRACE-502`. Refused.
 
 ## Decision
 
-**Alternative B**, with seven specifics. Specifics 1 to 5 are unchanged. Specific 6 is rewritten under
-SR-1. Specific 7 is new and is the guard SR-4 makes necessary.
+**Alternative B**, with seven specifics, and **alternative E's shape fixed but not built**. Specifics 1
+to 5 are unchanged. Specific 6 is rewritten under SR-1 and corrected against measured evidence.
+Specific 7 is rewritten around `REQ-TRACE-089`'s consulted/validated distinction, which is what the
+guard has to be now that a blanket no-handle rule would forbid something the specification permits.
 
 1. **Streaming parse.** `REQ-TRACE-501`'s memory bound is a design constraint, not a performance note:
    normalise, hash and reduce each document to its metadata record **before reading the next**. That
@@ -232,11 +324,20 @@ SR-1. Specific 7 is new and is the guard SR-4 makes necessary.
      legitimately reporting stale beside a regeneration;
    - *no invocation fails because another was running* — inside the application.
 
-   **The residual, stated plainly.** One toolchain reader remains outside the application:
-   `REQ-TRACE-182`'s test-session regeneration and `REQ-TRACE-183`'s meta-tests, running in the
-   project's own test process against the same checkout. That process's handles are invisible to ours
-   and ours to it, so on Windows either can still block the other's replace. The residual therefore has
-   a definite shape:
+   **The residual, stated plainly, and it is two things rather than one.** *First*, one toolchain
+   reader remains outside the application: `REQ-TRACE-182`'s test-session regeneration and
+   `REQ-TRACE-183`'s meta-tests, running in the project's own test process against the same checkout.
+   That process's handles are invisible to ours and ours to it, so on Windows either can still block the
+   other's replace. *Second, and this record previously omitted it* — a **foreign** process can hold one
+   of these files: the user's editor, a language server, a search indexer, anti-malware, a
+   file-synchronisation client. Constraint C-11 and ADR-0004 both now carry this half, and it is not a
+   `REQ-TRACE-502` conformance gap, because that requirement's subject is failing "because another
+   **invocation** was running" and an editor is not an invocation. It is a `REQ-TRACE-061` problem
+   instead: the failure is re-raised, so a user's editor can fail a regeneration the user asked for.
+   Two different requirements, one symptom, and conflating them is what makes the residue look either
+   larger or smaller than it is.
+
+   The first half has a definite shape:
 
    - *Test session blocked by the application.* Already conformant, and not by our doing:
      `REQ-TRACE-182` requires the test session's regeneration to **never block collection** and requires
@@ -253,27 +354,121 @@ SR-1. Specific 7 is new and is the guard SR-4 makes necessary.
    two orders: the unbounded reader population is gone, and one of the two directions is already
    answered by the specification. It is not zero, and the honest statement is worth more than a claimed
    closure. Callers of `REQ-TRACE-509` must still treat a write failure as a real outcome, and the
-   action must report it as `REQ-TRACE-508`'s surface reports what each operation did.
+   action must report it as `REQ-TRACE-508`'s surface reports what each operation did. `REQ-TRACE-513`
+   forecloses the one escape a later reader would look for: these four artifacts never enter a store, so
+   no store's concurrency control can be cited as discharging `REQ-TRACE-502`.
 
-   **What would close it:** a runtime API exposing share-delete on open, which would let the test
-   session's reader coexist with our replace; or the specification accepting a bounded retry for this
-   store, which `REQ-TRACE-061` currently forecloses by declaring no ladder. Both are outside this
-   record. The remedies OQ-41 listed as unavailable stay unavailable — a lock or lease is what the
-   requirement names and refuses, and bounding concurrency for this store contradicts C-10 and C-13.
+   **What would close it — corrected against measurement, because the remedy this record named does not
+   exist.** The previous version proposed "a runtime API exposing share-delete on open, which would let
+   the test session's reader coexist with our replace". The writer-handle spike (§3.2) establishes that
+   this is not the mechanism, and the correction changes the answer rather than the wording:
 
-7. **The engine takes no database handle, and that is the guard against `REQ-TRACE-089`'s stored
-   summary.** SR-4 puts a database in the product for the first time, and `REQ-TRACE-089` forbids
-   consulting a stored summary in place of reading the files. The line is drawn mechanically rather than
-   by intention: **no entry point of this engine accepts a database handle, so there is nothing for a
-   later change to consult.** This is the same device `REQ-TRACE-207` already forced for the layout
-   value — a parameter with no default, so omitting it is a compile error — and it is applied for the
-   same reason.
+   - **Node's `open` already requests share-delete.** The discriminator is clean: `fs.unlinkSync` and
+     .NET's `File.Delete` both succeed against a Node-held handle, while both fail against a .NET holder
+     that requests only `FileShare.ReadWrite`. There is no share-mode flag to add and none is missing.
+   - **The blocker is the replace-by-rename call.** `fs.renameSync` returned `EPERM` on 0/50 attempts
+     for every distinct open flag the runtime exposes, and it fails "even when the holder explicitly
+     permits delete" — 20/20 `EPERM` against a .NET holder opened `FileShare.ReadWrite | Delete`, where
+     .NET's own `File.Replace` succeeds. It fails under exactly the conditions in which
+     `MoveFileEx(MOVEFILE_REPLACE_EXISTING)` returns `ERROR_ACCESS_DENIED`.
+   - **`ReplaceFileW` succeeds** against a Node-held handle on every flag tried, 6/6, and a held reader
+     goes on reading the complete previous contents — no torn read, no empty read.
 
-   The distinction that matters, because the delivery store sits next to this engine and *is* rows:
+   So the closer is a **replace primitive**, not an open flag, and it is available at a measured price
+   rather than unavailable. Out of process it costs a shell spawn: **p50 767 ms, min 732, max 815,
+   10/10 successful**. The spike prices that out of a *compaction* path, correctly. This store is not a
+   compaction path: `REQ-TRACE-509` is a deliberate user action that already spends about a second
+   parsing the store (`REQ-TRACE-501`) and is bounded by nothing tighter, and it replaces at most five
+   small files. A second on the failure path of an action a user asked for is a different trade from a
+   second on a per-event path, and this record states that rather than inheriting the spike's verdict
+   from the domain it was measured for. In a native addon the same call is cheap, which is the shape
+   ADR-0004 and ADR-0056 would have to own; it is not this record's to take, because a native module is
+   a build-toolchain and packaging decision with an Electron-ABI rebuild obligation the comparison in
+   ESC-21's section already flagged as a live failure mode.
 
-   - A **stored summary** is a value *derived from the files* and read *instead of* reading them: a
-     cached parse, a cached sweep, a cached coverage count, a cached staleness verdict. Every one of
-     those is forbidden, in a row exactly as in a file.
+   The other route stays what it was: the specification accepting a **bounded retry** for this store,
+   which `REQ-TRACE-061` currently forecloses by declaring no ladder and requiring the failure re-raised.
+   OQ-44 is where that question now sits, and it is sharpened rather than answered by the above —
+   bounded contention is precisely the condition a bounded ladder is for, and the corpus states exactly
+   one such ladder (`REQ-SESSION-033`), in the wrong domain to borrow from, over a file that is not the
+   user's version-controlled material. The remedies OQ-41 listed as unavailable stay unavailable — a
+   lock or lease is what `REQ-TRACE-502` names and refuses, and bounding concurrency for this store
+   contradicts C-13.
+
+7. **Consulted versus validated, and the port shape that makes the difference mechanical.** This
+   replaces the previous specific 7, which drew the line as *the engine takes no database handle, so
+   there is nothing for a later change to consult*. That guard was correct when the only thing
+   `REQ-TRACE-089` said was "no stored summary shall be consulted in place of reading the files", and it
+   is worth preserving as the alternative it now is: it was cheap, it was checkable by reading a
+   signature, and it made the wrong design impossible rather than merely discouraged. **It is now too
+   strong.** `REQ-TRACE-089` and `REQ-TRACE-513` between them permit an index in exactly the store the
+   guard excluded, so a rule that forbids the handle forbids something the specification allows, and a
+   later implementer who wants the index will delete the guard rather than reshape it — losing the
+   protection along with the prohibition. A guard that will be removed is worse than one that bends.
+
+   **The distinction, stated once, in the form a reviewer can apply.** It is not about where the value
+   lives, what it is called, or how accurate it usually is.
+
+   - A value is **consulted** when what an operation reports can depend on what the value last recorded.
+     The requirement's own reason is the decisive one: "a stale index and a current one are
+     indistinguishable to the caller". A cached parse, a cached sweep, a cached coverage count, a cached
+     staleness verdict — every one of these is consulted, and is forbidden in a row exactly as in a file.
+   - A value is **validated** when it is checked against the files themselves before any answer is
+     given, and rebuilt from the files wherever the check fails or cannot be completed, "so every answer
+     still comes from the files and the index decides only how much work was avoided in producing it".
+
+   **What follows, and it is the part that constrains the build.** Every admissible validator is over
+   **content**, and this is forced rather than chosen. `REQ-TRACE-089`'s test names a restored backup
+   and a checkout of another revision as changes the application has no way to observe — a restore can
+   preserve a modification time, so mtime is not a validator; size is not a validator; and a
+   file-system watcher is not a validator, because the test is that the change may arrive by means the
+   application cannot observe. **An index therefore cannot save reading. It can only save
+   interpretation.** Anyone who reaches for an index to avoid I/O has already left the admissible set.
+
+   **The mechanical guard, reshaped.** The engine's entry points still take no database handle **for
+   answering**. If an index is ever built, it enters through one port and one port only, whose
+   signature is the whole of the discipline:
+
+   > the index is offered a path **together with the bytes just read from it**, and answers *recognised*
+   > or *not recognised*. It is never asked a question about a path alone.
+
+   Passing the freshly-read bytes is a required argument, so an implementation cannot obtain an answer
+   without having done the read that makes the answer sound; there is no overload that omits them and no
+   default value to supply. This is the same device `REQ-TRACE-207` already forced for the layout value —
+   a parameter with no default, so omitting it is a compile error — applied to the one place the
+   specification's distinction could otherwise be lost inside a function body.
+
+   **Three obligations attach, and each of them is a thing that can be got wrong quietly.**
+
+   - **The index must be droppable, and the engine must meet its budgets with the index cold.**
+     `REQ-TRACE-088` and `REQ-TRACE-501` are stated over the files and no requirement offers relief for
+     a cold index. So deleting the index must change timing and nothing else. This is also what settles
+     the one tension the amendment leaves open: `REQ-TRACE-090` requires verification to write nothing
+     and `REQ-TRACE-408` requires reading the board to write nothing, while `REQ-TRACE-089` requires the
+     index to be **rebuilt** from the files where validation fails — which is a write on a read path.
+     The reconciliation this record takes is that those two requirements' subject is the repository and
+     the delivery store, both of which a user or another tool can observe, and that a value whose
+     deletion has no observable consequence beyond timing is not a write in their sense. **That reading
+     is arguable and is recorded as arguable.** If it is wrong, the index is not available at all — and
+     the design survives that outcome intact precisely because nothing depends on the index.
+   - **One reading per run stays one reading.** `REQ-TRACE-089` closes by saying it does not weaken
+     `REQ-TRACE-091`, and the failure mode is easy to reach: validating an index by re-reading a file
+     the run has already read would make two readings of the same file within one verification run,
+     which is exactly what `REQ-TRACE-091` exists to forbid — "no two of its findings can describe
+     different states of the same file". The bytes handed to the port must be the run's own single read,
+     not a second one taken for validation.
+   - **The behavioural test is a conformance test and must be written as the requirement states it.**
+     With the application open, change a requirement document, a baseline, the generated artifact and
+     the retired-identifier log by means the application cannot observe — a checkout of another
+     revision, an edit by another program, a restored backup preserving timestamps — and assert the very
+     next operation reports the change with nothing cleared and no user action. `REQ-TRACE-089` says an
+     index that fails this "is being consulted, whatever it is called". The test must therefore exist
+     whether or not an index does, because it is also the test that catches an index arriving by
+     accident.
+
+   **Why the delivery store next door is not an exception to any of this.** It sits beside this engine
+   and *is* rows, so the boundary is worth stating in the same breath:
+
    - A **delivery record** is not derived from the files at all. It records what a person or the
      scheduler decided (`REQ-TRACE-405`, `REQ-CONFIG-198`), and `REQ-CONFIG-192` requires the delivery
      store to hold "operational records only" and never requirement text. Reading it is not reading a
@@ -286,7 +481,14 @@ SR-1. Specific 7 is new and is the guard SR-4 makes necessary.
      side of an equality test against a freshly derived one** is a validation and is required. If a
      future change ever short-circuits that comparison — trusting the stored hash when some cheaper
      marker says the file has not moved — it has turned a validation into a cache and has broken
-     `REQ-TRACE-089`. That sentence is the one to quote at a review.
+     `REQ-TRACE-089`. That sentence is the one to quote at a review, and it is now also the sentence
+     that describes the only index this engine may ever have.
+   - One naming trap, because `REQ-TRACE-514` puts the two words next to each other: the delivery store
+     keeps its own record of **retired ids** so a retired id is never re-issued, and that is a
+     *different thing* from the **retired-identifier log** this engine keeps as a file in the user's
+     repository (`REQ-TRACE-130`, `REQ-TRACE-513`). The first is a row and exports with the delivery
+     store; the second is the user's own file and "needs no export". Neither is derived from the other
+     and neither is a validator for the other.
 
 `REQ-TRACE-207`'s "the project's own layout, never the toolchain's built-in defaults" deserves a
 **mechanical guard**: the sweep entry point takes a layout value **with no default**, so omitting it is a
@@ -311,11 +513,17 @@ than by the workers.
   reopen discipline — never applied here, because this toolchain has no append-and-compact file, and
   are dissolved product-wide. ADR-0004 **rule 1** survives in the strengthened form of specific 6: not
   merely "readers must not hold descriptors" but "one owner performs all I/O on these four paths".
-- **SR-4 does not dissolve OQ-41**, and `owner-decisions.md` says otherwise. The ruling's own table
-  keeps the generated artifact, the baselines and the tombstone log as files in the user's repository —
-  correctly, under the ruling's own principle — so a store whose readers do not block its writers is not
-  where these artifacts live. What narrows OQ-41 is **SR-1**, not SR-4. Reported for correction rather
-  than quietly reconciled.
+- **SR-4 does not dissolve OQ-41, and this is no longer this record's objection to argue.** The
+  previous version reported it for correction: the ruling's own table kept the generated artifact, the
+  baselines and the tombstone log as files in the user's repository, so a store whose readers do not
+  block its writers is not where these artifacts live, and what narrows OQ-41 is **SR-1**, not SR-4.
+  That correction has since been made and made twice over. `owner-decisions.md` ESC-14 withdrew the
+  claim inside SR-4 itself — "**That reasoning is wrong and must not be cited**" — and `REQ-TRACE-513`
+  now states the positive form as a requirement, with the consequence spelled out: because these four
+  never enter any store, "no property of a store's concurrency control may be cited as discharging"
+  `REQ-TRACE-502`. The entry is kept rather than deleted because a reader may still meet the withdrawn
+  reasoning in an older quotation, and because the shape of the mistake — a storage decision quietly
+  crediting itself with a defect that lives outside the store — is worth being able to recognise again.
 
 ## Consequences accepted
 
@@ -323,7 +531,9 @@ than by the workers.
 2. Every board refresh re-reads the store and re-sweeps the repository. `REQ-TRACE-225` accepts this and
    states the mitigations: the read runs off the interface thread, the board says a refresh is in
    progress, the last good board stays on screen, and every external call the read makes is bounded.
-   **The presence of a database is not a licence to change this**, and specific 7 is the guard.
+   **The presence of a database is not a licence to change this.** What has changed is that the guard is
+   no longer "there is no handle to reach for" but "an index may only be offered bytes already read", so
+   an index can make a refresh cheaper and can never make one stale.
 3. A syntax-tree parser ships inside the product, with a bundle-size and start-up cost that
    `REQ-STARTUP-155`'s 5 s first-paint budget must absorb (ADR-0055).
 4. **Project-supplied regular expressions run unbounded** by requirement. The worker-thread placement
@@ -344,12 +554,48 @@ than by the workers.
    compatible with specific 6 only because the toolchain never replaces a requirement document —
    `REQ-TRACE-152` limits its writes to two named actions, so the documents it streams and the artifacts
    it replaces are disjoint sets. If a future operation writes into the store, the two collide directly.
+9. **The engine may acquire an index and must not need one.** Specific 7 fixes the shape and declines to
+   build it. The cost of deciding that way is that the accelerator is unavailable when someone first
+   wants it and then has to be built under pressure. The cost of deciding the other way is an
+   accelerator whose validation nobody exercises, because every test passes whether or not the
+   validation is correct — a cold index and a correct one are indistinguishable to a passing test suite,
+   which is the same failure `REQ-TRACE-089` describes one level up. The second is the worse outcome
+   and it is the silent one.
+10. **A validated index buys interpretation and never I/O, so the argument for one is narrower than it
+    looks.** If a measurement ever motivates it, the thing it can accelerate is the regular-expression
+    matching of `REQ-TRACE-073` and the metadata reduction of `REQ-TRACE-501` — not enumeration and not
+    reading. An index proposed on the grounds that "the disk is the bottleneck" is proposing an
+    inadmissible one.
+11. **The residue is two failure modes with two different owners, and this record closes neither.**
+    `REQ-TRACE-502`'s conformance gap is the test session — specific 6, OQ-41 at its narrowed scope.
+    `REQ-TRACE-061`'s re-raise against a foreign handle is a user-visible failure that `REQ-TRACE-502`
+    does not speak to at all, because its subject is another *invocation*; that is OQ-44. A reader who
+    sees only "regeneration can fail on Windows" will reach for one remedy for both, and only one of
+    them is a conformance question. C-11 should carry both halves and should still not assert
+    `REQ-TRACE-502` satisfied.
 
 ## Revisit if
 
-`REQ-TRACE-089` is relaxed to permit a cache with a stated invalidation rule; or a measured failure to
-meet `REQ-TRACE-088` or `REQ-TRACE-501` on a real repository at the stated scale, which would make the
-streaming design a correctness problem rather than a memory-hygiene one; or a runtime API exposes
-share-delete on open, or `REQ-TRACE-061` gains a retry ladder, either of which would close the residual
-in specific 6; or a second product process that reads these artifacts is reintroduced, which would undo
-specific 6's premise and put OQ-41 back at full size.
+`REQ-TRACE-089`'s index clause is amended in either direction — relaxed to permit a cache with a stated
+invalidation rule, which would make alternative E ordinary engineering, or withdrawn, which would
+restore the previous specific 7 unchanged and is why its argument is preserved above rather than
+deleted.
+
+A measured failure to meet `REQ-TRACE-088` or `REQ-TRACE-501` on a real repository at the stated scale,
+which would make the streaming design a correctness problem rather than a memory-hygiene one — **and
+which is also the only thing that should start a build of alternative E.** No such measurement exists.
+The budgets are ~1 s for 10^3 documents parsed and ~1 s for 10^3 source files swept, both under
+`REQ-TRACE-088`'s reference conditions, and neither has been run against a repository of that size with
+this design. A second workflow is taking measurements as this is written and its results are not in
+hand; **if they show either budget missed, the question that opens is which phase misses it**, because
+an index answers only for the interpretation phases and answers not at all for enumeration and reading.
+A measurement that reports one number will not decide this.
+
+`REQ-TRACE-061` gains a bounded retry ladder (OQ-44), or a native replace primitive is adopted — the
+writer-handle spike establishes `ReplaceFileW` succeeds where `fs.renameSync` cannot, so the remedy now
+has a known mechanism and a measured out-of-process cost of ~767 ms; what it lacks is an owner and a
+decision about a native module. Either would close specific 6's residual.
+
+A second product process that reads these artifacts is reintroduced, which would undo specific 6's
+premise and put OQ-41 back at full size. Or `REQ-TRACE-513` is amended, which is now the only route by
+which alternative C reopens.

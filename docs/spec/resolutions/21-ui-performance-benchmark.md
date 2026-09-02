@@ -30,6 +30,37 @@ status: resolved
 > - **ESC-13 is ruled and its amendment is not yet applied.** If OQ-28 resolves to the framework-neutral
 >   reading, REQ-UIBENCH-054 is relaxed; the canvas is refused outright either way. The amendment is
 >   drafted and deliberately withheld until OQ-28 is resolved.
+>   >
+>   > **Closed 2026-09-01. OQ-28 is resolved to the framework-neutral reading, and the withheld
+>   > amendment is applied.** The resolution is recorded in REQ-UIBENCH-050 itself rather than left to be
+>   > inferred from this record: the counting rule is operative and framework-neutral, `widgets` counts
+>   > every element that occupies layout space and can be painted whatever produced it — including a
+>   > rendered paragraph, code block or list item inside a transcript row — and the interface-framework
+>   > clause explains only why absolute numbers do not travel between revisions. Rows 13 and 29 of the
+>   > table below are the evidence that pointed one way, and they are now load-bearing rather than
+>   > incidental.
+>   >
+>   > REQ-UIBENCH-054's element-count invariant is therefore relaxed, as option 2 of the ruling
+>   > required. The withdrawn rule is quoted in place inside the requirement and marked **unsatisfiable
+>   > by any admissible implementation** rather than merely unmet, because the only structure that
+>   > satisfies it is the canvas the ruling refuses (REQ-CHAT-075, REQ-CHAT-077, REQ-CHAT-065,
+>   > REQ-SHELL-144). What replaces it is a bound on the count's variation across two comparisons in
+>   > which the displayed state is known not to change, plus one retained absolute — a later record
+>   > below the `construct_window` figure means structure was destroyed rather than content drawn. Row
+>   > 14's principle survives the relaxation: REQ-UIBENCH-054 stays canonical and REQ-UIBENCH-085
+>   > reports it.
+>   >
+>   > **This record never carried draft text for the withheld amendment**, only the fact that one
+>   > existed. A reader looking here for the wording the amendment was going to take will not find it,
+>   > and should not conclude it was lost: the applied relaxation was written from the ruling, from rows
+>   > 13, 14 and 29 below, from REQ-UIBENCH-050, and from spike 1's measurements.
+>   >
+>   > Three further defects in this domain were corrected in the same pass and are not consequences of
+>   > ESC-13: `settle_timed_out` is now read by the invariants that depend on a settled interface
+>   > (REQ-UIBENCH-087, REQ-UIBENCH-085, REQ-UIBENCH-119, REQ-UIBENCH-081); REQ-UIBENCH-118's and
+>   > REQ-UIBENCH-099's claim to hold the only absolute threshold is withdrawn as untrue of the document;
+>   > and REQ-UIBENCH-059's `unchanged_state` phase now applies the state actually displayed, so it
+>   > measures an unchanged application as its name promises.
 > - The benchmark's **own outputs** — `fixture.json`, `iteration-NNN.jsonl`, `summary.json`, `summary.md` —
 >   are unaffected. They are material a developer reads with stock tools, which is exactly what SR-4 keeps
 >   as files.

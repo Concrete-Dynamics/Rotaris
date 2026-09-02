@@ -144,9 +144,11 @@ a detachable daemon.
    interrupted is absent whole". **A force exit therefore loses at most one in-flight transaction, and
    can never leave a half-written record for a reader to find.** What it can still leave is: the ordered
    effects of `REQ-SESSION-094` incomplete (the permitted case); a lock row that reads live until the
-   next start reaps it; and, on the two write paths that remain files, a truncated `evidence/debug.log`
-   line and a summary rewrite that `REQ-SESSION-033`'s atomic replacement leaves as one of its two
-   complete versions. That is a materially better story than the one this record accepted and it is
+   next start reaps it; and, on the two write paths that remain files, a truncated last line in **the
+   session's log** (`REQ-SESSION-142`) and a summary rewrite that `REQ-SESSION-033`'s atomic replacement
+   leaves as one of its two complete versions. *(Path citation corrected 2026-09-02: this named
+   `evidence/debug.log`, which is withdrawn with the session-directory layout domain 18 carried.
+   `REQ-SESSION-002` fixes three kinds of per-session file and no filenames.)* That is a materially better story than the one this record accepted and it is
    owed entirely to the store, not to this design.
 3. The teardown pipeline runs in the run host, so main cannot observe its intermediate steps; it
    observes completion or the deadline. That is enough for `REQ-MONITOR-131`, which fixes what must

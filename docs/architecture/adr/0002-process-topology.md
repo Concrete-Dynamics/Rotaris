@@ -7,9 +7,12 @@
 - **Revised:** 2026-09-01, to carry the double-hop measurement. The topology is **confirmed by
   measurement, not reopened**: the "Revisit if" clause that turned on it is discharged and retired, and
   the `MessagePort` remedy is recorded as an available option rather than as a contingency.
+- **Revised:** 2026-09-02, to **settle** the workspace-identity question this record previously left as a
+  correction owed, and to place two allocations ESC-19 and ESC-21 create: who takes the whole-store
+  backup, and who owns `REQ-STARTUP-166`'s storage classification.
 - **Origin:** RUNTIME (ADR-RUNTIME-01), EXEC (ADR-EXEC-01), DATA (ADR-DATA-08), UI (ADR-UI-01, ADR-UI-05), MODEL (ADR-MODEL-05, ADR-MODEL-12)
 - **Depends on:** ADR-0001
-- **Governed by:** `owner-decisions.md` SR-1, SR-4, SR-8
+- **Governed by:** `owner-decisions.md` SR-1, SR-4, SR-8, ESC-15, **ESC-19**, **ESC-21**
 - **Evidence:** `../spikes/ipc-hop-latency.md`
 
 ## Context
@@ -160,13 +163,102 @@ structurally satisfied by a sandboxed renderer that physically cannot spawn a pr
 Under SR-1 "one per open workspace" is unambiguous: several main windows may be open on several
 workspaces, but two windows open on the *same* workspace (`REQ-STARTUP-163`) share one workspace
 service rather than each getting one. The service is keyed by resolved workspace path, not by window.
+Why that is the right key, and why it does not contradict ADR-0058, is settled in the next section.
 
-> **Correction owed, recorded rather than resolved (ESC-15).** Under `REQ-SESSION-197` a *path* is not a
-> workspace's identity: a folder that is moved keeps its identity, and two folders on one machine can
-> present the same identifier. ADR-0058 therefore keys the **store claim** by identifier while this record
-> keys the **service** by path, which is the minimum consistent arrangement and not a settled one — the two
-> records now answer "what identifies a workspace" differently. Reconciling them is deliberate work, not a
-> tidy-up, and it belongs to whoever next opens both. See ADR-0058 and OQ-47.
+Two further things belong to this process because nothing else can hold them.
+
+**`REQ-STARTUP-166`'s storage classification is determined once per workspace open and held here.** The
+requirement makes the determination "from the storage the workspace directory sits on", requires it for
+every workspace this product opens and by every path that opens one, and puts it in `REQ-STARTUP-043`'s
+post-show background activation. It is a property of the **path**, which is this service's key, and it is
+consumed by two unrelated parties: main raises the notice, at most once per opening of a workspace in a
+window; and the integration precondition of `REQ-GIT-124` and `REQ-GIT-128` reads it before it reads the
+integration lock. `REQ-GIT-128` forbids domain 06 making the determination again — "this domain states no
+storage test of its own" — so there must be exactly one determination and somewhere for it to live. It
+lives here, for the life of the workspace open, and both consumers read it. ADR-0005 owns what the
+integration precondition does with it.
+
+**The whole-store backup of `REQ-SESSION-201` is taken here.** It is O(store) and it must not be refused
+because a session is live, so it cannot sit on main's 100 ms budget (`REQ-SHELL-150`) and it must not sit
+in the run host, which holds every session lock and owns the publish path. The workspace service is the
+only process that resolves an identifier and opens the store (ADR-0058), which makes it the only process
+that can name what to copy. Main contributes the save dialog and nothing else, on the narrow-request
+route of consequence 7. ADR-0058 owns the mechanism.
+
+### What identifies a workspace — settled, 2026-09-02
+
+The previous version of this record carried a correction *"owed, recorded rather than resolved"*: that
+ADR-0058 keys the store by identifier while this record keys the service by path, and that "the two
+records now answer 'what identifies a workspace' differently". **That framing was wrong and it is
+withdrawn.** The two records key two different objects, the specification fixes both keys separately and
+in terms, and there is no reconciliation to invent. What follows is the evidence, then the one thing that
+genuinely was unsettled and is decided here.
+
+**The open workspace is a resolved directory path, and the specification keys it that way wherever it is
+user-visible.** `REQ-STARTUP-041` (a) expands and resolves a directory a launch carries and persists it
+as `workspace/lastOpened`. `REQ-STARTUP-163` decides whether a handed-over launch reuses a window or
+builds one by asking whether "a main window of that instance already has that directory open".
+`REQ-STARTUP-047` switches projects by folder, and `REQ-STARTUP-048` honours a switch for the window it
+came from. `REQ-STARTUP-166` classifies "the storage the workspace directory sits on". `REQ-CONFIG-477`
+and `REQ-TRACE-513` keep configuration, personas, model slots, the requirement documents, the generated
+artifact and the baselines as files under that path. Every Git operation in domain 06 runs in that tree.
+
+**The durable session store is keyed by the workspace identifier, and the specification keys it that way
+wherever it is not.** `REQ-SESSION-001`: the record "lives in that workspace's durable session store,
+which is machine-local and is found through the workspace identifier rather than through a path".
+`REQ-SESSION-197` makes the identifier "the workspace's name for its durable session store … located by
+that identifier and never by the workspace's path". `REQ-SESSION-198` puts that store outside the
+workspace entirely. `REQ-LIBRARY-042` scopes the improvement library to the same store on the same terms.
+
+**So the resolution is `path → identifier → store`; the first arrow is many-to-one; and it is traversed
+exactly once per workspace open, by this service.** A copied folder gives two paths and one identifier
+(`REQ-SESSION-197` forbids re-minting over a readable one). A moved folder gives a new path and the same
+identifier. `REQ-SESSION-001` composes the two keys in one sentence — the record is reachable from "the
+workspace the desktop window has open" *together with* the session id, and it lives in the store found
+through the identifier — so the specification is not silent here and it did not pick one key over the
+other. It gave each object its own.
+
+**Keying the service by identifier instead would be wrong, not merely different.** Every job this service
+does is scoped to one directory: configuration loading against `<workspace>/.rotaris/`, Git invocation in
+one checkout, worktrees under one root, `REQ-TRACE-073`'s scan over one repository's files, the delivery
+store against one set of requirement documents. Two folders presenting one identifier are two of all of
+those. A service keyed by identifier would have to hold two roots and choose between them per call, which
+is a defect with a tidier key, not a simplification.
+
+**Keying the store by path would also be wrong, and the field has the filed bug to prove it.** ESC-19's
+comparison found that the two surveyed harnesses which key session history by encoded absolute path have
+a documented, reproduced defect — sessions orphaned when a project folder is moved or renamed, one report
+losing 63 sessions across 10 projects after a reorganisation, and even a change of a folder name's case
+orphaning everything — and that the fix their users ask for is a stable per-project identifier file.
+`REQ-SESSION-197` is that file. This is stated here as well as in ADR-0058 because the tempting
+"simplification" a later sweep will propose is precisely to collapse the two keys into the one this
+record already uses, and it would land the product on the defect the design avoided.
+
+**What genuinely was unsettled, and is decided here: what "resolved path" means.** The requirements say
+"expanded/resolved" and "has that directory open" without fixing directory identity, so this record fixes
+it for its own key.
+
+- Absolute, with `~` and relative segments expanded, and platform-normalised separators.
+- **Symlinks and junctions resolved to the real path**, so a symlinked project and its target are one
+  workspace and get one service.
+- **Compared case-insensitively where the filesystem is case-insensitive**, which is why
+  `REQ-SESSION-197`'s identifier is a value ADR-0058 chose to be case-insensitively unique — the same
+  property is needed one level up.
+- **Not** reconciled across a UNC spelling and a mapped-drive spelling of the same share, or across a
+  mounted image and its source. There is no reliable, cross-platform way to do it and a wrong answer
+  merges two workspaces silently.
+
+Where two spellings fail to canonicalise to one, the consequence is bounded rather than silent: two
+services exist over one folder, both resolve the same identifier, and ADR-0058's per-instance identifier
+claim gives the store to the first and opens the second without one, reporting the condition. That is the
+same report as the copied-folder case and it is the safe direction.
+
+**What this settles in OQ-47 and what it does not.** OQ-47's closing paragraph — "two records disagree
+about what identifies a workspace" — is **discharged**; both records now state the same two-key
+arrangement and this section is the statement. OQ-47's first two paragraphs stay open and are not touched
+by this: what happens when two folders presenting one identifier are open at once is architecture-invented
+behaviour on a specification silence and still wants ratifying, and the absence of any product remedy for
+a copied folder or a corrupt identifier file is still a gap whose only answer is the user editing a file.
 
 **4. Renderers — one per top-level window,** with `contextIsolation: true`, `nodeIntegration: false`
 and `sandbox: true`. No filesystem, no Git, no engine, no session store. This is not a posture chosen
@@ -211,6 +303,15 @@ host is writing, and not because it settles `REQ-TRACE-502`, which it does not (
 `REQ-EVENTS-098`'s single
 writer per session must remain true, which it does, because only the run host writes session data and
 only while holding that session's lock. The workspace service writes no session row.
+
+**And ESC-19 adds a second one, which is the first place two open connections have to be *closed* in
+order.** `REQ-SESSION-201`'s restore replaces a whole store, and no platform lets a file be replaced
+underneath open handles — on Windows the writer's-handle spike measured a rename over a held descriptor
+failing outright. So a restore needs both connections shut before it swaps and re-opened after, which is
+a two-process handshake with a defined order. It is the second in the record; ADR-0014's quit is the
+first, and this one is not the same shape because the application keeps running through it. The order,
+and what a reader observes in the window between, are ADR-0058's to fix. What this record fixes is that
+there are exactly two connections to close, that main holds none, and that a renderer holds none.
 
 ### The transport between the run host and a renderer
 
@@ -299,9 +400,11 @@ sandboxed renderer cannot hold a port at all.
    registry is a real deliverable (ADR-0050) whose count varies at run time.
 
 7. Any part of the engine needing a main-only Electron API goes through a narrow request back to
-   main. In practice that is the export file chooser (`REQ-EVENTS-173`, `REQ-SESSION-189`) and
-   reveal-in-file-manager (`REQ-SESSION-191`) — both user-gesture-driven, both off the run's critical
-   path.
+   main. In practice that is the export file chooser (`REQ-EVENTS-173`, `REQ-SESSION-189`),
+   reveal-in-file-manager (`REQ-SESSION-191`), and the save and open dialogs of `REQ-SESSION-201`'s
+   whole-store backup and restore — all user-gesture-driven, all off the run's critical path. In every
+   case main supplies the dialog and nothing else: the work behind it happens in the workspace service,
+   because main must stay inside `REQ-SHELL-150`'s 100 ms budget and a backup is O(store).
 
 8. **`REQ-PROVIDER-152`'s cross-process credential lock is kept, on a narrower rationale than the one
    it states.** The requirement gives its reason as "more than one application instance may run",
@@ -334,7 +437,22 @@ sandboxed renderer cannot hold a port at all.
      symptom is a stale interface. What keeps the product away from that rate is ADR-0021's coalescing
      cap, which is therefore load-bearing for `REQ-MONITOR-222` (ADR-0044, corrected).
 
-10. **A cross-process conformance measurement must calibrate its clocks.** `performance.timeOrigin` is
+10. **The two keys are a standing invariant, and the pressure to collapse them is real.** A workspace has
+    a path and a store identifier, they are not interchangeable, and each of the two collapses is a
+    defect with a specific victim: keying the service by identifier gives one service two roots, and
+    keying the store by path orphans a moved project's history — which is not a hypothesis but a filed,
+    reproduced bug in two comparable products (ESC-19). Anyone who finds two keys untidy should read
+    this consequence before removing one.
+
+11. **A restore stops the store for both processes that hold it, while the application keeps running.**
+    Consequence: the run host must be able to be told a workspace's store is going away, close its
+    connection, refuse to start a run against that identifier, and re-open — without the run host
+    exiting and without any window closing. That is a capability the topology did not previously need
+    and it is stated here rather than discovered in ADR-0058. `REQ-SESSION-201` bounds it: a restore is
+    refused while any session in the target store is live, so the run host is never asked to give up a
+    store it is actively writing.
+
+12. **A cross-process conformance measurement must calibrate its clocks.** `performance.timeOrigin` is
     not a shared epoch across this topology's processes: the run-host-to-renderer offset ranged over
     1.43 ms across 46 launches, which is larger than the entire one-way latency on a direct port. Any
     test for `REQ-MONITOR-222`, `REQ-MONITOR-223` or `REQ-ORCH-155` that stamps in one process and
@@ -403,4 +521,9 @@ frames. Or `REQ-SESSION-192`'s residency cap is relaxed, which is the assumption
 measured ratio rests on. Or several concurrent runs become routine and consequence 1 is judged
 unacceptable in practice rather than in principle — in which case move to alternative B and name a
 separate owner for the sandbox availability verdict, accepting either the 5 s trial per run or a verdict
-cached outside the runs that use it.
+cached outside the runs that use it. Or a requirement appears that fixes directory identity for
+`REQ-STARTUP-163`'s "already has that directory open" — this record's canonicalisation rule is an
+architecture decision on a specification silence and a requirement would supersede it. Or the restore of
+consequence 11 is found to need the run host to give up a store while a session in *another* workspace is
+live, which would make the connection close per-identifier rather than per-process and is the first thing
+to check when ADR-0058's handshake is built.

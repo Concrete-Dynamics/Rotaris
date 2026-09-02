@@ -7,6 +7,25 @@ status: resolved
 
 # Resolution Record — Domain 09, User-Defined Lifecycle Hook Commands
 
+> ## Amendment, 2026-09-02 — which workspace an approval covers is decided by one rule for the product
+>
+> **No disposition below is reversed, and no approval is loosened.** REQ-HOOKS-097 stated its own
+> path rule — "reduced to an absolute path with symbolic links followed" — so that an approval granted
+> under an absolute path still applies when the same workspace is later referred to as `.`. That is the
+> same question REQ-STARTUP-163 now owns as the product's **single definition** of when two directory
+> strings name the same directory, and two rules for one question meant an approval could be honoured
+> under one spelling of a folder and withheld under another depending on which document was read.
+> REQ-HOOKS-097 now cites that rule and states none of its own; REQ-HOOKS-092 cites REQ-HOOKS-097 for
+> the resolved path it carries in the review request.
+>
+> **The guarantee is preserved and the safe direction is unchanged.** Relative segments are still
+> expanded, so the `.` case the disposition cared about still works. Where REQ-STARTUP-163 declines to
+> reconcile two spellings — a mapping the user configured outside the filesystem — they are different
+> workspaces here as everywhere else, the approval does not carry across, and the set goes back under
+> review, which is the conservative outcome. Nothing else about the decision changes: it stays keyed by
+> the workspace together with the fingerprint of the hook set, so altering, adding, removing or
+> reordering a workspace-declared hook still withdraws the approval.
+
 
 > ## Superseded by the storage rulings (2026-09-01)
 >
@@ -104,6 +123,20 @@ loses only the shell half, so nothing is withdrawn and no capability moves:
 - **REQ-HOOKS-089** — "Desktop and headless runs SHALL share one execution lifecycle" becomes a run
   started from the desktop interface and a run started by a programmatic embedding of the engine.
   The invariant is the point of the requirement and is preserved intact.
+
+> **Corrected 2026-09-01, in the ruling-application round.** The substitution above put a run path
+> into two requirements that this product does not have. REQ-EVENTS-178 states that the product is one
+> desktop application offering no embedding surface and no programmatic entry point — no library,
+> package, plugin host or endpoint through which code the user did not launch may start or drive a run
+> — so a comparison against "a run started by a programmatic embedding of the engine" is vacuous, and
+> the same defect was corrected in REQ-EVENTS-081 in the same round. REQ-HOOKS-083 and REQ-HOOKS-089
+> now state the guarantee against **REQ-SESSION-080's closed set** of ways a run can be started, citing
+> that owner rather than maintaining a second list that can go stale the same way. **The invariant is
+> not narrowed by the correction**, and both requirements say so: the trust gate is a property of the
+> run and never of the surface that began it, and a way of starting a run added later is inside the
+> guarantee from the moment it exists rather than on being named. REQ-HOOKS-089's testable consequence
+> — the approved and unapproved `iteration_end` cases and the "not been reviewed" notice — is
+> untouched.
 
 **REQ-HOOKS-102** listed "console output" among the surfaces a withheld hook's name and command must
 never reach. Since there is no console venue, the list now names the desktop interface itself and the

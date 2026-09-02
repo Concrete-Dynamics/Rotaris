@@ -6,10 +6,14 @@
   portable's launcher stub — because SR-7 moved that artifact off the packaging tool's own portable
   target (ADR-0054 alternative P4). The bundle-size revisit clause is restated on measurement, which
   points somewhere other than where it pointed.
+- **Revised:** 2026-09-02. The build gains an **obligation** it did not carry: rebuilding the product's
+  native modules against the Electron binary interface, for every target, proved at build time. ESC-21's
+  comparison surfaced the store binding failing silently under an Electron runtime through an ABI
+  mismatch, and the owner recorded that as this record's to design for rather than to discover.
 - **Origin:** UI (ADR-UI-15)
-- **Depends on:** ADR-0001, ADR-0002, ADR-0044, ADR-0053, ADR-0054
-- **Governed by:** `owner-decisions.md` SR-7
-- **Evidence:** `../spikes/packaged-first-paint.md`
+- **Depends on:** ADR-0001, ADR-0002, ADR-0020, ADR-0044, ADR-0053, ADR-0054, ADR-0058
+- **Governed by:** `owner-decisions.md` SR-7, and the consequence for ADR-0058 recorded with ESC-21
+- **Evidence:** `../spikes/packaged-first-paint.md` §1 for the two runtimes' versions
 
 ## Context
 
@@ -51,6 +55,32 @@ The caveat that keeps this from being a licence: nothing in that measurement *lo
 payload, so it prices carrying weight and says nothing about executing it. ADR-0001 consequence 1's
 syntax-tree parser start-up cost is unmeasured and is a load-time cost, not a bundle-size one.
 
+**Native modules, and the failure mode that makes this a build obligation rather than a runtime one.**
+The product ships two native bindings: the pseudo-terminal of ADR-0020, and — since SR-4 — the store
+binding of ADR-0058. A native addon is compiled against one binary interface and refuses to load into a
+runtime expecting another. **The two runtimes in play here are not the same runtime**, and the spike
+measured both on the same machine: the host Node is **v24.11.0** while the Electron the product ships
+reports **Node 24.19.0** (`electron@44.1.0`, Chromium 152.0.7977.65, V8 15.2.124.18-electron.0). A module
+built by an ordinary install on that host is built for the host, and the artifact runs on the other. That
+is precisely the condition an interface mismatch needs.
+
+**Why it is this record's problem and not the store's.** ESC-21's comparison found `better-sqlite3`
+recorded in another project's ecosystem as **failing silently under an Electron runtime** through exactly
+this mismatch, with the error swallowed by a `try`/`catch`. The owner recorded the consequence against
+ADR-0058: the toolchain rebuilds against the Electron interface, and a store that cannot load fails
+**loudly** on `REQ-SESSION-089`'s terms. The first half is this record's, and it is a build obligation
+because at run time the condition is **unrecoverable and total** — a wrongly built addon fails for every
+user, on every workspace, for the life of that build. There is no degraded mode to fall back to and no
+diagnosis a user can act on. A defect with that shape belongs to the step that can still prevent it.
+
+**One interface, not two, and that is worth stating because the topology suggests otherwise.** ADR-0002
+puts the run host and the workspace service in Electron `utilityProcess` forks, which re-enter the
+**shipped Electron binary** rather than a host Node. So all three processes that may load a binding —
+main, the run host, the workspace service — load it under the Electron interface. The build produces one
+build of each module per platform and architecture, not one for the windowed process and another for the
+node-shaped children. A build that produced two would be wrong in a way that only shows up in the
+children.
+
 **What was checked.** Context7, the electron-vite documentation, and the npm registry, 2026-08-31.
 `electron-vite` 5.0.0 is the current release, MIT, published December 2025. Each of its three
 configuration sections — `main`, `preload`, `renderer` — accepts its own
@@ -59,6 +89,22 @@ second build system. The `preload` section additionally has an **isolated-entry 
 preload as a self-contained bundle rather than as entries sharing a chunk. Those two facts are what the
 recommendation rests on: the first covers the four entry kinds, the second covers ADR-0044's
 sandboxed preload.
+
+**Checked separately for the native-module obligation, Context7 against the `electron-builder`
+documentation and source, 2026-09-02.** Four facts, and each bears on a choice below. `npmRebuild`
+defaults to **`true`** and runs `@electron/rebuild` over `node_modules` "to ensure all native modules
+compiled against correct Electron ABI"; setting it `false` **skips the step entirely** and logs an info
+line — which is the shape of a silent regression, because an info log during a release build is not an
+observation anybody makes. `buildDependenciesFromSource` forces compilation from source rather than
+accepting a prebuilt binary, documented for the case "when you need to ensure native modules are compiled
+against the exact Electron ABI". `nodeGypRebuild` is a separate switch over the same territory, so **three
+settings interact** and only one of them is the one we want. And the tool's own troubleshooting page gives
+the asar-unpack remedy with `node_modules/better-sqlite3/**` as its worked example — the same module
+ADR-0058 chose. **A version note that is a real coupling:** on the 26.x stable line these are top-level
+keys, and on the 27.x pre-release line they move under a `nativeModules` object with `nativeRebuilder`
+renamed to `rebuildMode`. ESC-11 may put the Linux artifact on the pre-release line, so which line the
+build runs on decides where these settings are written, and a configuration that silently no longer
+applies is the same failure as not setting it.
 
 ## Alternatives considered
 
@@ -88,6 +134,44 @@ development/production asset-path difference. **No requirement is served better.
 *Against:* it couples the build to Forge's packaging, which ADR-0054 rejected in favour of
 `electron-builder` for the artifact shapes. **Mixing Forge's build with `electron-builder`'s packaging
 is the worst of both.**
+
+### For the native modules — how the Electron interface is guaranteed rather than hoped for
+
+The question is not *whether* to rebuild. It is what makes the rebuild **true of the artifact that
+shipped**, given that the failure is silent by default in the ecosystem and that the packaging tool
+offers a setting whose only symptom, when wrong, is an info line in a build log.
+
+**N1 — Rely on the packaging tool's default.** `npmRebuild` is `true` out of the box, so an
+unconfigured build already rebuilds. *For:* nothing to write, nothing to maintain. *Against:* it is a
+default, and a default is not a claim. Three ways it goes wrong without anyone noticing: someone sets it
+`false` while debugging a slow build and the log line scrolls past; a prebuilt binary satisfies the
+install step so nothing is compiled at all; or the settings migrate to a different configuration key on
+a version bump and the ones we wrote stop applying. **Each produces an artifact that builds cleanly,
+packages cleanly, and does not run.** Refused as the whole answer, though the default itself is kept.
+
+**N2 — Consume the module's own prebuilt binaries, selected by interface version.** Several native
+packages publish prebuilt addons per runtime and interface. *For:* no compiler on the release runner, and
+a faster build. *Against:* it makes the correctness of the product's system of record depend on a third
+party publishing a binary for **the exact Electron the build pins**, which is a coverage claim nobody
+gives us; and a missing prebuild degrades to whatever the install step does next, which is the silent
+path again. This is the case `buildDependenciesFromSource` exists to close, and closing it is the point.
+
+**N3 — Rebuild from source per target in the release job, and verify by loading.** **Chosen.** The
+rebuild is configured explicitly rather than inherited, forced from source, and then **proved** by a
+step that loads each binding under the shipped Electron binary and fails the build if it does not load.
+*For:* it converts a property that is otherwise only observable in the field into a build outcome; the
+proof costs one process launch per target; and it is the only option whose failure mode is a red build
+rather than a shipped artifact. *Against:* a compiler toolchain on all three release runners, a slower
+build, and a verification step we own and must keep honest.
+
+**N4 — Have no native modules.** Recorded because it is the alternative that removes the problem rather
+than managing it, and because both bindings had a non-native candidate. *Against:* it is not this
+record's to take. ADR-0058 weighed `node:sqlite` — no native build, no rebuild, no unpacking — and
+rejected it on two published facts, the release-candidate stability of the binding and a shipped
+Electron release having omitted it altogether; ADR-0020 made the same call for the pseudo-terminal. Both
+keep the non-native option as a **named fallback** behind a deliberately thin data-access layer. If the
+obligation below ever becomes the dominant cost, that is where it is paid off — in those records, not by
+weakening the gate here.
 
 ## Decision
 
@@ -144,6 +228,46 @@ requirement, and no requirement in this record names a bundler.
   the portable carry the **same `win-unpacked` tree**, produced once; only the wrapper differs. Anything
   that makes them two payloads makes `REQ-STARTUP-159`'s per-artifact claim two claims.
 
+### The native-module obligation — alternative N3, stated as five rules
+
+Each rule exists because of a specific way the property fails silently. They are written as rules rather
+than as advice because the whole point is that none of them may be left to a default or to a habit.
+
+1. **Every native binding is rebuilt against the shipped Electron's binary interface, from source, for
+   every target of `REQ-STARTUP-030`'s matrix.** Two bindings today — ADR-0020's pseudo-terminal and
+   ADR-0058's store — and the rule is written over the *set*, so a third inherits it without an
+   amendment. The rebuild is **configured explicitly even where it is the tool's default**, because a
+   setting that is written down is reviewable and a default is not, and because the settings move between
+   the tool's 26.x and 27.x lines and a configuration that has silently stopped applying must be visible
+   as a diff rather than as an absence. Prebuilt binaries are refused: compilation is forced from source
+   so that what ships was built against the Electron this release pins and not against whatever a
+   registry had.
+2. **The interface is the Electron one, and there is exactly one of it per platform and architecture.**
+   Not the host Node's — the spike records them as different builds on the same machine, v24.11.0 against
+   the runtime's 24.19.0, which is the condition the mismatch needs. And not two, despite ADR-0002 having
+   node-shaped children: `utilityProcess` forks re-enter the shipped Electron binary, so the run host and
+   the workspace service load the same build main does.
+3. **Native addons are unpacked from the archive**, since an addon inside `app.asar` cannot be loaded by
+   the operating system's loader. This is the packaging tool's documented remedy and its own worked
+   example names the store binding. It composes with the portable of ADR-0054: the launcher stub places
+   the payload tree verbatim, so an unpacked addon must survive that placement byte-for-byte and with its
+   executable permissions intact — the placement is a copy, never a re-archive.
+4. **The build proves the addons load, under the shipped binary, and fails if they do not.** After
+   packaging and before an artifact is accepted, each binding is required to load in a process started
+   from the packaged tree under the Electron binary that tree carries. **The check is a load, not a
+   version comparison**, because the version numbers agreeing is a weaker claim than the loader accepting
+   the file, and it is the loader that fails in the field. A failure fails the build. This is the whole of
+   what alternative N3 buys over N1, and it is the only step in this record that could have caught the
+   defect ESC-21 found in another project.
+5. **No `require` of a native binding is wrapped in a `try`/`catch` that continues.** This is a coding
+   rule and it is stated in a build record deliberately, because the build is what makes it affordable:
+   with rule 4 in place, a load failure in the field is not a condition to be survived, it is a broken
+   artifact, and swallowing it converts a red build into a product that silently records nothing. Where a
+   binding will not load, the failure propagates to the surface the owning record names — for the store,
+   `REQ-SESSION-089`'s refusal, which requires the run not to start and requires the reason to name the
+   store and the engine's own error. **Degrading is forbidden, and this is the one place in the toolchain
+   where the prohibition can be enforced rather than remembered.**
+
 ## Consequences accepted
 
 1. A toolchain dependency in the critical path of every build, and a second one — Vite — beneath it.
@@ -164,6 +288,24 @@ requirement, and no requirement in this record names a bundler.
    not exercise. `REQ-STARTUP-156` has grown to match — an unmodified baseline machine, no separately
    installed product component, blocked network, the published asset at its listed digest, and a check
    whose conditions cannot be established recorded as **not performed** and failing the gate.
+6. **A compiler toolchain is now a release-runner requirement on all three platforms**, because
+   compilation is forced from source and a native module cannot be cross-built here — the matrix of
+   `REQ-STARTUP-030` already runs a job per platform, so this adds a provisioning obligation to jobs that
+   exist rather than new jobs. Builds get slower, and the slowness is the visible price of refusing N2.
+7. **Two version pins are now coupled and must move together.** The Electron version and the built
+   addons are one unit: bumping the shell without rebuilding produces artifacts that package cleanly and
+   do not run. The load proof of rule 4 is what makes that a failed build instead of a discovery, and it
+   is the reason a shell bump is not a routine dependency bump in this project — the same class of
+   statement ADR-0054 consequence 4 already makes about the Linux runtime.
+8. **The load proof is a claim about the packaged tree and it must be run against the packaged tree.**
+   Running it against `node_modules` in the checkout proves nothing about asar unpacking, and running it
+   under the host Node proves nothing at all — it would pass on exactly the artifact that fails. A proof
+   written the easy way is worse than no proof, because it reads as verified.
+9. **`REQ-STARTUP-156` does not cover this and is not being asked to.** The release gate launches each
+   artifact to first paint, and first paint does not open a store: ADR-0055 keeps the workspace read off
+   the critical path by design and ADR-0058 opens the store after the window is shown. **So an artifact
+   with an unloadable store binding would pass the gate.** Rule 4 is therefore not redundant with the
+   gate; it is the only check that sees this, and that asymmetry is the reason it sits in the build.
 
 ## Revisit if
 
@@ -178,3 +320,15 @@ extra payload cost about 10 ms at first paint on the flavours that pass, and the
 failed with an empty bundle. The clause is kept but re-aimed — the thing to watch is **start-up work**,
 not weight, and on the portable the thing weight buys is a longer preparation on a run the requirement
 exempts.
+
+**On the native-module obligation.** Either binding stops being native — `node:sqlite` reaching stable
+with Electron committing to ship it, which is ADR-0058's own revisit condition, or the equivalent for the
+pseudo-terminal — in which case rules 1 to 4 narrow to whatever remains and are withdrawn entirely if
+nothing does. Or the load proof of rule 4 turns out to be reachable *before* packaging with the same
+strength, which would make it cheaper without weakening it; the reason it sits after packaging today is
+consequence 8, and only a check that still sees asar unpacking may move. Or the packaging tool's native
+settings move again, at which point the coupling recorded under "what was checked" fires and the
+configuration has to be re-verified against the line ESC-11 puts the build on rather than assumed to have
+carried over. Or spike 20 forces the launcher stub to place the payload by some means other than a
+verbatim copy, which would put rule 3's "byte-for-byte, permissions intact" in tension with whatever that
+mechanism is — the stub is the one component that handles unpacked addons without knowing what they are.

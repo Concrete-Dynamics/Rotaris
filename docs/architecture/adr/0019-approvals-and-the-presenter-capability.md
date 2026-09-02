@@ -9,6 +9,18 @@
   its *justification* moves from "the architecture supplies what the specification omits" to "the
   architecture implements the test the specification states". A residual tension with
   `REQ-SANDBOX-101` is named below rather than smoothed away.
+- **Revised:** 2026-09-02, against `../spikes/presenter-liveness-and-instance-claim.md`, which measured
+  this record's remedy on the target platform. **The decision stands in every particular and the state it
+  detects is now reproducible rather than argued.** Three things changed underneath it, and two of them
+  are reasons rather than conclusions. (1) The detection mechanism gains **a condition that must be built
+  as stated**: the lapse test is *the gap since the last reply*, never *did a reply for sequence N
+  arrive*. (2) Obligation 3 is restated **application-wide and much harder** — no synchronous
+  platform-dialog call may ever be made on main — because the exposure turned out not to be the approval
+  dialog at all. (3) The consequence that registration "is revoked automatically when the channel to main
+  closes … **without a timeout**" was tested and **that path is not exercisable in this topology**; the
+  conclusion that a dead main leaves nothing hanging survives, the stated reason does not, and the reason
+  that actually holds has consequences of its own. Each is marked at the sentence it corrects rather than
+  only summarised here.
 - **Origin:** EXEC (ADR-EXEC-05), RUNTIME (constraint C10.5), UI (ADR-UI-05)
 - **Depends on:** ADR-0002, ADR-0013, ADR-0017
 - **Contains an unresolved conflict between slices** (presenter registration per window or per session,
@@ -168,6 +180,13 @@ to main closes — so a lost channel makes every session unattended, routes ever
 policy, and makes the fail-closed branch resolve `deny` rather than `ask`. That is the correct
 direction and it is reached **without a timeout**.
 
+> **Corrected 2026-09-02. The conclusion stands; the sentence above describes a mechanism that does not
+> operate, and it must not be cited as the account of what happens when main dies.** See *The
+> channel-close revocation is not the mechanism that operates* below. In one sentence: the run host does
+> not outlive main, so it never observes the close and never performs the revocation — nothing hangs
+> because nothing survives to hang, which is a different guarantee with different consequences. The
+> revocation that actually operates in every reachable case is the **gap-based lapse** recorded next.
+
 **Registration is revoked on a lapsed liveness signal as well as on a closed channel.** Main answers a
 periodic liveness poll on the channel that carries registration, and a registration whose answer does
 not arrive within the lapse window is revoked exactly as a closed channel revokes it. **This is how
@@ -176,7 +195,7 @@ approval prompt for this session *can be put in front of a person*, the presente
 another process, and a poll is the only evidence available. It is also what makes `REQ-TOOLS-064`'s
 "never a hang" hold at `runtime.approval_timeout_seconds: 0`, which `REQ-TOOLS-055` and `REQ-TOOLS-178`
 make a supported, user-writable value meaning wait without limit: a wedged main is otherwise
-indistinguishable from a person who has not answered yet. Three properties are obligations rather than
+indistinguishable from a person who has not answered yet. Four properties are obligations rather than
 implementation latitude.
 
 - **The lapse settles waits through the path the specification already fixes.** Revocation discards the
@@ -188,10 +207,28 @@ implementation latitude.
 - **No timer is placed on the user's wait.** The lapse window bounds how long main may fail to answer a
   poll; it does not bound how long a person may take to read a dialog. `runtime.approval_timeout_seconds`
   keeps its specified meaning, `0` included, and is never shortened to stand in for liveness.
-- **The poll must be answerable while a dialog is open.** Presentation is asynchronous, because a
-  presenter that shows `REQ-TOOLS-063`'s modal dialog by blocking main's loop would fail its own poll
-  and revoke itself the instant it asked the user anything. That is a constraint on how the dialog is
-  shown, not on what it shows.
+- **The check is a gap since the last reply, never a receipt for a particular poll. This is a
+  requirement on the mechanism, not a choice of implementation.** The lapse test is the elapsed time
+  since a reply last arrived, evaluated on a clock the **run host** owns. A check written as "did a
+  reply for sequence *N* arrive" is not an equivalent formulation and does not work, because a blocked
+  main does not lose messages — it answers late. Measured across the nine blocked runs: the
+  `utilityProcess` channel never emitted `close`, `process.kill(mainPid, 0)` returned true throughout,
+  every `postMessage` was accepted while main was blocked, and when the 8,000 ms block ended **all 84
+  outstanding replies arrived, the last with a measured round trip of 7,885 ms**. A receipt-based check
+  would have reported success eight seconds late and would never have fired
+  (`../spikes/presenter-liveness-and-instance-claim.md`, §4.2). The two states this record has to tell
+  apart — "the channel is closed" and "the channel is open and nothing answers" — are therefore genuinely
+  distinct, and it is the second that occurs.
+
+- **The poll must be answerable while a dialog is open.** For the dialog `REQ-TOOLS-063` itself
+  specifies this is now **measured and satisfied**: a child `BrowserWindow` with `parent` set,
+  `modal: true` and 560×380 left the run-host → main channel at a maximum inter-reply gap of
+  **266–267 ms across three repetitions** — indistinguishable from the 263–267 ms idle cadence. Main's
+  loop is not blocked by its own modal child window. **But the measurement moved this obligation off the
+  approval dialog and onto the whole application**, and in its restated form it reads: *no synchronous
+  platform-dialog call may ever be made on the main process.* See *The synchronous-native-dialog
+  prohibition* below. Presentation being asynchronous remains a constraint on how a dialog is shown and
+  not on what it shows; what changed is that the dialogs at risk belong to other domains.
 
 The lapse window is a free parameter — no requirement fixes one — and must be long enough that ordinary
 main-process work cannot trip it. **A lapse is not a focus change and must never be driven by one**: the
@@ -210,9 +247,168 @@ denies asks in flight. On the high side, main under an unthrottled frame load re
 of 22,777 ms while dropping and reordering nothing**: a main that answers eventually rather than never is
 a measured mode of this topology, not a hypothetical. That is precisely the state `REQ-TOOLS-053`'s
 capability test must call unattended, and it is the state a timeout on the *user's* wait would
-misdiagnose. **The spike did not measure a main that was showing a dialog**, so it does not size the
-window; it establishes the floor the window must clear and confirms that the condition being detected
-occurs. Sizing it remains open (OQ-39).
+misdiagnose. That spike's own gap — that it never measured a main showing a dialog — is closed by the
+liveness spike below. **Neither sizes the window. Sizing it remains open (OQ-39).**
+
+**Detection, measured.** `../spikes/presenter-liveness-and-instance-claim.md` reproduced this record's
+topology — main, a `utilityProcess` standing in for the run host, and a renderer — and heartbeated three
+transports at 250 ms through nine scenarios, three repetitions each.
+
+- **The floor.** Over the twelve runs in which main was never deliberately blocked — **258.1 s** of
+  heartbeating, n ≈ 1,000 replies — the run-host → main channel showed an inter-reply gap of
+  **p50 263 ms, p95 266 ms, p99 267 ms, max 303 ms, and zero gaps above 400 ms**. The one false-lapse
+  candidate in the whole 258 s was a single 545 ms gap on the *renderer* channel, which the poll does not
+  ride; no cause was determined and none is asserted.
+- **Detection latency.** On the run-host → main channel, a 500 ms gap threshold was crossed at
+  **+386 … +468 ms** after the block began, in all nine blocked runs, and the figure is the same whether
+  main was in a busy loop, showing a synchronous message box or showing a synchronous folder chooser.
+  **The heartbeat does not care why main stopped answering**, which is the correct behaviour for a
+  capability test.
+- **What that does and does not license.** On this host, with this workload, any threshold in
+  **[400 ms, ∞)** produced no false lapse and detected every real lapse. That is a **floor, not a size**.
+  The harness's main process paints one `<h1>`; it has no renderer framework, no transcript pipeline, no
+  session writer and no Git invocation, and it does **not** reproduce the 22,777 ms of event-loop lag the
+  `ipc-hop-latency` spike measured under frame load — which is the state the window must also survive.
+- **The direction of the failure was not exercised.** The spike measured detection, not the decision
+  path: no permission gate, no `PendingApprovals` map, no `headless_approval_policy`, no
+  `approval.requested`. `REQ-TOOLS-064`'s **"never a silent allow"** is a property of the gate and remains
+  untested by measurement; only **"never a hang"** has evidence.
+
+### The synchronous-native-dialog prohibition — application-wide, and not a style preference
+
+**The rule.** Every platform-native dialog this product opens SHALL be opened through its **asynchronous**
+form. No synchronous platform-dialog call may be made on the main process, anywhere in the application,
+for any reason.
+
+**What was measured (§4.4).** Five probes ran concurrently in one process tree, n = 1 per scenario. While
+a **synchronous** native dialog was open on main, over 6,489 ms (`showMessageBoxSync`) and 7,339 ms
+(`showOpenDialogSync`):
+
+| probe on main | firings during the dialog | largest gap |
+|---|---|---|
+| `setInterval(250 ms)` | **0** | 6,742 / 7,621 ms |
+| `ipcMain.on` from the renderer | **0** | 6,648 / 7,571 ms |
+| main → renderer → main round trip | **0** | 6,666 / 7,587 ms |
+| `utilityProcess` `parentPort` reply — *the channel this poll rides* | **0** | 6,601 / 7,417 ms |
+| run host ⇄ renderer direct `MessagePort` — *never touches main* | 25 / 28 | max gap **267 ms** |
+
+The busy-loop control produced the same pattern. **A synchronous native dialog is, from the run host's
+side, indistinguishable from a main process spinning in an infinite loop.** The only transport in the
+tree that survives it is the one that does not go through main.
+
+*One qualification the summary of this result loses, and it matters for anyone tempted to build on it:*
+"no main-process JavaScript runs" is true of every route the run host can reach and is **not** true in
+general. In the same spike (§5.3) the platform's own single-instance notification callback ran on main
+**+2,742 ms into a synchronous modal while main's own timers were dead**, because it is dispatched from
+the nested message pump's window procedure rather than from the Node event loop. That is not a route the
+run host has, it does not rescue the poll, and the spike labels the mechanism an inference. It is
+recorded so that nobody reads "nothing runs" as a licence and nobody rediscovers the exception as a bug.
+
+**Why the asynchronous form is a real remedy rather than a hope.** The blocking is a property of the
+`…Sync` call and not of the native dialog. With the *same* `#32770` native dialog on screen for ~6 s, the
+promise forms of the message box and the folder chooser left the run-host → main channel at a maximum gap
+of **267–303 ms** — inside the idle floor. And `REQ-TOOLS-063`'s own modal `BrowserWindow` measured
+**266–267 ms over three repetitions**.
+
+**Why this is architectural, and where it bites.** `REQ-SHELL-164` enumerates the product's
+platform-native dialogs: *"the folder choosers of `REQ-SHELL-011`, `REQ-SHELL-021` and `REQ-SHELL-163`,
+and the native message boxes of `REQ-SHELL-119`"*. `REQ-WORKSPACE-009` requires the operating system's
+native folder chooser for choosing a project folder, reached from the title-bar control of
+`REQ-WORKSPACE-016`, from the deferred first-launch prompt of `REQ-SHELL-011`, from the workspace chip of
+`REQ-SHELL-021` and from the diagnostics output-folder control of `REQ-SHELL-163`. And `REQ-SHELL-119`'s
+third close guard asks **"Quit while a run is active?"** — a native message box raised, by construction,
+*while a run is active*, which is precisely when an approval is most likely to be in flight.
+
+If any one of those is opened with a `…Sync` call, then for as long as the user leaves it open: the lapse
+fires at +386…+468 ms, registration is revoked, `REQ-TOOLS-177` cancels every waiting approval, those
+waiters resolve `cancelled` → **deny with source `cancelled`** (`REQ-TOOLS-052`), and every subsequent
+`ask` routes to `runtime.headless_approval_policy` (`REQ-TOOLS-064`, `REQ-TOOLS-065`) — which under
+`abort` stops the run through the session's abort hook. **A user picking a project folder would silently
+deny their own agent's tool calls. A user answering "Quit while a run is active?" would deny the very run
+they are being asked about.**
+
+**This record cannot enforce it and says so.** Nobody writing the workspace chooser or the window-close
+guard reads an approvals ADR. The rule belongs where those implementers look: **ADR-0048** owns the
+modality contract and already states that native dialogs are used only where the specification names
+them, and `constraints.md` **T-31** carries the *never a hang* obligation without mentioning that its
+reachability depends on this prohibition. **Reported to both rather than applied here** — this record is
+not the owner of either.
+
+**The limits of the evidence, stated so the rule is not over-claimed.** Windows 11 only; Electron 44.1.0;
+**unpackaged**, run as `electron.exe <appdir>` with no artifact, no ASAR and no portable extraction; n = 1
+for the §4.4 probe run and n = 3 for the scenario matrix. **Only `…Sync` blocking was measured.** The
+promise forms of `showMessageBox` and `showOpenDialog` were verified non-blocking on Windows and nothing
+else was — whether every native dialog the product needs has a non-blocking form on every platform is
+**not** established, and a dialog family that turns out to have none is an escalation rather than an
+implementation problem.
+
+### The channel-close revocation is not the mechanism that operates
+
+**Conclusion first, because it survives:** a main that has died leaves no approval hanging. That was the
+point of the consequence and it is still true.
+
+**The stated reason was tested and is false in this topology.** Three repetitions each of
+`process.crash()` on main and of `taskkill /F` on main's pid alone (§4.5):
+
+- the run host's `parentPort` **never emitted `close`** — 0 of 6 runs;
+- the run host itself was **gone within 207–341 ms** of main's death — 6 of 6;
+- **zero** run-host records were written after main's death in any run;
+- and in the single run that got a tick in before dying, the run host recorded main's pid already gone
+  with **`portClosed: false` in the same record**, then was gone two milliseconds later.
+
+**What actually operates.** For a main that has died, the run, its `PendingApprovals` map and its host
+cease to exist along with main. No revocation executes. No waiter is settled `cancelled`. No later `ask`
+is routed to `runtime.headless_approval_policy`, because there is no gate left to route it. Nothing hangs
+**because nothing survives to hang** — which is a different guarantee from the one this record described,
+and the difference has a consequence the record must carry:
+
+> **Nothing that must happen on the way down can be placed in the run host.** Settling pending approvals,
+> flushing the session, writing a terminal timeline entry — none of it runs when main dies. What is
+> durable is what had already committed: ADR-0009's per-event transaction and ADR-0024's per-entry
+> transaction are the design's answer, and they are the *whole* answer. Any additional on-teardown work
+> is not merely best-effort, it is unreachable.
+
+**The channel-close branch is kept, and it is not dead code.** It is the branch for a main that closes its
+end deliberately, and it is the branch a different hosting of the run host would exercise: the spike notes
+that a run host built as a detached child process or a separate executable might well outlive main and
+would then see the close — an alternative that was neither built nor measured. **For the case this record
+described it — main died — the branch does not run.** The revocation that operates in every reachable case
+is the gap-based lapse.
+
+### No platform signal for "main is unresponsive" is usable from the run host
+
+Recorded so that it is not re-proposed, because it looks like the obvious shortcut past a heartbeat.
+
+- **Electron's `unresponsive` / `responsive` are `webContents` events.** They report on a *renderer* and
+  they are emitted **by main**. A wedged main emits nothing. This is structural and no measurement can
+  change it.
+- **A `utilityProcess` has no observer of its parent.** It has `process.parentPort` — which does not close
+  before it dies, above — and `process.ppid`, and nothing else bearing on main's liveness.
+- **The operating system does have a signal and it detects the wrong case.** Probed every 250 ms from an
+  external process against main's own window:
+
+  | main is… | `IsHungAppWindow` | `SendMessageTimeout(WM_NULL, SMTO_ABORTIFHUNG, 300 ms)` |
+  |---|---|---|
+  | in a busy loop | **true from +5,176 / +5,407 / +5,435 ms** | **failed from +309 / +528 / +547 ms** |
+  | showing a **synchronous** native message box or folder chooser | **never true** | **never failed** |
+  | idle, or showing an async dialog, or showing a modal `BrowserWindow` | never true | never failed |
+
+  The dialog's own window was probed too: `IsHungAppWindow` was `0` on all 23 samples per run. The spike's
+  explanation — stated there as an inference — is that a native dialog runs a nested message pump on
+  main's thread, so the thread keeps pumping window messages while running no JavaScript, and the OS's
+  definition of *hung* is *not pumping messages*.
+
+**So the one case the OS detects is the one a heartbeat detects trivially, and the case the OS misses is
+exactly the case this mechanism exists to find.** Reaching either signal from a Node `utilityProcess`
+needs a native addon or an FFI binding; that was **not measured**, and on this table there is no reason to
+build one.
+
+**One cross-record observation, reported and not applied.** The spike records that a main which stops
+pumping messages both fails this poll *and* swallows ADR-0055's instance hand-over — the same host state
+seen from two sides, currently reasoned about independently by two records. Whatever detects one is in a
+position to inform the other. That is ADR-0055's to take up, not this record's.
+
+### The flow, and the headless path
 
 Flow: the gate resolves `ask`, publishes `approval.requested` with `resolver: "brokered"` and the
 configured `timeout_seconds`, inserts the payload into `PendingApprovals` and mirrors it into session
@@ -265,7 +461,12 @@ OQ-4).
 
 1. The run host, not main, decides that a session is unattended, so main must register and revoke
    presenters explicitly and promptly on window creation and close, or a torn-down presenter will be
-   treated as live until the channel notices.
+   treated as live until something else notices. **That "something else" is the lapse and only the
+   lapse.** The earlier text said "until the channel notices"; the channel does not notice for a main
+   that has died, and for a main that is alive with no window left there is nothing for it to notice.
+   An explicit revoke on window close is therefore load-bearing rather than an optimisation: without it
+   an application with no windows stays *attended* until a lapse it will never suffer, because a healthy
+   main answers the poll perfectly well while being unable to show anything to anybody.
 2. **A live-but-unresponsive presenter is now *inside* the specification's vocabulary, and the liveness
    signal is how the test is evaluated rather than a gap-filler.** The earlier text of this consequence
    read: "`REQ-TOOLS-053` and `REQ-TOOLS-069` test presence of a registration and nothing else — never
@@ -300,6 +501,16 @@ OQ-4).
    no rival process that could be waiting on the entry this instance is about to cancel.
 4. Pairing (`REQ-TOOLS-062`) is enforced where the decision record is built, and it reads the pending
    payload — so it must happen before the entry is removed from the map.
+5. **The run host does not outlive main, so the wait registry has no shutdown path of its own.** Measured
+   at 207–341 ms in 6 of 6 runs. `REQ-TOOLS-054`'s bulk cancel and `REQ-TOOLS-177`'s teardown ordering are
+   therefore reachable only for the cases where *something in the process tree is still running* — run
+   cancellation, session teardown, an orderly quit. They are **not** a recovery path for a dead main, and
+   must not be documented, tested or relied on as one. Consequence 3's resume rule is what settles a
+   pending entry after that kind of death, and it is the only thing that does.
+6. **A lapse that is a false positive is now bounded on one side only.** The floor is measured — 258 s of
+   unblocked running with no main-channel gap above 303 ms — but on an idle main. The loaded case is not
+   measured and the lapse window is not sized; OQ-39 is untouched by this evidence and the *Revisit if*
+   trigger about a window that cannot be set wide enough remains live.
 
 ## Revisit if
 
@@ -312,3 +523,14 @@ escalation rather than an architecture decision. **Or `REQ-SANDBOX-101`'s presen
 confirmed as the operative test rather than `REQ-TOOLS-053`'s capability test**, in which case the
 conflict this record was originally written around returns exactly as it stood and the argument
 preserved in consequence 2 becomes live again.
+
+**Or the run host stops being a `utilityProcess`.** The correction above is a fact about *this* hosting:
+a run host built as a detached child process or a separate executable could outlive main, would then
+observe `parentPort` closing, and the channel-close branch would become the mechanism this record
+originally described. Anything that changes the run host's hosting re-opens that paragraph and the
+teardown consequence that follows from it.
+
+**Or a native dialog family turns out to have no asynchronous form on some platform.** The
+synchronous-native-dialog prohibition is measured on Windows for two dialog families. A platform where a
+dialog `REQ-SHELL-164` requires can only be shown synchronously is a conflict between that requirement
+and `REQ-TOOLS-064`'s *never a hang*, and is an escalation rather than an architecture choice.

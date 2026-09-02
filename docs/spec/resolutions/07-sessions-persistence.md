@@ -33,6 +33,18 @@ status: resolved
 >   REQ-SESSION-138's launch audit. One live inconsistency it does **not** settle: REQ-SESSION-016 says the
 >   audit is recorded "at session start" and REQ-SESSION-138 says once by run startup after worktree
 >   binding and the sandbox verdict. OQ 12 sides with 138; the two requirements still disagree.
+>   >
+>   > **Closed 2026-09-01. They no longer disagree, and OQ 12's disposition is what the specification
+>   > implements.** REQ-SESSION-138 is the sole owner of *when* the launch audit is recorded;
+>   > REQ-SESSION-016 cites it and holds only the two-place recording, the five facts, their defaults,
+>   > the moments each is stamped on the session **state**, and the no-backfill rule. Reading both
+>   > requirements did not merely break the tie, it removed it: "at session start" is unsatisfiable,
+>   > because two of the five facts — the sandboxed flag and the sandbox backend name — are not
+>   > knowable until the sandbox verdict of REQ-SESSION-086, and because REQ-SESSION-138 with
+>   > REQ-SESSION-132 already establish that a session created but never run carries no launch audit at
+>   > all. That argument is now recorded inside REQ-SESSION-016 so the question cannot be reopened on a
+>   > reading of the words alone. REQ-SANDBOX-108's citation of the pair stays valid and is better
+>   > supported than before.
 > - **OQ 3** and **OQ 13** — the `host` field and the reap-equals-liveness identity survive, but the record
 >   says "lock file" and "parses as JSON" (now: carries the three fields with their stated types). Its
 >   reasoning that a foreign-host lock is the ordinary consequence of a shared filesystem is **superseded by
@@ -48,6 +60,25 @@ status: resolved
 >   is still true of the original open questions, but is no longer true of the domain: see the concerns
 >   raised against SR-5's near-unreachable refusal path, the backup profile of a machine-local store, and
 >   the loss-of-identifier case, none of which the original questions anticipated.
+>   >
+>   > **The backup concern is discharged as of 2026-09-01.** SR-9(b), re-affirmed by **ESC-19**, is
+>   > applied as two new requirements. REQ-SESSION-200 owns the **disclosure**: the product itself states
+>   > that backing up, copying, cloning or synchronising a workspace does not carry that workspace's
+>   > session history, names what is outside such a backup and what is carried, says where the two
+>   > remedies are, and may not be delivered only inside a failure or remediation message — a user who
+>   > has already restored a workspace and found no history in it has been told too late. REQ-SESSION-201
+>   > owns the **whole-store backup and restore**: one artifact covering the store and the per-session
+>   > files held with it, valid while runs are live, restored only when explicitly asked for, never
+>   > silently merged, refused while any session in the target store is live, and carrying the workspace
+>   > identifier it was taken from. ESC-19 **refuses** the configurable store location, so ADR-0058's
+>   > location decision does not reopen.
+>   >
+>   > Backups and exports are deliberately different artifacts and both requirements say so: an export
+>   > is a record rendered so that software knowing nothing about this product can read it, and is what
+>   > discharges REQ-EVENTS-166; a backup is the store rendered so that this product can put it back.
+>   > REQ-SESSION-199 gained the matching clause from the export side, so a reader arriving there cannot
+>   > conclude the exports already cover the gap. The SR-5 and identifier-loss concerns are unchanged
+>   > and remain open.
 
 
 This record disposes of every open question raised in the draft of
@@ -159,7 +190,7 @@ Both additions decided in domain 06 are **adopted**:
 | 20 | RESOLVED | Key names are fixed, because they are a machine-readable contract and a consumer cannot be written against a list of figures. `session.start` carries `session_id`, `task`, `workspace_root`, `persona`, `permission_mode`, `sandbox` (`{enabled, backend}`) and `max_iterations`, with value types stated. `metrics.json` and the trajectory document name each figure their own requirement lists, by the same words joined with underscores in lower snake case, and the trajectory document's top-level inventory is fixed exactly. Every inventory is exhaustive; key order is not significant. | REQ-SESSION-193 (new), REQ-SESSION-090, REQ-SESSION-139, REQ-SESSION-153 |
 | 21 | RESOLVED | One rule for the whole domain: text cut to a character cap is marked by appending `...`, counted inside the cap, so a stored value never exceeds its cap and a shortened value is always distinguishable from a complete one. It applies to the transcript fields, the continuation-payload budgets, the summary task line, error-path tool arguments and results, and replay payload renderings. Two deliberate exceptions: the todo elision marker line, because entries rather than a string end are dropped; and the thinking `chars` counter, which measures what was produced and not what was stored. And yes, `full_detail` is capped — at 8000 characters, cut at a line boundary, keeping the newest output. | REQ-SESSION-194 (new), REQ-SESSION-122, REQ-SESSION-115, REQ-SESSION-140, REQ-SESSION-136 |
 | 22 | RESOLVED | `failed`. The tool-row status vocabulary is REQ-MONITOR-105 — `running`, `ok`, `failed`, `blocked` — which has no `cancelled` value, and in which `blocked` denotes a call refused or skipped before it ran. A call that was under way and produced no result is a failure whatever became of the agent that made it; the child's own record still moves to `cancelled` under REQ-SESSION-065, the two records differing because they describe different things. | REQ-SESSION-129 |
-| 23 | RESOLVED (two parts MOOT) | The stderr notice and the `-o` default are moot: there is no command. The substantive part is decided — export writes to a file the user chooses through the platform's save dialog, with no implicit destination and nothing written before a destination is chosen; one session exports as one trajectory document, and several export as one JSON document `{"trajectory_version": 1, "sessions": [<document>, …]}` in selection order, a wrapper carrying no fields of its own so a consumer that understands one document understands a batch. The resumed-session and capped-history conditions survive as warnings that do not stop the export, and the raw stored lines remain obtainable byte-identical. | REQ-SESSION-189 (new), REQ-SESSION-188 (new), REQ-SESSION-152 (withdrawn), REQ-SESSION-153 |
+| 23 | RESOLVED (two parts MOOT) — **batch shape superseded** | The stderr notice and the `-o` default are moot: there is no command. The substantive part is decided — export writes to a file the user chooses through the platform's save dialog, with no implicit destination and nothing written before a destination is chosen; one session exports as one trajectory document, and several export as one JSON document in selection order, whose wrapper is closed so a consumer that understands one document understands a batch. The resumed-session and capped-history conditions survive as warnings that do not stop the export, and the raw stored lines remain obtainable byte-identical. **Superseded in one part:** this row fixed the wrapper as `{"trajectory_version": 1, "sessions": [<document>, …]}` carrying no field of its own, which could not be satisfied together with REQ-EVENTS-144's requirement that the wrapper carry the count of documents. The wrapper is now REQ-EVENTS-144's alone — `trajectory_version`, `count`, `trajectories`, closed at three — and REQ-SESSION-189 cites it. Nothing else in this row changes. | REQ-SESSION-189 (follower), REQ-EVENTS-144 (owner), REQ-SESSION-188 (new), REQ-SESSION-152 (withdrawn), REQ-SESSION-153 |
 | 24 | RESOLVED | The empty session id is the return value only and never the whole report. A refused board launch is additionally reported through the notification surface of domain 19, conveying which requirement unit could not be started and why, and the unit's row on the requirement board shows it as not started with that reason attached — so a refusal that produced no session is never indistinguishable from a unit nobody has run yet. | REQ-SESSION-158 |
 | 25 | RESOLVED | A declared capability, read from the model-capability metadata the product ships with (REQ-PROVIDER-137) — never an observed failure and never a hard-coded list of model identifiers. When that metadata does not declare the property for the session's default-persona model, the repair does not run at all, because rewriting stored conversation files on suspicion is worse than a request the provider might refuse. | REQ-SESSION-170 |
 

@@ -30,6 +30,38 @@ status: resolved
 > - **OQ 14** — the Windows installed/portable discriminator resolves "the running executable" inside the
 >   InstallDir path. Under SR-7 the running image may sit in a launch preparation, so the test now resolves
 >   **the artifact the launch started from** (REQ-STARTUP-106, REQ-STARTUP-165).
+>
+> ## Also superseded, by ESC-8 and the ESC-11 follow-through applied 2026-09-01
+>
+> - **OQ 5's gate set is closed again, one item larger.** Row 5 below states it as "`SHA256SUMS.txt`
+>   covers every other asset and every digest matches; the release body carries its seven elements;
+>   and on each of the three platform keys the published artifact has been downloaded and launched to
+>   first paint". Under **ESC-8** REQ-STARTUP-156 additionally requires that the **manifest's detached
+>   signature verifies**, and that it verifies against a key carried by every published artifact the
+>   release may be offered to as an update. A release passing every criterion in row 5 but failing
+>   either of those would be refused by every user's update client, so the two belong in the gate. Row
+>   5's requirements column should be read as also naming REQ-STARTUP-167 and REQ-STARTUP-168.
+> - **Any row treating the checksum manifest as establishing only *what* was downloaded is superseded.**
+>   REQ-STARTUP-123's closing sentence used to say the check "does not establish who produced the
+>   artifact, since artifacts are unsigned and the manifest is fetched over the same connection as the
+>   download". That was exactly ESC-8's defect. The digest comparison still detects a corrupted or
+>   incomplete transfer — that guarantee is preserved verbatim — but publisher authenticity for the
+>   update path is now established by the signature, and an unverified manifest reaches no parser and
+>   costs no download.
+> - **Row 10's verification hint is unchanged and now covers less than the product does.** The release
+>   body still names `sha256sum -c` and `certutil`, which check the digest and not the signature, and
+>   the hint is deliberately not extended because doing so would require naming a
+>   signature-verification tool and therefore a technology. A user who downloads by hand from the
+>   release page still gets an unsigned binary; the signature protects the **update path**. This is a
+>   narrow but real gap and is recorded rather than hidden.
+> - **REQ-STARTUP-165's clause (c) is no longer silent in every case.** The disposition that launch
+>   preparations are invisible holds for the four outcomes clause (f) names, and no fifth. Where a run
+>   produces **no usable preparation at all** — the storage refusing the write, being full, or
+>   unavailable, so redoing does not succeed either — the artifact still starts, never fails to launch
+>   for that reason, is exempt from the first-paint bound on REQ-STARTUP-155's terms, and reports the
+>   outcome once per run after paint. Without that, the recovery path degenerates into preparing on
+>   every launch, silently, and a user sees only an artifact that has become permanently slow with
+>   nothing saying why.
 
 
 This record disposes of every open question raised in the draft of

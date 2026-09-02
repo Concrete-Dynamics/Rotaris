@@ -2,25 +2,34 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-31
-- **Revised:** 2026-08-31, under `owner-decisions.md` ESC-2 and SR-4
+- **Revised:** 2026-09-02, under `owner-decisions.md` ESC-14, and against the specification as amended —
+  `REQ-CONFIG-477` (new), `REQ-CONFIG-252`, `REQ-CONFIG-288`, `REQ-CONFIG-192`, `REQ-CONFIG-010`
+- **Supersedes reasoning in:** its own 2026-08-31 revision, whose placement argument leaned on
+  `REQ-CONFIG-192` (see alternative D, objection 3)
 - **Origin:** DATA (ADR-DATA-03, Spike 2)
 - **Depends on:** ADR-0002, ADR-0004
 - **Constrains:** ADR-0015, ADR-0017, ADR-0022, ADR-0023, ADR-0032, ADR-0034
 
 ## Context
 
-SR-4 introduces a database for what only the application reads, and names configuration as one of the
-things that **stays in files**: "Configuration, personas, model slots — the things a user edits, and
-whose comments matter (ESC-2) — **YAML under `.rotaris/`, visible to version control**." This record
-confirms that placement with the argument behind it, because an unstated boundary is what lets a later
-implementer migrate configuration into the database and break ESC-2 and the tolerance rules below.
+**The placement is no longer this record's to argue.** When this ADR was first written the only thing
+saying configuration stays in files was a line in SR-4's table. `REQ-CONFIG-477` now states it as a
+requirement — "Configuration MUST be held as files, and MUST NOT be moved into a store that only this
+application can read" — and says why it is stated at all: "so that moving configuration into an
+application-owned store is a change someone has to argue for against these grounds, rather than an
+optimisation that can be made quietly while every requirement of this document still appears to be
+satisfied." It carries four grounds and calls each independently sufficient. What is left for this
+record is the *loader*: which library, which model, which write discipline, and where the boundary is
+enforced mechanically rather than by intention.
 
 `REQ-CONFIG-031` and `REQ-CONFIG-449`: **five layers, fixed and total** — built-in defaults,
 auto-discovered tool servers, the global discovery snapshot, global configuration files, workspace
-configuration files. `REQ-CONFIG-234` and `REQ-CONFIG-235` withdraw a sixth layer explicitly: there is
-no command line with which to name a configuration file, so no such file exists. Within one scope, that
-scope's model file overlays that scope's model block per field, and a global model file still loses to
-a workspace configuration file (`REQ-CONFIG-005`).
+configuration files — "and there is no sixth layer: the product accepts no configuration file from
+outside the two scopes, because it has no command-line invocation with which to name one".
+`REQ-CONFIG-234` and `REQ-CONFIG-235`, which described that sixth layer and the flag that named it, are
+**withdrawn**; the rule now lives in `REQ-CONFIG-031` itself. Within one scope, that scope's model file
+overlays that scope's model block per field, and a global model file still loses to a workspace
+configuration file (`REQ-CONFIG-005`).
 
 `REQ-CONFIG-040` fixes **four merge classes with different overlay depths**: replace-if-not-null;
 named-entry, where entries union by name and the entry's **immediate** fields are overlaid, the overlay
@@ -76,14 +85,26 @@ accepted list — "never as a type error, and never silently accepted". `REQ-CON
 tolerance for a model's thinking level.
 
 `REQ-CONFIG-248`, `REQ-CONFIG-441` and `REQ-CONFIG-199`: writers preserve key order and **never
-alphabetise**. `REQ-CONFIG-252` stated that comments and formatting are lost while content is preserved;
-**ESC-2 amends it and rules that comments are preserved** (see the decision).
+alphabetise**. `REQ-CONFIG-252` no longer says comments and formatting are lost. It now says the
+opposite in terms — "**Comments and formatting are preserved.** The write is a targeted edit of the
+existing document rather than a re-emission of the whole of it" — names the comment header the
+first-run bootstrap wrote (`REQ-CONFIG-025`) as the thing a user would otherwise lose, records that
+"the earlier statement that comments and formatting are lost is withdrawn", and binds **all four
+writers at once** rather than leaving each to restate it: the startup model-preference path
+(`REQ-CONFIG-248`), the desktop save (`REQ-CONFIG-256`), the scoped per-field write path
+(`REQ-CONFIG-441`) and the first-run bootstrap (`REQ-CONFIG-027`). It also gives the reason the rule is
+not cosmetic: it is the same discipline that forbids a writer to discard content it could not interpret
+(`REQ-CONFIG-442`, `REQ-CONFIG-458`), and "a writer that preserves an unrecognized key but discarded the
+comment explaining it would honour the letter of that rule and defeat its purpose."
 
 `REQ-CONFIG-464` and `REQ-CONFIG-471`: the advanced runtime card renders that scope's **raw `runtime:`
 mapping, read directly from that scope's file rather than from the merged configuration**, so a user can
 see whether a setting is stated globally, stated in this workspace, or stated nowhere and inherited —
 "the file itself remaining the place a runtime key is written by hand". This is a requirement that a
-human reads and hand-edits the artifact, and under SR-4's principle it settles the question on its own.
+human reads and hand-edits the artifact. `REQ-CONFIG-477`'s ground 2 makes it load-bearing for the
+placement, and adds a fact this record did not have: when the surface that first carried the capability
+was withdrawn, the capability was **deliberately re-sited rather than dropped** (`REQ-CONFIG-445`). The
+product has already declined to lose this once.
 
 `REQ-CONFIG-458`, `REQ-CONFIG-442`, `REQ-CONFIG-256` and `REQ-CONFIG-260`: no surface writes a
 configuration it cannot load back; the scoped per-field writer **refuses** when the existing file cannot
@@ -130,63 +151,102 @@ overlay exactly one level while sections recurse to any depth, and no generic de
 per-class null policies, per-scope pre-merge passes, or a five-way severity taxonomy. Each would be
 fought rather than used, and each brings its own precedence model that would have to be disabled.
 
-**D — Configuration in the workspace database (new under SR-4).** Assessed on its merits rather than
-dismissed by citing the ruling, because the ruling's table is short and the reasons are what a later
-reader needs. Five independent objections, any one of which is decisive:
+**D — Configuration in the workspace database (raised under SR-4, now refused by requirement).**
+Assessed on its merits rather than dismissed by citing a ruling, because a reader who reaches this
+alternative in two years will want the reasons and not the citation. Four of the five objections below
+are `REQ-CONFIG-477`'s own grounds, restated as objections; the fifth is this record's.
 
-1. **Comments.** ESC-2 rules that comments **are preserved**, including the comment header the
-   bootstrap itself writes (`REQ-CONFIG-025`). A row has nowhere to put a comment, and a
-   store-then-render round trip through rows would lose exactly what ESC-2 spent a spike establishing
-   is cheaper to keep than to discard.
-2. **Version control.** `REQ-CONFIG-471` and `REQ-CONFIG-464` require a surface to show the *raw*
-   mapping of one scope's file and require the file to remain the place a runtime key is hand-edited.
-   A workspace's `.rotaris/` configuration is committed, diffed and reviewed like any other project
-   material. SR-4's principle decides this clause on its own: **a file when a human or another tool is
-   meant to read or edit it, or when version control must track it.**
-3. **Tolerance of what the schema does not know.** `REQ-CONFIG-183` calls the requirements section's
-   unknown-key rejection "the opposite of the top-level policy", which fixes the top-level policy as
-   carry-and-ignore. A document tree carries an unrecognised key through a targeted edit untouched. A
-   table with a fixed column set cannot represent one at all, and a key-value table that could would
-   have to re-derive the tri-state, the merge classes and the ordering that the tree gives for free.
-   The same property is what `REQ-CONFIG-192` asks of *delivery records* — an unsupported record sits
-   uninterpreted and unmigrated while its neighbours read normally. That requirement is about the
-   delivery store, not about configuration (see ADR-0041, which preserves it in the database); the
-   configuration-side property is this one, and it is no weaker.
-4. **Scope.** Three of the five layers are **not per workspace** — built-in defaults, the global
-   discovery snapshot and global configuration files. SR-4's database is one per workspace. A layered
-   load that spans per-user and per-workspace roots cannot be sourced from a per-workspace store
-   without either duplicating the global layers into every workspace or adding a second database, and
-   the second database would hold a handful of keys nobody queries.
-5. **There is nothing to gain.** SR-4's principle asks for a database when the data is "high-volume,
-   queried, or transactional". Configuration is none of the three: `REQ-CONFIG-014` forbids a read
-   cache and requires a full re-read on every load precisely because the volume is negligible, there is
-   no query beyond "read the whole thing and merge", and the only atomicity anyone asks for is
-   `REQ-CONFIG-260`'s validate-before-any-file-is-touched, which is a pre-check rather than a
-   transaction.
+1. **Tolerance of what this release does not know** (`REQ-CONFIG-477` ground 1). An unrecognised
+   top-level key is a **warning**, contributes nothing to the merge, and is nevertheless still in the
+   file afterwards, so a document authored against a later release loads, is edited, and is written
+   back by an earlier one without losing the key (`REQ-CONFIG-040`, `REQ-CONFIG-233`); every writer of
+   `agents.yaml` is forbidden to discard content it could not interpret (`REQ-CONFIG-442`,
+   `REQ-CONFIG-458`), "and the file is what makes that possible". A document tree carries such a key
+   through a targeted edit untouched. A table with a fixed column set cannot represent one at all, and
+   a key-value table that could would have to re-derive the tri-state, the merge classes and the
+   ordering that the tree gives for free. `requirements:` is the deliberate exception in the other
+   direction — an unknown key there is a hard load failure (`REQ-CONFIG-183`) — and `REQ-CONFIG-477`
+   is explicit that this is "an exception about a *configuration block*, not a licence to store
+   configuration the way the product stores its own records."
+
+   > **Correction, and it is this record's own.** The previous revision argued this objection partly by
+   > analogy: it said the same tolerance "is what `REQ-CONFIG-192` asks of *delivery records*", and that
+   > the configuration-side property "is no weaker". **Do not cite that.** `owner-decisions.md` ESC-14
+   > records that SR-4's use of `REQ-CONFIG-192` to argue about configuration was wrong, because that
+   > requirement's subject is the delivery store, which moved to rows. `REQ-CONFIG-192` now says so
+   > itself: the delivery store "is not configuration and `REQ-CONFIG-477`'s boundary does not reach
+   > it". The analogy was not merely imprecise, it pointed at the one neighbouring requirement whose
+   > answer is the opposite. What survives of the argument is the part that never needed the analogy —
+   > the carry-and-ignore policy stated of configuration, by `REQ-CONFIG-040` and `REQ-CONFIG-233`, and
+   > enforced on every writer by `REQ-CONFIG-442` and `REQ-CONFIG-458`. That is strictly stronger than
+   > the borrowed version, because it is stated of the thing under discussion.
+
+2. **The product shows the user the file's own contents** (`REQ-CONFIG-477` ground 2). The advanced
+   runtime card renders the chosen scope's **raw** `runtime:` mapping read directly from that scope's
+   file, "exactly so a user can tell a setting stated globally from one stated in this workspace from
+   one inherited from the built-in defaults" (`REQ-CONFIG-471`). The requirement's own sharpest
+   sentence is the one to keep: "That distinction is a distinction between two files, and there is
+   nothing raw to render when there is no file."
+
+3. **Version control stays the user's choice** (`REQ-CONFIG-477` ground 3). These are the user's own
+   text in the user's own directories — diffable, mergeable, reviewable, quotable in a bug report. The
+   ignore rule of `REQ-CONFIG-013` and `REQ-CONFIG-456` is best-effort and is "a default about what is
+   staged by accident, not a prohibition" (`REQ-CONFIG-010`); *deciding otherwise* is a choice a file
+   leaves open, and "a store the application keeps for itself forecloses it for every user at once."
+   Note what this is **not**: it is not a claim that the product commits configuration, and it is not
+   in tension with the workspace being ignored by default. The ground is the availability of the
+   choice, not the exercise of it.
+
+4. **Three of the five layers are not per workspace** (`REQ-CONFIG-477` ground 4). Built-in defaults,
+   the auto-discovered tool servers and the global discovery snapshot are not workspace-scoped at all,
+   and the global scope is per user; the store SR-4 introduces is one per workspace and, under ESC-15,
+   machine-local. A store scoped to one workspace could hold at most layer 5, so migrating
+   configuration would put a single fixed total merge across two storage models with different failure
+   modes — at no gain, since the workspace layer is hand-edited exactly as the global one is.
+
+5. **There is nothing to gain, by SR-4's own test.** The principle asks for a database when the data is
+   "high-volume, queried, or transactional". Configuration is none of the three: `REQ-CONFIG-014`
+   forbids a read cache and requires a full re-read on every load precisely because the volume is
+   negligible; there is no query beyond "read the whole thing and merge"; and the only atomicity
+   anyone asks for is `REQ-CONFIG-260`'s validate-before-any-file-is-touched, which is a pre-check
+   rather than a transaction. Contrast the delivery store, where `REQ-CONFIG-192` now states the
+   opposite of all three in one sentence — the records "are high-volume, queried and transactional",
+   and the state, the history, the prune and the audit entry are written "together, indivisibly". The
+   two requirements were amended to sit beside each other, and reading them together is the fastest way
+   to see that this alternative fails a test the delivery store passes.
 
 ## Decision
 
 **Alternative B — configuration stays YAML under `.rotaris/` and the per-user configuration
 directory** — with `yaml@2.9.0` or later (the `eemeli/yaml` package) rather than `js-yaml`: both are
 safe by default, but only the former exposes the document tree the tri-state, the order-preserving
-writes and ESC-2's comment preservation need.
+writes and `REQ-CONFIG-252`'s comment preservation need.
 
 **No configuration value is read from, written to, cached in, or mirrored into the workspace
-database.** That sentence is the boundary this ADR exists to draw. The mechanical guard is the same
-shape ADR-0040 uses for its layout argument: **the loader's entry point takes no database handle**, so
-a later change that wanted to consult one would have to alter a signature that ADR-0002 and the
-constraints table both name, rather than adding a line inside a function.
+database.** `REQ-CONFIG-477` now states that boundary, so this ADR's job is no longer to draw it but to
+make it **mechanical**, which a requirement cannot do on its own. The guard is the same shape ADR-0040
+uses for its layout argument: **the loader's entry point takes no database handle**, so a later change
+that wanted to consult one would have to alter a signature that ADR-0002 and the constraints table both
+name, rather than adding a line inside a function. Note the asymmetry with ADR-0040, which is
+deliberate and is the reason both records state their guard rather than sharing one: the traceability
+engine's no-handle rule is now a *default* that `REQ-TRACE-089` explicitly permits to be lifted for a
+validated index, while this one has no such escape and is meant not to acquire one.
 
 Use the **default 1.2 core schema**, under which the two ambiguous switch spellings parse as strings;
 `REQ-CONFIG-020` then reduces to un-folding the two literal boolean spellings **per field against that
 field's vocabulary**, which is a smaller and more auditable rule than un-folding six. The requirement's
 observable is satisfied either way; this is the cheaper route to it.
 
-**Comments and layout are preserved on every write path (ESC-2).** Every writer edits the parsed
-document in place and re-emits it, rather than parsing to a value and stringifying that value; the
-spike shows this is the *cheaper* route, because only parse-then-stringify loses comments. A test that
-round-trips a commented file through each of the four writers and asserts the comments survive is the
-guard, and it is the direct replacement for the consequence this ADR used to accept.
+**Comments and layout are preserved on every write path (`REQ-CONFIG-252`).** Every writer edits the
+parsed document in place and re-emits it, rather than parsing to a value and stringifying that value;
+the spike shows this is the *cheaper* route, because only parse-then-stringify loses comments. A test
+that round-trips a commented file through each of the four writers the requirement names —
+`REQ-CONFIG-027`, `REQ-CONFIG-248`, `REQ-CONFIG-256`, `REQ-CONFIG-441` — and asserts the comments,
+blank lines and indentation survive is the guard, and it is the direct replacement for the consequence
+this ADR used to accept. The test belongs with the unrecognised-key test rather than beside it:
+`REQ-CONFIG-252` binds the two together, and a writer that keeps a key it does not understand while
+dropping the comment explaining it "would honour the letter of that rule and defeat its purpose". One
+fixture, carrying an unknown key *and* the comment above it, through all four writers.
 
 Validation: whatever library is chosen must support **assignment-time** validation for the two sections
 that require it. The natural shape is a validating wrapper around those sections whose setters run the
@@ -203,9 +263,14 @@ per-field writer overlays "recursively through nested mappings exactly as a sect
 **so the merge code is shared between the loader and one of the writers** — which makes a divergence
 between them a compile-time impossibility rather than a test we might forget.
 
-Under ESC-1 the composer's permission-mode control writes **only its own key**, through that same
-scoped per-field writer; pending Settings edits stay pending. That is a use of an existing writer, not
-a fifth one.
+`REQ-CONFIG-288` — which no longer hands the decision over, and takes it against the coupling — has the
+composer's permission-mode control write **only its own key**, through that same scoped per-field
+writer, into the scope `REQ-CONFIG-463` fixes, refusing outright if the target file cannot be read
+(`REQ-CONFIG-442`), and reloading after. Pending Settings edits stay pending, stay dirty and are still
+undone by Discard. That is a use of an existing writer, not a fifth one. Its architectural weight is
+that the *refusal* path matters more here than anywhere else the per-field writer is used: an
+unparseable `agents.yaml` must fail this write loudly, because silently not writing a permission mode
+leaves a run at a mode the user did not choose.
 
 The tier-alias substitution and reasoning-synthesis passes are exported as **pure transforms over a
 configuration value**, not as private steps of a file-reading function, because `REQ-CONFIG-263` calls
@@ -228,11 +293,24 @@ between domains 15 and 06 that must be stated rather than discovered.
   demand, never followed; there was no polling cadence here to withdraw. `REQ-CONFIG-211`'s
   modification-time-or-size check on the discovery snapshot is a check performed *during a load*, not a
   timer, and it survives untouched.
-- **SR-4** confirms the placement and adds the boundary statement above. ADR-0004 **rule 1** (readers
-  hold no descriptors; every read is open-read-close) still binds every file in this store, because
-  these files are still replaced by rename and an ordinary reader still blocks that rename on Windows.
-  ADR-0004 **rule 3** (a writer's handle across its own compaction) never applied here — configuration
-  has no append-and-compact file — and is dissolved product-wide with the stores that had one.
+- **SR-4** confirms the placement, which `REQ-CONFIG-477` has since made a requirement. ADR-0004
+  **rule 1** (readers hold no descriptors; every read is open-read-close) still binds every file in
+  this store, because these files are still replaced by rename and an ordinary reader still blocks that
+  rename on Windows — measured, and not merely inherited: the writer-handle spike held the target with
+  `'r'`, `'r+'`, `'a'`, `'a+'` and `'w'` and got `EPERM` from `fs.renameSync` on every one. What the
+  same spike corrects is the *reason* the record used to give. Node's `open` does request share-delete;
+  the blocker is the replace-by-rename call, which reproduces `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`'s
+  failure conditions exactly. Rule 1 is unaffected and this store is the least interesting place that
+  correction lands, but a reader who finds the old reason quoted here should follow it to ADR-0004 and
+  ADR-0040 where it changes an answer. ADR-0004 **rule 3** (a writer's handle across its own
+  compaction) never applied here — configuration has no append-and-compact file — and is dissolved
+  product-wide with the stores that had one.
+- **Configuration is one of the two things this loader must keep out of the store, and the other one is
+  not this record's.** `REQ-CONFIG-010` now enumerates what is left under `<workspace>/.rotaris/`: the
+  workspace identifier, plugins, per-session checkouts, and the configuration files themselves. Session
+  records, improvement artifacts and delivery records are gone from it, "and no key of this domain
+  names a location for any of them". A loader that ever grew a key naming one would be re-creating a
+  layout three requirements deleted.
 
 ## Consequences accepted
 
@@ -244,21 +322,54 @@ between domains 15 and 06 that must be stated rather than discovered.
    later "optimised" into a violation — and, now that a database exists in the product, so that the
    optimisation nobody should reach for is named: **not a configuration table, not a parsed-document
    cache in a row.**
-3. **Comments and layout survive every write (ESC-2).** This reverses what this ADR previously
-   accepted. `REQ-CONFIG-252` is amended by the owner; key order preserved and never alphabetised
+3. **Comments and layout survive every write.** This reverses what this ADR previously accepted, and
+   the reversal is now the specification's rather than a ruling's: `REQ-CONFIG-252` states preservation
+   and withdraws its own earlier sentence. Key order preserved and never alphabetised
    (`REQ-CONFIG-248`) is unaffected and was always the case.
 4. Both the workspace service and the run host instantiate this loader (ADR-0002). The tri-state model
    and the validating wrapper must therefore be free of process-specific dependencies — and, now, free
    of any database dependency.
-5. `REQ-CONFIG-192` remains a **configuration key** in this store while the records it governs move to
-   the database. The key that names the delivery store's settings is authored by a user in YAML; the
-   delivery records themselves are rows. Nothing about that split is odd, but it is exactly the sort of
-   thing a later reader mis-summarises, so it is written down here and in ADR-0041.
+5. **`requirements.delivery` stays a configuration block whose records are rows, and the loader is
+   where that split is enforced.** `REQ-CONFIG-192`'s four remaining keys — `schema_version`,
+   `retain_tombstones`, `audit_trail`, `history_limit` — are authored by a user in YAML and merged by
+   this loader like any other section; the delivery records they govern are rows in ADR-0041's store.
+   The requirement now states the split itself, including that `REQ-CONFIG-477`'s boundary does not
+   reach it.
+6. **Two withdrawn subpath keys become load failures, and this loader is what delivers them.** The
+   storage move withdrew `store_subpath` with the directory it named, and `worktree_subpath` was never
+   a key of this domain (`REQ-CONFIG-192`, `REQ-CONFIG-194`). Both sat under `requirements:`, where
+   `REQ-CONFIG-183` makes an unrecognised key a **hard load failure** rather than a warning — so a
+   workspace configured against an earlier build does not degrade, it stops loading, and under
+   `REQ-GIT-071` that is fatal to the workspace: nothing that depends on it starts, no session
+   directory and no lock are created, and the application goes on running with no workspace
+   configuration. That is the one place the storage decision reaches this ADR at all, and it is worth
+   stating because it is the only user-visible cost of the move that this record owns. Two things
+   follow. The failure message must name the key and the file, as `REQ-CONFIG-183` and
+   `REQ-CONFIG-237`'s `<dotted.path>: <message>` rendering require, and the strict block is exactly
+   where a bare "unknown key" is least helpful. And this is a genuine argument *against* the strictness
+   inversion that `REQ-CONFIG-183` chose, recorded rather than smoothed away: had `requirements:`
+   followed the top-level carry-and-ignore policy, a withdrawn key would have been a warning and the
+   workspace would still open. The inversion is the specification's decision and this record does not
+   reopen it; it does note that the amendment pass made the inversion cost something it did not cost
+   before.
 
 ## Revisit if
 
-A requirement makes absent and null equivalent everywhere, removing the tri-state; or a sixth layer or a
-per-key precedence inversion appears, both of which `REQ-CONFIG-449` currently forbids; or a validation
-library models tri-state optionality natively without normalising, which would collapse alternatives A
-and B into one; or ESC-2 is reversed and comments are again to be discarded, which would make the
-document API optional rather than required.
+`REQ-CONFIG-477` is amended — which is now the only route by which alternative D reopens, and is
+deliberately a harder route than reversing this ADR. A requirement makes absent and null equivalent
+everywhere, removing the tri-state; or a sixth layer or a per-key precedence inversion appears, both of
+which `REQ-CONFIG-031` and `REQ-CONFIG-449` currently forbid; or a validation library models tri-state
+optionality natively without normalising, which would collapse alternatives A and B into one; or
+`REQ-CONFIG-252` is reversed and comments are again to be discarded, which would make the document API
+optional rather than required.
+
+Two contingencies turn on measurements this record does not have and must not guess at. **The
+document-API write path has not been timed on a real `agents.yaml`** — the DATA spike established that
+a targeted edit *preserves* comments, layout and key order, not what it costs. If a measurement shows
+the in-place edit is materially slower than parse-and-stringify at the sizes users actually write, that
+is a cost to record, not a reason to reverse: `REQ-CONFIG-252` fixes the observable and the alternative
+does not produce it. **The no-cache rule has not been timed against `REQ-SHELL-150`'s 100 ms gesture
+budget** on the paths that re-read and re-merge on every settings-screen open. Consequence 2 asserts
+microseconds; that is an estimate from file sizes and not a figure. If it turns out to be wrong the
+answer is still not a cache — `REQ-CONFIG-014` forbids one — but the settings screen's own
+sequencing would then belong in a decision record rather than in an assumption here.

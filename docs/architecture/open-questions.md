@@ -12,23 +12,48 @@ Everything the architecture record leaves unresolved, in three groups:
 Nothing here blocks the Architecture Gate from being *held*. Several items block specific ADRs from
 being *ratified*, and those are marked **blocking**.
 
-**Counts, as of the measurement-and-amendment pass of 2026-09-01.** **Twenty-five escalations, eighteen
-ruled** (`owner-decisions.md`) **and seven open** — the seven are new with this pass and every one of
-them is a cost of a ruling rather than a decision anyone deferred. **Forty-six specification questions**,
-four **resolved** and closed with their reasons below, leaving forty-two open, **none of which blocks a
-named ADR any more**. Two design-reference dependencies. **Twenty-one numbered spikes**, one withdrawn,
-two discharged and one discharged for Windows only, leaving seventeen outstanding.
+**Counts, as of the measurement round of 2026-09-02.** **Thirty-one escalations. Twenty-two are ruled**
+(`owner-decisions.md`, ESC-1 to ESC-21 and **ESC-26**), **two more are closed by the specification itself
+with no ruling needed** (ESC-23, ESC-25), and **seven are open** — ESC-22 (the unbounded aggregate frame
+rate), ESC-24 (a launch inside the force-exit allowance), and **ESC-27 to ESC-31**, which the
+defect-correction round raised rather than took and which nobody has ruled. **Forty-seven specification
+questions**, six **resolved** and closed with their reasons below, leaving forty-one open, **none of which
+blocks a named ADR**. Two design-reference dependencies. **Twenty-two numbered spikes**, one withdrawn,
+**seven discharged** and one discharged for Windows only, leaving **thirteen outstanding** — and see the
+spike section, which now separates them into the three groups the gate actually turns on.
+
+**Four spikes landed on 2026-09-02 and nothing here closed because of it, which is the point.** Every
+owner ruling survived. What the measurements changed is the *reasons*: three platform facts this record
+asserted were disproved, one ADR's own stated gate trigger fired, and one question a spike raised was
+answered in the specification rather than filed here. **Two sub-cases went unmeasured inside spikes that
+otherwise passed and both are listed rather than absorbed** — `REQ-STARTUP-165`(c)'s "no usable
+preparation at all" branch, and ESC-21's second premise — because a sub-case folded into a discharged
+spike is a gap nobody can see afterwards.
 
 **Nothing here is closed because a ruling said it would be, and nothing is closed because a measurement
-was taken nearby.** Two closures in this pass were **rewritten rather than deleted**, because they were
-right about the outcome and wrong about the reason: OQ-11 is closed, but not by dissolution, and OQ-44's
-statement of fact was false. Two questions the ADRs decided against the specification's silence are filed
-as **new** questions (OQ-47, OQ-48) rather than being presented as settled, because leaving them open
-means an implementer picks and in both cases the appealing pick is the unsafe one.
+was taken nearby.** Two closures in the previous pass were **rewritten rather than deleted**, because
+they were right about the outcome and wrong about the reason: OQ-11 is closed, but not by dissolution,
+and OQ-44's statement of fact was false. Two questions the ADRs decided against the specification's
+silence were filed as **new** questions (OQ-47, OQ-48) rather than being presented as settled, and both
+are still open.
 
-**Where a measurement overturned something, the claim is preserved beside what replaced it.** Four spike
-reports arrived on 2026-09-01 and each of them changed at least one entry below. They are in
-[`spikes/`](spikes/) and are cited by filename.
+**What the second pass changed, stated so a reader can audit it.** Five escalations are closed
+individually and each says which requirement closed it and what it left behind; **none of them is closed
+because a ruling exists, and two are closed against the entry's own conclusion** (ESC-25 argued a
+detached signature was unavailable and the specification amended the two requirements that forbade it;
+ESC-23 argued the antecedent was lost and the specification restored it). One question is closed because
+the specification moved under it (**OQ-28**). One is new because ADR-0002 had to decide a silence
+(**OQ-49**). Three escalations remain open and one of them is new. **Nothing is closed that an agent did
+not actually settle**: where a pass reported a conclusion this register could not verify against the
+requirement text, the conclusion is recorded and the entry stays open.
+
+**Where a measurement overturned something, the claim is preserved beside what replaced it.** **Eight
+spike reports now exist** — four dated 2026-09-01 and four dated 2026-09-02, covering seven live spikes
+and one withdrawn one — and each of them changed at least one entry below. They are in
+[`spikes/`](spikes/) and are cited by filename. **In the second four, what was overturned was more often a
+*reason* than a *conclusion*, and the entries below say which:** where a measurement disproved a reason but
+not a conclusion, the entry states the conclusion, states that the original reason was tested and found
+false, and states the reason that actually holds.
 
 ---
 
@@ -41,16 +66,16 @@ as the statement of what was decided **between**, because a ruling is only legib
 chose from; each remains the canonical description of the choice and `owner-decisions.md` is canonical
 for the answer.
 
-**ESC-19 to ESC-25 are new with the 2026-09-01 pass and carry no ruling.** Every one of them is a cost of
-a ruling or a consequence of a measurement rather than a decision anyone deferred, and **two of them
-(ESC-19, ESC-20) are requirements SR-9 minted that are not in the specification** — which is the sharpest
-kind of open item this register can hold, because a reader of `owner-decisions.md` alone would believe
-they were closed.
+**ESC-19, ESC-20 and ESC-21 were ruled on 2026-09-01** against comparative evidence from seven coding
+harnesses, and **ESC-23 and ESC-25 have since been answered by the specification itself** rather than by
+a ruling. **ESC-22 and ESC-24 remain open and neither is architecture's to settle.** Every one of the
+seven was a cost of a ruling or a consequence of a measurement rather than a decision anyone deferred.
 
-Three of the ruled entries are marked below where a later ruling reached back into them: **ESC-3**, whose
-accepted defect a transaction makes unreachable (ESC-18); **ESC-9** and **ESC-10**, whose mechanisms
-SR-1 and SR-4 dissolved without disturbing either ruling; and **ESC-15**, whose ruling created ESC-19 and
-ESC-21.
+Four of the ruled entries are marked below where a later ruling or a later amendment reached back into
+them: **ESC-3**, whose accepted defect a transaction makes unreachable (ESC-18); **ESC-9** and **ESC-10**,
+whose mechanisms SR-1 and SR-4 dissolved without disturbing either ruling; **ESC-15**, whose ruling
+created ESC-19 and ESC-21; and **ESC-1**, whose consequence ESC-23 named and whose antecedent
+`REQ-CONFIG-423` has since been restored by amendment.
 
 ### ESC-1 — The shared save path between Settings and the composer's permission-mode control
 
@@ -459,10 +484,31 @@ a larger change than the defect warrants" — and the defect is now gone without
 which is a different world from the one the ruling was taken in. Confirm, or state that the
 specification's stated consequence must be reproduced.
 
-### ESC-19 — SR-9(b)'s backup disclosure is not in the specification *(new, 2026-09-01)*
+### ESC-19 — SR-9(b)'s backup disclosure is not in the specification *(raised 2026-09-01; **RULED 2026-09-01; the specification has since landed both halves**)*
 
-**Where:** ADR-0058; constraint W-22. **Source:** `owner-decisions.md` SR-9(b), against
-`REQ-SESSION-198` and the absence of any requirement discharging it.
+> **Status, 2026-09-02: CLOSED, and closed by requirement rather than by the ruling alone.** ESC-19 was
+> ruled **option 1 *and* half of option 2**: mint the disclosure, add a whole-store backup and restore,
+> and **refuse** the configurable store location. All three have landed. `REQ-SESSION-200` is the
+> disclosure and is substantial — it names what sits outside a workspace backup, names what *is* carried
+> so the statement is informative rather than alarming, names both remedies, requires reachability from
+> `REQ-SESSION-182`'s session-management surface, and forbids delivery only inside a failure message.
+> `REQ-SESSION-201` is the backup and restore, and it fixes far more than the ruling asked for: one
+> artifact covering the whole store plus `REQ-SESSION-002`'s per-session files and nothing outside it, a
+> user-chosen destination, validity **while runs are live**, a result that is "a state of the store that
+> a reader could have observed at one moment", an explicit restore that never merges silently and is
+> refused rather than half-done, and an artifact carrying the workspace identifier. `REQ-SESSION-182`
+> places both actions. The store's location is unchanged and ESC-19 states in terms that ADR-0058's
+> location decision does not reopen. **Constraint W-22 is relabelled MET; W-24 carries what the backup
+> now forces.**
+>
+> **What is left is not this escalation and must not be filed under it.** One thing the pair *creates*
+> is escalated separately below as **ESC-26**: `REQ-SESSION-201`'s restore and `REQ-SESSION-197`'s
+> absolute identifier rule together make the intended disaster-recovery use end in a manual file edit.
+> And the mechanism ADR-0058 built for it is entirely unmeasured — spike 22.
+
+**Where:** ADR-0058; constraint W-22, and now W-24. **Source:** `owner-decisions.md` SR-9(b), against
+`REQ-SESSION-198` and the absence of any requirement discharging it. **The options as they stood when
+this was raised are kept below, because a ruling is only legible beside them.**
 
 SR-9(b) ruled that a machine-local store changes what a backup protects and that **a requirement is
 minted** so the product states the property rather than letting a user infer it from an absence.
@@ -484,10 +530,30 @@ it cannot make the product tell anyone.
    ADR-0058's alternative N and makes the store's location a user setting, with a second set of failure
    modes (a location on a share re-creates ESC-15; a location that moves orphans a history).
 
-### ESC-20 — SR-9(a)'s two exports are not minted, and the argument reaches a third record the specification excludes *(new, 2026-09-01)*
+### ESC-20 — SR-9(a)'s two exports are not minted, and the argument reaches a third record the specification excludes *(raised 2026-09-01; **RULED 2026-09-01; the specification has since landed it in full**)*
 
-**Where:** ADR-0024, ADR-0058; constraint W-23. **Source:** SR-9(a) and SR-6, against
-`REQ-SESSION-199`, domain 14, and `REQ-TOOLS-190`.
+> **Status, 2026-09-02: CLOSED.** ESC-20 was ruled: mint SR-9(a)'s two exports, and **draw the boundary
+> on redaction safety rather than on readership**. `REQ-LIBRARY-176` and `REQ-TRACE-514` mint the two,
+> each applying `REQ-EVENTS-166`'s guarantee "on the same terms `REQ-SESSION-199` applies it to the
+> timeline, the issues record, the metrics document and the permission audit". The third case went the
+> way this entry could not predict: `REQ-TOOLS-190` **gains** an export, in its continuation paragraph,
+> and the readership sentence quoted below as the possible stopping point **has been deleted from the
+> requirement** and replaced by the test itself, which `REQ-TOOLS-190` now calls "the product's single
+> statement of that test" — *a record gains an export when it carries no unredacted user or tool content,
+> and does not gain one when it does.* The one case this entry said must never be swept in is protected
+> by the same requirement, in stronger terms than were asked for: `REQ-SESSION-136`'s tool-call evidence
+> "MUST NEVER gain an export — not under this rule, and not under any later widening of it", and a
+> future requirement proposing one "MUST be refused rather than reconciled". **Constraint W-23 is
+> relabelled MET.**
+>
+> **One residue, and it is disclosure rather than boundary.** `REQ-SESSION-201`'s backup carries the
+> tool-call evidence because it carries the store whole. The requirement states that itself and obliges
+> the product to convey it where the action is offered, so it is not a widening — but a reader who meets
+> it without that sentence will conclude the prohibition is porous, which is exactly the argument for
+> widening it. ADR-0024 and ADR-0058 both state the distinction rather than omitting it.
+
+**Where:** ADR-0024, ADR-0041, ADR-0058; constraint W-23. **Source:** SR-9(a) and SR-6, against
+`REQ-SESSION-199`, domain 14, and `REQ-TOOLS-190`. **The question as it stood is kept below.**
 
 SR-9(a) ruled improvement artifacts and delivery records into the export list "on the same terms as the
 four in SR-6". `REQ-SESSION-199` carries the four. **Neither of the two exists**: domain 14 contains no
@@ -506,10 +572,35 @@ deliberately holds **unredacted** arguments; the permission audit exports safely
 `REQ-TOOLS-079` gives an entry no argument values at all. That is the principled line between the two
 cases and it is stated in ADR-0024.
 
-### ESC-21 — the one lock with a cross-machine obligation is the one the product cannot enforce *(new, 2026-09-01)*
+### ESC-21 — the one lock with a cross-machine obligation is the one the product cannot enforce *(raised 2026-09-01; **RULED IN DIRECTION 2026-09-01; strength pending spike 19**)*
+
+> **Status, 2026-09-02: direction settled and carried by requirement; strength still owed to a
+> measurement that is running.** ESC-21 was ruled: **the product must not promise cross-machine mutual
+> exclusion it cannot enforce**, and the integration operation must detect the condition and refuse
+> rather than proceed under a lock that does not lock. There was no field precedent to borrow — every
+> harness surveyed is single-machine and the one with multi-device continuity uses a server this product
+> does not have and does not want — so this was reasoned rather than copied. The specification now
+> carries it: `REQ-GIT-128`'s second paragraph refuses the integration where the workspace is classified
+> as replicated and requires the lock **not be created at all**; `REQ-GIT-124` places that refusal in its
+> ordered list **ahead of** the lock check "because it is exactly the condition under which the lock the
+> next check reads does not mean what it says"; and `REQ-GIT-128` forbids domain 06 making the storage
+> determination again or raising a second notice — the classification is `REQ-STARTUP-166`'s and the
+> notice is `REQ-STARTUP-166`'s.
+>
+> **Two things are genuinely still open and one of them is not a measurement.** *(a)* **Strength.**
+> Spike 19 decides whether refusal or a proceed-past warning is right. ADR-0005 states that if the answer
+> is a warning, one refusal becomes a confirmation and its four mechanism rules are unaffected either
+> way. *(b)* **The residual the mechanism cannot reach, which no spike closes.** An unrecognised
+> synchronisation client classifies as *unknown*; `REQ-STARTUP-166` makes an inconclusive determination a
+> silent negative, "and a silent negative is the only safe answer to an unknown"; `REQ-GIT-128` carries
+> that forward in terms — a workspace the product could not classify does not refuse either. So the
+> refusal removes the **recognised** cases and no more, and the worst outcome in this record — two
+> machines merging into one base branch at once, silently — remains reachable through an unrecognised
+> client. ADR-0005 records this as an unclosed residual rather than hiding it, and the owner should see
+> it in the same breath as the ruling that produced it.
 
 **Where:** ADR-0005, ADR-0058; constraints C-01, W-20. **Source:** `REQ-GIT-128` against
-`REQ-STARTUP-166`.
+`REQ-STARTUP-166`. **The question as it stood is kept below.**
 
 `REQ-GIT-128` keeps the integration lock a **file** deliberately: what it protects is the base
 repository, which is the user's own material and travels with the workspace, so "a second machine
@@ -530,7 +621,13 @@ nothing connects the two. Options are: extend `REQ-STARTUP-166`'s determination 
 replicated storage; state the limitation in the requirement and accept it; or give the integration lock a
 second, non-filesystem interlock, which is a new mechanism.
 
-### ESC-22 — the aggregate terminal-frame rate is unbounded, and a conformance budget now depends on it *(new, 2026-09-01)*
+### ESC-22 — the aggregate terminal-frame rate is unbounded, and a conformance budget now depends on it *(new 2026-09-01; **STILL OPEN, re-checked 2026-09-02**)*
+
+> **Re-checked against the amended corpus and unchanged.** `REQ-TOOLS-108` still reads "default 20,
+> minimum 1" with **no maximum**, and `REQ-CONFIG-116` registers the key as `int ≥ 1, default 20`. The
+> amendment pass did not touch either. One of the two factors in a conformance budget is still
+> user-writable without a ceiling, and the three remedies below are unchanged. **Nothing about this is
+> architecture's alone.**
 
 **Where:** ADR-0021, ADR-0044; constraints T-42, X-19. **Source:**
 `spikes/ipc-hop-latency.md` §6 question 2 and §7.1, against `REQ-TOOLS-108` and `REQ-MONITOR-222`.
@@ -556,10 +653,29 @@ frames/s it rose 97.8× to 126.207 ms. Three remedies and none is architecture's
 collapse nothing was dropped and nothing was reordered — every one of 586,960 frames arrived, in order,
 `refused = 0` — so `REQ-MONITOR-226`'s gap counter never fires and the only symptom is a stale interface.
 
-### ESC-23 — `REQ-CONFIG-423` loses its antecedent under ESC-1 *(new, 2026-09-01)*
+### ESC-23 — `REQ-CONFIG-423` loses its antecedent under ESC-1 *(raised 2026-09-01; **ANSWERED BY AMENDMENT 2026-09-02, no ruling needed**)*
+
+> **Status: CLOSED, and closed in favour of the first of the two candidate rules named below.** Both
+> requirements have been amended. `REQ-CONFIG-288` no longer states the coupling in the present tense —
+> it now *takes* the decision ESC-1 ruled, in its own voice: "**The composer's permission-mode control
+> writes only its own key, and commits nothing else.** The decision this requirement previously handed
+> over is taken here rather than left open, and it is taken against the coupling", through
+> `REQ-CONFIG-441`'s scoped per-field writer, refusing outright where the target file cannot be read
+> (`REQ-CONFIG-442`), with every pending Settings edit staying pending and still undone by Discard. And
+> `REQ-CONFIG-423`'s antecedent is restored rather than deleted: a change to that field made while
+> Settings is open "**by any other surface — the composer's control, which writes that key alone
+> (`REQ-CONFIG-288`), or any other writer of it** — lands in that pending state". The dependence on the
+> shared save path is gone; the pending state tracks the field however it was written. `REQ-CONFIG-423`
+> additionally states why, which the entry below could not: "where a permission mode has been changed
+> elsewhere and applied to a live run, a settings screen that went on showing the user's unsaved choice
+> would be showing a mode no run is operating under."
+>
+> **ADR-0037 has not been swept against this and is stale in two places** — it says "The requirement has
+> not been amended, and this record must not pretend otherwise" and treats `REQ-CONFIG-423`'s second
+> sentence as having lost its antecedent. Reported under the ADR sweep rather than fixed here.
 
 **Where:** ADR-0037; constraint G-19. **Source:** ESC-1 as ruled, against `REQ-CONFIG-423` and
-`REQ-CONFIG-288`.
+`REQ-CONFIG-288`. **The question as it stood is kept below.**
 
 ESC-1 rules that the composer's permission-mode control writes only its own key, through
 `REQ-CONFIG-441`'s scoped per-field writer, and states that the decision "must not break
@@ -575,7 +691,21 @@ path. The difference is user-visible, in the same security-relevant control the 
 protect. *Related and separate:* `REQ-CONFIG-288` still states the coupling ESC-1 ruled against, in the
 present tense, so an implementer reading it alone would build the coupling the owner refused.
 
-### ESC-24 — a launch handed to an instance inside its force-exit allowance *(new, 2026-09-01)*
+### ESC-24 — a launch handed to an instance inside its force-exit allowance *(new 2026-09-01; **STILL OPEN, re-checked 2026-09-02**)*
+
+> **Re-checked against the amended corpus and unchanged in substance; one adjacent requirement now
+> bounds it partly, which is worth stating precisely rather than letting a reader think it closed it.**
+> `REQ-STARTUP-161` still releases the record "when that instance's process ends" and `REQ-STARTUP-162`
+> still requires the hand-over to surface a window — and to **build** one where none is open — while
+> writing nothing and reporting nothing. `REQ-STARTUP-164`(3) covers the case where the exiting instance
+> **does not answer**: the launch reclaims after 5 seconds and retries once. It does **not** cover the
+> case this escalation is about, which is the exiting instance **answering** the hand-over and being
+> obliged to build a window in a process about to force-exit. *A second, adjacent case did close by
+> amendment and should not be confused with this one:* `REQ-STARTUP-121`'s update restart now fixes the
+> hand-over in terms — the record "passes from the current instance to the successor rather than being
+> released for anyone to claim", and a launch arriving during it "SHALL be handed to whichever of the two
+> holds the record at that moment and SHALL never start a third process". ADR-0055 meets that by argument
+> rather than by construction and says so; see the gate verdict.
 
 **Where:** ADR-0014, ADR-0055; constraints P-16, R-17. **Source:** `REQ-STARTUP-161` to
 `REQ-STARTUP-164` against `REQ-MONITOR-131`.
@@ -590,9 +720,34 @@ Neither `REQ-MONITOR-131` nor `REQ-STARTUP-161` to `REQ-STARTUP-164` says which 
 answer is user-visible, and **SR-1 is what created the case**, so it belongs with the ruling rather than
 with the ADR.
 
-### ESC-25 — ESC-8's signature has no available placement, and rotation is a release commitment *(new, 2026-09-01)*
+### ESC-25 — ESC-8's signature has no available placement, and rotation is a release commitment *(raised 2026-09-01; **ANSWERED BY AMENDMENT 2026-09-02, and answered against this entry's own conclusion**)*
+
+> **Status: CLOSED. Both halves are settled, and the first is settled the opposite way to the one this
+> entry and ADR-0054 both argued for.** This entry concluded that a detached `SHA256SUMS.txt.sig` "is not
+> a thing this release may publish" and that the signature must therefore live *inside* the manifest.
+> **That is withdrawn.** The specification took the third option — amend the two requirements that
+> forbade it, individually. `REQ-STARTUP-032` now requires a release to publish, beside the manifest, "a
+> detached signature over the manifest's exact published bytes, named `SHA256SUMS.txt.sig`", and states
+> the reason the entry below missed: the manifest cannot carry a digest over a file derived from itself,
+> and a detached signature leaves the manifest's bytes identical for the update path and for
+> `sha256sum -c` alike. `REQ-STARTUP-152` excepts it from the naming-scheme agreement; `REQ-STARTUP-035`
+> excepts it from the one-row-per-asset rule. `REQ-STARTUP-122` fixes the order — fetch manifest **and**
+> signature, verify the signature, **then** parse the manifest, then stream, verify, apply — so untrusted
+> bytes reach no parser of ours.
+>
+> **Rotation is settled too, and settled as this entry said it must be — in the build, at the release
+> gate.** `REQ-STARTUP-167` fixes that every artifact carries the verification counterpart within itself,
+> that the accepted set is fixed when the build is produced, and that nothing at run time may add to,
+> replace or disable it. `REQ-STARTUP-168`(a) makes what a build carries **a set rather than a single
+> value**; (b) requires a release to be signed with a key carried by every artifact it may be offered to,
+> "decidable before publishing … and it SHALL be decided then rather than discovered afterwards", at
+> `REQ-STARTUP-156`'s release gate. That is the operational commitment this entry asked the owner to see
+> stated, and it is now stated. **ADR-0054 has been swept and carries the reversal**, with its superseded
+> argument preserved and the reason it failed named: its premise was a requirement, and the requirement
+> was amended.
 
 **Where:** ADR-0054. **Source:** ESC-8 as ruled, against `REQ-STARTUP-152` and `REQ-STARTUP-035`.
+**The question as it stood is kept below.**
 
 ESC-8 rules that the checksums manifest is signed with a key shipped in the application. Two consequences
 were not visible when it was ruled and neither is architecture's to settle.
@@ -610,16 +765,154 @@ with, so rotating strands every older client on "unverifiable" — invisible at 
 dual signatures across a window long enough to cover the versions in the field, which is an **operational
 commitment** the owner should see stated rather than an architecture detail.
 
+### ESC-26 — the identifier cannot be re-established by any product action, and that blocks the recovery path ESC-19 just minted *(raised 2026-09-02; **RULED 2026-09-01 and APPLIED 2026-09-02**)*
+
+> ***Ruled: option 2, drawn as narrowly as it can be drawn. `REQ-SESSION-197` gains one exception — a
+> restore MAY establish the workspace identifier on explicit user confirmation, and no other action ever
+> may.*** The ruling is in `owner-decisions.md`; the amendment has landed in `REQ-SESSION-197` (which
+> carries the whole exception) and `REQ-SESSION-201` (which carries a pointer, because a contract has
+> exactly one home). **Five conditions bind it and it is unavailable unless every one holds:** only inside
+> the restore action, with the requirement naming the paths that do *not* gain it — opening or preparing a
+> workspace, `REQ-SESSION-060`'s explicit repair, a migration, an update, a later convenience; explicit
+> confirmation naming **both** identifiers and stating that this workspace's own sessions become
+> unreachable from it, never automatic, never the default or pre-selected, with report-and-do-nothing kept
+> as a correct outcome; the **absent**-identifier case unchanged and explicitly *not* this exception; a
+> present-but-**unreadable** identifier still reported and never overwritten; and the displaced store
+> **moved aside and kept**, never deleted, with the confirmation saying where it went. ADR-0058 adds that
+> the operation is reversible by hand and says so in the confirmation, which is what makes a
+> one-way-looking action safe to confirm.
+>
+> **What it does NOT settle, stated because the shapes are similar enough to be confused.** A user who
+> **copies** a workspace folder and wants the copy to have an identity of its own still has no product
+> action — **OQ-47 stays open on that side**, and ADR-0058 says so explicitly rather than letting the
+> ruling read as covering it. **OQ-48 is more owed, not less**: the exception adds a third producer of
+> orphaned stores, and the reclamation surface is now the only route *back* to a store a user may well
+> want rather than only the route to clearing one they do not.
+>
+> *The reading question this entry flagged is answered by the amendment rather than by an ADR: the restore
+> may write the identifier, on the conditions above and on no others.*
+
+**The entry below is the statement of what was decided between, kept because a ruling is only legible
+beside the options it chose from.**
+
+**Where:** ADR-0058, ADR-0002; constraints W-19, W-24; OQ-47. **Source:** `REQ-SESSION-201` against
+`REQ-SESSION-197`. **This is the one thing the backup pass could not settle inside the architecture,
+because settling it means amending a requirement.**
+
+ESC-19 was ruled so that a user can carry their history to another machine. `REQ-SESSION-201` builds
+that: one artifact, the whole store, carrying "the workspace identifier it was taken from … so a backup
+cannot be poured into the wrong workspace by accident". But `REQ-SESSION-197` forbids the identifier
+changing "afterwards for any reason", forbids minting a replacement over one the product can read, and
+states no user-confirmed exception — for a good reason, which the same requirement gives: overwriting one
+"would silently orphan every session recorded under it".
+
+**Follow the intended journey and it ends in a text editor.** A user's machine dies. On the new machine
+they clone their repository — `.rotaris/` is kept out of version control by `REQ-CONFIG-013`, so no
+identifier arrives. They open the workspace once, which is the natural first thing to do, and the product
+mints a new identifier. *Then* they restore their backup. The artifact names identifier A; the open
+workspace reads identifier B; `REQ-SESSION-197` says the product may not touch B. The sessions restore
+into a store the open workspace will never resolve to, and the only remedy the product may offer is to
+close the workspace, replace the identifier file by hand, and reopen. **This is the same dead end OQ-47
+already records for a copied folder, reached from a second and much more likely direction** — and
+reaching one dead end twice, from two independent routes, is evidence rather than coincidence.
+
+Three options, and the architecture has taken the only part of the third that is unambiguously legal:
+
+1. **Leave it.** `REQ-SESSION-200`'s disclosure at least means nobody is surprised. The cost is a
+   recovery path people will get wrong, at the worst moment to get something wrong.
+2. **Grant `REQ-SESSION-197` one narrow exception**, available only during a restore, only behind an
+   explicit user confirmation that names what is being detached, and never automatic. This weakens the
+   protection ESC-19's own comparative evidence identifies as this record's single best decision — the
+   filed, painful, path-keyed history-loss bug three surveyed products have and this one does not — so it
+   should not be granted casually.
+3. **Allow a restore to establish an identifier only where the workspace has never been prepared.** This
+   fixes the *clone-then-restore-before-first-open* order and leaves the common order broken.
+
+ADR-0058 implements the part of (3) that no requirement forbids: where `.rotaris/` carries **no**
+identifier file at all, the restore establishes it from the artifact by exclusive create, arguing that
+nothing is replaced and the value established is the one the restored sessions were recorded under.
+It is guarded twice — a file that is present but unreadable is **not** this case, because
+`REQ-SESSION-197` requires that reported rather than overwritten, and the write is an exclusive create so
+a racing file wins. It refuses to invent the rest, and records the residue undressed.
+
+*One reading question rides on this and ADR-0058 flags it rather than burying it:* `REQ-SESSION-201`'s
+"It MUST NOT reach outside that store" sits in the backup paragraph, and the restore's obligations are
+stated separately in the same requirement with none of them forbidding an identifier write. ADR-0058
+takes the narrow reading. **If the owner reads it the other way, the legal case above collapses into the
+manual remedy and this escalation gets worse rather than better.**
+
+### ESC-27 to ESC-31 — five product decisions the defect-correction round raised rather than took *(raised 2026-09-02; **all five OPEN and none ruled**)*
+
+**These are not architecture's and were not architecture's to raise.** The defect-correction round of
+2026-09-02 corrected ten specification defects this record reported and, in five places, found that
+closing the defect required deciding something a user would see. It recorded the decision rather than
+taking it. **They are stated in full in
+[`../clean-room/specification-gate.md`](../clean-room/specification-gate.md), which is canonical for
+them; they are listed here so this register's count of open escalations is honest.** Only ESC-31 has an
+architecture consequence today.
+
+- **ESC-27 — `secrets.yaml` has no file mode.** `REQ-CONFIG-216` fixes the write as atomic and
+  directory-creating and states no mode, so the one configuration file that holds credentials by design
+  inherits the process mask. `0600` plus the explicit access-control list treats it by what it holds;
+  `0644` treats it by what it is, matching every other configuration file. Constraint **D-26** and
+  **OQ-14** are the same fact from two directions and neither closes without this ruling.
+- **ESC-28 — should the product do more than tell a user about a withdrawn configuration key?**
+  `REQ-CONFIG-478` fixes the honest minimum. Opening the offending file for editing from the failure
+  report, or a confirmed one-click removal, are further options; the second sits against the rule that the
+  product does not repair a user's configuration and would need that rule narrowed explicitly.
+- **ESC-29 — a withdrawn key in the *global* scope stops every workspace opening**, and no in-product
+  surface is reachable from that state, including the settings screen that would edit the global file.
+  Worth ruling with ESC-28.
+- **ESC-30 — a version missing because it was never recorded is not distinguishable from one retention
+  pruned.** This is **OQ-45**'s product half, escalated. `REQ-LIBRARY-047` makes recording a version
+  best-effort and outside the write's all-or-nothing boundary; `REQ-LIBRARY-052` now obliges the store to
+  say how many pruning dropped and `REQ-LIBRARY-176` forbids the export implying that figure accounts for
+  every absence. Whether the export must tell the two causes apart is the owner's, and a conformant export
+  can be built today under either ruling and widened later without rework.
+- **ESC-31 — where the permission-audit entry's identifier lives.** `REQ-EVENTS-056` fixes the locator's
+  form and its record-kind token; `REQ-TOOLS-079` is obliged to give an audit entry an identifier.
+  Whether that identifier is a further **field** of the entry or travels **beside** it is deliberately
+  left open, and the two are observably different in the exported audit file. **ADR-0024's choice that
+  the identifier is the export ordinal is permitted and unblessed until this is ruled**, and whichever is
+  chosen, `REQ-TOOLS-079`'s no-argument-values property must survive untouched: it is what makes the audit
+  exportable at all.
+
 ---
 
 ## Specification questions
 
 ### Resolved, and closed with the reason
 
-Four entries are answered. They keep their numbers and stay here because ADRs cite them, and each says
-what closed it, so a reader who finds the citation is not left guessing. **Nothing is listed here that
-the record did not actually settle** — three further questions the rulings expected to close did not, and
-they are still open below with their residues stated (OQ-12, OQ-19, OQ-41).
+Four entries are answered here, and a fifth — **OQ-28** — was resolved on 2026-09-02 and is closed in
+place among the ADR-specific entries below, because the argument that closed it is long and belongs
+beside the measurement it rests on. They keep their numbers and stay in the register because ADRs cite
+them, and each says what closed it, so a reader who finds the citation is not left guessing. **Nothing is
+listed as closed that the record did not actually settle** — three further questions the rulings expected
+to close did not, and they are still open below with their residues stated (OQ-12, OQ-19, OQ-41).
+
+***A sixth entry closed on 2026-09-02: OQ-49, closed by amendment rather than by argument.***
+`REQ-STARTUP-163` now owns what makes two directory strings the same directory — what is resolved, what is
+deliberately not reconciled, and the bounded cost of not reconciling it — with two additions ADR-0002 did
+not state: a trailing separator carries no meaning, and abbreviated alternate spellings the filesystem
+itself resolves are resolved. It states explicitly that it is **not** the definition of workspace identity,
+which is `REQ-SESSION-197`'s and is never derived from a path. **Constraint W-25 moves from a ruling to a
+requirement citation and ADR-0002 should now cite rather than decide.** The store side of the same hazard
+is *not* closed by that requirement and is now a rule of its own — see constraint **W-27** and the entry
+immediately below.
+
+***One question a spike raised is answered rather than filed, and it is recorded here in the closed form
+so the spike's own request for an entry is not silently ignored.*** `spikes/remote-and-synchronised-storage.md`
+section 11 item 14 asked: **where does a first-statement store failure after a successful open belong?**
+`REQ-EVENTS-084` governs "opening the store only"; `REQ-EVENTS-088` governs a write that fails *during* a
+run; the measured case — a store that opens cleanly, reports and reads back its journal mode, owns its
+shared-memory companion at the expected size, and throws on the very next statement — belonged to neither,
+**30 times out of 30 on a mapped network drive**. It is **minted and closed in the specification rather
+than left open here**: `REQ-EVENTS-179` requires the store to be *exercised* rather than merely opened,
+by a write made and then undone, before the run starts; it resolves its own failure into `REQ-EVENTS-084`
+and refuses on exactly that requirement's terms; `REQ-EVENTS-084` and `REQ-EVENTS-088` each gained the
+boundary sentence that routes to it; and `REQ-SESSION-089` gained the matching clause on the run-lifecycle
+side. **What is NOT closed and is listed under the spikes below is the cost of the probe itself**, which
+has not been measured on the startup path. Constraints **W-04**, **W-08** and **E-05** carry it.
 
 **OQ-3 — Is a second application instance on one workspace a supported configuration? *Resolved: no.***
 *(ADR-0011, ADR-0030.)* `REQ-STARTUP-161` fixes at most one instance per user account and makes every
@@ -742,9 +1035,35 @@ entry and `REQ-MCP-099` runs it with three setup subcommands. **Recommended read
 general pass-through and `REQ-MCP-033` describes what happens when the remaining arguments select the
 server. If answered the other way, one of the two requirements must change.
 
-**OQ-28 — What the two structural counts mean for a document-model interface.** ***De-blocked by ESC-13,
-measured, and still open as a definitional question.*** *(ADR-0045 — **no longer blocked**; ADR-0051
-consequence 3 depends on the answer.)*
+**OQ-28 — What the two structural counts mean for a document-model interface.** ***RESOLVED 2026-09-02 —
+the specification chose, and it chose reading 2 and then relaxed the requirement that reading breaks.***
+*(ADR-0045, ADR-0051 consequence 3.)*
+
+> **The live item this entry named — "the specification has not moved" — is discharged, and the sentence
+> that carried it must not be cited.** It read: "`REQ-UIBENCH-050` still supports both readings in one
+> paragraph and `REQ-UIBENCH-054` still states the invariant … while `resolutions/21` holds the drafted
+> relaxation back." Both halves are now false. `REQ-UIBENCH-050` states in bold that **"The counting rule
+> stated here is framework-neutral and is the operative one"**, spells reading 2 out — "a rendered
+> paragraph, code block or list item inside a transcript row is a `widget`, and an element whose box is
+> degenerate at the moment of counting is not" — and closes the escape route this entry identified as
+> reading 1: the framework clause "explains only why absolute numbers do not travel between revisions or
+> implementations; it does **not** license a product to count only the elements its own layout declares
+> and to leave out what it drew." And `REQ-UIBENCH-054` carries the relaxation, in ESC-13's own terms:
+> the element-count invariant is **withdrawn as unsatisfiable by any admissible implementation**, not
+> merely as unmet, because the only structure that could hold it is a canvas and a canvas forfeits
+> `REQ-CHAT-075`, `REQ-CHAT-077`, `REQ-CHAT-065` and `REQ-SHELL-144`.
+>
+> **The measurement is what makes this a resolution rather than a preference, and it is preserved below
+> rather than replaced by the conclusion.** Spike 1 established that the two readings diverge in a
+> running window in every run, at the `construct_window` → `apply_fixture` boundary, by +147 or +85, and
+> that under reading 2 the count is a property of where the reader is scrolled rather than of the
+> transcript. That is the fact the requirement was amended against.
+>
+> **The cost ESC-13 accepted is unchanged and is not softened by the closure**: under the operative
+> reading the product ships a benchmark whose headline structural invariant is gone, in a domain whose
+> whole point is determinism. `REQ-UIBENCH-088` makes it informational either way. ADR-0045 stands.
+
+*The question as it stood, and the two readings between which it could not choose, are kept below.*
 
 **Two things changed and neither is an answer.** *A ruling:* ESC-13 is decided — accessibility wins, the
 canvas is refused outright, and if the framework-neutral reading is the operative one then
@@ -883,7 +1202,28 @@ Windows.
 which the closure opened.
 
 **OQ-12 — Durability semantics are unstated. *Materially moved by measurement, still open — and the fact
-it partly rested on is false.*** *(ADR-0004.)* No requirement asks for a file-system sync.
+it partly rested on is false. A SECOND measurement on 2026-09-02 pulls the same way and RAISES the
+stakes.*** *(ADR-0004, ADR-0058.)*
+
+***Added 2026-09-02, and this entry is now larger than it was.*** Two things changed. **(a)** The
+directory-flush picture gained a second, apparently contradictory result:
+`spikes/remote-and-synchronised-storage.md` §8 found the call returning `EPERM` on **every** path spelling
+**including local NTFS**, where the writer-handle spike found it succeeding 200 of 200. The two are
+consistent and **the reconciliation is INFERRED rather than measured** — the second harness opened the
+directory the ordinary way, which is read-only, so the available call needs a handle deliberately opened
+for write. Both figures are kept rather than one being picked. What the pair adds is operational: **the
+naive call an implementer would reach for fails everywhere**, so "add the missing flush" produces an error
+rather than a guarantee, and no durability step may assume the containing directory is flushed. **(b) The
+power-loss half of this question is no longer only about a file replace — it is now the SOLE STATED GROUND
+for a durability decision in the store.** `spikes/commit-on-the-publish-path.md` §11.4 disproved the
+reason ADR-0058 gave for forcing the stronger synchronous setting on a terminal save (readability, which
+the weaker setting delivers across processes and bindings), and the decision was re-grounded on power-loss
+and operating-system-crash survival — the one property the weaker setting in write-ahead-log mode
+explicitly lacks. **Nothing measured anywhere says whether a committed log frame survives a power cut.**
+So the unnumbered power-loss measurement this register already owed now decides two things rather than
+one, and it is the only evidence that would keep an optimiser from dropping the forcing.
+
+*(ADR-0004.)* No requirement asks for a file-system sync.
 `REQ-LIBRARY-138` asks for one file to be "flushed to disk", the only durability verb in the corpus;
 every other crash-safety requirement is phrased as an **ordering** or as **the replace is atomic**.
 
@@ -1051,7 +1391,31 @@ fail-closed direction, but one that will surprise corporate users and **should b
 rather than a library default**.
 
 **OQ-39 — A presenter that is registered and never answers. *Premise stale on one side; the record's
-answer is strengthened; the window is still unanchored.*** *(ADR-0019; not blocking. Constraint T-41.)*
+answer is strengthened; the window is still unanchored. MEASURED 2026-09-02 AND EXPLICITLY NOT CLOSED.***
+*(ADR-0019; not blocking. Constraints T-41, T-31.)*
+
+***What spike 14 settled, and what it deliberately did not.*** `spikes/presenter-liveness-and-instance-claim.md`
+**settled the mechanism**: a gap-based poll detected all nine blocked runs at **+386 to +468 ms** on a
+500 ms threshold, with **zero false lapses in 258 s** of unblocked running and a maximum idle channel gap
+of 303 ms. It also settled three things this entry did not ask. **(1) The check must be gap-based, not
+reply-based** — while main was blocked the channel never closed, the process probed alive, every message
+was accepted, and when the block ended **all 84 outstanding replies arrived**, the last at 7,885 ms round
+trip, so a "did the reply arrive" check reports success eight seconds late and never fires. **(2) The
+exposure is not the approval dialog**, which cost the poll nothing at a 266–267 ms maximum gap; it is
+**every synchronous native dialog anywhere in the product**, during which no main-process JavaScript runs
+at all — 0 timers, 0 handled renderer messages, 0 replies to the run host, over 6,489 ms and 7,339 ms.
+That is now constraint **T-31**'s stated dependency and an application-wide prohibition in ADR-0019.
+**(3) No platform signal for an unresponsive main is usable from the run host** — the operating-system
+signals detect a busy loop and **never** a native modal, and reaching them from a Node utility process
+needs a native addon and was not measured.
+
+***What it did not settle is exactly the thing this question asks.*** **The window is still not sized.**
+The spike's main process paints one heading: no renderer framework, no transcript pipeline, no session
+writer, no workspace service, no version-control invocation. It does **not** reproduce the 22,777 ms of
+event-loop lag `spikes/ipc-hop-latency.md` measured under frame load, which is the state the window has to
+survive. **So the floor is narrower and it is still a floor.** ADR-0019's existing Revisit-if — that a
+window which cannot be set wide enough turns this into an escalation — **stays live**, and the measurement
+this entry needs is a liveness poll answered by a main process carrying product-shaped load.
 
 ***This entry's opening sentence is superseded and is kept only because ADR-0019 and constraint T-41 both
 quote the wording it describes.*** It states that `REQ-TOOLS-053` and `REQ-TOOLS-069` define attendedness
@@ -1165,12 +1529,29 @@ either failure **re-raised** and states no retry ladder. **Bounded contention is
 under which a bounded ladder becomes sufficient — the condition this question said did not hold — and the
 corpus now states no ladder anywhere (OQ-44).** ADR-0004 deliberately declines to invent the constants.
 
-*Two closures exist and neither belongs to the architect:* a runtime API exposing share-delete on open,
-or `REQ-TRACE-061` gaining a bounded ladder. `REQ-TRACE-502` should also be amended to say what
-"concurrent invocations" now means, since the only concurrency left is in-process work plus
-`REQ-TRACE-182`'s test session — and `REQ-TRACE-182` itself presupposes an invocable toolchain the
-product no longer has, which is its own amendment. C-11 records the narrowing and the residual conflict
-and does **not** report the property satisfied.
+***"What would close it" was wrong and is corrected, 2026-09-02.*** This entry named "a runtime API
+exposing share-delete on open" as one of two closures. **That remedy does not exist because the problem
+is not there.** `spikes/windows-writer-handle-compaction.md` §3.2 establishes the discriminator cleanly:
+`fs.unlinkSync` and .NET `File.Delete` both **succeed** against a Node-held handle and both **fail**
+against a .NET holder requesting only `FileShare.ReadWrite`, so the runtime's open **does** request
+share-delete. What fails is `fs.renameSync`, which returned `EPERM` on every distinct open flag the
+runtime exposes, and 20/20 even against a holder that explicitly permits delete. So the closer is a
+**replace primitive**, not a share flag: `ReplaceFileW` succeeded 6/6 against a Node-held handle with no
+torn or empty read, out of process at p50 767 ms and unmeasured in process. **The question is therefore
+"who owns a native replace primitive", not "is a share flag available"** — and it is available at a
+measured price rather than unavailable. ADR-0040 additionally declines to inherit the spike's own
+verdict across domains: the spike prices the 767 ms spawn out of a *compaction* path, correctly, but
+`REQ-TRACE-509` is a deliberate user action already spending about a second parsing the store under
+`REQ-TRACE-501` and replacing at most five small files, and a second on the failure path of a user-asked
+action is a different trade from a second on a per-event path. A reader may disagree; the reasoning is
+on the page rather than folded into the conclusion.
+
+*The other closure is unchanged:* `REQ-TRACE-061` gaining a bounded ladder. `REQ-TRACE-502` should also
+be amended to say what "concurrent invocations" now means, since the only concurrency left is in-process
+work plus `REQ-TRACE-182`'s test session — and `REQ-TRACE-182` itself presupposes an invocable toolchain
+the product no longer has, which is its own amendment. C-11 records the narrowing and the residual
+conflict, now **split into its two halves with their two owners**, and does **not** report the property
+satisfied.
 
 **OQ-42 — After a sticky mid-run store failure, may publication continue unanchored? *Narrowed on one
 side by the amendment; the remaining half is harder, not easier.*** *(ADR-0010 consequence 7, which cites
@@ -1207,8 +1588,20 @@ failure as a **session issue** and not only as `REQ-EVENTS-088`'s one warning �
 healthy transcript over a history that stopped being written. Until this is answered the record continues
 to publish and marks the surface **unanchored**, so the condition is visible rather than inferred.
 
-**OQ-43 — Does the single-instance gate admit a benchmark iteration?** *(ADR-0042, ADR-0053, ADR-0055;
-constraints P-16, P-17, W-14.)* `REQ-UIBENCH-037` to `REQ-UIBENCH-039` make a benchmark iteration a fresh
+**OQ-43 — Does the single-instance gate admit a benchmark iteration? *Unchanged in substance; the gate it
+asks about is now OURS rather than the platform's (2026-09-02).*** *(ADR-0042, ADR-0053, ADR-0055;
+constraints P-16, P-17, W-14.)*
+
+***What changed and what did not.*** ADR-0055's claim moved from the platform's single-instance primitive
+to our own record file, **on measurement** — the primitive blocked 20.0 s against `REQ-STARTUP-164`'s 5 s
+interval, performed no reclaim, and dropped the hand-over (constraint P-16). **That makes the sentinel
+branch entirely ours to define and the composition easier to state**, because the admission rule is now a
+line in our own claim rather than a behaviour of a component we do not control. **It does not touch the
+requirement-level ambiguity this question records**, which is the whole of the question: nothing in
+`REQ-UIBENCH-037` to `REQ-UIBENCH-039` or in `REQ-STARTUP-161` says how the two compose, and W-14's marker
+remains architecture-invented on a specification silence. ADR-0055 still cites this question for three
+cases — the bundled code-intelligence server, the benchmark iteration child, and the update-restart
+successor. `REQ-UIBENCH-037` to `REQ-UIBENCH-039` make a benchmark iteration a fresh
 child process **of the product's own program that the product itself starts**, with `XDG_CONFIG_HOME` and
 one benchmark-private variable redirected; `REQ-UIBENCH-046` makes it an acceptance criterion that the
 user's real stored settings hold the same bytes afterwards. `REQ-STARTUP-161` says a second launch is
@@ -1221,8 +1614,29 @@ flavour and deserves stating in the requirement rather than being inferred. **If
 gate admits no exception, `REQ-UIBENCH-046` is unimplementable and this becomes an escalation** between
 the benchmark's isolation and the one-instance rule.
 
-**OQ-44 — `REQ-TRACE-061` faces the one case a ladder is for, in the one domain that has none.** *(ADR-0004,
-ADR-0040; constraints D-25, C-11, D-06. Successor to OQ-11 and to OQ-41's residue.)*
+**OQ-44 — `REQ-TRACE-061` faces the one case a ladder is for, in the one domain that has none. *MEASURED
+2026-09-02: it changes character from "sufficient and unspecified" to "NECESSARY and unspecified", and it
+gains urgency rather than an answer.*** *(ADR-0004, ADR-0040; constraints D-25, C-11, D-06. Successor to
+OQ-11 and to OQ-41's residue.)*
+
+***The measurement, and why it changes what kind of question this is.*** This entry, and ADR-0004, and the
+writer-handle report all derive the ladder from **local reader contention** — a foreign handle held for a
+moment, rare, absorbed by belt and braces. `spikes/remote-and-synchronised-storage.md` §8 measured the same
+call on ordinary shared storage and found it failing at **6.2 % — 37 of 600 first attempts — WITH NO OTHER
+OPENER PRESENT AT ALL**, against **0 of 300** locally. So the ladder is not a defence against a rare case;
+on the storage this requirement's artifacts actually live on, **it is the normal path for roughly one
+document write in sixteen**, and its cause is not the one `REQ-SESSION-033` names. **The requirement's
+failure policy is *re-raised*, so today that is a user-initiated regeneration failing for a reason the
+user cannot act on, at that rate, on the platform the product mandates.**
+
+***The measurement fixes the shape of the answer without supplying its numbers*** — the existing ladder
+absorbed every failure, 29 of 30 on the second attempt and all 30 within two extra attempts, 0 of 600 gave
+up — so what is owed is a requirement, not a research question. **Two qualifications this entry must
+carry.** Every remote figure came from one client talking to a server on the same machine over loopback:
+no latency, no packet loss, no reconnection, and an unknown protocol dialect, so **6.2 % is a floor**. And
+the inversion is worth stating: the one target that **has** a ladder (`summary.md`) moved to machine-local
+storage under ESC-15 and no longer needs it for this reason, while the targets that have **none** are
+exactly the ones `REQ-SESSION-198` deliberately leaves on whatever storage the user chose.
 
 ***The premise this entry was filed on is false and is corrected here rather than deleted, because the
 question survives it.*** This entry asserted that "the corpus now states no Windows retry ladder
@@ -1246,7 +1660,38 @@ a user's editor or an antivirus scanner momentarily holding `docs/requirements/r
 can fail a regeneration the user asked for. **No neighbouring store's constants may be borrowed to
 pretend a ladder exists.**
 
-**OQ-45 — No ADR owns the improvement artifact store.** *(ADR-0003, ADR-0004, ADR-0041; ESC-3, ESC-18.)*
+***Widened 2026-09-02: the same gap now has a second site, and it is the one where a foreign handle is
+likeliest of anywhere in the product.*** `REQ-SESSION-189`'s trajectory export, `REQ-SESSION-199`'s four
+record exports, `REQ-LIBRARY-176`'s and `REQ-TRACE-514`'s new ones, and `REQ-EVENTS-145`'s trajectory
+document all write to **a destination the user chooses through the platform's save dialog** — which over
+an existing file is a whole-file replace in place, at a path the product does not own and may be on
+removable media, a network share or a synchronised folder. `REQ-SESSION-033` scopes its ladder to "where
+this domain replaces a whole file in place", names `summary.md` as "the one written **repeatedly**"
+rather than as the only one, and then closes by declaring itself "the only replacement ladder this domain
+states". **The text supports both readings and they differ in what a user observes** — a failed export
+against a held file, or a successful one a second later. `REQ-EVENTS-145` states no ladder for the
+trajectory document either. ADR-0004 consequence 9 records this as a specification question and does not
+choose. *Same gap, two sites, and the second one is on a user-initiated action rather than a background
+one.*
+
+***A third closure now exists that this entry did not carry.*** OQ-41's correction applies here too: a
+native replace primitive (`ReplaceFileW`, measured succeeding against a held reader) removes the need for
+a ladder on the traceability path entirely, at a cost that is measured out of process and unmeasured in
+process. That is a decision about who owns a native addon, not about constants.
+
+**OQ-45 — No ADR owns the improvement artifact store. *Its product half is now ESC-30 and is with the
+owner (2026-09-02); the storage half stays here.*** *(ADR-0003, ADR-0004, ADR-0041; ESC-3, ESC-18,
+ESC-30; constraint C-10.)*
+
+***What moved.*** `REQ-LIBRARY-052` now obliges the store to state how many versions pruning dropped and
+`REQ-LIBRARY-176` forbids the export implying that figure accounts for every absence — so the *falsehood*
+this entry produced is fixed. **What is not fixed and is not this register's to fix** is whether the
+export must distinguish a version absent because `REQ-LIBRARY-047`'s best-effort write never recorded it
+from one retention pruned: that is **ESC-30**, raised rather than taken, because bringing version
+recording inside the write's all-or-nothing boundary makes the audit trail complete at the cost of review
+actions failing in a workspace whose version store is unwritable. **The part that stays open here is the
+one nobody owns either way**: the write path that would maintain a count of versions *allocated* as
+against retained (constraint W-26). ADR-0041 takes the export and names the fix; no record owns the write.
 `REQ-LIBRARY-042`'s read-modify-write semantics, `REQ-LIBRARY-043`'s atomic-replace-with-retry contract,
 `REQ-LIBRARY-047`'s all-or-nothing artifact write with a best-effort history write, `REQ-LIBRARY-049`'s
 full-copy version files and `REQ-LIBRARY-052`'s intermediate-version pruning are described **only** inside
@@ -1267,6 +1712,29 @@ D-25, and OQ-11 as rewritten). **What remains unowned is one write**: `REQ-LIBRA
 artifact-history write, which is now a decision about whether that write stays outside the transaction —
 and if it does, what a user is told when the artifact lands and its history entry does not.
 
+***Narrowed again, and sharpened, 2026-09-02.*** *Narrowed:* ADR-0041 now takes the improvement store's
+**export** and only the export, because `REQ-LIBRARY-176` and `REQ-TRACE-514` were minted by one ruling
+over one guarantee and splitting them across two records would produce a second, divergent
+implementation of it by accident. That is stated as a scope note in ADR-0041's header rather than as an
+adoption of the store, and the **write path is still the orphan**. *Sharpened, and this is the part that
+makes the entry more owed rather than less:* ESC-18 removed ESC-3's ruling, so this entry can read as
+having decayed into nothing. It has not. `REQ-LIBRARY-047`'s best-effort version write was **untouched by
+that amendment**, and it now interacts with a requirement that did not exist when this question was
+filed. `REQ-LIBRARY-176` requires the export to state where retention "has dropped intermediate versions
+… and how many". Under `REQ-LIBRARY-047` a version can be absent because it was **never recorded** —
+"when the artifact is stored but its version cannot be, the save MUST still report success … and the
+failure MUST appear only in the application log" — and nothing in the corpus requires the store to retain
+enough to tell that apart from a `REQ-LIBRARY-052` prune. The two mean different things to a user: one is
+the product working as specified, the other is data they were told about only in a log.
+
+**The resolution is a choice between two things and both belong to whoever takes this store**: bring the
+version write inside the transaction, which `REQ-LIBRARY-047` currently forbids and which would make a
+failed version undo the review decision it recorded; or keep it outside and give the store a count of
+versions **allocated** as well as retained, so the export can distinguish the two causes. The second
+costs nothing if it is taken alongside ADR-0041's transitions-ever-recorded counter, which is the same
+shape of obligation for the same reason (constraints C-10, W-26). **Someone should own this store before
+it is discovered from a user's export.**
+
 **OQ-46 — The repair notice is specified in the singular and the failure it reports is plural.**
 *(ADR-0002, ADR-0055; constraint R-17.)* `REQ-SESSION-062` and `REQ-SHELL-155` specify a repair notice
 written for **one** stale session. ADR-0002 now accepts as a consequence rather than disputing that a
@@ -1279,8 +1747,21 @@ recorded in ADR-0002; what the user is shown is not. **This was hypothetical whi
 disputed and is reachable now that it is accepted.** It becomes an escalation only if the answer changes
 the notice vocabulary `REQ-NOTIFY-044` and `REQ-NOTIFY-048` to `REQ-NOTIFY-050` close.
 
-**OQ-47 — Two concurrently open workspaces presenting one identifier.** *(New, 2026-09-01. ADR-0058,
-ADR-0002; constraints W-19, W-01.)* `REQ-SESSION-197` fixes that a **copied** folder carries the
+**OQ-47 — Two concurrently open workspaces presenting one identifier. *NOT closed by ESC-26, and ADR-0058
+now says so explicitly (2026-09-02).*** *(ADR-0058, ADR-0002; constraints W-19, W-01, W-27.)*
+
+***Read this before assuming ESC-26 covered it.*** ESC-26 granted `REQ-SESSION-197` one exception and the
+amendment has landed — but it is **confined to `REQ-SESSION-201`'s restore action** and the requirement
+names, one by one, the paths that do *not* gain it. **A user who copies a workspace folder and wants the
+copy to have an identity of its own still has no product action**, so this entry's first two paragraphs —
+the concurrent two-copies-one-identifier behaviour, and the absence of any remedy for a copied folder or a
+corrupt identifier file — **stay open exactly as they were**. What ESC-26 removed is only the *other*
+route to the same dead end, the clone-then-restore recovery, which this entry's own text cited as evidence
+that reaching one dead end twice by two independent routes was significant. **One of the two routes is now
+closed and the other is not, which is a narrowing rather than a resolution.** *Related but distinct:* the
+**store**-side hazard of one identifier reached two ways is now constraint **W-27** and is a correctness
+rule with a measured, silent failure mode; this entry remains about the *workspace* side, where the hazard
+is a resume in one window starting an agent that writes into the folder the user does not have open. `REQ-SESSION-197` fixes that a **copied** folder carries the
 identifier unchanged, and that the product **MUST NOT** mint a replacement over an identifier it can read
 — so two folders on one machine necessarily resolve to one store. **No requirement says what happens when
 both are open at once.**
@@ -1306,13 +1787,44 @@ copied folder, and for a corrupt identifier file, is the user editing or deletin
 is no product action for either. None was invented, because the requirement is absolute; a reader should
 notice that the product's answer to a common user action is "go and edit this file".
 
-**And two records disagree about what identifies a workspace.** ADR-0002 keys the workspace service by
-**resolved path**; ADR-0058 keys the store claim by **identifier**. That is the minimum consistent
-arrangement and not a settled one, and it should be reconciled deliberately rather than by whichever ADR
-a reader opens first. Both records now carry a pointer to this entry.
+***That dead end is now reached by a second, independent route, and the coincidence is evidence
+(2026-09-02).*** `REQ-SESSION-201`'s restore hits it from the opposite direction: a user who clones their
+repository on a new machine, opens it once — which mints an identifier — and *then* restores their
+backup has an artifact naming one identifier and a workspace carrying another, and the product may not
+touch either. That is the common shape of disaster recovery, and its only remedy is the same hand edit.
+Two independent routes to one hand edit is a stronger case for a narrow, explicit, user-confirmed
+exception than either route alone. **It is escalated as ESC-26 and is not decided here.**
 
-**OQ-48 — Reclaiming a machine-local store whose workspace no longer exists.** *(New, 2026-09-01.
-ADR-0058; constraints W-17, W-22.)* `REQ-SESSION-166` deletes one session. ESC-15 moved every session's
+***The third paragraph of this entry is DISCHARGED, 2026-09-02, and is preserved as the mistake it was.***
+It read: "**And two records disagree about what identifies a workspace.** ADR-0002 keys the workspace
+service by **resolved path**; ADR-0058 keys the store claim by **identifier**. That is the minimum
+consistent arrangement and not a settled one." **The framing was wrong and must not be cited.** The two
+records key two *different objects*, and the specification fixes both keys separately and in terms —
+`REQ-STARTUP-041`(a), `REQ-STARTUP-163`, `REQ-STARTUP-047`/`048` and `REQ-STARTUP-166` all key the open
+workspace by its **resolved directory**, while `REQ-SESSION-001`, `REQ-SESSION-197`, `REQ-SESSION-198`
+and `REQ-LIBRARY-042` all key the durable store by the **identifier**, and `REQ-SESSION-001` composes
+both in one sentence. Neither collapse is available: keying the service by identifier gives one service
+two roots, and every job it does — configuration against one `.rotaris/`, Git in one checkout, worktrees
+under one root, `REQ-TRACE-073`'s scan over one repository, the delivery store against one set of
+requirement documents — is directory-scoped; keying the store by path is the field's filed, painful,
+most-complained-of defect (ESC-19's survey: one report of 63 sessions lost across 10 projects after a
+reorganisation, and even a change of a folder name's *case* orphaning everything). ADR-0002 holds the
+argument and constraint W-19 carries it. **The first two paragraphs of this entry are untouched and stay
+open.**
+
+**OQ-48 — Reclaiming a machine-local store whose workspace no longer exists. *MORE owed after ESC-26, and
+the surface changes purpose (2026-09-02).*** *(ADR-0058; constraints W-17, W-22, W-24.)*
+
+***ESC-26 adds a third producer and a third shape of leftover.*** A confirmed identifier establishment
+leaves the **old** identifier's store intact and merely unreferenced — that is one of the five conditions
+the exception is bound by, and it is what makes a one-way-looking operation safe to confirm. So there are
+now three sources of a store nothing points at: the corruption ladder displaces a damaged store and keeps
+it (W-17), a restore displaces the store it replaces and keeps it (W-24), and a confirmed establishment
+orphans the workspace's previous one. **The surface's purpose changes with it.** It was the route to
+*clearing* a store a user does not want; it is now also **the only route back to a store a user may well
+want**, because after a confirmed establishment the previous history is reachable by nothing else in the
+product. That makes "offer the exports first" a stronger obligation rather than a courtesy, and it makes
+the absence of the surface a larger gap than it was. `REQ-SESSION-166` deletes one session. ESC-15 moved every session's
 record out of the workspace. **Nothing addresses a whole store that nothing points at** after the user
 deletes the project, re-identifies it, or clones it fresh — a hole the ruling opened and the amendment
 pass did not close.
@@ -1330,6 +1842,45 @@ delete a user's history to punish them for the operation the design supports.
 `origin.txt` — which records last-seen paths for diagnostics and for exactly this listing — **must not**
 be consulted to resolve a store, so it cannot quietly become an identity mechanism. Ratify the behaviour,
 or state that an orphaned store is never reclaimed and the disk cost is accepted.
+
+***Unchanged in substance and MORE owed, 2026-09-02.*** The surface still does not exist, and ESC-19 has
+added a second and a third source of stores nothing points at: **a restore displaces the store it
+replaces** and keeps it under a UTC-timestamped name rather than deleting it (constraint W-24), and the
+corruption ladder displaces a damaged one (W-17). Both are deliberate and both are right — the user is
+mid-recovery in each case and a deleted store is history that existed nowhere else. But it means **the
+two operations a user in trouble is most likely to reach for are the two that produce leftovers only this
+surface can clear**, and it is the one surface the record assumes and nothing owns.
+
+**OQ-49 — What makes two directory strings the same directory. *RESOLVED 2026-09-02 by amendment.***
+*(ADR-0002; constraint W-25, and now constraint W-27 for the store side.)* `REQ-STARTUP-163` **now owns
+this**: what is resolved, what is deliberately not reconciled, and the bounded cost of not reconciling it,
+plus two additions ADR-0002 did not state — a trailing separator carries no meaning, and abbreviated
+alternate spellings the filesystem itself resolves are resolved. It states in terms that it is **not** the
+definition of workspace identity, which is `REQ-SESSION-197`'s and is never derived from a path.
+**ADR-0002 should now cite rather than decide, and W-25 moves from a ruling to a requirement citation.**
+***One thing this closure does NOT cover, and a reader will assume it does.*** The requirement settles
+which *window* a launch reaches. It says nothing about the **store**, where the same hazard is a
+correctness failure rather than a usability one: two spellings of one store path were measured losing up
+to 95 % of committed rows with both writers reporting success and a clean integrity check. That is
+constraint **W-27** — one store, one canonical spelling, resolved once — and it is architecture's, not the
+specification's. The original entry follows. `REQ-STARTUP-163` decides window reuse on whether "a main window of that instance already has
+that directory open" and `REQ-STARTUP-041`(a) requires the directory "resolved and persisted as the
+remembered workspace". **Neither fixes what makes two directory strings the same directory.** Symlinks,
+junctions, filesystem case sensitivity and UNC against mapped-drive spellings all bear on it, and the
+answer is user-visible: it decides whether a launch surfaces the window the user already has or builds a
+second one on the same folder.
+
+**ADR-0002 has decided it, because the workspace service needed a key**, and the decision is filed here
+rather than presented as settled. Absolute and normalised; symlinks and junctions resolved to the real
+path; compared case-insensitively where the filesystem is; and **not** reconciled across UNC against
+mapped-drive spellings, because there is no reliable cross-platform way to do that and a wrong answer
+merges two workspaces silently — which is a worse failure than declining to merge them.
+
+**This is low-stakes and is filed anyway, and the reason is the shape rather than the size.** Where two
+spellings fail to canonicalise the outcome is bounded: two workspace services, one identifier, and
+ADR-0058's per-instance claim gives the store to the first, which is W-19's stated behaviour rather than
+a new one. But it is user-observable behaviour invented on a specification silence, which is exactly the
+class this register exists to keep visible, and a requirement would supersede it at no cost.
 
 ---
 
@@ -1370,24 +1921,74 @@ that changes if it fails.
 
 **Numbers are stable and are never reused.** ADRs cite spikes by number, so a spike that is withdrawn
 keeps its number as a tombstone (spike 9) and a spike whose subject changed keeps its number with new
-content (spikes 8 and 19), exactly as constraint D-28 is handled. **Twenty-one numbered, one withdrawn,
-two discharged and one discharged for Windows only — seventeen outstanding.**
+content (spikes 8 and 19), exactly as constraint D-28 is handled. **Twenty-two numbered, one withdrawn,
+seven discharged and one discharged for Windows only — thirteen outstanding.**
+
+### What is outstanding is not one kind of thing, and the gate depends on the difference
+
+A list of thirteen outstanding measurements reads as thirteen equal debts. It is not. As of the
+measurement round of 2026-09-02 the outstanding spikes fall into four groups, and the last two are the
+ones that bear on the gate.
+
+**(a) Genuinely not started, and owed by this record.** Spikes 2 to 8, 11, 13, 15 and 18. Nine of the
+thirteen. None of them blocks a decision that has already been taken; each of them prices one that has.
+**Two of these grew in the measurement round.** Spike 8 now also owes the cost of `REQ-EVENTS-179`'s write
+probe on the startup path, and the store's behaviour against a **real schema** — every measurement so far
+used three tables with two primary keys and one listing index, and every additional index on the transcript
+table adds write-ahead-log frames per insert and therefore moves **both** the commit cost and the checkpoint
+period. Spike 18 now also owes **two run hosts** contending, which `REQ-TOOLS-089` and `REQ-SANDBOX-038`
+permit and which spike 21 did not measure: only run-host-against-workspace-service was.
+
+**(b) Cannot be run on this machine at all, and no amount of care here changes that.** **Spike 12** (the
+Linux image's runtime on an unmodified baseline installation) needs a Linux machine that has never had
+the legacy FUSE library installed. **Spike 17's two remaining platform keys** need a macOS machine and a
+Linux machine of their own keys, because `REQ-STARTUP-155` binds all four artifacts and
+`packaged-first-paint.md` built only the Windows two. **ADR-0056's build-time load proof** (below, an
+unnumbered sibling obligation) must run on all three release runners. These are **build-host**
+obligations, not architecture ones: they need infrastructure, they will not be closed by anyone reasoning
+harder, and stating them as merely "outstanding" understates what it takes to clear them. ESC-11's choice
+between its options turns on spike 12 and will stay open until a Linux host exists. ***One of these grew
+materially on 2026-09-02***: ADR-0055's instance claim moved off the platform primitive on measurement, so
+the claim, the hand-over endpoint and the stale-record protocol are now **ours on three platforms and
+measured on one**. The verification is relocated rather than discharged, and `REQ-STARTUP-156`'s release
+gate does **not** require launching the entry point twice on one user account — which is
+`REQ-STARTUP-152`'s release-checkable form of SR-1, and the check that would catch a failure there.
+
+**(c) An architecture-side gate item that has never been run in its load-bearing half.** **Spike 22**,
+`REQ-SESSION-201`'s backup and restore. Its **backup** half is now measured and the choice is vindicated;
+its **restore** half has not been executed in any part. It is the one item on which this register's verdict
+would be optimistic if it were folded into any other group.
+
+**(d) Sub-cases left unmeasured inside spikes that otherwise passed, listed rather than absorbed.** Two,
+and they are listed separately because a sub-case folded into a discharged spike is a gap nobody can see
+afterwards. **`REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice**, not attempted
+by spike 20 — it is the only part of that requirement left untouched, ADR-0054 wrote it from scratch on
+2026-09-02 against the amended text, and its failure mode is a **missing warning**, which is the outcome
+the clause exists to prevent. And **ESC-21's second premise** — whether two machines on one synchronised
+folder can each succeed at exclusive create on the same lock name — which spike 19 stated precisely,
+called one afternoon's work, and refused to fake.
 
 ### What has been measured, and what each report did not settle
 
-Four reports exist, in [`spikes/`](spikes/), all dated 2026-09-01. **They are the first real evidence
-this record has ever had, and several of them overturned something it asserted.** Where they did, the
-overturned claim is preserved beside its replacement in the ADR that carried it, and the entries above
-say which.
+Eight reports exist, in [`spikes/`](spikes/) — seven for live spikes and one for a withdrawn one — four
+dated 2026-09-01 and four dated 2026-09-02. **They are the only real evidence this record has, and several
+of them overturned something it asserted.** Where they did, the overturned claim is preserved beside its
+replacement in the ADR that carried it, and the entries above say which. **In the second four, what was
+overturned was more often a *reason* than a *conclusion*: every owner ruling survived, three platform facts
+this record asserted were disproved, and one ADR's own stated gate trigger fired.**
 
 | Report | Spike | Discharged | Explicitly **not** settled |
 |---|---|---|---|
 | `ipc-hop-latency.md` | **10 — discharged** | ADR-0002's double-hop Revisit-if; ADR-0044's structured-clone trigger and its channel-isolation claim; `REQ-MONITOR-222` (p95 1.133 / 1.291 ms vs 250 ms), `REQ-MONITOR-223` (ratio 1.14 vs 2), `REQ-ORCH-155` (p95 5.951 ms vs 100 ms as SR-8 reads it) | **the commit `REQ-MONITOR-221` requires before publication**, which the report states is outside its interval, so every figure is a lower bound; fan-out to several windows; concurrent runs; the reconcile path (`refused = 0` everywhere); a real renderer |
 | `packaged-first-paint.md` | **17 — discharged for Windows only** | that the `onefile` portable fails `REQ-STARTUP-155` at 13,287–19,580 ms across four bundle weights **including a zero-payload build**, with no packaging setting closing the gap; that bundle weight is close to free (~10 ms across 327 MB) on the flavours that pass. **It triggered SR-7** | the macOS `.dmg` and the Linux AppImage — **neither was built**, and `REQ-STARTUP-155` binds both; the harness "contains no product" — no persistence, no native module, nothing ADR-0055 puts before first paint |
 | `renderer-invariance-and-benchmark-cadence.md` | **1 — discharged** | both counting rules against a running window (OQ-28); the tail-phase memory tripwire; that the reachable viewport is not knowable at construction (OQ-40); that ADR-0053's paint settle does not work and that `invalidate()` is worse than the timeout | whether a rAF settle and a paint settle measure the **same interval** where both resolve; the real component rather than a mock shell — the element counts and timings are stated as a **floor** |
-| `windows-writer-handle-compaction.md` | **9 — withdrawn** | historically: that deleted rule 3 was right (0 of 115 trims, no observable symptom, ~73× throughput collapse), and **three corrections that outlive its subject** — what actually blocks a replace, that share-delete *is* requested, and that a directory `fsync` works on a write-opened handle | whether a replace survives a **power cut**, on any platform. The report declined to claim the guarantee from a success return |
+| `windows-writer-handle-compaction.md` | **9 — withdrawn** | historically: that deleted rule 3 was right (0 of 115 trims, no observable symptom, ~73× throughput collapse), and **three corrections that outlive its subject** — what actually blocks a replace, that share-delete *is* requested, and that a directory `fsync` works on a write-opened handle | whether a replace survives a **power cut**, on any platform. The report declined to claim the guarantee from a success return. **And its directory-`fsync` figure is qualified by spike 19**, which found the same call failing on every spelling including local; the reconciliation is handle mode and is *inferred* (OQ-12) |
+| `commit-on-the-publish-path.md` | **21 — discharged** | ADR-0058's own open item on the commit; `REQ-MONITOR-221` (0.396 ms p50 / 0.700 ms p95, work not a wait), `REQ-MONITOR-222` (p95 1.774 / 1.723 ms vs 250 ms), `REQ-MONITOR-223` (ratio 0.971 vs 2), `REQ-ORCH-155` on both readings, `REQ-EVENTS-029` (marginal cost −4 to +31 µs), `REQ-SESSION-067`/`-068`/`-072`; that the checkpoint period is arithmetic (7.44 frames per commit → every 135–136 commits at 9–11 ms p50); **that `REQ-SESSION-070`'s readability clause does not need the stronger durability setting**; that ADR-0002, ADR-0008 and ADR-0010 are not reopened | **a real schema with declared indexes** (spike 8); **two run hosts** contending (spike 18); **any failure path at all** — no torn write, no corruption, no disk-full, no read-only volume; packaging, so the native module's asar-unpacking obligation is untested; **power loss**, which is now the sole ground for forcing the stronger setting; macOS and Linux; the trim's own latency and the ring displacement's own cost |
+| `remote-and-synchronised-storage.md` | **19 — discharged on its own question; it could NOT decide ESC-21's strength and says so** | ESC-15 supported on stronger evidence **and its stated mechanism disproved in two of three links**; ADR-0058's journal read-back as necessary-but-**insufficient**; that a naive copy of a live store is not a backup (625/627 unopenable) and the engine snapshot is (8/8, median 1,077 ms per 41 MB); ESC-21 premise 1 (2,500 races, one winner in 2,500); `REQ-STARTUP-166`'s classification as implementable, precise and cheap; `REQ-GIT-124`'s ordering confirmed | **ESC-21 premise 2 — no second machine, and it declined to fake one**; no synchronisation client was written to; **no Electron**, host Node with a prebuilt binding; one store-engine version, one binding; loopback rather than a network, so the 12 ms rename and the 6.2 % failure rate are **floors**; exclusive create against a dehydrated cloud placeholder; no power loss |
+| `cached-portable-launch.md` | **20 — discharged; SR-7's gate condition met** | the cached-launch figure (575.5–723.1 ms warm, 897.3–1,414.6 ms cold vs 5,000 ms); the fast-path check (0.14–0.49 ms, against 709.6–845.0 ms for the cheapest digest it rejects); cache invalidation across an update (**did not fail**); that `REQ-STARTUP-125` is **rescued** rather than merely preserved by SR-7; **two defects in ADR-0054's own mechanism** — the commit could not commit, and the completeness check returned a hit on a preparation that produced no window | **clause (c)'s "no usable preparation at all" branch and its notice — not attempted**; clause (d) independently verified (no network capture, no privilege trace); a real read-only volume rather than an access-control approximation; the commit's durability discipline, so a power loss could leave a torn tree behind a valid marker; a real download with the platform's reputation check; a larger bundle or fewer cores |
+| `presenter-liveness-and-instance-claim.md` | **14 and 16 — 16 discharged and ADR-0055's own rule FIRED; 14 measured and OQ-39 NOT closed** | that the liveness poll works and **must be gap-based**; that the exposure is every **synchronous native dialog** and not the approval dialog; that the run host dies with main in 207–341 ms and never sees the channel close; that no platform signal for an unresponsive main is usable from a utility process; that the platform single-instance primitive **fails** `REQ-STARTUP-164` on Windows (20.0 s, no reclaim, no window) | **macOS and Linux — zero coverage, on both sides of the decision, and this is the largest single gap**; the decision path (no gate, no pending-approval map, no headless policy), so *never a silent allow* is **unexercised**; **sizing the lapse window under product-shaped load**; whether every native dialog has a non-blocking form on every platform; packaged builds; the cross-platform hand-over endpoint, which has **no measurement anywhere behind it** |
 
-**A note a reader should not have to work out.** Two of those four measured a design that no longer
+**A note a reader should not have to work out.** Two of the eight measured a design that no longer
 exists — the file-based journal and compaction that SR-4 removed, and the packaging target SR-7 replaced.
 Neither is therefore wasted: what generalises from the writer-handle report is a **diagnosis** (an
 append-and-compact file whose writer holds it open is a silent cap-enforcement failure) and three factual
@@ -1396,9 +1997,23 @@ bundle weight, was the cost. Both are cited above and in constraints D-27, D-28 
 
 ### What is new
 
-**Spike 20 and spike 21 are new. Spike 20 is required before the gate by SR-7's own words; spike 21 is
-required because the whole persist-before-publish design now rests on a number nobody has taken.**
-Spike 19's question changed with ESC-15 and it keeps its number.
+**Spikes 20 and 21 have been run and are discharged; spike 22 has not been run at all and is now the only
+new one still owed.** Spike 20 was required before the gate by SR-7's own words and its condition is met.
+Spike 21 was required because the whole persist-before-publish design rested on a number nobody had taken,
+and that number exists. **Spike 22 is required because `REQ-SESSION-201`'s backup and restore is the
+largest mechanism the record has ever added on one pass, and its restore half is still unexecuted** —
+the backup half is now measured, which sharpens rather than softens the case, because the measurement
+found that the obvious cheap version of the experiment returns a false all-clear. Spike 19's question
+changed with ESC-15 and it keeps its number.
+
+**Two measurements are owed and are deliberately not numbered.** A **power-loss test**, which is now
+larger than it was: it is OQ-12's outstanding half, and since 2026-09-02 it is also the **sole stated
+ground** for forcing the stronger durability setting on a terminal save, because the readability clause
+that used to carry that decision was tested and does not need it. And a **rebuilt-for-Electron
+confirmation run of the storage measurements**: spike 19 ran host Node with a prebuilt binding, spike 21
+rebuilt against the Electron runtime but measured different questions, and neither exercised the store
+under a packaged build — so the first-statement failure `REQ-EVENTS-179` now governs was measured on one
+binding on one machine.
 
 1. ***Discharged 2026-09-01 — `spikes/renderer-invariance-and-benchmark-cadence.md`.*** Element-count
    invariance of a fixed slot-pool recycler through the benchmark's seven phases, under *both* counting
@@ -1465,8 +2080,11 @@ Spike 19's question changed with ESC-15 and it keeps its number.
    table: `events.jsonl` (`REQ-EVENTS-091`), `permissions.jsonl` (`REQ-TOOLS-078`), the verification-gate
    log (`REQ-TOOLS-190`) and the ring-capped evidence files (`REQ-SESSION-133`). The concurrent-follower
    half went earlier, with SR-2. Checked rather than assumed: the only file still opened in append mode
-   anywhere in the product is `evidence/debug.log` (`REQ-SESSION-142`), and nothing compacts it — **so no
-   file in the product is now replaced by rename over a handle its own writer holds.** The number is
+   anywhere in the product is **the session's log** (`REQ-SESSION-142`), and nothing compacts it — **so no
+   file in the product is now replaced by rename over a handle its own writer holds.** *(Path corrected
+   2026-09-02: this named `evidence/debug.log`, which is withdrawn with the session-directory layout
+   domain 18 carried; `REQ-SESSION-002` fixes three kinds of per-session file and no filenames. The fact
+   is unchanged — only the name was wrong.)* The number is
    retained because ADR-0004, ADR-0009 and ADR-0024 all cited it; it is not to be reused.
 
    ***It was nevertheless measured, after it was withdrawn, and the report is
@@ -1526,7 +2144,19 @@ Spike 19's question changed with ESC-15 and it keeps its number.
     session-store counters under the run host's actual write rate, to confirm that a counter incremented
     inside every insert transaction is genuinely free when diagnostics is off (`REQ-STARTUP-129`,
     `REQ-STARTUP-130`). It shares a harness with spike 1, so the marginal cost is small.
-14. **A presenter liveness lapse window that survives ordinary main-process load.** *(ADR-0019, OQ-39,
+14. ***Measured 2026-09-02 — `spikes/presenter-liveness-and-instance-claim.md`. The mechanism is
+    discharged; the window this spike exists to size is NOT, and OQ-39 stays open.*** The poll detected
+    all nine blocked runs at **+386 to +468 ms** on a 500 ms threshold with **zero false lapses in 258 s**
+    of unblocked running. Three findings it was not asked for and which are now in ADR-0019 and constraint
+    T-31: the check **must be gap-based**, because a blocked main queues rather than drops and all 84
+    outstanding replies arrived when the block ended, the last at **7,885 ms**; the exposure is **every
+    synchronous native dialog**, not the approval dialog, which cost the poll nothing at a 266–267 ms
+    maximum gap; and **no platform signal for an unresponsive main is usable from the run host**, the
+    operating-system signals detecting a busy loop and never a native modal. **It also falsified an
+    ADR-0019 mechanism**: the run host dies with main in **207–341 ms** and never observes the channel
+    close, so the channel-close revocation is not what operates. **Why the window is still unsized is
+    stated in the *Not discharged* paragraph below and has not changed.**
+    **A presenter liveness lapse window that survives ordinary main-process load.** *(ADR-0019, OQ-39,
     constraint T-41.)* Measure the worst-case latency of a liveness poll answered by the desktop main
     process while it does the heaviest ordinary work it does — a large transcript render, a
     garbage-collection pause, a settings flush, a native dialog on the platform where one blocks — and
@@ -1545,7 +2175,28 @@ Spike 19's question changed with ESC-15 and it keeps its number.
     ceiling-plus-flush reading actually lands inside `REQ-SHELL-150`'s 100 ms budget rather than merely
     removing the sampling term from the sum. If the two hops and the paint consume the budget on their
     own, the flush is necessary but not sufficient and OQ-38 becomes an escalation about the figures.
-16. **The single-instance record's probe and reclaim, on all three platform keys.** *(ADR-0055, which
+16. ***Discharged for Windows 2026-09-02 — `spikes/presenter-liveness-and-instance-claim.md` — AND THE
+    STATED RULE FIRED. Observation 2 does not hold: the platform primitive is refused and the claim is
+    ours on every platform.*** Against a primary running but not pumping messages,
+    `app.requestSingleInstanceLock()` blocked **20,004.6 / 20,010.9 ms** against a 5-second interval,
+    returned false, performed **no reclaim and no retry**, and the hand-over never reached the primary —
+    not even in the 25 s after it recovered, so it was **dropped rather than queued** — and the launch
+    ended with **no window on screen**. It cannot be wrapped: the call is synchronous on the launching
+    process's own main thread and takes no timeout. **Observations 1 and 3 passed and are carried forward
+    as measured obligations on the replacement** — first-attempt reclaim at **+187 ms** after a force-kill
+    with the window shown at +345/+373 ms and the release bracketed to a 67–69 ms window, and 69 probes
+    with no observable effect — as is declared-field delivery, because `argv` really was mangled. The
+    JS-blocked-but-pumping sub-case passed at 4.07/4.82 ms, and it passed in a way the record would not
+    have chosen: the hand-over callback ran inside the dialog's nested message pump while the primary's own
+    timers were dead, so a hand-over can be delivered into a process that is otherwise entirely stopped.
+    ***Two thirds of the obligation is now UNMET RATHER THAN INHERITED, and this is the part that grew.***
+    macOS and Linux were not measurable on this host, and adopting our own record **relocates** the
+    verification rather than discharging it: a hand-over endpoint and a stale-record protocol we write
+    ourselves must be verified on both, and on macOS must additionally compose with the convention that a
+    second launch of a bundle produces no second process. **The cross-platform endpoint is the piece with
+    no measurement anywhere behind it**, it sits on the critical path of every launch, and its failure mode
+    is the same one that failed under the primitive — a launch that ends with no window.
+    **The single-instance record's probe and reclaim, on all three platform keys.** *(ADR-0055, which
     records this as a verification obligation and names it a spike; constraint P-16; `REQ-STARTUP-164`,
     `REQ-STARTUP-030`.)* `REQ-STARTUP-164` fixes a 5-second hand-over interval, **at most one** reclaim,
     two claim attempts, no spin, no side effect on the probed process, and nothing written but the record.
@@ -1589,9 +2240,32 @@ Spike 19's question changed with ESC-15 and it keeps its number.
     store per workspace, so taking alternative G would need the ruling revisited, which is why the number
     matters before implementation rather than after. **Run this with spike 21**, which needs the same
     harness and the same contending writer, and whose figure is meaningless without this one's.
-19. **What ELSE the product writes into `.rotaris/` on synchronised storage.** *(Same number, **new
+19. ***Discharged on its own question 2026-09-02 — `spikes/remote-and-synchronised-storage.md`. It could
+    NOT decide ESC-21's strength, and it said so rather than inventing a result.*** **What it settled:**
+    exclusive create is a genuine primitive over a network share — 2,500 races across five pairings
+    including two that mix I/O stacks, **exactly one winner in 2,500, more than one in 0, none in 0**; the
+    atomic document primitive holds on a share **only with the retry ladder**, 6.2 % of first attempts
+    failing with no other opener present (OQ-44); `REQ-STARTUP-166`'s direct classification is real,
+    precise and cheap, correct at every depth inside a live third-party sync root and correctly negative
+    one level above it, p50 0.10–1.83 ms; and `REQ-GIT-124`'s ordering of the storage check ahead of the
+    lock check is confirmed by measurement, both halves independently. **What it disproved:** ESC-15's
+    stated mechanism, in two of its three links (constraint W-04) — the conclusion survives on three worse
+    measured failures. **What it exposed:** the `REQ-EVENTS-084`/`REQ-EVENTS-088` gap, now closed by
+    `REQ-EVENTS-179`; and a same-machine two-spellings hazard now carried as constraint W-27.
+    ***What it could not do, and this is the part that stays owed:*** ESC-21's **second** premise needs a
+    second machine and a synchronisation account. The report states the closing experiment precisely — two
+    machines, one synced folder, an exclusive-create race against the same lock name with a wall-clock
+    barrier — and calls it one afternoon's work; **the single number that matters is races in which both
+    machines' exclusive create returned success.** Until it is taken, the refusal-versus-warning strength
+    of ESC-21 rests on reasoning rather than on measurement. **Also unmeasured and worth naming:** the
+    classification's blind spot is any client that registers no platform sync root, and the most widely
+    deployed such client was present on the measuring machine and registered **none**; exclusive create
+    against a **dehydrated cloud placeholder** was not exercised; and the replace path was tested against
+    only one of the four destinations ADR-0004 names — the spike declined to write into the machine's live
+    sync roots because they hold the user's own material, which was the right call.
+    **What ELSE the product writes into `.rotaris/` on synchronised storage.** *(Same number, **new
     question**, changed by ESC-15 exactly as that ruling said it would be. ADR-0058, ADR-0005;
-    constraints D-29, W-20, B-24; ESC-21.)*
+    constraints D-29, W-20, W-04, W-27, B-24; ESC-21.)*
 
     **The old question is answered by a requirement and is withdrawn.** It asked which of three things
     happens to a store on a share or in a sync folder. `REQ-SESSION-198` puts the store on the machine's
@@ -1609,7 +2283,39 @@ Spike 19's question changed with ESC-15 and it keeps its number.
     is two machines merging into one base branch at once, silently. A cloud-sync folder is a **local**
     filesystem with a daemon on top and must be measured separately from a true network share rather than
     assumed to share the verdict. **ESC-21 turns on this.**
-20. **The prepared portable's steady-state launch. *New. `owner-decisions.md` SR-7 names this as required
+20. ***Discharged 2026-09-02 — `spikes/cached-portable-launch.md`. SR-7's gate condition is met and the
+    remaining options SR-7 held in reserve are not needed.*** **The three figures it was raised for.**
+    Cached first paint **575.5–624.2 ms warm and 897.3–1,242.5 ms cold** (n = 6 each), replicated
+    independently at 581.3–723.1 / 964.0–1,414.6 ms, against 5,000 ms; the exempt **preparing** run lands
+    inside the bound it is exempt from at **1,634.7–2,091.3 ms** warm and 3,798.8–3,909.8 ms
+    single-threaded. The **fast-path check** costs **0.14–0.49 ms warm, 0.37 ms on a cold first touch**,
+    against 709.6–845.0 ms for the fastest launch-time digest of the artifact, 1.48–1.95 s for a
+    pure-Rust one, and 4.43–5.50 s for a digest of the prepared tree. **Cache invalidation across an
+    update did not fail** — a one-line change produced a different token and prepared afresh, the previous
+    version's preparation stayed intact and was still used at 591.3 ms, and two token-named directories
+    coexisted, each with its own marker. **Two defects were found in ADR-0054's own mechanism, both fixed
+    there, and neither is visible in a build that never meets a damaged preparation**: the commit step
+    could not commit (a directory cannot be renamed onto an existing directory on Windows), and the
+    completeness check returned a **hit** on a preparation that launched and produced **no window**.
+    **One correction the record must carry:** `REQ-STARTUP-125` is not merely preserved by SR-7's ruling,
+    it is **rescued** by it — under the packaging tool's portable target the artifact was locked for the
+    entire run, 79 consecutive failures with the first rename succeeding only at 16,837 ms as its own
+    process exited, so "the replacement SHALL succeed while the application being replaced is still
+    running" **was not satisfiable on that target at all**; under the preparation the rename succeeded on
+    the first attempt at 189 ms with the application alive. **And one figure this register mis-attributed:
+    the 13,287–19,580 ms is the packaging tool's extraction cost, not this mechanism's** — the launcher
+    writes the same tree in 410.7–565.7 ms, so anywhere the price of a preparing run is quoted in tens of
+    seconds it is the wrong number.
+    ***What it did not do, and one item is a listed gap rather than a footnote:*** clause (c)'s **no
+    usable preparation at all** branch and its notice were **not attempted**, and clause (d)'s "issues no
+    network request and raises no elevation prompt" is true only by construction of the spike's own
+    launcher — no network capture, no privilege trace. Also unmeasured: a real read-only volume rather than
+    an access-control approximation; the commit's durability discipline, so a power loss could leave a torn
+    tree behind a valid marker, which is the one damage class the per-file manifest does **not** catch; a
+    real download carrying the platform's mark-of-the-web, which lands exactly where the release gate now
+    looks; and a materially larger bundle or fewer cores, which is the figure that stops being comfortable
+    first.
+    **The prepared portable's steady-state launch. *`owner-decisions.md` SR-7 named this as required
     before the gate.*** *(ADR-0054, ADR-0055, ADR-0056; constraint B-23, `REQ-STARTUP-165`,
     `REQ-STARTUP-155`.)* Three figures, in order of what they decide. **The cached-launch first paint**,
     which is the whole point: SR-7 keeps `REQ-STARTUP-155`'s 5 s bound for every run after the one that
@@ -1622,13 +2328,57 @@ Spike 19's question changed with ESC-15 and it keeps its number.
     **ADR-0054's and ADR-0055's *Revisit if* clauses both turn on this**, and `REQ-STARTUP-156` now
     requires the release gate to observe **two runs** of a self-preparing artifact on the same machine —
     the one that prepares, and a later one where the bound is actually observed — so this is a release
-    obligation as well as an architecture one. **One case has no stated outcome and should be exercised
-    here:** a per-user root that is unwritable or full, where `REQ-STARTUP-165`(c)'s recovery path *is*
-    preparing, so the artifact silently returns to the measured 13–19 s behaviour on every launch with no
-    way for anyone to see why.
-21. **The commit on the publish path. *New, and it is the single unmeasured link in the chain the whole
-    persist-before-publish design now rests on.*** *(ADR-0058, ADR-0008, ADR-0009, ADR-0010;
-    constraints D-16, U-03, U-04, W-05, W-06, W-21.)* `spikes/ipc-hop-latency.md` states in its own
+    obligation as well as an architecture one.
+    ***Corrected 2026-09-02: this entry said "One case has no stated outcome and should be exercised
+    here". The outcome is now stated and the case should still be exercised — as specified behaviour to
+    verify rather than as a gap to characterise.*** `REQ-STARTUP-165`(c)'s third paragraph covers a run
+    that can produce **no** usable preparation at all: it "SHALL still start the artifact", is exempt
+    from the first-paint bound, and — uniquely among the five preparation outcomes — **is reported**,
+    once per such run, after the window is painted, on the persistent notice surface at warning severity,
+    conveying that the artifact could not prepare itself, which storage it could not prepare into, and
+    that every launch will cost what this one cost until that storage accepts a preparation. So the
+    silent 13–19 s degradation this entry described is no longer the specified behaviour. What to
+    exercise: that the notice actually fires, that it names the per-user data location and never the
+    placement within it, and that the four silent outcomes stay silent — ADR-0054 names
+    "implementing four-silent-one-loud from a habit of *the-preparation-is-silent*" as the specific error
+    to prevent.
+    **One reading question rides on this and should be settled before, not after** (see the specification
+    defects the gate verdict lists): clause (c) requires such a run to start the artifact and clause (d)
+    requires preparing to "write nothing outside the per-user directories of `REQ-STARTUP-145`", and the
+    payload cannot run without existing as files — so where that root refuses **every** write the two
+    clauses are jointly unsatisfiable on the conservative reading. ADR-0054 designs for the conservative
+    reading, covers the reachable failures by placing an ephemeral tree under the same root, and records
+    the residue.
+    ***Also on this spike's harness, and cheap there:*** the cost of the store open after the show, which
+    ADR-0055 keeps off the critical path by construction and nothing has measured. `PRAGMA quick_check`
+    on a large store is bounded rather than fast, and the post-show pipeline is where the window becomes
+    *useful*.
+21. ***Discharged 2026-09-02 — `spikes/commit-on-the-publish-path.md`. The lower bound is gone and the
+    margin survives at two thirds of its old size.*** Commit **then** publish, end to end over the relay:
+    **p95 1.774 ms at 0 rows and 1.723 ms at 10,000**, against 250 ms — the quoted margin falls from ~221×
+    to **~141×**. `REQ-MONITOR-223`'s ratio is **0.971** against a ceiling of 2; zero of 20,000
+    publications exceeded 250 ms; the commit alone is **0.28 %** of the budget and the whole interval
+    **0.71 %**. Persist-before-publish costs **0.396 ms p50 / 0.700 ms p95** and it is work, not a wait.
+    Making each event durable individually is **free** — marginal cost −4 to +31 µs at p50 — so
+    `REQ-EVENTS-029` is not a cost the design absorbs. **ADR-0058's own open item is closed** and its
+    commit-cost Revisit-if is **not triggered, on evidence**.
+    ***Three things it changed that were not the question.*** **(a) The shape of the distribution matters
+    more than the percentile**: the automatic checkpoint fires every **135–136 commits** — arithmetic, from
+    7.44 log frames per publish-path commit against a threshold of 1,000 — at **9–11 ms p50, worst observed
+    53 ms**, while the other 99.27 % cost 179–220 µs. Nothing threatens 250 ms, but any threshold built on
+    "about a millisecond" will see routine fifty-fold excursions on a fixed period, and **the checkpoint
+    period is a design input**: widening the publish-path transaction shortens it proportionally.
+    **(b) ADR-0058's stated ground for forcing the stronger durability setting on a terminal save is
+    false** — a separate process using a different binding read a terminal status back immediately at the
+    weaker setting — and the decision is re-grounded on power loss, which nothing has tested (constraint
+    W-06, OQ-12). **(c) `REQ-MONITOR-218`'s no-delay-floor rule can be broken from outside this record**:
+    a second process holding a 200 ms write transaction produced a **205.4 ms** commit, and held back to
+    back the writer starved indefinitely, which makes constraint W-05 a conformance obligation with a
+    number attached rather than hygiene.
+    ***What it did not measure*** is listed in the group (a) note above and in the table: a real schema, two
+    run hosts, any failure path at all, packaging, power loss, and any machine but one.
+    **The commit on the publish path.** *(ADR-0058, ADR-0008, ADR-0009, ADR-0010;
+    constraints D-16, U-03, U-04, W-05, W-06, W-21, W-28.)* `spikes/ipc-hop-latency.md` states in its own
     section 8 that "the database commit `REQ-MONITOR-221` requires before publication" is **outside** its
     measured interval, so every transport figure in this record is a **lower bound** on `REQ-MONITOR-222`'s
     and `REQ-ORCH-155`'s own intervals. `REQ-MONITOR-218` forbids a delay floor **of any size** before
@@ -1647,3 +2397,72 @@ Spike 19's question changed with ESC-15 and it keeps its number.
     *For calibration rather than as a claim: the file design's per-event durable write measured 0.518 ms
     p50 with an `fsync` and 0.0135 ms without one. An ordinary commit performs no `fsync` and should cost
     less — that is inference, and it is exactly what this spike exists to replace with a number.*
+22. **The whole-store backup and its restore, end to end. *The BACKUP half is measured and the choice is
+    vindicated; the RESTORE half has never been run in any part, and it is the architecture-side gate
+    item.*** *(ADR-0058, ADR-0005, ADR-0002; constraint W-24, `REQ-SESSION-201`.)*
+
+    ***What spike 19 settled incidentally, on 2026-09-02, and it settled the alternative rather than the
+    mechanism.*** A **naive file copy of a live store is unopenable 625 times in 627** — 150 of 152 under
+    write-ahead logging and **475 of 475** under a rollback journal, so the rollback case is worse rather
+    than a safe fallback — while `VACUUM INTO` produced **8 valid snapshots out of 8** during 108,525
+    concurrent commits, integrity-clean, checksum-clean and monotonic, at a **median 1,077 ms per 41 MB**
+    on local storage. That is the mechanism `REQ-SESSION-201`'s "valid while runs are live" needs and it
+    now has a number. **And the trap is recorded so nobody falls into it twice:** the gentle version of the
+    same experiment — a realistic 20 commits per second against a small store — returns **0 bad copies in
+    40**, so the obvious test gives a false all-clear and makes the choice look arbitrary to whoever runs
+    it next.
+
+    ***Everything below is still owed.*** Every step of the restore is individually justified from the
+    requirement; **nothing has been run.** It closes two store connections across two processes,
+    expands an archive, opens a database, runs an integrity check, performs two directory renames and
+    re-opens — all while the application keeps running and a window is showing.
+
+    **A documentation check comes first, costs nothing, and decides one alternative against another on
+    its own.** ADR-0058 chooses `VACUUM INTO` over the engine's stepped online-backup API on a
+    *documented* property — that the stepped API restarts the copy when the source is written through a
+    connection other than the one driving it — and says explicitly that it read this rather than measured
+    it. ADR-0002 puts **two** writer processes on this store, and `REQ-SESSION-201` forbids refusing a
+    backup because a session is live, so under `REQ-MONITOR-219`'s tick every run-host commit is an
+    external write and termination is not obvious. **Confirm the property against the binding's own
+    documentation before measuring anything.** If it does not hold as stated, the stepped API is the
+    better mechanism and `VACUUM INTO` should be dropped. A reader skimming ADR-0058's *Decision* could
+    take this as established; it is not.
+
+    **Then four figures, in the order of what they decide.** (1) `VACUUM INTO` cost on a live store —
+    time, destination space, and the one that is not obvious: **how much the write-ahead log grows while
+    the read transaction pins it**, on a store large enough to matter, with a run committing at
+    `REQ-MONITOR-219`'s tick. ***Half of this is now answered and half is not, and the split is the whole
+    point.*** The **correctness** is settled — 8 valid snapshots in 8 under concurrent load — and the
+    **time** has a figure at one size, a median 1,077 ms per 41 MB. **The log growth is not measured**, and
+    it is the only input the mid-copy-checkpoint question and the progress-reporting question turn on. So
+    the question is now "at what size does this stop being comfortable", not "seconds or minutes". This
+    decides whether progress reporting, cancellation and a mid-copy checkpoint strategy are needed at all. ESC-19's own survey cites a comparable product's session logs
+    reaching 700 MB to 2 GB, and ESC-9 leaves retention unbounded, so "large enough to matter" is not
+    hypothetical. (2) **The restore's connection-close handshake**, which has no timing figure anywhere:
+    both processes must close, two renames must land, and both must re-open, while the application stays
+    running. **Nothing bounds how long a user stares at a workspace whose store is deliberately absent** —
+    a state `REQ-SESSION-043` makes ordinary, which is what keeps the worst observable an empty session
+    list rather than a corrupt store, but which is still a user watching a blank surface. (3) The two
+    renames, which ADR-0058 does **not** claim atomic, on the filesystems the writer-handle spike did not
+    cover — network shares, ReFS, removable media and cloud-sync folders, all of which the destination
+    may be. (4) Whether an export holding a long read transaction can delay a transition commit, which
+    `REQ-EVENTS-098` forbids **outright** rather than budgeting for ("a store in which one blocks the
+    other does not satisfy this requirement"); ADR-0024's and ADR-0041's export mechanisms both infer
+    from the journal mode that it cannot, and inference is not what that requirement asks for.
+
+    **This deserves running before the Architecture Gate rather than after**, and it is stated that way
+    rather than softened: the requirement it implements is one of the two the owner minted in this pass,
+    and the mechanism is entirely architecture's.
+
+**Not a numbered spike, and deliberately so: a build-host obligation ADR-0056 creates.** Rule 4 of that
+record requires a **build-time proof that each native binding loads under the shipped Electron binary,
+from the packaged tree**, failing the build if it does not. It is the only check anywhere in the record
+that catches an unloadable store binding, and the reason is an asymmetry worth stating once:
+`REQ-STARTUP-156`'s release gate observes **first paint**, first paint does not open a store (ADR-0055
+keeps the workspace read off the critical path, ADR-0058 opens after show), so **an artifact with an
+unloadable store binding passes the release gate** — the property that makes the failure graceful is the
+same property that makes the gate blind to it. The proof must run against the packaged tree under the
+Electron binary that tree carries: run against `node_modules` in the checkout it proves nothing about
+asar unpacking, and run under the host Node it passes on exactly the artifact that fails. **A proof
+written the easy way is worse than none, because it reads as verified.** Somebody must establish that it
+is constructible on all three release runners before it is relied on as the only defence.

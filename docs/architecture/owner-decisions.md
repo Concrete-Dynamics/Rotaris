@@ -683,6 +683,38 @@ discovered.
 - [Chat history keyed to absolute project path · RooCodeInc/Roo-Code#6618](https://github.com/RooCodeInc/Roo-Code/issues/6618)
 - [Codex session logs grow to 700MB-2GB · openai/codex#24948](https://github.com/openai/codex/issues/24948)
 
+### ESC-26 — a restore may establish the workspace identifier, on explicit confirmation, and only there
+
+**Decided: `REQ-SESSION-197` gains one narrow exception. A restore MAY establish the workspace identifier
+when the user explicitly confirms it, and no other action ever may.**
+
+**The problem.** `REQ-SESSION-201` exists so a user can carry their history to another machine. But
+`.rotaris/` is gitignored, so on the ordinary recovery journey — machine dies, clone the repository, open
+it once, restore the backup — the clone mints identifier **B** while the artifact carries identifier
+**A**, and `REQ-SESSION-197` forbids the product touching either. The sessions restore into a store the
+open workspace will never resolve to, and the only remedy is editing a file by hand. The feature is
+incomplete in exactly the situation it was minted for.
+
+**The shape of the exception, which is what makes it safe:**
+
+- It exists **only inside the restore action**. No other path gains it — not workspace open, not repair,
+  not a migration, not a future convenience.
+- It requires **explicit user confirmation**, naming both identifiers and stating that the workspace's
+  existing sessions become unreachable from that workspace. It is never automatic and never a default.
+- The absent-identifier case is unchanged and remains **not** an exception: where no identifier file
+  exists the restore establishes one by exclusive create, which replaces nothing.
+- A present-but-**unreadable** identifier is still reported and never overwritten, per `REQ-SESSION-197`
+  as it stands.
+- The displaced store is **moved aside and kept**, never deleted, consistent with the rule that the
+  application never deletes a store.
+
+**Why the exception is drawn this narrowly.** The absolute rule is the record's best-evidenced decision:
+the comparative survey found that every path-keyed harness has a filed, painful bug where moving or
+renaming a project folder orphans its sessions, and `REQ-SESSION-197`'s identifier is what keeps this
+product out of it. Weakening it generally would trade a common protection for a rare recovery. Confining
+the exception to one user-confirmed action inside one feature keeps the protection everywhere it earns its
+place, and pays for the recovery path only where a user has asked for it in as many words.
+
 ### Consequences to carry
 
 - `REQ-MONITOR-013` **survives, clarified rather than withdrawn.** Its "a run executing in a different

@@ -29,6 +29,25 @@ status: resolved
 > - The **integration lock** (REQ-GIT-128) deliberately stays a file at `<workspace>/.rotaris/`. It is the
 >   one lock in the product that is not machine-local, because what it protects is the user's own base
 >   repository, which travels with the workspace.
+>   >
+>   > **Still true, and incomplete after ESC-21 (2026-09-01).** The lock stays where it is for exactly
+>   > the reason given, and every sentence of REQ-GIT-128's case for it is preserved. What the note
+>   > omits is the boundary within which the cross-machine guarantee is actually true. Exclusive create
+>   > is a genuine primitive on a network filesystem and is **not** one inside a file-synchronisation
+>   > agent's tree, because such an agent replicates after creation: both machines create the lock
+>   > locally, both succeed, and both believe they hold it. The product therefore does not promise
+>   > mutual exclusion it cannot enforce — on storage classified as file-synchronisation-replicated
+>   > (REQ-STARTUP-166) the integration is **refused before anything is attempted** and the lock is not
+>   > created at all, as a pre-work refusal under REQ-GIT-157 and second in REQ-GIT-124's ordered list.
+>   > REQ-GIT-145's one-integration-per-workspace limit is correspondingly no longer asserted on a lock
+>   > that does not lock. The **strength** of that response — refusal against a proceed-past warning —
+>   > is what spike 19 decides; the direction is settled and the spike does not reopen it.
+>   >
+>   > Domain 06 states no storage test of its own: the classification is REQ-STARTUP-166's and is not
+>   > made a second time here. An unclassifiable or not-yet-determined answer does **not** refuse,
+>   > because an inconclusive answer is a silent negative in REQ-STARTUP-166 and stays one here; that is
+>   > why REQ-GIT-150's "every ambiguity about liveness resolves toward refusal" is now bounded so the
+>   > two rules cannot appear to conflict.
 
 
 This record disposes of every open question raised in the draft of

@@ -7,6 +7,55 @@ status: resolved
 
 # Resolution Record — Domain 04, Model Providers, Sign-In, and Model Routing
 
+
+> ## Amendment, 2026-09-02 — the Copilot gateway staging directory leaves the workspace
+>
+> **Row 14 below is superseded.** It settled the staging directory as
+> `<workspace root>/.rotaris/copilot-gateway/`. REQ-PROVIDER-063 now places it under the **per-user data
+> directory**, beside the credential store rather than inside it (REQ-PROVIDER-014, REQ-PROVIDER-018),
+> with one directory per workspace named by the workspace's stable identifier and never by its path
+> (REQ-SESSION-197), located the way REQ-SESSION-198 locates the durable session store.
+>
+> **Why.** The two staged files are bearer tokens. ESC-15 and SR-4 moved the session store out of the
+> workspace precisely so that nothing the product owns sits where a file-synchronising client reaches it,
+> and that reasoning reaches credentials at least as strongly. What bounded these files while they were
+> in the workspace — REQ-CONFIG-013's ignore rule, REQ-PROVIDER-016's protection, and short token
+> lifetimes — bounds version control and local access, and none of it bounds replication to a
+> synchronisation vendor's servers. This is an extension of a ruling the owner already made, not a new
+> decision.
+>
+> **Why this is a fix and not an escalation.** ADR-0004 consequence 8 records that the path "cannot be
+> relocated to per-user storage the way the session store was, because consumers are pointed at the
+> directory by `GITHUB_COPILOT_TOKEN_DIR` and the name is stated to be part of the observable contract."
+> That inference runs backwards. Being pointed at a directory *by a variable the product sets* is exactly
+> what makes the location free: the variable carries whatever path this specification fixes. What is a
+> third-party contract is the **variable name**, the two **file names** `access-token` and `api-key.json`,
+> and the **content of `api-key.json`** — and every one of those is unchanged, character for character.
+> REQ-PROVIDER-063 now says the directory's own name is not a contract with any consumer, in place of the
+> sentence that said it was.
+>
+> **Everything else in REQ-PROVIDER-063 is unchanged**: the protection (POSIX `0700` on the directory and
+> `0600` on both files, the explicit Windows access control list, staging refused outright when the
+> protection cannot be applied), the all-or-nothing write, the on-disk-before-success rule, both file
+> shapes, and the `https://api.githubcopilot.com` default for `endpoints.api`. REQ-PROVIDER-064 keeps the
+> `managed-by-rotaris` sentinel and the per-workspace pinning it already required; REQ-PROVIDER-061 and
+> REQ-PROVIDER-092 are re-pointed. Row 3 below is unaffected — the product's obligation still ends at
+> publishing the files and the variables.
+>
+> **One clause added on the fix's own premise.** REQ-PROVIDER-063 and REQ-PROVIDER-014 now both require
+> the per-user data directory they resolve to be storage **local to the machine** and not storage
+> replicated to another machine or profile, on the terms REQ-SESSION-198 already fixes for the durable
+> session store. Without it the move is hollow: a per-user data directory that is itself replicated
+> reaches a vendor's servers exactly as `.rotaris/` did. This matters concretely, because the
+> architecture record reports that on Windows one requirement's "platform-conventional data directory"
+> resolves under the **roaming** profile while another's "storage local to that machine" does not
+> (REQ-STARTUP-145 against REQ-STARTUP-166) — a domain 11 question this pass does not own but whose
+> answer these two requirements now depend on.
+>
+> **Carried to other documents, not made here.** ADR-0004's table row and consequence 8, ADR-0029 and
+> `proposals/model.md` all still place the directory in the workspace; domain 15's REQ-CONFIG-010 and
+> workspace-layout block have been amended, since that domain is the other one this pass owns.
+
 This record disposes of every open question raised in the draft of
 [`../04-model-providers-auth.md`](../04-model-providers-auth.md) (domain 04, requirement prefix
 `REQ-PROVIDER`). The body of that specification has been amended so that each decision below is
@@ -143,7 +192,7 @@ prices them on a cost this domain owns (REQ-CHAT-174). Both are now stated here.
 | 11 | RESOLVED | The reported failure must convey that the attempt did not reach an outcome within the 30-second limit, which provider it was for, and that nothing was stored so a retry is safe. Exact wording is left to the implementation; the venue clause naming stdout and stderr was struck in job 1. | REQ-PROVIDER-013 |
 | 12 | RESOLVED | The absence of a scope check is the intended contract. Granted scopes never affect status classification and no request is refused locally on scope grounds, because only the provider knows what a grant permits; a provider that refuses for want of a scope surfaces its own refusal, and a refusal carrying HTTP 401 or 403 takes the existing credential-hygiene path. | REQ-PROVIDER-034, REQ-PROVIDER-098 |
 | 13 | RESOLVED | One trigger and one lifetime. The exchange runs on demand immediately before a request for a configured model that names `codex` as its sign-in provider and is dispatched against an API-key-style endpoint, and nowhere else. The derived `sk-` key lives in process memory for the lifetime of the process only, is never written to the credential store, the snapshot, a log, an event, or any file, and is re-derived when rejected or after a restart; a failed exchange fails that one model call and never invalidates the stored codex credential. The organization-missing message now directs the user to re-authenticate Codex from provider settings instead of naming a command. | REQ-PROVIDER-035, REQ-PROVIDER-141 |
-| 14 | RESOLVED | The staging directory is `<workspace root>/.rotaris/copilot-gateway/`, and that name is part of the observable contract because consumers reach it through `GITHUB_COPILOT_TOKEN_DIR`. It carries the credential-store protection (POSIX `0700`, or an explicit Windows ACL), and both `access-token` and `api-key.json` carry POSIX `0600` or the equivalent ACL; staging fails without writing either file when that protection cannot be applied. | REQ-PROVIDER-063, Data & Formats |
+| 14 | RESOLVED — **location superseded 2026-09-02, see the amendment block at the head of this record** | The staging directory is `<workspace root>/.rotaris/copilot-gateway/`, and that name is part of the observable contract because consumers reach it through `GITHUB_COPILOT_TOKEN_DIR`. It carries the credential-store protection (POSIX `0700`, or an explicit Windows ACL), and both `access-token` and `api-key.json` carry POSIX `0600` or the equivalent ACL; staging fails without writing either file when that protection cannot be applied. | REQ-PROVIDER-063, Data & Formats |
 | 15 | RESOLVED | The mapping is made total. Every non-2xx status not already named — 404, 408, 429, and every other 4xx — fails discovery reporting that status and conveying a refusal for a reason other than authentication, and for HTTP 429 additionally that the refusal was a rate limit the read can retry later. No response is left unclassified and no unmapped status is silently treated as success. | REQ-PROVIDER-071 |
 | 16 | RESOLVED | The three key paths are build data, declared once in the build's Copilot catalog-payload mapping and applied to every entry. This specification fixes the behavior for each value found, not the path it is found at, so a build that follows a payload change changes no behavior; an entry carrying nothing at a declared path counts as omitting that field and is treated as available. | REQ-PROVIDER-073, REQ-PROVIDER-151 |
 | 17 | RESOLVED | The per-model rows are build data, revised without a specification change. What is normative: every key has the form `provider/model` or `provider/`; every value is a pair of positive integers; the `deepseek/` row ships with (1,048,576, 384,000); the table is consulted only through the stated lookup; and a table with no matching row leaves those limits unknown rather than failing anything. | REQ-PROVIDER-079, REQ-PROVIDER-080 |

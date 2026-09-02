@@ -7,6 +7,44 @@ status: resolved
 
 # Resolution Record — Domain 10, Command Sandboxing and Network Egress Policy
 
+
+> ## Superseded in part by ESC-6, applied 2026-09-01
+>
+> The product owner's ruling **ESC-6** (`../../architecture/owner-decisions.md`) accepts the
+> specification for the first release — a host outside REQ-SANDBOX-065's closed two-platform set gets
+> no confinement — and requires the product to say so **plainly, on the settings surface and in the
+> launch advisory, rather than only in a remediation string**. Every disposition below stands; what
+> changes is that the state they settle is now disclosed rather than merely resolvable.
+>
+> - **No disposition that closes the platform set is disturbed.** REQ-SANDBOX-065 still closes it at
+>   exactly two identifiers and forbids adding one, and REQ-SANDBOX-048 still forbids an opportunistic
+>   fourth mode. The ruling adds a disclosure and no capability; REQ-SANDBOX-095's refusal to start is
+>   unchanged and no verdict moves.
+> - **What was already there was not enough, and this is why.** REQ-SANDBOX-073's reason string names
+>   the absence of OS-level confinement on native Windows, and REQ-SANDBOX-119 already puts reason and
+>   remediation on the launch dialog as visible text. That is precisely the "only in a remediation
+>   string" state the ruling found insufficient, because a remediation string reaches the user who has
+>   already asked for confinement and not the user who never asked. **REQ-SANDBOX-130 is minted** to
+>   state the fact once and require it on both surfaces: this host cannot confine anything, so every
+>   command an agent runs executes with the same operating-system privileges as the account running the
+>   application, and no value of `runtime.sandbox_mode` changes that here. On the settings surface it
+>   accompanies REQ-SANDBOX-116's availability label without the user having to select a confinement
+>   mode first; on the launch surface it is shown before the run begins, for attended and unattended
+>   sessions alike, and also when REQ-SANDBOX-107's advisory is empty — an attended run on such a host
+>   is exactly as unconfined as an unattended one. REQ-SANDBOX-107's emptiness rule governs that
+>   advisory's own text and does not suppress this disclosure.
+> - **REQ-SANDBOX-101's attended test is corrected rather than narrowed.** It said only the *presence*
+>   of an approval channel is tested. That bundled two different claims: registration-not-capability,
+>   which was wrong and disagreed with REQ-TOOLS-053, and presence-not-answering, which was right. The
+>   test is now REQ-TOOLS-053's — an approval prompt for the session can be put in front of a person —
+>   so a conformance test written from either requirement agrees with the other on every case. What the
+>   test still does not reach is whether a prompt that *can* be shown is ever *answered* (timeout,
+>   headless policy) and a presentation that fails when attempted, which is REQ-TOOLS-058's
+>   `presenter-error` denial. Neither is an input to mode resolution.
+> - **A new cross-domain dependency to be aware of.** REQ-SANDBOX-130 cites REQ-SHELL-149 — the
+>   disclosure is text, never colour and never a disabled control. This domain had not previously cited
+>   domain 12.
+
 This record disposes of every open question raised in the draft of
 [`../10-sandbox-network-egress.md`](../10-sandbox-network-egress.md) (domain 10, requirement prefix
 `REQ-SANDBOX`). The body of that specification has been amended so that each decision below is

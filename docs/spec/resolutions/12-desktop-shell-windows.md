@@ -7,6 +7,29 @@ status: resolved
 
 # Resolution Record — Domain 12, Desktop Shell, Navigation, and Window Management
 
+> ## Amendment, 2026-09-02 — "the folder that is already open" is decided by one rule for the product
+>
+> **No disposition below is reversed.** This domain makes two decisions that turn on whether two
+> directory strings name the same directory: REQ-SHELL-010 (a) resolves a workspace a window was
+> explicitly built for before persisting it, and REQ-SHELL-021 does nothing when the folder selected in
+> the chooser is the one already open. Both stated their own rule, and REQ-SHELL-010's — "normalized to
+> an absolute path" — was weaker than the rules the startup domain and the hooks domain applied to the
+> same question. Which of two outcomes a user gets (a second window, or nothing at all) depended on
+> which document an implementer read.
+>
+> REQ-STARTUP-163 is now the product's **single definition** of when two directory strings name the same
+> directory, and states in its own text that a document needing the rule cites it rather than restating
+> it. Both requirements above now cite it. The rule resolves symbolic and directory links, expands
+> home-relative prefixes and relative segments, gives a trailing separator no meaning, resolves
+> abbreviated alternate spellings the filesystem itself keeps, and compares case-sensitively or not
+> according to the filesystem holding the paths. It deliberately does **not** reconcile spellings that
+> reach one directory only through a mapping the user configured outside the filesystem, and the cost of
+> that is bounded to a second window opened on one folder — which is a better outcome than silently
+> merging two workspaces.
+>
+> **Nothing here decides workspace identity.** What binds a workspace to its sessions is the identifier
+> REQ-SESSION-197 fixes, which is carried in the workspace and never derived from a path.
+
 
 > ## Superseded by the storage rulings (2026-09-01)
 >

@@ -9,10 +9,31 @@
   before an application process exists at all (`REQ-STARTUP-165`). The budget arithmetic is restated per
   flavour on measured figures rather than assumed, and the "Revisit if" clause that turned on that
   measurement is discharged.
+- **Revised:** 2026-09-02, against the settled specification. Three things land. Phase −1 gains an
+  **outcome that is not silent** — `REQ-STARTUP-165` (c) now specifies a notice for a preparation that
+  cannot be made at all, and this record owns where in the post-show order it sits. The workspace store
+  is named in that order, because ADR-0058 puts its opening there and a **native binding that will not
+  load** must fail loudly on `REQ-SESSION-089`'s terms rather than be swallowed. And `REQ-STARTUP-121`'s
+  update restart is a **hand-over of the instance record**, which the platform primitive alternative II
+  chose has no operation for — a gap this record had not noticed and now closes.
+- **Revised:** 2026-09-02, a second time. **This record's own verification obligation was measured and it
+  fired.** Observation 2 does not hold on Windows: against a primary that was running but not pumping
+  messages, `app.requestSingleInstanceLock()` **blocked the launching process for 20.0 seconds**, returned
+  `false`, performed no reclaim and no retry, and the hand-over **never reached the primary — not even in
+  the 25 seconds after it recovered.** The second launch ended **with no window on screen**, which
+  `REQ-STARTUP-164` forbids in terms. By this record's own stated rule, **the claim moves to alternative
+  I — our own record file — on every platform**, and the platform primitive is dropped rather than wrapped
+  in a timeout. The paint sequence is unaffected and alternative B stands. The portable's steady-state
+  budget is also now measured rather than asserted, and the "Revisit if" clause that turned on it is
+  discharged.
 - **Origin:** UI (ADR-UI-13)
-- **Depends on:** ADR-0002, ADR-0042, ADR-0048, ADR-0050, ADR-0054
-- **Governed by:** `owner-decisions.md` SR-1, SR-7
-- **Evidence:** `../spikes/packaged-first-paint.md`
+- **Depends on:** ADR-0002, ADR-0042, ADR-0048, ADR-0049, ADR-0050, ADR-0054, ADR-0056, ADR-0058
+- **Governed by:** `owner-decisions.md` SR-1, SR-7, and the consequence for ADR-0058 recorded with ESC-21
+- **Evidence:** `../spikes/presenter-liveness-and-instance-claim.md` §5 — the measurement that discharges
+  and fails this record's verification obligation on the instance claim;
+  `../spikes/cached-portable-launch.md` — the portable's steady-state launch, which fixes phase −1's cost
+  and the budget arithmetic of consequence 8; `../spikes/packaged-first-paint.md` for the installed
+  flavours and for the portable target SR-7 replaced.
 
 ## Context
 
@@ -29,8 +50,12 @@ control by which a second can be started.
 user account; **outside every workspace directory**, so it never appears in a project or its version
 control; **not a key of the desktop preference store**, whose key set is closed (`REQ-SHELL-006`,
 `REQ-STARTUP-146`); created by the launch that becomes the instance and released when that process
-ends; and creatable, readable and removable **without elevation**. Its form and location are
-explicitly implementation choices — which is what this record decides.
+ends, **"a record that outlives its process being settled by `REQ-STARTUP-164`"**; and creatable,
+readable and removable **without elevation**. Its form and location are explicitly implementation
+choices — which is what this record decides. That closing clause matters more than it looks: the
+requirement **anticipates the record surviving its holder** and hands that case to the probe-and-reclaim
+path rather than to any operating-system release, which is what lets the record be an ordinary unheld
+file.
 
 `REQ-STARTUP-164` fixes the resolution order and the failure direction. (1) Claim the record
 exclusively; success makes this process the instance and startup continues at `REQ-STARTUP-040`.
@@ -46,7 +71,11 @@ side effect on the probed process"* — and it **deliberately resolves the ambig
 direction**: an unreadable session lock resolves toward live because two writers would corrupt a
 session, while an unreachable instance record resolved toward live would leave the user unable to start
 the application at all. Probing must not affect the probed process, and a launch writes nothing but the
-record while resolving it.
+record while resolving it. **The requirement closes by licensing the one state the reclaim can produce**,
+and this record now depends on that sentence: *"Reclaiming from a process that is running but
+unresponsive is the one path by which two processes of the application can briefly exist, and what makes
+it safe is that a session is protected by its own lock whichever process reaches it (`REQ-SESSION-046`,
+`REQ-SESSION-047`), not by this record."*
 
 `REQ-STARTUP-162` fixes what a hand-over looks like: **nothing the user can see except a surfaced
 window.** No window, dialog, banner, acknowledgement or error from the handed-over launch; nothing
@@ -94,11 +123,23 @@ neither first paint nor post-show activation.
 **`REQ-STARTUP-165` puts something in front of everything this record sequences, on one artifact.** A
 `onefile` artifact may prepare itself once and start from that preparation on every later run; the run
 that prepares is exempt from the 5-second bound and **no other run is**, "first run" meaning the first
-run of a given *version* of that artifact for that user on that machine. Preparing must be silent on
-every path — made, reused, superseded or redone (`REQ-STARTUP-150`) — must issue no network request and
-raise no elevation prompt, and an unusable preparation must be redone rather than reported. ADR-0054
-owns the preparation's design; what this record owns is that it happens **before the application process
-exists**, so it is upstream of the instance claim, of `REQ-STARTUP-040`, and of everything else here.
+run of a given *version* of that artifact for that user on that machine. Preparing is silent on four
+paths — made, reused, superseded or redone (`REQ-STARTUP-150`) — must issue no network request and raise
+no elevation prompt, and an unusable preparation must be redone rather than reported. ADR-0054 owns the
+preparation's design; what this record owns is that it happens **before the application process exists**,
+so it is upstream of the instance claim, of `REQ-STARTUP-040`, and of everything else here.
+
+**There is a fifth path and it is not silent, which changes what phase −1 owes the rest of startup.**
+`REQ-STARTUP-165` (c) now states the outcome for a run that produces **no usable preparation at all** —
+the storage refusing the write, being full, or being unavailable, so that redoing it does not succeed
+either. Such a run still starts the artifact, keeps every behaviour of clause (f), is exempt from the
+5-second bound on `REQ-STARTUP-155`'s own terms because it performs the work a preparation exists to
+avoid, and **is reported once, after the window is painted**, on the persistent non-modal non-blocking
+surface `REQ-STARTUP-116` uses, at warning severity. `REQ-STARTUP-150` was amended to carve this out
+explicitly: "an artifact preparing itself for launch, reusing a preparation, or redoing an unusable one
+is always silent … while an artifact that could produce no preparation at all is always warned about and
+never prevented from running, that being the one preparation outcome the product reports". **So phase −1
+can now produce something the post-show pipeline has to deliver**, which it could not before.
 
 **`REQ-STARTUP-043` has grown a fourth member and it is not a network call.** Post-show background
 activation is now repository status discovery, **the workspace-storage determination of
@@ -138,7 +179,7 @@ running."*
 **I — Our own record file, resolved by our own discipline.** A small file in the per-user data
 directory holding pid, host and a hand-over endpoint, claimed by atomic exclusive create, probed and
 reclaimed by exactly the logic `REQ-SESSION-047` applies to a session lock, with a socket or named pipe
-for the hand-over.
+for the hand-over. **Chosen, on measurement, 2026-09-02.**
 
 *For:* it is visibly the same idiom as the session lock, which `REQ-STARTUP-164` explicitly asks for,
 and every constant in the requirement — the 5 s wait, the one reclaim, the two claim attempts — is ours
@@ -150,9 +191,21 @@ correct on three platforms with three different ideas of what a process handle m
 `REQ-SESSION-054` hazards — pid recycling, and Windows reporting an exited process as alive while any
 handle to it survives.
 
+*What measurement has since established about that "against".* **Its first clause is false and its
+second and third stand.** "It duplicates something the platform layer already ships" was the load-bearing
+half, and there is nothing to duplicate: the primitive does not implement `REQ-STARTUP-164`'s discipline
+at all. Against a primary that was running but not pumping messages it performed **no reclaim, no second
+claim attempt, and no bounded wait** — it blocked for 20.0 s and returned `false`. So the choice was never
+between writing the discipline and inheriting it; it was between writing it and not having it. The other
+two clauses are unaffected and are now the real cost of this alternative, and they are stated as
+consequences rather than talked down: the endpoint and the stale-record protocol are ours, on the launch
+path, and the `REQ-SESSION-054` hazards are ours to resolve — which the product must do for the session
+lock anyway, and which is exactly why `REQ-STARTUP-164` names that lock's discipline as its lineage.
+
 **II — The platform's single-instance primitive.** Electron's `app.requestSingleInstanceLock()`, which
 returns whether this process obtained the lock, with the `second-instance` event delivering the other
-launch's `argv`, working directory and an `additionalData` object to the primary. **Chosen.**
+launch's `argv`, working directory and an `additionalData` object to the primary. **Was chosen. Refused
+on measurement, 2026-09-02** — see the verification section below, which is where the numbers are.
 
 *For:* it is one call and one event; the record lives in the per-user data directory, satisfying every
 observable `REQ-STARTUP-161` states — one per user account, outside every workspace, not a preference
@@ -162,6 +215,41 @@ convention that a second launch of a bundle does not create a second process at 
 *Against:* the 5 s bound, the at-most-one-reclaim and the no-spin guarantee of `REQ-STARTUP-164` become
 properties of a component we did not write. **That is a verification obligation, not an assumption**,
 and it is discharged below rather than waved at.
+
+*A second objection, found on 2026-09-02 and not previously recorded, because it comes from a requirement
+this record had never read against the claim.* `REQ-STARTUP-121` requires the update restart to be a
+**hand-over**: "the record of `REQ-STARTUP-161` passes from the current instance to the successor rather
+than being released for anyone to claim". **The platform primitive has no pass operation.** It offers a
+claim and a release, and this record's own decision states that the release is never called. So the one
+verb the requirement names is the one verb the component does not have, and the gap is not cosmetic — the
+requirement is explicit that a launch arriving mid-hand-over "SHALL be handed to whichever of the two
+holds the record at that moment and SHALL never start a third process", which is a statement about there
+being no moment when the record is unheld. Alternative I would have this for free, since a record we own
+can be rewritten in place. **This was recorded as the strongest argument alternative I had. It is no
+longer the strongest and it is no longer an argument: the claim has moved, and this gap closes with it**
+— see the restart section, where the concession this record used to make is withdrawn.
+
+*What the measurement confirmed about alternative II's "for", which must be carried forward rather than
+lost with the primitive.* Everything the primitive was chosen **for**, apart from the reclaim it turned
+out not to perform, was measured and holds — and each item becomes a requirement on the replacement
+rather than a benefit surrendered:
+
+- **Claim latency is negligible.** `requestSingleInstanceLock()` returned in **3.3–7.1 ms**, and 65
+  consecutive failed calls from one process cost 0.97–2.11 ms each. Our exclusive create must stay in
+  that order; it is inside the launch-to-first-paint span.
+- **A record left by a force-killed holder does not strand the product.** The claim became available
+  within a **67–69 ms** window of `taskkill /F`, bracketed by a 62 ms poller, and a fresh launch
+  reacquired it on the **first attempt at +187 ms**, with a window at +345/+373 ms. That 187 ms was
+  dominated by process startup, not by the claim: Electron's own floor from spawn to the first line of
+  `main.js` was 137–154 ms on the same machine.
+- **The probe leaves the probed process unaffected.** 65 consecutive probes plus 4 discrete ones; primary
+  alive, pid unchanged, its own 500 ms heartbeat uninterrupted, window intact, no signal.
+- **A declared field is required, because `argv` really is mangled.** The `second-instance` payload
+  carried `additionalData.workspace` verbatim and `workingDirectory` correctly, while `argv` arrived with
+  **`--allow-file-access-from-files` appended and the application-path argument moved to the end.** This
+  record predicted that from documentation; it is now measured. The prediction outlives the primitive:
+  under alternative I the workspace directory is resolved by the launching process and sent as a declared
+  field, and the receiving side never re-derives it from a command line.
 
 **III — No single-instance record; rely on the session lock alone.** Recorded because it was the
 product's shape before SR-1 and because it is the alternative a reader will ask about. Two application
@@ -205,7 +293,11 @@ budget goes.
 
 ## Decision
 
-**Alternative II for the claim, alternative B for the paint**, with these specifics.
+**Alternative I for the claim, alternative B for the paint**, with these specifics.
+
+*Alternative II was chosen here until 2026-09-02 and is refused on measurement, not on preference.* Every
+sentence below that describes the claim was rewritten for that reason; the paint sequence, phase −1 and
+the post-show pipeline are unchanged by it.
 
 ### Phase −1 — the launch preparation, on the `onefile` portable only
 
@@ -217,18 +309,54 @@ startup properties rather than packaging ones:
 - **It precedes everything.** The instance claim, the preference-store scoping, the icon, the fonts and
   the theme all belong to the application process, and on this artifact that process does not exist
   until phase −1 has chosen which image to run. Nothing in phase 0 or later may be relied on here.
-- **It is silent, including on the recovery path**, and a recovery is indistinguishable from a first
-  run (`REQ-STARTUP-165` (c), `REQ-STARTUP-150`). Nothing in this record's notice or diagnostics
-  machinery is available in phase −1 anyway, which makes the silence structural.
+- **It is silent on four of its five outcomes, including the recovery path**, and a recovery is
+  indistinguishable from a first run (`REQ-STARTUP-165` (c), `REQ-STARTUP-150`). Nothing in this record's
+  notice or diagnostics machinery is available in phase −1 anyway, which makes that silence structural.
+- **The fifth outcome is not silent, and the silence being structural is exactly why it needs a
+  mechanism.** A run that could produce no preparation at all must raise a warning notice after the
+  window is painted. Phase −1 cannot raise it — there is no notice surface, no window, and no application
+  — so the outcome has to survive into a process that has all three. ADR-0054 carries it in the marker
+  the stub writes into the tree it placed, deliberately not in an environment variable
+  (`REQ-STARTUP-147`'s list is closed) and not in a launch argument (the product has none, and OQ-43 is
+  already open on the one sentinel this record needs). **What this record fixes is the consequence for
+  ordering:** the application reads that marker relative to its own image during the pre-window phase,
+  where it is one read of a file the fast path has already touched, and **holds the finding until after
+  the show**. Reading it early and delivering it late is the only arrangement that satisfies both
+  constraints — the value is only available from the launch chain, and the notice is only permitted after
+  first paint. *(That marker is no longer small: ADR-0054's correction of 2026-09-02 makes it carry the
+  completeness manifest as well, which is what stops a damaged preparation launching to no window. The
+  read is still one file and still off first paint's critical arithmetic — the whole fast-path check
+  measured at a few milliseconds against 5,000 — but the "shrink the marker" escape hatch both records
+  once reserved is now closed, and consequence 11's chain is what would break first if anyone reopened
+  it.)*
 - **The instance claim cannot serialise it.** Two portable launches can race to prepare, because the
   claim they would be serialised by lives in a process neither has started yet. ADR-0054 resolves the
   race in the preparation itself; what this record records is that **SR-1 does not remove it**, and that
   the two launches converge on the ordinary hand-over once both have an application process.
 
-**The budget.** The run that prepares is exempt from `REQ-STARTUP-155`'s 5 seconds; every later run of
-that artifact is bound by it exactly as every other artifact is, and the release gate now checks both
-runs on the same machine (`REQ-STARTUP-156`). So this record's own first-paint discipline is measured
-against the **steady-state** portable launch, not against the preparing one.
+**The budget, now measured on the mechanism rather than asserted from a baseline.** The run that prepares
+is exempt from `REQ-STARTUP-155`'s 5 seconds; every later run of that artifact is bound by it exactly as
+every other artifact is, and the release gate now checks both runs on the same machine
+(`REQ-STARTUP-156`). So this record's own first-paint discipline is measured against the **steady-state**
+portable launch, not against the preparing one — and that launch was measured at **575.5–624.2 ms warm
+and 897.3–1,242.5 ms cold**, with the worst observation anywhere **1,414.6 ms**. Phase −1 itself costs
+about **37 ms** of that on a warm cache, of which the whole fast-path check is well under a millisecond
+and the manifest check ADR-0054 added is a few more.
+
+**What that leaves this record is roughly 3.6–4.4 s, which is the same order of headroom the installed
+flavour has — and that equality is the point.** Consequence 8's figure for the installed build was
+0.6–1.6 s consumed and 3.4–4.4 s left; the portable running from its preparation consumes 0.58–1.41 s and
+leaves 3.6–4.4 s. **The portable is no longer a special case and this record no longer has to sequence
+against a worst artifact that fails.** The same two qualifications hold on both figures and neither is
+softened by the new measurement: the measured application **contains no product at all** — no framework,
+no store, no native module, no preload, no theming, and none of `REQ-STARTUP-040`'s icon, font
+registration or theme restore — so everything this record sequences is *additional*; and the clock starts
+at process creation from a parent rather than at a double-click, so both are lower bounds.
+
+**The preparing run was priced rather than assumed, and it is comfortable at this bundle weight.** It
+painted in **1,634.7–2,091.3 ms warm** and **3,798.8–3,909.8 ms when forced to a single thread** — inside
+the bound it is exempt from, in both cases. That is a margin and not a dependency, but it scales with the
+payload and with the core count, so it is the figure to re-take if the bundle grows materially.
 
 ### Phase 0 — the instance claim, before anything else
 
@@ -236,7 +364,10 @@ against the **steady-state** portable launch, not against the preparing one.
 before `app.whenReady()` resolves, so a launch that is handed over performs no preference scoping, sets
 no icon, registers no font, reads no theme, constructs no window and opens no connection. That is what
 makes `REQ-STARTUP-162`'s "writes nothing to the preference store and nothing to any per-user or
-per-workspace state" structural rather than a discipline to remember.
+per-workspace state" structural rather than a discipline to remember. **Moving the claim off the platform
+primitive makes this easier rather than harder**: the primitive had to be called at module scope because
+that is where it works, whereas an exclusive create and a listening socket depend on nothing the
+application layer provides and can sit at the very top of the entry point without qualification.
 
 **Two internal-child branches are evaluated ahead of the claim, and that ordering is deliberate.** The
 product starts its own executable as a child in two cases: the bundled code-intelligence server
@@ -250,55 +381,294 @@ and an interface control, and names no command-line argument, so a sentinel argu
 thing it forbids — but **the composition of the two requirements is inferred here rather than stated
 anywhere, and that is OQ-43.** It is left open rather than closed by this record.
 
-- **The record is Electron's single-instance lock**, claimed with `app.requestSingleInstanceLock()`.
-  A `true` return makes this process the instance; startup continues at phase 1. A `false` return means
-  the launch has been handed over: it ends. `app.releaseSingleInstanceLock()` exists and **is never
-  called** — there is no supported way to run two instances (`REQ-STARTUP-161`,
-  `REQ-STARTUP-146`).
-- **The workspace directory travels in `additionalData`, not in `argv`.** Electron's documentation
-  recommends `additionalData` precisely because the command-line array delivered to `second-instance`
-  may have parameters appended or ordering altered by the platform. The launch resolves the directory
-  the operating system handed it (`REQ-STARTUP-024`, `REQ-STARTUP-041` (a)) and passes it as one
-  declared field. `argv` and the working directory are still delivered and are still read as a
-  fallback, but the declared field is authoritative.
-- **The primary handles `second-instance` by resolving `REQ-STARTUP-163`, then `REQ-STARTUP-162`:**
-  if a main window already has that directory open, surface it and build nothing; if a directory was
-  carried and no window has it open, build an additional main window on it, show it, surface it, and
-  leave every other window untouched; if no directory was carried, surface the main window that most
-  recently held keyboard focus, or the first built, and build nothing. If the instance has no window at
-  all, build one, resolving its workspace as a launch does. Every window built this way goes through
-  the ordinary post-show activation of `REQ-STARTUP-043` and the ordinary shared deferral of
-  `REQ-SHELL-011`.
-- **macOS is a different shape and needs no special protocol.** A second launch of the same bundle does
-  not create a second process; the system activates the running one. The instance therefore also
-  listens for `open-file` — which must be registered **before** `ready`, or a launch-time file is
-  missed — and for `activate`, whose `hasVisibleWindows: false` case is exactly `REQ-STARTUP-162`'s
-  "holds the record but has no window open at all". Both paths converge on the same handler as
-  `second-instance`, so the surfacing rule is written once.
-- **On Windows and Linux the directory arrives in the launch's own arguments** and is read from
-  `process.argv` in main before the claim, so it is available to put in `additionalData`.
+- **The record is our own file, on every platform, and the platform primitive is not used at all.** It
+  lives in the per-user data directory of `REQ-STARTUP-145`, which gives `REQ-STARTUP-161`'s observables
+  directly: one per user account, outside every workspace so it never enters a project or its version
+  control, not a key of the closed preference store (`REQ-SHELL-006`, `REQ-STARTUP-146`), and creatable,
+  readable and removable without elevation. **This is the same idiom as the session lock and deliberately
+  not the same store.** `REQ-SESSION-046` now holds the session lock as a record *in the store that holds
+  the session it locks*, and under ESC-15 that store is machine-local and per workspace; an instance
+  record must be outside every workspace and there is no per-user store to put it in. **The discipline is
+  shared, the medium is not, and a reader who tries to unify them will land the instance record inside a
+  workspace, which `REQ-STARTUP-161` forbids in terms.**
+- **What the record carries, and why the file existing is not the exclusion.** `pid`, `host` and
+  `acquired_at` under **the same three names and value types `REQ-SESSION-046` fixes**, so one probe and
+  one parse serve both records, plus the address of the hand-over endpoint — which is `REQ-STARTUP-161`'s
+  "how a launch reaches it" and is the only field the session lock has no analogue for. **The record must
+  carry the liveness fact rather than rely on its own existence**, and that is a measured lesson, not a
+  precaution: the platform primitive's record survived a `taskkill /F` and was still present afterwards,
+  and it did not prevent the next launch from claiming, because the file was never what excluded anyone.
+  Under alternative I an exclusive create makes the file's existence exclude by construction, so a
+  force-killed holder would strand every later launch **for ever** unless the pid and host in it are what
+  the next launch actually decides on. That is precisely the case `REQ-STARTUP-164`'s first sentence
+  exists to forbid.
+- **No handle is held open on the record.** The obvious implementation — hold an exclusive handle so the
+  operating system releases it on process death — is refused twice over. `REQ-STARTUP-161` already
+  anticipates the record outliving its process and says it is "settled by `REQ-STARTUP-164`", i.e. by the
+  probe and the reclaim, not by an operating-system release. And a held handle would make the record
+  un-replaceable by rename on Windows, which is exactly the operation the update-restart hand-over below
+  depends on: the `windows-writer-handle-compaction` spike found that replace-by-rename fails with
+  `EPERM`/`ERROR_ACCESS_DENIED` against **any** held handle and succeeds against an unheld path. **The
+  record is deliberately unheld so that it can be rewritten in place.**
+- **The claim, and the resolution, are `REQ-STARTUP-164` step for step.** (1) Atomic exclusive create;
+  success makes this process the instance and startup continues at phase 1. (2) A create that fails means
+  a record exists: read it, and connect to the endpoint it names to be handed over; the launch ends under
+  `REQ-STARTUP-162` when the instance acknowledges. (3) **Not acknowledged within 5 seconds — for any of
+  the four reasons the requirement enumerates, and they are not distinguished** — remove the record and
+  retry the exclusive create **exactly once**. (4) A second failure means another launch claimed inside
+  the interval: attempt the hand-over once more and end. **At most one reclaim, two create attempts, one
+  interval, no spin**, so a record another party keeps recreating cannot make a launch loop.
+- **The probe is the session lock's probe, with the ambiguous case resolved the other way — deliberately,
+  and the requirement says so.** `REQ-SESSION-051` to `REQ-SESSION-054` are inherited whole, including
+  the rule that matters most in practice: on Windows **the probe must deliver no signal and no console
+  control event**, because implementing it as a null signal injects a real console interrupt into the
+  target (`REQ-SESSION-053`). That is what buys `REQ-STARTUP-164`'s "probing SHALL have no effect on that
+  process", which the measurement confirmed for the primitive across 69 probes and which is now ours to
+  hold. What is **not** inherited is the direction: `REQ-SESSION-047` and `REQ-SESSION-056` resolve every
+  ambiguity toward *live* because two writers would corrupt a session, and `REQ-STARTUP-164` states in its
+  own text that it resolves the same ambiguity the opposite way, because an unreachable instance record
+  resolved toward live leaves the user unable to start the application at all. **The two directions are
+  both correct and a later reader must not harmonise them.** `REQ-SESSION-054`'s residual hazards — a
+  recycled pid, and Windows reporting an exited process as alive while a handle to it survives — resolve
+  toward live here too, and cost at most one 5-second hand-over wait followed by the single reclaim, which
+  is what makes the inherited bias safe on this record rather than dangerous.
+- **The hand-over endpoint is served by the instance's main process, and the acknowledgement means the
+  window is on screen.** A named pipe on Windows, a unix-domain socket on macOS and Linux, its address in
+  the record so a launch never has to guess it. **The acknowledgement is sent after the surfacing of
+  `REQ-STARTUP-162` has actually happened, not on receipt**, and that ordering is the whole point: an
+  acknowledgement from a process that then fails to surface anything would end the launch silently with
+  nothing on screen, which is the exact observable the platform primitive produced and the one
+  `REQ-STARTUP-164` closes with — "every path therefore ends with exactly one instance running and a
+  window on screen". The one refinement is for an instance that is **still starting** and has no window
+  yet: there the acknowledgement follows the request being bound to that startup, whose own 5-second
+  paint bound (`REQ-STARTUP-155`) is what guarantees the window. **The property that is load-bearing in
+  both cases is the same — an acknowledgement proves main's event loop is running**, which is precisely
+  what the twenty-second failure did not.
+- **The endpoint is listening before the record is written, not after.** The claim writes a record naming
+  an address, and a second launch that reads that record and cannot connect is, by `REQ-STARTUP-164` (3),
+  a process that "does not answer" — so it would wait its 5 seconds and reclaim a record a healthy
+  starting instance holds. Creating the endpoint first closes that window by construction and costs
+  nothing: **the record never names an address that is not already accepting.**
+- **It follows that a main process running no JavaScript does not acknowledge, and that is correct.** The
+  endpoint is served from main's event loop, so a main that is wedged, or blocked in a synchronous
+  platform dialog, answers nothing; the 5 seconds elapse, the launch reclaims once and becomes the
+  instance. `REQ-STARTUP-164` licenses exactly this — "reclaiming from a process that is running but
+  unresponsive is the one path by which two processes of the application can briefly exist, and what makes
+  it safe is that a session is protected by its own lock whichever process reaches it". **Under the
+  platform primitive that same host state produced no window at all after twenty seconds. Under this
+  design it produces a window inside the bound.** The endpoint must **not** be moved somewhere that
+  survives a blocked main in order to keep answering: it would then acknowledge a hand-over the instance
+  cannot act on, which is worse than not answering, and the measurement shows the only transport in the
+  tree that survives a blocked main touches neither main nor any window.
+- **The frequency of that reclaim is governed by a rule that lives in another record, and the two must be
+  read together.** A synchronous platform-native dialog on main runs no JavaScript at all — not a timer,
+  not an IPC handler, not a utility-process channel — for as long as it is on screen, and the product
+  specifies native dialogs on ordinary paths. So the application-wide prohibition on synchronous
+  platform-dialog calls that ADR-0019 needs for the approval liveness poll is **the same rule that keeps a
+  user picking a project folder from causing an instance reclaim.** One host state, two records; neither
+  is sufficient on its own.
+- **Releasing is best-effort deletion of our own record on ordinary exit**, and a crash or force-quit
+  simply leaves it, which is the case step (3) settles. There is no supported way to run two instances
+  (`REQ-STARTUP-161`, `REQ-STARTUP-146`); the only path that ever rewrites a record this process holds is
+  the update restart of `REQ-STARTUP-121`, decided below.
+- **A launch that is handed over writes nothing, and that stays structural rather than becoming a
+  discipline.** An exclusive create that fails writes nothing; the launch then connects, sends and exits
+  without ever reaching `app.whenReady()`, so it performs no preference scoping, sets no icon, registers
+  no font, reads no theme and constructs no window — which is what makes `REQ-STARTUP-162`'s "writes
+  nothing to the preference store and nothing to any per-user or per-workspace state" true by
+  construction. The only launch that writes is one that **reclaims**, and a launch that reclaims becomes
+  the instance rather than being handed over. `REQ-STARTUP-164`'s "a launch SHALL write nothing but the
+  record itself while resolving it" is therefore satisfied with the record as the sole exception it names.
+- **The workspace directory travels as a declared field over that endpoint, never as a command line.**
+  The launch resolves the directory the operating system handed it (`REQ-STARTUP-024`,
+  `REQ-STARTUP-041` (a)) on `REQ-STARTUP-163`'s same-directory terms and sends it as one named value with
+  the launch's working directory beside it. The reason this record originally gave for not trusting a
+  command line is now measured rather than cited: a command line delivered across the platform primitive
+  arrived with a parameter appended and its ordering altered. Under our own endpoint the hazard does not
+  arise at all, and the rule is kept anyway, because the receiving side re-deriving a directory from a
+  command line is the mistake, not the transport.
+- **The instance handles an arriving hand-over by resolving `REQ-STARTUP-163`, then `REQ-STARTUP-162`,
+  and only then acknowledges:** if a main window already has that directory open, surface it and build
+  nothing; if a directory was carried and no window has it open, build an additional main window on it,
+  show it, surface it, and leave every other window untouched; if no directory was carried, surface the
+  main window that most recently held keyboard focus, or the first built, and build nothing. If the
+  instance has no window at all, build one, resolving its workspace as a launch does. Every window built
+  this way goes through the ordinary post-show activation of `REQ-STARTUP-043` and the ordinary shared
+  deferral of `REQ-SHELL-011`. **The window this path builds is bounded by the same 5 seconds**
+  (`REQ-STARTUP-155`), and the handed-over launch is bounded by the hand-over interval rather than by a
+  paint of its own — so the acknowledgement, which now waits for the surfacing, must not wait on that
+  window's *post-show* work.
+- **macOS is a different shape and still needs no special protocol; dropping the primitive does not drop
+  the convention.** A second launch of the same bundle does not create a second process — the system
+  activates the running one — so on that platform the claim path is rarely the one exercised, and our
+  record simply stays claimed by the one process there is. The instance therefore also listens for
+  `open-file`, which must be registered **before** `ready` or a launch-time file is missed, and for
+  `activate`, whose `hasVisibleWindows: false` case is exactly `REQ-STARTUP-162`'s "holds the record but
+  has no window open at all". Both converge on the same handler as an arriving hand-over, so the
+  surfacing rule is written once. **This is a platform behaviour and was never a property of the
+  primitive**, which is why moving the claim does not disturb it — and the record is still needed there,
+  because a launch that does reach a second process must resolve against something.
+- **On every platform the directory arrives in the launch's own arguments** and is read from
+  `process.argv` in main before the claim, so it is available to resolve and to send as the declared
+  field above.
 
-### Verification obligation on `REQ-STARTUP-164`, recorded rather than assumed
+### The update restart is a hand-over of the record — and with the claim moved, we have a verb for it
+
+`REQ-STARTUP-121` is the one case in which this product starts the application while an instance is
+running. It fixes the order — the updated installation is started first; the record passes to the
+successor rather than being released; the current window closes only after the successor has started; the
+successor keeps running once the current process has exited — and it fixes two negatives: the successor
+**is not handed back** to the instance that started it and **does not surface** that instance's windows
+(`REQ-STARTUP-162`, `REQ-STARTUP-164`). ADR-0005 and ADR-0032 both already depend on the brief overlap
+this produces, so two live processes is a state the record has accepted; what nobody had written down is
+how the record moves between them.
+
+**The obvious sequence does not work, and it is worth seeing why before the one that does.** If the
+predecessor holds the lock and starts the successor, the successor's own claim **fails** — and a failed
+claim is, by phase 0 above, exactly a hand-over: the successor would notify the predecessor, surface its
+window and end, which is the outcome `REQ-STARTUP-121` forbids by name. If instead the predecessor
+releases first, there is a
+window in which the record is unheld and an ordinary launch arriving in it becomes a third instance,
+which the same sentence forbids. **Neither ordering is available, so the successor cannot be an ordinary
+launch.**
+
+**The decision: the successor is started on the sentinel branch that already exists, and the predecessor
+rewrites the record in place rather than releasing it.** In order: the predecessor starts the successor
+with the sentinel that marks it not-an-ordinary-launch; the successor performs no claim and no hand-over
+attempt, opens its own hand-over endpoint, and signals the predecessor that it is ready; the predecessor
+**replaces the record's contents with the successor's `pid`, `host` and endpoint address in one atomic
+replacement**, and tells the successor the record is now its own; only then does the predecessor close its
+window and exit. `REQ-STARTUP-121`'s failure branch covers every way this stalls — "when the successor
+cannot be started, nothing SHALL close" — so a successor that never signals leaves the predecessor holding
+the record with its window open and accepting input, which is both the requirement's outcome and the safe
+one.
+
+**The concession this record used to make here is withdrawn.** Under the platform primitive there was no
+pass operation, so the sequence had to release and re-claim, and between those two calls the record was
+genuinely unheld: a launch arriving in that gap became the instance while the successor then failed its
+claim and was handed to it. This record called that "not conformant", bounded by two calls, and "the one
+place `REQ-STARTUP-121` is met by argument rather than by construction". **With the claim moved to our own
+record it is met by construction.** The record is never unheld, because a rewrite is not a release: the
+file exists continuously and every launch arriving at any moment reads either the predecessor's fields or
+the successor's, which is exactly `REQ-STARTUP-121`'s "handed to whichever of the two holds the record at
+that moment". **This is a property the migration buys back, not merely relocates**, and it is the second
+reason for it after the measurement.
+
+**Two implementation rules keep that true rather than nearly true.** The replacement must be **atomic** —
+write a sibling and rename over, never truncate-and-rewrite, because a reader that observes a
+half-written record sees a record it cannot parse and `REQ-STARTUP-164` (3) would then have it reclaim a
+record two live processes are relying on. And the rename-over is possible only because **nothing holds a
+handle on the record**: the `windows-writer-handle-compaction` spike measured replace-by-rename failing
+against any held handle and succeeding against an unheld path, which is why the no-handle rule in phase 0
+is stated as load-bearing rather than as a preference. *(Note the contrast with the directory commit
+ADR-0054 had to correct: renaming a **directory** onto an existing directory fails on Windows, renaming a
+**file** onto an existing file does not. The two lessons are not interchangeable and neither should be
+transplanted onto the other.)*
+
+**Two orderings that follow and are easy to get wrong.** The successor is a new artifact version, so on
+the portable **its first run is a preparing run** — the exempt one — and on the measured payload the
+predecessor therefore holds its record and its window for **roughly 1.6–2.1 seconds, and up to about 3.9
+seconds on a single core**. *(This record previously put that at 13–19 seconds, which was the cost of the
+extraction mechanism SR-7 replaced and not of the one that shipped in its place; the wait is real and it
+is seconds rather than tens of seconds.)* Nothing about that is a failure and nothing may time it out
+into one — in particular the successor's readiness signal has no timeout of its own, and
+`REQ-STARTUP-121`'s "when the successor cannot be started, nothing SHALL close" is what covers a
+successor that never arrives. And the successor
+must not be sent through phase 0's ordinary path at all, which means the sentinel branch is now load-
+bearing for a third case; **OQ-43 covers two of the three and should be read as covering this one too.**
+
+### Verification obligation on `REQ-STARTUP-164` — taken, 2026-09-02, and it fired
 
 `REQ-STARTUP-164` fixes a 5 second hand-over wait, at most one reclaim, at most two claim attempts, no
-spin, no side effect on the probed process, and nothing written but the record. The platform primitive
-performs its own probe of the recorded process and its own reclaim of a record left by a process that
-is gone, on its own schedule. **Whether that schedule matches the requirement's is a measurement this
-record does not have, and it must be taken before implementation is authorised.** Three observations
-decide it, on all three platform keys of `REQ-STARTUP-030`:
+spin, no side effect on the probed process, and nothing written but the record. This record made three
+observations the condition of keeping the platform primitive, on all three platform keys of
+`REQ-STARTUP-030`, and stated the consequence in advance: **"if any of the three does not hold,
+alternative I is adopted for the claim and the platform primitive is dropped, not wrapped in a timeout."**
+The measurement was taken on Windows. **Observation 2 does not hold. The rule has fired and the claim has
+moved, on every platform.**
 
-1. **A record left by a process killed without cleanup must not make the application unlaunchable**, and
-   the next launch must reach a window within `REQ-STARTUP-155`'s 5 seconds. This is the case
-   `REQ-STARTUP-164` exists to forbid and the one the requirement is emphatic about.
-2. **A recorded process that is running but not answering must be resolved within the stated interval**,
-   with at most one reclaim, and without spinning.
-3. **The probe must leave the probed process unaffected** — no signal, no window message that changes
-   its state, no termination.
+**Observation 1 — a record left by a process killed without cleanup must not make the application
+unlaunchable. PASS.** After `taskkill /F` with no cleanup, the claim was reacquired on the **first
+attempt at +187 ms** (2 runs, 4.8–5.0 ms for the call itself) and a window was on screen at
+**+345 / +373 ms**. A separate poller calling every ~62 ms across the kill bracketed the release itself
+to a **69 ms / 67 ms** window. Nothing close to `REQ-STARTUP-155`'s 5 seconds was consumed. *(The window
+here is a harness's trivial one, not a product first paint.)*
 
-**If any of the three does not hold, alternative I is adopted for the claim and the platform primitive
-is dropped, not wrapped in a timeout.** A record whose reclaim rules we cannot state is not a record
-that satisfies `REQ-STARTUP-161`. This is recorded as a named spike, because the failure mode — a
-product that will not start — is the worst one in the domain and is invisible until it happens.
+**Observation 2 — a recorded process that is running but not answering must be resolved within the stated
+interval, at most one reclaim, no spin. FAIL, on Windows, for a primary that is running but not pumping
+messages.** Two runs, the second designed specifically to distinguish "delayed" from "dropped":
+
+| | measured |
+|---|---|
+| `app.requestSingleInstanceLock()` in the second launch **blocked for** | **20,004.6 ms / 20,010.9 ms** |
+| …and returned | **`false`** |
+| reclaims performed | **none** |
+| second claim attempts | **none** |
+| windows shown by the second launch | **none** |
+| primary's hand-over handler | not observed in run 1; in run 2 **never fired**, including the **25 s after the wedge ended** |
+
+Run 2 exists to settle the "delayed or lost" question and settles it: the wedge ended, the primary went on
+running normally for 25 further seconds, and **the hand-over never arrived. It was not queued behind the
+block. It was dropped.**
+
+Against the requirement, item by item: the 5-second bound was exceeded **fourfold**; "reclaim the record
+and retry the exclusive claim exactly once" did not happen at all; and "every path therefore ends with
+exactly one instance running and a window on screen" was violated — one instance was running and **no
+window was on screen**. The user double-clicks the icon, waits twenty seconds, and gets nothing.
+
+**And the failure is invisible by construction, which is what makes it the worst kind.** A `false` return
+means "you have been handed over", and `REQ-STARTUP-162` requires a handed-over launch to be silent — no
+window, no dialog, no banner, no error. The launch cannot tell a successful hand-over from a failed one,
+and the requirement forbids it from reporting the difference even if it could.
+
+**It cannot be rescued by wrapping, and that is now a measurement rather than an argument.** The call is
+**synchronous on the launching process's own main thread** and takes no timeout argument; the two samples
+differed by 6 ms, consistent with a fixed timeout inside the component. There is nothing to put a timeout
+around without moving the claim off the launch's main thread entirely, which is not a smaller change than
+owning the record.
+
+**The other sub-case passed, and it is recorded so the failure is not overstated.** Where the primary was
+blocked in a synchronous native dialog — running no JavaScript, but still pumping window messages — the
+second launch's call returned `false` in **4.07 / 4.82 ms** and the primary's hand-over handler ran
+**during** the dialog, while its own 500 ms timer was recording zero firings. So the primitive handles one
+kind of "not answering" and drops the other. **One sub-case failing is enough by this record's own rule**,
+which was written that way deliberately: a claim that is correct for some unresponsive primaries and
+produces no window at all for others is not a claim whose reclaim rules we can state.
+
+**And the sub-case that passed passed in a way this record would not have chosen.** The hand-over
+callback executed **while the primary's own timers were dead** — the inference offered, and labelled as
+one, is that the notification is dispatched by the nested message pump the dialog runs, not by the outer
+loop. So the primitive can deliver a hand-over **into a process that is otherwise entirely stopped**, and
+the handler then runs at an arbitrary point inside a nested loop rather than at a quiescent point of
+main's own event loop. Under alternative I that cannot happen: our endpoint is serviced from the outer
+loop, so an instance that is not running that loop simply does not answer and the specified reclaim
+follows. **The failing sub-case is why the claim moved; this one is a second, quieter reason not to
+regret it.**
+
+**Observation 3 — the probe must leave the probed process unaffected. PASS.** 65 consecutive probes plus
+4 discrete ones: primary alive, pid unchanged, its 500 ms heartbeat uninterrupted, window intact, no
+signal, no state change beyond the specified event. This is the property phase 0 now inherits through
+`REQ-SESSION-051` to `REQ-SESSION-054`.
+
+**macOS and Linux were not measurable and the decision does not wait on them.** The measuring host runs
+Windows 11 only; no macOS machine and no Linux environment was available, and neither behaviour can be
+inferred from the Windows result — macOS is a different shape, and Chromium's Linux process singleton is
+a filesystem construction with entirely different stale-record and reclaim rules from the Windows
+hidden-window path that failed. **This record's rule already says the claim moves on every platform once
+one fails**, for the reason it gave at the time — one record resolved two different ways is worse than
+either — so two thirds of the platform coverage being absent does not block the *decision*. **It does
+relocate the obligation rather than discharge it.** Alternative I's own stale-record protocol, endpoint
+and hand-over must be verified on macOS and Linux, on macOS additionally composing with the convention
+that a second launch produces no second process; and `REQ-STARTUP-152` makes this a release-checkable
+claim per platform — "launching that entry point twice on one user account SHALL leave exactly one process
+of the application running". That check is where the missing two thirds land.
+
+**One measured fact about the record itself carries into the design and is easy to lose.** The
+primitive's record file **survived a force-kill and was not itself the exclusion**: it was still present
+after `taskkill /F` and did not prevent the next launch from claiming. Our record's existence *is* the
+exclusion, so the same force-kill would strand every later launch unless the record carries the liveness
+fact. That is why phase 0 puts `pid` and `host` in it and probes them, and it is the single most
+important thing not to simplify away.
 
 ### Phase 1 onward — the paint sequence
 
@@ -316,6 +686,42 @@ product that will not start — is the worst one in the domain and is invisible 
   interactive, initialisation resolution and the hook-review notice; then, after the shared deferral, the
   project chooser if it is still owed. The two mutually exclusive schedules `REQ-STARTUP-044` names are
   **two branches of that one pipeline, sharing one delay**.
+- **Two more things happen after the show, and neither is a member of `REQ-STARTUP-043`'s list.** That
+  requirement names four activities and requires them not to precede the show; it is not a licence for
+  anything else to precede it, and it is not an enumeration of everything a shown window may then do.
+  Both additions are ordered here rather than left to fall where they may.
+  - **The preparation-failure notice of `REQ-STARTUP-165` (c)**, where phase −1 found one. It is raised
+    **once per run**, at warning severity, on the same surface `REQ-STARTUP-116`'s offer uses. It is
+    placed **before the update check** in the order, for a reason that is about what the user reads
+    rather than about cost: both can put a notice on that surface in the same second, and the one
+    explaining why this launch took twenty seconds should not arrive underneath an unrelated update
+    offer. It waits on nothing, since the finding was read before the window was built.
+  - **Opening the workspace store**, which ADR-0058 places after the window is shown and which
+    `PRAGMA quick_check` bounds. It must not move earlier: this record's first paint is rendered from
+    stored preferences and constants only, and a store open on the critical path would put an unbounded
+    disk operation inside the 5 seconds — the same discipline that keeps a workspace read, a
+    version-control probe and a session load out of it.
+- **A store that will not open is loud, and a native binding that will not load is the same failure with
+  a different cause.** ESC-21 recorded `better-sqlite3` failing silently under an Electron runtime
+  through an interface mismatch, with the error swallowed by a `try`/`catch`. Three rules follow, and
+  they belong here because this is the record that decides what a failure during startup is allowed to
+  do:
+  - **Neither condition is caught and continued.** `REQ-SESSION-089` requires the run to refuse rather
+    than degrade, conveying the session id, that nothing was started, which store could not be opened,
+    and the reason the store itself gave. ESC-16 ruled that partial-failure mode out of existence; a
+    swallowed load error would reintroduce it in the one shape nobody would notice.
+  - **Neither is a first-paint failure.** The window is already shown, so a store that will not open is
+    a workspace whose sessions are unavailable, not an application that will not start. That is the
+    correct outcome and it is a deliberate consequence of putting the open after the show: the user gets
+    a painted window and a stated reason instead of a launch that dies.
+  - **The two causes are distinguished in what is reported, because their remedies differ.** A store
+    that will not open has ADR-0058's recovery ladder behind it — salvage, export, move aside — and a
+    binding that will not load has none of that: it is a defect in the build, identical for every
+    workspace and every user of that build, and no user action changes it. Reporting the second as the
+    first sends a user to salvage a store that is fine. **The real defence is upstream**: ADR-0056 rule 4
+    requires the packaged tree to be proved to load before an artifact is accepted, precisely because
+    `REQ-STARTUP-156`'s gate would not catch it — the gate observes first paint, and first paint does
+    not open a store.
 - **The workspace-storage determination runs on every path that opens a workspace, and is one function
   with three entrances.** `REQ-STARTUP-041`'s startup resolution, `REQ-STARTUP-163`'s launch-carried
   directory, and `REQ-STARTUP-047`'s project switch each reach it; a window built for a handed-over
@@ -358,13 +764,20 @@ product that will not start — is the worst one in the domain and is invisible 
    consequence: the user sees the shell before they see their project.
 3. The run host is forked after the shell is ready (ADR-0002), so no run can start before then; nothing
    in the startup requirements asks for one.
-4. **`second-instance` is guaranteed to be emitted only after `ready`.** A launch handed to an instance
-   that is still starting is acknowledged at the platform layer, but its workspace directory is acted on
-   after the primary's own `ready`. That is consistent with `REQ-STARTUP-162` — the handed-over launch
-   shows nothing either way — and with `REQ-STARTUP-155`, which bounds the handed-over launch by the
-   hand-over interval rather than by first paint. It does mean the *worst* case for a user double-clicking
-   the icon twice in quick succession is the primary's own 5 s paint followed by the surfacing, and that
-   is the correct behaviour rather than a defect to engineer around.
+4. **A launch handed to an instance that is still starting waits on that instance's own paint, and the
+   two 5-second bounds are the same 5 seconds.** The handed-over launch is bounded by the hand-over
+   interval rather than by a paint of its own (`REQ-STARTUP-155`), and the instance it is waiting on is
+   bounded by 5 seconds to paint. So a user who double-clicks the icon twice in quick succession waits
+   the primary's own startup and is then surfaced — the correct behaviour rather than a defect to
+   engineer around. **What changed on 2026-09-02 is what happens at the boundary**, and it is stated
+   rather than smoothed: under the platform primitive the second launch returned immediately and could
+   not tell a delivered hand-over from a dropped one; under our own record it waits for an acknowledgement
+   and, where a primary near its own paint bound does not acknowledge inside the interval, it **reclaims
+   and becomes the instance**. That is `REQ-STARTUP-164` (3) applied literally, it still ends with a
+   window on screen, and its cost is a second process in the narrow case of a launch arriving against a
+   primary that is both starting and slow. Two things bound it: the endpoint is listening before the
+   record is written, so the failure cannot come from a connect that was merely early; and the same
+   pre-window discipline that protects first paint is what keeps a primary away from its own bound.
 5. **The window registry becomes the answer to "which window".** `REQ-STARTUP-162` needs the main window
    that most recently held keyboard focus, falling back to the one built first, and needs persona and
    terminal windows excluded. That is a most-recently-focused ordering the registry (ADR-0048) must
@@ -378,7 +791,9 @@ product that will not start — is the worst one in the domain and is invisible 
 7. **Nothing user-visible reports a refused launch**, anywhere, ever (`REQ-STARTUP-162`). A diagnostics
    record of the hand-over is permitted and useful; a toast, a banner or a log line the user is shown is
    not.
-8. **The budget this record is disciplined against is now a measured number, and it is per flavour.**
+8. **The budget this record is disciplined against is now a measured number, and it is no longer per
+   flavour** — the portable's steady state was measured on 2026-09-02 and lands in the same band as the
+   installed build (phase −1 above). The figures below are the installed flavour's and are unchanged.
    On the installed Windows build, packaging and runtime consume **0.6–1.6 s** of the 5,000 ms — 664 ms
    to 1,561 ms from launch to first paint on a trivial application, with the never-launched-from-this-
    path case at 1,232–1,593 ms. **That leaves roughly 3.4–4.4 s** for everything this record puts in
@@ -396,7 +811,32 @@ product that will not start — is the worst one in the domain and is invisible 
    two-run gate is the release-side form of the same distinction. Note that nothing about this may reach
    a user-facing surface (`REQ-STARTUP-165` (f), `REQ-STARTUP-150`): the run kind is a diagnostics
    property, not a notice.
-10. **Windows will not clamp a window to a display, and no construction-time figure bounds its
+10. **We own the claim, the endpoint and the stale-record protocol, on three platforms, on the critical
+    path of every launch.** This is alternative I's stated cost and it is now real rather than avoided.
+    Two things make it smaller than it reads. The probe is not new work: `REQ-SESSION-051` to
+    `REQ-SESSION-054` already specify it for the session lock, and `REQ-STARTUP-164` names that lineage
+    itself, so **a second probe implementation here would be a defect, not a cost**. And the constants
+    the requirement fixes — the 5 s wait, the one reclaim, the two attempts — become ours to *test*,
+    which is the property whose absence the measurement exposed. What is genuinely new is a cross-platform
+    hand-over endpoint, and it is the piece with no Windows measurement behind it at all.
+    **This consequence replaces the previous one**, which recorded that
+    `app.releaseSingleInstanceLock()` — written here as "exists and is never called" — had acquired a
+    single exception on the update-restart path. There is no such call now, the absolute-with-one-exception
+    hazard it warned about is gone, and the update restart rewrites the record instead of releasing it.
+11. **Startup now has an outcome it must carry across a process boundary it does not own.** The
+    preparation-failure finding is produced by the launcher stub, read by the application before its
+    window exists, and delivered after that window is painted. Three components have to agree about one
+    small file for a warning to appear, and the failure mode of that chain is a **missing** warning: the
+    artifact is permanently slow and nothing anywhere says why, which is the outcome
+    `REQ-STARTUP-165` (c) exists to prevent. It needs a test that asserts the notice appears, not one
+    that asserts the notice is silent on the other four paths.
+12. **First paint is now provably independent of the store, and that independence is load-bearing rather
+    than incidental.** It was already true — nothing on the critical path waits on a workspace read — but
+    it now carries weight it did not: it is why a store that will not open is a stated reason rather than
+    a dead launch, and it is also why `REQ-STARTUP-156`'s gate cannot see an unloadable native binding.
+    The same property that makes the failure graceful makes the release gate blind to it. **Both halves
+    have to be said together or the second gets lost.**
+13. **Windows will not clamp a window to a display, and no construction-time figure bounds its
     viewport.** A content height of 20,000 CSS pixels was requested, granted and laid out on a machine
     whose tallest display is 1,080 px, and display enumeration at construction offered nothing that
     bounds it. This record's "the seven views are constructed — which ADR-0045 needs anyway for
@@ -405,6 +845,31 @@ product that will not start — is the worst one in the domain and is invisible 
     partly-blank pane rather than to a slow one. The constant and its growth branch belong to ADR-0045;
     what belongs here is that startup cannot supply a better figure and must not be written as though it
     could.
+14. **A wedged main process now costs a second process rather than a dead launch, and that trade is
+    deliberate.** Under the platform primitive, a primary that stopped pumping messages produced a
+    20-second block and no window at all. Under this record's claim it produces a hand-over that goes
+    unacknowledged, one reclaim, and a launch that becomes the instance — so the user gets a window, and
+    two processes of the application exist until the wedged one is dealt with. `REQ-STARTUP-164`
+    licenses this in terms and explains why it is safe: a session is protected by its own lock whichever
+    process reaches it. **The residue is that the requirement says "briefly", and nothing here makes the
+    reclaimed-from process stand down.** A primary that recovers still believes it is the instance. It
+    must therefore re-read the record before acting as one, and where it finds a record naming another
+    process it must stop behaving as the instance rather than compete — which is a rule this record
+    states and which has no measurement behind it.
+15. **The frequency of consequence 14 is governed by a rule in another record.** A synchronous
+    platform-native dialog on main runs no main-process JavaScript at all for as long as it is open —
+    measured across timers, renderer IPC and the utility-process channel alike — and the product
+    specifies native dialogs on ordinary paths, including a project-folder chooser and a
+    "quit while a run is active" guard. So **the application-wide prohibition on synchronous
+    platform-dialog calls that ADR-0019 needs for the approval liveness poll is the same rule that keeps
+    a folder chooser from causing an instance reclaim.** Neither record can enforce it alone and neither
+    currently states it where the person writing a folder chooser would read it.
+16. **The verification obligation is relocated, not discharged, and its hardest two thirds are still
+    unmeasured.** Windows is measured; macOS and Linux are not, on either the primitive or the
+    replacement, and the endpoint is the piece with the least evidence behind it anywhere.
+    `REQ-STARTUP-152` makes this release-checkable per platform, and `REQ-STARTUP-156`'s gate is where a
+    failure would be caught — but that gate observes a *single* launch to first paint, so **launching
+    twice is the specific thing it must be made to do**, or the whole of SR-1 goes untested by it.
 
 ## Open question
 
@@ -435,13 +900,52 @@ is preserved so a reader can see that it was right about the failure and wrong a
 assumed the only variables were the budget and the payload, and the third variable — how the payload
 gets onto the disk — was invisible until it was measured.
 
+## Discharged — the two clauses that fired, retired 2026-09-02
+
+**The steady-state clause fired the good way.** It read: *"the portable's steady state is asserted to
+resemble [the installed flavour] on the strength of a 0.7-second file-copy baseline, which is a baseline
+and not a result."* It is now a result and the assertion held: 575.5–1,414.6 ms across every cached
+measurement, 0.58–1.41 s consumed against the installed flavour's 0.6–1.6 s. None of the three bad
+outcomes the clause was written for occurred. The prepared launch reached first paint with about 3.6–4.4 s
+to spare, so the **font await** the clause named as the first thing this record would give up is not under
+pressure and stays. The fast-path check is well under a millisecond of it, so consequence 11's marker
+chain does not have to change — **and it must not, because ADR-0054 has since made that marker carry the
+completeness manifest as well; shrinking it now would trade this record's warning chain and that record's
+damage check for a saving the budget does not need.** Cache invalidation across an update was exercised
+directly and worked: a second version prepared afresh while the first version's preparation stayed intact
+and was still used, so the successor of the restart sequence runs the payload it was updated to.
+
+**The verification clause fired the bad way, and this record wrote down in advance what to do.** It read:
+*"Or the three observations under the verification obligation do not hold on some platform — in which case
+the claim moves to alternative I on every platform, not only the one that failed, because one record
+resolved two different ways is worse than either. Note that the hand-over gap named in the restart section
+moves with it and is closed by that migration rather than merely relocated, so a failure there buys back
+a property this record currently concedes."* **Observation 2 failed on Windows. Both halves were carried
+out**: the claim moved on every platform, and the restart section's concession is withdrawn rather than
+relocated. The clause is retired because it has been acted on, not because it stopped applying.
+
 ## Revisit if
 
-Spike 20 shows the prepared portable's steady-state launch does not reach first paint inside 5 s, in
-which case this record's pre-window phase is competing with a launch cost it cannot reduce and the
-sequence has to be argued against a smaller budget than the 3.4–4.4 s consequence 8 assumes. Or the
-three observations under the verification obligation do not hold on some platform — in which case the
-claim moves to alternative I on every platform, not only the one that failed, because one record
-resolved two different ways is worse than either. Or `REQ-STARTUP-166`'s determination turns out to cost
-enough that it competes with the rest of post-show activation, in which case it needs its own place in
-the pipeline rather than a position in a list.
+**The bundle grows enough that the preparing run stops being comfortable.** The steady-state figure is
+nearly insensitive to payload weight; the exempt preparing run is not — it was 1.6–2.1 s on sixteen
+threads and 3.8–3.9 s on one, at the measured bundle weight. Nothing this record sequences is involved,
+but consequence 9's instrumentation is how it would be noticed, and the question would go to ADR-0054's
+archive rather than to the paint sequence.
+
+**Any of the three observations fails for *our own* record on macOS or Linux.** The rule that moved the
+claim does not have a second destination: alternative II is refused on measurement and alternative III is
+withdrawn by SR-1. A failure there is therefore not a choice between recorded alternatives, and it
+returns to the owner as a new escalation.
+
+**The hand-over endpoint cannot be made to satisfy the acknowledgement rule on some platform** — that the
+acknowledgement follows the surfacing rather than the receipt. That rule is what keeps `REQ-STARTUP-164`'s
+closing guarantee true, and it is the one part of the design with no measurement anywhere behind it.
+
+**Or `REQ-STARTUP-166`'s determination turns out to cost enough that it competes with the rest of
+post-show activation**, in which case it needs its own place in the pipeline rather than a position in a
+list.
+
+**Or the store open proves slow enough to matter after the show.** It is off the critical path by
+construction, so it cannot delay first paint — but the post-show pipeline is also where the window becomes
+useful, and a `quick_check` on a large store is bounded rather than fast. Nothing measures it today. If it
+does compete, the ordering above is what changes, not the placement.

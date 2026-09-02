@@ -31,6 +31,24 @@ status: resolved
 >   `history/<artifact_id>/<version>.json` layout, `rotaris-prompts.json` or `<session_dir>/artifacts/` as
 >   settled file layouts now describes withdrawn mechanism. Every guarantee attached to those layouts was
 >   re-homed before the mechanism went; see REQ-LIBRARY-042, -043, -047, -049, -087 and -138.
+> - **The gap that block leaves is closed as of 2026-09-01.** Improvement artifacts were readable JSON
+>   files a user could open for themselves before SR-4 made them records, and nothing replaced that.
+>   **SR-9(a)**, ruled again under **ESC-20**, mints the export: REQ-LIBRARY-176 requires the workspace's
+>   improvement artifacts to be obtainable as a file the user chooses, per artifact and for the whole
+>   workspace, carrying the artifact container, each proposal with its evidence entries in stored order,
+>   and the recorded version history REQ-LIBRARY-168 calls "the audit trail the write path keeps" — in
+>   recorded order, none omitted, and with a statement where retention has pruned intermediate versions.
+>   It cites REQ-EVENTS-166 for what an export must guarantee rather than restating it, and applies it on
+>   the terms REQ-SESSION-199 fixes.
+> - **Its boundary is worth reading before anyone widens it.** ESC-20 draws the export line on redaction
+>   safety, not readership: a record gains an export when it carries no unredacted user or tool content.
+>   REQ-LIBRARY-176 therefore carries the artifact exactly as stored and MUST NOT resolve an evidence
+>   entry's `source_session_id`, `source_artifact_id` or `source_task_id` into the material those ids
+>   name, because that material is REQ-SESSION-136's tool-call evidence, which never gains an export
+>   (REQ-TOOLS-190). **This domain states no redaction obligation over an evidence entry's own excerpt**,
+>   which REQ-LIBRARY-010 allows to hold quoted source text. That is not a defect introduced here — it
+>   predates the export — but the export is what makes it consequential, and it is the one thing in this
+>   area that may still need a product ruling.
 
 
 This record disposes of every open question raised in the draft of

@@ -27,6 +27,25 @@ status: resolved
 >   unbounded concurrent processes the defect rested on. A residue remains, recorded as OQ-44: no
 >   requirement in the corpus now states a Windows retry ladder for these four files, and REQ-TRACE-061
 >   requires a failed replace to be re-raised.
+> - **The delivery store gains an export, applied 2026-09-01.** Delivery records were readable files
+>   under `.rotaris/requirements/` before SR-4 made them rows, and neither SR-6 nor the storage round
+>   gave them an export. **SR-9(a)**, ruled again under **ESC-20**, mints one: REQ-TRACE-514 requires a
+>   workspace's delivery records to be obtainable as a file the user chooses, carrying per requirement
+>   the delivery state from REQ-TRACE-232's column vocabulary with the blocked condition and origin
+>   state of REQ-TRACE-233, the delivered specification hash an acceptance stored (REQ-TRACE-387,
+>   REQ-TRACE-402), the retained per-requirement history, and each transition with its acting party,
+>   time and stated reason — an override additionally carrying that it was one and its grounds
+>   (REQ-TRACE-401). It cites REQ-EVENTS-166 for what an export must guarantee and applies it on the
+>   terms REQ-SESSION-199 fixes.
+> - **Two boundaries it deliberately keeps.** The export carries the **delivery store's own** retained
+>   retired ids and never the toolchain's retired-identifier log, which is a file in the user's
+>   repository (REQ-TRACE-130, REQ-TRACE-513) — the vocabulary boundary the storage round drew is not
+>   eroded by an export crossing it. And the export is **not a fifth toolchain operation**: REQ-TRACE-508
+>   to REQ-TRACE-511 remain exactly four and the Data & Formats toolchain table stays correct. Writing
+>   nothing, persisting no delivery state (REQ-TRACE-399), relocating no card and recording no
+>   verification (REQ-TRACE-410) are all stated in the requirement so an export can never become a
+>   mutation path. An uninterpretable record exports as it stands and is identified as uninterpretable
+>   with its version, which is REQ-CONFIG-192's answer everywhere else.
 
 
 This record disposes of every open question raised in the draft of
@@ -214,6 +233,15 @@ Each of these is otherwise in scope and loses only its shell half. Nothing moves
 - **REQ-TRACE-218** — the seam's second independent host is a programmatic embedding of the engine,
   the project's own test suite among them, in place of the headless verification command. Two hosts
   are still required, which is the whole point of the requirement.
+
+  > **Corrected 2026-09-01, in the ruling-application round.** This substitution named a host the
+  > product does not have: REQ-EVENTS-178 states there is no embedding surface and no programmatic
+  > entry point, and the identical defect was corrected in REQ-EVENTS-081 and REQ-HOOKS-089 in the
+  > same round. The second host is now **the project's own test suite**, which the requirement already
+  > named and which drives the seam directly rather than through any surface. Two independent
+  > consumers are still required, at least one of which is not a product surface — a test suite that
+  > can only reach the seam through the desktop worker is not a second consumer. The obligation is
+  > unchanged in strength; only a host that could not exist was removed from it.
 - **REQ-TRACE-464**, **REQ-TRACE-471** — "headless invocation" and "the terminal interface or the
   headless command line" are struck; the substance (a composition without a coordinator still runs;
   the board's permission elevation reaches no other run) is unchanged.

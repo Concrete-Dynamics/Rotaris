@@ -727,13 +727,26 @@ Workspace values override global values field by field; list- and mapping-valued
 
 ### Trajectory export document
 
-One document per session, or a batch document covering several, emitted as pretty-printed key-sorted JSON on stdout or written to a path (REQ-CLI-237).
+**The two document shapes this section once fixed are withdrawn, and this section now fixes nothing.**
+They were REQ-CLI-237's, and that identifier is withdrawn: the self-contained trajectory document is
+REQ-EVENTS-132's, its version number REQ-EVENTS-133's, its summary block REQ-EVENTS-136's, its
+truncation disclosure REQ-EVENTS-140's, and its top-level key inventory REQ-SESSION-193's; the batch
+document that wraps one trajectory per selected session is REQ-EVENTS-144's, whose closed three-key
+inventory is that requirement's alone. Each of those inventories is declared exhaustive where it is
+fixed, and no part of either is restated here.
 
-Trajectory document: `schema_version`, `session_id`, `workspace`, `exported_at`, `run_count`, `truncated`, `event_count`, `events` (the stored event objects, unaltered, in stored order).
+*Withdrawn, recorded in place rather than deleted so a reader who has seen an earlier draft is told the
+keys are gone:* this section fixed a trajectory document as `schema_version`, `session_id`, `workspace`,
+`exported_at`, `run_count`, `truncated`, `event_count`, `events`, and a batch document as
+`schema_version`, `exported_at`, `session_count`, `sessions` (trajectory documents in command-line
+order). Both disagreed with the owners named above, on every key name where they differ, and neither
+was ever a contract this product owes anyone. **No conformance test may look for `schema_version`,
+`exported_at`, `run_count`, `event_count`, `session_count` or `sessions` on either document.**
 
-Batch document: `schema_version`, `exported_at`, `session_count`, `sessions` (trajectory documents in command-line order).
-
-`truncated` is true exactly when the store's per-session retention cap discarded lines (`runtime.event_retention_per_session`, 20,000 events by default, oldest lines dropped first, 0 meaning never trim).
+The per-session retention cap the withdrawn shapes disclosed is `runtime.event_retention_per_session`,
+whose registration, default and value space are REQ-CONFIG-473's and whose trimming behaviour is
+REQ-EVENTS-091's. Neither is restated here, and the figures quoted in REQ-CLI-195 above are left as
+drafted under the retirement note rather than maintained.
 
 ## Open Questions
 

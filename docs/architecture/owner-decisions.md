@@ -715,6 +715,49 @@ product out of it. Weakening it generally would trade a common protection for a 
 the exception to one user-confirmed action inside one feature keeps the protection everywhere it earns its
 place, and pays for the recovery path only where a user has asked for it in as many words.
 
+### ESC-22, ESC-24 and ESC-27 to ESC-31 — ruled 2026-09-02
+
+Delegated to the clean-room manager and ruled together. Each is small; two of them protect a user from
+losing access to their own work, which is why they are not merely tidy.
+
+| | Decided |
+|---|---|
+| **ESC-22** — no requirement bounds the aggregate terminal-frame rate | **Bound it.** |
+| **ESC-24** — a launch arriving inside the force-exit allowance | **Refuse the launch until exit completes.** |
+| **ESC-27** — `secrets.yaml` has no file mode | **`0600`**, matching credentials. |
+| **ESC-28** — a withdrawn configuration key fails the load | **Report and carry on.** |
+| **ESC-29** — a withdrawn key in *global* scope stops every workspace opening | **Report and carry on**, same rule. |
+| **ESC-30** — a version never recorded is indistinguishable from one pruned | **Make them distinguishable.** |
+| **ESC-31** — where the permission-audit entry's identifier lives | **In the entry.** |
+
+**ESC-22.** `REQ-MONITOR-222` now depends on this bound, which it did not when the vocabulary was written:
+the IPC measurement showed a separately named channel is not a separate transport, so the coalescing cap
+is what keeps a high-volume stream from delaying a transcript row. The measurement also located the cliff
+— transcript p95 rose sixfold at 65.5 MB/s and ninety-eightfold at 12,000 frames per second, while
+staying at 1.51 ms at 999. An unbounded rate leaves a load-bearing property resting on a default.
+
+**ESC-24.** The force-exit allowance exists because a quit is already going wrong. Admitting a launch into
+that window means two instances briefly exist, which SR-1 exists to prevent, at the one moment the product
+is least able to reason about its own state. Refusing is also consistent with SR-1's own shape: a second
+launch never starts a rival process.
+
+**ESC-28 and ESC-29 together, and this is the one that matters most.** A key the product itself invited a
+user to write, in a build the product itself shipped, must never make their workspace unopenable — and in
+the global scope it would make *every* workspace unopenable at once, from one line in one file, with no
+way in the product to reach the file that caused it. The user is told what is unsupported and what is
+being ignored, and the workspace opens. This is a deliberate departure from `REQ-CONFIG-183`'s hard load
+failure for an unknown key: an unknown key a stranger wrote and a withdrawn key we solicited are not the
+same case, and treating them alike converts our own deprecation into their outage.
+
+**ESC-30.** A version absent because it was never recorded and one absent because retention removed it
+mean different things to a user reading an audit trail — one is a gap in the record, the other is the
+record working as designed. `REQ-LIBRARY-047` makes the version write best-effort and outside the
+all-or-nothing boundary, so both cases genuinely occur.
+
+**ESC-31.** The identifier belongs **in the entry**. `REQ-EVENTS-056` requires the locator to resolve
+through the export on a machine carrying none of this product's code, so an identifier held anywhere else
+does not survive the export, and the export is the whole point of the audit being an audit.
+
 ### Consequences to carry
 
 - `REQ-MONITOR-013` **survives, clarified rather than withdrawn.** Its "a run executing in a different

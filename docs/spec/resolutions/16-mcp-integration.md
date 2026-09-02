@@ -154,3 +154,32 @@ from a shell there.
 | 31 | RESOLVED | Named from the catalog that already owns them rather than invented here: `tool.start` is observable before the call returns and its matching `tool.finish` follows when the call settles (REQ-EVENTS-057), and every other event of the catalog of REQ-EVENTS-041 that the session would otherwise have emitted is emitted at its normal point, neither withheld nor deferred until the outstanding call completes. The guarantee holds on every channel carrying the session event stream, for every surface fed by it, and however many calls are outstanding at once - which is what makes it testable: hold a call open and assert that the stream keeps moving. | REQ-MCP-068 |
 | 32 | MOOT | The question was about the prompt, abort and confirmation lines of a shell subcommand, withdrawn in the graphical-only sweep (REQ-MCP-086). Its successor REQ-MCP-111 fixes information content instead of strings, under the message-text decision: the value field does not echo, an empty value is refused and writes nothing, and the confirmation conveys the variable, the scope and the masked value. Its label must identify what the key is for without requiring the user to know the variable's name. | REQ-MCP-086 (withdrawn), REQ-MCP-111 (new) |
 | 33 | RESOLVED | A failed step stops the steps that would follow it. The three are ordered because each depends on the one before, and indexing a project that was never created cannot succeed; attempting it would produce a second, misleading failure for the user to read. A step not attempted for that reason is reported as `not-attempted`, distinct from a failure of its own, and the step status vocabulary is closed at `succeeded`, `failed`, `skipped-no-code`, `not-attempted`. A run in which any step is `failed` or `not-attempted` is reported as not having completed setup. | REQ-MCP-099 |
+
+
+> ## Amendment, 2026-09-02 — ESC-27 follow-through: `secrets.yaml`'s write is cited, not restated
+>
+> **The defect this closes.** `REQ-MCP-082` restated how `secrets.yaml` is written — "Writes SHALL be
+> atomic (temp file then rename) with parent directories auto-created" — and stated no file protection at
+> all. While `REQ-CONFIG-216` also stated no mode, the two agreed and the restatement was merely
+> redundant. ESC-27 has now fixed a mode there, and the moment it did, this sentence became a text a
+> build could conform to in full while leaving a file that holds credentials by design at whatever
+> protection the process mask happened to give it. **A build could satisfy domain 16 and violate domain
+> 15 over the same file.**
+>
+> **The amendment.** `REQ-MCP-082` now cites `REQ-CONFIG-216` for the whole of how the file is written
+> and holds no copy of the atomicity, the directory creation, the protection every write leaves in place,
+> or what happens when that protection cannot be applied. The withdrawn restatement is recorded in place
+> with its reason. The Data & Formats secrets section carried the same "atomic writes" phrase and now
+> carries the same citation.
+>
+> **Checked before deleting.** `REQ-CONFIG-216` holds everything the withdrawn sentence held — the write
+> is atomic and creates the target directory when missing — and adds the mode, the explicit application
+> of it on every write, the non-POSIX equivalent by citation to `REQ-PROVIDER-016`, the explicit denial
+> of `REQ-CONFIG-444`'s platform-default fallback, and the rule that the write does not happen where the
+> protection cannot be applied. Nothing was lost and one guarantee was gained.
+>
+> **The global scope's location** is now identified as `REQ-CONFIG-001`'s directory, which is the per-user
+> location `REQ-STARTUP-145` fixes — the same citation chain the rest of the corpus now uses.
+>
+> **ESC-12 was checked and nothing is owed here.** The ruling chooses a tool-server protocol line, which
+> is a technology decision; no requirement in this document states a protocol era and none should.

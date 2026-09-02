@@ -182,3 +182,26 @@ application log, which widens the guarantee rather than narrowing it.
 | 34 | RESOLVED | `none`. Nothing could be read, so nothing can run, and REQ-NOTIFY-227 closes the hook-trust vocabulary at four statements and admits no fifth for this case. In that state the tab shows no hook rows and raises no pending-review notice, and the read failure degrades to a log entry rather than becoming a warning of its own — consistent with the rest of the domain, where an unreadable input never fails a run and never reads as consent. | REQ-HOOKS-105 |
 | 35 | RESOLVED | Logical pixels — the unit REQ-SHELL-022 uses for every window dimension in this product, so the 620×440 minimum holds as the same physical area at every display scaling factor (REQ-SHELL-030) and is testable as written. The count inflects: it reads in the singular at 1 and no `hook(s)` construction is emitted literally, matching the domain-wide rule settled at open questions 18 and 35 together. | REQ-HOOKS-106, REQ-HOOKS-101 |
 | 36 | RESOLVED | Only runs started afterwards. REQ-HOOKS-131's fixed-at-run-start rule is canonical, and REQ-HOOKS-117's "at run time" is restated to mean *when the run's hook set is assembled*: the agent and per-hook toggles are read once, then never again for that run. The alternative — re-reading a file on every tool call — would make a run's behavior depend on a mid-run disk write, contradict the snapshot of REQ-HOOKS-118, and give the user no way to know which calls saw which setting. The settings tab conveys that a change takes effect for the next run, so clearing a checkbox mid-run does not read as stopping a hook that is still running. | REQ-HOOKS-109, REQ-HOOKS-117, REQ-HOOKS-131 |
+
+
+> ## Amendment, 2026-09-02 — `ROTARIS_CONFIG_DIR` is bounded to the file it names
+>
+> **Why this was touched at all.** `REQ-STARTUP-145` now fixes which per-user location the product uses
+> and states that it governs over the platform's own default. `ROTARIS_CONFIG_DIR` is the only thing in
+> this document that names a different per-user location, and it was stated without a boundary. A reader
+> could take it as a general override of the per-user directory — moving `agents.yaml`, `models.yml`,
+> `secrets.yaml` and the provider snapshot with it — or, worse, as an override of `REQ-STARTUP-145`
+> itself, which would let a user point the product's stores at storage shared with another machine. That
+> is the outcome ESC-19 refused when it declined a configurable store location, and the comparative
+> survey behind that ruling names variables of exactly this shape as the mechanism by which other
+> products' users relocate stores into synchronising folders.
+>
+> **What the amendment says.** `REQ-HOOKS-115` now states that the variable relocates **this one file**
+> and reaches nothing else — not the layered configuration scopes, not the credential store, not the
+> durable session store, not the desktop preference store — and that where it is set, the location of
+> every one of those is unchanged. The default remains the per-user global configuration directory of
+> `REQ-CONFIG-001`, which is now identified as the location `REQ-STARTUP-145` fixes.
+>
+> **What was deliberately not done.** Whether the variable should exist at all was not reopened. It has
+> a stated purpose in this domain, it was not raised by any ruling, and withdrawing a capability nobody
+> escalated is not this round's to do. The amendment adds a boundary and removes no behaviour.

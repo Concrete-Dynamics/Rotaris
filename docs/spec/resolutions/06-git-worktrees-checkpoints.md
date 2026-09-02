@@ -209,3 +209,41 @@ only the `sessions --repair` venue is gone. **OQ 11** likewise stands: what the 
 convey is REQ-GIT-161's, REQ-GIT-122's and REQ-SHELL-038's. **OQ 5** is untouched, since the liveness
 probe and the lock file's `host` field (REQ-GIT-093, REQ-GIT-020) never depended on the surface that
 invoked them.
+
+
+> ## Amendment, 2026-09-02 — the withdrawn `worktree_subpath` key, and spike 19's report on ESC-21
+>
+> **ESC-28 / ESC-29 follow-through.** `REQ-GIT-074` said a `worktree_subpath` written under
+> requirement-execution worktree configuration "is rejected as an unknown key, on the terms
+> `REQ-CONFIG-194` fixes". Those terms now say the key is **reported and ignored**, the workspace
+> opening and every other key loading as though it were absent. The sentence cited the requirement whose
+> terms it contradicted, so a build reading `REQ-GIT-074` and a build reading `REQ-CONFIG-194` would have
+> behaved differently over the same file. `REQ-GIT-074` now states the outcome the ruling fixes and cites
+> `REQ-CONFIG-194` and `REQ-CONFIG-183` for the terms, with the superseded wording recorded in place
+> rather than deleted. The configuration-surface line in Data & Formats carried the same sentence and is
+> corrected with it.
+>
+> **Nothing about the key itself changed.** `worktree_subpath` is still not a configuration key of any
+> domain, still configures nothing, and `REQ-GIT-137` still fixes where requirement-unit checkouts are
+> placed. What changed is only what happens to a file that still states it.
+>
+> **The unknown-key rule was checked and is not weakened by this.** The carve-out reaches exactly a key
+> this specification defined and withdrew and a key it names as not a configuration key of this domain.
+> A key nobody defined — a mistyping, or one something other than this product wrote — is still a hard
+> load failure under `REQ-CONFIG-183` and still fatal under `REQ-CONFIG-233`. Getting that backwards
+> would have been worse than the defect it fixes, because the `requirements:` block drives runs nobody
+> is watching.
+>
+> **ESC-21, status corrected rather than settled.** `REQ-GIT-128`'s closing paragraph said the strength
+> of the refusal "is left to the synchronised-storage spike". That spike has now reported. It measured
+> ESC-21's **first** premise and confirmed it — exclusive create is a genuine primitive over a network
+> share, 2,500 races, exactly one winner in 2,500, more than one in none — and it could **not** measure
+> the second premise, which needs a second machine and a synchronisation account, so it stated the
+> closing experiment precisely and declined to invent a result. It also established two things the
+> requirement rests on: the detection `REQ-STARTUP-166` performs is real, precise for providers that
+> register with the platform, and costs single-digit milliseconds; and **nothing in the lock can break
+> the tie afterwards**, because the orderable timestamp step is about a millisecond while the measuring
+> machine's own clock carried an offset of about 855 milliseconds against a public source. The
+> requirement now records that the spike has reported without deciding the strength, so a reader does
+> not wait for an answer that has already come back empty. **The direction is unchanged and was never
+> the spike's to reopen: the product does not proceed under a lock that does not lock.**

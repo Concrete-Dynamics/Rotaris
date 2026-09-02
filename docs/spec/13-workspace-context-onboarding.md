@@ -484,6 +484,8 @@ Not a format this domain defines. The locations, the accepted shape and keys, an
 
 ### Machine setup state
 
+The per-user data directory named below is the one REQ-STARTUP-145 fixes, which is where that requirement settles which per-user location is meant on a platform offering more than one; this appendix holds no copy of that property and states none of its own. The layout itself is REQ-STARTUP-070's.
+
 - `<per-user-data-dir>/setup/state.json` — atomic JSON outcome record (`complete` | `degraded` | `cancelled` | `already-running`, plus manifest fingerprint).
 - `<per-user-data-dir>/tools/…` — managed tool installs; `setup.lock` stale after 900 s.
 

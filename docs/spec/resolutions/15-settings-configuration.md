@@ -106,6 +106,59 @@ status: resolved
 > amended: `<workspace>/.rotaris/` never held it, and now the two documents agree about that.
 
 
+> ## Amendment, 2026-09-02 — three owner rulings land (ESC-27, ESC-28, ESC-29) and the per-user location is cited
+>
+> **ESC-27 — `secrets.yaml` gains a file mode, and it is `0600`.** REQ-CONFIG-216 fixed the write as
+> atomic and directory-creating and fixed **no mode**, so the one file in this document's configuration
+> set that holds credentials by design took whatever the process mask happened to leave. Ruled `0600`,
+> matching credentials. REQ-CONFIG-216 is amended in place: every write leaves the file at `0600` with no
+> group or other bit, applies that explicitly rather than by inheritance, and on a platform with no POSIX
+> mode uses the explicit owner-only access control REQ-PROVIDER-016 fixes for the credential store —
+> **cited, not restated**, because that requirement owns the platform-specific form of the protection. The
+> `0644` of REQ-CONFIG-444 and REQ-CONFIG-212 is untouched and now reads as the rule for ordinary
+> configuration, with the contrast stated so the two are not read as a conflict; REQ-CONFIG-444's
+> "leave the platform's own default in place" fallback is explicitly **not** available for this file. Where
+> the protection cannot be applied, the existing failure path governs and no secret is written at a weaker
+> protection. The Data & Formats secrets entry carries the same statement as a citation.
+>
+> **ESC-28 and ESC-29 — a withdrawn configuration key is reported and the workspace opens.** Ruled
+> together: report and carry on. Amended in REQ-CONFIG-183, which owns the rule, rather than carved out
+> elsewhere. A key this specification itself defined and withdrew, and a key it names as not a
+> configuration key of this domain, are **reported and ignored**: they contribute nothing to the merge,
+> every other key loads as though they were absent, and the workspace opens. **REQ-CONFIG-183's rule for a
+> genuinely unknown key is not weakened** — it is restated as unweakened, with its reason (the block drives
+> unattended runs, so a silently ignored key there would let a run proceed under settings its author
+> believed they had given it), so that a later reader cannot take this carve-out as licence to widen it.
+>
+> The requirement states **why** rather than merely carving an exception, because the departure is
+> deliberate: an unknown key a stranger wrote and a withdrawn key this product solicited are not the same
+> case, and treating them alike converts our own deprecation into the user's outage. In the global scope
+> the asymmetry is total — one line in one file would stop *every* workspace opening at once, with no
+> surface of the product reachable to repair it, the settings screen that edits that very file included.
+>
+> **What moved and what did not.** The report's content — file by full path and scope, key by full path,
+> withdrawn-rather-than-mistyped, what became of what the key configured — is **relocated, not withdrawn**:
+> it moves from REQ-CONFIG-478 into REQ-CONFIG-183 because it now describes a warning rather than a fatal
+> failure, and REQ-CONFIG-183 adds that the report must also convey that the key is being ignored and that
+> the rest of the configuration loaded. REQ-CONFIG-478 keeps its identifier and its job — the floor every
+> **fatal** load failure meets — with its stated motivation corrected in place rather than deleted, since
+> the case that motivated it is now handled at its source. REQ-CONFIG-233 moves the case from **Fatal** to
+> **Warn and continue** and narrows the fatal entry to a key this specification has never defined.
+> REQ-CONFIG-192 and REQ-CONFIG-194 are amended to cite the new outcome instead of the old refusal.
+> REQ-CONFIG-477 ground 1 now reads the surviving withdrawn key as that ground working rather than as an
+> exception to it.
+>
+> **Deliberately not done.** No new surface, and no licence to edit the user's file: the product neither
+> removes the key nor offers to. The second half of ESC-28 — a confirmed one-click removal — would need the
+> no-repair rule narrowed explicitly and was not taken. `REQ-CONFIG-478`'s no-repair guarantee is unchanged.
+>
+> **The per-user location is now cited rather than assumed.** REQ-STARTUP-145 gains the clause fixing
+> which per-user location is meant where a platform offers both a replicated one and a machine-local one.
+> REQ-CONFIG-001 and the workspace-layout block now cite it; this domain states no rule of its own about
+> the location and the per-platform spellings in REQ-CONFIG-001 are that location rather than a second
+> definition of it.
+
+
 This record disposes of every open question raised in the draft of
 [`../15-settings-configuration.md`](../15-settings-configuration.md) (domain 15, requirement prefix
 `REQ-CONFIG`). The body of that specification has been amended so that each decision below is stated

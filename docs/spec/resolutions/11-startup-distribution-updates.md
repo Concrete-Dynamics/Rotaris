@@ -64,6 +64,56 @@ status: resolved
 >   nothing saying why.
 
 
+> ## Amendment, 2026-09-02 — REQ-STARTUP-145 states which per-user location is meant
+>
+> **The defect.** REQ-STARTUP-145 said "platform-conventional configuration and data directories" and
+> said nothing about a platform that offers a user **two** per-user locations — one the platform
+> replicates to the user's other machines or to another copy of their profile, and one that stays on the
+> machine in use. Four requirements that need the machine-local one each said so for themselves
+> (REQ-SESSION-198, REQ-PROVIDER-014, REQ-PROVIDER-063, and this domain's REQ-STARTUP-165 (a)), so the
+> corpus was satisfiable and **no build reading any one of them was wrong** — and a build was still wrong
+> overall, because the requirements that place things there and say nothing inherit the platform default.
+>
+> **It is measured rather than anticipated.** On the machine that ran spike 20 the platform layer's
+> default per-user data path resolved under the replicated profile, and a launch preparation derived from
+> it would have placed a full payload per artifact version into replicated storage. The spike's own
+> anchor payload was 507.9 MiB — that figure is the deliberately ballasted `W150` anchor adopted from
+> spike 17 so the two spikes' numbers sit on one axis, not a prediction of the shipping product's weight
+> — and §8.2 measured two such trees present at once after launching two versions, so the cost is per
+> version left unreclaimed rather than one-off. What the measurement establishes is the **trap**, not the
+> size: the default resolves to the replicated location on the platform this product mandates.
+>
+> **The fix is at the definition, in one clause.** REQ-STARTUP-145 now states, once, that where a platform
+> offers both, the per-user configuration and data directories of this product are the location local to
+> this machine and not replicated, copied or synchronised to any other machine or to any other copy of the
+> user's profile; that where only one exists the clause selects nothing; and that where the platform's own
+> default is the replicated location, **this requirement governs over that default** — conformance being
+> decided by the directories the product actually writes to, never by the one a platform layer would have
+> chosen unasked. It names no operating-system directory and no platform interface. It also states why the
+> clause is at the definition: each mechanism is individually harmless in a replicated location and they
+> are jointly wrong, because a record describing *this* machine describes a machine it is not on as soon
+> as it is replicated to a second one.
+>
+> **Dependents now cite rather than restate.** REQ-STARTUP-165 (a) drops its own machine-local sentence and
+> cites REQ-STARTUP-145; REQ-STARTUP-070 and REQ-STARTUP-087 gain the citation; the Data & Formats entries
+> for the launch preparation, the single-instance record and the per-user setup layout follow.
+> **REQ-STARTUP-161 gains the property it never had**, which is the third mechanism the architecture record
+> named: the single-instance record is now fixed to that location, because a replicated record would offer
+> a launch a process that was never running on this machine and REQ-STARTUP-164's resolution would have to
+> reclaim it on every launch.
+>
+> **One restatement was checked and deliberately kept.** REQ-STARTUP-165 (c) permits a run-scoped placement
+> in a closed set of **two** locations, and only the first of them — the per-user data directories —
+> inherits the property from REQ-STARTUP-145. The platform's transient-files storage is not those
+> directories and inherits nothing, so the prohibition on replicated storage is retained in clause (c) and
+> the retention is explained in its own text, rather than deleted as a duplicate of the owner's rule.
+>
+> **Per-workspace state is untouched.** `<workspace>/.rotaris/` is not per-user state: it stays wherever
+> the user put the workspace, on whatever storage they chose, and REQ-STARTUP-145 now says so explicitly so
+> that the new clause cannot be read as licensing the product to relocate or refuse a workspace on shared
+> or replicated storage, which REQ-STARTUP-166 reports and never refuses.
+
+
 This record disposes of every open question raised in the draft of
 [`../11-startup-distribution-updates.md`](../11-startup-distribution-updates.md) (requirement prefix
 `REQ-STARTUP`). The body of that specification has been amended so that each decision below is
@@ -146,7 +196,7 @@ not made from a released standalone artifact as never updatable, is unaffected a
 | REQ-STARTUP-098 | `rotaris-cli setup [--workspace PATH]` — stderr step lines, a bare outcome word on stdout, exit 1 for degraded or cancelled | **REQ-STARTUP-153** (new) — machine setup is re-runnable from Settings after first launch, whole or step by step, reading and updating the same `setup/state.json` (REQ-NOTIFY-265, REQ-CONFIG-397). The repair route of REQ-STARTUP-103 already carried the whole-pass case |
 | REQ-STARTUP-099 | `rotaris-headless setup [--workspace PATH]`, identical contract | **REQ-STARTUP-153** (new), as above |
 | REQ-STARTUP-100 | The automatic bundled ensure-setup pre-step in front of every console command, with `setup: {message}` lines on stderr | REQ-STARTUP-044 and REQ-STARTUP-096 (the desktop schedules setup before repository discovery and before onboarding) and REQ-STARTUP-089 (the managed environment is activated at desktop startup before any child process can launch). The "never open a GUI, never block on one" clause had no referent left |
-| REQ-STARTUP-145, migration clause only | The one-time silent rename of a legacy per-user and per-workspace directory | Nothing to rescue — decision 5. The rest of REQ-STARTUP-145, which defines the per-user and per-workspace locations, is unchanged and survives |
+| REQ-STARTUP-145, migration clause only | The one-time silent rename of a legacy per-user and per-workspace directory | Nothing to rescue — decision 5. The rest of REQ-STARTUP-145, which defines the per-user and per-workspace locations, survives — since amended by the 2026-09-02 block above, which adds which per-user location is meant where a platform offers more than one |
 
 ### Requirements amended to strike a shell-surface clause
 
@@ -249,3 +299,50 @@ by adopting a vocabulary another domain had already fixed.
   rescue of its own.
 - **REQ-CONFIG-269 / REQ-CONFIG-396** place the machine-setup card in the `project` settings
   category; REQ-STARTUP-101 and REQ-STARTUP-153 cite that category rather than naming a new one.
+
+
+> ## Corrective amendment, 2026-09-02 — domain 11's side of ESC-24
+>
+> *Made by the sweep pass as a correction of a contradiction between two amended domains, and recorded
+> separately from the `REQ-STARTUP-145` amendment above.*
+>
+> `REQ-SHELL-169` (ESC-24) requires a launch arriving while this instance is shutting down to be refused,
+> answered, and honoured once the shutdown has finished. Three requirements of this domain contradicted
+> it as written, and one of the three would have defeated it outright.
+>
+> **`REQ-STARTUP-164`, and this is the one that mattered.** Clause (3) reclaimed the instance record
+> where the hand-over went unacknowledged for 5 seconds, listing "a process that is running does not
+> answer" among its triggers. A refusal **is** an answer, but it is not an acknowledgement of the
+> hand-over, so on the literal reading a launch refused one second into a thirty-second force-exit
+> allowance would reclaim the record at second five and become the second simultaneous instance ESC-24
+> was ruled to prevent. Neither requirement was individually unsatisfiable, and no test in either domain
+> would have caught it. The clause now states that an instance which answers is not an instance that does
+> not answer, that the 5 seconds are not applied to a refusal, that the record is not reclaimed, that the
+> launch waits instead, that the wait is bounded by the force-exit allowance `REQ-MONITOR-131` carries
+> and of which this domain holds no copy, and that the deferred launch re-enters the resolution order at
+> clause (1) with its full complement of attempts once the record is released — resolving a record the
+> shutdown left behind exactly as the clause already resolves one naming a process that is no longer
+> running.
+>
+> **`REQ-STARTUP-162`, twice.** Its clause requiring an instance that holds the record but has no window
+> open to **build and show** a main window is precisely what ESC-24 identified as wrong, and
+> `REQ-SHELL-169` forbids it from its side only; that clause now carries its single exception. Its
+> silence rule — "no surface anywhere in the product reports that a launch was refused" — is scoped to a
+> launch that has been handed over and has **ended**, which is what it was always about, and a new
+> paragraph fixes what a refused-and-waiting launch shows. `REQ-SHELL-169` states in terms that this
+> surface is domain 11's to fix and deliberately does not fix it, so until this amendment the obligation
+> to tell the user existed and the thing that tells them did not.
+>
+> **`REQ-STARTUP-161`.** Its closure — "every launch resolves to exactly one of two outcomes and to no
+> third" — is still true, because a refused launch eventually becomes the instance or is handed to a
+> successor. Read literally it nonetheless reads as forbidding the wait. It now states that the set of
+> outcomes is closed while *when* a launch reaches one is not fixed there, and that waiting is not a
+> third outcome. The Data & Formats constant for the hand-over wait is qualified in the same way: the 5 s
+> bounds an **unanswered** hand-over, not a refused one.
+>
+> **What was deliberately not done.** `REQ-STARTUP-121`'s update restart needed no amendment.
+> `REQ-SHELL-169` relies on it — the record **passes** to a successor rather than being released, so a
+> refused launch is handed to the successor rather than becoming the instance — and its own "SHALL never
+> start a third process" holds unchanged. A reciprocal cross-citation from the update-restart side would
+> make the interaction visible from there and is a nicety rather than a contradiction; it is reported
+> rather than made.

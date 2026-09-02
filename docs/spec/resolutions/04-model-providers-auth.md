@@ -208,3 +208,37 @@ prices them on a cost this domain owns (REQ-CHAT-174). Both are now stated here.
 | 27 | RESOLVED | Half-up, the same direction the money rule uses for every amount that is not a balance: clamp to 0–100, then round half-up to a whole number, so an exact halfway value rounds away from zero. One rule governs every percentage the domain displays, and the three usage readers now cite it instead of restating it. | REQ-PROVIDER-127, REQ-PROVIDER-124, REQ-PROVIDER-125, REQ-PROVIDER-126 |
 | 28 | OMITTED | The two-label distinction is dropped rather than pinned to a guessed payload field. It was an arbitrary difference with no behavioral consequence — the same number, computed the same way, under a different name — and specifying it would have meant naming a payload field whose meaning cannot be established from any approved source. One label is used for the `premium_interactions` snapshot whatever the account's billing arrangement, conveying that the figure is that account's premium-request allowance, and the read never branches on a billing kind. The conditional " credits" suffix on the used label goes with it. | REQ-PROVIDER-125 (narrowed) |
 | 29 | RESOLVED | One fixed marker, identical in every venue — log, user-visible error text, snapshot, event stream, hook payload. It carries no character of the value it replaced and its length does not vary with that value's length, so neither the secret nor its size can be inferred from redacted text. The marker's wording is left to the implementation provided it is uniform and reads as a redaction. The 2+4+2 mask is never used as a redaction marker: it exists only as the deliberate rendering of a key the user themselves stored. | REQ-PROVIDER-131, REQ-PROVIDER-107 |
+
+
+> ## Amendment, 2026-09-02 — the credential and staging directories cite REQ-STARTUP-145 rather than restate it
+>
+> **What changed.** `REQ-PROVIDER-014` said the per-user data directory its credential files sit in
+> "MUST be storage local to the machine rather than storage replicated to another machine or profile",
+> and `REQ-PROVIDER-063` said the same for the Copilot gateway staging directory. `REQ-STARTUP-145` now
+> states that property once, at the definition of the per-user directories, and declares itself the
+> single statement of it. Both requirements now **cite** it and state it no longer.
+>
+> **Why the restatements were a defect and not merely redundant.** The property was stated four times in
+> the corpus and defined nowhere. Every requirement that put something in a per-user directory and said
+> nothing — which is most of them — inherited whatever the platform's own default was, and on the
+> mandated desktop platform that default resolves under the replicated profile. Each requirement was
+> individually defensible and the build was wrong overall. That is the shape of defect a citation fixes
+> and a restatement cannot.
+>
+> **What was deliberately kept.** Each requirement keeps its own **reason** for relying on the property,
+> because a reason is not the property. `REQ-PROVIDER-014` keeps "the protection `REQ-PROVIDER-016`
+> applies to a file does not survive that file being replicated somewhere else"; `REQ-PROVIDER-063`
+> keeps the whole paragraph explaining that what bounded these files inside the workspace bounds version
+> control and local access and does not bound a synchronisation client replicating a bearer token to a
+> vendor's servers. Those are the strongest sentences either requirement has and none of them is
+> `REQ-STARTUP-145`'s.
+>
+> **The Data & Formats appendix** gained one sentence naming `REQ-STARTUP-145` as the definition of both
+> per-user roots it spells out, so a reader who arrives at the appendix rather than at the requirement
+> reaches the same place.
+>
+> **What was deliberately not done.** `REQ-PROVIDER-084`'s "unknown keys are rejected" for the provider
+> snapshot was checked against the ESC-28 / ESC-29 ruling and left alone. That rejection is not a
+> configuration load failure: `REQ-WORKSPACE-036` states that a snapshot failing validation contributes
+> nothing and does not make configuration load fail, so no workspace is made unopenable by it and the
+> ruling does not reach it.

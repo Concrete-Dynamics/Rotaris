@@ -89,6 +89,23 @@ status: resolved
 > test — the requirement says so itself, and the identifier is forbidden to be derived from or to
 > disclose any argument of the call the entry decided.
 
+> ## Correction, 2026-09-02 — the paragraph immediately above is superseded and must not be cited
+>
+> **"What is deliberately not fixed" is now fixed.** The product owner ruled that the identifier is
+> carried **in the entry**, and REQ-TOOLS-079 has been amended to state it and to state why: REQ-EVENTS-056
+> requires the locator to resolve *through the export*, on a machine carrying none of this product's code,
+> so an identifier held anywhere but in the entry does not survive being exported, and the export is the
+> whole reason the audit is an audit. The claim above that "a conformant build can be made today under
+> either" reading is withdrawn — a build that carries the identifier beside the entry is now
+> non-conformant.
+>
+> **Two things the amendment deliberately did not change.** REQ-TOOLS-079's no-argument-values property is
+> untouched and the identifier is still forbidden to be derived from or to disclose any argument of the
+> decided call, so REQ-TOOLS-190's redaction-safety test still passes for the audit. And REQ-TOOLS-082's
+> mode-change entries keep their field set exactly: the ruling fixes where a *decision* entry's identifier
+> lives, no locator names a mode-change entry, and reading the ruling as an obligation on every entry the
+> audit holds would put a field into a shape REQ-TOOLS-082 states as closed.
+
 
 This record disposes of every open question raised in the draft of
 [`../05-tools-permissions-approvals.md`](../05-tools-permissions-approvals.md) (domain 05,

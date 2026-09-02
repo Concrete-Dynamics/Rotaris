@@ -202,3 +202,61 @@ resolved, OQ 18 and OQ 23 each carried a component that ceased to exist with the
 requirements were withdrawn for legacy-compatibility reasons and fourteen for shell-surface reasons,
 with every capability rescued as recorded above. Nothing was escalated and nothing remains
 outstanding for the product owner in this domain.
+
+
+> ## Amendment, 2026-09-02 — ESC-31's follow-through, the export destination, and the machine-local citation
+>
+> Five changes, four of them consequences of amendments landed in other domains and one of them a
+> resolution of this domain's own ambiguity.
+>
+> **1. `REQ-SESSION-137` stated the permission audit's record shapes a second time, and the second
+> statement had gone wrong.** ESC-31 ruled that a decision entry's identifier is a **field of the entry**
+> and `REQ-TOOLS-079` now says so. `REQ-SESSION-137` stated the decision entry as a closed literal object
+> that named no identifier, and stated the mode-change entry as a shorter object than `REQ-TOOLS-082`
+> requires — it omitted `timestamp` and `session_id`. Read as closed, the first contradicted the ruling
+> and a build following it would export an audit whose locators do not resolve on a machine carrying none
+> of this product's code, which is the exact failure ESC-31 was ruled to prevent and one that nothing
+> errors on. **Both enumerations are withdrawn in place and replaced by citations.** Each was checked
+> field by field against its owner first: `REQ-TOOLS-079` holds every field the first named and adds the
+> identifier; `REQ-TOOLS-082` holds every field the second named and two it omitted.
+>
+> What this domain keeps is what is genuinely its own: that the audit is part of the session's durable
+> record, the automatic issue and timeline entries a deny and an approval file, that mode changes are
+> counted separately in metrics, the append-only property a reader may rely on, and that both properties
+> must be evident in the export.
+>
+> **2. `REQ-SESSION-199`'s locator clause said "for every entry it emits".** Under the ruling that reads
+> as an obligation to put an identifier into `REQ-TOOLS-082`'s closed shape. It now reads on every entry
+> **that has one**, with the two consequences stated rather than inferred: an entry whose own requirement
+> gives it no identifier is not reached, and a kind holding entries of more than one shape is nameable
+> while its unidentified entries are not, which `REQ-EVENTS-056` states. The "beside the entry" branch is
+> kept for a shape closed against additions and gains the requirement that the identifier be locatable as
+> the identifier there — a value carried under no known field resolves nothing.
+>
+> **3. The export destination gained the atomicity and the ladder it never had.** `REQ-SESSION-189` and
+> `REQ-SESSION-199` write to a file the user chooses through a save dialog. That is the one class of
+> write in this product whose target the product does not pick, and it reaches removable media, storage
+> shared with another machine, a synchronising client's folder, and a directory in which another
+> application holds the previous export open. Neither requirement said the write must land in one step,
+> and neither said what happens when replacing an existing file fails transiently. Both now **cite**
+> `REQ-EVENTS-145` for what an export write owes its destination and `REQ-TRACE-061` for the bounded
+> retry ladder. Neither obligation is restated here and this domain states no ladder of its own for that
+> destination. `REQ-EVENTS-145` gained the reciprocal sentence saying its one-step obligation is the
+> product's single statement of the property and is not confined to the exports its own document names,
+> so the citation cannot later be orphaned by a tidying pass reading "this document" as a scope.
+>
+> **4. `REQ-SESSION-033`'s attempt count was ambiguous and is resolved.** "Retried up to 5 times with
+> exponential backoff starting at 0.05 s (0.05, 0.1, 0.2, 0.4, 0.8 s)" reads as either five attempts or
+> six, and the architecture record carries **both** readings in two different places. Two conformant
+> builds would therefore absorb different amounts of a transient failure. It is fixed at **six attempts
+> in total — the first and at most five retries, the last beginning no more than 1.55 s after the
+> first** — because that is the reading under which every delay the requirement itself lists is used.
+> **Nothing is narrowed by the resolution**: the alternative reading retries strictly less. The
+> requirement also now says that the export destinations are not this domain's to ladder and cite
+> `REQ-TRACE-061`, whose figures are that domain's own and are not these.
+>
+> **5. `REQ-SESSION-198` cites `REQ-STARTUP-145` for machine-local rather than stating it.** The property
+> was stated four times in the corpus and defined nowhere; it is now defined once. The requirement keeps
+> everything that is its own — that the rule holds always and is never made conditional on detecting
+> shared storage, the four observable consequences, that the per-session files are held with the store,
+> and that a store which cannot be opened is not worked around.

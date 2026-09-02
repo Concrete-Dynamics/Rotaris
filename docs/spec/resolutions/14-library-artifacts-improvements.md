@@ -162,3 +162,52 @@ shell-surface requirements:
 | 31 | RESOLVED | Normalised, then matched: surrounding whitespace stripped and the remainder compared case-insensitively, so ` Research ` is the tag `research` and is accepted. A tag that still does not match is rejected, and the error names it as the user supplied it rather than in normalised form, so the message points at what was actually typed. A repeated tag is collapsed to one occurrence rather than rejected — a duplicate expresses no ambiguity, so refusing a whole publish over it would be gratuitous — and the record stores tags normalised, in order of first occurrence. | REQ-LIBRARY-089 |
 | 32 | RESOLVED | Only prompts actually sent to a run or queued for one are recorded; REQ-LIBRARY-137 is canonical and REQ-LIBRARY-142's contrary sentence is removed. Composer text the window consumes as a slash command is handled locally, becomes neither a sent nor a queued prompt, and is not recorded — recording it would fill the history a user reaches for with commands rather than with the prompts they wrote, which defeats the feature. Text that merely begins with a slash without being a recognised command is ordinary prompt text and is recorded once sent or queued. | REQ-LIBRARY-137, REQ-LIBRARY-142 |
 | 33 | RESOLVED | The attempt count is contractual and so is the total bound; the individual delays are not. Each retry is preceded by a non-zero pause, and all 5 attempts must complete within 1 second of the first, so a file another process is momentarily holding delays a save by at most that long before the failure is reported. The growth pattern between attempts is an implementation choice, is not observable, and must not be relied on. Bounding the total rather than the steps is what makes the guarantee testable — a save can never hang on a held file — without pinning a backoff curve. | REQ-LIBRARY-043 |
+
+
+> ## Amendment, 2026-09-02 — ESC-30, and the export destination's ladder by citation
+>
+> *Recorded by the sweep pass rather than by the agent that made the amendment, so the record is not
+> owed twice.*
+>
+> **ESC-30, ruled "make them distinguishable".** A version absent because retention pruned it and a
+> version absent because the best-effort recording never wrote it mean different things to a user reading
+> an audit trail: one is the record working as designed, the other is a hole in it. `REQ-LIBRARY-047`
+> makes the version write best-effort and outside the all-or-nothing boundary, so both cases genuinely
+> occur.
+>
+> **Where the obligation was put, and why there.** On the **store**, not on the export.
+> `REQ-LIBRARY-047` now requires each artifact write to record, inside its own all-or-nothing operation,
+> that a version was due for the state it stored — so a version the best-effort recording then failed to
+> write is afterwards known to be absent and countable. What is retained must be enough to say **how
+> many** were never recorded and must not be a copy of what any of them held. That mirrors how
+> `REQ-LIBRARY-052` and `REQ-TRACE-405` already work, and follows `REQ-SESSION-133` as the named model:
+> retain enough to say what was dropped, in the same durable operation.
+>
+> **The guards, so the amendment does not overreach.** Recording that a version was *due* is not
+> recording the version, so nothing is brought inside the boundary that was outside it; version recording
+> stays best-effort; a version that cannot be recorded still does not undo the artifact write; and the
+> user's change still takes effect in a workspace whose versions cannot be written.
+>
+> **`REQ-LIBRARY-176` carries two figures, never one.** How many versions retention dropped
+> (`REQ-LIBRARY-052`) and how many were never recorded (`REQ-LIBRARY-047`), each identified as which of
+> the two it is, never merged, never stated without saying which it is, and each stated as **zero rather
+> than omitted** where neither has occurred — because an omitted figure is ambiguous between "none
+> dropped" and "not computed", which is the same reasoning as the requirement's existing empty-record
+> rule. The zero clause was not in the ruling and is recorded here as an addition.
+>
+> **The cross-export guard.** `REQ-LIBRARY-176` may not carry either figure in a shape shared with the
+> export of a store whose absences have only one cause, and `REQ-TRACE-514` states the reciprocal. One
+> shared export mechanism is the natural implementation and it would emit one undifferentiated "dropped"
+> field true of neither store.
+>
+> **`REQ-LIBRARY-052` gained one clause and no more**, pointing at `REQ-LIBRARY-047` as the owner of the
+> other count, so its correct "this obligation covers versions pruning dropped and nothing else" no
+> longer reads as implying the never-recorded case is uncounted.
+>
+> **The export destination.** `REQ-LIBRARY-176` writes to a file the user chooses, which may sit on
+> removable media, on storage shared with another machine, in a synchronising client's folder, or in a
+> directory where another application holds the previous export open. It **cites** `REQ-TRACE-061`'s
+> retry ladder rather than stating a third one, and records in terms that this domain states no
+> replacement ladder of its own. `REQ-LIBRARY-043`'s withdrawn ladder is **not** reinstated;
+> `REQ-LIBRARY-158`'s reason for that withdrawal — no writer outside this application can reach a record
+> in the store — was checked and does not reach a destination outside the store that the user named.

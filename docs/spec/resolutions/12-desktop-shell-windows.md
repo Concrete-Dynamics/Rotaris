@@ -166,3 +166,57 @@ precedence ladder intact. The section heading "Command line and process lifecycl
 | 34 | RESOLVED | The transient error notification of REQ-SHELL-112 — the same surface the workspace-open, new-session and session-browser refusals already use, so a refused action always reports in one place. The message conveys three things: that nothing was restored; that the reason is a live run, or that liveness could not be read and is therefore treated as live; and that finishing or cancelling the run makes restore available. Wording is left to the implementation. A refused restore changes nothing at all — no file, no checkpoint record, no view contents — and leaves the checkpoint listing exactly as it was, so a refusal is never a partial restore. | REQ-SHELL-155, REQ-SHELL-112 |
 | 35 | RESOLVED | Either condition triggers it, and either alone is enough: the polled balance is at or below zero, or that same poll reported the service declining new work (admission not allowed, REQ-PROVIDER-130). The two need not agree and no reconciliation is attempted. Title and body are stated as content, not wording: they convey that the account has no credit or is being refused new work, that a run on a cloud model may therefore fail partway or not start at all, and that the choice is between starting anyway and topping up. Two answers only — "Start anyway", and a declining answer whose own label states that it opens the account page, which is the default. Escape starts no run and opens nothing, under the general rule of REQ-SHELL-055 that dismissing a dialog never launches anything outside the application. The already-polled-balance rule is unchanged: no network request between the request and the confirmation. | REQ-SHELL-158, REQ-SHELL-055, REQ-PROVIDER-130 |
 | 36 | RESOLVED | The interval is 400 ms after the last keystroke, with an immediate flush — not waiting out the interval — whenever the composer loses focus, the active view changes, the workspace is replaced, or the window closes. Survival of an abnormal termination is deliberately not promised; the bound is stated instead, which is checkable where a promise would not be: a power loss or a killed process may lose at most the keystrokes of the last debounce interval and nothing earlier, because every deliberate departure from the composer has already flushed. A draft is never left half-written — a write lands whole or not at all — so the text read back is always text the user actually typed at some moment. | REQ-SHELL-159 |
+
+
+> ## Amendment, 2026-09-02 — ESC-24, and the preference store's per-user location
+>
+> *The ESC-24 half is recorded by the sweep pass rather than by the agent that made it, so the record is
+> not owed twice. The preference-store half is the sweep's own corrective edit.*
+>
+> **ESC-24 — a launch arriving while this instance is shutting down is refused.** `REQ-SHELL-169` is
+> minted, placed in the window-close and shutdown section. "Shutting down" is the interval from the
+> ordered shutdown effects `REQ-MONITOR-131` fixes beginning until the process ends, force-exit allowance
+> included and not copied. Through it the instance builds no window, opens no workspace, and starts and
+> writes nothing on the launch's behalf — including the window `REQ-STARTUP-162` would otherwise have a
+> window-less instance build. The reason the ruling gave is carried in the requirement: admitting the
+> launch would mean two instances briefly existed, which `REQ-STARTUP-161` exists to prevent, at the
+> moment the product is least able to reason about its own state.
+>
+> **The refusal is answered, never silent**, and the requirement states why silence is not equivalent: an
+> unanswered launch treats the instance as unreachable and reclaims the record, which is the path
+> `REQ-STARTUP-164` keeps for a process that *cannot* answer, and taking it for one that can would
+> produce the two simultaneous processes the refusal exists to avoid. Where a main window is on screen it
+> is surfaced and already states that stopping is under way; where none is, the user is still told the
+> application is finishing shutting down and will open when it has, so a launch that appears to do
+> nothing for the length of the allowance is not mistaken for one that failed. The waiting launch's
+> surface is handed to domain 11 rather than fixed here.
+>
+> **Domain 11 was amended in step, because without it the refusal is defeated by the requirement it
+> relies on.** `REQ-STARTUP-164` clause (3) reclaimed the record where "a process that is running does
+> not answer" within 5 seconds. A refusal is an answer but is not an acknowledgement of the hand-over, so
+> on the literal reading a launch refused one second into a thirty-second allowance would reclaim the
+> record four seconds later and become exactly the second instance ESC-24 forbids. The clause now states
+> that an answered refusal stops that interval running at all, that the launch waits instead, that the
+> wait is bounded by the force-exit allowance, and that the deferred launch re-enters the resolution
+> order at clause (1) once the record is released. `REQ-STARTUP-162` gained the shutting-down exception
+> to its build-a-window clause, had its silence rule scoped to a launch that has been handed over and has
+> ended, and gained the paragraph fixing what a refused launch shows while it waits.
+> `REQ-STARTUP-161` states that waiting is not a third outcome and that the two-outcome set stays closed.
+> The Data & Formats constant for the 5 s hand-over wait now says it bounds an **unanswered** hand-over.
+>
+> **`REQ-SHELL-006`'s preference store now says which per-user location it is.** This is the sweep's own
+> correction and it closes the last residue of the round's first defect. `REQ-STARTUP-145` now fixes
+> which per-user location the product uses and directs every requirement that places something in a
+> per-user directory to cite it. The desktop preference store is **not** one of `REQ-STARTUP-145`'s
+> directories, so it inherited nothing, and its own closed list of observable properties described it
+> only as "the host platform's own standard per-user application-settings location" — the same silence
+> the round had just closed elsewhere. The store holds `workspace/lastOpened` and
+> `diagnostics/outputDir`, both paths that describe *this* machine, so a replicated store would answer a
+> launch on one machine with a folder that exists only on another. The property is added to the closed
+> list with `REQ-STARTUP-145` cited for its terms and the reason stated locally, so a later reader meets
+> the argument rather than the silence. The store's physical path and on-disk form remain implementation
+> choices.
+>
+> **The alternative that was available and not taken** was for this document to state why the preference
+> store *may* replicate. Nothing in the corpus supports that and two of the store's own keys contradict
+> it, so the selection was made rather than the exception.

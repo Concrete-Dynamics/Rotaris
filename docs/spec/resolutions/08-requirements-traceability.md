@@ -264,3 +264,59 @@ state. The numeric constant "Command-line version-control timeout" is renamed
 Sixteen requirements withdrawn, five added (`REQ-TRACE-508` through `REQ-TRACE-512`), no identifier
 renumbered, reused or deleted. Dispositions OQ 1, OQ 3, OQ 10 and OQ 23 are superseded by this
 sweep; OQ 9's 30-second bound and OQ 7's empty-store warning survive it intact.
+
+
+> ## Amendment, 2026-09-02 — `REQ-TRACE-061` states a replacement retry ladder
+>
+> *Recorded by the sweep pass rather than by the agent that made the amendment, so the record is not
+> owed twice.*
+>
+> **The defect.** `REQ-TRACE-061` required a failed whole-file replacement to be re-raised, with no
+> retry of any kind. Measurement on the target platform showed that on storage shared with, or reachable
+> from, another machine the replacement fails transiently **with no other opener present at all**, and
+> that the failures were absorbed by two further attempts in every case where a retry was made. A user
+> who asks for a regeneration therefore meets a failure caused by a condition of their storage that they
+> can neither act on nor reproduce, and the requirement gave the build nothing to absorb it with.
+>
+> **The amendment.** At most five attempts in total — the first and at most four retries — with delays
+> of 0.05, 0.1, 0.2 and 0.4 s, so the last attempt begins no more than 0.75 s after the first; an
+> attempt that succeeds reports nothing; only after the last has failed is the failure re-raised on the
+> terms already stated; and no attempt leaves a temporary artifact behind.
+>
+> **The clause that stops the wrong build.** The retry SHALL NOT be conditioned on this application
+> being able to attribute the failure to another process holding the target. The measured failure has no
+> other opener at all, so a build that gates its retry on detecting contention absorbs none of it — and
+> both the corpus's other ladder and every derivation of it in the architecture record argue from
+> contention, which is precisely why the negative had to be written down.
+>
+> **The constants are this domain's own and were deliberately not borrowed.** `REQ-SESSION-033`'s figures
+> govern a different target on different storage; OQ-44 and ADR-0004 both refuse borrowing a neighbouring
+> store's constants to pretend a ladder exists; and `REQ-SESSION-033`'s own list was ambiguous between
+> five attempts and six, which this ladder refused to inherit. The requirement states in terms that
+> neither ladder may be cited in place of the other.
+>
+> **Scope, and cross-domain citation.** The ladder covers every whole-file replacement this domain
+> performs — the generated artifact, `REQ-TRACE-126`'s three baselines, `REQ-TRACE-137`'s
+> retired-identifier log, and the destination `REQ-TRACE-514`'s export writes to — and declares itself
+> the only replacement ladder this domain states. A requirement in another domain whose write lands on a
+> destination the product does not choose MAY cite it rather than state a third;
+> `REQ-LIBRARY-176`, `REQ-SESSION-189` and `REQ-SESSION-199` do.
+>
+> **A boundary sentence added on judgement.** `REQ-TRACE-502` says no invocation may wait for another.
+> That is the sentence a conformant implementer would cite to delete the ladder, so `REQ-TRACE-502` now
+> states that a bounded replacement retry is not a wait for another invocation, holds nothing another
+> invocation needs, and completes or re-raises within its own bound.
+>
+> **ESC-30 on the delivery side.** `REQ-TRACE-514` now states that where its export reports entries
+> absent it says why, that in this store retention is the only cause there is — because `REQ-TRACE-405`
+> makes writing the record a condition of the state-changing action completing — and that it may not
+> carry absence as a single undifferentiated figure nor in a shape shared with the export of a store
+> whose absences have more than one cause (`REQ-LIBRARY-176`). The guard exists because one shared export
+> mechanism emitting one "dropped" field would be true of neither store.
+>
+> **The figure the measurement produced was deliberately kept out of the requirement.** The condition is
+> stated qualitatively instead. The measured first-attempt failure rate is a floor from one loopback
+> harness with one client and one server on the same computer, no latency, no packet loss, an
+> unestablished cause and uncontrolled anti-malware; a normative document should not carry it as though
+> it were a rate. What an implementer needs — do not condition on contention, do not drop the ladder — is
+> stated in full.

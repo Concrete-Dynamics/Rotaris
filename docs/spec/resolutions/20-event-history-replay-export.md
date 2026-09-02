@@ -78,6 +78,27 @@ status: resolved
 >   withdrawn REQ-EVENTS-079. Recorded here rather than silently rewritten, because the row is a record
 >   of what was decided and when.
 
+> ## Amendment, 2026-09-02 — REQ-EVENTS-098's read-side clause split into three
+>
+> **Row 2's disposition is unchanged and nothing it decided is reversed.** Single-writer, the right to
+> write being the right to hold the session lock, and lock-free unrestricted reading all stand exactly as
+> that row settled them.
+>
+> **What changed is the sentence the row did not write.** REQ-EVENTS-098 closed with "a reader MUST NOT be
+> able to delay or block the writer, and the writer MUST NOT be able to make a reader fail; a store in
+> which one blocks the other does not satisfy this requirement". Read literally, that is unsatisfiable by
+> any store: a fully compliant reader that never blocks the writer still measurably raises the writer's
+> latency, and no store can offer concurrent access at no scheduling cost — so a conformance suite written
+> from those words rejects every implementation, a correct one included. The requirement now states three
+> properties instead of one, and says which are absolute: **(a)** neither side may prevent, indefinitely
+> stall or fail the other, which is the blocking prohibition and is absolute; **(b)** what the writer
+> durably recorded must become observable to a reader that reads again, which is absolute and is what
+> catches a store that loses a writer's records while both sides report success; **(c)** either side may
+> cost the other measurable time, which is expressly *not* a violation and must not be tested as one.
+>
+> **The behavioural guarantee is undiminished.** Everything the old sentence forbade, (a) and (b) still
+> forbid. What is withdrawn is only the reading under which a measurable cost counts as a delay.
+
 
 This record disposes of every open question raised in the draft of
 [`../20-event-history-replay-export.md`](../20-event-history-replay-export.md) (requirement prefix
@@ -266,3 +287,35 @@ None. All twenty-six open questions were decided here: twenty-two RESOLVED, none
 (OQ 5, OQ 8, OQ 11, OQ 13 — each about a console, a text-mode row, a headless entry point, or a
 process exit code that no longer exists), none ESCALATED. The specification's "Open Questions"
 section now records that nothing is outstanding.
+
+
+> ## Corrective amendment, 2026-09-02 — `REQ-EVENTS-145` says its one-step obligation is the product's
+>
+> *Made by the sweep pass to remove a dangling reading it would otherwise have created, and recorded
+> separately from the `REQ-EVENTS-098` and ESC-31 amendments above.*
+>
+> `REQ-TRACE-061`'s new retry ladder was attached to the export destinations of `REQ-TRACE-514`,
+> `REQ-LIBRARY-176`, `REQ-SESSION-189` and `REQ-SESSION-199`. A ladder for a **replacement** hangs on
+> there being a replacement: without an obligation that the document land in one step, a build could
+> truncate the destination and write in place, never perform a replacement, satisfy every word of the
+> ladder, and still destroy a user's previous export on a failure. `REQ-EVENTS-145` holds that obligation
+> and was cited by nothing outside this document.
+>
+> The requirement now states that its one-step-visibility obligation is the product's single statement of
+> what an export write owes the destination a user chose, that it is not confined to the exports this
+> document names, and that a requirement in another domain whose export writes to such a destination
+> cites this identifier rather than stating a second obligation — naming `REQ-SESSION-189` and
+> `REQ-SESSION-199` as the citers. It also separates the two halves a citer needs to distinguish: the
+> one-step obligation binds every export write whatever form the document takes, and the document-form
+> clauses bind an export written as a JSON document, since not every exported record is one.
+>
+> **Nothing was added to the obligation and nothing was widened.** The requirement's subject was already
+> "writing an export to a file"; its "this is the only place **this document** requires a file to be
+> replaced in one step" is a remark about this document's other requirements and never a scope on the
+> obligation. What the amendment prevents is a later tidying pass reading it as one and silently
+> orphaning four citations.
+>
+> **What is still open.** The three export destinations this document itself governs have the one-step
+> obligation and no ladder. `REQ-TRACE-061` was written to be citable across domains for exactly this
+> case; whether this document should cite it or state its own is not settled here, and minting a
+> competing ladder owner would be the wrong answer to it.

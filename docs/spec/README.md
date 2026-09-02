@@ -7,10 +7,10 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,952** identifiers across the 19 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,694** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,953** identifiers across the 19 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,695** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,396** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,397** identifiers in all, **268** of them withdrawn.
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -99,7 +99,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 04 | [Model Providers, Sign-In, and Model Routing](04-model-providers-auth.md) | `REQ-PROVIDER` | 152 | 18 | core |
 | 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 192 | 0 | core |
 | 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | 8 | core |
-| 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 201 | 22 | core |
+| 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 202 | 22 | core |
 | 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 514 | 16 | core |
 | 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | 1 | core |
 | 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 130 | 1 | core |

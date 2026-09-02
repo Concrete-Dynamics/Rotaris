@@ -5,8 +5,9 @@
 - **Evidence base:** [`constraints.md`](constraints.md) — what the specification forces, with requirement identifiers — read together with [`../spec/resolutions/`](../spec/resolutions/), the twenty-one records disposing of every open question each domain draft raised. A resolution sometimes narrows what a requirement appears to license; `constraints.md` says where and why.
 - **Measurements:** [`spikes/`](spikes/) — **nine reports covering eight live spikes and one withdrawn one**, four dated 2026-09-01 and five dated 2026-09-02, and **the only real evidence this record has**. Several of them overturn something it asserted, and the 2026-09-02 group overturned more than the first four did: **three platform facts this record had asserted were disproved, one ADR's own stated gate trigger fired, and one mechanism this record had decided and never run was found not to work at all.** They are named inline wherever a claim rests on one, and the ADRs that depend on them carry an `Evidence:` header field. **Where a measurement disproved a *reason* but not a *conclusion*, both records say so in as many words** — the conclusion, that the original reason was tested and found false, and the reason that actually holds. That sentence is what stops a later reader "simplifying" the decision back into the defect. **Where a measurement disproved a *mechanism*, which has now happened three times, the record carries the failure in place beside the corrected step** — see the three-for-three finding in section 6.
 - **Decisions:** [`adr/`](adr/) — 58 records, numbered in dependency order. **Every requirement identifier cited anywhere in `adr/` — 1,214 of them, drawn from a corpus of 4,397 — resolves to a requirement the specification defines. Zero dangling citations.** Re-checked mechanically on 2026-09-02 after the last of the three rounds of that date, which minted `REQ-EVENTS-179`, `REQ-MONITOR-306`, `REQ-SHELL-169` and `REQ-SESSION-202` and edited nine ADRs between them; what it does *not* establish is that every citation still says what the ADR claims it says, which is a different sweep and is reported in section 6.
-- **Unresolved:** [`open-questions.md`](open-questions.md) — **thirty-one escalations: twenty-nine ruled, two closed by the specification itself, NONE open**; forty-seven specification questions (**eight** closed with their reasons, **thirty-nine** open); two design-reference dependencies; twenty-two numbered spikes of which one is withdrawn, **eight discharged** and one discharged for Windows only — **twelve outstanding**, plus four sub-cases owed inside spikes that passed
-- **Ruled on:** [`owner-decisions.md`](owner-decisions.md) — ESC-1 to ESC-22, ESC-24 and ESC-26 to ESC-31, and nine structural rulings, SR-1 to SR-9. ESC-19, ESC-20 and ESC-21 were ruled on 2026-09-01 by **comparison with seven other coding harnesses** rather than from first principles — that comparison, with its sources, is in `owner-decisions.md` and is evidence, not illustration. **ESC-26 was ruled on 2026-09-01 and has landed in the specification**: `REQ-SESSION-197` gains one narrow exception, bound by five conditions, available only inside `REQ-SESSION-201`'s restore. ESC-23 and ESC-25 needed no ruling in the end: the amendment answered both, and answered ESC-25 *against* what this record had argued. ***No escalation is open.*** The seven that were — ESC-22, ESC-24 and ESC-27 to ESC-31 — were **ruled together on 2026-09-02** and all seven have landed in requirements. Read SR-4's own correction block before citing SR-4: an earlier version of that ruling claimed the store dissolves OQ-41 and it does not (ESC-14) — **cite the corrected form, never the withdrawn one**. Two rulings now carry a *reason* a measurement has since disproved, and both are flagged in section 6: **ESC-15**'s stated mechanism and **SR-7**'s statement of how the artifact is identified.
+- **Unresolved:** [`open-questions.md`](open-questions.md) — **thirty-one escalations: twenty-nine ruled, two closed by the specification itself, NONE open**; forty-seven specification questions (**nine** closed with their reasons, **thirty-eight** open, OQ-31 closed 2026-09-02 by GD-1); **one** design-reference dependency, OQ-30, which is IC-2 rather than a gate condition; twenty-two numbered spikes of which one is withdrawn, **eight discharged** and one discharged for Windows only — **twelve outstanding**, plus four sub-cases owed inside spikes that passed
+- **Binding at build time:** [`implementation-conditions.md`](implementation-conditions.md) — obligations that are **not** gate conditions but **are** conditions on building the thing they name. Created 2026-09-02 by ruling GD-3, which checked rather than assumed that such a register existed and found it did not. Two entries: **IC-1**, the corrected restore is re-measured before its implementation is signed off; **IC-2**, no screen is built before the approved visual design reference is available. An entry here binds the work it names and is removed only by the authority that set it.
+- **Ruled on:** [`owner-decisions.md`](owner-decisions.md) — ESC-1 to ESC-22, ESC-24 and ESC-26 to ESC-31, and nine structural rulings, SR-1 to SR-9. ESC-19, ESC-20 and ESC-21 were ruled on 2026-09-01 by **comparison with seven other coding harnesses** rather than from first principles — that comparison, with its sources, is in `owner-decisions.md` and is evidence, not illustration. **ESC-26 was ruled on 2026-09-01 and has landed in the specification**: `REQ-SESSION-197` gains one narrow exception, bound by five conditions, available only inside `REQ-SESSION-201`'s restore. ESC-23 and ESC-25 needed no ruling in the end: the amendment answered both, and answered ESC-25 *against* what this record had argued. ***No escalation is open.*** The seven that were — ESC-22, ESC-24 and ESC-27 to ESC-31 — were **ruled together on 2026-09-02** and all seven have landed in requirements. Read SR-4's own correction block before citing SR-4: an earlier version of that ruling claimed the store dissolves OQ-41 and it does not (ESC-14) — **cite the corrected form, never the withdrawn one**. Two rulings carried a *reason* a measurement disproved — **ESC-15**'s stated mechanism and **SR-7**'s statement of how the artifact is identified. **Both were corrected in place on 2026-09-02 by ruling GD-2, with the conclusions unchanged**, and each now carries a dated correction block giving what was measured against what was claimed; cite the corrected form. The four decisions the Architecture Gate verdict left with the owner were **all ruled on 2026-09-02 as GD-1 to GD-4**, and nothing in this record now waits on a person.
 
 This document describes the system one Electron desktop application makes: what its parts are, which
 process each runs in, how they talk, where state lives, and what happens end to end when a user starts a
@@ -1678,42 +1679,55 @@ infrastructure.**
 ADR-0058 consequence 1 is untested everywhere — including under the Electron run spike 22 performed, which
 loaded the binding from `node_modules`.
 
-#### D. OWNER DECISIONS OUTSTANDING
+#### D. OWNER DECISIONS OUTSTANDING — ALL FOUR RULED 2026-09-02
 
 ***No escalation is open. Thirty-one were raised, twenty-nine are ruled and two were answered by the
-specification itself.*** What is left for the owner is four things, and none of them is an escalation
-because none of them is a choice about what the product is.
+specification itself.*** Four things were left for the owner, none of them an escalation because none was
+a choice about what the product is. **All four are now ruled**, as GD-1 to GD-4 in `owner-decisions.md`.
+They are recorded here with what each one changed, because the category is where a reader looks to find
+out whether anything is still waiting on a person: **nothing is.**
 
-1. **Two design-reference dependencies, which block screens rather than mechanisms.** The theme palettes
-   and token values (OQ-30) and the Markdown dialect (OQ-31) wait on the approved visual design reference.
-   **Every mechanism in this record is independent of it; no screen can be built without it.**
-2. **Two owner rulings carry a reason a measurement disproved, and neither is architecture's to edit.**
-   `owner-decisions.md` is the authority for what was decided and it is quoted, cited and relied on across
-   this record, so a reader who cites a ruling picks up its reasoning with it. **ESC-15's ruling text still
-   says "write-ahead logging is unsupported on network filesystems, so the store opens read-only"**, which
-   section 3 records as measured false in both clauses; the ruling survives on stronger evidence — three
-   measured failures, every one worse than the one it used to rest on. **SR-7 still says the artifact "is
-   identified by the packaging tool's own portable-executable environment variable, not by `execPath`"**;
-   that variable was set in **0 of 157** launches through our own launcher, because it belongs to the
-   packaging tool SR-7's whole purpose is to move off — while the same tool's own portable published it
-   correctly on the same machine on the same day, so this is a fact about the mechanism and not about the
-   machine. The conclusion survives, carried by our own declared variable, which held the correct absolute
-   artifact path in **149 of 149** painted launches. **Both corrections are made in the ADRs; neither can be
-   made in the ruling. Whether the rulings should carry them is the owner's.**
-3. **Whether the re-run of the corrected restore is made a condition of the Architecture Gate.** It is not
-   one today and this record has not invented one. **The argument for making it one is the three-for-three
-   finding below and nothing else**; the argument against is that the three corrections are each narrow, each
-   stated with its measurement, and each cheap to get wrong in a way a first implementation would find.
-   *This record's recommendation, offered as a recommendation: make it a condition of the first
-   implementation of the restore rather than of the gate, because it is a re-measurement of a mechanism
-   already known to have been wrong three times and it costs an afternoon.*
-4. **Two smaller questions a measurement made askable that were not askable before.** Whether a restore
-   that takes **2.67 s** and leaves the store unavailable for **1.45 s** owes the user a progress
-   indication — the specification's silence on the restore's *duration* is now recorded as deliberate, but
-   that is a silence about disturbing **runs**, not about what a waiting user is shown, and the two are
-   separable. And whether `REQ-SESSION-201` should fix anything for **cancelling a backup in progress**, now
-   that the cost is priced at a median 1,077 ms per 41 MB against comparable products reaching 700 MB to
-   2 GB. Both are surface choices; neither blocks anything.
+1. **The two design-reference dependencies — ruled GD-1, and the two were separated.** The reference is
+   **not a condition of this gate**: every mechanism in this record was shown independent of it, and
+   holding a gate about mechanism for material no mechanism depends on delays every unrelated decision and
+   improves none. But the other half of that finding is acted on too — **no screen can be built without
+   it** — and it is recorded as **IC-2** in `implementation-conditions.md` rather than left as an
+   observation. OQ-30's theme palettes and token values stay open and stay the reference's, with the
+   information architecture of the seven views, the benchmark and diagnostics layouts, and
+   `REQ-SHELL-149`'s glyph vocabulary. **OQ-31 was ruled without the reference and is closed**, because the
+   Markdown dialect turned out to be a question about what the renderer accepts from model output rather
+   than about appearance: GitHub Flavored Markdown, less raw HTML, less image loading, with no image ever
+   loaded from a Markdown image reference whether it names a remote location or a local one.
+   `REQ-CHAT-056` carries it.
+2. **The two rulings resting on disproved reasons — ruled GD-2: corrected in place, conclusions
+   unchanged.** ESC-15 and SR-7 now carry dated correction blocks stating what was measured against what
+   was claimed. ESC-15's reason is replaced by the three failures the measurement found instead, each worse
+   than the one it rested on — a store that reports WAL enabled, reads it back, owns its shared-memory
+   segment and still loses the next write silently, and a failure that depends on **how the path is
+   spelled**. SR-7's identification moves from the packaging tool's variable (**0 of 157**) to our own
+   declared variable (**149 of 149**); its timing evidence is untouched. Neither conclusion moved, which is
+   the point: a record whose conclusions are right for reasons that are false cannot be re-derived.
+3. **The re-run of the corrected restore — ruled GD-3: a condition on its implementation, not on this
+   gate.** The recommendation this record offered was taken, with one thing checked rather than assumed —
+   **no register of implementation-time conditions existed**, so the ruling created one.
+   `implementation-conditions.md` holds it as **IC-1**, bounded to the two experiments the corrections
+   changed and the measurement has not seen: a run raced into the window between the refusal of new runs
+   and the run host's acknowledgement, and an install rename forced to fail on an occupied name. Without
+   that file the option would have been the do-nothing option under another name.
+4. **The two questions a measurement made askable — ruled GD-4, both into `REQ-SESSION-201` as clauses.**
+   A restore under way **is acknowledged and is visible** — the gesture answered on `REQ-SHELL-150`'s
+   ordinary terms and the user told the workspace's sessions are unavailable — with **no proportion, no
+   stage list and no estimate**, because reporting stages would mean reporting from inside a sequence whose
+   value is that it is indivisible, and would create standing pressure to make it interruptible. This
+   creates no duration budget and leaves the deliberate silence intact. And **a backup in progress may be
+   abandoned**: the partial artifact is discarded, the store is untouched, and nothing partial or
+   unreadable is left at the destination the user chose. That one mostly writes down a property the
+   mechanism already has, and leaving it unspecified would have been the same shape — a requirement
+   enumerating cases with the residue undefined — that produced `REQ-SESSION-043`'s defect.
+
+**What this does not change.** The gate verdict does not turn on this category and did not before. It
+turns on **A** and **C** — the four build-wrong defects and the four build-host obligations — and both are
+unchanged by these rulings.
 
 #### THE THREE-FOR-THREE FINDING — stated in the verdict rather than in a footnote
 

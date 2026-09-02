@@ -324,3 +324,56 @@ outstanding for the product owner in this domain.
 > everything that is its own — that the rule holds always and is never made conditional on detecting
 > shared storage, the four observable consequences, that the per-session files are held with the store,
 > and that a store which cannot be opened is not worked around.
+
+
+> ## Amendment, 2026-09-02 (second)
+>
+> **Owner ruling GD-4 adds two clauses to `REQ-SESSION-201`.** Both answer questions that became askable
+> only once the backup and restore were measured end to end. No prior disposition is reversed, and neither
+> clause is a new identifier: both govern the action this requirement already owns.
+>
+> **GD-4a — a restore under way is visible, and that is separate from how long it takes.** The requirement
+> already recorded, deliberately, that nothing bounds a restore's duration: the backup carries timing
+> obligations because it runs while sessions are live, and the restore carries none because by its own
+> refusal clause nothing is live for its duration. That reasoning is sound and stands. **What it does not
+> answer is what a waiting user is shown**, and the two were being treated as one thing. A silence about
+> not disturbing runs is not a licence to leave a person looking at a product that appears to have stopped.
+>
+> Added: the request is acknowledged within the gesture budget the shell carries for anything else
+> (`REQ-SHELL-150`), and while the restore runs the product conveys that a restore is under way and that the
+> workspace's sessions are unavailable until it finishes.
+>
+> **What is required is acknowledgement, not progress reporting**, and the requirement says so rather than
+> leaving the ceiling to an implementer's judgement. No proportion completed, no stage list, no estimate.
+> The reason is structural rather than aesthetic: a restore that reported stages would have to report from
+> inside a sequence whose entire value is that it is indivisible, and a requirement asking for stage
+> reporting creates standing pressure to subdivide that sequence so that it has something to report. The
+> clause names that and forbids reading it as licence.
+>
+> **Why the obligation exists at all**, given that a small store restores in 64 ms: the interval scales with
+> what the store holds, and nothing in this product bounds that — no requirement caps how many sessions a
+> workspace keeps or discards them with age. The measured window ran from 64 ms to 1.45 s over the sizes
+> tested, with the whole action at 2.67 s at the top of that range, and those are a floor rather than a
+> ceiling. A workspace silent for several seconds is a state this requirement permits, so it must not be a
+> state that looks like a failure.
+>
+> **GD-4b — a backup in progress may be abandoned, and abandoning it costs nothing.** Nothing in the corpus
+> said what happens if a user stops a backup. The requirement fixed what a backup covers, that it may run
+> while sessions are live, that it must not disturb them, and where it is written — and left the residue
+> undefined.
+>
+> Added: the user may abandon a backup in progress; abandoning it discards the partial artifact, leaves the
+> store exactly as it was, and never leaves a partial, truncated or otherwise unreadable file at the
+> destination the user chose. Abandoning is not failing, and a backup the user stopped is not reported as a
+> fault.
+>
+> **Why this is nearly free, and why the omission was not.** The mechanism already has the property: a
+> backup writes a staging snapshot and never mutates the store, so most of the clause records something
+> already true, which is the cheapest kind of obligation to meet and the easiest to test. The clause about
+> the destination is the part that is not free, and it is the part that matters — a file that exists at the
+> user's chosen path and cannot be restored is worse than no file, because its owner believes they have a
+> backup. Against that, leaving the case unspecified is the same shape that produced `REQ-SESSION-043`'s
+> defect earlier the same day: a requirement that answers by enumerating cases is only as good as its list.
+> That shape has now cost this domain twice, and it was invisible to review of the words both times. The
+> user will meet the question, because a backup of a large store measured 4.2 s and runs while their work
+> continues.

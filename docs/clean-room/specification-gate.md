@@ -176,7 +176,7 @@ the specification was sufficient to design from; that judgment stands. But a rea
 closure figures, or the phrase "approved as sufficient", as describing the corpus as it exists today.
 `../spec/README.md` carries the current counts and is the authority for them.
 
-Amendments made under the standing direction so far, in **seven** rounds. The **structural-ruling round**
+Amendments made under the standing direction so far, in **eight** rounds. The **structural-ruling round**
 applied SR-1 to SR-3; the **storage-ruling round** applied SR-4 to SR-8 and ESC-11, ESC-13, ESC-15,
 ESC-16 and ESC-18; the **ruling-application round** of 2026-09-01 applied everything that was ruled and
 never made — ESC-1, ESC-2, ESC-5, ESC-6, ESC-7, ESC-8, ESC-13's withheld half, ESC-19, ESC-20, ESC-21
@@ -189,9 +189,11 @@ eight measurements against the target platform — which named **three defects t
 conformant implementation to be built wrong and that no test would find**, and applied the seven owner
 rulings of that date: **ESC-22, ESC-24 and ESC-27 to ESC-31**. The **restore-measurement round** of
 2026-09-02 answered the first execution of `REQ-SESSION-201`'s restore, which found **two defects in the
-requirement itself** and one state no requirement described. **The first six are recorded in detail in
-[`provenance.md`](provenance.md); the seventh is recorded here and not yet there**, together with the count
-change it produced, and that file is not this document's to edit.
+requirement itself** and one state no requirement described. The **owner-ruling round** of 2026-09-02 applied
+**GD-1** and **GD-4**, the two of the four Architecture Gate owner decisions that land in requirements.
+**The first six are recorded in detail in
+[`provenance.md`](provenance.md); the seventh and eighth are recorded here and not yet there**, together
+with the count changes they produced, and that file is not this document's to edit.
 
 **Current figures, superseding the closure figures above:** **3,953** identifiers across the nineteen
 shipping domains, **258** withdrawn in place, **3,695** stating live behaviour; plus **444** identifiers
@@ -770,6 +772,82 @@ this round's amendments, recorded here because the architecture record is not th
 **One coupling worth recording before it is discovered.** `REQ-TRACE-514`'s "retention is the only cause
 there is" is true only while `REQ-TRACE-405` keeps writing the record a condition of the state-changing
 action completing. Relax `REQ-TRACE-405` and `REQ-TRACE-514`'s statement becomes false silently.
+
+### The owner-ruling round, 2026-09-02
+
+The eighth round applied the two of the four Architecture Gate owner decisions that land in requirements.
+The other two — GD-2, which corrects two rulings' reasoning in `owner-decisions.md`, and GD-3, which binds
+a measurement to an implementation rather than to a gate — change no requirement and are recorded there
+and in `../architecture/implementation-conditions.md`.
+
+**This round is the first in which the specification was amended by a decision that had been deferred to a
+document nobody had yet produced.** GD-1 turned on a question about the visual design reference, and GD-3
+turned on whether a register of implementation-time conditions existed. It did not. That was checked rather
+than assumed, and the register was created, because an obligation classed as binding-at-implementation with
+nowhere to be written is not a lighter obligation than a gate condition — it is none.
+
+**GD-1 — `REQ-CHAT-056` gains the Markdown dialect, and OQ-31 closes without the design reference.**
+
+1. The requirement named five treatments and required links to be activatable, and said nothing about
+   headings, block quotes, lists, task lists, tables or images. It now fixes the dialect: **GitHub Flavored
+   Markdown, less raw HTML, less image loading.**
+2. **Raw HTML in Markdown source is shown as text and never rendered as markup.** The reason is recorded in
+   the requirement rather than left to the reader: rendering agent output as markup would let every model
+   response introduce elements into the surface the user reads their workspace through.
+3. **No image is ever loaded from a Markdown image reference**, whether it names a remote location or one
+   on this machine. The remote half already followed from the existing prohibition on network requests
+   during rendering. The local half did not follow from anything, and leaving it to be inferred would have
+   invited the conclusion that a local path is therefore fine — which is wrong twice over, because a
+   transcript that reads locations named by model output discloses whatever those locations hold, and
+   because a filesystem read is not accommodated by the same clause's synchronous-completion rule.
+4. **The architecture record's reason for deferring this was wrong and is recorded as wrong.** OQ-31 was
+   held on the design reference as "as much a visual question as a functional one". The supported element
+   list does not decide how a transcript looks; it decides what the renderer accepts from model output. The
+   entry's own closing sentence, that images interact with the no-network-request rule, was the evidence
+   for that and sat unread in the entry for as long as the entry existed.
+
+**GD-4 — `REQ-SESSION-201` gains two clauses, both about states the first end-to-end measurement made
+visible.**
+
+5. **A restore under way is acknowledged and visible, and that obligation is separated from the duration
+   silence it had been folded into.** The requirement records, deliberately, that nothing bounds how long a
+   restore takes, because nothing is live for its duration to disturb. That reasoning is sound and stands.
+   It answers a question about **runs** and had been standing in for the answer to a question about
+   **people**, which is a different question. The request is now acknowledged on the shell's ordinary
+   gesture terms and the user is told the workspace's sessions are unavailable while the restore runs.
+6. **What is required is acknowledgement and not progress reporting**, stated as a ceiling rather than a
+   floor. No proportion, no stage list, no estimate. The reason is structural: reporting stages means
+   reporting from inside a sequence whose value is that it is indivisible, so a requirement asking for it
+   would create standing pressure to subdivide the one part of the mechanism that must not be subdivided.
+7. **The obligation exists because the interval is unbounded, not because it is long.** Measured at 64 ms,
+   144 ms and 1.45 s over the sizes tested, with the whole action at 2.67 s at the top of that range — and
+   nothing in this product caps how much a store holds, so those are a floor. A workspace silent for
+   several seconds is a state the requirement permits, and it must not resemble a product that has stopped.
+8. **A backup in progress may be abandoned, and abandoning it costs nothing** — the partial artifact is
+   discarded, the store is untouched, and nothing partial or unreadable is left at the destination the user
+   chose. Most of this records a property the mechanism already has. The destination clause does not, and
+   it is the one that matters: a file that exists at the user's chosen path and cannot be restored is worse
+   than no file, because its owner believes they have a backup.
+9. **The same defect shape as `REQ-SESSION-043`'s, found the same day, in the same requirement family.**
+   `REQ-SESSION-201` fixed what a backup covers, that it may run while sessions are live, that it must not
+   disturb them, and where it is written — and left "the user stops it" answered by nothing. A requirement
+   that answers by enumerating cases is only as good as its list. **This is the second instance in one day
+   and the second in this domain**, and it is direct support for the sweep this record recommended and has
+   not performed: requirements shaped as a list of cases, and requirements shaped "X is refused while Y".
+
+**What this round did not close.** GD-1 leaves **OQ-30** open and leaves it the design reference's, along
+with the information architecture of the seven primary views, the benchmark and diagnostics layouts, and
+`REQ-SHELL-149`'s glyph vocabulary. Those are now IC-2 in the architecture record rather than gate items.
+Nothing in this round touches the four defects that would cause a conformant implementation to be built
+wrong, one of which — the foreign-host lock row making a store permanently unrestorable — is the
+specification's and is still unowned.
+
+**Count change: none.** Both GD-4 obligations are clauses of `REQ-SESSION-201` and GD-1's is a clause of
+`REQ-CHAT-056`; no identifier was minted, renumbered or withdrawn. The corpus figures recorded for the
+seventh round stand: **3,953** identifiers across the nineteen shipping domains, **258** withdrawn in
+place, **3,695** carrying live behaviour, and **4,397** in all with **268** withdrawn. `../spec/README.md`
+was one requirement behind after the seventh round and **was brought current in this one**, including
+domain 07's row moving from 201 to 202.
 
 ## What these decisions change
 

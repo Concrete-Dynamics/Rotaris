@@ -383,3 +383,23 @@ No behavior was lost to the sweep, and no requirement identifier was renumbered,
 | 61 | RESOLVED | No, and it cannot. Skill policies are written into the workspace file only and carry no per-field scope of their own, but `skills` is section-class and its two override maps overlay per skill name, so a workspace save overlays exactly the skills it names and never discards the global scope's policy for any other. The one hole this leaves is closed: the sparse-write rule is qualified so that a baseline policy **is** written explicitly where a lower layer states a policy for that skill, otherwise returning one skill to the baseline from the screen would be impossible. | REQ-CONFIG-042, REQ-CONFIG-169, REQ-CONFIG-256, REQ-CONFIG-258 |
 | 62 | RESOLVED | With no configuration service the guard offers two buttons only — Discard and Cancel, with **Cancel as the default** — and its text additionally conveys that settings are read-only in the current mode so the pending changes cannot be saved. A Save that cannot succeed is never offered as a button and never as the default, and the user is always left a way to leave the screen. | REQ-CONFIG-281, REQ-CONFIG-286 |
 | 63 | RESOLVED | An actor is a person exactly when the action arrives through an interactive surface, attached to a terminal or a window, in direct answer to a prompt raised for that specific action. An action from an agent, a hook, the non-interactive command surface, a scheduled or headless run, or a replay is never a person whatever it claims, and a confirmation reaching such a host is refused and recorded as unanswered rather than assumed. The audit record names the operating-system account the interactive session ran under and the surface the answer came from; the product maintains no identity of its own and asks for none. | REQ-CONFIG-198 |
+
+> ## Amendment, 2026-09-02 (requirement-shape sweep)
+>
+> **`REQ-CONFIG-028` wrote the starter configuration on a determination it had not made.** The requirement
+> named two conditions that cause a write — the target is absent, or its text is empty after trimming — and
+> two that cause a decline and are never written over: a path that is a directory, and a file whose bytes
+> cannot be decoded as UTF-8. **A target that exists and cannot be read at all falls into neither set**:
+> refused by the operating system, held by another process, or failing for any other reason. Nothing in the
+> requirement said what becomes of it.
+>
+> **Why this one matters more than its size suggests.** The residue is not a rare shape, and the obvious
+> implementation gets it wrong in the dangerous direction: a bootstrap that asks "can I read a file here?"
+> and treats *no* as *nothing is here* writes the starter file over a user's existing configuration. The
+> two conditions that trigger a write are both determinations that nothing is there; a failed read is the
+> absence of a determination, and the two are not the same.
+>
+> Added: such a target declines as the other two do, reporting the path and what prevented the read. And the
+> rule the three now share is stated in terms, so it survives a later edit to any of the lists — **the
+> starter file is written only where the product has established that nothing is there, and never where it
+> has failed to establish anything. Not being able to read a file is not evidence that the file is empty.**

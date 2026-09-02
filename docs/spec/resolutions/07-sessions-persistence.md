@@ -377,3 +377,38 @@ outstanding for the product owner in this domain.
 > That shape has now cost this domain twice, and it was invisible to review of the words both times. The
 > user will meet the question, because a backup of a large store measured 4.2 s and runs while their work
 > continues.
+
+> ## Amendment, 2026-09-02 (requirement-shape sweep)
+>
+> A corpus-wide sweep looked for two *shapes* rather than for defects: an obligation whose evaluation moment
+> is not fixed, and an answer given by enumerating cases with the residue left undefined. Both shapes had
+> produced a defect earlier the same day, and both had been invisible to review of the words.
+>
+> **`REQ-SESSION-164` — the refusal is now durative, and this is the requirement `REQ-SESSION-201` cited as
+> its precedent.** When `REQ-SESSION-201`'s refusal was corrected to hold for the whole of the restore, the
+> sentence justifying it read "for the same reason `REQ-SESSION-164` refuses a checkpoint restore on a
+> session that claims to be running". The model was never checked and had the identical defect: the refusal
+> attached to the decision to begin, nothing re-checked, and nothing forbade proceeding once begun.
+>
+> **It is the worse of the two, and the requirement now says why.** A checkpoint restore replaces the user's
+> own working tree rather than a record this product keeps. A run admitted during it has the files it is
+> reading and writing changed beneath it, and unlike a store the product owns, nothing about the working
+> tree is this product's to put back. Added: the refusal holds from the moment the question is answered
+> until the restore completes or is abandoned; a restore already begun is undone to the state it started
+> from; the restore may not stop, cancel, interrupt or require a live run to give up the working tree, the
+> remedy being refusal; and the two restores are one rule with neither an exception to the other. Which end
+> of the window is closed is left to the implementation, as in `REQ-SESSION-201`.
+>
+> **`REQ-SESSION-048` — the third case a lock can present.** The requirement declares itself the single
+> statement of what a creation-time lock refusal must convey, then distinguishes exactly two cases, both
+> keyed on what the lock's `host` says. **A lock that is present and cannot be read has no `host` to name.**
+> That case is not obscure: `REQ-SESSION-056` makes it live by construction and `REQ-SESSION-183` names it
+> as one of the two conditions its explicit release exists for. The single statement had nothing to say
+> about a condition its own neighbours describe. It now covers it, requires the report to say that a lock is
+> present and could not be read, and forbids naming a machine or a pid the product does not have — the
+> honest report being that the product cannot tell which of the other two cases it is.
+>
+> **The general lesson, and it is the second time this domain has supplied it.** A requirement that answers
+> by listing cases is only as good as its list, and a list keyed on the *content* of a record has no answer
+> for a record with no readable content. `REQ-SESSION-043` produced this lesson by being run; this one was
+> found by looking for the shape.

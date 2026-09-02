@@ -176,7 +176,7 @@ the specification was sufficient to design from; that judgment stands. But a rea
 closure figures, or the phrase "approved as sufficient", as describing the corpus as it exists today.
 `../spec/README.md` carries the current counts and is the authority for them.
 
-Amendments made under the standing direction so far, in **eight** rounds. The **structural-ruling round**
+Amendments made under the standing direction so far, in **nine** rounds. The **structural-ruling round**
 applied SR-1 to SR-3; the **storage-ruling round** applied SR-4 to SR-8 and ESC-11, ESC-13, ESC-15,
 ESC-16 and ESC-18; the **ruling-application round** of 2026-09-01 applied everything that was ruled and
 never made — ESC-1, ESC-2, ESC-5, ESC-6, ESC-7, ESC-8, ESC-13's withheld half, ESC-19, ESC-20, ESC-21
@@ -191,9 +191,12 @@ rulings of that date: **ESC-22, ESC-24 and ESC-27 to ESC-31**. The **restore-mea
 2026-09-02 answered the first execution of `REQ-SESSION-201`'s restore, which found **two defects in the
 requirement itself** and one state no requirement described. The **owner-ruling round** of 2026-09-02 applied
 **GD-1** and **GD-4**, the two of the four Architecture Gate owner decisions that land in requirements.
+The **requirement-shape sweep** of 2026-09-02 was
+not prompted by a defect report: it looked for the two *shapes* the previous two rounds' defects had, and
+found four more, one of them in the requirement the eighth round's own correction cited as its authority.
 **The first six are recorded in detail in
-[`provenance.md`](provenance.md); the seventh and eighth are recorded here and not yet there**, together
-with the count changes they produced, and that file is not this document's to edit.
+[`provenance.md`](provenance.md); the seventh, eighth and ninth are recorded here and not yet there**,
+together with the count changes they produced, and that file is not this document's to edit.
 
 **Current figures, superseding the closure figures above:** **3,953** identifiers across the nineteen
 shipping domains, **258** withdrawn in place, **3,695** stating live behaviour; plus **444** identifiers
@@ -848,6 +851,87 @@ seventh round stand: **3,953** identifiers across the nineteen shipping domains,
 place, **3,695** carrying live behaviour, and **4,397** in all with **268** withdrawn. `../spec/README.md`
 was one requirement behind after the seventh round and **was brought current in this one**, including
 domain 07's row moving from 201 to 202.
+
+### The requirement-shape sweep, 2026-09-02
+
+The ninth round is the sweep the previous round recommended and did not perform. It looked for two shapes
+rather than for defects, on the reasoning that both specification defects found by execution were invisible
+to review of the words and both had a nameable form: one in **when** an obligation is evaluated, one in
+**which states** a requirement enumerates.
+
+**Method, recorded so the result can be judged.** Every requirement body in `docs/spec/` was parsed — 4,397
+identifiers, matching the mechanical count exactly — and filtered mechanically. Shape A: a refusal or
+prohibition governed by a temporal condition (*while*, *until*, *during*, *as long as*) where the guarded
+operation is one that takes time, minus those already carrying durative language. Shape B: an answer given
+by enumerating cases, minus those already carrying a boundary sentence. That produced 20 and 29 candidates
+respectively, of which 6 were in the retired domains and excluded, and every survivor was read.
+
+**Four defects found, and the first of them is the finding that justifies the sweep.**
+
+1. **`REQ-SESSION-164` had exactly the defect `REQ-SESSION-201` was corrected for, and `REQ-SESSION-201`
+   cites it as its own precedent.** The whole-store restore's refusal was corrected earlier the same day to
+   hold for the whole of the restore, and the sentence that justified it reads "for the same reason
+   `REQ-SESSION-164` refuses a checkpoint restore on a session that claims to be running". The model was
+   never checked. Its refusal was evaluated once, at the request, with nothing re-checking and nothing
+   forbidding the restore from proceeding once begun.
+
+   **It is the worse of the two.** What a checkpoint restore replaces is the user's own working tree, not a
+   record this product keeps, so a run admitted during it has the files it is reading and writing changed
+   beneath it — and unlike a store the product owns, nothing about the working tree is this product's to
+   put back. `REQ-SESSION-164` now carries the durative clause, the prohibition on asking a live run to
+   stand aside, the obligation to undo a restore already begun, and the statement that it and
+   `REQ-SESSION-201` are one rule with neither an exception to the other.
+
+2. **`REQ-SHELL-155` restated the same refusal and inherited the same defect.** Corrected by citation
+   rather than by a second statement: it now names `REQ-SESSION-164` as the owner of the condition, holds
+   no copy of the window, and states only what the shell owes — that a restore refused because a session
+   became live *after* the question was answered is reported in the same terms as one refused at the moment
+   it was asked, so the user does not meet a different kind of failure according to when the refusal was
+   reached.
+
+3. **`REQ-SESSION-048` enumerated two cases keyed on what the lock says, and a lock may say nothing.** It
+   declares itself "the single statement of what such a refusal must convey" and then distinguishes exactly
+   two: the lock names this machine, the lock names another. **A lock that is present and cannot be read
+   has no `host` to name.** That case is not obscure — `REQ-SESSION-056` and `REQ-SESSION-183` both name it
+   explicitly, and `REQ-SESSION-056` makes it live by construction — so the single statement had nothing to
+   say about a condition its own neighbours describe. It now covers it, and requires the report not to name
+   a machine or a pid it does not have.
+
+4. **`REQ-CONFIG-028` wrote the starter configuration on a determination it had not made.** Two conditions
+   caused a write (absent, empty after trimming) and two caused a decline (a directory, bytes that will not
+   decode). A target that exists and **cannot be read at all** — refused by the operating system, or failing
+   for any other reason — is in neither set. Under the enumeration as written, an implementer reaching for
+   the obvious construction treats an unreadable file as one it could not find and writes the starter file
+   over the user's configuration. It now declines, and the three cases share a stated rule that survives a
+   later edit to any of the lists: **the starter file is written only where the product has established
+   that nothing is there, and never where it has failed to establish anything. Not being able to read a
+   file is not evidence that the file is empty.**
+
+**Three lesser findings, recorded and not fixed, because each is a surface choice rather than a reading a
+builder could get wrong.** `REQ-STARTUP-114` admits one update operation in flight and refuses a second,
+without saying when the in-flight state is established, which is a check-then-set shape rather than a
+defect on a single-threaded surface. `REQ-TOOLS-160` declines a gate write in three cases and says nothing
+about an otherwise-valid write that fails for a reason none of them names. `REQ-CHAT-159` fixes the outcome
+for a catalogue command invoked with no argument and with an unrecognised one, and not for one invoked with
+more arguments than it takes.
+
+**What the sweep also establishes, which is worth as much as the defects.** The corpus is mostly *good* at
+both shapes, and several requirements are models of them: `REQ-STARTUP-164` enumerates four launch outcomes
+and states in terms that waiting is not a fifth; `REQ-SANDBOX-078` exists **only** to say what happens when
+the check of the requirement before it races a filesystem change; `REQ-SANDBOX-077` partitions its space on
+two axes rather than listing likely cases; `REQ-EVENTS-106` walks a decode-parse-shape-field ladder and
+covers each rung; `REQ-MCP-055` enumerates five grant cases and closes them. **Both shapes were already
+understood in this corpus.** What the sweep found is not a habit of writing them badly but four places
+where a requirement was written before its neighbours existed and never revisited — which is why a sweep
+finds them and a review of any one document does not.
+
+**Cost, for whoever decides whether to repeat this.** One pass, mechanical filtering plus reading 43
+requirement bodies, four defects, one of them in the requirement that the last round's own correction cited
+as its authority. Against that: the two defects this shape produced before were each found by building the
+mechanism and running it.
+
+**Count change: none.** All four corrections amend requirements in place. No identifier was minted,
+renumbered or withdrawn, and the figures recorded for the seventh round stand.
 
 ## What these decisions change
 

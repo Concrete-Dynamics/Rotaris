@@ -220,3 +220,19 @@ precedence ladder intact. The section heading "Command line and process lifecycl
 > **The alternative that was available and not taken** was for this document to state why the preference
 > store *may* replicate. Nothing in the corpus supports that and two of the store's own keys contradict
 > it, so the selection was made rather than the exception.
+
+> ## Amendment, 2026-09-02 (requirement-shape sweep)
+>
+> **`REQ-SHELL-155` restated a refusal that domain 07 owns, and inherited its defect with it.** The
+> checkpoint-restore refusal was stated independently here and in `REQ-SESSION-164`, and both attached the
+> refusal to the decision to begin rather than to the whole of the restore — so a session becoming live
+> after the question was answered was a session the user was never told about, and the restore proceeded to
+> replace the working tree under a run that was using it.
+>
+> **Corrected by citation rather than by a second statement**, which is the pattern this corpus uses
+> wherever two documents describe one condition. `REQ-SESSION-164` owns the condition and states the window;
+> this requirement holds no copy of it and states no window of its own. What remains here is the part that
+> is genuinely the shell's: **a restore refused because a session became live during it is reported on the
+> same surface, in the same terms, as one refused at the moment it was asked.** Without that, an
+> implementation could correctly refuse late and still present the user with a failure that looks like a
+> different problem, which is how a correct refusal becomes an unhelpful one.

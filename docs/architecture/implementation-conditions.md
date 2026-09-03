@@ -309,3 +309,13 @@ settle-on-continue sweep has no route in the product until the `continue`/`resum
 prompt mints a new session. Owed and stated: the loop supervisor, the fallback-model and rate-limit paths, the
 artifact payload items, REQ-ORCH-030's per-item attempt limit, and the persisted `runtime.*` keys and personas
 (ADR-0036).
+
+## Lifecycle hooks — 2026-09-03/04: no condition bound; the eighth defect sat in a mechanism built earlier
+
+ADR-0015 was built and run without a condition naming it and without an unstarted spike pricing it, with the
+first slice of ADR-0036's loader beneath it. Its first-execution note holds the Windows cost of "kill the
+started process only" (`cmd.exe` is never the command; a timeout always spends the 5 s grace) and the
+REQ-HOOKS-013 consequence a reviewer will read as a bug. The eighth defect of decision 3's pattern was found by
+it and not in it: kernel's redaction pass (ADR-0007) was quadratic and had never run at size. Owed and stated:
+worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, ADR-0049's single notice
+slot losing the advisory, the benchmark harness for REQ-HOOKS-139.

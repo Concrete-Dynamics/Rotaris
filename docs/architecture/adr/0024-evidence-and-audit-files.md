@@ -736,3 +736,10 @@ host died inside reads back as `running`, which is `REQ-CHAT-049`'s dead-session
 for any kind (mechanism 2 holds by absence); the DAL has no statement that reads `tool_calls` for anything
 but the diagnostics reader this build does not have yet. Consequence 3's "absent, not failing" writer for a
 call outside every session is not reachable in this build: every call belongs to a run.
+
+**Second execution, 2026-09-03, with the hooks (ADR-0015).** A `pre_tool` stop settles the tool-call record
+`blocked` with `failure_kind: 'hook_blocked'` and the refusal as its result — one refused invocation, the
+policy's `allow` still in the audit ahead of it (REQ-HOOKS-004: the policy decided first, the hook refused
+after). Reading recorded: the record's `result` is **what the agent was given** (REQ-SESSION-136's "what
+was returned"), so `post_tool` feedback appended to an observation is in the record; feedback delivered as a
+following user message for an errored call is not, because the agent did not receive it as that call's result.

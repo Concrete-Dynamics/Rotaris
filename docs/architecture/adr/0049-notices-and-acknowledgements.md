@@ -127,3 +127,17 @@ gesture budget.
 A requirement appears for more than one notice on screen at once — the requirements board's
 per-requirement standing banners are close to that and belong to the board rather than to the shell
 banner slot; if that boundary moves, the single-slot store is what changes.
+
+## First execution with a second publisher — 2026-09-03, the run host's notices
+
+*Recorded under GD-10.* Until the hooks, main was the only source of a notice. ADR-0015 gives the run host
+three (REQ-HOOKS-054's advisory, REQ-HOOKS-086's withheld notice, REQ-NOTIFY-223/224) and they arrive over
+one `notice.publish` event that main alone turns into the current notice, with a key for REQ-NOTIFY-224's
+once-per-pair rule and an action id main maps to the notice's recovery entry — consequence 2's single entry
+point held. **Found:** the single slot loses one of them. In the built app the switched-off advisory
+("Hooks need attention") was published at teardown and the run's own outcome notice ("The run completed")
+followed a moment later and replaced it; the user saw the second. REQ-HOOKS-054 and REQ-SESSION-186 each
+require their notice and the slot holds one. Not repaired here: the advisory is also a `hook_failure` issue
+and an entry on the Hooks tab, so nothing is lost durably, and a queue or a second slot is a change to this
+record's decision, which the requirements board's banners were already pressing on ("Revisit if"). Left as
+the first concrete case for that revisit.

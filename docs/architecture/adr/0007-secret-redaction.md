@@ -112,3 +112,19 @@ same-named key elsewhere in the document.
 A requirement adds a credential prefix or a key word — a change to a closed vocabulary and therefore a
 specification amendment; or a surface appears that must show a stored secret in clear, which
 `REQ-TOOLS-171`, `REQ-PROVIDER-107` and `REQ-MCP-109` currently forbid outright.
+
+## First execution at size — 2026-09-03, found by REQ-HOOKS-139
+
+*Recorded under GD-10.* The pass had run under every test of REQ-TOOLS-171/172 and REQ-EVENTS-060 and
+never over a long string. The hooks' payload bound (10 ms at 100 KB, REQ-HOOKS-139) ran it over 100,000
+`x` and measured **26 seconds**. Two patterns were quadratic: the assignment key `[A-Za-z0-9][A-Za-z0-9_.\-]*`
+and, once that was bounded, the unanchored URL scheme `[A-Za-z][A-Za-z0-9+.-]*://` (13 s alone; 46 ms
+bounded but still unanchored). Each start position re-scanned the whole run for a separator that never came.
+
+**The falsified reason, kept:** "a key is any alphanumeric run, however long" — true of the grammar, and
+the cause. **The replacement:** the key, the flag and the quoted-key patterns are bounded at 128 characters
+(REQ-TOOLS-172's segments are short words, so no credential name is longer) and the scheme is anchored at a
+boundary and bounded at 64. No masking outcome changes — the requirement's worked examples all pass as
+before — and `redaction.test.ts` now pins 100 KB under 50 ms (0.5 ms measured). Consequence 2's closed set
+is untouched. This is the eighth first-execution defect of the pattern `implementation-conditions.md`
+decision 3 names, and the first found in a mechanism other than the one being built.

@@ -138,3 +138,65 @@ and `REQ-HOOKS-033` states its allowance in terms. Raised as open question OQ-9 
 OQ-9 resolves toward reading (b); or `REQ-HOOKS-139`'s 50 ms bound cannot be met at 100 entries —
 noting that the bound covers *resolving and validating* the set, not invoking, so process-per-
 invocation is not in tension with it.
+
+## First execution — 2026-09-03/04, the runner against cmd.exe and the engine in the run
+
+*Recorded under GD-10.*
+
+**Built and run:** `@rotaris/hooks` (matcher, payload, runner, verdicts, trust gate, external import,
+policy file, the per-session `HookEngine`) over the first slice of ADR-0036's loader (`@rotaris/config`:
+the document tree, the `hooks:` section, the merge); the engine's `HookPort` and the gate's `ToolHooks`
+filled at the run-host root with one object; the four lifecycle points in the run and the two slots in the
+gate; the Hooks tab, the review dialog, the notices. Verified in the built app on this host: an unapproved
+workspace withheld its two hooks (one `hook.finish` each, one `hook_trust` issue, one keyed notice) and the
+six global entries its list had displaced were reinstated; the reinstated `pre_tool` guard stopped
+`git push origin main` as a `blocked` row carrying REQ-HOOKS-049's text with the tool never run; `post_tool`
+stderr rode in the `read_file` result; three failures switched a hook off with exactly one warning and the
+advisory followed; a `session_end` hook read `status=completed` off stdin, the string the `session.end`
+event carries; the review dialog allowed the set and `hook-trust.json` appeared; the approved run executed
+the workspace hooks with the global list superseded; a refusal persisted and re-asked nothing; an imported
+Claude Code `PreToolUse` on `Bash` fired for a terminal call under scope `external:claude-code` while the
+workspace's own hooks stayed refused; `hooks.enabled: false` left nothing observable; no credential reached
+a payload, the audit, the timeline or the stream.
+
+**The three mechanics held, and one of them costs more on Windows than this record said.** Mechanic 1
+(resolve on exit plus a grace, never on `close`) was exercised by a hook that spawned a detached grandchild
+inheriting its pipes and sleeping 30 s: the hook resolved with its output after its own exit plus the grace.
+Mechanic 3 held byte for byte: a node hook reading stdin to the end reported the payload's exact length and
+`}` as its last byte. Mechanic 2 is where the cost lives. On Windows the interpreter is `cmd.exe /c`, and
+`cmd.exe` runs the command as **its own child**; `ChildProcess.kill()` terminates `cmd.exe` and nothing
+else, so the command survives the timeout path — the 60 s sleep under a 0.3 s budget was still running when
+the invocation returned. REQ-HOOKS-033 permits exactly that ("a descendant is permitted to outlive both the
+hook process and the run") and bounds collection with the grace, so **every timed-out hook on Windows
+costs the full 5.0 s grace and reports empty output**; the invocation returned at 5,334 ms, inside the
+bound. This is the specification's design, not a defect, but this record's "kill the started process only"
+did not say that on this platform the started process is never the command. Recorded so nobody "fixes" it
+with a tree kill, which REQ-HOOKS-033 forbids in terms and which the terminal path (ADR-0020) does on
+purpose. OQ-9 is reading (a) by construction: no Job Object exists in this codebase yet, so nothing reaches
+a hook's descendants at application exit; the question stays open for the day one does.
+
+**Found — and it was not in this mechanism.** REQ-HOOKS-139's bound of 10 ms for a 100 KB payload exposed
+kernel's redaction pass (ADR-0007) as quadratic over a long alphanumeric run: 26 s for 100,000 characters,
+in the key pattern and, once that was bounded, in the unanchored URL-scheme pattern. Both are bounded and
+anchored now (0.5 ms), no masking outcome changed, and the reason is on ADR-0007. It is the eighth defect of
+the pattern in `implementation-conditions.md` decision 3, found by the first mechanism to run the pass at
+size rather than by the pass's own first execution.
+
+**Two decisions this record left open, taken here.** The segmenter is **not** ADR-0018's `decompose`: that
+one honours `;;`, `$(…)` and backslash escapes for the policy's purposes and REQ-HOOKS-025 names a different
+set with a literal backslash, so the two definitions are kept apart on purpose in `config/command-pattern.ts`
+and `agent-tools/scanner.ts`. And the concurrency model is per occurrence sequential, occurrences
+concurrent, with one tally: three simultaneous occurrences of a failing hook produced one switch-off and one
+warning under a fake clock.
+
+**A consequence of REQ-HOOKS-013 worth stating once, because a reviewer will read it as a bug.** A workspace
+that declares any `hooks:` list *replaces* the global list. While the workspace's hooks are withheld the
+displaced global entries are reinstated (REQ-HOOKS-098) and run; the moment the user allows the workspace's
+hooks, the global entries are superseded and **stop running**. A global guard therefore protects an
+unreviewed checkout and not a reviewed one. REQ-CONFIG-150 says list replacement "is not softened"; the tab
+shows the displaced entries as `superseded` with the scope that replaced them (REQ-CONFIG-153).
+
+**Owed and stated:** the working directory is the workspace until worktrees exist (REQ-HOOKS-030/084);
+`verifier_finished` never fires (no verifier); REQ-HOOKS-082's before-the-checkpoint guarantee is vacuous
+(no checkpoints); the notice slot is single (ADR-0049's note); the 50 ms / 10 ms / 1 ms bounds are tested
+under vitest on this workstation, not under a benchmark harness (ADR-0053).

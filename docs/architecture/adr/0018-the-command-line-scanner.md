@@ -115,3 +115,7 @@ therefore ask under the supervised presets — the over-triggering direction. It
 tool's description as the record asked.
 
 **Found: nothing.**
+
+**Second execution, 2026-09-03, beside the hooks.** Not reused for REQ-HOOKS-025: that definition divides
+at six separators (no `;;`), treats a backslash as an ordinary character and `?`/`[` as literals, so the
+hook matcher is a second tokenizer in `config/command-pattern.ts`, kept apart on purpose. Nothing changed here.

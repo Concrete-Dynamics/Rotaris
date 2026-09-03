@@ -373,3 +373,17 @@ budget** on the paths that re-read and re-merge on every settings-screen open. C
 microseconds; that is an estimate from file sizes and not a figure. If it turns out to be wrong the
 answer is still not a cache — `REQ-CONFIG-014` forbids one — but the settings screen's own
 sequencing would then belong in a decision record rather than in an assumption here.
+
+## First slice built — 2026-09-03, for the hooks (ADR-0015)
+
+*Recorded under GD-10.* `@rotaris/config` exists with `yaml@2.9.0`, the document tree, the tri-state
+(absent / null / value observed as three different things through the document API, as the DATA spike said),
+and readers for **one section**: `hooks:` in both file scopes, with the list shorthand, the bare-key
+semantics of REQ-HOOKS-011, every invalid entry reported at once with its YAML path, the scope stamped
+before the merge, full-list substitution and the displaced lists kept. The entry point takes no database
+handle. The default 1.2 core schema behaved as decided: `on` stayed a string, `true` folded and was un-folded
+per field for the event vocabulary and rejected as an unrecognised member naming the seven. An unknown
+top-level key was carried and ignored. **Not built:** the four merge classes beyond what the section needs,
+the validating wrapper, the placeholder and secret passes, the four writers, the discovery layer, the
+runtime keys — those stay environment stopgaps at the run-host root. Neither timing contingency of "Revisit
+if" is measured yet: the hooks read is a few kilobytes and no settings save exists.

@@ -43,9 +43,16 @@ export interface SessionRow {
   readonly summary_text: string | null;
   readonly todo: string | null;
   readonly progress: string | null;
+  // v4 — REQ-TOOLS-071 / REQ-TOOLS-060.
+  readonly permission_mode: string | null;
+  readonly sandboxed: number;
+  readonly pending_approvals: string;
 }
 /** The run-recorded columns a save may carry (REQ-SESSION-168: aggregates copied on every persist). */
 export interface SessionRunPatch {
+  readonly permission_mode?: string | null;
+  readonly sandboxed?: number;
+  readonly pending_approvals?: string;
   readonly stop_reason?: string | null;
   readonly iterations_completed?: number;
   readonly run_started_at?: string | null;
@@ -75,6 +82,77 @@ export interface TranscriptRowRecord {
   readonly name: string | null;
   /** Local wall-clock HH:MM:SS at append (REQ-SESSION-121). */
   readonly ts: string;
+  // v4 — REQ-CHAT-046's tool-row fields; null on text rows.
+  readonly tool_name: string | null;
+  readonly tool_status: string | null;
+  readonly call_key: string | null;
+  readonly duration_ms: number | null;
+  readonly started_at: string | null;
+  readonly input: string | null;
+  readonly output: string | null;
+  readonly diff: string | null;
+  readonly blocked_reason: string | null;
+}
+/** The tool-row fields a row may carry at append and at settle (REQ-CHAT-046). */
+export interface RowToolFields {
+  readonly tool_name?: string | null;
+  readonly tool_status?: string | null;
+  readonly call_key?: string | null;
+  readonly duration_ms?: number | null;
+  readonly started_at?: string | null;
+  readonly input?: string | null;
+  readonly output?: string | null;
+  readonly diff?: string | null;
+  readonly blocked_reason?: string | null;
+}
+
+/** ADR-0024: the ring kinds and REQ-SESSION-133's caps, one policy table. */
+export const RING_KINDS = ['permission_audit', 'tool_calls', 'issues'] as const;
+export type RingKind = (typeof RING_KINDS)[number];
+export const RING_CAPS: Readonly<Record<RingKind, number>> = Object.freeze({ permission_audit: 5000, tool_calls: 5000, issues: 500 });
+
+export interface RingState {
+  readonly next_ordinal: number;
+  readonly held: number;
+  readonly dropped: number;
+}
+export interface AuditRow {
+  readonly session_id: string;
+  readonly ordinal: number;
+  readonly recorded_at: string;
+  readonly kind: 'decision' | 'mode_change';
+  /** The serialised entry, verbatim — the record; the columns beside it are indexes. */
+  readonly entry: string;
+  readonly agent_id: string;
+  readonly persona: string;
+  readonly tool_name: string;
+  readonly decision: string;
+  readonly rule_id: string;
+  readonly source: string;
+}
+export interface ToolCallRow {
+  readonly session_id: string;
+  readonly ordinal: number;
+  readonly call_id: string;
+  readonly agent_name: string;
+  readonly tool_name: string;
+  readonly status: string;
+  readonly started_at: string;
+  readonly elapsed_ms: number | null;
+  readonly is_error: number;
+  readonly entry: string;
+}
+export interface IssueRow {
+  readonly session_id: string;
+  readonly ordinal: number;
+  readonly id: string;
+  readonly recorded_at: string;
+  readonly kind: string;
+  readonly severity: string;
+  readonly actor: string;
+  readonly message: string;
+  readonly evidence_ref: string;
+  readonly metadata: string;
 }
 export interface LaunchAuditRow {
   readonly session_id: string;
@@ -117,6 +195,9 @@ export class StoreDal {
       // REQ-SESSION-168: a save copies the aggregates; COALESCE keeps a column the patch did not name.
       updateSessionRun: db.prepare(`
         UPDATE sessions SET
+          permission_mode = coalesce(@permission_mode, permission_mode),
+          sandboxed = coalesce(@sandboxed, sandboxed),
+          pending_approvals = coalesce(@pending_approvals, pending_approvals),
           stop_reason = coalesce(@stop_reason, stop_reason),
           iterations_completed = coalesce(@iterations_completed, iterations_completed),
           run_started_at = coalesce(@run_started_at, run_started_at),
@@ -148,9 +229,14 @@ export class StoreDal {
       countResident: db.prepare('SELECT count(*) AS c FROM transcript_rows WHERE session_id = ? AND page IS NULL'),
       maxRowIndex: db.prepare('SELECT max(row_index) AS m FROM transcript_rows WHERE session_id = ?'),
       maxPage: db.prepare('SELECT max(page) AS m FROM transcript_rows WHERE session_id = ?'),
-      appendRow: db.prepare('INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, persona, name, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+      appendRow: db.prepare(`INSERT INTO transcript_rows
+        (session_id, row_index, kind, settled, body, at, persona, name, ts, tool_name, tool_status, call_key, duration_ms, started_at, input, output, diff, blocked_reason)
+        VALUES (@session_id, @row_index, @kind, @settled, @body, @at, @persona, @name, @ts, @tool_name, @tool_status, @call_key, @duration_ms, @started_at, @input, @output, @diff, @blocked_reason)`),
       // REQ-SESSION-131: the settle path can only reach a RESIDENT row; a released row has no statement that updates it.
-      settleRow: db.prepare('UPDATE transcript_rows SET body = ?, settled = 1 WHERE session_id = ? AND row_index = ? AND page IS NULL'),
+      settleRow: db.prepare(`UPDATE transcript_rows SET body = @body, settled = 1,
+        tool_status = coalesce(@tool_status, tool_status), duration_ms = coalesce(@duration_ms, duration_ms), output = coalesce(@output, output),
+        diff = coalesce(@diff, diff), blocked_reason = coalesce(@blocked_reason, blocked_reason)
+        WHERE session_id = @session_id AND row_index = @row_index AND page IS NULL`),
       // REQ-SESSION-192: release the oldest resident rows as one whole page, index untouched.
       releaseOldest: db.prepare(`
         UPDATE transcript_rows SET page = ? WHERE rowid IN (
@@ -173,7 +259,73 @@ export class StoreDal {
 
       countAllRows: db.prepare('SELECT count(*) AS c FROM transcript_rows'),
       countAllSessions: db.prepare('SELECT count(*) AS c FROM sessions'),
+
+      // ADR-0024: the rings. Exactly these statements exist per kind — insert, delete-oldest, read — plus the one
+      // settling update the tool-call record alone permits.
+      ringState: db.prepare('SELECT next_ordinal, held, dropped FROM ring_state WHERE session_id = ? AND kind = ?'),
+      putRingState: db.prepare('INSERT OR REPLACE INTO ring_state (session_id, kind, next_ordinal, held, dropped) VALUES (?, ?, ?, ?, ?)'),
+      insertAudit: db.prepare(`INSERT INTO permission_audit (session_id, ordinal, recorded_at, kind, entry, agent_id, persona, tool_name, decision, rule_id, source)
+        VALUES (@session_id, @ordinal, @recorded_at, @kind, @entry, @agent_id, @persona, @tool_name, @decision, @rule_id, @source)`),
+      oldestAudit: db.prepare('DELETE FROM permission_audit WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM permission_audit WHERE session_id = ?)'),
+      auditOf: db.prepare('SELECT * FROM permission_audit WHERE session_id = ? ORDER BY ordinal'),
+      insertToolCall: db.prepare(`INSERT INTO tool_calls (session_id, ordinal, call_id, agent_name, tool_name, status, started_at, elapsed_ms, is_error, entry)
+        VALUES (@session_id, @ordinal, @call_id, @agent_name, @tool_name, @status, @started_at, @elapsed_ms, @is_error, @entry)`),
+      settleToolCall: db.prepare('UPDATE tool_calls SET status = ?, elapsed_ms = ?, is_error = ?, entry = ? WHERE session_id = ? AND ordinal = ? AND status = \'running\''),
+      oldestToolCall: db.prepare('DELETE FROM tool_calls WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM tool_calls WHERE session_id = ?)'),
+      toolCallsOf: db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal'),
+      insertIssue: db.prepare(`INSERT INTO issues (session_id, ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata)
+        VALUES (@session_id, @ordinal, @id, @recorded_at, @kind, @severity, @actor, @message, @evidence_ref, @metadata)`),
+      oldestIssue: db.prepare('DELETE FROM issues WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM issues WHERE session_id = ?)'),
+      issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
     };
+  }
+
+  /**
+   * ADR-0024 / REQ-SESSION-133: ONE ring implementation. Inside the caller's transaction: assign the next ordinal
+   * (never reset, never reused), run the insert, displace the oldest when the cap is exceeded, and move the
+   * counts — all in the same durable operation, so a reader never sees more than the cap or a partial trim.
+   */
+  ringInsert(kind: RingKind, id: SessionId, insert: (ordinal: number) => void): { ordinal: number; displaced: boolean } {
+    const state = this.ringState(id, kind);
+    const ordinal = state.next_ordinal;
+    insert(ordinal);
+    let held = state.held + 1;
+    let dropped = state.dropped;
+    let displaced = false;
+    if (held > RING_CAPS[kind]) {
+      const stmt = kind === 'permission_audit' ? 'oldestAudit' : kind === 'tool_calls' ? 'oldestToolCall' : 'oldestIssue';
+      const n = this.stmts[stmt]!.run(id, id).changes;
+      held -= n;
+      dropped += n;
+      displaced = n > 0;
+    }
+    this.stmts['putRingState']!.run(id, kind, ordinal + 1, held, dropped);
+    return { ordinal, displaced };
+  }
+  ringState(id: SessionId, kind: RingKind): RingState {
+    return (this.stmts['ringState']!.get(id, kind) as RingState | undefined) ?? { next_ordinal: 1, held: 0, dropped: 0 };
+  }
+  insertAudit(row: Omit<AuditRow, 'session_id'> & { readonly session_id: SessionId }): void {
+    this.stmts['insertAudit']!.run(row);
+  }
+  auditOf(id: SessionId): AuditRow[] {
+    return this.stmts['auditOf']!.all(id) as AuditRow[];
+  }
+  insertToolCall(row: Omit<ToolCallRow, 'session_id'> & { readonly session_id: SessionId }): void {
+    this.stmts['insertToolCall']!.run(row);
+  }
+  /** False when the row is not `running` — the trigger refuses a second settle; this reports it without raising. */
+  settleToolCall(id: SessionId, ordinal: number, status: string, elapsedMs: number | null, isError: boolean, entry: string): boolean {
+    return this.stmts['settleToolCall']!.run(status, elapsedMs, isError ? 1 : 0, entry, id, ordinal).changes === 1;
+  }
+  toolCallsOf(id: SessionId): ToolCallRow[] {
+    return this.stmts['toolCallsOf']!.all(id) as ToolCallRow[];
+  }
+  insertIssue(row: Omit<IssueRow, 'session_id'> & { readonly session_id: SessionId }): void {
+    this.stmts['insertIssue']!.run(row);
+  }
+  issuesOf(id: SessionId): IssueRow[] {
+    return this.stmts['issuesOf']!.all(id) as IssueRow[];
   }
 
   /** One transaction as the unit of work (ADR-0008). Runs `fn` inside BEGIN IMMEDIATE; commits on return, rolls back on throw. */
@@ -215,6 +367,7 @@ export class StoreDal {
   updateSessionRun(id: SessionId, patch: SessionRunPatch): void {
     this.stmts['updateSessionRun']!.run({
       session_id: id,
+      permission_mode: patch.permission_mode ?? null, sandboxed: patch.sandboxed ?? null, pending_approvals: patch.pending_approvals ?? null,
       stop_reason: patch.stop_reason ?? null, iterations_completed: patch.iterations_completed ?? null, run_started_at: patch.run_started_at ?? null,
       tokens_input: patch.tokens_input ?? null, tokens_output: patch.tokens_output ?? null, cost: patch.cost ?? null,
       tool_calls: patch.tool_calls ?? null, compressions: patch.compressions ?? null,
@@ -266,12 +419,19 @@ export class StoreDal {
     return this.stmts['deleteLocksNotOnHost']!.run(host).changes;
   }
 
-  appendRow(id: SessionId, index: number, kind: string, settled: boolean, body: string, at = '', extra: { persona?: string | null; name?: string | null; ts?: string } = {}): void {
-    this.stmts['appendRow']!.run(id, index, kind, settled ? 1 : 0, body, at, extra.persona ?? null, extra.name ?? null, extra.ts ?? '');
+  appendRow(id: SessionId, index: number, kind: string, settled: boolean, body: string, at = '', extra: { persona?: string | null; name?: string | null; ts?: string } & RowToolFields = {}): void {
+    this.stmts['appendRow']!.run({
+      session_id: id, row_index: index, kind, settled: settled ? 1 : 0, body, at, persona: extra.persona ?? null, name: extra.name ?? null, ts: extra.ts ?? '',
+      tool_name: extra.tool_name ?? null, tool_status: extra.tool_status ?? null, call_key: extra.call_key ?? null, duration_ms: extra.duration_ms ?? null,
+      started_at: extra.started_at ?? null, input: extra.input ?? null, output: extra.output ?? null, diff: extra.diff ?? null, blocked_reason: extra.blocked_reason ?? null,
+    });
   }
   /** False when the row is not resident — which REQ-SESSION-131 makes a refusal, not a repair. */
-  settleRow(id: SessionId, index: number, body: string): boolean {
-    return this.stmts['settleRow']!.run(body, id, index).changes === 1;
+  settleRow(id: SessionId, index: number, body: string, tool: RowToolFields = {}): boolean {
+    return this.stmts['settleRow']!.run({
+      body, session_id: id, row_index: index,
+      tool_status: tool.tool_status ?? null, duration_ms: tool.duration_ms ?? null, output: tool.output ?? null, diff: tool.diff ?? null, blocked_reason: tool.blocked_reason ?? null,
+    }).changes === 1;
   }
   /** Release the oldest whole page of resident rows into `page`. Returns how many rows moved. */
   releaseOldestPage(id: SessionId, page: number): number {

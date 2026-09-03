@@ -1,7 +1,8 @@
-import { err, ok, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { randomBytes } from 'node:crypto';
+import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import type { TranscriptRow } from '@rotaris/contracts';
-import { EVENT_SCHEMA_VERSION, serializeEvent, type EventKind, type WireEvent } from './events.js';
+import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 
 /**
@@ -61,7 +62,105 @@ export interface CommittedEvent {
 export interface RowExtra {
   readonly persona?: string;
   readonly name?: string;
+  /** REQ-CHAT-046: the tool-row fields, in the row's own (wire) spelling. */
+  readonly toolName?: string;
+  readonly toolStatus?: string;
+  readonly callKey?: string;
+  readonly durationMs?: number;
+  readonly startedAt?: string;
+  readonly input?: string;
+  readonly output?: string;
+  readonly diff?: string;
+  readonly blockedReason?: string;
 }
+/** What a settle may add to a tool row (REQ-CHAT-060: the outcome, the duration, the output, a blocked reason). */
+export interface RowSettle {
+  readonly toolStatus?: string;
+  readonly durationMs?: number;
+  readonly output?: string;
+  readonly diff?: string;
+  readonly blockedReason?: string;
+}
+
+function toolColumns(x: RowExtra | RowSettle): RowToolFields {
+  const e = x as RowExtra;
+  return {
+    ...(e.toolName === undefined ? {} : { tool_name: e.toolName }), ...(e.toolStatus === undefined ? {} : { tool_status: e.toolStatus }),
+    ...(e.callKey === undefined ? {} : { call_key: e.callKey }), ...(e.durationMs === undefined ? {} : { duration_ms: e.durationMs }),
+    ...(e.startedAt === undefined ? {} : { started_at: e.startedAt }), ...(e.input === undefined ? {} : { input: e.input }),
+    ...(e.output === undefined ? {} : { output: e.output }), ...(e.diff === undefined ? {} : { diff: e.diff }),
+    ...(e.blockedReason === undefined ? {} : { blocked_reason: e.blockedReason }),
+  };
+}
+
+/** REQ-EVENTS-059/063: every string inside `row` on the wire is masked THEN clipped; the record keeps the full row. */
+export function maskRow(row: TranscriptRow): TranscriptRow {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) out[k] = typeof v === 'string' ? redactRowString(v) : v;
+  return out as TranscriptRow;
+}
+
+/** REQ-SESSION-135: 12 lowercase hex characters. */
+export function issueId(): string {
+  return randomBytes(6).toString('hex');
+}
+
+/** REQ-TOOLS-079: a decision entry; `id` is the ordinal the ring assigns (ADR-0024). */
+export interface DecisionEntry {
+  readonly timestamp: string;
+  readonly session_id: string;
+  readonly agent_id: string;
+  readonly persona: string;
+  readonly tool_name: string;
+  readonly decision: string;
+  readonly rule_id: string;
+  readonly source: string;
+  readonly summary: string;
+  readonly reason: string;
+  readonly request_id?: string;
+}
+/** REQ-TOOLS-082: a mode-change entry; `skipped_personas` always present. */
+export interface ModeChangeEntry {
+  readonly timestamp: string;
+  readonly event: 'permission_mode_change';
+  readonly session_id: string;
+  readonly agent_id: string;
+  readonly requested_mode: string;
+  readonly effective_mode: string;
+  readonly previous_mode: string;
+  readonly source: string;
+  readonly reason: string;
+  readonly skipped_personas: readonly string[];
+}
+/** REQ-SESSION-136: what is known at start; the rest at settle. */
+export interface ToolCallOpen {
+  readonly call_id: string;
+  readonly agent_name: string;
+  readonly tool_name: string;
+  readonly args: Readonly<Record<string, unknown>>;
+}
+export interface ToolCallSettle {
+  readonly status: 'ok' | 'failed' | 'blocked';
+  readonly elapsed_ms: number;
+  readonly is_error: boolean;
+  readonly result: string;
+  readonly error?: string | null;
+  readonly outcome_kind?: string;
+  readonly exit_code?: number | null;
+  readonly failure_kind?: string | null;
+  readonly warnings?: readonly string[];
+}
+export interface IssueInput {
+  readonly kind: string;
+  readonly severity: 'debug' | 'info' | 'warning' | 'error';
+  readonly actor: string;
+  readonly message: string;
+  readonly evidence_ref?: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
+const DECISION_FIELDS: ReadonlySet<string> = new Set(['id', 'timestamp', 'session_id', 'agent_id', 'persona', 'tool_name', 'decision', 'rule_id', 'source', 'summary', 'reason', 'request_id']);
+const MODE_CHANGE_FIELDS: ReadonlySet<string> = new Set(['timestamp', 'event', 'session_id', 'agent_id', 'requested_mode', 'effective_mode', 'previous_mode', 'source', 'reason', 'skipped_personas']);
 /** REQ-SESSION-094's terminal transaction, as one unit. */
 export interface EndRunArgs {
   readonly status: string;
@@ -108,7 +207,14 @@ function isTerminalStatus(status: string): boolean {
 
 export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
   const row: TranscriptRow = { index: r.row_index, kind: r.kind, settled: r.settled === 1, body: r.body, at: r.at, ts: r.ts };
-  return { ...row, ...(r.persona === null ? {} : { persona: r.persona }), ...(r.name === null ? {} : { name: r.name }) };
+  return {
+    ...row, ...(r.persona === null ? {} : { persona: r.persona }), ...(r.name === null ? {} : { name: r.name }),
+    ...(r.tool_name === null ? {} : { toolName: r.tool_name }), ...(r.tool_status === null ? {} : { toolStatus: r.tool_status }),
+    ...(r.call_key === null ? {} : { callKey: r.call_key }), ...(r.duration_ms === null ? {} : { durationMs: r.duration_ms }),
+    ...(r.started_at === null ? {} : { startedAt: r.started_at }), ...(r.input === null ? {} : { input: r.input }),
+    ...(r.output === null ? {} : { output: r.output }), ...(r.diff === null ? {} : { diff: r.diff }),
+    ...(r.blocked_reason === null ? {} : { blockedReason: r.blocked_reason }),
+  };
 }
 
 export class SessionWriter {
@@ -187,8 +293,10 @@ export class SessionWriter {
     const at = toIsoUtc(now);
     const ts = localHms(now);
     const index = this.nextIndex;
-    const row: TranscriptRow = { index, kind, settled, body, at, ts, ...(extra.persona === undefined ? {} : { persona: extra.persona }), ...(extra.name === undefined ? {} : { name: extra.name }) };
-    const ev = this.envelope('transcript.row', at, { index, row });
+    const { persona, name, ...tool } = extra;
+    const definedTool = Object.fromEntries(Object.entries(tool).filter(([, v]) => v !== undefined));
+    const row: TranscriptRow = { index, kind, settled, body, at, ts, ...(persona === undefined ? {} : { persona }), ...(name === undefined ? {} : { name }), ...definedTool };
+    const ev = this.envelope('transcript.row', at, { index, row: maskRow(row) });
     const line = serializeEvent(ev);
     if (!line.ok) {
       // REQ-EVENTS-032: the row is recorded, its event alone is dropped, and every later event lands.
@@ -205,7 +313,7 @@ export class SessionWriter {
           this.residentCount -= moved;
           released = { fromIndex: oldest, toIndex: oldest + moved - 1 };
         }
-        dal.appendRow(sessionId, index, kind, settled, body, at, { persona: extra.persona ?? null, name: extra.name ?? null, ts });
+        dal.appendRow(sessionId, index, kind, settled, body, at, { persona: extra.persona ?? null, name: extra.name ?? null, ts, ...toolColumns(extra) });
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, line.value);
         dal.touchSession(sessionId, this.status, at);
       });
@@ -223,20 +331,21 @@ export class SessionWriter {
   }
 
   /** REQ-EVENTS-052 settled form: the second and last event for an index. One transaction. */
-  settleRow(index: number, body: string): Result<TranscriptRow, WriteFailure> {
+  settleRow(index: number, body: string, settle: RowSettle = {}): Result<TranscriptRow, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
     const current = dal.residentRows(sessionId).find((r) => r.row_index === index);
     if (!current) return err({ code: 'row-not-resident', index });
     if (current.settled === 1) return err({ code: 'row-already-settled', index });
-    const row: TranscriptRow = { ...toTranscriptRow(current), settled: true, body };
-    const ev = this.envelope('transcript.row', at, { index, row });
+    const definedSettle = Object.fromEntries(Object.entries(settle).filter(([, v]) => v !== undefined));
+    const row: TranscriptRow = { ...toTranscriptRow(current), ...definedSettle, settled: true, body };
+    const ev = this.envelope('transcript.row', at, { index, row: maskRow(row) });
     const line = serializeEvent(ev);
     if (!line.ok) this.deps.warn(`event transcript.row (settled) for row ${index} could not be serialised and was not recorded: ${line.error.reason}`);
     try {
       dal.transaction(() => {
-        if (!dal.settleRow(sessionId, index, body)) throw new Error(`row ${index} is not resident`);
+        if (!dal.settleRow(sessionId, index, body, toolColumns(settle))) throw new Error(`row ${index} is not resident`);
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, line.value);
         dal.touchSession(sessionId, this.status, at);
       });
@@ -389,6 +498,140 @@ export class SessionWriter {
     return ok({ ordinals: committed.map((c) => c.ordinal) });
   }
 
+  /**
+   * ADR-0024 / REQ-TOOLS-027/078/079/081/083: a decision entry into the permission audit — the serialised entry
+   * verbatim with `id` = its ordinal — and its `permission.decision` event, ONE transaction (REQ-EVENTS-072).
+   * The field inventory is validated on the write path: a field outside REQ-TOOLS-079's set is a fault, never a
+   * passthrough (the export's redaction-safety rests on it). Returns the ordinal, which is the entry's identifier.
+   */
+  recordDecision(entry: DecisionEntry): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    for (const k of Object.keys(entry)) if (!DECISION_FIELDS.has(k)) return err({ code: 'not-serializable', reason: `audit entry carries a field outside REQ-TOOLS-079's inventory: ${k}` });
+    const ev = this.envelope('permission.decision', at, { request_id: entry.request_id ?? '', tool_name: entry.tool_name, decision: entry.decision, source: entry.source, rule_id: entry.rule_id, summary: entry.summary });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event permission.decision could not be serialised and was not recorded: ${line.error.reason}`);
+    let ordinal = 0;
+    try {
+      dal.transaction(() => {
+        const r = dal.ringInsert('permission_audit', sessionId, (o) => {
+          const stored = { id: o, ...entry, ...(entry.request_id === undefined ? {} : { request_id: entry.request_id }) };
+          dal.insertAudit({ session_id: sessionId, ordinal: o, recorded_at: at, kind: 'decision', entry: JSON.stringify(sortKeys(stored)), agent_id: entry.agent_id, persona: entry.persona, tool_name: entry.tool_name, decision: entry.decision, rule_id: entry.rule_id, source: entry.source });
+        });
+        ordinal = r.ordinal;
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'permission.decision', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(ordinal);
+  }
+
+  /** REQ-TOOLS-082: a mode-change entry in the same series, interleaved in write order; no identifier is owed to it. */
+  recordModeChange(entry: ModeChangeEntry): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    for (const k of Object.keys(entry)) if (!MODE_CHANGE_FIELDS.has(k)) return err({ code: 'not-serializable', reason: `mode-change entry carries a field outside REQ-TOOLS-082's shape: ${k}` });
+    try {
+      return ok(dal.transaction(() => dal.ringInsert('permission_audit', sessionId, (o) => {
+        dal.insertAudit({ session_id: sessionId, ordinal: o, recorded_at: at, kind: 'mode_change', entry: JSON.stringify(sortKeys(entry)), agent_id: entry.agent_id, persona: '', tool_name: '', decision: '', rule_id: '', source: entry.source });
+      }).ordinal));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * REQ-SESSION-136 / REQ-EVENTS-072: the tool-call record is written at `tool.start` as `running`, with the
+   * arguments unredacted, and the masked `tool.start` event in the same transaction (the reading on ADR-0024).
+   */
+  openToolCall(open: ToolCallOpen): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('tool.start', at, { tool_name: open.tool_name, call_id: open.call_id, arguments: maskArguments(open.args) });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event tool.start could not be serialised and was not recorded: ${line.error.reason}`);
+    let ordinal = 0;
+    try {
+      dal.transaction(() => {
+        const r = dal.ringInsert('tool_calls', sessionId, (o) => {
+          const entry = { timestamp: at, agent_name: open.agent_name, tool_name: open.tool_name, call_id: open.call_id, status: 'running', elapsed_ms: null, is_error: false, args: open.args };
+          dal.insertToolCall({ session_id: sessionId, ordinal: o, call_id: open.call_id, agent_name: open.agent_name, tool_name: open.tool_name, status: 'running', started_at: at, elapsed_ms: null, is_error: 0, entry: JSON.stringify(sortKeys(entry)) });
+        });
+        ordinal = r.ordinal;
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'tool.start', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(ordinal);
+  }
+
+  /** The one settling update, with `tool.finish` in the same transaction; on error args/result are cut to 2000 (REQ-SESSION-136). */
+  settleToolCall(ordinal: number, open: ToolCallOpen, settle: ToolCallSettle): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const cut = (s: string) => (settle.is_error && s.length > 2000 ? s.slice(0, 2000) : s);
+    const entry: Record<string, unknown> = {
+      timestamp: at, agent_name: open.agent_name, tool_name: open.tool_name, call_id: open.call_id, status: settle.status, elapsed_ms: settle.elapsed_ms, is_error: settle.is_error,
+      args: settle.is_error ? cut(JSON.stringify(open.args)) : open.args, result: cut(settle.result),
+      ...(settle.outcome_kind === undefined ? {} : { outcome_kind: settle.outcome_kind }), ...(settle.exit_code === undefined ? {} : { exit_code: settle.exit_code }),
+      ...(settle.failure_kind === undefined ? {} : { failure_kind: settle.failure_kind }), ...(settle.warnings === undefined ? {} : { warnings: settle.warnings }),
+    };
+    const ev = this.envelope('tool.finish', at, { tool_name: open.tool_name, call_id: open.call_id, status: settle.status, duration_ms: settle.elapsed_ms, error: settle.error ?? null });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event tool.finish could not be serialised and was not recorded: ${line.error.reason}`);
+    let settled = false;
+    try {
+      dal.transaction(() => {
+        settled = dal.settleToolCall(sessionId, ordinal, settle.status, settle.elapsed_ms, settle.is_error, JSON.stringify(sortKeys(entry)));
+        if (settled && line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'tool.finish', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (settled && line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(settled);
+  }
+
+  /**
+   * REQ-SESSION-135: an issue with its `issue` timeline entry in one transaction; only an error-severity issue
+   * additionally publishes an `error` event, `fatal: false`, whose `detail` is the issue's locator (REQ-EVENTS-072).
+   */
+  recordIssue(input: IssueInput): Result<string, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const id = issueId();
+    const ref = input.evidence_ref ?? '';
+    const ev = input.severity === 'error' ? this.envelope('error', at, { message: input.message, error_class: input.kind, detail: locator('issues', id), fatal: false }) : null;
+    const line = ev ? serializeEvent(ev) : null;
+    if (line && !line.ok) this.deps.warn(`event error could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.ringInsert('issues', sessionId, (o) => {
+          dal.insertIssue({ session_id: sessionId, ordinal: o, id, recorded_at: at, kind: input.kind, severity: input.severity, actor: input.actor, message: input.message, evidence_ref: ref, metadata: JSON.stringify(input.metadata ?? {}) });
+        });
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'issue', input.actor, input.message, JSON.stringify({ issue_id: id, kind: input.kind, severity: input.severity, evidence_ref: ref }));
+        if (ev && line?.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'error', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (ev && line?.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(id);
+  }
+
   /** REQ-SESSION-067: a no-op where nothing is outstanding — and with synchronous commits nothing ever is. */
   flush(): void {
     /* every requested save has already returned durable */
@@ -437,6 +680,16 @@ export class SessionWriter {
   get droppedCount(): number {
     return this.dropped;
   }
+}
+
+/** Compact, keys sorted at every depth — the same form the wire uses, so a stored entry is byte-stable. */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(o).filter((k) => o[k] !== undefined).sort().map((k) => [k, sortKeys(o[k])]));
+  }
+  return value;
 }
 
 export { RESIDENT_ROW_CAP, RELEASE_PAGE_SIZE };

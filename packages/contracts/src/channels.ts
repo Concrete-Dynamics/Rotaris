@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ApprovalPayloadSchema } from './tools.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 
 /**
@@ -47,6 +48,18 @@ export const TranscriptRowSchema = z.object({
   /** REQ-SESSION-121: agent, thinking and tool rows name their agent and persona. */
   persona: z.string().optional(),
   name: z.string().optional(),
+  /** REQ-CHAT-046: the tool-row fields — status from REQ-MONITOR-105's four; input/output untruncated in the record. */
+  toolName: z.string().optional(),
+  toolStatus: z.string().optional(),
+  callKey: z.string().optional(),
+  durationMs: z.number().optional(),
+  startedAt: z.string().optional(),
+  input: z.string().optional(),
+  output: z.string().optional(),
+  /** REQ-CHAT-050: the structured diff, on edit-diff rows only. */
+  diff: z.string().optional(),
+  /** REQ-CHAT-060: reachable from a blocked row. */
+  blockedReason: z.string().optional(),
 });
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 
@@ -83,7 +96,6 @@ export const SessionRecordSchema = z.object({
     lastTrimAt: z.string().nullable(),
   }),
   agents: z.array(z.object({ id: z.string(), state: z.string(), depth: z.number().int() })),
-  pendingApprovals: z.array(z.object({ requestId: z.string(), tool: z.string() })),
   pendingQuestions: z.array(z.object({ requestId: z.string(), prompt: z.string() })),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
   /** Decimal string (ADR-0031). */
@@ -93,6 +105,13 @@ export const SessionRecordSchema = z.object({
   iterationsCompleted: z.number().int().nonnegative(),
   /** REQ-SESSION-074: the end-of-run summarisation, presented exactly once (REQ-SESSION-186). */
   summary: z.object({ status: z.string(), severity: z.string(), message: z.string() }).nullable(),
+  /** REQ-TOOLS-071 / REQ-TOOLS-184: the effective mode and the sandbox verdict, as the strip shows them. */
+  permissionMode: z.string().nullable(),
+  sandboxed: z.boolean(),
+  /** REQ-TOOLS-060 / REQ-CHAT-051: the pending approvals, request id to payload, for the trailer rows. */
+  pendingApprovals: z.array(ApprovalPayloadSchema),
+  /** REQ-TOOLS-184: background terminal sessions in the running state. */
+  backgroundSessions: z.number().int().nonnegative(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

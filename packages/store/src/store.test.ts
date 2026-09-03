@@ -358,3 +358,79 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     forgetSpelling(r.dir);
   });
 });
+
+describe('store — v4: the evidence rings (ADR-0024, REQ-SESSION-133/135/136/137, REQ-TOOLS-078)', () => {
+  function open(n: string) {
+    const id = mintWorkspaceId(`000000000000000000000000000000${n}`);
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId(`S-${n}`);
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    return { r, dal, sid };
+  }
+  it('the schema is v4; the session and row columns read their defaults; a tool row keeps its untruncated input and output', () => {
+    const { r, dal, sid } = open('91');
+    expect(CURRENT_SCHEMA_VERSION).toBe(4);
+    const s = dal.getSession(sid)!;
+    expect([s.permission_mode, s.sandboxed, s.pending_approvals]).toEqual([null, 0, '[]']);
+    dal.appendRow(sid, 0, 'tool', false, 'glob **/*.ts', 't', { tool_name: 'glob', tool_status: 'running', call_key: 'c1', started_at: 't', input: '{"pattern":"**/*.ts"}' });
+    expect(dal.settleRow(sid, 0, 'glob **/*.ts', { tool_status: 'ok', duration_ms: 12.5, output: 'x'.repeat(40_000) })).toBe(true);
+    const row = dal.residentRows(sid)[0]!;
+    expect([row.tool_name, row.tool_status, row.call_key, row.duration_ms, row.input?.length, row.output?.length]).toEqual(['glob', 'ok', 'c1', 12.5, 21, 40_000]);
+    dal.updateSessionRun(sid, { permission_mode: 'ask', pending_approvals: '[{"request_id":"r1"}]' });
+    expect(dal.getSession(sid)!.pending_approvals).toContain('r1');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('the ring assigns contiguous ordinals, displaces in the insert transaction, never reuses an ordinal, and counts the drops', () => {
+    const { r, dal, sid } = open('92');
+    const cap = 500; // issues
+    for (let i = 1; i <= cap + 3; i += 1) {
+      dal.transaction(() => dal.ringInsert('issues', sid, (ordinal) => dal.insertIssue({ session_id: sid, ordinal, id: `i${i}`, recorded_at: 't', kind: 'tool_error', severity: 'warning', actor: 'a', message: 'm', evidence_ref: '', metadata: '{}' })));
+    }
+    const rows = dal.issuesOf(sid);
+    expect(rows).toHaveLength(cap);
+    expect(rows[0]!.ordinal).toBe(4);
+    expect(rows[rows.length - 1]!.ordinal).toBe(cap + 3);
+    const st = dal.ringState(sid, 'issues');
+    expect(st).toEqual({ next_ordinal: cap + 4, held: cap, dropped: 3 });
+    // the export arithmetic: dropped + retained == newest ordinal, oldest - 1 == dropped
+    expect(st.dropped + st.held).toBe(rows[rows.length - 1]!.ordinal);
+    expect(rows[0]!.ordinal - 1).toBe(st.dropped);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('a failed insert rolls the ordinal back with it, so the series stays contiguous', () => {
+    const { r, dal, sid } = open('93');
+    dal.transaction(() => dal.ringInsert('permission_audit', sid, (ordinal) => dal.insertAudit({ session_id: sid, ordinal, recorded_at: 't', kind: 'decision', entry: '{}', agent_id: 'a', persona: 'p', tool_name: 't', decision: 'allow', rule_id: 'r', source: 'rule' })));
+    expect(() => dal.transaction(() => dal.ringInsert('permission_audit', sid, () => { throw new Error('boom'); }))).toThrow('boom');
+    expect(dal.ringState(sid, 'permission_audit')).toEqual({ next_ordinal: 2, held: 1, dropped: 0 });
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('the store refuses an update of an audit entry or an issue; the tool-call record is settled exactly once', () => {
+    const { r, dal, sid } = open('94');
+    dal.transaction(() => dal.ringInsert('permission_audit', sid, (ordinal) => dal.insertAudit({ session_id: sid, ordinal, recorded_at: 't', kind: 'decision', entry: '{}', agent_id: 'a', persona: 'p', tool_name: 't', decision: 'allow', rule_id: 'r', source: 'rule' })));
+    expect(() => r.db.prepare('UPDATE permission_audit SET decision = ? WHERE session_id = ?').run('deny', sid)).toThrow(/append-only/);
+    dal.transaction(() => dal.ringInsert('issues', sid, (ordinal) => dal.insertIssue({ session_id: sid, ordinal, id: 'abc', recorded_at: 't', kind: 'k', severity: 'warning', actor: 'a', message: 'm', evidence_ref: '', metadata: '{}' })));
+    expect(() => r.db.prepare('UPDATE issues SET message = ? WHERE session_id = ?').run('x', sid)).toThrow(/append-only/);
+    const { ordinal } = dal.transaction(() => dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: 'c1', agent_name: 'a', tool_name: 'glob', status: 'running', started_at: 't', elapsed_ms: null, is_error: 0, entry: '{"status":"running"}' })));
+    expect(dal.settleToolCall(sid, ordinal, 'ok', 3.2, false, '{"status":"ok"}')).toBe(true);
+    expect(dal.settleToolCall(sid, ordinal, 'failed', 4, true, '{}')).toBe(false);
+    expect(() => r.db.prepare('UPDATE tool_calls SET call_id = ? WHERE session_id = ?').run('c2', sid)).toThrow(/settled exactly once/);
+    expect(dal.toolCallsOf(sid)[0]).toMatchObject({ status: 'ok', elapsed_ms: 3.2, call_id: 'c1' });
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('the ring reads and the settle are served by the primary key — no index is declared and none is scanned (spike 8)', () => {
+    const { r, dal, sid } = open('95');
+    for (const sql of ['SELECT * FROM permission_audit WHERE session_id = ? ORDER BY ordinal', 'SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal', 'SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal']) {
+      const plan = r.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(sid) as { detail: string }[];
+      expect(plan.map((p) => p.detail).join(' | ')).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex/);
+      expect(plan.map((p) => p.detail).join(' | ')).not.toMatch(/TEMP B-TREE/);
+    }
+    void dal;
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+});

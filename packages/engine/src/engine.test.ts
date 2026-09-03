@@ -116,6 +116,55 @@ describe('engine — the session writer feeds the projection owner (ADR-0008, AD
     expect(parseEventLine(first.payload).ok).toBe(true);
   });
 
+  it('ADR-0024: a decision, a tool call and an issue each commit with their event; the audit refuses a foreign field; the wire row is masked', () => {
+    const rec = recorder();
+    const { writer, sessionId } = open('s-rings', rec);
+    // a decision entry, id = ordinal, permission.decision in the same commit
+    const d = writer.recordDecision({ timestamp: 't', session_id: sessionId, agent_id: 'orchestrator', persona: 'orchestrator', tool_name: 'terminal', decision: 'deny', rule_id: 'starter:deny-recursive-delete', source: 'rule', summary: 'terminal: rm -rf x', reason: 'r' });
+    expect(d.ok && d.value).toBe(1);
+    const audit = dal.auditOf(sessionId);
+    expect(JSON.parse(audit[0]!.entry)).toMatchObject({ id: 1, decision: 'deny', rule_id: 'starter:deny-recursive-delete' });
+    expect(Object.keys(JSON.parse(audit[0]!.entry))).not.toContain('args');
+    const bad = writer.recordDecision({ timestamp: 't', session_id: sessionId, agent_id: 'a', persona: 'p', tool_name: 't', decision: 'allow', rule_id: 'r', source: 'rule', summary: 's', reason: 'r', args: { x: 1 } } as never);
+    expect(bad.ok).toBe(false);
+    expect(dal.auditOf(sessionId)).toHaveLength(1);
+    // a mode change interleaves in the same ordinal series
+    const m = writer.recordModeChange({ timestamp: 't', event: 'permission_mode_change', session_id: sessionId, agent_id: 'user', requested_mode: 'autonomous', effective_mode: 'autonomous', previous_mode: 'ask', source: 'user', reason: '', skipped_personas: [] });
+    expect(m.ok && m.value).toBe(2);
+    // the tool call: running at start, settled once, args unredacted in the record and masked on the wire
+    const openCall = { call_id: 'c1', agent_name: 'orchestrator', tool_name: 'terminal', args: { command: 'curl --token abc123 https://x' } };
+    const o = writer.openToolCall(openCall);
+    expect(o.ok && o.value).toBe(1);
+    expect(dal.toolCallsOf(sessionId)[0]).toMatchObject({ status: 'running', call_id: 'c1' });
+    expect(dal.toolCallsOf(sessionId)[0]!.entry).toContain('abc123');
+    const startEv = dal.eventsOfKind(sessionId, 'tool.start')[0]!;
+    expect(startEv.payload).not.toContain('abc123');
+    expect(startEv.payload).toContain('***');
+    expect(writer.settleToolCall(1, openCall, { status: 'ok', elapsed_ms: 12, is_error: false, result: 'done' }).ok).toBe(true);
+    expect(dal.toolCallsOf(sessionId)[0]).toMatchObject({ status: 'ok', elapsed_ms: 12 });
+    const again = writer.settleToolCall(1, openCall, { status: 'failed', elapsed_ms: 13, is_error: true, result: 'x' });
+    expect(again.ok && again.value).toBe(false);
+    expect(dal.eventsOfKind(sessionId, 'tool.finish')).toHaveLength(1);
+    // an issue: 12 hex, an `issue` timeline entry, an error event only at error severity
+    const w = writer.recordIssue({ kind: 'permission_denied', severity: 'warning', actor: 'orchestrator', message: 'm', evidence_ref: 'permission_audit#1' });
+    expect(w.ok && /^[0-9a-f]{12}$/.test(w.value as string)).toBe(true);
+    expect(dal.eventsOfKind(sessionId, 'error')).toHaveLength(0);
+    const e = writer.recordIssue({ kind: 'terminal_shell_failure', severity: 'error', actor: 'orchestrator', message: 'boom' });
+    expect(dal.eventsOfKind(sessionId, 'error')).toHaveLength(1);
+    expect(dal.eventsOfKind(sessionId, 'error')[0]!.payload).toContain(`issues#${e.ok ? e.value : ''}`);
+    expect(dal.timelineOf(sessionId).filter((t) => t.name === 'issue')).toHaveLength(2);
+    // a tool row keeps its untruncated input in the record; the wire masks and clips it
+    const r = writer.appendRow('tool', 'terminal: curl', false, { toolName: 'terminal', toolStatus: 'running', callKey: 'c1', input: 'curl --token abc123 ' + 'y'.repeat(20_000) });
+    expect(r.ok).toBe(true);
+    expect(dal.residentRows(sessionId)[0]!.input!.length).toBe(20_020);
+    const rowEv = dal.eventsOfKind(sessionId, 'transcript.row').at(-1)!;
+    expect(rowEv.payload).not.toContain('abc123');
+    expect(JSON.parse(rowEv.payload).row.input.length).toBe(16_001);
+    const settled = writer.settleRow(0, 'terminal: curl', { toolStatus: 'blocked', durationMs: 0.5, blockedReason: 'denied' });
+    expect(settled.ok && settled.value.toolStatus).toBe('blocked');
+    expect(dal.residentRows(sessionId)[0]).toMatchObject({ tool_status: 'blocked', duration_ms: 0.5, blocked_reason: 'denied' });
+  });
+
   it('a second claim of the same session is refused as lock-held and steals nothing (REQ-SESSION-047)', () => {
     open('s1', recorder());
     const again = SessionWriter.create(

@@ -1,5 +1,5 @@
 import { asSessionId, err, ok, type Clocks, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
-import type { ControlRequest, ControlResult, SessionRecord, TranscriptRow } from '@rotaris/contracts';
+import { ApprovalPayloadSchema, type ControlRequest, type ControlResult, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { RELEASE_PAGE_SIZE, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend } from '@rotaris/model';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
@@ -69,14 +69,28 @@ export function toSessionRecord(r: SessionRow): SessionRecord {
     historyOpen: r.history_open === 1,
     truncation: { truncated: r.truncated === 1, droppedCount: r.dropped_count, cap: r.trim_cap, lastTrimAt: r.last_trim_at },
     agents: [],
-    pendingApprovals: [],
+    pendingApprovals: parsePending(r.pending_approvals),
     pendingQuestions: [],
     tokenUsage: { input: r.tokens_input, output: r.tokens_output },
     cost: r.cost,
     stopReason: r.stop_reason,
     iterationsCompleted: r.iterations_completed,
     summary: r.summary_status && r.summary_severity && r.summary_text ? { status: r.summary_status, severity: r.summary_severity, message: r.summary_text } : null,
+    permissionMode: r.permission_mode,
+    sandboxed: r.sandboxed === 1,
+    backgroundSessions: 0,
   };
+}
+
+/** REQ-TOOLS-060: the mirror is a JSON array of payloads; an unreadable mirror reads as empty rather than failing the record. */
+function parsePending(json: string): SessionRecord['pendingApprovals'] {
+  try {
+    const v: unknown = JSON.parse(json);
+    if (!Array.isArray(v)) return [];
+    return v.flatMap((x) => { const r = ApprovalPayloadSchema.safeParse(x); return r.success ? [r.data] : []; });
+  } catch {
+    return [];
+  }
 }
 
 export class Sessions {

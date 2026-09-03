@@ -97,3 +97,10 @@ export function parseEventLine(line: string): Result<WireEvent, { code: 'malform
   }
   return ok(o as unknown as WireEvent);
 }
+
+/** REQ-EVENTS-056: the closed record-kind tokens a locator may name, and the locator's one form. */
+export const RECORD_KINDS = ['issues', 'tool_call_evidence', 'permission_audit'] as const;
+export type RecordKind = (typeof RECORD_KINDS)[number];
+export function locator(kind: RecordKind, id: string | number): string {
+  return `${kind}#${String(id)}`;
+}

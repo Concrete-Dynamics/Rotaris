@@ -150,6 +150,102 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 4,
+    // v4 lands with the permission gate and the first tools (ADR-0024's evidence rings, REQ-SESSION-133/135/136/137,
+    // REQ-TOOLS-078/079/082, REQ-CHAT-046). NO new index: every query below is served by a primary key — ring reads
+    // are ordered by (session_id, ordinal) and a settle names its ordinal. When a budgeted query needs one, declare
+    // it and assert its plan in store.test.ts (spike 8's rule).
+    sql: `
+      -- REQ-CHAT-046: a tool row carries its call key, status, timing and the UNTRUNCATED input and output; an
+      -- edit-diff row carries the structured diff. Text rows leave these null.
+      ALTER TABLE transcript_rows ADD COLUMN tool_name      TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN tool_status    TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN call_key       TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN duration_ms    REAL;
+      ALTER TABLE transcript_rows ADD COLUMN started_at     TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN input          TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN output         TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN diff           TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN blocked_reason TEXT;
+
+      -- REQ-TOOLS-071 / REQ-TOOLS-060: the effective mode, the sandbox verdict, and the pending-approval mirror.
+      ALTER TABLE sessions ADD COLUMN permission_mode   TEXT;
+      ALTER TABLE sessions ADD COLUMN sandboxed         INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sessions ADD COLUMN pending_approvals TEXT NOT NULL DEFAULT '[]';
+
+      -- ADR-0024: one writer per kind per session; the serialised entry VERBATIM in 'entry' (the columns beside
+      -- it are indexes, never read back in its place); a per-session ordinal from a counter that is never reset and
+      -- never reused after a displacement (ring_state). The permission audit and the issues record expose NO
+      -- update path: the store refuses one (REQ-TOOLS-078 "never altered").
+      CREATE TABLE permission_audit (
+        session_id  TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        ordinal     INTEGER NOT NULL,
+        recorded_at TEXT NOT NULL,
+        kind        TEXT NOT NULL,   -- 'decision' | 'mode_change' (REQ-TOOLS-082, interleaved in one series)
+        entry       TEXT NOT NULL,
+        agent_id    TEXT NOT NULL,
+        persona     TEXT NOT NULL,
+        tool_name   TEXT NOT NULL,
+        decision    TEXT NOT NULL,
+        rule_id     TEXT NOT NULL,
+        source      TEXT NOT NULL,
+        PRIMARY KEY (session_id, ordinal)
+      );
+      CREATE TRIGGER permission_audit_no_update BEFORE UPDATE ON permission_audit
+        BEGIN SELECT RAISE(ABORT, 'permission_audit is append-only (REQ-TOOLS-078)'); END;
+
+      -- REQ-SESSION-136: the tool-call evidence record, arguments UNREDACTED (never exported, REQ-TOOLS-190).
+      -- Written at tool.start as 'running' and settled exactly once at tool.finish (the reading recorded on
+      -- ADR-0024): the trigger refuses any second update and any change to the identity columns.
+      CREATE TABLE tool_calls (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        ordinal    INTEGER NOT NULL,
+        call_id    TEXT NOT NULL,
+        agent_name TEXT NOT NULL,
+        tool_name  TEXT NOT NULL,
+        status     TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        elapsed_ms REAL,
+        is_error   INTEGER NOT NULL DEFAULT 0,
+        entry      TEXT NOT NULL,
+        PRIMARY KEY (session_id, ordinal)
+      );
+      CREATE TRIGGER tool_calls_settle_once BEFORE UPDATE ON tool_calls
+        WHEN OLD.status <> 'running' OR NEW.status = 'running'
+          OR NEW.session_id <> OLD.session_id OR NEW.ordinal <> OLD.ordinal OR NEW.call_id <> OLD.call_id
+          OR NEW.agent_name <> OLD.agent_name OR NEW.tool_name <> OLD.tool_name OR NEW.started_at <> OLD.started_at
+        BEGIN SELECT RAISE(ABORT, 'a tool-call record is settled exactly once (REQ-SESSION-136)'); END;
+
+      -- REQ-SESSION-135: the issues record; 'id' is the 12-hex identifier a locator names.
+      CREATE TABLE issues (
+        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        ordinal      INTEGER NOT NULL,
+        id           TEXT NOT NULL,
+        recorded_at  TEXT NOT NULL,
+        kind         TEXT NOT NULL,
+        severity     TEXT NOT NULL,
+        actor        TEXT NOT NULL,
+        message      TEXT NOT NULL,
+        evidence_ref TEXT NOT NULL,
+        metadata     TEXT NOT NULL,
+        PRIMARY KEY (session_id, ordinal)
+      );
+      CREATE TRIGGER issues_no_update BEFORE UPDATE ON issues
+        BEGIN SELECT RAISE(ABORT, 'issues is append-only (REQ-SESSION-135)'); END;
+
+      -- REQ-SESSION-133: the ring's own state — the next ordinal (never reused), how many are held, and how many
+      -- the cap has dropped, maintained in the SAME transaction as the insert that moved them.
+      CREATE TABLE ring_state (
+        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        kind         TEXT NOT NULL,
+        next_ordinal INTEGER NOT NULL,
+        held         INTEGER NOT NULL,
+        dropped      INTEGER NOT NULL,
+        PRIMARY KEY (session_id, kind)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

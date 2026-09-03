@@ -25,7 +25,7 @@ const WORKSPACE_PACKAGES = ['@rotaris/kernel', '@rotaris/contracts', '@rotaris/p
 // electron-vite's own default external list; it is REPLACED, not merged, once rollupOptions is given,
 // so it is restated here for both node-side sections. Bundling the `electron` npm shim into main or
 // the preload was measured to break both (the shim requires child_process, which the sandbox lacks).
-const EXTERNAL = ['electron', /^electron\/.+/, 'better-sqlite3', ...builtinModules.flatMap((m) => [m, `node:${m}`])];
+const EXTERNAL = ['electron', /^electron\/.+/, 'better-sqlite3', 'node-pty', ...builtinModules.flatMap((m) => [m, `node:${m}`])];
 
 const workspaceAliases = {
   '@rotaris/kernel': resolve(repo, 'packages/kernel/src/index.ts'),

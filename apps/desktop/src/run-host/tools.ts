@@ -3,8 +3,8 @@ import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type HeadlessPolicy, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  buildPolicy, effectiveMode, FileToolState, Gate, globTool, grepTool, haetEditTool, haetReadTool, PendingApprovals, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, TodoList, todoTool, writeFileTool, type GateSink, type PresenterPort, type ToolExecutor,
+  buildPolicy, effectiveMode, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
+  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { parseLogLevel, type ModeChange, type PortToolCall, type PortToolResult, type RuntimePosture, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { z } from 'zod';
@@ -23,12 +23,15 @@ export const RUNTIME_ENV_KEYS = {
   headlessApprovalPolicy: 'ROTARIS_HEADLESS_APPROVAL_POLICY',
   allowOutsideWorkspace: 'ROTARIS_ALLOW_OUTSIDE_WORKSPACE',
   sessionLogLevel: 'ROTARIS_SESSION_LOG_LEVEL',
+  shellCommandTimeoutS: 'ROTARIS_SHELL_COMMAND_TIMEOUT_S',
 } as const;
 
 export interface RuntimeFromEnv extends RuntimePosture {
   readonly approvalTimeoutMs: number;
   readonly headlessPolicy: HeadlessPolicy;
   readonly allowOutsideWorkspace: boolean;
+  /** REQ-CONFIG-116: `runtime.shell_command_timeout`, seconds, default 100. */
+  readonly shellCommandTimeoutS: number;
   readonly warnings: string[];
 }
 
@@ -50,10 +53,17 @@ export function runtimeFromEnv(env: NodeJS.ProcessEnv = process.env): RuntimeFro
   const allowOutsideWorkspace = /^(1|true|yes)$/i.test(env[RUNTIME_ENV_KEYS.allowOutsideWorkspace] ?? '');
   const level = parseLogLevel(env[RUNTIME_ENV_KEYS.sessionLogLevel]);
   if (level.warning) warnings.push(level.warning);
+  let shellCommandTimeoutS = 100;
+  const shellRaw = env[RUNTIME_ENV_KEYS.shellCommandTimeoutS];
+  if (shellRaw !== undefined && shellRaw.trim() !== '') {
+    const n = Number(shellRaw);
+    if (!Number.isFinite(n) || n <= 0) warnings.push(`runtime.shell_command_timeout must be a positive number of seconds; '${shellRaw}' was rejected and the default 100 stands (REQ-CONFIG-116)`);
+    else shellCommandTimeoutS = n;
+  }
   return {
     permissionMode: mode.preset, allowUnsandboxedAutonomous: false,
     sandbox: { requested: false, available: false, backend: '' },
-    sessionLogLevel: level.level, approvalTimeoutMs, headlessPolicy, allowOutsideWorkspace, warnings,
+    sessionLogLevel: level.level, approvalTimeoutMs, headlessPolicy, allowOutsideWorkspace, shellCommandTimeoutS, warnings,
   };
 }
 
@@ -99,6 +109,16 @@ export interface ToolPortDeps {
   readonly nextSequence: () => number;
   /** Shared per workspace root: the read record and the undo stacks (REQ-TOOLS-137). */
   readonly fileStates: Map<string, FileToolState>;
+  /** ADR-0020: one manager for the run host; null when no shell is present (REQ-TOOLS-104) and the tool is removed. */
+  readonly terminal: TerminalManager | null;
+}
+
+/** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
+export async function terminalManagerFromHost(clocks: Clocks, warn: (m: string) => void, shellCommandTimeoutS: number): Promise<TerminalManager | null> {
+  const backend = findShell();
+  if (!backend) return null;
+  const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string'));
+  return new TerminalManager({ factory: await nodePtyFactory(), backend, clocks, config: { ...TERMINAL_DEFAULTS, commandTimeoutS: shellCommandTimeoutS }, env, warn });
 }
 
 /** The sink the gate writes through: every unit lands in the session writer's transactions. */
@@ -125,6 +145,7 @@ function executorsFor(root: string, deps: ToolPortDeps, todo: TodoList): Map<str
     haetEditTool(state, 'haet_edit') as ToolExecutor, haetEditTool(state, 'haet') as ToolExecutor,
     grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, todoTool(todo) as ToolExecutor,
   ];
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: deps.runtime.shellCommandTimeoutS }) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
 }
 

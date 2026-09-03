@@ -3,8 +3,8 @@ import { asSessionId, millis, ok, type Clocks, type WorkspaceId } from '@rotaris
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
 import { RefusalLease, RUN_CONFIG_DEFAULTS, Sessions, type ModelSetup } from '@rotaris/engine';
-import { PresenterRegistry, type FileToolState } from '@rotaris/agent-tools';
-import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv } from './tools.js';
+import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
+import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, terminalManagerFromHost } from './tools.js';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -138,6 +138,12 @@ for (const w of runtime.warnings) log(w, 'warn');
 log(`runtime (env stopgap): permission_mode=${runtime.permissionMode} approval_timeout=${runtime.approvalTimeoutMs / 1000}s headless=${runtime.headlessPolicy} allow_outside_workspace=${runtime.allowOutsideWorkspace} sandbox=off (no backend on this platform, ADR-0022)`);
 const fileStates = new Map<string, FileToolState>();
 let approvalSequence = 0;
+// ADR-0020 / REQ-TOOLS-104: the terminal backend is decided once, by presence; the sessions live for the application.
+const terminalReady: Promise<TerminalManager | null> = terminalManagerFromHost(clocks, (m) => log(m, 'warn'), runtime.shellCommandTimeoutS)
+  .then((t) => { log(t ? `terminal: PowerShell backend present (single-session)` : 'terminal: no shell found on PATH; the tool is removed from every persona (REQ-TOOLS-104)', t ? 'info' : 'warn'); return t; })
+  .catch((e) => { log(`terminal: the PTY could not be loaded: ${String(e)}; the tool is removed`, 'warn'); return null; });
+let terminal: TerminalManager | null = null;
+void terminalReady.then((t) => { terminal = t; });
 
 const sessions = new Sessions({
   clocks,
@@ -154,7 +160,8 @@ const sessions = new Sessions({
     snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
   },
   onRunResult: (sessionId, result) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }),
-  tools: (ctx) => createToolPort(ctx, { clocks, runtime, presenter, nextSequence: () => ++approvalSequence, fileStates }),
+  tools: (ctx) => createToolPort(ctx, { clocks, runtime, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal }),
+  backgroundSessions: () => terminal?.runningBackground ?? 0,
   attended: () => presenters.attended,
   runtime,
   sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
@@ -248,6 +255,8 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their terminal results.
       presenters.stop();
       await sessions.closeAll();
+      // REQ-TOOLS-111: every background session ended and every terminal resource closed before the host goes.
+      await terminal?.dispose();
       for (const s of stores.values()) { try { s.db?.close(); } catch { /* */ } }
       stores.clear();
       clocks.timers.after(millis(0), () => process.exit(0));

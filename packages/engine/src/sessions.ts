@@ -73,6 +73,8 @@ export interface SessionsDeps {
   readonly runtime?: RuntimePosture;
   /** REQ-SESSION-142: an appender for the session's log file; absent means no file. */
   readonly sessionLogAppender?: (dal: StoreDal, sessionId: SessionId) => (line: string) => void;
+  /** REQ-TOOLS-184: background terminal sessions in the running state, for the strip. */
+  readonly backgroundSessions?: () => number;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -185,7 +187,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => toSessionRecord(dal.getSession(sessionId)!),
+      readSession: () => ({ ...toSessionRecord(dal.getSession(sessionId)!), backgroundSessions: this.deps.backgroundSessions?.() ?? 0 }),
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;

@@ -8,9 +8,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@rotaris/kernel": "workspace:*",
     "@rotaris/contracts": "workspace:*",
+    "@rotaris/kernel": "workspace:*",
     "@rotaris/platform": "workspace:*",
-    "@rotaris/store": "workspace:*"
+    "@rotaris/store": "workspace:*",
+    "node-pty": "1.1.0"
   }
 }

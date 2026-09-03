@@ -9,6 +9,7 @@ packages:
 # build rebuilds and load-proves it itself.
 allowBuilds:
   better-sqlite3: true
+  node-pty: true
   electron: true
   electron-winstaller: true
   esbuild: true

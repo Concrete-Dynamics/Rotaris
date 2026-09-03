@@ -585,7 +585,8 @@ export class SessionWriter {
     const cut = (s: string) => (settle.is_error && s.length > 2000 ? s.slice(0, 2000) : s);
     const entry: Record<string, unknown> = {
       timestamp: at, agent_name: open.agent_name, tool_name: open.tool_name, call_id: open.call_id, status: settle.status, elapsed_ms: settle.elapsed_ms, is_error: settle.is_error,
-      args: settle.is_error ? cut(JSON.stringify(open.args)) : open.args, result: cut(settle.result),
+      // REQ-SESSION-136: on error the args and the result are cut to 2000 characters; an object that fits stays an object.
+      args: settle.is_error && JSON.stringify(open.args).length > 2000 ? cut(JSON.stringify(open.args)) : open.args, result: cut(settle.result),
       ...(settle.outcome_kind === undefined ? {} : { outcome_kind: settle.outcome_kind }), ...(settle.exit_code === undefined ? {} : { exit_code: settle.exit_code }),
       ...(settle.failure_kind === undefined ? {} : { failure_kind: settle.failure_kind }), ...(settle.warnings === undefined ? {} : { warnings: settle.warnings }),
     };

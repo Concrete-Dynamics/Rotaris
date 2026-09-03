@@ -20,6 +20,8 @@ export interface ShellNotice {
   readonly severity: 'info' | 'warning' | 'error';
   readonly headline: string;
   readonly detail?: string | undefined;
+  /** REQ-NOTIFY-223/224: an action the notice offers, by the identifier the renderer root resolves. */
+  readonly recovery?: readonly { readonly label: string; readonly command: string }[] | undefined;
 }
 
 export interface AppShellProps {
@@ -29,11 +31,12 @@ export interface AppShellProps {
   readonly views?: Partial<Record<ViewId, ReactNode>>;
   readonly notice?: ShellNotice | null;
   readonly onAcknowledge?: ((id: number) => void) | undefined;
+  readonly onRecover?: ((command: string) => void) | undefined;
 }
 
 const GLYPH: Record<ShellNotice['severity'], string> = { info: 'i', warning: '!', error: '×' };
 
-export function NoticeBanner({ notice, onAcknowledge }: { notice: ShellNotice; onAcknowledge?: ((id: number) => void) | undefined }) {
+export function NoticeBanner({ notice, onAcknowledge, onRecover }: { notice: ShellNotice; onAcknowledge?: ((id: number) => void) | undefined; onRecover?: ((command: string) => void) | undefined }) {
   return (
     <div className={`notice notice--${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'}>
       <span className="notice__glyph" aria-hidden="true">{GLYPH[notice.severity]}</span>
@@ -47,12 +50,15 @@ export function NoticeBanner({ notice, onAcknowledge }: { notice: ShellNotice; o
           </details>
         )}
       </div>
+      {(notice.recovery ?? []).map((r) => (
+        <button key={r.command} type="button" className="btn btn-secondary notice__action" onClick={() => onRecover?.(r.command)}>{r.label}</button>
+      ))}
       <button type="button" className="btn btn-ghost notice__dismiss" aria-label="Dismiss notice" onClick={() => onAcknowledge?.(notice.id)}>Dismiss</button>
     </div>
   );
 }
 
-export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge }: AppShellProps) {
+export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge, onRecover }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
 
@@ -82,7 +88,7 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
         <span className="title-bar__workspace">{workspaceLabel}</span>
       </header>
       <div className="notice-slot" aria-live="polite">
-        {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} />}
+        {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onRecover={onRecover} />}
       </div>
       <div className="body">
         <NavRail items={PRIMARY_VIEWS} active={activeView} onSelect={(id: ViewId) => switchView(id)} />

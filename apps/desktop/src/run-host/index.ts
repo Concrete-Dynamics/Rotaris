@@ -1,11 +1,11 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, type ProcessMessage, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
-import { asSessionId, millis, ok, type Clocks, type WorkspaceId } from '@rotaris/kernel';
+import { asSessionId, millis, ok, toIsoUtc, type Clocks, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
 import { RefusalLease, RUN_CONFIG_DEFAULTS, Sessions, type ModelSetup } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, terminalManagerFromHost } from './tools.js';
-import { createHookPort } from './hooks.js';
+import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -49,7 +49,7 @@ function log(message: string, level: 'info' | 'warn' = 'info'): void {
 
 /**
  * Verification only: a scripted client. `ROTARIS_SCRIPT` names the steps, comma-separated, one per model
- * call — `glob`, `read`, `write`, `rm`, `git`, `edit` request a tool call; anything else, or the end of
+ * call — `glob`, `read`, `write`, `rm`, `git`, `push`, `edit` request a tool call; anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
  */
 function scriptedClient(c: Clocks): ModelClient {
@@ -65,6 +65,7 @@ function scriptedClient(c: Clocks): ModelClient {
     edit: { name: 'write_file', args: { operation: 'edit', path: 'NOTES.md', old_string: 'scripted agent', new_string: 'scripted agent (edited)' } },
     rm: { name: 'terminal', args: { command: 'rm -rf build' } },
     git: { name: 'terminal', args: { command: 'git status' } },
+    push: { name: 'terminal', args: { command: 'git push origin main' } },
     todo: { name: 'todo', args: { operation: 'add_phase', name: 'main' } },
   };
   return {
@@ -174,6 +175,7 @@ void terminalReady.then((t) => { terminal = t; });
 
 // REQ-HOOKS-032: a hook inherits exactly the environment this process was started with; the desktop supplies no override.
 const hostEnv: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string'));
+const configDir = resolveUserDirs().config;
 const sessions = new Sessions({
   clocks,
   pid: process.pid,
@@ -195,7 +197,7 @@ const sessions = new Sessions({
   runtime,
   sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
   // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
-  hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: resolveUserDirs().config, env: hostEnv }),
+  hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
 });
 presenters.start();
@@ -258,6 +260,29 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'session.control':
       return { kind: 'control.result', result: sessions.control(req.request) };
+    case 'hooks.summary': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      return { kind: 'hooks.summary', summary: hooksSummaryFor({ workspaceRoot: s.root, globalDir: configDir, env: hostEnv, dal: s.dal, sessionId: req.sessionId }) };
+    }
+    case 'hooks.decide': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const r = await decideHooks(s.root, configDir, req.trusted, toIsoUtc(clocks.wall.instant()));
+      if (!r.ok) return { kind: 'refused', code: 'hooks.decision', headline: 'The decision could not be recorded', detail: r.error.reason };
+      log(`hooks: workspace ${s.root} ${req.trusted ? 'allowed' : 'refused'} (${r.value.fingerprint.slice(0, 12)}…)`);
+      return { kind: 'ack' };
+    }
+    case 'hooks.clearDecision': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const r = clearHooksDecision(s.root);
+      return r.ok ? { kind: 'ack' } : { kind: 'refused', code: 'hooks.clear', headline: 'The stored decision could not be removed', detail: r.error.reason };
+    }
+    case 'hooks.setToggle': {
+      const r = await setHookToggle(hostEnv, configDir, req.agent, req.hookId, req.on);
+      return r.ok ? { kind: 'ack' } : { kind: 'refused', code: 'hooks.policy', headline: 'The hook policy could not be saved', detail: r.error.reason };
+    }
     case 'runs.active':
       // ADR-0013: the registry's predicate. Sessions are not keyed by workspace yet; the count is instance-wide.
       return { kind: 'runs.count', workspaceId: req.workspaceId, count: sessions.activeRunCount() };

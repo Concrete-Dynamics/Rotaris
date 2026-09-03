@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
@@ -63,6 +64,11 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('presenter.revoke'), windowId: z.string().min(1) }),
   z.object({ kind: z.literal('presenter.pollReply'), seq: z.number().int().nonnegative(), windows: z.array(z.string()) }),
   /** REQ-TOOLS-063: main reports whether the dialog was put in front of a person; a failure denies with source presenter-error. */
+  /** ADR-0015: the Hooks tab's reads and writes; the run host holds the hooks package and the store (REQ-HOOKS-136). */
+  z.object({ kind: z.literal('hooks.summary'), workspaceId: z.string(), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('hooks.decide'), workspaceId: z.string(), trusted: z.boolean() }),
+  z.object({ kind: z.literal('hooks.clearDecision'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
   z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
@@ -162,6 +168,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.restore.assessment'), assessment: RestoreAssessmentSchema }),
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
+  z.object({ kind: z.literal('hooks.summary'), summary: HooksSummarySchema }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

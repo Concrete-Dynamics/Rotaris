@@ -1,6 +1,8 @@
 import { hookDisplayName, loadHooksConfig, type HookEntry } from '@rotaris/config';
-import { applyGate, HookEngine, type HookSinks } from '@rotaris/hooks';
-import { redact, type Clocks } from '@rotaris/kernel';
+import { applyGate, buildSummary, clearDecision, HookEngine, hookOn, policyPath, readPolicy, withToggle, writeDecision, writePolicy, type HookSinks } from '@rotaris/hooks';
+import { asSessionId, err, ok, redact, type Clocks, type Result } from '@rotaris/kernel';
+import type { HookAgentId, HooksSummary } from '@rotaris/contracts';
+import type { StoreDal } from '@rotaris/store';
 import type { HookPort, HookPortContext } from '@rotaris/engine';
 
 /**
@@ -33,7 +35,9 @@ export function createHookPort(ctx: HookPortContext, deps: HookRootDeps): HookPo
     ctx.log(`${HOOKS_LOAD_WARNING} ${load.error.errors.map((e) => `${e.scope} ${e.file}${e.path ? ` ${e.path}` : ''}: ${e.message}`).join('; ')}`);
   } else {
     const gate = applyGate(load.value, ctx.workspaceRoot);
-    permitted = gate.permitted;
+    // REQ-HOOKS-116/117/131: the policy toggles are read once here, when the set is assembled, and never again for this run.
+    const policy = readPolicy(policyPath(deps.env, deps.globalDir));
+    permitted = gate.permitted.filter((h) => hookOn(policy, 'rotaris', h.id));
     withheld = gate.withheld;
     gateNotice = gate.notice;
     reinstated = gate.reinstated.length;
@@ -63,4 +67,36 @@ export function createHookPort(ctx: HookPortContext, deps: HookRootDeps): HookPo
       postTool: async (call) => { const r = await engine.fireTool('post_tool', call); return { feedback: r.feedback }; },
     },
   };
+}
+
+/** REQ-HOOKS-103..105/137: everything the Hooks tab renders, re-read from the sources on every call (REQ-CONFIG-014). */
+export function hooksSummaryFor(o: { readonly workspaceRoot: string; readonly globalDir: string; readonly env: Readonly<Record<string, string>>; readonly dal: StoreDal | null; readonly sessionId?: string | undefined }): HooksSummary {
+  const load = loadHooksConfig({ globalDir: o.globalDir, workspaceRoot: o.workspaceRoot });
+  const gate = load.ok ? applyGate(load.value, o.workspaceRoot) : null;
+  const policy = readPolicy(policyPath(o.env, o.globalDir));
+  const sid = o.dal && o.sessionId ? asSessionId(o.sessionId) : null;
+  const timeline = sid && o.dal ? o.dal.timelineOf(sid) : [];
+  const issues = sid && o.dal ? o.dal.issuesOf(sid) : [];
+  const switchedOff = issues.filter((i) => i.kind === 'hook_failure' && i.message.includes('is disabled for the rest of this session')).flatMap((i) => { try { const m = JSON.parse(i.metadata) as { hook_id?: string }; return m.hook_id ? [m.hook_id] : []; } catch { return []; } });
+  return buildSummary({ workspace: o.workspaceRoot, load, gate, policy, imported: [], timeline, switchedOff });
+}
+
+/** REQ-HOOKS-092/093/096/097: the decision is recorded against the fingerprint of the in-memory set just resolved. */
+export async function decideHooks(workspaceRoot: string, globalDir: string, trusted: boolean, nowIso: string): Promise<Result<{ readonly fingerprint: string }, { readonly reason: string }>> {
+  const load = loadHooksConfig({ globalDir, workspaceRoot });
+  if (!load.ok) return err({ reason: 'the hook configuration could not be read, so no decision can be recorded against it' });
+  const gate = applyGate(load.value, workspaceRoot);
+  if (load.value.entries.filter((h) => h.source === 'workspace').length === 0) return err({ reason: 'this workspace declares no hooks' });
+  const w = await writeDecision(workspaceRoot, gate.fingerprint, trusted, nowIso);
+  return w.ok ? ok({ fingerprint: gate.fingerprint }) : err(w.error);
+}
+
+export function clearHooksDecision(workspaceRoot: string): Result<void, { readonly reason: string }> {
+  return clearDecision(workspaceRoot);
+}
+
+/** REQ-HOOKS-109/115: a checkbox change is saved to the policy file; it governs runs started afterwards. */
+export async function setHookToggle(env: Readonly<Record<string, string>>, globalDir: string, agent: HookAgentId, hookId: string | null, on: boolean): Promise<Result<void, { readonly reason: string }>> {
+  const path = policyPath(env, globalDir);
+  return writePolicy(path, withToggle(readPolicy(path), agent, hookId, on));
 }

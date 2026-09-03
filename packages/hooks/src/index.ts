@@ -4,3 +4,5 @@ export * from './runner.js';
 export * from './verdict.js';
 export * from './trust.js';
 export * from './engine.js';
+export * from './policy.js';
+export * from './summary.js';

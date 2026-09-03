@@ -13,6 +13,10 @@ import { isViewId, STARTUP_VIEW, type ViewId } from '@rotaris/contracts';
 export interface ShellState {
   readonly activeView: ViewId;
   switchView(id: string): void;
+  /** A category the Settings view should select next (a notice action, REQ-NOTIFY-223); consumed once. */
+  readonly settingsCategory: string | null;
+  openSettings(category: string): void;
+  takeSettingsCategory(): void;
 }
 
 export const useShellState = create<ShellState>((set) => ({
@@ -20,5 +24,12 @@ export const useShellState = create<ShellState>((set) => ({
   switchView(id) {
     if (!isViewId(id)) return;
     set({ activeView: id });
+  },
+  settingsCategory: null,
+  openSettings(category) {
+    set({ activeView: 'settings', settingsCategory: category });
+  },
+  takeSettingsCategory() {
+    set({ settingsCategory: null });
   },
 }));

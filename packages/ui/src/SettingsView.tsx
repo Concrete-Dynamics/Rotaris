@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { isBusy, type SessionRecord } from '@rotaris/contracts';
+import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
+import { useShellState } from './shell-state.js';
 
 /**
  * The Settings view, at the point the mechanism has reached: the thirteen
@@ -34,11 +36,18 @@ export interface SettingsViewProps {
   readonly workspace: string | null;
   readonly onBackup: () => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onRestore: () => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** ADR-0015: the Hooks category's data and actions, owned by the renderer root. */
+  readonly hooks?: HooksSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks }: SettingsViewProps) {
   // REQ-CONFIG-271: the selected category persists user-wide; until the preference store lands, `models` is the start.
-  const [category, setCategory] = useState<SettingsCategoryId>('models');
+  const [chosen, setChosen] = useState<SettingsCategoryId>('models');
+  // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
+  const wanted = useShellState((s) => s.settingsCategory);
+  const take = useShellState((s) => s.takeSettingsCategory);
+  const category: SettingsCategoryId = wanted !== null && SETTINGS_CATEGORIES.some((c) => c.id === wanted) ? (wanted as SettingsCategoryId) : chosen;
+  const setCategory = (id: SettingsCategoryId) => { take(); setChosen(id); };
   const [busyAction, setBusyAction] = useState<'backup' | 'restore' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const runActive = session !== null && isBusy(session.executionStatus);
@@ -101,6 +110,8 @@ export function SettingsView({ session, workspace, onBackup, onRestore }: Settin
             </div>
             {message && <div className="composer__error" role="alert">{message}</div>}
           </div>
+        ) : category === 'hooks' && hooks ? (
+          <HooksSettings {...hooks} />
         ) : (
           <div className="view__empty">
             <h1 className="display">{SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}</h1>

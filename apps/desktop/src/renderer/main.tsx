@@ -1,9 +1,9 @@
-import { StrictMode, useEffect, useMemo } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type ApprovalOption, type ApprovalPayload, type PermissionPreset, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { AppShell, ApprovalDialog, SettingsView, WorkspaceView } from '@rotaris/ui';
+import { AppShell, ApprovalDialog, HookReviewDialog, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -96,7 +96,38 @@ async function workspaceAction(kind: 'workspace.backup' | 'workspace.restore'): 
 
 function Settings({ workspace }: { workspace: string | null }) {
   const session = useStore(replica, (s) => s.session);
-  return <SettingsView session={session} workspace={workspace} onBackup={() => workspaceAction('workspace.backup')} onRestore={() => workspaceAction('workspace.restore')} />;
+  const sessionId = useStore(replica, (s) => s.sessionId);
+  // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
+  const [summary, setSummary] = useState<HooksSummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = useCallback(async () => {
+    if (workspace === null) { setSummary(null); return; }
+    setLoading(true);
+    const r = await bridge.command({ kind: 'hooks.summary', ...(sessionId ? { sessionId } : {}) });
+    setLoading(false);
+    if (r.ok) { setSummary(r.value as HooksSummary); setError(null); } else setError(r.detail ?? r.headline);
+  }, [workspace, sessionId]);
+  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
+  const act = async (req: Parameters<typeof bridge.command>[0]) => {
+    const r = await bridge.command(req);
+    if (!r.ok) setError(r.detail ?? r.headline);
+    await refresh();
+  };
+  const hooks = {
+    summary, loading, error,
+    onRefresh: () => { void refresh(); },
+    onReview: () => { void act({ kind: 'hooks.review' }); },
+    onClear: () => { void act({ kind: 'hooks.clearDecision' }); },
+    onToggle: (agent: HookAgentId, hookId: string | null, on: boolean) => { void act({ kind: 'hooks.setToggle', agent, hookId, on }); },
+  };
+  return <SettingsView session={session} workspace={workspace} onBackup={() => workspaceAction('workspace.backup')} onRestore={() => workspaceAction('workspace.restore')} hooks={hooks} />;
+}
+
+/** REQ-NOTIFY-223/224: a notice's action, resolved here to a command or a view. */
+function recover(command: string): void {
+  if (command === 'hooks.review') { void bridge.command({ kind: 'hooks.review' }); return; }
+  if (command === 'hooks.settings') { useShellState.getState().openSettings('hooks'); return; }
 }
 
 function App({ version, workspace, processes }: { version: string; workspace: string; processes: string[] }) {
@@ -132,6 +163,7 @@ function App({ version, workspace, processes }: { version: string; workspace: st
       views={{ workspace: <Workspace />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} /> }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
+      onRecover={recover}
     />
   );
 }
@@ -150,8 +182,24 @@ async function bootApproval(): Promise<void> {
   root.render(<StrictMode><ApprovalDialog payload={payload} othersWaiting={othersWaiting} onAnswer={onAnswer} /></StrictMode>);
 }
 
+/** REQ-HOOKS-106/107: the review window — the only surface that displays a hook command. */
+async function bootHookReview(): Promise<void> {
+  const r = await bridge.command({ kind: 'hooks.reviewPayload' });
+  const root = createRoot(document.getElementById('root')!);
+  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
+  const { workspace, entries } = r.value as { workspace: string; entries: HooksSummary['review'] };
+  document.title = "Review this workspace's hooks";
+  const onDecide = async (trusted: boolean): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const c = await bridge.command({ kind: 'hooks.reviewDecide', trusted });
+    return c.ok ? { ok: true } : { ok: false, reason: c.detail ?? c.headline };
+  };
+  root.render(<StrictMode><HookReviewDialog workspace={workspace} entries={entries} onDecide={onDecide} /></StrictMode>);
+}
+
 async function boot(): Promise<void> {
-  if (new URLSearchParams(window.location.search).get('role') === 'approval') { await bootApproval(); return; }
+  const role = new URLSearchParams(window.location.search).get('role');
+  if (role === 'approval') { await bootApproval(); return; }
+  if (role === 'hook-review') { await bootHookReview(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[] }) : { version: '?', workspace: '(no workspace)', processes: [] };
   createRoot(document.getElementById('root')!).render(

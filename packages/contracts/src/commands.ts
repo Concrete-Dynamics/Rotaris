@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ControlRequestSchema } from './control.js';
+import { HOOK_AGENT_IDS } from './hooks.js';
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -37,6 +38,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
   z.object({ kind: z.literal('approval.payload') }),
+  /** ADR-0015: the Hooks tab (REQ-HOOKS-103..105/109/136/137) and the review dialog (REQ-HOOKS-106/107). Every read re-reads the sources (REQ-CONFIG-014). */
+  z.object({ kind: z.literal('hooks.summary'), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('hooks.review') }),
+  z.object({ kind: z.literal('hooks.reviewPayload') }),
+  z.object({ kind: z.literal('hooks.reviewDecide'), trusted: z.boolean() }),
+  z.object({ kind: z.literal('hooks.clearDecision') }),
+  z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

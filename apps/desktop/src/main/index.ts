@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, utilityProcess, type UtilityProces
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, type ApprovalPayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, type HooksSummary, type ApprovalPayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 
@@ -109,6 +109,14 @@ async function main(): Promise<void> {
     const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
     log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${ack.kind}`);
     if (ack.kind === 'workspace.ack') currentWorkspaceId = opened.workspaceId;
+    // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
+    if (ack.kind === 'workspace.ack') {
+      clocks.timers.after(millis(800), () => {
+        void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
+          if (r.kind === 'hooks.summary' && r.summary.status === 'review') raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review'));
+        }).catch(() => undefined);
+      });
+    }
     return { workspaceId: opened.workspaceId, storeFile: opened.storeFile };
   };
 
@@ -121,9 +129,19 @@ async function main(): Promise<void> {
   let currentNotice: NoticeCurrent['current'] = null;
   const publishNotice = (n: NoticeCurrent['current']) => { currentNotice = n; relay.broadcast(CHANNEL.noticeCurrent, { v: CONTRACT_SCHEMA_VERSION, current: n } satisfies NoticeCurrent); };
   const publishedNoticeKeys = new Set<string>();
-  const raiseNotice = (severity: 'info' | 'warning' | 'error', headline: string, detail?: string) => {
-    publishNotice({ id: ++noticeSeq, severity, headline, ...(detail === undefined ? {} : { detail }) });
+  type Recovery = { label: string; command: string }[];
+  const raiseNotice = (severity: 'info' | 'warning' | 'error', headline: string, detail?: string, recovery?: Recovery) => {
+    publishNotice({ id: ++noticeSeq, severity, headline, ...(detail === undefined ? {} : { detail }), ...(recovery === undefined || recovery.length === 0 ? {} : { recovery }) });
   };
+  /** REQ-NOTIFY-224: once per key within this application session; nothing persists across a restart (REQ-NOTIFY-027). */
+  const raiseNoticeKeyed = (key: string, severity: 'info' | 'warning' | 'error', headline: string, detail?: string, recovery?: Recovery): boolean => {
+    if (publishedNoticeKeys.has(key)) return false;
+    publishedNoticeKeys.add(key);
+    raiseNotice(severity, headline, detail, recovery);
+    return true;
+  };
+  /** REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's recovery entry. */
+  const recoveryFor = (action: string | undefined): Recovery => action === 'hooks.review' ? [{ label: 'Review hooks', command: 'hooks.review' }] : action === 'hooks.settings' ? [{ label: 'Open hook settings', command: 'hooks.settings' }] : [];
   /**
    * ADR-0019 / REQ-TOOLS-063: main owns the per-window DIALOG QUEUE and nothing else — it never decides.
    * One approval dialog open per window, oldest first by the payload's sequence, the next within 100 ms
@@ -194,6 +212,64 @@ async function main(): Promise<void> {
     }
   };
   const dialogPayloads = new Map<number, { payload: ApprovalPayload; othersWaiting: number }>();
+  /**
+   * REQ-HOOKS-106/107: the review dialog — a modal BrowserWindow painting the one bundle with role=hook-review,
+   * at least 620×440 logical pixels, opened only when the user asks (REQ-HOOKS-104, REQ-SHELL-016). Leaving it
+   * without choosing is a rejection, reported once: the first exit path taken reports.
+   */
+  const reviewPayloads = new Map<number, { workspace: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>();
+  const openHookReview = async (): Promise<CommandOutcome> => {
+    if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reviewing its hooks' };
+    const r = await runHost.request({ kind: 'hooks.summary', workspaceId: currentWorkspaceId }, millis(10_000));
+    if (r.kind !== 'hooks.summary') return refusal(r, 'The hooks could not be read');
+    if (r.summary.declaredCount === 0) return { ok: false, code: 'hooks.none', headline: 'This workspace declares no hooks' };
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !reviewPayloads.has(w.webContents.id));
+    const dlg = new BrowserWindow({
+      ...(parent ? { parent, modal: true } : {}), width: 720, height: 520, minWidth: 620, minHeight: 440, show: false, title: "Review this workspace's hooks", backgroundColor: '#242424',
+      resizable: true, minimizable: false, maximizable: false,
+      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    const wc = dlg.webContents.id;
+    const workspaceId = currentWorkspaceId;
+    const entry = { workspace: r.summary.workspace, entries: r.summary.review, decided: false, win: dlg };
+    reviewPayloads.set(wc, entry);
+    dlg.setMenuBarVisibility(false);
+    dlg.on('closed', () => {
+      reviewPayloads.delete(wc);
+      if (!entry.decided) {
+        entry.decided = true;
+        void runHost.request({ kind: 'hooks.decide', workspaceId, trusted: false }, millis(10_000)).then((d) => log(`hook review closed without a choice → refused (${d.kind})`)).catch(() => undefined);
+      }
+    });
+    try {
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?role=hook-review`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query: { role: 'hook-review' } });
+      dlg.show();
+      dlg.focus();
+      log(`hook review opened for ${entry.workspace} (${entry.entries.length} hook(s))`);
+      // Verification seam (only with ROTARIS_CAPTURE_PNG): capture the dialog, then click Allow or Do-not-run.
+      const scriptedReview = capturing ? process.env['ROTARIS_CAPTURE_HOOK_REVIEW'] : undefined;
+      if (scriptedReview) {
+        clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_HOOK_REVIEW_MS'] ?? 900)), async () => {
+          if (dlg.isDestroyed()) return;
+          const png = process.env['ROTARIS_CAPTURE_REVIEW_PNG'];
+          if (png) { const { writeFileSync } = await import('node:fs'); writeFileSync(png, (await dlg.webContents.capturePage()).toPNG()); log(`captured review dialog ${png}`); }
+          const label = scriptedReview === 'allow' ? 'Allow these hooks' : 'Do not run these hooks';
+          const rect = await dlg.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(label)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+          if (!rect) { log(`capture: no "${label}" button in the review dialog`); return; }
+          dlg.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+          dlg.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+          log(`capture: review dialog → clicked "${label}"`);
+        });
+      }
+      return { ok: true, value: { opened: true } };
+    } catch (cause) {
+      log(`the hook review could not be opened: ${String(cause)}`);
+      entry.decided = true;
+      if (!dlg.isDestroyed()) dlg.close();
+      return { ok: false, code: 'hooks.review', headline: 'The review dialog could not be opened', detail: String(cause) };
+    }
+  };
 
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
@@ -211,10 +287,8 @@ async function main(): Promise<void> {
       if (openDialog && openDialog.requestId === e.requestId) { openDialog.answered = true; if (!openDialog.win.isDestroyed()) openDialog.win.close(); }
     }
     else if (e.kind === 'notice.publish') {
-      // REQ-NOTIFY-224: once per key within this application session; nothing persists across a restart (REQ-NOTIFY-027).
-      if (e.key !== undefined) { if (publishedNoticeKeys.has(e.key)) return; publishedNoticeKeys.add(e.key); }
-      raiseNotice(e.severity, e.headline, e.detail);
-      log(`notice from the run host: ${e.headline}${e.action ? ` [${e.action}]` : ''}`);
+      const shown = e.key !== undefined ? raiseNoticeKeyed(e.key, e.severity, e.headline, e.detail, recoveryFor(e.action)) : (raiseNotice(e.severity, e.headline, e.detail, recoveryFor(e.action)), true);
+      log(`notice from the run host: ${e.headline}${e.action ? ` [${e.action}]` : ''}${shown ? '' : ' (already shown this session)'}`);
     }
     else if (e.kind === 'run.result') {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
@@ -361,6 +435,37 @@ async function main(): Promise<void> {
         const p = dialogPayloads.get(senderId);
         return p ? { ok: true, value: p } : { ok: false, code: 'approval.none', headline: 'This window was not opened for an approval' };
       }
+      case 'hooks.summary': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace to see its hooks' };
+        const r = await runHost.request({ kind: 'hooks.summary', workspaceId: currentWorkspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));
+        return r.kind === 'hooks.summary' ? { ok: true, value: r.summary } : refusal(r, 'The hooks could not be read');
+      }
+      case 'hooks.review':
+        return openHookReview();
+      case 'hooks.reviewPayload': {
+        const p = reviewPayloads.get(senderId);
+        return p ? { ok: true, value: { workspace: p.workspace, entries: p.entries } } : { ok: false, code: 'hooks.review.none', headline: 'This window was not opened for a hook review' };
+      }
+      case 'hooks.reviewDecide': {
+        const p = reviewPayloads.get(senderId);
+        if (!p || p.decided) return { ok: false, code: 'hooks.review.none', headline: 'No review is open for this window' };
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'The workspace is no longer open' };
+        const r = await runHost.request({ kind: 'hooks.decide', workspaceId: currentWorkspaceId, trusted: req.trusted }, millis(10_000));
+        if (r.kind !== 'ack') return refusal(r, 'The decision could not be saved');
+        p.decided = true;
+        log(`hook review → ${req.trusted ? 'allowed' : 'refused'}`);
+        clocks.timers.after(millis(50), () => { if (!p.win.isDestroyed()) p.win.close(); });
+        return { ok: true };
+      }
+      case 'hooks.clearDecision': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'hooks.clearDecision', workspaceId: currentWorkspaceId }, millis(10_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The stored decision could not be removed');
+      }
+      case 'hooks.setToggle': {
+        const r = await runHost.request({ kind: 'hooks.setToggle', agent: req.agent, hookId: req.hookId, on: req.on }, millis(10_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The hook policy could not be saved');
+      }
       case 'shell.hello':
         return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`) } };
       case 'session.start': {
@@ -474,9 +579,9 @@ async function main(): Promise<void> {
     }
     // ROTARIS_CAPTURE_ACTION=backup|restore at ROTARIS_CAPTURE_ACTION_MS: the command a Settings action sends.
     const action = process.env['ROTARIS_CAPTURE_ACTION'];
-    if (action === 'backup' || action === 'restore') {
+    if (action === 'backup' || action === 'restore' || action === 'hooks-review') {
       clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_ACTION_MS'] ?? 1_500)), async () => {
-        const outcome = await runCommand({ kind: action === 'backup' ? 'workspace.backup' : 'workspace.restore' });
+        const outcome = await runCommand({ kind: action === 'backup' ? 'workspace.backup' : action === 'restore' ? 'workspace.restore' : 'hooks.review' });
         log(`capture: ${action} → ${JSON.stringify(outcome)}`);
       });
     }
@@ -489,7 +594,7 @@ async function main(): Promise<void> {
         wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
         if (view === 7) {
           await new Promise((r) => clocks.timers.after(millis(200), () => r(undefined)));
-          const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === 'Project'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+          const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === ${JSON.stringify(process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project')}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
           if (rect) { wc.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 }); wc.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 }); }
         }
       });

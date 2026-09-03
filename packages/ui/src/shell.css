@@ -189,3 +189,23 @@
 .agent-row__task { color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-row__meta { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
+
+/* ── Settings → Hooks (REQ-HOOKS-103..109/136/137, REQ-CONFIG-354..359) and the review window (REQ-HOOKS-106/107) ── */
+.hooks__summary { margin: 0 0 var(--rt-space-2, 8px); }
+.hooks__pending { margin: 0 0 var(--rt-space-3, 12px); }
+.hooks__table { margin: 0 0 var(--rt-space-2, 8px); }
+.hooks__agent td { background: var(--rt-chrome); }
+.hooks__row .hooks__name { padding-left: var(--rt-space-6, 24px); }
+.hooks__check { display: inline-flex; align-items: center; gap: var(--rt-space-2, 8px); cursor: pointer; }
+.hooks__name--static { color: var(--rt-text-secondary); }
+.hooks__invocations { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+.hooks__invocation { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); }
+.hooks__invocation-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); }
+.hooks__invocation-name { font-weight: var(--rt-weight-medium, 500); }
+.hooks__output summary { cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+.hooks__stream { margin: var(--rt-space-1, 4px) 0 0; padding: var(--rt-space-2, 8px); max-height: 160px; overflow: auto; background: var(--rt-chrome); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.hooks__stream--err { border-color: var(--rt-warn); }
+.notice__action { margin-left: var(--rt-space-2, 8px); }
+.hook-review__dialog { width: 100%; max-width: 760px; }
+.hook-review__list { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); max-height: 46vh; overflow: auto; }
+.hook-review__entry { margin: 0; padding: var(--rt-space-3, 12px); background: var(--rt-chrome); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre; overflow-x: auto; user-select: text; }

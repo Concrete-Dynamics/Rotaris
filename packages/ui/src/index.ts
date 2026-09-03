@@ -5,3 +5,5 @@ export * from './shell-state.js';
 export * from './SettingsView.js';
 export * from './ApprovalDialog.js';
 export * from './AgentTree.js';
+export * from './HooksSettings.js';
+export * from './HookReviewDialog.js';

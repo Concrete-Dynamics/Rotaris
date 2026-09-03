@@ -10,6 +10,8 @@
 @import '@design/tokens/spacing.css';
 @import '@design/tokens/effects.css';
 @import '../../../../packages/ui/src/fonts.css';
+/* Phosphor icon classes (REQ-SHELL-027) are imported from @phosphor-icons/web in main.tsx:
+ * a bare package specifier in a CSS @import is not resolved by the bundler. */
 @import '@design/base.css';
 @import '@design/components.css';
 @import '@design/motif.css';

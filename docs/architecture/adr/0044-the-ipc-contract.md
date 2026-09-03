@@ -298,3 +298,16 @@ either, so whatever is bundled into it must be pure.
 
 **Not exercised:** the sequence contract end to end (no publisher yet). `@rotaris/ui-core`'s step-0
 check is tested in a plain process against synthetic publications only.
+
+**Found later the same day, in the relay's attachment to a window:** the application would not exit.
+`app.exit(0)`, `app.quit()` and `process.exit(0)` all left the browser process alive indefinitely;
+only the raw `process.reallyExit` ended it. Bisected by removing one listener at a time: the cause was
+the window's `closed` handler, which read `win.webContents.id` to detach the relay - and `webContents`
+on a destroyed window throws. A throw from a `closed` handler during exit is an uncaught exception,
+and Electron's response to an uncaught exception in main is a modal error dialog, which no headless
+run can see or dismiss. **The relay must hold the window's id, never the window**: the id is read
+once at attachment and the `send` adapter checks `isDestroyed()` first. This is the shape ADR-0044's
+relay was already meant to have (it fans out by id) and the composition root had not honoured it.
+Two things follow for the quit choreography (ADR-0014): every `closed`, `will-quit` and
+`before-quit` handler must be exception-safe, and the release gate's first-paint check must assert
+the process *ended*, not only that it painted.

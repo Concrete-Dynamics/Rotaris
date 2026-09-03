@@ -12,6 +12,7 @@
     "package": "electron-vite build && electron-builder --config electron-builder.yml --win"
   },
   "dependencies": {
+    "@phosphor-icons/web": "2.1.1",
     "@rotaris/agent-tools": "workspace:*",
     "@rotaris/contracts": "workspace:*",
     "@rotaris/engine": "workspace:*",

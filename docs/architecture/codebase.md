@@ -67,6 +67,11 @@ plain process with no React and the restore run against a fake run host with a c
 - **The IPC payloads carry no secret** — `contracts.test.ts` walks every channel schema.
 - **The symbol artifact is regenerated before collection** — vitest `globalSetup`, same generator as
   the build. A withdrawn identifier is `@deprecated` and warns at every reference (REQ-TRACE-181).
+- **A window is held by id, never by handle, past its creation** — `webContents` on a destroyed
+  window throws, and a throw from a `closed` handler during exit wedges the process behind a modal
+  error dialog (ADR-0044 first-execution note). The relay attaches by id; `send` checks `isDestroyed()`.
+- **Icons are `@phosphor-icons/web` classes** (`ph ph-<name>`), imported in the renderer root; the
+  design assets carry the same two fonts and are not referenced directly.
 - **Implementation conditions are markers at the module they bind** — `TODO(IC-4)` in
   `platform/src/machine-id.ts`, `TODO(IC-5)` in `store/src/restore.ts`, `TODO(IC-6)` in
   `apps/desktop/electron-builder.yml`.

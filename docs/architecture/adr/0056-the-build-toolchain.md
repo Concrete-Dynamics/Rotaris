@@ -382,6 +382,10 @@ mechanism is — the stub is the one component that handles unpacked addons with
    that binary or a prebuild is exactly IC-6's question and is still unanswered.
 
 **What ran:** all five entries emitted; the renderer bundle carried the five design fonts and one CSS
-file; the strict CSP raised no violation; the application painted. **Not exercised:** `electron-builder`
+file; the strict CSP raised no violation; the application painted. The rail's icons first painted as
+the wrong glyphs: the seven Phosphor codepoints had been hand-mapped. The mockup loads the icon
+classes from `@phosphor-icons/web@2.1.1`, and the two icon fonts in `docs/design/assets` are byte for
+byte that package's; the renderer now imports the package's `regular` and `fill` stylesheets (a bare
+package specifier inside a CSS `@import` is not resolved by the bundler, so the import is in `main.tsx`). **Not exercised:** `electron-builder`
 (no artifact was produced — the packaging path is untested); the rebuild-against-Electron-ABI rule
 (spike 22 found this binding is Node-API and needs none for this version); IC-6.

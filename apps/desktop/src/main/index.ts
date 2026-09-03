@@ -103,8 +103,11 @@ async function main(): Promise<void> {
     width: 1280, height: 820, show: false, backgroundColor: '#242424', title: 'Rotaris',
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
-  relay.attach({ id: win.webContents.id, send: (c, p) => win.webContents.send(c, p) });
-  win.on('closed', () => relay.detach(win.webContents.id));
+  // The id is read once, up front: `webContents` on a destroyed window throws, and a throw from a
+  // `closed` handler during exit is an uncaught exception, which wedges the process (ADR-0044 note).
+  const wcId = win.webContents.id;
+  relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
+  win.on('closed', () => relay.detach(wcId));
 
   ipcMain.handle(CHANNEL.command, async (_e, raw): Promise<CommandOutcome> => {
     const parsed = CommandRequestSchema.safeParse(raw);
@@ -114,10 +117,10 @@ async function main(): Promise<void> {
       case 'shell.hello':
         return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`) } };
       case 'session.subscribe':
-        relay.subscribe(win.webContents.id, req.sessionId);
+        relay.subscribe(wcId, req.sessionId);
         return { ok: true };
       case 'session.unsubscribe':
-        relay.unsubscribe(win.webContents.id, req.sessionId);
+        relay.unsubscribe(wcId, req.sessionId);
         return { ok: true };
       default:
         return { ok: false, code: 'command.unimplemented', headline: `${req.kind} is not built yet` };

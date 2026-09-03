@@ -6,22 +6,14 @@
  *   18c029f5  Space Grotesk (variable)
  *   d961a407  JetBrains Mono (variable)
  *   4a0312df  JetBrains Mono Italic (variable)
- *   dbbb65b4  Phosphor (icon font, regular)
- *   251721af  Phosphor Fill (icon font)
+ *   dbbb65b4  Phosphor (icon font, regular)  — byte-identical to @phosphor-icons/web@2.1.1
+ *   251721af  Phosphor Fill (icon font)       — byte-identical to @phosphor-icons/web@2.1.1
+ * The two icon fonts are loaded through the package's own stylesheet (see
+ * apps/desktop/src/renderer/design.css), which carries the glyph classes the
+ * mockup uses; the hashed copies here are not referenced.
  * Manrope is NOT in the import and falls back to the system UI face until the
  * design material supplies it. */
 @font-face { font-family: 'Space Grotesk'; src: url('@design-assets/18c029f5.woff2') format('woff2-variations'); font-weight: 300 700; font-style: normal; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url('@design-assets/d961a407.woff2') format('woff2-variations'); font-weight: 100 800; font-style: normal; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url('@design-assets/4a0312df.woff2') format('woff2-variations'); font-weight: 100 800; font-style: italic; font-display: swap; }
-@font-face { font-family: 'Phosphor'; src: url('@design-assets/dbbb65b4.woff2') format('woff2'); font-weight: normal; font-style: normal; font-display: block; }
-@font-face { font-family: 'Phosphor-Fill'; src: url('@design-assets/251721af.woff2') format('woff2'); font-weight: normal; font-style: normal; font-display: block; }
 
-.ph { font-family: 'Phosphor'; font-style: normal; font-weight: normal; speak: never; display: inline-block; }
-/* Phosphor glyph codepoints for the seven rail icons (REQ-SHELL-027: a distinct icon per view). */
-.ph-squares-four::before { content: '\e5d8'; }
-.ph-chats::before { content: '\e1a8'; }
-.ph-tree-structure::before { content: '\e6c4'; }
-.ph-list-checks::before { content: '\e3b0'; }
-.ph-git-branch::before { content: '\e2fe'; }
-.ph-books::before { content: '\e10e'; }
-.ph-gear::before { content: '\e2f0'; }

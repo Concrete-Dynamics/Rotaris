@@ -45,6 +45,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hooks.reviewDecide'), trusted: z.boolean() }),
   z.object({ kind: z.literal('hooks.clearDecision') }),
   z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
+  /** REQ-ORCH-026: the built-in playbook catalogue for the settings listing. */
+  z.object({ kind: z.literal('playbooks.catalogue') }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

@@ -2,10 +2,11 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSc
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
-import { RefusalLease, RUN_CONFIG_DEFAULTS, Sessions, type ModelSetup } from '@rotaris/engine';
+import { CATALOGUE, RefusalLease, RUN_CONFIG_DEFAULTS, RungMemory, Sessions, type ModelSetup } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, terminalManagerFromHost } from './tools.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
+import { runPreflight } from './intent.js';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -72,9 +73,20 @@ function scriptedClient(c: Clocks): ModelClient {
     async *stream(req: ModelRequest) {
       await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
-      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : 'child';
+      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You classify a user request/.test(system) ? 'classifier' : 'child';
       call += 1;
       calls[who] = (calls[who] ?? 0) + 1;
+      if (who === 'classifier') {
+        // ROTARIS_INTENT_SCRIPT: <category> | garbage | timeout | reject (the two JSON rungs refused, then text) — verification only.
+        const want = (process.env['ROTARIS_INTENT_SCRIPT'] ?? 'moderate_feature').trim();
+        if (want === 'timeout') { await new Promise<void>((resolve) => req.signal.addEventListener('abort', () => resolve(), { once: true })); yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
+        if (want === 'reject' && req.output !== undefined) { yield { ok: false as const, error: { code: 'http' as const, headline: 'response_format is not supported by this model', status: 400, transient: false } }; return; }
+        const text = want === 'garbage' ? 'lol no' : want === 'reject' ? 'small_feature\nfrom the text rung' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ intent: want, confidence: 0.75, reason: 'scripted classification' });
+        yield ok<StreamPart>({ kind: 'text', delta: text });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 12, output: 8 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
       if (who === 'summariser') {
         yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify({ summary: 'The child carried out its task (scripted summary).', key_findings: ['scripted'], tags: ['implementation'] }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 20, output: 10 } });
@@ -176,6 +188,13 @@ void terminalReady.then((t) => { terminal = t; });
 // REQ-HOOKS-032: a hook inherits exactly the environment this process was started with; the desktop supplies no override.
 const hostEnv: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string'));
 const configDir = resolveUserDirs().config;
+// REQ-ORCH-010: a rung a model rejected is remembered for the session — this process's lifetime.
+const rungMemory = new RungMemory();
+const modelSetup = modelFromEnv();
+// Decision 4: the scripted client classifies itself unless ROTARIS_INTENT_SCRIPT=none; a real model needs the slot ids.
+const intentEnv: Record<string, string | undefined> = process.env['ROTARIS_MODEL_DIALECT'] === 'scripted' && (process.env['ROTARIS_INTENT_SCRIPT'] ?? '') !== 'none'
+  ? { ...process.env, ROTARIS_SMALL_MODEL_ID: process.env['ROTARIS_SMALL_MODEL_ID'] ?? 'scripted' }
+  : { ...process.env };
 const sessions = new Sessions({
   clocks,
   pid: process.pid,
@@ -184,7 +203,7 @@ const sessions = new Sessions({
   retentionCap: 20_000,
   warn: (m) => log(m, 'warn'),
   mintSessionId: () => randomUUID(),
-  model: modelFromEnv(),
+  model: modelSetup,
   sessionFilesDir: (dal, sid) => join(dirname(dal.db.name), 'sessions', sid),
   publisher: {
     increment: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.increment', payload } }),
@@ -199,6 +218,13 @@ const sessions = new Sessions({
   // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
   hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
+  // REQ-ORCH-005: the pre-flight before the coordinator exists; the classifier's slots and the tier come from the environment (decision 4).
+  ...(modelSetup ? {
+    preflight: (ctx) => runPreflight(ctx, {
+      clocks, backend: modelSetup.backend, runModel: modelSetup.config.model, resolveCredential: modelSetup.config.resolveCredential, modelTimeoutMs: modelSetup.config.modelTimeoutMs,
+      globalDir: configDir, env: intentEnv, runOverride: runtime.runOverride, memory: rungMemory, log: (m) => log(m),
+    }),
+  } : {}),
 });
 presenters.start();
 
@@ -279,6 +305,9 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const r = clearHooksDecision(s.root);
       return r.ok ? { kind: 'ack' } : { kind: 'refused', code: 'hooks.clear', headline: 'The stored decision could not be removed', detail: r.error.reason };
     }
+    case 'playbooks.catalogue':
+      // REQ-ORCH-026: the built-in catalogue, user-inspectable — every slot, every variant, the built-in text.
+      return { kind: 'playbooks.catalogue', catalogue: CATALOGUE };
     case 'hooks.setToggle': {
       const r = await setHookToggle(hostEnv, configDir, req.agent, req.hookId, req.on);
       return r.ok ? { kind: 'ack' } : { kind: 'refused', code: 'hooks.policy', headline: 'The hook policy could not be saved', detail: r.error.reason };

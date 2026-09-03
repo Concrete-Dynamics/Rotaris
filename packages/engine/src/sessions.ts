@@ -11,12 +11,14 @@ import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
-import { clampBudget, DEFAULT_BUDGET, NORMAL_CELL, type Budget } from './children/ledger.js';
+import { DEFAULT_BUDGET, type Budget } from './children/ledger.js';
 import { presentationChildState, type AgentRecord, type ChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
+import type { Preflight, PreflightContext } from './preflight.js';
+import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -53,6 +55,9 @@ export interface ToolPortContext {
   readonly depth?: number | undefined;
   /** ADR-0015: the session's tool hooks for the gate's two slots; absent means none. */
   readonly hooks?: ToolHookBridge | undefined;
+  /** REQ-ORCH-016/018: the entry role's grant for this run, decided by the pre-flight; other roles ignore it. */
+  readonly grant?: IntentGrant | undefined;
+  readonly intent?: IntentCategory | undefined;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -96,6 +101,8 @@ export interface SessionsDeps {
   readonly hooks?: (ctx: HookPortContext) => HookPort | null;
   /** The host's notice channel. */
   readonly notice?: (n: RunNotice) => void;
+  /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
+  readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -149,7 +156,20 @@ export function toSessionRecord(r: SessionRow): SessionRecord {
     permissionMode: r.permission_mode,
     sandboxed: r.sandboxed === 1,
     backgroundSessions: 0,
+    intent: null,
   };
+}
+
+/** REQ-ORCH-014: derived, not stored — `classifying` while the run is starting and no audit exists, then the audit's `run_intent`. */
+export function intentStatusOf(r: SessionRow, auditPayload: string | null): IntentStatus | null {
+  if (auditPayload !== null) {
+    try {
+      const p = JSON.parse(auditPayload) as { run_intent?: unknown };
+      const parsed = IntentResultSchema.safeParse(p.run_intent);
+      if (parsed.success) return { phase: 'classified', ...parsed.data };
+    } catch { /* an unreadable audit reads as no status */ }
+  }
+  return r.execution_status === 'starting' ? { phase: 'classifying' } : null;
 }
 
 /** REQ-MONITOR-044/046/047: a child row as a surface sees it. */
@@ -221,7 +241,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => ({ ...toSessionRecord(dal.getSession(sessionId)!), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0 }),
+      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -237,6 +257,8 @@ export class Sessions {
     if (this.deps.hooks) {
       try { hooks = this.deps.hooks({ sessionId, workspaceRoot, writer, warn, log: (m) => { log?.info(m); } }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
     }
+    // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
+    const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
     const baseCtx = { sessionId, workspaceRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
@@ -244,15 +266,18 @@ export class Sessions {
     // REQ-ORCH-053: a run that has just taken the lock settles every non-terminal child a previous run left, before its first iteration.
     const stale = settleStaleChildren(dal, writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first iteration (REQ-ORCH-053)`);
-    const budget = clampBudget(this.deps.runtime?.childBudget ?? DEFAULT_BUDGET, NORMAL_CELL);
+    // REQ-ORCH-024: the configured policy; the run clamps it by the pre-flight's BUDGET cell (the `normal` cell stood in until playbooks existed).
+    const budget = this.deps.runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = this.deps.runtime?.modelConcurrencyCap ?? null;
+    const preflight = this.deps.preflight;
     const run = new Run({
       sessionId, workspaceRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
       readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
+      ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
         dal, budget, modelCap: () => cap,
         summariser: { backend: model.backend, model: model.config.model, thinking: model.config.thinking, timers: this.deps.clocks.timers, resolveCredential: model.config.resolveCredential },
       } : {}),

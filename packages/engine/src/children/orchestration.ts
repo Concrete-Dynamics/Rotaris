@@ -12,6 +12,7 @@ import { BUILT_IN_PERSONAS, type RoleName } from './personas.js';
 import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import type { HookPort } from '../hooks-port.js';
+import { withPlaybook } from '../run/run.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -47,6 +48,10 @@ export interface ChildrenDeps {
   readonly warn: (m: string) => void;
   /** ADR-0015: `child_completed` fires once a child has finished, whatever its final state (REQ-HOOKS-003). */
   readonly hooks?: HookPort | null | undefined;
+  /** REQ-ORCH-019: the rendered playbook per role; null or '' means no playbook. */
+  readonly playbookFor?: ((role: string) => string) | null | undefined;
+  /** REQ-ORCH-015: on the answer route the answered category is accepted at once. */
+  readonly route?: 'answer' | 'work' | undefined;
 }
 
 export class IterationChildren implements DelegationOps {
@@ -185,7 +190,7 @@ export class IterationChildren implements DelegationOps {
     const dispatched = new Map<string, string>();
     const turn = (task: string, history: readonly ChatMessage[]) => runTurn({
       writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
-      systemPrompt: persona?.systemPrompt ?? '', model: deps.model, thinking: deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
+      systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: deps.model, thinking: deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
       resolveCredential: deps.resolveCredential, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
     }, task, history, controller.signal);
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
@@ -199,8 +204,11 @@ export class IterationChildren implements DelegationOps {
     let error: { type: string; message: string } | null = null;
     try {
       outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior), controller.signal);
-      // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered.
-      if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.toolCallCount === 0 && outcome.report.text.trim() === '') {
+      // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
+      // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
+      const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';
+      const rePrompt = outcome.toolCallCount === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
+      if (!controller.signal.aborted && outcome.report.status !== 'failed' && rePrompt) {
         const again = await turn('Carry out the task now, using your tools where the task needs them, then answer with what you did.', outcome.messages);
         outcome = { ...again, toolCallCount: outcome.toolCallCount + again.toolCallCount };
       }

@@ -1,5 +1,5 @@
 import { err, ok, type Result } from '@rotaris/kernel';
-import { APICallError, jsonSchema, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
+import { APICallError, jsonSchema, Output, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type StreamPart, type ToolSpec } from './ports.js';
@@ -140,8 +140,10 @@ export class AiSdkModelClient implements ModelClient {
     const signal = AbortSignal.any([req.signal, timeoutSignal]);
     try {
       const tools = toToolSet(req.tools);
+      // REQ-ORCH-010: the structured-output rungs map to the SDK's `output`; a provider rejection surfaces as an error part.
+      const output = req.output === undefined ? undefined : req.output.kind === 'json_schema' ? Output.object({ schema: jsonSchema(req.output.schema as Parameters<typeof jsonSchema>[0]) }) : Output.json();
       const result = streamText({
-        model, messages: toModelMessages(req.messages), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}),
+        model, messages: toModelMessages(req.messages), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
         ...(req.thinking === 'unset' ? {} : { providerOptions: { openai: { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking } } }),
       });
       let usage: { input: number; output: number } | null = null;

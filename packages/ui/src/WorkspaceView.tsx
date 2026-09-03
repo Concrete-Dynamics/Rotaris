@@ -51,6 +51,16 @@ export function rowRole(row: Pick<TranscriptRow, 'kind' | 'persona' | 'name'>): 
   if (row.kind === 'diff') return 'edit';
   return row.persona ?? row.name ?? row.kind;
 }
+/** REQ-ORCH-014: the transient status, then the classified one in its place — the category identifier exact, never colour alone. */
+export function intentStatusText(intent: SessionRecord['intent']): string | null {
+  if (!intent) return null;
+  if (intent.phase === 'classifying') return 'Classifying intent…';
+  const extras = [
+    ...(intent.carried_over ? ['continued from the previous run'] : []),
+    ...(intent.fallback ? [`fallback${intent.reason ? `: ${intent.reason}` : ''}`] : []),
+  ];
+  return `Intent: ${intent.category}${extras.length > 0 ? ` (${extras.join('; ')})` : ''}`;
+}
 export function rowTime(at: string): string {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return '';
@@ -221,6 +231,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         </aside>
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
+        {intentStatusText(session?.intent ?? null) && (
+          <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase}>{intentStatusText(session?.intent ?? null)}</div>
+        )}
         {rows.length === 0 && (
           <div className="empty-state">
             <span className="empty-state-title">{session ? 'No rows yet' : 'Describe the outcome you want…'}</span>

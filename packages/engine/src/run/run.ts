@@ -15,6 +15,8 @@ import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
+import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
+import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 
 /**
@@ -104,6 +106,8 @@ export interface RunDeps {
   readonly hooks?: HookPort | null | undefined;
   /** The host's notice channel (REQ-HOOKS-054/086/087). */
   readonly notice?: ((n: RunNotice) => void) | undefined;
+  /** REQ-ORCH-005: classify, grant, resolve the playbooks — before the coordinator exists. Absent: the fallback intent, no playbook. */
+  readonly preflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
   readonly pid: number;
   readonly host: MachineId;
   readonly readSession: () => SessionRow | undefined;
@@ -152,6 +156,7 @@ export class Run {
   private readonly ports = new Set<ToolPort>();
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
+  private preflight: Preflight | null = null;
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
@@ -206,10 +211,15 @@ export class Run {
       // REQ-SESSION-087, in order and observably.
       writer.save('starting');
       this.startedAt = clocks.monotonic.now();
+      // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
+      if (this.deps.preflight) {
+        try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
+      }
+      if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
       const audit = writer.recordLaunchAudit({
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
-        run_intent: { category: 'moderate_feature', confidence: null, reason: 'intent classification is not built; fallback', fallback: true, carried_over: false },
-        permission_mode: 'default', check_suite: null, resolved_playbooks: {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: {},
+        run_intent: this.preflight?.intent ?? NO_PREFLIGHT_INTENT, intent_grant: this.preflight?.grant ?? 'none',
+        permission_mode: 'default', check_suite: null, resolved_playbooks: this.preflight?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: {},
       });
       if (audit.ok && !audit.value) this.deps.warn(`launch audit for ${this.sessionId} already existed and was not rewritten (REQ-SESSION-138)`);
       writer.appendTimeline('run_start', 'rotaris', `A run is starting for session ${this.sessionId}.`, { workspace_root: this.deps.workspaceRoot });
@@ -336,15 +346,17 @@ export class Run {
       ? new IterationChildren({
         sessionId: this.sessionId, workspaceRoot: this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn,
-        budget: this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
-        summariser: this.deps.summariser ?? null, hooks: this.hooks, ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
+        budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
+        summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
       }, iteration)
       : null;
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
     const turnFn = (text: string, history: readonly ChatMessage[]) => runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
-      systemPrompt: config.systemPrompt, model: config.model, thinking: config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
+      systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: config.model, thinking: config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
     }, text, history, this.abort.signal);
     try {
@@ -501,6 +513,11 @@ export class Run {
     this.ended = true;
     return result;
   }
+}
+
+/** REQ-ORCH-019/020: the playbook after the role's own instructions, once. */
+export function withPlaybook(systemPrompt: string, playbook: string): string {
+  return playbook === '' ? systemPrompt : `${systemPrompt}\n\n${playbook}`;
 }
 
 function describe(e: ModelError): string {

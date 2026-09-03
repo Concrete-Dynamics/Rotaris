@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
+import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
@@ -69,6 +70,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hooks.decide'), workspaceId: z.string(), trusted: z.boolean() }),
   z.object({ kind: z.literal('hooks.clearDecision'), workspaceId: z.string() }),
   z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
+  z.object({ kind: z.literal('playbooks.catalogue') }),
   z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
@@ -169,6 +171,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
   z.object({ kind: z.literal('hooks.summary'), summary: HooksSummarySchema }),
+  z.object({ kind: z.literal('playbooks.catalogue'), catalogue: PlaybookCatalogueSchema }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

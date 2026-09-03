@@ -442,6 +442,10 @@ async function main(): Promise<void> {
       }
       case 'hooks.review':
         return openHookReview();
+      case 'playbooks.catalogue': {
+        const r = await runHost.request({ kind: 'playbooks.catalogue' }, millis(10_000));
+        return r.kind === 'playbooks.catalogue' ? { ok: true, value: r.catalogue } : refusal(r, 'The playbook catalogue could not be read');
+      }
       case 'hooks.reviewPayload': {
         const p = reviewPayloads.get(senderId);
         return p ? { ok: true, value: { workspace: p.workspace, entries: p.entries } } : { ok: false, code: 'hooks.review.none', headline: 'This window was not opened for a hook review' };

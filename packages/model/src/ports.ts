@@ -100,6 +100,14 @@ export function modelError(fields: Omit<ModelError, 'transient'> & { readonly tr
   return { ...fields, transient: fields.transient ?? isTransient(fields.code, fields.status) };
 }
 
+/**
+ * REQ-ORCH-010's rungs as the port sees them: a strict JSON schema, or JSON-object mode; absent means
+ * ordinary text. A provider that rejects the rung fails the request with an HTTP error the caller reads.
+ */
+export type OutputSpec =
+  | { readonly kind: 'json_schema'; readonly name: string; readonly schema: Readonly<Record<string, unknown>> }
+  | { readonly kind: 'json_object' };
+
 export interface ModelRequest {
   readonly model: ModelRef;
   readonly messages: readonly ChatMessage[];
@@ -112,6 +120,8 @@ export interface ModelRequest {
   readonly headers?: Readonly<Record<string, string>>;
   /** The callable set; absent or empty means the model is offered no tool. */
   readonly tools?: readonly ToolSpec[];
+  /** Structured output for the call; absent means text. */
+  readonly output?: OutputSpec;
 }
 
 export interface ModelClient {
@@ -133,6 +143,7 @@ export interface TurnInput {
   readonly timeoutMs: number;
   readonly retries: number;
   readonly resolveCredential: () => Promise<string>;
+  readonly output?: OutputSpec;
 }
 
 export interface TurnSink {

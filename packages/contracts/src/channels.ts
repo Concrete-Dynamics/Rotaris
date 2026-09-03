@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IntentStatusSchema } from './intent.js';
 import { ApprovalPayloadSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
@@ -114,6 +115,8 @@ export const SessionRecordSchema = z.object({
   pendingApprovals: z.array(ApprovalPayloadSchema),
   /** REQ-TOOLS-184: background terminal sessions in the running state. */
   backgroundSessions: z.number().int().nonnegative(),
+  /** REQ-ORCH-014: the intent status — classifying, then the classified result; null before a run and for a session that never ran. */
+  intent: IntentStatusSchema.nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

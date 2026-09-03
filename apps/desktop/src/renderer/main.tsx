@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { AppShell, ApprovalDialog, HookReviewDialog, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
 import './design.css';
@@ -109,6 +109,9 @@ function Settings({ workspace }: { workspace: string | null }) {
     if (r.ok) { setSummary(r.value as HooksSummary); setError(null); } else setError(r.detail ?? r.headline);
   }, [workspace, sessionId]);
   useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
+  // REQ-ORCH-026: the catalogue is static for the build; read once per Settings mount.
+  const [playbooks, setPlaybooks] = useState<PlaybookCatalogue | null>(null);
+  useEffect(() => { queueMicrotask(() => { void bridge.command({ kind: 'playbooks.catalogue' }).then((r) => { if (r.ok) setPlaybooks(r.value as PlaybookCatalogue); }); }); }, []);
   const act = async (req: Parameters<typeof bridge.command>[0]) => {
     const r = await bridge.command(req);
     if (!r.ok) setError(r.detail ?? r.headline);
@@ -121,7 +124,7 @@ function Settings({ workspace }: { workspace: string | null }) {
     onClear: () => { void act({ kind: 'hooks.clearDecision' }); },
     onToggle: (agent: HookAgentId, hookId: string | null, on: boolean) => { void act({ kind: 'hooks.setToggle', agent, hookId, on }); },
   };
-  return <SettingsView session={session} workspace={workspace} onBackup={() => workspaceAction('workspace.backup')} onRestore={() => workspaceAction('workspace.restore')} hooks={hooks} />;
+  return <SettingsView session={session} workspace={workspace} onBackup={() => workspaceAction('workspace.backup')} onRestore={() => workspaceAction('workspace.restore')} hooks={hooks} playbooks={playbooks} />;
 }
 
 /** REQ-NOTIFY-223/224: a notice's action, resolved here to a command or a view. */

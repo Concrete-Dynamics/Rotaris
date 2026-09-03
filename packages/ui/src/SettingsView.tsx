@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { isBusy, type SessionRecord } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
+import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 
 /**
@@ -38,9 +39,11 @@ export interface SettingsViewProps {
   readonly onRestore: () => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** ADR-0015: the Hooks category's data and actions, owned by the renderer root. */
   readonly hooks?: HooksSettingsProps | undefined;
+  /** REQ-ORCH-026: the built-in playbook catalogue — every slot, every variant, the text — listed under Personas. */
+  readonly playbooks?: PlaybookCatalogue | null | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks }: SettingsViewProps) {
   // REQ-CONFIG-271: the selected category persists user-wide; until the preference store lands, `models` is the start.
   const [chosen, setChosen] = useState<SettingsCategoryId>('models');
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
@@ -112,6 +115,23 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks }:
           </div>
         ) : category === 'hooks' && hooks ? (
           <HooksSettings {...hooks} />
+        ) : category === 'personas' ? (
+          <div className="settings__section">
+            <h1 className="display">Personas</h1>
+            <h2 className="settings__heading">Playbook catalogue</h2>
+            <p className="text-secondary">
+              Every role's instructions carry a playbook of eight slots chosen by role, classified intent and model tier. This is the built-in catalogue —
+              what an override in <code className="mono">playbooks/</code> (your global configuration directory or this workspace's <code className="mono">.rotaris/</code>) may re-word: a slot, a variant identifier, its text. An override may not add a slot or a variant.
+            </p>
+            {playbooks ? Object.entries(playbooks).map(([slot, variants]) => (
+              <section key={slot} className="playbooks__slot" aria-label={`Slot ${slot}`}>
+                <h3 className="mono">{slot}</h3>
+                {Object.entries(variants).map(([variant, text]) => (
+                  <div key={variant} className="playbooks__variant"><span className="mono text-secondary">{variant}</span><span>{text}</span></div>
+                ))}
+              </section>
+            )) : <p className="text-secondary">Reading the catalogue…</p>}
+          </div>
         ) : (
           <div className="view__empty">
             <h1 className="display">{SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}</h1>

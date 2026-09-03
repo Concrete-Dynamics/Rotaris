@@ -51,6 +51,16 @@ export const NETWORK_CLASS: ReadonlySet<PublicToolName> = new Set<PublicToolName
 /** REQ-TOOLS-006: `coordinator_only` removes exactly these five and nothing else. */
 export const COORDINATOR_REMOVES: ReadonlySet<PublicToolName> = new Set<PublicToolName>(['terminal', 'write_file', 'haet_edit', 'haet', 'git_commit']);
 
+/**
+ * REQ-ORCH-016: the direct-work bundle by CAPABILITY, never a literal list — todo management and delegation,
+ * the search, fetch and artifact-read capabilities, and every tool the registry declares as reading or writing
+ * workspace files or running commands. A tool added to the table joins or stays out by its own declaration.
+ */
+export const DIRECT_WORK_CAPABILITIES: ReadonlySet<PublicToolName> = new Set<PublicToolName>(['todo', 'delegate', 'background_output', 'wait_for_tasks', 'grep', 'glob', 'fetch', 'artifact_read', 'artifact_list']);
+export function directWorkBundle(): readonly PublicToolName[] {
+  return PUBLIC_TOOL_NAMES.filter((n) => DIRECT_WORK_CAPABILITIES.has(n) || DECLARATIONS[n].readsWorkspaceFiles || DECLARATIONS[n].writesWorkspaceFiles || DECLARATIONS[n].runsCommands);
+}
+
 /** REQ-TOOLS-014: never gated; they live in the gate, not in the table (ADR-0016 c.4). */
 export const META_TOOL_NAMES: ReadonlySet<string> = new Set(['finish', 'finishtool', 'think', 'thinktool']);
 

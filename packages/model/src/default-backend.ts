@@ -22,7 +22,7 @@ export class DefaultAgentBackend implements AgentBackend {
     const calls = new Map<string, { name: string; args: string }>();
     for await (const part of this.client.stream({
       model: input.model, messages, thinking: input.thinking, signal,
-      timeoutMs: input.timeoutMs, retries: input.retries, resolveCredential: input.resolveCredential, tools: input.tools,
+      timeoutMs: input.timeoutMs, retries: input.retries, resolveCredential: input.resolveCredential, tools: input.tools, ...(input.output ? { output: input.output } : {}),
     })) {
       if (!part.ok) return { status: 'failed', text, usage, error: part.error, toolCalls: [...calls].map(([callId, c]) => ({ callId, ...c })) };
       switch (part.value.kind) {

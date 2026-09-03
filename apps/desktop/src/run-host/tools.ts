@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type HeadlessPolicy, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  buildPolicy, effectiveMode, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
+  buildPolicy, directWorkBundle, effectiveMode, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, type ModeChange, type PortToolCall, type PortToolResult, type RoleName, type RuntimePosture, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
@@ -174,6 +174,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const isEntry = ctx.persona === 'orchestrator';
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
   const single = deps.runtime.runOverride === 'single';
+  // REQ-ORCH-016/018: the pre-flight's grant reaches the entry role only; the bundle is resolved by facet against the registry.
+  const directWork = isEntry && (single || ctx.grant === 'direct-work');
+  const declared = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
   const delegationAvailable = ctx.delegation !== undefined && !single;
   if (delegationAvailable && ctx.delegation) {
     const parentId = ctx.parentId ?? 'root';
@@ -182,7 +185,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
   }
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
-  const resolved = resolveToolSet({ name: ctx.persona, tools: persona.tools, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !single, readOnly: persona.readOnly }, {}, {
+  const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly }, {}, {
     delegationRuntime: delegationAvailable, userPromptChannel: false, artifactStore: false, canPublishArtifacts: false, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
   }, isEntry);
   for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);

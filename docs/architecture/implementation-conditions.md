@@ -289,3 +289,14 @@ them is not promoting them to conditions:
 - **The power-loss test** — OQ-12's outstanding half, and now the **sole** stated ground for forcing the
   stronger durability setting on a terminal save. No spike has performed one, and it is the only route to an
   absent store directory that the restore's corrections do not close.
+
+## The permission gate and the first tools — 2026-09-03: no condition bound, none was downgraded
+
+The gate (ADR-0016 to ADR-0019), the evidence rings (ADR-0024), the first eight tools and the terminal
+(ADR-0020) were built and run without a condition in this file naming them and without an unstarted spike
+named above pricing them. Their first-execution notes are on the ADRs that decided them; ADR-0020's holds
+the seventh defect of the pattern this file's decision 3 exists for. What those notes leave owed, stated
+here so it is not mistaken for discharged: the export of the four records (`REQ-SESSION-199`, ADR-0024),
+the `fetch` executor over ADR-0023's classifier (needs ADR-0036), confinement (ADR-0022, no backend on this
+platform), the terminal's live streaming (ADR-0021), and the sizing of ADR-0019's lapse window under load
+(OQ-39 — the window is 3,000 ms as a first figure, not a measurement).

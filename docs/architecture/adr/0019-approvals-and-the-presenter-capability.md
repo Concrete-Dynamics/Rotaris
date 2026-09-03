@@ -534,3 +534,44 @@ teardown consequence that follows from it.
 synchronous-native-dialog prohibition is measured on Windows for two dialog families. A platform where a
 dialog `REQ-SHELL-164` requires can only be shown synchronously is a conflict between that requirement
 and `REQ-TOOLS-064`'s *never a hang*, and is an escalation rather than an architecture choice.
+
+## First execution — 2026-09-03, the presenter across the real boundary
+
+*Recorded under GD-10.*
+
+**Built and run.** `packages/agent-tools/src/approvals.ts`: `PendingApprovals` with every clause of
+`REQ-TOOLS-054` (waiting on an unknown id resolves *cancelled*), and `PresenterRegistry` — registrations per
+main window, a 250 ms poll on the channel that carries registration, and the lapse test as THE GAP SINCE THE
+LAST REPLY on the run host's own clock, never a receipt for sequence *N*. **The lapse window is 3,000 ms**:
+ten missed replies, an order of magnitude above the measured 303 ms idle maximum, inside the 22,777 ms lag
+the `ipc-hop-latency` spike says must read as unattended. That is a first figure, not a sizing: the loaded
+case is still unmeasured and **OQ-39 stays open**. Main registers each window on creation and revokes it on
+`closed` (consequence 1), answers each poll at once with the windows it holds, owns the per-window dialog
+queue and nothing else; the dialog is a modal `BrowserWindow` painting the one renderer bundle with
+`role=approval` — never a synchronous native call. The gate's flow is the one this record describes:
+`approval.requested` published before the wait with `brokered` and the configured timeout, or `headless`,
+`timeout_seconds: null` and `unattended_reason: headless-policy` with no wait created at all.
+
+**"Never a silent allow" now has evidence beyond measurement** — the direction this record said the spike
+had not exercised. The gate's tests drive the decision path: an unattended session routes every ask to the
+headless policy and denies; `abort` invokes the registered hook; a presenter that fails discards the
+pending entry and denies with `presenter-error`; approval resolution that raises denies `fail-closed`; a
+lapse settles every waiter `cancelled` and the next reply clears it. In the built app, a run stopped while
+a dialog waited released the waiter first (`REQ-MONITOR-012`) and the decision was audited with source
+`cancelled` and the request id.
+
+**Found — the synchronous-dialog prohibition has a second entrance, and it was walked through.** Main's
+`closed` handler for the dialog read `webContents` of the already-destroyed window. That throw is the
+pitfall the toolchain notes already record; what this record had not stated is its consequence *here*: an
+uncaught exception in main raises the platform's native error box, which is exactly the synchronous modal
+this record forbids, and it blocked the loop and every poll reply — the run completed in the run host while
+main sat wedged. Two corrections: the handler holds the id read up front, and **main now logs uncaught
+exceptions instead of letting the platform present them** (`process.on('uncaughtException')`). The
+prohibition is therefore not only "open every dialog asynchronously"; it is also "let no exception reach
+the platform's own presenter". ADR-0048 and constraint T-31 are the owners of the rule and are told here
+rather than amended.
+
+**One handshake this record did not describe.** The run host cannot request from main, so `present()` posts
+an `approval.present` event and awaits main's `approval.shown` request, bounded at 10 s; a late or absent
+confirmation is a presenter error. Main reports `ok: false` when no main window exists, which is the
+unattended case reached without a lapse.

@@ -105,3 +105,19 @@ which is the only shape that cannot drift.
 A requirement adds a fourth facet — `REQ-TOOLS-001` anticipates growth in *names*, not in facets; or
 plugin tools gain a declared and validated capability contract, which is a product-owner decision
 rather than an architectural one.
+
+## First execution — 2026-09-03, the registry under the first gate
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/agent-tools/src/registry.ts` — the frozen facet table for the eighteen names, the
+alias table, the two classes as literal sets under the consistency test, `grantsOn` / `withholdsOn` (an
+unknown name answers `false` and `true`), the four-stage fold each stage asserted a subset of its input,
+prerequisite removal with stable reason codes, and `resolveToolSet` whose ONE value feeds both the prompt's
+listing and the callable set (`apps/desktop/src/run-host/tools.ts`). The reason code `executor_absent` is this
+build's own addition to `REQ-TOOLS-004`'s enumerated four — a declared name this build registers no executor
+for is removed and logged, which is how `terminal` was removed on every run before ADR-0020 landed and how
+`fetch`, `git_commit`, `artifact_*`, `ask_questions` and the delegation tools read today.
+
+**Found: nothing.** The persona whose tools are declared is a built-in table at the run-host root until
+ADR-0036 loads `agents.yaml` (decision 2 of the plan in `codebase.md`).

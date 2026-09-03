@@ -707,3 +707,32 @@ writes `BEGIN IMMEDIATE`. **The distance between the right reading and the wrong
 
 **(b) Whether the export's document form is tolerable at the caps `REQ-SESSION-133` sets is still not
 measured**, and the commit spike does not touch it. Unchanged.
+
+## First execution — 2026-09-03, the rings under the first gate
+
+*Recorded under GD-10.*
+
+**Built and run:** store v4 (`packages/store/src/schema.ts`) — `permission_audit`, `tool_calls`, `issues`,
+`ring_state`; ONE ring implementation (`dal.ringInsert`) that assigns the next ordinal, runs the insert,
+displaces the oldest when the cap is exceeded and moves the `held` and `dropped` counts, all inside the
+caller's transaction; `REQ-SESSION-133`'s caps as one policy table; the serialised entry stored verbatim with
+the query columns beside it; **UPDATE refused by a trigger on the audit and the issues record**; the
+decision entry's `id` is its ordinal, carried inside the entry (`REQ-TOOLS-079`), and the field inventory is
+validated on the write path (a field outside it is a fault — mechanism 1). Mode-change entries interleave in
+the same ordinal series (verified: a mid-run change at ordinal 1 ahead of the decision at ordinal 2). The
+timeline stays uncapped. No index was declared: every ring read is a primary-key range and the settle names
+its ordinal, which the plan-assertion test in `store.test.ts` checks.
+
+**One reading, recorded because this record's "no update path" and `REQ-EVENTS-072` cannot both be met by
+an insert alone.** `REQ-EVENTS-072` pairs `tool.start` AND `tool.finish` against the tool-call record and
+requires that a run killed between the two "leave a record with no event, never an event with no record".
+A record inserted at finish would leave `tool.start` with no record. So **the tool-call record is written at
+`tool.start` with status `running` and settled EXACTLY ONCE at `tool.finish`**, and the store enforces the
+"once": a trigger refuses any update of a row whose status is not `running`, any update that sets it back to
+`running`, and any change to the identity columns. The audit's "never altered" stays absolute. A call the
+host died inside reads back as `running`, which is `REQ-CHAT-049`'s dead-session case and needs no repair.
+
+**Found: nothing in the ring.** The export of `REQ-SESSION-199` is not built and no exporter object exists
+for any kind (mechanism 2 holds by absence); the DAL has no statement that reads `tool_calls` for anything
+but the diagnostics reader this build does not have yet. Consequence 3's "absent, not failing" writer for a
+call outside every session is not reachable in this build: every call belongs to a run.

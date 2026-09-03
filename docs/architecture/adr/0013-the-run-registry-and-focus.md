@@ -171,3 +171,8 @@ A second prompt while a run is active is refused with "A run is already active."
 
 **Found: nothing.** The registry is a map; what the first execution found belongs to the records of the
 things in it.
+
+**Second execution, 2026-09-03, with approvals in it.** An approval answer is routed by request id across
+every live session (`Sessions.answerApproval`) and reported undeliverable when none waits (`REQ-MONITOR-254`);
+a permission-mode change is addressed to the one session id the sending window resolved (`REQ-MONITOR-254`'s
+other half). Consequence 1 held as written: two policies, one addressing. **Found: nothing.**

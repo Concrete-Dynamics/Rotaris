@@ -139,3 +139,20 @@ required results; see OQ-36. This must be resolved before the classifier is writ
 OQ-36 or OQ-37 resolves; or `REQ-SANDBOX-047` is reopened; or a requirement asks for egress control
 over MCP servers' own network traffic, which nothing currently covers and which this design does not
 reach.
+
+## First execution — 2026-09-03, the classifier only
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/agent-tools/src/egress.ts` — `canonicalizeHost`, `compileHostPattern` /
+`matchHostPattern` (the single leading `*.` over whole labels; any other `*` an error naming the pattern),
+`isLocal` (textual loopback only: `169.254.169.254`, `10.x`, `0.0.0.0` and `::` are remote), `classify` in
+denied → allowed → default order, and the permissive fallback as a real, tested value (consequence 5). The
+fetch rule pair of `REQ-TOOLS-045` is built into the supervised presets on top of it and evaluated against
+the `url` facet — a remote or unparseable URL asks, loopback allows.
+
+**OQ-36 read as `REQ-SANDBOX-006`:** an IPv6 literal canonicalises unbracketed (`http://[::1]:9000/` → `::1`),
+and the test states it. **The `fetch` tool itself is not built**: its policy is read from configuration
+(ADR-0036), which does not exist yet; nothing here opens a connection.
+
+**Found: nothing.**

@@ -1944,7 +1944,7 @@ check costs ~2.8 ms per MB and may not sit on the startup path** (462 ms on a 16
 and summary are index reads at 1–5 ms; the trim is ~35 ms per 2,500 appends; the binding cannot open
 a path over 260 characters unprefixed, which the store's own path never is. **It found the fifth
 defect of consequence 17's pattern**: an index declared for a budgeted axis that the planner never
-used. Consequence 17's estimate is unchanged and its count is now five — **six** with the run loop's, in the next section.
+used. Consequence 17's estimate is unchanged and its count is now five — **six** with the run loop's, in the next section, and **seven** with the terminal's (ADR-0020's marker protocol read the PTY's echo before the shell's frame; recorded there, 2026-09-03).
 
 **Spike 18** (`two-writers-one-store.md`): two compliant writer processes on one store — zero
 `SQLITE_BUSY` in 6,000 contended commits, nothing lost, +12 % at p50, aggregate throughput unchanged,
@@ -1966,7 +1966,7 @@ untouched: the publish-path transaction gained no statement.
 transcript on every whole-session update, which was harmless while only an attach published one and
 emptied a transcript still being written once the run loop's status saves did. Corrected there, with the
 falsified reason kept beside the fix. Every mechanism in this record that has gone from paper to first
-execution has now held a defect no reading caught, six times.
+execution has now held a defect no reading caught, six times — seven with ADR-0020's, the first mechanism of the permission-gate part to run against something real.
 
 ## First execution — 2026-09-03, the restore behind the real run host, and the backup from the Settings view
 

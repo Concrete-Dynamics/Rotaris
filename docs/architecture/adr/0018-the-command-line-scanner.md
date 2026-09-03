@@ -96,3 +96,22 @@ stated: the scanner has one behaviour, versioned by its tests.
 A requirement asks for platform-native tokenisation — a PowerShell-shaped scanner on Windows — which
 `REQ-TOOLS-033`'s "identically on every platform and every backend" currently forbids; or the
 unconfident predicate stops being closed.
+
+## First execution — 2026-09-03
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/agent-tools/src/scanner.ts` — one walk tracking quote and backslash state,
+operators split longest-first with the introducing operator kept, redirection ending the matched stream,
+the closed unconfident predicate, `decompose` never throwing, `tokenizePattern` throwing `REQ-TOOLS-034`'s
+error, a `*`/`?` glob per token with the first token case-folded. Consequence 1's obligation is met in the
+form it asked for: a deterministic 2,000-input fuzz over the operator and quote alphabet asserts never-throws
+and at-least-one-segment, and that a non-blank segment yielding no token fires the escalation matcher.
+`REQ-TOOLS-094`'s catalogue is compiled through the same scanner and tested on the worked examples
+(`date && curl …` settles the line; a bare `curl` and a bare `npx` match; `curling` does not).
+
+**Consequence 2 observed as stated:** `pwsh -Command Get-Date` and `cmd /c dir` classify unconfident and
+therefore ask under the supervised presets — the over-triggering direction. It is stated in the `terminal`
+tool's description as the record asked.
+
+**Found: nothing.**

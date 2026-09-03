@@ -141,3 +141,28 @@ matched case-insensitively before anything else and resolve `allow` with source 
 configuration-to-policy compilation step and per-rule settings validation; or a requirement makes
 evaluation depend on mutable state such as a rate limit or a per-run counter, at which point
 "evaluation is pure" stops being free.
+
+## First execution — 2026-09-03, the first gate
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/agent-tools/src/policy.ts` (build, validate, evaluate, `PolicyContext` with the
+atomic swap, session approvals scanned most-recent-first before the policy, canonical-JSON argument comparison,
+path scope over the seven keys with an injected resolver whose failure is a non-match, the downgrade of
+`REQ-TOOLS-067`) and `gate.ts` (`REQ-TOOLS-175`'s order with both hook slots empty and labelled so). The
+fixed rule ids of `REQ-TOOLS-039/042/043/044/045` are under a snapshot test per preset. Verified in the built
+app: allow by `ask:read-only-tool`, deny by `starter:deny-recursive-delete` with no dialog, approve once,
+approve for the session (the second identical call decided by `session:allow:1` with no dialog), a
+mid-run mode change deciding the very next call.
+
+**One reading, recorded because the requirements leave the order open.** A payload still unreadable or
+schema-invalid after `REQ-TOOLS-032`'s three repairs is returned as the recoverable tool-result error
+BEFORE the permission resolution runs, and no decision is audited for it: a call that cannot be dispatched
+as an ordinary call is not a dispatch, and asking a person to approve arguments the tool would reject is
+a prompt with no purpose. `REQ-TOOLS-011`'s "no ungated dispatch path" is untouched — nothing executes on
+that branch. The evidence record still opens and settles for such a call (status `failed`,
+`failure_kind: invalid_request`), so `tool.start` and `tool.finish` exist for every call the model made.
+
+**Found: nothing in the mechanism.** The one surprise was in the tests, not the code: `REQ-TOOLS-017`'s
+canonical-JSON rule makes `1` and `1.0` compare equal by construction in this runtime, which the test now
+states rather than assumes.

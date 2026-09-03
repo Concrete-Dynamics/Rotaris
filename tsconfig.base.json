@@ -22,6 +22,8 @@
       "@rotaris/kernel": ["./packages/kernel/src/index.ts"],
       "@rotaris/contracts": ["./packages/contracts/src/index.ts"],
       "@rotaris/platform": ["./packages/platform/src/index.ts"],
+      "@rotaris/config": ["./packages/config/src/index.ts"],
+      "@rotaris/hooks": ["./packages/hooks/src/index.ts"],
       "@rotaris/store": ["./packages/store/src/index.ts"],
       "@rotaris/engine": ["./packages/engine/src/index.ts"],
       "@rotaris/agent-tools": ["./packages/agent-tools/src/index.ts"],

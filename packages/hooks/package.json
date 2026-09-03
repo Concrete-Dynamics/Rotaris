@@ -1,0 +1,16 @@
+{
+  "name": "@rotaris/hooks",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Lifecycle hooks (ADR-0015, domain 09): the matcher, the payload builder, the runner, the trust gate and fingerprint, the external import, the policy file, the per-session HookEngine. Lives in the run host; the engine's HookPort and the gate's ToolHooks are filled with it at the root.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/config": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/platform": "workspace:*"
+  }
+}

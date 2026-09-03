@@ -1,0 +1,16 @@
+{
+  "name": "@rotaris/config",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "ADR-0036's configuration loader, first slice: the YAML document tree over a tri-state model and the readers for the hooks section, the playbook overrides and the intent-to-tools mapping. Takes no database handle. Instantiated by the run host and the workspace service.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/platform": "workspace:*",
+    "yaml": "^2.9.0"
+  }
+}

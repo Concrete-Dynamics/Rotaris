@@ -14,8 +14,10 @@
   "dependencies": {
     "@phosphor-icons/web": "2.1.1",
     "@rotaris/agent-tools": "workspace:*",
+    "@rotaris/config": "workspace:*",
     "@rotaris/contracts": "workspace:*",
     "@rotaris/engine": "workspace:*",
+    "@rotaris/hooks": "workspace:*",
     "@rotaris/kernel": "workspace:*",
     "@rotaris/mcp": "workspace:*",
     "@rotaris/model": "workspace:*",

@@ -1,0 +1,21 @@
+packages:
+  - packages/*
+  - apps/*
+  - tools/*
+
+# Which install scripts may run. Electron's downloads the runtime; esbuild's
+# places its binary; better-sqlite3's fetches the prebuild — which ADR-0056
+# rule 1a says is NOT evidence of anything for the packaged app: the desktop
+# build rebuilds and load-proves it itself.
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@types/react-dom@19.2.7'
+
+# One flat node_modules (see .npmrc for why); pnpm 11 reads it from here.
+nodeLinker: hoisted

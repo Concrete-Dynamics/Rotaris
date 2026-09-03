@@ -1,0 +1,18 @@
+{
+  "name": "@rotaris/store",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The workspace store: better-sqlite3 behind one statement-shaped data-access module, schema and migrations, lock rows, resolution by identifier, backup and the corrected restore. ADR-0058, ADR-0005.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/platform": "workspace:*",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
+  }
+}

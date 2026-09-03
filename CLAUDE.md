@@ -61,6 +61,15 @@ Keep a falsified reason beside its replacement; never repair it quietly in the c
 
 **A spike is taken as the first act of building the thing it prices**, not before and not later.
 
+## The codebase
+
+`docs/architecture/codebase.md` is the map: packages follow **process boundaries**, arrows point
+downward only, and `eslint-plugin-boundaries` fails `pnpm lint` on a violation. Composition roots are
+`apps/desktop/src/{main,preload,renderer,run-host,workspace-service}` and are the only places
+`electron` is imported. Engine code takes time from the clock ports, never from globals
+(`rotaris/no-bare-timers`). `pnpm check` runs the symbol generator, typecheck, lint and tests; all four
+must be green before a commit. `pnpm build` then `electron apps/desktop/out/main/index.js` runs the app.
+
 ## Traceability
 
 Implementation work cites the requirement IDs it satisfies. Commits that implement behavior

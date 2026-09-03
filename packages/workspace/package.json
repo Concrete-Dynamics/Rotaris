@@ -1,0 +1,16 @@
+{
+  "name": "@rotaris/workspace",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The workspace service's libraries: YAML configuration, the git invocation helper, checkpoints, the traceability engine, the delivery store, the improvement library. ADR-0036 to ADR-0041.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/platform": "workspace:*",
+    "@rotaris/store": "workspace:*"
+  }
+}

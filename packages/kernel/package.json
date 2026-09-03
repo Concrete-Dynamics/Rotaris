@@ -1,0 +1,11 @@
+{
+  "name": "@rotaris/kernel",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Pure domain core: value types, Result, the clock ports, pure domain functions. No Node, no I/O, no timers.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false
+}

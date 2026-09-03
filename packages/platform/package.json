@@ -1,0 +1,13 @@
+{
+  "name": "@rotaris/platform",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Node-side adapters that are process-agnostic: clocks, per-user directories, the atomic document primitive, liveness, the instance record, the machine identifier, path canonicalisation, spawning. No Electron import.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*"
+  }
+}

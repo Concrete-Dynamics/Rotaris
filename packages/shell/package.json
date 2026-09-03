@@ -1,0 +1,15 @@
+{
+  "name": "@rotaris/shell",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Main-side logic with no Electron import outside src/electron/: the relay, the window registry, notices, preferences, the quit choreography. ADR-0042, ADR-0044, ADR-0048, ADR-0049, ADR-0055.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/platform": "workspace:*"
+  }
+}

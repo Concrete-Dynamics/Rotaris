@@ -1,0 +1,10 @@
+{
+  "name": "@rotaris/symbol-artifact",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Generates the requirement-symbol module from docs/spec (ADR-0040 #4). Shared by the build and the test runner.",
+  "bin": {
+    "rotaris-symbols": "./generate.mjs"
+  }
+}

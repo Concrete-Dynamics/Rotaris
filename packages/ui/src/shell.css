@@ -1,0 +1,73 @@
+/* The shell's own layout classes, on top of the design system's tokens.
+ * Every colour and length is a token (docs/design/README.md §1): cite the
+ * token, never a literal. */
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  height: 100vh;
+  background: var(--rt-bg);
+  color: var(--rt-text);
+  font-family: var(--rt-font-body, 'Manrope', system-ui, sans-serif);
+}
+
+.title-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--rt-space-2, 8px);
+  padding: 0 var(--rt-space-3, 12px);
+  height: 36px;
+  background: var(--rt-chrome);
+  border-bottom: 1px solid var(--rt-border, oklch(30% 0 0));
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.title-bar__name { font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 600; }
+.title-bar__version { color: var(--rt-text-tertiary); font-size: 12px; }
+.title-bar__spacer { flex: 1; }
+.title-bar__workspace { color: var(--rt-text-secondary); font-size: 12px; }
+.brand-mark {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--rt-accent);
+  box-shadow: 4px -2px 0 -3px var(--rt-axis-x-500, var(--rt-wait)), -2px 4px 0 -3px var(--rt-axis-y-500, var(--rt-run));
+}
+
+.notice-slot { min-height: 0; }
+.notice-slot:not(:empty) { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); }
+
+.body { display: grid; grid-template-columns: auto 1fr; min-height: 0; }
+
+.nav-rail {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--rt-space-2, 8px) 0;
+  background: var(--rt-chrome);
+  border-right: 1px solid var(--rt-border, oklch(30% 0 0));
+  /* REQ-SHELL-029: wide enough for "Requirements" at 9 px with no ellipsis; re-derived per theme. */
+  min-width: 76px;
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 6px; margin: 0 6px;
+  border: 0; border-radius: var(--rt-radius-md, 6px);
+  background: transparent; color: var(--rt-text-secondary);
+  cursor: pointer; font: inherit; font-size: 9px; line-height: 1.1; white-space: nowrap;
+}
+.nav-item i { font-size: 17px; line-height: 17px; width: 17px; height: 17px; }
+.nav-item:hover { background: var(--rt-hover); color: var(--rt-text); }
+.nav-item.is-active { background: var(--rt-accent-tint-10); color: var(--rt-accent-300); }
+.nav-item:focus-visible { outline: 2px solid var(--rt-accent-300); outline-offset: -2px; }
+
+.view { overflow: auto; padding: var(--rt-space-5, 24px); }
+.view__empty h1 { margin: 0 0 var(--rt-space-2, 8px); font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 500; }
+.text-secondary { color: var(--rt-text-secondary); }
+.mono { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); }
+
+.status-strip {
+  display: flex; gap: var(--rt-space-4, 16px);
+  height: 24px; align-items: center;
+  padding: 0 var(--rt-space-3, 12px);
+  background: var(--rt-chrome);
+  border-top: 1px solid var(--rt-border, oklch(30% 0 0));
+  color: var(--rt-text-tertiary); font-size: 11px;
+  font-family: var(--rt-font-mono, 'JetBrains Mono', monospace);
+}

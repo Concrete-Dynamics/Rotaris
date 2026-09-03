@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "apps/*/src/**/*.ts",
+    "apps/*/src/**/*.tsx",
+    "apps/*/electron.vite.config.ts",
+    "tools/*/src/**/*.ts",
+    "tools/*/*.ts",
+    "vitest.config.ts",
+    "eslint.config.js"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "**/out"]
+}

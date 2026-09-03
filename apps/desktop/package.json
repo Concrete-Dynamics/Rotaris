@@ -1,0 +1,44 @@
+{
+  "name": "@rotaris/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Rotaris — the one Electron desktop application. Five composition roots: main, preload, renderer, run-host, workspace-service.",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-vite build && electron-builder --config electron-builder.yml --win"
+  },
+  "dependencies": {
+    "@rotaris/agent-tools": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/engine": "workspace:*",
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/mcp": "workspace:*",
+    "@rotaris/model": "workspace:*",
+    "@rotaris/platform": "workspace:*",
+    "@rotaris/release-naming": "workspace:*",
+    "@rotaris/shell": "workspace:*",
+    "@rotaris/store": "workspace:*",
+    "@rotaris/ui": "workspace:*",
+    "@rotaris/ui-core": "workspace:*",
+    "@rotaris/workspace": "workspace:*",
+    "better-sqlite3": "^13.0.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.5.4",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "vite": "^8.2.2"
+  }
+}

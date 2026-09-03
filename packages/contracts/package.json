@@ -1,0 +1,15 @@
+{
+  "name": "@rotaris/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The IPC contract between processes of the one instance: five channels, the command envelope, the control vocabulary, the process protocols. ADR-0044, ADR-0010.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "zod": "^4.5.4"
+  }
+}

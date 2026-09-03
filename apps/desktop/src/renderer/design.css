@@ -1,0 +1,33 @@
+/* The adopted design language, wired in. docs/design/README.md §2: the
+ * language is authoritative; the information architecture is not.
+ *
+ * typography.css is NOT imported whole: its @font-face rules point at files
+ * this repository does not carry under those names (wiring note 1). The
+ * fonts are re-pointed in @rotaris/ui's fonts.css, and the type tokens below
+ * are that file's own :root block, reproduced verbatim so the values stay
+ * the design's. */
+@import '@design/tokens/colors.css';
+@import '@design/tokens/spacing.css';
+@import '@design/tokens/effects.css';
+@import '../../../../packages/ui/src/fonts.css';
+@import '@design/base.css';
+@import '@design/components.css';
+@import '@design/motif.css';
+@import '../../../../packages/ui/src/shell.css';
+
+:root{
+--rt-font-display:'Space Grotesk',system-ui,sans-serif;
+--rt-font-body:'Manrope',system-ui,sans-serif;
+--rt-font-mono:'JetBrains Mono','Cascadia Mono',Menlo,Consolas,monospace;
+/* Three weights, and only three. Hierarchy comes from size, colour and space —
+   never from adding weight. Nothing in the system goes above 500. */
+--rt-weight-display:500;
+--rt-weight-body:400;
+--rt-weight-medium:500;
+
+--rt-text-2xs:10px;--rt-text-xs:11px;--rt-text-sm:12px;--rt-text-base:14px;--rt-text-md:16px;
+--rt-h6:11px;--rt-h5:16px;--rt-h4:20px;--rt-h3:24px;--rt-h2:32px;--rt-h1:44px;
+--rt-tracking-tight:-0.022em;--rt-tracking-wide:0.05em;--rt-tracking-label:0.075em;
+--rt-leading-tight:1.12;--rt-leading-body:1.62;
+}
+html, body, #root { margin: 0; height: 100%; }

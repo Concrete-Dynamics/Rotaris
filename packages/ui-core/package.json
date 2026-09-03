@@ -1,0 +1,15 @@
+{
+  "name": "@rotaris/ui-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Renderer logic with NO React: the replica store, the apply pipeline with the step-0 sequence check, the recycler logic, the caches, the instrumentation registry. Runs in a plain test process. ADR-0043, ADR-0046, ADR-0057.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "zustand": "^5.0.15"
+  }
+}

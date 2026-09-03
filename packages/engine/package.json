@@ -1,0 +1,16 @@
+{
+  "name": "@rotaris/engine",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The run engine: loop, registry, scheduler, session writer, event history, projection owner, the three channels. Lives in the run host. ADR-0008 to ADR-0015, ADR-0043.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/platform": "workspace:*",
+    "@rotaris/store": "workspace:*"
+  }
+}

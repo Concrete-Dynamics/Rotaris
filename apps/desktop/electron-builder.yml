@@ -1,0 +1,37 @@
+# ADR-0054 / ADR-0056 — packaging. Windows only until IC-3 is discharged:
+# the macOS and Linux targets are DELIBERATELY absent, not defaulted, because
+# an artifact for a platform nobody has measured is shipping on an untested
+# platform (implementation-conditions.md, IC-3).
+#
+# Artifact names come from tools/release-naming (REQ-STARTUP-031) and are
+# composed nowhere else; the templates below must match `artifactName(v, 'setup')`.
+# The portable is NOT the tool's `portable` target (refused, ADR-0054 P1); it is
+# assembled by the release pipeline from win-unpacked around our own stub, later.
+appId: dev.rotaris.desktop
+productName: Rotaris
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  # ADR-0058 consequence 1 / ADR-0056 rule 2: native bindings are unpacked.
+  - "**/*.node"
+publish: null
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: "Rotaris-${version}-windows-x64-setup.${ext}"
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: "Rotaris-${version}-windows-x64-setup.${ext}"
+# ADR-0056 rule 1: every native binding is rebuilt from source against the
+# shipped Electron, configured explicitly even where it is the default.
+npmRebuild: true
+buildDependenciesFromSource: true
+# TODO(IC-6): rule 1a — the rebuild's exit status is not evidence; the build
+# must establish that a compiled binary exists, is newer than the rebuild
+# step, and is the file the loader resolves (rule 4's load). Not yet written.

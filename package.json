@@ -1,0 +1,35 @@
+{
+  "name": "rotaris-crw",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Rotaris — one Electron desktop application. Clean-room rewrite.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "symbols": "node tools/symbol-artifact/generate.mjs",
+    "dev": "pnpm --filter @rotaris/desktop dev",
+    "build": "pnpm --filter @rotaris/desktop build",
+    "package": "pnpm --filter @rotaris/desktop package",
+    "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.9.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^4.1.11"
+  }
+}

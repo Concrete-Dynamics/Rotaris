@@ -1,0 +1,14 @@
+{
+  "name": "@rotaris/mcp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The MCP client: the official SDK's protocol layer over our own stdio transport; three connection paths, one launch primitive; the bundled code-intelligence branch. ADR-0033 to ADR-0035.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/platform": "workspace:*"
+  }
+}

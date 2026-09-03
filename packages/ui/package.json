@@ -1,0 +1,22 @@
+{
+  "name": "@rotaris/ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "React components over the adopted design language (docs/design/system) and the seven views of REQ-SHELL-023. ADR-0057, ADR-0048.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/ui-core": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7"
+  }
+}

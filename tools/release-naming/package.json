@@ -1,0 +1,11 @@
+{
+  "name": "@rotaris/release-naming",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The single naming authority for release artifacts (REQ-STARTUP-031), shared by electron-builder, the updater and the portable's assembly step (ADR-0054, ADR-0056).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false
+}

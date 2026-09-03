@@ -278,3 +278,23 @@ architecture. **If the approved design reference introduces a surface fed by dat
 names, the snapshot type must grow rather than a sixth channel appearing** — `REQ-MONITOR-217` makes the
 snapshot the single carrier for non-transcript state, and a sixth channel would need a counter of its
 own or would break the single-counter rule.
+
+## First execution — 2026-09-03, the walking skeleton
+
+*Recorded under GD-10.*
+
+**Built and run:** every renderer with `contextIsolation`, `sandbox`, no `nodeIntegration`; one
+preload exposing one frozen namespace from an explicit method list (`BRIDGE_KEY`); the five channel
+names with zod schemas; the command envelope returning a value rather than throwing. `shell.hello`
+crossed the boundary and painted the version and workspace path it returned.
+
+**Found, in the build rather than the contract:** the sandboxed preload failed to load on the first
+run — *"module not found: child_process"* — because the bundler had inlined the `electron` npm
+package's launcher shim (which requires `child_process`) into the preload. **The sandbox has no such
+module and the failure is total: the bridge is absent and the renderer throws on boot.** The cause and
+fix are ADR-0056's (its default external list is replaced, not merged). This is the isolated-entry
+rule from the other side: a sandboxed preload cannot load a chunk, and it cannot load a Node built-in
+either, so whatever is bundled into it must be pure.
+
+**Not exercised:** the sequence contract end to end (no publisher yet). `@rotaris/ui-core`'s step-0
+check is tested in a plain process against synthetic publications only.

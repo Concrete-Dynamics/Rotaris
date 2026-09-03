@@ -1,0 +1,13 @@
+{
+  "name": "@rotaris/model",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The model boundary: ModelClient and AgentBackend ports, the AI SDK adapter, the provider catalogue, discovery. ADR-0026 to ADR-0032.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/kernel": "workspace:*"
+  }
+}

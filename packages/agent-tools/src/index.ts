@@ -11,3 +11,6 @@ export * from './registry.js';
 export * from './scanner.js';
 export * from './egress.js';
 export * from './policy.js';
+export * from './approvals.js';
+export * from './gate.js';
+export * from './tools/types.js';

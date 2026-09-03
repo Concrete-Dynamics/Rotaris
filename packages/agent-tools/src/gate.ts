@@ -1,0 +1,312 @@
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+import type { MonotonicClock, Timers, WallClock } from '@rotaris/kernel';
+import { APPROVAL_RESOLUTION_SOURCES, denialText, type ApprovalPayload, type HeadlessPolicy, type ToolStatus } from '@rotaris/contracts';
+import type { ApprovalOutcome, PendingApprovals, PresenterPort } from './approvals.js';
+import { argumentSummary, permissionRequest, requestSummary, type DecisionRecord, type PermissionRequest, type PolicyContext } from './policy.js';
+import { META_TOOL_NAMES } from './registry.js';
+import type { Observation, ToolExecutor } from './tools/types.js';
+
+/**
+ * ADR-0017 / REQ-TOOLS-011: the ONE gate. Every dispatch — built-in, plugin, MCP — comes through
+ * `dispatch`, in REQ-TOOLS-175's order: the payload repaired and validated (REQ-TOOLS-032), the
+ * permission resolved (never raises), an `ask` brokered to the approval flow or the headless policy
+ * (ADR-0019), the decision audited whatever it was (REQ-TOOLS-027), *(pre-execution hooks: not built —
+ * the slot is here and empty, ADR-0015)*, execution, *(post-execution hooks: not built)*, the
+ * observation settled into the evidence record with its diagnostics issues (REQ-SESSION-136).
+ * A deny returns REQ-TOOLS-013's exact text with the original call id and never aborts the run.
+ *
+ * The gate knows nothing of the store: `GateSink` is the seam the engine fills with the session writer.
+ */
+export interface ToolCall {
+  readonly callId: string;
+  readonly name: string;
+  /** As the model produced it — a string of JSON, or an already-parsed object. */
+  readonly rawArgs: string | Readonly<Record<string, unknown>> | null;
+  readonly persona: string;
+  readonly agentId: string;
+  readonly agentName: string;
+}
+
+export interface ToolResult {
+  readonly callId: string;
+  readonly name: string;
+  /** Model-visible text. */
+  readonly text: string;
+  readonly isError: boolean;
+  readonly status: Exclude<ToolStatus, 'running'>;
+  readonly durationMs: number;
+  readonly decision: DecisionRecord | null;
+  readonly observation: Observation | null;
+  /** The repaired, validated arguments (empty when the payload could not be read). */
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly label: string;
+}
+
+export interface GateSink {
+  /** ADR-0024: the audit entry; returns its ordinal (the entry identifier) or null when recording failed. */
+  decision(entry: { agent_id: string; persona: string; tool_name: string; decision: string; rule_id: string; source: string; summary: string; reason: string; request_id?: string }): number | null;
+  approvalRequested(payload: { request_id: string; agent_name: string; persona: string; tool_name: string; rule_id: string; summary: string; resolver: 'brokered' | 'headless'; timeout_seconds: number | null; unattended_reason: string }): void;
+  /** REQ-TOOLS-060: the mirror into session state. */
+  pendingChanged(pending: readonly ApprovalPayload[]): void;
+  issue(input: { kind: string; severity: 'warning' | 'error'; actor: string; message: string; evidence_ref: string; metadata: Record<string, unknown> }): void;
+  timeline(name: string, actor: string, message: string, metadata: Record<string, unknown>): void;
+  toolOpen(open: { call_id: string; agent_name: string; tool_name: string; args: Readonly<Record<string, unknown>> }): number | null;
+  toolSettle(ordinal: number, open: { call_id: string; agent_name: string; tool_name: string; args: Readonly<Record<string, unknown>> }, settle: { status: Exclude<ToolStatus, 'running'>; elapsed_ms: number; is_error: boolean; result: string; error?: string | null; outcome_kind?: string; exit_code?: number | null; failure_kind?: string | null; warnings?: readonly string[] }): void;
+  warn(message: string): void;
+}
+
+export interface GateDeps {
+  readonly sessionId: string;
+  readonly workspaceRoot: string;
+  readonly policy: PolicyContext;
+  readonly approvals: PendingApprovals;
+  readonly attended: () => boolean;
+  readonly presenter: PresenterPort | null;
+  readonly headlessPolicy: HeadlessPolicy;
+  /** REQ-TOOLS-065: the session's registered abort hook, when any. */
+  readonly abortHook: (() => void) | null;
+  /** Milliseconds; 0 = wait without limit (REQ-TOOLS-055). */
+  readonly approvalTimeoutMs: number;
+  readonly executors: ReadonlyMap<string, ToolExecutor>;
+  readonly resolvePath: (p: string) => string | null;
+  readonly monotonic: MonotonicClock;
+  readonly wall: WallClock;
+  readonly timers: Timers;
+  readonly sink: GateSink;
+  /** ADR-0019: the monotonic presentation sequence, run-host-wide. */
+  readonly nextSequence: () => number;
+  readonly newRequestId?: () => string;
+}
+
+/** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
+export function completeTruncatedJson(text: string): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') stack.push('}');
+    else if (ch === '[') stack.push(']');
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  let out = text;
+  if (inString) out += '"';
+  // a dangling `"key":` or a trailing comma cannot be completed as a value; drop back to the last complete member
+  out = out.replace(/,\s*$/, '').replace(/("(?:[^"\\]|\\.)*")\s*:\s*$/, '');
+  out = out.replace(/,\s*$/, '');
+  while (stack.length > 0) out += stack.pop();
+  return out;
+}
+
+const ARRAY_FIELDS = ['tasks', 'phases', 'files', 'items', 'test_cases'] as const;
+
+/** REQ-TOOLS-032: the three repairs, before schema validation. Null when nothing readable remains. */
+export function repairPayload(raw: string | Readonly<Record<string, unknown>> | null, isCompletion: boolean): Record<string, unknown> | null {
+  let obj: unknown = null;
+  if (raw === null) return {};
+  if (typeof raw !== 'string') obj = raw;
+  else {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      try {
+        obj = JSON.parse(completeTruncatedJson(raw));
+      } catch {
+        if (isCompletion) return { message: raw.replace(/^\s*\{\s*"message"\s*:\s*"?/, '').replace(/"?\s*\}?\s*$/, '') };
+        return null;
+      }
+    }
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const o = { ...(obj as Record<string, unknown>) };
+  for (const f of ARRAY_FIELDS) if (o[f] !== undefined && !Array.isArray(o[f]) && typeof o[f] === 'object' && o[f] !== null) o[f] = [o[f]];
+  return o;
+}
+
+function defaultLabel(name: string, args: Readonly<Record<string, unknown>>): string {
+  const cmd = args['command'];
+  if (typeof cmd === 'string') return `${name}: $ ${cmd}`;
+  const path = args['path'] ?? args['file_path'] ?? args['pattern'] ?? args['url'];
+  return typeof path === 'string' ? `${name} ${path}` : `${name}(${Object.keys(args).sort().join(', ')})`;
+}
+
+export class Gate {
+  constructor(private readonly deps: GateDeps) {}
+
+  async dispatch(call: ToolCall, signal: AbortSignal): Promise<ToolResult> {
+    const { deps } = this;
+    const started = deps.monotonic.now();
+    const executor = deps.executors.get(call.name) ?? deps.executors.get(call.name.toLowerCase());
+    const isMeta = META_TOOL_NAMES.has(call.name.toLowerCase());
+    const repaired = repairPayload(call.rawArgs, isMeta);
+    const argsForGate: Readonly<Record<string, unknown>> = repaired ?? {};
+    const open = { call_id: call.callId, agent_name: call.agentName, tool_name: call.name, args: argsForGate };
+    const label = executor?.label?.(argsForGate) ?? defaultLabel(call.name, argsForGate);
+    // The evidence record is opened first: tool.start precedes everything else naming this call (REQ-EVENTS-076).
+    const ordinal = deps.sink.toolOpen(open);
+    const finish = (r: Omit<ToolResult, 'durationMs' | 'callId' | 'name' | 'args' | 'label'>, extra: { outcome_kind?: string; exit_code?: number | null; failure_kind?: string | null; warnings?: readonly string[]; error?: string | null } = {}): ToolResult => {
+      const durationMs = deps.monotonic.now() - started;
+      if (ordinal !== null) deps.sink.toolSettle(ordinal, open, { status: r.status, elapsed_ms: durationMs, is_error: r.isError, result: r.text, ...extra });
+      return { ...r, callId: call.callId, name: call.name, durationMs, args: argsForGate, label };
+    };
+
+    // REQ-TOOLS-032: a payload still unreadable or schema-invalid after repair is a recoverable error, not executed.
+    if (!executor) {
+      return finish({ text: `Unknown tool '${call.name}'. The call was not executed; choose one of the tools listed.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
+    }
+    if (repaired === null) {
+      return finish({ text: `The arguments for '${call.name}' could not be read as JSON even after repair. Re-issue the call with a well-formed object.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
+    }
+    const parsed = executor.schema.safeParse(repaired);
+    if (!parsed.success) {
+      const detail = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+      return finish({ text: `The arguments for '${call.name}' do not match its schema (${detail}). Re-issue the call with corrected arguments.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
+    }
+
+    // (1) permission resolution — never raises; an ask is resolved here, so nothing below sees one.
+    const req = permissionRequest(call.name, call.persona, repaired);
+    const attended = deps.attended();
+    let decision = deps.policy.evaluate(req, { attended, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath });
+    let requestId: string | undefined;
+    if (decision.decision === 'ask') {
+      const brokered = await this.broker(call, req, decision, attended);
+      decision = brokered.decision;
+      requestId = brokered.requestId;
+    }
+    const summary = requestSummary(req);
+    const pairing = requestId !== undefined && APPROVAL_RESOLUTION_SOURCES.has(decision.source) ? { request_id: requestId } : {};
+    const auditOrdinal = deps.sink.decision({ agent_id: call.agentId, persona: call.persona, tool_name: call.name, decision: decision.decision, rule_id: decision.ruleId, source: decision.source, summary, reason: decision.reason, ...pairing });
+    if (decision.source === 'user-once' || decision.source === 'user-session') {
+      deps.sink.timeline('permission_approved', call.agentId, `The user approved ${summary}`, { tool: call.name, rule: decision.ruleId, source: decision.source, persona: call.persona });
+    }
+    if (decision.decision === 'deny') {
+      deps.sink.issue({
+        kind: 'permission_denied', severity: 'warning', actor: call.agentId || call.persona,
+        message: `Permission denied for ${summary}: ${decision.reason}`,
+        evidence_ref: auditOrdinal === null ? '' : `permission_audit#${auditOrdinal}`,
+        metadata: { tool: call.name, rule: decision.ruleId, source: decision.source, persona: call.persona },
+      });
+      const text = denialText(decision.ruleId, decision.reason, call.name);
+      return finish({ text, isError: true, status: 'blocked', decision, observation: null }, { error: decision.reason });
+    }
+
+    // (2) pre-execution hooks: not built (ADR-0015). (3) execution.
+    let obs: Observation;
+    try {
+      obs = await executor.execute(parsed.data, {
+        workspaceRoot: deps.workspaceRoot, sessionId: deps.sessionId, agentName: call.agentName, persona: call.persona,
+        monotonic: deps.monotonic, wall: deps.wall, signal, warn: (m) => deps.sink.warn(m),
+      });
+    } catch (cause) {
+      const aborted = signal.aborted;
+      obs = { text: aborted ? `The '${call.name}' call was cancelled before it completed.` : `The '${call.name}' call failed: ${String(cause instanceof Error ? cause.message : cause)}`, isError: true, failureKind: aborted ? 'cancelled' : 'execution_error' };
+    }
+    // (4) post-execution hooks: not built. (5) diagnostics.
+    const status: Exclude<ToolStatus, 'running'> = obs.isError ? 'failed' : 'ok';
+    const result = finish({ text: obs.text, isError: obs.isError, status, decision, observation: obs }, {
+      ...(obs.outcomeKind === undefined ? {} : { outcome_kind: obs.outcomeKind }), ...(obs.exitCode === undefined ? {} : { exit_code: obs.exitCode }),
+      ...(obs.failureKind === undefined ? {} : { failure_kind: obs.failureKind }), ...(obs.warnings === undefined ? {} : { warnings: obs.warnings }),
+      error: obs.isError ? obs.text.slice(0, 500) : null,
+    });
+    this.outcomeIssues(call, obs);
+    return result;
+  }
+
+  /** REQ-SESSION-136's outcome-driven issues, each referencing the tool-call record. */
+  private outcomeIssues(call: ToolCall, obs: Observation): void {
+    const ref = `tool_call_evidence#${call.callId}`;
+    const actor = call.agentId || call.persona;
+    const meta = { tool: call.name, outcome_kind: obs.outcomeKind ?? '', failure_kind: obs.failureKind ?? '' };
+    if (obs.outcomeKind === 'shell_failure') this.deps.sink.issue({ kind: 'terminal_shell_failure', severity: 'error', actor, message: `A terminal command failed (exit ${obs.exitCode ?? '?'}).`, evidence_ref: ref, metadata: meta });
+    else if (obs.outcomeKind === 'suspicious_success') this.deps.sink.issue({ kind: 'terminal_suspicious_success', severity: 'warning', actor, message: `A terminal command exited 0 with output that looks like a failure: ${(obs.warnings ?? []).join('; ')}`, evidence_ref: ref, metadata: meta });
+    else if (obs.outcomeKind === 'timeout' || obs.failureKind === 'timeout') this.deps.sink.issue({ kind: 'terminal_timeout', severity: 'error', actor, message: 'A terminal command exceeded its timeout.', evidence_ref: ref, metadata: meta });
+    else if (obs.isError) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
+  }
+
+  /** ADR-0019's flow: publish, then either the headless policy (no wait at all) or the brokered wait. */
+  private async broker(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, attended: boolean): Promise<{ decision: DecisionRecord; requestId: string }> {
+    const { deps } = this;
+    const requestId = (deps.newRequestId ?? (() => randomUUID().replace(/-/g, '')))();
+    const summary = requestSummary(req);
+    const base = { agent_name: call.agentName, persona: call.persona, tool_name: call.name, rule_id: asked.ruleId, summary };
+    try {
+      if (!attended || !deps.presenter) {
+        // REQ-TOOLS-061/064/065/066: headless — timeout null, no wait occurs.
+        deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
+        return { requestId, decision: this.headless(asked) };
+      }
+      const timeoutS = deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs / 1000 : 0;
+      deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'brokered', timeout_seconds: timeoutS, unattended_reason: '' });
+      const payload: ApprovalPayload = {
+        request_id: requestId, session_id: deps.sessionId, agent_id: call.agentId || call.persona, persona: call.persona, tool_name: call.name,
+        command: req.commandFacet === null ? '' : summary.slice(call.name.length + 2), argument_summary: argumentSummary(req),
+        rule_id: asked.ruleId, reason: asked.reason, sequence: deps.nextSequence(),
+      };
+      const wait = deps.approvals.create(payload, deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs : null);
+      deps.sink.pendingChanged(deps.approvals.pending());
+      const shown = await deps.presenter.present(payload);
+      if (!shown.ok) {
+        // REQ-TOOLS-058: the pending request is discarded and the call denied with source presenter-error.
+        deps.approvals.cancel(requestId);
+        deps.sink.pendingChanged(deps.approvals.pending());
+        return { requestId, decision: { decision: 'deny', ruleId: asked.ruleId, source: 'presenter-error', reason: `${asked.reason} Denied because the approval request could not be shown: ${shown.error}.`, description: asked.description } };
+      }
+      deps.approvals.markShown(requestId);
+      const outcome = await wait;
+      deps.sink.pendingChanged(deps.approvals.pending());
+      deps.presenter.close(requestId);
+      return { requestId, decision: this.outcomeDecision(call, req, asked, outcome) };
+    } catch (cause) {
+      // REQ-TOOLS-026: approval resolution that raises denies with source fail-closed.
+      deps.approvals.cancel(requestId);
+      deps.sink.pendingChanged(deps.approvals.pending());
+      return { requestId, decision: { decision: 'deny', ruleId: asked.ruleId, source: 'fail-closed', reason: `${asked.reason} Denied because approval resolution failed: ${String(cause instanceof Error ? cause.message : cause)}.`, description: asked.description } };
+    }
+  }
+
+  /** REQ-TOOLS-052's five mappings. */
+  private outcomeDecision(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, outcome: ApprovalOutcome): DecisionRecord {
+    switch (outcome.kind) {
+      case 'timed_out':
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'timeout', reason: `${asked.reason} Denied because no answer arrived within ${outcome.afterSeconds} seconds.`, description: asked.description };
+      case 'cancelled':
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'cancelled', reason: `${asked.reason} Denied because the approval request was cancelled.`, description: asked.description };
+      case 'resolved':
+        if (outcome.option === 'once') return { decision: 'allow', ruleId: 'approval:once', source: 'user-once', reason: `The user approved '${call.name}' once (rule '${asked.ruleId}' asked).`, description: asked.description };
+        if (outcome.option === 'session') {
+          const grant = this.deps.policy.grant(req);
+          return { decision: 'allow', ruleId: 'approval:session', source: 'user-session', reason: `The user approved '${call.name}' for this session (rule '${asked.ruleId}' asked); session rule '${grant.id}' added.`, description: grant.description };
+        }
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'user-deny', reason: `${asked.reason} Denied because the user denied the request.`, description: asked.description };
+      default:
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'fail-closed', reason: `${asked.reason} Denied because approval resolver returned no verdict.`, description: asked.description };
+    }
+  }
+
+  /** REQ-TOOLS-065/066. */
+  private headless(asked: DecisionRecord): DecisionRecord {
+    const { deps } = this;
+    if (deps.headlessPolicy === 'abort') {
+      if (deps.abortHook) {
+        deps.abortHook();
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} No approval UI is available in this host, so the request was denied and the headless approval policy aborts the run.`, description: asked.description };
+      }
+      deps.sink.warn(`headless approval policy 'abort' has no abort hook registered for ${deps.sessionId}; degrading to deny (REQ-TOOLS-065)`);
+    }
+    return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} No approval UI is available in this host, so the request was denied.`, description: asked.description };
+  }
+}
+
+/** A minimal executor for tests and for the never-gated meta tools. */
+export function simpleExecutor<A>(name: string, description: string, schema: z.ZodType<A>, execute: ToolExecutor<A>['execute']): ToolExecutor<A> {
+  return { name, description, schema, execute };
+}
+
+export const anySchema = z.record(z.string(), z.unknown());

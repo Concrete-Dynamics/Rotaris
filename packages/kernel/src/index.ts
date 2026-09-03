@@ -4,3 +4,5 @@ export * from './time.js';
 export * from './clock/ports.js';
 export * from './clock/fake.js';
 export * from './generated/requirements.js';
+export * from './redaction.js';
+export * from './similarity.js';

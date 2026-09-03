@@ -1,0 +1,94 @@
+import { z } from 'zod';
+
+/**
+ * The closed vocabularies of the tools and permissions domain, in ONE place (REQ-TOOLS-001, -012,
+ * -028, -041, -047, -051, -056, REQ-MONITOR-105). The engine and agent-tools read them; a surface
+ * renders them and never invents a member.
+ */
+
+/** REQ-TOOLS-001: exactly eighteen public names. */
+export const PUBLIC_TOOL_NAMES = [
+  'ask_questions', 'delegate', 'background_output', 'wait_for_tasks', 'haet', 'haet_edit', 'haet_read', 'read_file',
+  'write_file', 'terminal', 'git_commit', 'todo', 'fetch', 'grep', 'glob', 'artifact_read', 'artifact_list', 'artifact_write',
+] as const;
+export type PublicToolName = (typeof PUBLIC_TOOL_NAMES)[number];
+export const PUBLIC_TOOL_NAME_SET: ReadonlySet<string> = new Set(PUBLIC_TOOL_NAMES);
+
+/** REQ-TOOLS-001: `haet` resolves to the same tool as `haet_edit`. */
+export const TOOL_ALIASES: Readonly<Record<string, PublicToolName>> = Object.freeze({ haet: 'haet_edit' });
+
+/** REQ-TOOLS-012. */
+export const DECISIONS = ['allow', 'ask', 'deny'] as const;
+export type Decision = (typeof DECISIONS)[number];
+
+/** REQ-TOOLS-028: exactly twelve; persisted and streamed, must round-trip. */
+export const DECISION_SOURCES = [
+  'rule', 'session-rule', 'preset', 'builtin', 'fail-closed', 'user-once', 'user-session', 'user-deny',
+  'headless-policy', 'timeout', 'cancelled', 'presenter-error',
+] as const;
+export type DecisionSource = (typeof DECISION_SOURCES)[number];
+
+/** REQ-TOOLS-062: the sources that may claim a request id. */
+export const APPROVAL_RESOLUTION_SOURCES: ReadonlySet<DecisionSource> = new Set<DecisionSource>([
+  'user-once', 'user-session', 'user-deny', 'headless-policy', 'timeout', 'cancelled', 'presenter-error', 'fail-closed',
+]);
+
+/** REQ-MONITOR-105 / REQ-CHAT-046: closed to four; `running` never appears on `tool.finish` (REQ-EVENTS-057). */
+export const TOOL_STATUSES = ['running', 'ok', 'failed', 'blocked'] as const;
+export type ToolStatus = (typeof TOOL_STATUSES)[number];
+
+/** REQ-TOOLS-041/047: exactly three presets, totally ordered by restrictiveness. */
+export const PERMISSION_PRESETS = ['restricted', 'ask', 'autonomous'] as const;
+export type PermissionPreset = (typeof PERMISSION_PRESETS)[number];
+export const PRESET_RANK: Readonly<Record<PermissionPreset, number>> = Object.freeze({ restricted: 0, ask: 1, autonomous: 2 });
+/** REQ-TOOLS-046: the shipped default. */
+export const DEFAULT_PRESET: PermissionPreset = 'ask';
+
+/** REQ-TOOLS-046: empty → default, unknown → strictest with `warned: true`. Never raises. */
+export function resolvePreset(name: string | undefined | null): { preset: PermissionPreset; warned: boolean } {
+  const n = (name ?? '').trim();
+  if (n === '') return { preset: DEFAULT_PRESET, warned: false };
+  if ((PERMISSION_PRESETS as readonly string[]).includes(n)) return { preset: n as PermissionPreset, warned: false };
+  return { preset: 'restricted', warned: true };
+}
+
+/** REQ-TOOLS-047: rank lookup resolves like preset resolution, silently. */
+export function presetRank(name: string | undefined | null): number {
+  return PRESET_RANK[resolvePreset(name).preset];
+}
+
+/** REQ-TOOLS-051: exactly three options. */
+export const APPROVAL_OPTIONS = ['once', 'session', 'deny'] as const;
+export type ApprovalOption = (typeof APPROVAL_OPTIONS)[number];
+
+/** REQ-TOOLS-065. */
+export const HEADLESS_POLICIES = ['deny', 'abort'] as const;
+export type HeadlessPolicy = (typeof HEADLESS_POLICIES)[number];
+
+/** REQ-TOOLS-056: the nine fields, JSON-serialisable in full; `sequence` orders presentation across windows (ADR-0019). */
+export const ApprovalPayloadSchema = z.object({
+  request_id: z.string().min(1),
+  session_id: z.string().min(1),
+  agent_id: z.string(),
+  persona: z.string(),
+  tool_name: z.string(),
+  /** Secret-redacted command facet; empty when the request has none. */
+  command: z.string(),
+  /** REQ-TOOLS-057: empty when the request carries a command. */
+  argument_summary: z.string(),
+  rule_id: z.string(),
+  reason: z.string(),
+  sequence: z.number().int().nonnegative(),
+});
+export type ApprovalPayload = z.infer<typeof ApprovalPayloadSchema>;
+
+export const ApprovalAnswerSchema = z.object({
+  request_id: z.string().min(1),
+  option: z.enum(APPROVAL_OPTIONS),
+});
+export type ApprovalAnswer = z.infer<typeof ApprovalAnswerSchema>;
+
+/** REQ-TOOLS-013: the exact refusal text. */
+export function denialText(ruleId: string, reason: string, toolName: string): string {
+  return `Permission denied by rule '${ruleId}'. ${reason} The '${toolName}' call was not executed. Choose a different approach or ask the user to adjust the permission policy.`;
+}

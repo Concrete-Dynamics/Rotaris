@@ -91,3 +91,18 @@ describe('contracts — process protocol (ADR-0002)', () => {
     expect(r.success).toBe(true);
   });
 });
+
+describe('contracts — tools vocabularies', () => {
+  it('REQ-TOOLS-001/028/041/047: the sets are exactly as fixed and the ranks total', async () => {
+    const t = await import('./tools.js');
+    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(18);
+    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(18);
+    expect(t.DECISION_SOURCES).toHaveLength(12);
+    expect(t.PERMISSION_PRESETS).toEqual(['restricted', 'ask', 'autonomous']);
+    expect(t.resolvePreset('')).toEqual({ preset: 'ask', warned: false });
+    expect(t.resolvePreset('bogus')).toEqual({ preset: 'restricted', warned: true });
+    expect(t.presetRank('autonomous')).toBe(2);
+    expect(t.presetRank(undefined)).toBe(1);
+    expect(t.denialText('r', 'Because.', 'terminal')).toBe("Permission denied by rule 'r'. Because. The 'terminal' call was not executed. Choose a different approach or ask the user to adjust the permission policy.");
+  });
+});

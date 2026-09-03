@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
 import { NavRail } from './NavRail.js';
 import { useShellState } from './shell-state.js';
@@ -8,18 +8,19 @@ import { useShellState } from './shell-state.js';
  * persistent-notice banner slot; the navigation rail beside the active view;
  * status strip. REQ-SHELL-049: Ctrl+1..7 open the seven views in order.
  *
- * This is the walking skeleton's shell: the structure is the
- * specification's, the language is the design system's, and every view
- * body is empty. The views' contents are drawing work against
+ * The structure is the specification's, the language is the design
+ * system's. A view body is supplied by the caller through `views`; a view
+ * without one is empty. The views' contents are drawing work against
  * docs/design/README.md §3.2.
  */
 export interface AppShellProps {
   readonly version: string;
   readonly workspaceLabel: string;
   readonly statusItems: readonly string[];
+  readonly views?: Partial<Record<ViewId, ReactNode>>;
 }
 
-export function AppShell({ version, workspaceLabel, statusItems }: AppShellProps) {
+export function AppShell({ version, workspaceLabel, statusItems, views = {} }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
 
@@ -37,6 +38,7 @@ export function AppShell({ version, workspaceLabel, statusItems }: AppShellProps
   }, [switchView]);
 
   const active = PRIMARY_VIEWS.find((v) => v.id === activeView)!;
+  const body = views[activeView];
 
   return (
     <div className="app-shell" data-view={activeView}>
@@ -51,10 +53,12 @@ export function AppShell({ version, workspaceLabel, statusItems }: AppShellProps
       <div className="body">
         <NavRail items={PRIMARY_VIEWS} active={activeView} onSelect={(id: ViewId) => switchView(id)} />
         <main className="view" aria-label={active.label}>
-          <div className="view__empty">
-            <h1 className="display">{active.label}</h1>
-            <p className="text-secondary">Not drawn yet. Structure from REQ-SHELL-023; language from docs/design/system.</p>
-          </div>
+          {body ?? (
+            <div className="view__empty">
+              <h1 className="display">{active.label}</h1>
+              <p className="text-secondary">Not drawn yet. Structure from REQ-SHELL-023; language from docs/design/system.</p>
+            </div>
+          )}
         </main>
       </div>
       <footer className="status-strip" aria-label="Status">

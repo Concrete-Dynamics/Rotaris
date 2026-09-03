@@ -71,3 +71,19 @@
   color: var(--rt-text-tertiary); font-size: 11px;
   font-family: var(--rt-font-mono, 'JetBrains Mono', monospace);
 }
+
+/* ── Workspace view: transcript + composer (REQ-CHAT-001/-010/-011) ── */
+.view:has(> .workspace) { padding: 0; display: flex; flex-direction: column; }
+.workspace { display: grid; grid-template-rows: minmax(180px, 1fr) auto; height: 100%; min-height: 0; }
+.transcript { overflow: auto; padding: var(--rt-space-4, 16px) var(--rt-space-5, 24px); display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
+.transcript .empty-state { margin: auto; max-width: 420px; width: 100%; }
+.row { display: flex; flex-direction: column; gap: 4px; padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
+.row--user { border-color: var(--rt-accent-tint-14, var(--rt-border)); }
+.row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
+.row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); }
+.row__time { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+.row__body { font-size: var(--rt-text-sm, 13px); color: var(--rt-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); border-top: 1px solid var(--rt-border); background: var(--rt-chrome); }
+.composer__input { min-height: 48px; resize: none; }
+.composer__actions { display: flex; justify-content: flex-end; }
+.composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }

@@ -55,8 +55,9 @@ recording the result in the record whether or not it passed, and **no condition 
 the person doing the work**.
 
 **A mechanism's first execution reports back into the record that decided it**, in place, including
-when it found nothing — standing policy, ruled at the Architecture Gate. Four mechanisms in this
-record have gone from paper to first execution and every one held a defect no reading had caught.
+when it found nothing — standing policy, ruled at the Architecture Gate. Every mechanism in this
+record that has gone from paper to first execution has held a defect no reading had caught (five by
+the count in ADR-0058 consequence 17, plus the build toolchain's three and the relay's one).
 Keep a falsified reason beside its replacement; never repair it quietly in the code that meets it.
 
 **A spike is taken as the first act of building the thing it prices**, not before and not later.

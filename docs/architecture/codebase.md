@@ -39,13 +39,13 @@ kernel     pure: Result, ids, time, the clock ports, generated requirement symbo
 | `@rotaris/kernel` | any | `Result`, branded ids, `Millis`/`Instant`/`Budget`, `MonotonicClock`/`WallClock`/`Timers`, `FakeClock`, `REQ` (generated) | ADR-0006 |
 | `@rotaris/contracts` | any | channel schemas (zod), command envelope, 21 control ops, `PRIMARY_VIEWS`, process protocols, `CONTRACT_SCHEMA_VERSION` | ADR-0010, ADR-0044, REQ-SHELL-023 |
 | `@rotaris/platform` | main, run host, workspace service | clocks, per-user dirs (local-not-roaming), atomic document, liveness probe + lock predicate, machine id, canonical path, instance record + claim, spawn | ADR-0004, ADR-0055, REQ-STARTUP-145, REQ-SESSION-046/051–054 |
-| `@rotaris/store` | run host, workspace service | open (WAL read back, write probe, one canonical spelling), schema + migrations, the DAL, identifier + resolution, backup, the corrected restore | ADR-0058, ADR-0005 |
-| `@rotaris/engine` | run host | `RefusalLease`, `SequenceCounters` today; the loop, registry, writer, projection owner next | ADR-0008–0015, ADR-0043 |
+| `@rotaris/store` | run host, workspace service | open (WAL read back, write probe, one canonical spelling), schema v2 + migrations, the DAL (rows with residency, events with the derived envelope and three declared indexes, the truncation record), identifier + resolution, backup, the corrected restore | ADR-0058, ADR-0005, ADR-0009 |
+| `@rotaris/engine` | run host | `SessionWriter` (one transaction per unit of work, residency release, trim, sticky failure, durable terminal save), the one serialiser and the 23-type catalogue, `ProjectionOwner` (resident rows, the counter, growth tick, attach/reconcile), `Sessions` (the registry), `RefusalLease`; the loop, tools, model and the rest next | ADR-0008, ADR-0009, ADR-0010, ADR-0043, ADR-0013 |
 | `@rotaris/agent-tools` · `model` · `mcp` | run host | port shapes today; executors, gate, terminal, confinement, egress, the AI SDK adapter, the MCP transport next | ADR-0016–0035 |
 | `@rotaris/workspace` | workspace service | git denylist + network set today; config, git helper, checkpoints, traceability, delivery next | ADR-0036–0041 |
 | `@rotaris/shell` | main | `UpdateRelay` (fan-out, order across both channels, message counters), `ProcessLink` (bounded request/reply) | ADR-0044, ADR-0013, ADR-0002 c.11 |
-| `@rotaris/ui-core` | renderer | the replica store with the step-0 sequence check; **no React** | ADR-0043, ADR-0046, ADR-0057 |
-| `@rotaris/ui` | renderer | `AppShell`, `NavRail`, local shell state, the design system wired in | ADR-0048, REQ-SHELL-024–028, -049 |
+| `@rotaris/ui-core` | renderer | the replica store with the step-0 sequence check, the decline, paging older rows; **no React** | ADR-0043, ADR-0046, ADR-0057, REQ-SESSION-161 |
+| `@rotaris/ui` | renderer | `AppShell`, `NavRail`, `WorkspaceView` (transcript rows + composer), local shell state, the design system wired in | ADR-0048, REQ-SHELL-024–028, -049, REQ-CHAT-001–005, -011 |
 | `tools/symbol-artifact` | build + test | generates `kernel/src/generated/requirements.ts` from `docs/spec` | ADR-0040 #4, ADR-0056 |
 | `tools/release-naming` | build | the four artifact names, the one authority | REQ-STARTUP-031 |
 | `tools/eslint-rules` | lint | `no-bare-timers`, `no-electron-outside-roots` | ADR-0006 |
@@ -76,6 +76,13 @@ plain process with no React and the restore run against a fake run host with a c
   `platform/src/machine-id.ts`, `TODO(IC-5)` in `store/src/restore.ts`, `TODO(IC-6)` in
   `apps/desktop/electron-builder.yml`.
 
+## A test reads the plan, not only the time
+
+Spike 8 found an index that was declared, migrated, present and never chosen by the planner; every
+test had passed because none reads a query plan. `store.test.ts` now asserts the plan of each budgeted
+query (`REQ-EVENTS-117`'s axes, `REQ-SESSION-042`'s listing) names its index. Add one for every index
+you declare; a timing alone reads as "slow", not as "dead".
+
 ## What the walking skeleton does, and nothing more
 
 `pnpm build` then `electron apps/desktop/out/main/index.js`:
@@ -89,13 +96,21 @@ plain process with no React and the restore run against a fake run host with a c
 5. a second launch is handed over and exits with no window; a carried workspace is honoured;
 6. a run-host exit is logged and **not** re-forked (ADR-0002).
 
-No run, no transcript, no tool, no model call. Every view body reads "Not drawn yet".
+7. **the first mechanism with behaviour (2026-09-03):** a prompt submitted in the Workspace view's
+   composer starts a session in the run host — session row, lock row, history open, `session.start` —
+   and records the prompt as row 0 (`user`) with its `transcript.row` event in one transaction; the
+   projection owner publishes the snapshot and the increment with one counter; main relays; the
+   replica applies with the step-0 check; the row paints with role `you` and its time. The session
+   stays `idle`: there is no run loop yet, so nothing consumes the prompt.
+
+No run, no tool, no model call. Every view body but Workspace reads "Not drawn yet".
 
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |
 |---|---|---|
-| the session writer + projection owner + one transcript row end to end | `engine`, `store` (DAL), `shell` (relay), `ui-core` | spike 8, spike 18 |
+| ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
+| the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions | `engine`, `model` | ADR-0008 (aggregates, launch audit, summary), ADR-0010's control channel, the wire bus with its 5 s bound |
 | the restore behind a real run host | `workspace`, `apps/desktop/src/workspace-service` | IC-4, IC-5 |
 | the build's load proof | `apps/desktop/electron-builder.yml` + a build script | IC-6 |
 | a terminal save's durability | `engine` (writer) | the power-loss test |

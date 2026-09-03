@@ -3,10 +3,10 @@ import { createReplicaStore } from './index.js';
 
 const session = (seq: number) => ({
   v: 1, sessionId: 's', seq,
-  session: { id: 's', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: 'x', agents: [], pendingApprovals: [], pendingQuestions: [], tokenUsage: { input: 0, output: 0 } },
+  session: { id: 's', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: 'x', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [], tokenUsage: { input: 0, output: 0 } },
 });
 const inc = (seq: number, earliestChanged: number, rows: { index: number; body: string }[]) => ({
-  v: 1, sessionId: 's', seq, earliestChanged, rows: rows.map((r) => ({ ...r, kind: 'text', settled: true })), diffs: [], personas: [],
+  v: 1, sessionId: 's', seq, earliestChanged, rows: rows.map((r) => ({ ...r, kind: 'text', settled: true, at: 't' })), diffs: [], personas: [],
 });
 
 describe('ui-core — the apply pipeline, step 0 (REQ-MONITOR-214, REQ-MONITOR-226, ADR-0046)', () => {
@@ -65,5 +65,30 @@ describe('ui-core — the apply pipeline, step 0 (REQ-MONITOR-214, REQ-MONITOR-2
     store.getState().applySnapshot(session(1));
     expect(store.getState().applyIncrement({ ...inc(2, 0, []), v: 99 })).toBe('refused');
     expect(reconciles).toEqual(['s']);
+  });
+
+  it('REQ-SESSION-161: an increment reaching before the oldest row held is DECLINED - one whole read, rows on display unchanged', () => {
+    const reconciles: string[] = [];
+    const store = createReplicaStore({ requestReconcile: (id) => reconciles.push(id) });
+    const a = store.getState();
+    a.follow('s');
+    a.applySnapshot(session(1));
+    a.applyIncrement(inc(2, 50, [{ index: 50, body: 'r50' }, { index: 51, body: 'r51' }]));
+    expect(a.applyIncrement(inc(3, 10, [{ index: 10, body: 'r10' }]))).toBe('declined');
+    expect(store.getState().rows.map((r) => r.body)).toEqual(['r50', 'r51']);
+    expect(reconciles).toEqual(['s']);
+    // A genuine reset (earliest-changed 0, REQ-MONITOR-229) is not a decline.
+    a.applySnapshot(session(4));
+    expect(a.applyIncrement(inc(5, 0, [{ index: 0, body: 'fresh' }]))).toBe('applied');
+  });
+
+  it('REQ-CHAT-165: an older span is placed above what is held, identical rows, and the top is reported', () => {
+    const store = createReplicaStore({ requestReconcile: () => {} });
+    store.getState().follow('s');
+    store.getState().applySnapshot(session(1));
+    store.getState().applyIncrement(inc(2, 50, [{ index: 50, body: 'r50' }]));
+    store.getState().prependOlder([{ index: 48, kind: 'text', settled: true, body: 'r48', at: 't' }, { index: 49, kind: 'text', settled: true, body: 'r49', at: 't' }], false);
+    expect(store.getState().rows.map((r) => r.index)).toEqual([48, 49, 50]);
+    expect(store.getState().reachedOldest).toBe(false);
   });
 });

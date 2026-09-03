@@ -1932,3 +1932,21 @@ defect, caught because the assertion named the number.
 
 **Not exercised:** the restore behind a *real* run host over the process protocol (the test's run host
 is in-process); IC-4 and IC-5 remain as `TODO` markers at the modules they bind.
+
+## Spikes 8 and 18 — 2026-09-03, taken with the session writer
+
+*Recorded under GD-10 and the spike ruling. Both reports are in `../spikes/`.*
+
+**Spike 8** (`store-schema-and-open-path.md`): the declared indexes cost +37 % / +42 % on the
+publish-path commit and shorten the checkpoint period below 100 commits; the open sequence is ~3 ms
+and `REQ-EVENTS-179`'s probe 0.15 ms; log recovery after a kill is whole and ~11 ms; **an integrity
+check costs ~2.8 ms per MB and may not sit on the startup path** (462 ms on a 167 MB store); listing
+and summary are index reads at 1–5 ms; the trim is ~35 ms per 2,500 appends; the binding cannot open
+a path over 260 characters unprefixed, which the store's own path never is. **It found the fifth
+defect of consequence 17's pattern**: an index declared for a budgeted axis that the planner never
+used. Consequence 17's estimate is unchanged and its count is now five.
+
+**Spike 18** (`two-writers-one-store.md`): two compliant writer processes on one store — zero
+`SQLITE_BUSY` in 6,000 contended commits, nothing lost, +12 % at p50, aggregate throughput unchanged,
+and **one sample of 258 ms** in 6,000, the first this record has seen cross `REQ-MONITOR-222` on a
+compliant path. Rule 4 stands; a third writer is not measured.

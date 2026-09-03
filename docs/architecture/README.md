@@ -2162,15 +2162,15 @@ All of it is in [`open-questions.md`](open-questions.md).
 
 ### The measurements
 
-**Twenty-two numbered spikes: one withdrawn, EIGHT discharged, one discharged for Windows only —
-TWELVE outstanding.** Numbers are stable and never reused; a withdrawn spike keeps its number as a
+**Twenty-two numbered spikes: one withdrawn, TEN discharged, one discharged for Windows only —
+TEN outstanding** *(counts corrected 2026-09-03 when spikes 8 and 18 were taken with the session writer)*. Numbers are stable and never reused; a withdrawn spike keeps its number as a
 tombstone. What matters more than the count is the split in the gate verdict above: **nine have never been
 started, three need a build host that does not exist here, and four sub-cases went unmeasured inside spikes
 that otherwise passed.** *The line this paragraph used to carry — "one (22) is new and load-bearing and has
 never been run in its restore half" — is withdrawn; spike 22 has been run, and what it left behind is a list
 of defects rather than a list of measurements.*
 
-NINE reports exist, all in [`spikes/`](spikes/) — eight for live spikes and one for a withdrawn one:
+ELEVEN reports exist, all in [`spikes/`](spikes/) — ten for live spikes and one for a withdrawn one:
 
 | Report | Spike | What it settled | What it did not |
 |---|---|---|---|
@@ -2183,6 +2183,8 @@ NINE reports exist, all in [`spikes/`](spikes/) — eight for live spikes and on
 | `cached-portable-launch.md` | **20 — discharged; SR-7's gate condition met** | the cached-launch figure, the fast-path check's cost, cache invalidation across an update; that self-update is **rescued** rather than merely preserved by SR-7; **two defects in ADR-0054's own mechanism** — the first two of the four-for-four finding above | `REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice — **not attempted**; clause (d) independently verified; a read-only volume rather than an access-control approximation; the commit's durability discipline; a real download with the platform's reputation check |
 | `presenter-liveness-and-instance-claim.md` | **14 and 16 — 16 discharged and its ADR's rule fired; 14 measured, OQ-39 not closed** | that the liveness poll works and must be **gap-based**; that the exposure is every synchronous native dialog and not the approval dialog; that the run host dies with main and never sees the channel close; that the platform single-instance primitive **fails** `REQ-STARTUP-164` on Windows | **macOS and Linux — zero coverage, on both sides of the decision**; the decision path (no gate, no pending-approval map, no headless policy), so *never a silent allow* is unexercised; sizing the lapse window under product-shaped load; whether every native dialog the product needs has a non-blocking form on every platform; packaged builds |
 
+| `store-schema-and-open-path.md` | **8 — discharged** | the declared indexes' cost on the commit (+37 % p50) and on the checkpoint period (below 100 commits); `REQ-EVENTS-179`'s probe at 0.15 ms; whole log recovery after a kill; that an integrity check (~2.8 ms/MB) may **not** sit on the startup path; listing and summary as index reads; the trim's delete at ~35 ms; **that a declared index the planner never used had passed every test** — the fifth of the finding above | `REQ-TRACE-239`'s board (no table yet); any failure path but the kill; macOS and Linux; Node's long-path behaviour on the identifier file |
+| `two-writers-one-store.md` | **18 — discharged** | two compliant writers on one store lose nothing and cost +12 % at p50; one 258 ms sample in 6,000 | three writers; a reader beside them; the trim under contention |
 | `backup-restore-mechanism.md` | **22 — discharged; the mechanism did not work** | that ADR-0058's restore as written fails **0 of 30**; that a run admitted between the liveness gate and the swap **is destroyed by it**, measured mid-write; that the reversal fails identically wherever the install failed on an occupied name; all three refusal gates including the older-schema case that must **not** refuse; ESC-26's three identifier cases and all five unreadable shapes; **ADR-0005 consequence 11 against its own counterfactual**; the one-rename installation (20 of 20, absent and never mixed); the whole cost curve, store unavailable 64 ms / 144 ms / **1.45 s**, renames flat at 3–5 ms; and ADR-0056's owed Electron-ABI figure, whose answer is that **no rebuild is needed for this binding** | **the corrected mechanism — none of the three fixes has been run**; **the kill-in-the-gap case**; a restore of an artifact read from a network destination; **two concurrent restores of one identifier**; packaging, so the asar-unpack obligation is still untested; any user interface; and **eight defects it found and did not fix** — list A above |
 
 **A note a reader should not have to work out.** Two of the nine measured a design that no longer exists.

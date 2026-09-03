@@ -18,6 +18,11 @@ export type CommandOutcome = z.infer<typeof CommandOutcomeSchema>;
 
 export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shell.hello') }),
+  /** REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`. */
+  z.object({ kind: z.literal('session.start'), prompt: z.string().min(1) }),
+  /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
+  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
+  /** Begin following: every attach starts with a whole-session update (REQ-MONITOR-214). */
   z.object({ kind: z.literal('session.subscribe'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.unsubscribe'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.reconcile'), sessionId: z.string() }),

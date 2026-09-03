@@ -253,3 +253,21 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     for (const d of displaced) expect(existsSync(join(root, d, 'workspace.db'))).toBe(true);
   });
 });
+
+describe('store - a declared index is a claim about a query plan; the plan is asserted (spike 8)', () => {
+  it('every budgeted query names its index in EXPLAIN QUERY PLAN', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000077');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const plan = (sql: string, ...args: unknown[]) => (r.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((p) => p.detail).join(' | ');
+    // REQ-SESSION-042: the listing reads the listing index.
+    expect(plan('SELECT * FROM sessions ORDER BY updated_at DESC')).toContain('sessions_by_updated');
+    // REQ-EVENTS-117's axes (REQ-EVENTS-175: 100 ms): each is an index read, never a scan.
+    expect(plan("SELECT * FROM events WHERE session_id = 's' AND kind = 'tool.start' ORDER BY ordinal")).toContain('events_by_kind');
+    expect(plan("SELECT * FROM events WHERE session_id = 's' AND iteration = 3 ORDER BY ordinal")).toContain('events_by_iteration');
+    expect(plan("SELECT * FROM events WHERE session_id = 's' AND at >= ? AND at <= ? ORDER BY ordinal", 'a', 'b')).toContain('events_by_at');
+    // REQ-SESSION-192: the resident window is read through its partial index.
+    expect(plan("SELECT * FROM transcript_rows WHERE session_id = 's' AND page IS NULL ORDER BY row_index")).toContain('transcript_resident');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+});

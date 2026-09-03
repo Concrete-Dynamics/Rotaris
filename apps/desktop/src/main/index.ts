@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, type CommandOutcome, type ProcessKind, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, type CommandOutcome, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 
@@ -31,6 +31,11 @@ function workspaceFromArgv(argv: readonly string[]): string | undefined {
   // of its own (P-13); a bare path is what a file manager passes.
   const candidate = argv.slice(app.isPackaged ? 1 : 2).find((a) => !a.startsWith('-'));
   return candidate ? canonicalPath(candidate) : undefined;
+}
+
+function refusal(r: ProcessReply, headline: string): CommandOutcome {
+  const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
+  return { ok: false, code: r.kind === 'refused' ? r.code : 'reply.unexpected', headline, detail };
 }
 
 function portOf(child: UtilityProcess): MessagePortLike {
@@ -75,6 +80,7 @@ async function main(): Promise<void> {
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
+  let currentWorkspaceId: string | undefined;
   const openWorkspace = async (root: string): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
     const key = canonicalPath(root);
     let svc = services.get(key);
@@ -89,6 +95,7 @@ async function main(): Promise<void> {
     // W-18: the run host is HANDED the resolved path; it never reads the identifier file.
     const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
     log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${ack.kind}`);
+    if (ack.kind === 'workspace.ack') currentWorkspaceId = opened.workspaceId;
     return { workspaceId: opened.workspaceId, storeFile: opened.storeFile };
   };
 
@@ -96,6 +103,12 @@ async function main(): Promise<void> {
   log(`run host: ${JSON.stringify(rhHello)}`);
 
   const relay = new UpdateRelay();
+  // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
+  runHost.onEvent((e) => {
+    if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
+    else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
+    else if (e.kind === 'log') log(`run host ${e.level}: ${e.message}`);
+  });
   const processes: ProcessKind[] = ['run-host'];
   let currentWorkspace = argvWorkspace ?? '(no workspace)';
 
@@ -116,12 +129,34 @@ async function main(): Promise<void> {
     switch (req.kind) {
       case 'shell.hello':
         return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`) } };
-      case 'session.subscribe':
+      case 'session.start': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
+        const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt }, millis(10_000));
+        if (r.kind !== 'session.started') return refusal(r, 'The session could not be started');
+        return { ok: true, value: { sessionId: r.sessionId } };
+      }
+      case 'session.prompt': {
+        const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt }, millis(10_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
+      }
+      case 'session.subscribe': {
+        // Subscribe the relay FIRST so the attach's snapshot and transcript reach this window.
         relay.subscribe(wcId, req.sessionId);
-        return { ok: true };
+        const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be followed');
+      }
       case 'session.unsubscribe':
         relay.unsubscribe(wcId, req.sessionId);
+        void runHost.request({ kind: 'session.detach', sessionId: req.sessionId }, millis(5_000)).catch(() => undefined);
         return { ok: true };
+      case 'session.reconcile': {
+        const r = await runHost.request({ kind: 'session.reconcile', sessionId: req.sessionId }, millis(5_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be re-read');
+      }
+      case 'session.pageOlder': {
+        const r = await runHost.request({ kind: 'session.pageOlder', sessionId: req.sessionId, beforeIndex: req.beforeIndex }, millis(5_000));
+        return r.kind === 'session.page' ? { ok: true, value: { rows: r.rows, oldest: r.oldest } } : refusal(r, 'Older messages could not be loaded');
+      }
       default:
         return { ok: false, code: 'command.unimplemented', headline: `${req.kind} is not built yet` };
     }
@@ -148,7 +183,25 @@ async function main(): Promise<void> {
   const capture = process.env['ROTARIS_CAPTURE_PNG'];
   if (capture) {
     const { writeFileSync } = await import('node:fs');
-    clocks.timers.after(millis(1_500), async () => {
+    const prompt = process.env['ROTARIS_CAPTURE_PROMPT'];
+    if (prompt) {
+      // Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L focuses the
+      // composer (REQ-CHAT-002), the text is typed, Enter submits (REQ-CHAT-001).
+      clocks.timers.after(millis(800), () => {
+        const wc = win.webContents;
+        wc.sendInputEvent({ type: 'keyDown', keyCode: '2', modifiers: ['control'] });
+        wc.sendInputEvent({ type: 'keyUp', keyCode: '2', modifiers: ['control'] });
+        clocks.timers.after(millis(200), () => {
+          wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] });
+          wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] });
+          for (const ch of prompt) wc.sendInputEvent({ type: 'char', keyCode: ch });
+          wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+          wc.sendInputEvent({ type: 'char', keyCode: 'Return' });
+          wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+        });
+      });
+    }
+    clocks.timers.after(millis(prompt ? 3_000 : 1_500), async () => {
       const img = await win.webContents.capturePage();
       writeFileSync(capture, img.toPNG());
       log(`captured ${capture}`);

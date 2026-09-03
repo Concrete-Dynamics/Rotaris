@@ -17,7 +17,7 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
  * Structured clone, not JSON strings: rows are plain objects, no class
  * instances, no functions. Nothing here may carry a credential value or any
  * session content bound for a diagnostics file (ADR-0030, REQ-STARTUP-134);
- * `channels.test.ts` asserts that over every schema.
+ * `contracts.test.ts` asserts that over every schema.
  */
 
 export const CHANNEL = {
@@ -33,12 +33,15 @@ const schemaVersion = z.literal(CONTRACT_SCHEMA_VERSION);
 const sessionId = z.string().min(1);
 const seq = z.number().int().positive();
 
-/** A transcript row as it travels. The full row vocabulary is domain 03's; the skeleton fixes the envelope. */
+/** A transcript row as it travels. The full row vocabulary is domain 03's; this fixes the envelope. */
 export const TranscriptRowSchema = z.object({
   index: z.number().int().nonnegative(),
+  /** `user` for the row REQ-CHAT-011 appends on submission; the rest of the vocabulary lands with the run loop. */
   kind: z.string().min(1),
   settled: z.boolean(),
   body: z.string(),
+  /** ISO-8601 UTC instant the row was recorded (REQ-CHAT-011 formats it HH:MM:SS). */
+  at: z.string(),
 });
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 
@@ -54,22 +57,39 @@ export const TranscriptIncrementSchema = z.object({
 });
 export type TranscriptIncrement = z.infer<typeof TranscriptIncrementSchema>;
 
+/**
+ * The session record as a surface may display it. The whole-session update's payload is
+ * DERIVED from this type (ADR-0010, ADR-0043 consequence 4) so that adding a field to the
+ * record is adding it to the payload by definition (REQ-MONITOR-217).
+ */
+export const SessionRecordSchema = z.object({
+  id: sessionId,
+  executionStatus: z.string(),
+  workspaceRoot: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  /** REQ-EVENTS-087: whether the history has been brought into existence. */
+  historyOpen: z.boolean(),
+  /** REQ-EVENTS-092: the four facts; absence reads as not truncated with zero drops. */
+  truncation: z.object({
+    truncated: z.boolean(),
+    droppedCount: z.number().int().nonnegative(),
+    cap: z.number().int().nullable(),
+    lastTrimAt: z.string().nullable(),
+  }),
+  agents: z.array(z.object({ id: z.string(), state: z.string(), depth: z.number().int() })),
+  pendingApprovals: z.array(z.object({ requestId: z.string(), tool: z.string() })),
+  pendingQuestions: z.array(z.object({ requestId: z.string(), prompt: z.string() })),
+  tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
+});
+export type SessionRecord = z.infer<typeof SessionRecordSchema>;
+
 /** The whole-session update: every displayable field, bounded collections in full (REQ-MONITOR-216/217). */
 export const SessionSnapshotSchema = z.object({
   v: schemaVersion,
   sessionId,
   seq,
-  session: z.object({
-    id: sessionId,
-    executionStatus: z.string(),
-    workspaceRoot: z.string(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-    agents: z.array(z.object({ id: z.string(), state: z.string(), depth: z.number().int() })),
-    pendingApprovals: z.array(z.object({ requestId: z.string(), tool: z.string() })),
-    pendingQuestions: z.array(z.object({ requestId: z.string(), prompt: z.string() })),
-    tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
-  }),
+  session: SessionRecordSchema,
 });
 export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
 
@@ -105,3 +125,4 @@ export const CHANNEL_SCHEMAS = {
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */
 export const SEQUENCED_CHANNELS = [CHANNEL.transcriptIncrement, CHANNEL.sessionSnapshot] as const;
+export type SequencedChannel = (typeof SEQUENCED_CHANNELS)[number];

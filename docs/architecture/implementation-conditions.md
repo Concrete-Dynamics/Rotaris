@@ -265,8 +265,12 @@ them is not promoting them to conditions:
   integrity check on the startup path, long-path behaviour, and the cost of `REQ-EVENTS-179`'s write probe.
   Spike 21 measured a schema with no indexes beyond two primary keys and one listing index, so
   `REQ-SESSION-042`'s listing budget and `REQ-TRACE-239`'s board budget are unmeasured against anything real.
+  **Taken 2026-09-03 with the session writer** — `spikes/store-schema-and-open-path.md`. It found a
+  declared index the planner never used, and it settled the integrity check *off* the startup path.
+  `REQ-TRACE-239`'s board remains unmeasured: no board table exists yet.
 - **Spike 18** — two run hosts on one store, which `REQ-TOOLS-089` and `REQ-SANDBOX-038` permit and which no
   spike has measured; spike 21 measured only run-host-against-workspace-service.
+  **Taken 2026-09-03** — `spikes/two-writers-one-store.md`. Nothing lost, +12 % at p50, one 258 ms sample.
 - **The power-loss test** — OQ-12's outstanding half, and now the **sole** stated ground for forcing the
   stronger durability setting on a terminal save. No spike has performed one, and it is the only route to an
   absent store directory that the restore's corrections do not close.

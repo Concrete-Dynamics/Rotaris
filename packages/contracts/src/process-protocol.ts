@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
+import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -8,7 +9,9 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
  * consequence 11: every acknowledgement is bounded, expiry refuses).
  *
  * Main → run host, main → workspace service: `Request`. Reverse: `Reply`
- * or an unsolicited `Event`.
+ * or an unsolicited `Event`. A publication on either update channel is an
+ * unsolicited event from the run host, which main RELAYS unchanged
+ * (ADR-0044): the sequence number is already on it.
  */
 const v = z.literal(CONTRACT_SCHEMA_VERSION);
 const id = z.number().int().nonnegative();
@@ -27,6 +30,14 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.renewLease'), workspaceId: z.string(), leaseMs: z.number().int().positive() }),
   z.object({ kind: z.literal('workspace.closeStore'), workspaceId: z.string() }),
   z.object({ kind: z.literal('workspace.release'), workspaceId: z.string() }),
+  /** REQ-CHAT-011 / REQ-SESSION-089: create the session, take its lock, open its history, record row 0. */
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().min(1) }),
+  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
+  /** A surface begins following: snapshot first, then the resident transcript (REQ-MONITOR-214, REQ-SESSION-161). */
+  z.object({ kind: z.literal('session.attach'), sessionId: z.string() }),
+  z.object({ kind: z.literal('session.detach'), sessionId: z.string() }),
+  z.object({ kind: z.literal('session.reconcile'), sessionId: z.string() }),
+  z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -53,6 +64,9 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('pong') }),
   z.object({ kind: z.literal('workspace.opened'), workspaceId: z.string(), storeFile: z.string(), schemaVersion: z.number().int() }),
   z.object({ kind: z.literal('workspace.ack'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('session.started'), sessionId: z.string() }),
+  /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */
+  z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
 ]);
@@ -65,6 +79,9 @@ export type ProcessReplyEnvelope = z.infer<typeof ProcessReplyEnvelopeSchema>;
 export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ready'), process: ProcessKindSchema, pid: z.number().int() }),
   z.object({ kind: z.literal('log'), level: z.enum(['debug', 'info', 'warn', 'error']), message: z.string() }),
+  /** A publication, already stamped by the projection owner. Main relays; it adds nothing (ADR-0043 #2). */
+  z.object({ kind: z.literal('publish.increment'), payload: TranscriptIncrementSchema }),
+  z.object({ kind: z.literal('publish.snapshot'), payload: SessionSnapshotSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

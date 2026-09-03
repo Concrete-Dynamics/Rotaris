@@ -19,9 +19,13 @@ import { CONTRACT_SCHEMA_VERSION, type SessionSnapshot, type TranscriptIncrement
  *  - while a reconcile is in flight, publications are DROPPED, not queued.
  *  - a schema version this build does not understand takes the gap path.
  *
+ * REQ-SESSION-161: an increment whose earliest-changed index falls before the
+ * oldest row this surface holds from its last whole read is DECLINED — it
+ * costs one further whole read and leaves the rows on display unchanged.
+ *
  * Written against the vanilla store; imports nothing from React.
  */
-export type ApplyClass = 'applied' | 'reset' | 'superseded' | 'refused' | 'dropped' | 'foreign';
+export type ApplyClass = 'applied' | 'reset' | 'superseded' | 'refused' | 'dropped' | 'foreign' | 'declined';
 
 export interface ReplicaState {
   readonly sessionId: string | null;
@@ -30,6 +34,8 @@ export interface ReplicaState {
   readonly reconciling: boolean;
   readonly session: SessionSnapshot['session'] | null;
   readonly rows: readonly TranscriptRow[];
+  /** REQ-CHAT-165: whether the first recorded row is among those held (paging has reached the top). */
+  readonly reachedOldest: boolean;
   readonly counters: Readonly<Record<ApplyClass, number>>;
 }
 
@@ -38,22 +44,30 @@ export interface ReplicaActions {
   follow(sessionId: string | null): void;
   applySnapshot(p: unknown): ApplyClass;
   applyIncrement(p: unknown): ApplyClass;
+  /** REQ-CHAT-165: a span older than what is held, placed above it; rows identical to those released. */
+  prependOlder(rows: readonly TranscriptRow[], oldest: boolean): void;
   /** The reconcile response has landed (it arrives as ordinary traffic); resume consuming. */
   reconcileSettled(): void;
 }
 
 export type ReplicaStore = StoreApi<ReplicaState & ReplicaActions>;
 
-const zero = (): Record<ApplyClass, number> => ({ applied: 0, reset: 0, superseded: 0, refused: 0, dropped: 0, foreign: 0 });
+const zero = (): Record<ApplyClass, number> => ({ applied: 0, reset: 0, superseded: 0, refused: 0, dropped: 0, foreign: 0, declined: 0 });
 
 export interface ReplicaDeps {
-  /** Called on a gap; must request a whole read (REQ-MONITOR-226). No timer sits behind it. */
+  /** Called on a gap or a decline; must request a whole read (REQ-MONITOR-226). No timer sits behind it. */
   readonly requestReconcile: (sessionId: string) => void;
   readonly onDiagnostic?: (message: string) => void;
 }
 
 function bump(c: Readonly<Record<ApplyClass, number>>, k: ApplyClass): Record<ApplyClass, number> {
   return { ...c, [k]: c[k] + 1 };
+}
+
+/** REQ-EVENTS-052: upsert by index, never append; rows from `earliestChanged` onward are the update's. */
+export function projectIncrement(held: readonly TranscriptRow[], earliestChanged: number, rows: readonly TranscriptRow[]): TranscriptRow[] {
+  const kept = held.filter((r) => r.index < earliestChanged);
+  return [...kept, ...[...rows].sort((a, b) => a.index - b.index)];
 }
 
 export function createReplicaStore(deps: ReplicaDeps): ReplicaStore {
@@ -63,27 +77,25 @@ export function createReplicaStore(deps: ReplicaDeps): ReplicaStore {
     reconciling: false,
     session: null,
     rows: [],
+    reachedOldest: false,
     counters: zero(),
 
     follow(sessionId) {
-      set({ sessionId, expect: null, reconciling: false, session: null, rows: [] });
+      set({ sessionId, expect: null, reconciling: false, session: null, rows: [], reachedOldest: false });
     },
 
     applySnapshot(raw) {
       const s = get();
       const p = raw as SessionSnapshot;
       if (!p || p.sessionId !== s.sessionId) { set({ counters: bump(s.counters, 'foreign') }); return 'foreign'; }
-      if (s.reconciling) {
-        // The reconcile response is a snapshot; anything else while reconciling is dropped.
-        // The response is recognised by carrying a number at or above the expectation-to-be.
-      }
       if (p.v !== CONTRACT_SCHEMA_VERSION) {
         deps.onDiagnostic?.(`snapshot with unknown schema version ${String(p.v)}`);
         set({ counters: bump(s.counters, 'refused') });
         return 'refused';
       }
-      // A whole-session update always SETS the expectation and replaces the session.
-      set({ expect: p.seq + 1, session: p.session, reconciling: false, counters: bump(s.counters, 'reset') });
+      // A whole-session update always SETS the expectation and replaces the session. The transcript is
+      // re-delivered by the increment that follows it (REQ-SESSION-161), so it is cleared here.
+      set({ expect: p.seq + 1, session: p.session, rows: [], reachedOldest: false, reconciling: false, counters: bump(s.counters, 'reset') });
       return 'reset';
     },
 
@@ -100,10 +112,23 @@ export function createReplicaStore(deps: ReplicaDeps): ReplicaStore {
         return 'refused';
       }
       if (p.seq < s.expect) { set({ counters: bump(s.counters, 'superseded') }); return 'superseded'; }
-      // Rows before earliestChanged are untouched; from it onward the update's rows govern (REQ-MONITOR-214).
-      const kept = s.rows.filter((r) => r.index < p.earliestChanged);
-      set({ expect: p.seq + 1, rows: [...kept, ...p.rows], counters: bump(s.counters, 'applied') });
+      const oldestHeld = s.rows.length === 0 ? null : s.rows[0]!.index;
+      if (oldestHeld !== null && p.earliestChanged < oldestHeld && p.earliestChanged !== 0) {
+        // REQ-SESSION-161 / REQ-CHAT-052: decline rather than fit; the rows on display are unchanged.
+        deps.onDiagnostic?.(`declined increment on ${p.sessionId}: earliest-changed ${p.earliestChanged} precedes oldest held ${oldestHeld}`);
+        set({ reconciling: true, expect: p.seq + 1, counters: bump(s.counters, 'declined') });
+        deps.requestReconcile(p.sessionId);
+        return 'declined';
+      }
+      set({ expect: p.seq + 1, rows: projectIncrement(s.rows, p.earliestChanged, p.rows), counters: bump(s.counters, 'applied') });
       return 'applied';
+    },
+
+    prependOlder(rows, oldest) {
+      const s = get();
+      const have = new Set(s.rows.map((r) => r.index));
+      const fresh = rows.filter((r) => !have.has(r.index));
+      set({ rows: [...fresh, ...s.rows].sort((a, b) => a.index - b.index), reachedOldest: oldest });
     },
 
     reconcileSettled() {

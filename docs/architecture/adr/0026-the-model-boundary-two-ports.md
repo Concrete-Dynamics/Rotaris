@@ -139,3 +139,20 @@ OQ-17 resolves such that the `claude-code` provider is dropped, or is reduced to
 carrying a subscription token — in which case the second backend disappears and alternative A becomes
 correct. Also revisit if a third backend is proposed: two is justifiable, three is a plugin surface
 needing its own decision.
+
+## First execution — 2026-09-03, the two ports
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/model/src/ports.ts` — `ModelClient` as the streaming call (text, reasoning,
+tool-call, finish, usage; image parts in; dialect per model; thinking level with no `auto`; abort signal
+and timeout; retry count; an error carrying status, provider message and a **transient** fact decided on
+the status so `REQ-ORCH-092` never pattern-matches prose; a credential resolver invoked inside the request
+path), and `AgentBackend` owning a turn with `ownsTheLoop`. The default backend runs one call over the
+client with the engine driving the loop. Every engine test runs the loop against a scripted client with
+the controlled clock; the application runs the AI SDK adapter (ADR-0027) or, for verification, a scripted
+client selected by an environment variable.
+
+**Found: nothing in this record.** The second backend (`claude-code`) is not built and OQ-17 is where it
+was. The conformance suite of consequence 1 has one backend to run against and does not yet exist as a
+parameterised suite.

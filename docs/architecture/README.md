@@ -2163,14 +2163,14 @@ All of it is in [`open-questions.md`](open-questions.md).
 ### The measurements
 
 **Twenty-two numbered spikes: one withdrawn, TEN discharged, one discharged for Windows only —
-TEN outstanding** *(counts corrected 2026-09-03 when spikes 8 and 18 were taken with the session writer)*. Numbers are stable and never reused; a withdrawn spike keeps its number as a
+TEN outstanding** *(counts corrected 2026-09-03 when spikes 8 and 18 were taken with the session writer; spike 6 was taken in its structural half with the run loop the same day and its live half is owed, so it stays counted as outstanding)*. Numbers are stable and never reused; a withdrawn spike keeps its number as a
 tombstone. What matters more than the count is the split in the gate verdict above: **nine have never been
 started, three need a build host that does not exist here, and four sub-cases went unmeasured inside spikes
 that otherwise passed.** *The line this paragraph used to carry — "one (22) is new and load-bearing and has
 never been run in its restore half" — is withdrawn; spike 22 has been run, and what it left behind is a list
 of defects rather than a list of measurements.*
 
-ELEVEN reports exist, all in [`spikes/`](spikes/) — ten for live spikes and one for a withdrawn one:
+TWELVE reports exist, all in [`spikes/`](spikes/) — eleven for live spikes and one for a withdrawn one:
 
 | Report | Spike | What it settled | What it did not |
 |---|---|---|---|
@@ -2185,6 +2185,7 @@ ELEVEN reports exist, all in [`spikes/`](spikes/) — ten for live spikes and on
 
 | `store-schema-and-open-path.md` | **8 — discharged** | the declared indexes' cost on the commit (+37 % p50) and on the checkpoint period (below 100 commits); `REQ-EVENTS-179`'s probe at 0.15 ms; whole log recovery after a kill; that an integrity check (~2.8 ms/MB) may **not** sit on the startup path; listing and summary as index reads; the trim's delete at ~35 ms; **that a declared index the planner never used had passed every test** — the fifth of the finding above | `REQ-TRACE-239`'s board (no table yet); any failure path but the kill; macOS and Linux; Node's long-path behaviour on the identifier file |
 | `two-writers-one-store.md` | **18 — discharged** | two compliant writers on one store lose nothing and cost +12 % at p50; one 258 ms sample in 6,000 | three writers; a reader beside them; the trim under contention |
+| `responses-dialect.md` | **6 — taken, structural half; live half owed** | both dialects reach their paths under one arbitrary base URL through the pinned SDK; the credential resolved per request and the headers arrive; the log never sees the bearer; usage, finish, deltas, a 401's body and an abort map across the port; that a fake `fetch` which ignores the abort signal reads as an adapter defect | a real responses endpoint — stream shape, latency, usage, error bodies; ADR-0027's fallback stays priced |
 | `backup-restore-mechanism.md` | **22 — discharged; the mechanism did not work** | that ADR-0058's restore as written fails **0 of 30**; that a run admitted between the liveness gate and the swap **is destroyed by it**, measured mid-write; that the reversal fails identically wherever the install failed on an occupied name; all three refusal gates including the older-schema case that must **not** refuse; ESC-26's three identifier cases and all five unreadable shapes; **ADR-0005 consequence 11 against its own counterfactual**; the one-rename installation (20 of 20, absent and never mixed); the whole cost curve, store unavailable 64 ms / 144 ms / **1.45 s**, renames flat at 3–5 ms; and ADR-0056's owed Electron-ABI figure, whose answer is that **no rebuild is needed for this binding** | **the corrected mechanism — none of the three fixes has been run**; **the kill-in-the-gap case**; a restore of an artifact read from a network destination; **two concurrent restores of one identifier**; packaging, so the asar-unpack obligation is still untested; any user interface; and **eight defects it found and did not fix** — list A above |
 
 **A note a reader should not have to work out.** Two of the nine measured a design that no longer exists.
@@ -2199,12 +2200,11 @@ platform keys of 17. ***The "new, load-bearing and never run" group is now EMPTY
 and what it left behind is seven uncorrected defects in list A rather than a spike in this list.
 **Genuinely not started:** 2 (Windows access-control
 read-back), 3 (tool-server negotiation over our own transport, on which ESC-12 partly turns), 4 (console
-suppression), 5 (the reserved-token branch), 6 (the Responses dialect), 7 (the board projection crossing),
-8 (store query latency against **declared** indexes, plus store open, log recovery, an integrity check on
-the startup path, and long-path behaviour — and now also the cost of `REQ-EVENTS-179`'s write probe), 11
-(parse-cache behaviour), 13 (forced synchronous commits at recycler-pool scale), 15 (echo latency), and 18
-(two writers on the one store; spike 21 measured run-host-against-workspace-service and **not** two run
-hosts, which `REQ-TOOLS-089` and `REQ-SANDBOX-038` permit).
+suppression), 5 (the reserved-token branch), 7 (the board projection crossing), 11 (parse-cache
+behaviour), 13 (forced synchronous commits at recycler-pool scale) and 15 (echo latency). *Corrected
+2026-09-03: 8 and 18 were taken with the session writer and are discharged; 6 was taken in its structural
+half with the run loop and its live half is owed — the three had been left in this list after their
+reports were written.*
 
 **FOUR sub-cases are owed inside spikes that passed, and they are listed here rather than folded into the
 parents**, because a sub-case absorbed into a discharged spike is a gap nobody can see: `REQ-STARTUP-165`

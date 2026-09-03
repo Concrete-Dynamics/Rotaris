@@ -16,6 +16,9 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@types/react-dom@19.2.7'
+  - '@ai-sdk/gateway@4.0.74'
+  - '@ai-sdk/openai@4.0.58'
+  - ai@7.0.92
 
 # One flat node_modules (see .npmrc for why); pnpm 11 reads it from here.
 nodeLinker: hoisted

@@ -180,3 +180,23 @@ being a defence and the quit path needs main off the traffic path altogether —
 ADR-0043 and ADR-0044 already name as the remedy. **Or** the launch-during-quit case of consequence 5
 is answered in a way that requires the instance to keep serving handovers while shutting down, which
 would make the quit path hold the single-instance record rather than release it at exit.
+
+## First execution — 2026-09-03, the stop request, the deadline and the teardown pipeline
+
+*Recorded under GD-10.*
+
+**Built and run:** `StopRequest` as decided — observable, never thrown, sticky (a listener wired after the
+request is replayed at once; a request before the loop exists skips the agent runtime, `REQ-SESSION-091`),
+a second request able only to raise `forced`. On request the in-flight model call's abort signal fires and
+**one `Budget` of 30 s** is armed from the monotonic clock; on expiry the request is re-raised forced. With
+no tools in flight the graceful stop is the abort of the stream, so the deadline never fires in practice;
+the test proves it is armed and that it fires the force by itself at 30 s. Teardown is `REQ-SESSION-094`'s
+pipeline under a guard: a step that throws is logged and the pipeline continues; tested with an
+iteration that raised and a teardown step made to throw, and the lock was still released and the pair
+still recorded. Shutdown asks every run to stop before waiting on any (`REQ-MONITOR-255`) and the run
+host's reply to main's bounded `shutdown` follows their terminal results, which is what lets main hold
+process exit until the run has reported (`REQ-MONITOR-131`).
+
+**Found: nothing in this record.** Rule 3's shared-fate case (a wedged main) is not reachable at this load.
+**Not exercised:** the second sweep (nothing to sweep); the workspace service's two waiting policies; the
+force-exit backstop from main's side; consequence 5's launch-during-quit.

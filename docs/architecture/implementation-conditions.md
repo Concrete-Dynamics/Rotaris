@@ -271,6 +271,11 @@ them is not promoting them to conditions:
 - **Spike 18** — two run hosts on one store, which `REQ-TOOLS-089` and `REQ-SANDBOX-038` permit and which no
   spike has measured; spike 21 measured only run-host-against-workspace-service.
   **Taken 2026-09-03** — `spikes/two-writers-one-store.md`. Nothing lost, +12 % at p50, one 258 ms sample.
+- **Spike 6** — the Responses dialect through the AI SDK against a non-vendor base URL with custom headers
+  (ADR-0027 consequence 2). **Taken 2026-09-03 in its structural half with the adapter** —
+  `spikes/responses-dialect.md`: both dialects under one base URL, the credential per request, headers,
+  errors and abort all held against a fake `fetch`. **The live half is owed**: no endpoint exists on the build
+  machine; the harness is gated on one the owner supplies.
 - **The power-loss test** — OQ-12's outstanding half, and now the **sole** stated ground for forcing the
   stronger durability setting on a terminal save. No spike has performed one, and it is the only route to an
   absent store directory that the restore's corrections do not close.

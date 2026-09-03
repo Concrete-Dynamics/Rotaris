@@ -347,3 +347,29 @@ one.
 
 **Not exercised:** several windows on one session; a hidden window's unsubscribe (`REQ-SHELL-151`);
 the subscriber-queue drop of point 7; the two diagnostics counters as instruments (ADR-0052).
+
+## Corrected on first execution of the run loop — 2026-09-03: a whole-session update keeps the rows
+
+*Recorded under GD-10. This corrects the note immediately above, which is kept as written.*
+
+**The note above said** a whole-session update clears the replica's transcript, "because the attach and
+the reconcile both re-deliver it … and a snapshot alone cannot say which rows survived", and that keeping
+rows across a snapshot "was only safe while nothing published one". **That reasoning was wrong, and the
+first run in the application showed it:** every status save the run loop makes publishes a whole-session
+update (`starting`, `running`, once per iteration, `cancelling`, the terminal status), and the first
+completed run painted its notice over a transcript reading "No rows yet". The rows had been cleared five
+times while they were being written.
+
+**The correction, and the reading that carries it.** `REQ-MONITOR-216` fixes that the whole-session update
+carries the session record with its unbounded collections emptied — the transcript is not in it. A
+snapshot therefore *cannot* speak for the rows, which is exactly why it must not clear them. The attach
+and the reconcile still re-deliver the resident window on the increment channel immediately after, and
+that increment **upserts by index** (`REQ-EVENTS-052`), so a surface that held rows keeps them and gains
+what it lacked; rows never disappear from a session, so nothing a snapshot could have removed exists.
+`packages/ui-core/src/replica.ts` keeps the rows and a test pins a status save mid-run leaving them on
+display. **This is the sixth mechanism built for the first time to hold a defect no reading caught**, and
+the count is kept in ADR-0058 consequence 17.
+
+**What the earlier note got right and stands:** every attach begins with a whole-session update; the
+increment that follows carries the number the surface counts on from; a genuine reset at index 0 is not
+a decline.

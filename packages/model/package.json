@@ -8,6 +8,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@rotaris/kernel": "workspace:*"
+    "@ai-sdk/openai": "4.0.58",
+    "@ai-sdk/openai-compatible": "3.0.43",
+    "@rotaris/kernel": "workspace:*",
+    "ai": "7.0.92"
   }
 }

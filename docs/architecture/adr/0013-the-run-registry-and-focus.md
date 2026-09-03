@@ -157,3 +157,17 @@ ADR-0002 moves to one process per run, in which case the registry becomes a supe
 processes and the addressing above becomes the wire protocol rather than a map lookup — the shape does
 not change, only the transport. Or a product change re-introduces a run this instance does not own, in
 which case alternative C returns and the completeness claim above is the first thing that breaks.
+
+## First execution — 2026-09-03, the registry with a run in it
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/engine/src/sessions.ts` — `Map<sessionId, …>` holding, per live session, the
+writer that holds its lock, the projection owner it feeds and the run executing it; every control names a
+session id the sending window resolved from its own focus, and the run host is never told about focus;
+the registry supplies the "is a run active" predicate (`isRunActive`, `activeRunCount`) and nothing else.
+A second prompt while a run is active is refused with "A run is already active." (`REQ-CHAT-012`,
+`REQ-MONITOR-260`). Bindings are late-bound by session id and removed at teardown.
+
+**Found: nothing.** The registry is a map; what the first execution found belongs to the records of the
+things in it.

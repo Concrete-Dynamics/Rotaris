@@ -37,15 +37,16 @@ kernel     pure: Result, ids, time, the clock ports, generated requirement symbo
 | Package | Process | Holds | Cites |
 |---|---|---|---|
 | `@rotaris/kernel` | any | `Result`, branded ids, `Millis`/`Instant`/`Budget`, `MonotonicClock`/`WallClock`/`Timers`, `FakeClock`, `REQ` (generated) | ADR-0006 |
-| `@rotaris/contracts` | any | channel schemas (zod), command envelope, 21 control ops, `PRIMARY_VIEWS`, process protocols, `CONTRACT_SCHEMA_VERSION` | ADR-0010, ADR-0044, REQ-SHELL-023 |
+| `@rotaris/contracts` | any | channel schemas (zod), command envelope, 21 control ops, `PRIMARY_VIEWS`, process protocols, the status vocabularies and presentation mapping (`status.ts`), `CONTRACT_SCHEMA_VERSION` | ADR-0010, ADR-0044, REQ-SHELL-023, REQ-SESSION-073, REQ-NOTIFY-048/049/050 |
 | `@rotaris/platform` | main, run host, workspace service | clocks, per-user dirs (local-not-roaming), atomic document, liveness probe + lock predicate, machine id, canonical path, instance record + claim, spawn | ADR-0004, ADR-0055, REQ-STARTUP-145, REQ-SESSION-046/051–054 |
 | `@rotaris/store` | run host, workspace service | open (WAL read back, write probe, one canonical spelling), schema v2 + migrations, the DAL (rows with residency, events with the derived envelope and three declared indexes, the truncation record), identifier + resolution, backup, the corrected restore | ADR-0058, ADR-0005, ADR-0009 |
-| `@rotaris/engine` | run host | `SessionWriter` (one transaction per unit of work, residency release, trim, sticky failure, durable terminal save), the one serialiser and the 23-type catalogue, `ProjectionOwner` (resident rows, the counter, growth tick, attach/reconcile), `Sessions` (the registry), `RefusalLease`; the loop, tools, model and the rest next | ADR-0008, ADR-0009, ADR-0010, ADR-0043, ADR-0013 |
-| `@rotaris/agent-tools` · `model` · `mcp` | run host | port shapes today; executors, gate, terminal, confinement, egress, the AI SDK adapter, the MCP transport next | ADR-0016–0035 |
+| `@rotaris/engine` | run host | `SessionWriter` (one transaction per unit of work, residency release, trim, sticky failure, the launch audit, the timeline, the terminal transaction), the one serialiser and the 23-type catalogue, `ProjectionOwner` (resident rows, the counter, growth tick, attach/reconcile), `Sessions` (the registry, the control channel, the run-active predicate), `run/` (`Run`, `StopRequest`, the stop conditions and every total mapping, the todo, the aggregates, `EventBus`, `SummaryWriter`), `RefusalLease`; tools, children, hooks next | ADR-0008, ADR-0009, ADR-0010, ADR-0013, ADR-0014, ADR-0043 |
+| `@rotaris/model` | run host | the two ports (`ModelClient`, `AgentBackend`), `DefaultAgentBackend`, `ScriptedModelClient` (tests), `AiSdkModelClient` (pinned SDK, one decorated `fetch`); engine → model is a downward edge in the matrix | ADR-0026, ADR-0027 |
+| `@rotaris/agent-tools` · `mcp` | run host | port shapes today; executors, gate, terminal, confinement, egress, the MCP transport next | ADR-0016–0025, ADR-0033–0035 |
 | `@rotaris/workspace` | workspace service | git denylist + network set today; config, git helper, checkpoints, traceability, delivery next | ADR-0036–0041 |
 | `@rotaris/shell` | main | `UpdateRelay` (fan-out, order across both channels, message counters), `ProcessLink` (bounded request/reply) | ADR-0044, ADR-0013, ADR-0002 c.11 |
-| `@rotaris/ui-core` | renderer | the replica store with the step-0 sequence check, the decline, paging older rows; **no React** | ADR-0043, ADR-0046, ADR-0057, REQ-SESSION-161 |
-| `@rotaris/ui` | renderer | `AppShell`, `NavRail`, `WorkspaceView` (transcript rows + composer), local shell state, the design system wired in | ADR-0048, REQ-SHELL-024–028, -049, REQ-CHAT-001–005, -011 |
+| `@rotaris/ui-core` | renderer | the replica store with the step-0 sequence check, the decline, paging older rows, rows kept across a snapshot; the notice store; **no React** | ADR-0043, ADR-0046, ADR-0049, ADR-0057, REQ-SESSION-161 |
+| `@rotaris/ui` | renderer | `AppShell` (with the one persistent notice), `NavRail`, `WorkspaceView` (user/agent/system rows, the growing row, the composer, the stop control), local shell state, the design system wired in | ADR-0048, ADR-0049, REQ-SHELL-024–028, -049, -114, REQ-CHAT-001–005, -011, REQ-SESSION-186 |
 | `tools/symbol-artifact` | build + test | generates `kernel/src/generated/requirements.ts` from `docs/spec` | ADR-0040 #4, ADR-0056 |
 | `tools/release-naming` | build | the four artifact names, the one authority | REQ-STARTUP-031 |
 | `tools/eslint-rules` | lint | `no-bare-timers`, `no-electron-outside-roots` | ADR-0006 |
@@ -72,6 +73,13 @@ plain process with no React and the restore run against a fake run host with a c
   error dialog (ADR-0044 first-execution note). The relay attaches by id; `send` checks `isDestroyed()`.
 - **Icons are `@phosphor-icons/web` classes** (`ph ph-<name>`), imported in the renderer root; the
   design assets carry the same two fonts and are not referenced directly.
+- **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
+  it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
+  first run loop's status saves emptied a transcript still being written before this was so (ADR-0043
+  correction note). A test pins it.
+- **Every total mapping between the closed vocabularies lives once** — `contracts/src/status.ts` for what a
+  surface needs, `engine/src/run/stop-conditions.ts` for what a run decides; a token outside a closed set
+  yields `error` with a diagnostic, never a guessed success (REQ-EVENTS-026, REQ-SESSION-187).
 - **Implementation conditions are markers at the module they bind** — `TODO(IC-4)` in
   `platform/src/machine-id.ts`, `TODO(IC-5)` in `store/src/restore.ts`, `TODO(IC-6)` in
   `apps/desktop/electron-builder.yml`.
@@ -100,17 +108,35 @@ you declare; a timing alone reads as "slow", not as "dead".
    composer starts a session in the run host — session row, lock row, history open, `session.start` —
    and records the prompt as row 0 (`user`) with its `transcript.row` event in one transaction; the
    projection owner publishes the snapshot and the increment with one counter; main relays; the
-   replica applies with the step-0 check; the row paints with role `you` and its time. The session
-   stays `idle`: there is no run loop yet, so nothing consumes the prompt.
+   replica applies with the step-0 check; the row paints with role `you` and its time.
 
-No run, no tool, no model call. Every view body but Workspace reads "Not drawn yet".
+8. **the run loop (2026-09-03):** the prompt is consumed. The session goes `starting` → `running`
+   (REQ-SESSION-087: aggregates rehydrated, the one-shot launch audit, `run_start`), one iteration runs
+   the root agent over the model port, an `agent` row appears on the first delta and grows on the 50 ms
+   tick, `usage.update` and `iteration.end` are recorded, the stop conditions are evaluated between
+   iterations, and teardown records the system row, releases the lock, records `session.end` then
+   `result` and the terminal status in one durable transaction, then rebuilds `summary.md` off the path.
+   The stop control cancels gracefully and a second press forces; the outcome is presented once as the
+   persistent notice; the status strip shows the presentation vocabulary. Every event is recorded then
+   forwarded on the bus with the 5 s bound. **No tool, no child, no hook, no intent classification, no
+   verification**: one task, one agent, one turn per iteration.
+
+**Where the model comes from is a stopgap at the run-host root** (`apps/desktop/src/run-host/index.ts`),
+not a settings surface: `ROTARIS_MODEL_BASE_URL`, `ROTARIS_MODEL_ID`, `ROTARIS_MODEL_DIALECT` and
+`ROTARIS_MODEL_API_KEY_ENV` (the *name* of the variable holding the key) build the AI SDK client;
+`ROTARIS_MODEL_DIALECT=scripted` selects a built-in scripted client for verification; with nothing set a
+run is refused before it starts with one `result` of status `error` (REQ-EVENTS-021). It goes when
+ADR-0036 (configuration) and ADR-0029 (credentials) land.
+
+Every view body but Workspace reads "Not drawn yet".
 
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
-| the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions | `engine`, `model` | ADR-0008 (aggregates, launch audit, summary), ADR-0010's control channel, the wire bus with its 5 s bound |
+| ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half (an endpoint from the owner); ADR-0026's parameterised conformance suite once a second backend exists |
+| tools and the permission gate, then children and the scheduler, hooks, intent classification | `agent-tools`, `engine` | ADR-0024's evidence rings, the session log (`REQ-SESSION-142`), the remaining 20 control ops |
 | the restore behind a real run host | `workspace`, `apps/desktop/src/workspace-service` | IC-4, IC-5 |
 | the build's load proof | `apps/desktop/electron-builder.yml` + a build script | IC-6 |
 | a terminal save's durability | `engine` (writer) | the power-loss test |

@@ -3,7 +3,7 @@ import { asSessionId, millis, ok, type Clocks, type WorkspaceId } from '@rotaris
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
 import { RefusalLease, RUN_CONFIG_DEFAULTS, Sessions, type ModelSetup } from '@rotaris/engine';
-import { DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
+import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 
@@ -76,9 +76,14 @@ function modelFromEnv(): ModelSetup | null {
     log('model: none configured (ROTARIS_MODEL_BASE_URL / ROTARIS_MODEL_ID unset); every run is refused before it starts (REQ-EVENTS-021)', 'warn');
     return null;
   }
-  // The AI SDK adapter (ADR-0027) lands with spike 6; until then a configured endpoint is reported, not used.
-  log(`model: ${modelId} at ${baseUrl} (${dialect ?? 'chat'}, key from ${keyEnv ?? '(none)'}) — the AI SDK adapter is not built yet; runs are refused`, 'warn');
-  return null;
+  // The key is read from the variable NAMED by ROTARIS_MODEL_API_KEY_ENV, inside the request path, per request.
+  const resolveCredential = async () => (keyEnv ? process.env[keyEnv] ?? '' : '');
+  const client = new AiSdkModelClient({ baseUrl, onRequest: (i) => log(`model request ${i.method} ${i.url}`) });
+  log(`model: ${modelId} at ${baseUrl} (${dialect === 'responses' ? 'responses' : 'chat'}; key from ${keyEnv ?? '(none)'})`);
+  return {
+    backend: new DefaultAgentBackend(client),
+    config: { ...RUN_CONFIG_DEFAULTS, model: { providerId: 'env', modelId, dialect: dialect === 'responses' ? 'responses' : 'chat' }, resolveCredential },
+  };
 }
 
 const sessions = new Sessions({

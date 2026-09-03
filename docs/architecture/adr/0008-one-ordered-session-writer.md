@@ -449,3 +449,36 @@ the tee to consumers with its 5 s bound (`REQ-EVENTS-165`) — each lands with t
 produces its rows. Spike 8 and spike 18 were taken with this build; see
 `../spikes/store-schema-and-open-path.md` and `../spikes/two-writers-one-store.md`, and ADR-0009's
 note for what they changed.
+
+## First execution — 2026-09-03, the run loop: aggregates, the launch audit, summary.md, the terminal transaction
+
+*Recorded under GD-10. This is the second note on this record in one day; the first said what the writer
+did not build, and this is that list built.*
+
+**Built and run:** the metric aggregates as in-process figures rehydrated once at run start and copied into
+every save (`REQ-SESSION-139/168/169`; `packages/engine/src/run/aggregates.ts`); the one-shot launch audit
+as a table whose primary key *is* the one-shot — the writer reports a second insert as refused, it does not
+check first (`REQ-SESSION-138`); the timeline as an append-ordered table with the writer assigning the
+ordinal (`REQ-ORCH-139`); and `summary.md` rebuilt after each save's commit, off the path, through
+ADR-0004's primitive under `REQ-SESSION-033`'s six-attempt ladder, generation-ordered so an older rebuild
+never overwrites a newer one (`packages/engine/src/run/summary.ts`). Schema v3 adds columns and two tables
+and **no index**, because no budgeted query reads them yet.
+
+**One reading this record now carries, stated so a reader does not have to choose.** `REQ-SESSION-094`
+orders the lock release *before* `session.end` and `result`; `REQ-EVENTS-098` makes the right to write a
+session's history exactly the right to hold its lock. Read flatly they conflict for the two terminal
+events. The writer's `endRun` commits **one durable transaction** in `REQ-SESSION-094`'s order — the
+system row of `REQ-SESSION-093`, the lock-row delete, `session.end`, `result`, the terminal status and
+its patch — so the writer holds the lock at the instant it records the pair and holds nothing when the
+commit is visible, and the bus forwards both after the commit while the sink is still attached. If the
+owner reads `REQ-SESSION-094` as requiring the release to be *visible* before the pair is recorded, it is
+a one-line change and this note is where it is argued.
+
+**A second reading, on the persisted status at normal completion.** `REQ-MONITOR-029` maps the terminal
+result `completed` to the status `completed`; `REQ-SESSION-093` says a normal completion takes its status
+from the end-of-run summarisation. They differ for one case — a run whose only task was abandoned stops
+`no_pending_tasks` (result `completed`) and summarises `failed`. The run persists the **summarisation's**
+status there, because `REQ-SESSION-093` is the requirement about what is persisted; every other outcome
+takes `REQ-MONITOR-029`'s mapping. Tested in `run.test.ts`.
+
+**Found: nothing in this record's own mechanism.** What the first run found is ADR-0043's (below).

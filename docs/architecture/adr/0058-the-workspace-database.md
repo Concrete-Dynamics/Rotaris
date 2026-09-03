@@ -1944,9 +1944,26 @@ check costs ~2.8 ms per MB and may not sit on the startup path** (462 ms on a 16
 and summary are index reads at 1–5 ms; the trim is ~35 ms per 2,500 appends; the binding cannot open
 a path over 260 characters unprefixed, which the store's own path never is. **It found the fifth
 defect of consequence 17's pattern**: an index declared for a budgeted axis that the planner never
-used. Consequence 17's estimate is unchanged and its count is now five.
+used. Consequence 17's estimate is unchanged and its count is now five — **six** with the run loop's, in the next section.
 
 **Spike 18** (`two-writers-one-store.md`): two compliant writer processes on one store — zero
 `SQLITE_BUSY` in 6,000 contended commits, nothing lost, +12 % at p50, aggregate throughput unchanged,
 and **one sample of 258 ms** in 6,000, the first this record has seen cross `REQ-MONITOR-222` on a
 compliant path. Rule 4 stands; a third writer is not measured.
+
+## The run loop — 2026-09-03: schema v3 and the sixth of consequence 17
+
+*Recorded under GD-10.*
+
+**Schema v3** lands with the run loop: the run's columns on the session row (`stop_reason`,
+`iterations_completed`, the aggregates with cost as a decimal string, the summarisation, the todo and
+progress documents), `launch_audits` whose primary key is `REQ-SESSION-138`'s one-shot, and `timeline`
+append-ordered by the writer's ordinal. **No index**, because no budgeted query reads any of it yet; the
+plan-assertion rule of spike 8 stands for the first one that does. Consequence 11's checkpoint period is
+untouched: the publish-path transaction gained no statement.
+
+**The sixth of consequence 17's pattern is ADR-0043's**, not this record's: the replica cleared its
+transcript on every whole-session update, which was harmless while only an attach published one and
+emptied a transcript still being written once the run loop's status saves did. Corrected there, with the
+falsified reason kept beside the fix. Every mechanism in this record that has gone from paper to first
+execution has now held a defect no reading caught, six times.

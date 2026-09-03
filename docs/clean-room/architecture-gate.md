@@ -4,6 +4,19 @@
 implementation is authorized within the bounds recorded below. This is the first authorization of
 production code in this repository.**
 
+> **CORRECTION, 2026-09-03, made after closure and material to what closure means.** This document, and
+> the record of decision below, stated that **IC-2 keeps every screen shut until the approved visual
+> design reference exists**. **The reference exists and has been in this repository since 2026-09-01** —
+> `docs/design/`, commit `1ad8fee`: the tokens, type ramp, spacing, radii, elevation, motion, iconography,
+> motif, copy voice, 27 components with typed signatures, twenty specimen cards, the fonts, the mark and a
+> mockup, together with an adoption rule and a full reconciliation against `REQ-SHELL-023`. **The owner
+> pointed this out; no measurement found it.** IC-2 is rewritten in
+> [`../architecture/implementation-conditions.md`](../architecture/implementation-conditions.md) and is now
+> narrow: `nocturne` and `high-contrast` have no palette and the token set declares no theme metadata or
+> native-surface mapping, so `REQ-SHELL-128`'s three-theme obligation cannot yet be met. **Screens are not
+> blocked.** The gate's verdict and every other ruling are unaffected — this was the widest bound the gate
+> imposed and it was imposed on a false premise, which is worth more visible than tidied away.
+
 This gate asks one question: *is the architecture good enough to begin building the product?* It is not
 asking whether the architecture is finished, and it is not asking whether every measurement has been taken.
 The question is whether what remains unknown is small enough, and bounded well enough, that a conformant
@@ -26,7 +39,8 @@ in this repository may become production code before that.
   three measurement rounds of 2026-09-02 and 2026-09-03.
 - **Three implementation conditions**, IC-1 to IC-3, in
   [`../architecture/implementation-conditions.md`](../architecture/implementation-conditions.md). IC-1 is
-  discharged; IC-2 and IC-3 bind work that has not started.
+  discharged; IC-2 and IC-3 bind work that has not started. *IC-2 was largely discharged on 2026-09-03 —
+  see the correction above — and the gate added IC-4 to IC-6.*
 - **1,214 requirement citations** across the ADRs, re-checked mechanically against a corpus of **4,397**
   identifiers, with **zero dangling**.
 - **Forty-nine open questions** raised, nine closed with their reasons, forty open.
@@ -183,7 +197,7 @@ Recorded 2026-09-03 from the product owner, who accepted this record's recommend
 
 | Item | Decision | Date |
 |------|----------|------|
-| 1. Authorization and scope | **APPROVED, BOUNDED.** Implementation is authorized for everything not blocked by an implementation condition. **IC-2** keeps every screen shut until the approved visual design reference exists; **IC-3** keeps the Linux and macOS artifacts shut until the hosts exist. What is authorized is the mechanism: process topology, the store, the run flow, the event stream, settings, permissions, the backup and the restore. | 2026-09-03 |
+| 1. Authorization and scope | **APPROVED, BOUNDED.** Implementation is authorized for everything not blocked by an implementation condition. **IC-3** keeps the Linux and macOS artifacts shut until the hosts exist. *This cell also read "**IC-2** keeps every screen shut until the approved visual design reference exists" — see the correction at the head of this file: the reference exists, screens are not blocked, and IC-2 now bounds only `REQ-SHELL-128`'s three-theme obligation.* What is authorized is the mechanism: process topology, the store, the run flow, the event stream, settings, permissions, the backup and the restore. | 2026-09-03 |
 | 2. The argued closures | **BOUND AS CONDITIONS.** The three closures that rest on argument rather than on measurement against the defect they close are now **IC-4** (the foreign-host lock row's fix, both halves), **IC-5** (the artifact-layout conversion and `origin.txt`, which IC-1 exercised without aiming at), and **IC-6** (the build rule that replaced `electron-rebuild`'s exit status with the artifact). Each names what must be shown and where the result goes. | 2026-09-03 |
 | 3. The unstarted spikes | **BOUND TO THE WORK EACH PRICES.** A spike is taken as the first act of building the thing it measures, and its result goes into the record that made the decision whether or not it passes. Spike 8, spike 18 and the power-loss test are named as the ones a build reaches first. Recorded at the end of `implementation-conditions.md`. | 2026-09-03 |
 | 4. ADR ratification standard | **A DEFECT STATED IN THE RECORD, AND NOT BUILD-WRONG, DOES NOT BLOCK IMPLEMENTING AGAINST THAT RECORD.** The standard is worthless unless the statement exists, so ADR-0058 now carries **consequence 18**, naming D5, D8 and D11 with what each costs, and **consequence 5** now tabulates all five leftover shapes with whether anything deletes each — it had been tracking three while the mechanism produced five. | 2026-09-03 |
@@ -222,5 +236,6 @@ written where the work will find it:
 | the store's read paths | **spike 8**, against declared indexes |
 | two run hosts on one store | **spike 18** |
 | a terminal save's durability | **the power-loss test**, which is now its sole stated ground |
-| any screen at all | **IC-2** — and the reference does not exist yet |
+| any screen at all | the adopted language in `docs/design/` plus the structure in `docs/spec/` — **not blocked** |
+| `REQ-SHELL-128`'s three built-in themes | **IC-2**, now narrow: two palettes and the theme metadata |
 | a Linux or macOS artifact | **IC-3**, deferred to hardware by GD-5, owed and not waived |

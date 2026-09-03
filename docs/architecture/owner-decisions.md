@@ -830,7 +830,11 @@ And **OQ-31 is ruled now**, on its own merits, rather than waiting on the refere
 **Why the reference does not block the gate.** `open-questions.md` states the position the architects
 reached without it: every slice proposal is about mechanism — where state lives, what crosses a process
 boundary, what paints a row — and **no mechanism depends on the reference, while no screen can be built
-without it**. ADR-0050's theme mechanism is the clearest case: themes as data, corrections computed,
+without it**. *(Corrected 2026-09-03: the second clause was written as though the reference were absent.
+It is present — `docs/design/`, since 2026-09-01 — so the true statement is that no screen can be built
+without **a** design language, and this product has one, adopted. GD-1's ruling that the reference does
+not block the gate is unaffected and was right for the reason given.)* ADR-0050's theme mechanism is the
+clearest case: themes as data, corrections computed,
 contrast asserted from rendered pixels, all of it independent of which values the palette holds. Holding
 a gate about mechanism for material no mechanism depends on delays every unrelated decision and improves
 none of them.
@@ -1016,6 +1020,18 @@ to know that the alternatives were put and not taken, and each ruling below keep
 process topology, the store, the run flow, the event stream, settings, permissions, the backup and the
 restore. **IC-2 and IC-3 are not advice**: no screen before the approved visual design reference exists, no
 Linux or macOS artifact before the build hosts do.
+
+> **Corrected 2026-09-03, hours after the ruling, and the ruling stands.** The sentence above says *no
+> screen before the approved visual design reference exists*. **It exists**, and it has been in this
+> repository since 2026-09-01 — `docs/design/`, commit `1ad8fee`. The owner said so; nothing in this record
+> caught it. **What GD-6 authorises is unchanged**, because it authorises the mechanism and bounds it by
+> whatever the conditions actually say; what changed is that IC-2 now says something much narrower —
+> `nocturne` and `high-contrast` have no palette and the token set declares no theme metadata or
+> native-surface mapping, so `REQ-SHELL-128`'s three-theme obligation is not yet meetable. **Screens are
+> not blocked**, and the design material's own adoption rule governs how they are drawn: the **language**
+> is adopted and authoritative, the **information architecture** is not, and structure comes from
+> `docs/spec/` with `REQ-SHELL-023` canonical. The paragraph below says "one is material nobody has" and
+> that clause is false; the refusal of the unbounded option does not rest on it.
 
 *The alternatives were: approve unbounded, treating IC-2 and IC-3 as advice; approve a smaller first slice;
 or decline and name what must change.* Unbounded was refused because both conditions exist for reasons that

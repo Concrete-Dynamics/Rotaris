@@ -33,10 +33,20 @@ never valid reasons to cross the boundary.
 (`docs/clean-room/architecture-gate.md`). What is authorized is **the mechanism** — process topology,
 the store, the run flow, the event stream, settings, permissions, the backup and the restore.
 
+**Design material, and how to use it.** `docs/design/` holds the **approved design language** — tokens,
+colour, type, spacing, radii, elevation, motion, iconography, the motif, the copy voice and 27
+components. It is **adopted and authoritative**: cite the token by name, never a literal colour or pixel
+value. Its **information architecture is not adopted**. Which screens exist, what is on them, what they
+are called, their order and their tabs come from `docs/spec/`, where `REQ-SHELL-023` is the single
+definition of the seven primary views. `docs/design/mockup/` is read **for craft, never for structure**,
+and where the two disagree the specification governs without exception. `docs/design/README.md` §2 is
+the adoption rule and §3.2 is the list of views still to be drawn.
+
 **Two bounds are not waived and no agent may treat them as advice:**
 
-- **No screen, view, benchmark card or diagnostics surface may be built** until the approved visual
-  design reference exists (**IC-2**). Mechanism that a screen will later use is not a screen.
+- **`REQ-SHELL-128`'s three built-in themes cannot yet be met** (**IC-2**): `nocturne` and
+  `high-contrast` have no palette, and the token set declares no theme metadata or native-surface
+  mapping. Screens are **not** blocked — build against `rotaris-dim` and the adopted language.
 - **No Linux or macOS release artifact may be produced** until the build hosts exist (**IC-3**).
 
 `docs/architecture/implementation-conditions.md` holds **IC-1 to IC-6**. A condition binds the work it

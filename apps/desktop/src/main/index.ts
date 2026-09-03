@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
@@ -89,6 +89,16 @@ async function main(): Promise<void> {
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
       child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); });
+      // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
+      svc.link.onAsk((a) => {
+        switch (a.kind) {
+          case 'runHost.refuseRuns': return runHost.request({ kind: 'workspace.refuseRuns', workspaceId: a.workspaceId, leaseMs: a.leaseMs }, millis(5_000));
+          case 'runHost.renewLease': return runHost.request({ kind: 'workspace.renewLease', workspaceId: a.workspaceId, leaseMs: a.leaseMs }, millis(5_000));
+          case 'runHost.closeStore': return runHost.request({ kind: 'workspace.closeStore', workspaceId: a.workspaceId }, millis(5_000));
+          case 'runHost.release': return runHost.request({ kind: 'workspace.release', workspaceId: a.workspaceId }, millis(5_000));
+          case 'runHost.reopen': return runHost.request({ kind: 'workspace.release', workspaceId: a.workspaceId }, millis(5_000));
+        }
+      });
     }
     const opened = await svc.link.request({ kind: 'workspace.open', workspaceRoot: key }, millis(10_000));
     if (opened.kind !== 'workspace.opened') { log(`workspace.open refused: ${JSON.stringify(opened)}`); return undefined; }
@@ -135,7 +145,115 @@ async function main(): Promise<void> {
   relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
   win.on('closed', () => relay.detach(wcId));
 
-  ipcMain.handle(CHANNEL.command, async (_e, raw): Promise<CommandOutcome> => {
+  /**
+   * Verification seams for an unattended run (only with ROTARIS_CAPTURE_PNG set): the save and open
+   * dialogs answer from the environment and every message box is logged with its text and answered from
+   * ROTARIS_CAPTURE_ANSWERS in order. A user-driven run never enters these branches.
+   */
+  const capturing = Boolean(process.env['ROTARIS_CAPTURE_PNG']);
+  const scriptedAnswers = (process.env['ROTARIS_CAPTURE_ANSWERS'] ?? '').split(',').filter((s) => s.length > 0).map(Number);
+  const chooseSave = async (opts: Electron.SaveDialogOptions): Promise<string | null> => {
+    const forced = capturing ? process.env['ROTARIS_CAPTURE_BACKUP_TO'] : undefined;
+    if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
+    const r = await dialog.showSaveDialog(win, opts);
+    return r.canceled || !r.filePath ? null : r.filePath;
+  };
+  const chooseOpen = async (opts: Electron.OpenDialogOptions): Promise<string | null> => {
+    const forced = capturing ? process.env['ROTARIS_CAPTURE_RESTORE_FROM'] : undefined;
+    if (forced) { log(`capture: open dialog "${opts.title}" → ${forced}`); return forced; }
+    const r = await dialog.showOpenDialog(win, opts);
+    return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
+  };
+  const askBox = async (opts: Electron.MessageBoxOptions): Promise<number> => {
+    if (capturing && scriptedAnswers.length > 0) {
+      const answer = scriptedAnswers.shift()!;
+      log(`capture: message box "${opts.title}" | ${opts.message} | ${opts.detail ?? ''} | buttons ${JSON.stringify(opts.buttons)} default ${opts.defaultId} → answered ${answer} (${opts.buttons?.[answer]})`);
+      return answer;
+    }
+    return (await dialog.showMessageBox(win, opts)).response;
+  };
+
+  /**
+   * REQ-SESSION-201's restore, as main conducts it: every question before anything is changed, cancel the
+   * default everywhere, and the work in the workspace service. ADR-0058's identifier cases and ESC-26's
+   * confirmation; D9's foreign rows as one condition with the risk stated.
+   */
+  const restoreFlow = async (): Promise<CommandOutcome> => {
+    if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before restoring its session store' };
+    const root = canonicalPath(currentWorkspace);
+    const svc = services.get(root);
+    if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+    // REQ-SESSION-201 / REQ-SHELL-021's gate: refused while a run is active; the service's liveness gates hold it for the whole restore.
+    const active = await runHost.request({ kind: 'runs.active', workspaceId: currentWorkspaceId }, millis(5_000));
+    if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'run.active', headline: 'Finish the active run before restoring the session store.' };
+    const artifact = await chooseOpen({ title: 'Restore a session store backup', properties: ['openFile'], filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }] });
+    if (!artifact) return { ok: true, value: { cancelled: true } };
+    const assessed = await svc.link.request({ kind: 'workspace.restore.assess', workspaceRoot: root, artifact }, millis(120_000));
+    if (assessed.kind !== 'workspace.restore.assessment') return refusal(assessed, 'The backup could not be assessed');
+    const a = assessed.assessment;
+    if (a.refusal) { raiseNotice('error', 'The restore was refused', a.refusal.detail); return { ok: false, code: `restore.${a.refusal.why}`, headline: 'The restore was refused', detail: a.refusal.detail }; }
+    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    const cancel = (): CommandOutcome => ({ ok: true, value: { cancelled: true } });
+
+    // 1 — which workspace, when, and what it does to the store that is there now. Cancel is the default.
+    const from = a.artifact.lastSeenWorkspacePath ?? a.artifact.workspaceId;
+    const nowText = a.target.exists
+      ? `The store this backup restores into currently holds ${plural(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${plural(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
+      : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${plural(a.artifact.sessions, 'session')}.`;
+    const first = await askBox({
+      type: 'question', title: 'Restore the session store', message: `This backup was taken from ${from} on ${a.artifact.takenAtUtc}.`, detail: nowText,
+      buttons: ['Cancel', 'Restore'], defaultId: 0, cancelId: 0, noLink: true,
+    });
+    if (first !== 1) return cancel();
+
+    // 2 — the identifier (ADR-0058 case (c), ESC-26): both values named, the consequence stated, cancel the default.
+    let identifier: 'workspace' | 'artifact-store' | 'establish' = a.identifier.case === 'same' ? 'workspace' : 'establish';
+    if (a.identifier.case === 'different') {
+      const mine = a.identifier.current ?? '';
+      const theirs = a.artifact.workspaceId;
+      const second = await askBox({
+        type: 'warning', title: 'This workspace carries a different identifier',
+        message: `This workspace's identifier is ${mine}. The backup was taken under ${theirs}.`,
+        detail: `Restore into the backup's own store: the sessions are restored under ${theirs}, this workspace keeps ${mine}, and they will not appear here until a workspace carrying ${theirs} is opened.\n\nReplace this workspace's identifier with ${theirs} and restore: this workspace's existing sessions, recorded under ${mine}, become unreachable from this workspace. The store under ${mine} is kept intact; writing ${mine} back into .rotaris/workspace-id is a complete undo.`,
+        buttons: ['Cancel', "Restore into the backup's own store", 'Replace the identifier and restore'], defaultId: 0, cancelId: 0, noLink: true,
+      });
+      if (second === 0) return cancel();
+      identifier = second === 1 ? 'artifact-store' : 'establish';
+    }
+
+    // 3 — D9 / IC-4: lock rows naming another machine, together, with the risk stated. Cancel is the default.
+    let proceedWithForeignLocks = false;
+    if (a.target.foreignLocks.length > 0) {
+      const third = await askBox({
+        type: 'warning', title: 'Lock records name another machine',
+        message: `${plural(a.target.foreignLocks.length, 'session')} in the store carry lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
+        detail: 'Nothing on this machine is writing under them. If this store genuinely is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. Nothing needs to be cleared one at a time.',
+        buttons: ['Cancel', 'Restore anyway'], defaultId: 0, cancelId: 0, noLink: true,
+      });
+      if (third !== 1) return cancel();
+      proceedWithForeignLocks = true;
+    }
+
+    const done = await svc.link.request({ kind: 'workspace.restore.perform', workspaceRoot: root, artifact, decisions: { identifier, proceedWithForeignLocks } }, millis(600_000));
+    if (done.kind !== 'workspace.restored') return refusal(done, 'The restore could not be performed');
+    const rep = done.report;
+    if (rep.ok) {
+      // The workspace now resolves as the restore left it; hand the run host the store again (W-18).
+      await openWorkspace(root);
+      raiseNotice('info', `Restored ${plural(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
+      return { ok: true, value: { restoredInto: rep.restoredInto, identifierEstablished: rep.identifierEstablished } };
+    }
+    const why = rep.refusal
+      ? rep.refusal.why === 'sessions-live' ? `A session became live before the restore could finish (${rep.refusal.sessions.join(', ')}); nothing was changed.`
+        : rep.refusal.why === 'ack-timeout' ? `The run host did not answer within ${rep.refusal.boundMs} ms at step ${rep.refusal.step}; nothing was changed.`
+          : `Lock records name another machine (${rep.refusal.sessions.join(', ')}); nothing was changed.`
+      : rep.error ?? 'The restore did not complete.';
+    raiseNotice('error', 'The restore was not performed', why);
+    await openWorkspace(root);
+    return { ok: false, code: rep.refusal ? `restore.${rep.refusal.why}` : 'restore.failed', headline: 'The restore was not performed', detail: why };
+  };
+
+  const runCommand = async (raw: unknown): Promise<CommandOutcome> => {
     const parsed = CommandRequestSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
     const req = parsed.data;
@@ -160,6 +278,24 @@ async function main(): Promise<void> {
       case 'notice.acknowledge':
         if (currentNotice && currentNotice.id === req.noticeId) publishNotice(null);
         return { ok: true };
+      case 'workspace.backup': {
+        // REQ-SESSION-201: the destination is a file the user chooses; nothing is written until then.
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before backing up its session store' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        const stamp = new Date(clocks.wall.instant()).toISOString().replace(/[:.]/g, '-');
+        const destination = await chooseSave({
+          title: 'Back up the session store', defaultPath: `rotaris-sessions-${currentWorkspaceId}-${stamp}.tar`,
+          filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }],
+        });
+        if (!destination) return { ok: true, value: { cancelled: true } };
+        const r = await svc.link.request({ kind: 'workspace.backup', workspaceRoot: canonicalPath(currentWorkspace), destination }, millis(600_000));
+        if (r.kind !== 'workspace.backedUp') { if (r.kind === 'refused') raiseNotice('error', 'The backup could not be taken', [r.headline, r.detail].filter(Boolean).join(': ')); return refusal(r, 'The backup could not be taken'); }
+        raiseNotice('info', `Backed up ${r.sessions} session${r.sessions === 1 ? '' : 's'} to ${r.destination}.`);
+        return { ok: true, value: { destination: r.destination, sessions: r.sessions, bytes: r.bytes } };
+      }
+      case 'workspace.restore':
+        return restoreFlow();
       case 'session.prompt': {
         const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
@@ -185,7 +321,8 @@ async function main(): Promise<void> {
       default:
         return { ok: false, code: 'command.unimplemented', headline: `${req.kind} is not built yet` };
     }
-  });
+  };
+  ipcMain.handle(CHANNEL.command, (_e, raw) => runCommand(raw));
 
   surface = (h) => {
     // REQ-STARTUP-162/163: surface the window; honour a carried workspace.
@@ -224,6 +361,28 @@ async function main(): Promise<void> {
           wc.sendInputEvent({ type: 'char', keyCode: 'Return' });
           wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
         });
+      });
+    }
+    // ROTARIS_CAPTURE_ACTION=backup|restore at ROTARIS_CAPTURE_ACTION_MS: the command a Settings action sends.
+    const action = process.env['ROTARIS_CAPTURE_ACTION'];
+    if (action === 'backup' || action === 'restore') {
+      clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_ACTION_MS'] ?? 1_500)), async () => {
+        const outcome = await runCommand({ kind: action === 'backup' ? 'workspace.backup' : 'workspace.restore' });
+        log(`capture: ${action} → ${JSON.stringify(outcome)}`);
+      });
+    }
+    // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, click the Project category.
+    const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
+    if (view > 0) {
+      clocks.timers.after(millis(600), async () => {
+        const wc = win.webContents;
+        wc.sendInputEvent({ type: 'keyDown', keyCode: String(view), modifiers: ['control'] });
+        wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
+        if (view === 7) {
+          await new Promise((r) => clocks.timers.after(millis(200), () => r(undefined)));
+          const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === 'Project'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+          if (rect) { wc.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 }); wc.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 }); }
+        }
       });
     }
     // ROTARIS_CAPTURE_STOP_MS: press the stop control with a real click at its measured position (REQ-SESSION-186).

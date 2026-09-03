@@ -161,6 +161,9 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'session.control':
       return { kind: 'control.result', result: sessions.control(req.request) };
+    case 'runs.active':
+      // ADR-0013: the registry's predicate. Sessions are not keyed by workspace yet; the count is instance-wide.
+      return { kind: 'runs.count', workspaceId: req.workspaceId, count: sessions.activeRunCount() };
     case 'session.attach':
       return sessions.attach(asSessionId(req.sessionId)) ? { kind: 'ack' } : { kind: 'refused', code: 'session.not-live', headline: 'That session is not live' };
     case 'session.detach':

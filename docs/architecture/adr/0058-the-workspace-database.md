@@ -1967,3 +1967,55 @@ transcript on every whole-session update, which was harmless while only an attac
 emptied a transcript still being written once the run loop's status saves did. Corrected there, with the
 falsified reason kept beside the fix. Every mechanism in this record that has gone from paper to first
 execution has now held a defect no reading caught, six times.
+
+## First execution — 2026-09-03, the restore behind the real run host, and the backup from the Settings view
+
+*Recorded under GD-10. IC-5 discharged; IC-4 discharged in its first half, prepared in its second.*
+
+**Built and run:** `packages/workspace/src/{backup,restore}.ts` around this record's mechanism, the
+workspace service performing both (ADR-0002 c.7: main supplied the save and open dialogs and the message
+boxes and nothing else), and the service reaching the run host through **narrow requests back to main**
+that main forwards — steps 1, 3, 4a and 10 as `runHost.refuseRuns / closeStore / release / reopen`,
+each bounded, with the lease renewed every 10 s while a restore runs (3b). The restore is two-phased so
+every question is asked before anything is changed (`REQ-SESSION-201`): an assessment that runs gates 1
+and 2 on the artifact, reads the identifier case, and counts what the target holds including its lock
+rows; then the perform. The three confirmations carry what the requirement and ESC-26 fix — which
+workspace, when, what happens to the store that is there now; both identifier values and the sessions
+that become unreachable, cancel the default, three outcomes; the foreign rows as one condition with the
+risk stated. The two actions sit in the Settings view's Project category (`REQ-CONFIG-268`), disabled
+with the reason while a run is busy (`REQ-NOTIFY-008`).
+
+**Run in the application, six scenarios, real utility processes:** a backup taken **while a run was
+streaming** — 4 sessions, 100 KB, the run finished afterwards untouched; a restore **refused while a run
+was active** ("Finish the active run before restoring the session store."); a restore into the same
+identifier — assessed (5 sessions in the target, 4 in the artifact), confirmed, performed in ~250 ms,
+the previous store displaced and kept, `origin.txt` naming the workspace, the run host re-handed the
+store; a restore into a workspace carrying a **different** identifier with ESC-26's third outcome — both
+values named, the identifier replaced *after* the store was whole, the store under the old value intact,
+and writing the old value back undoing it (done, on the scratch workspace); and the Settings screen.
+
+**Found, and it is about this record: case (b) has no route in the product.** "The workspace carries no
+identifier file at all" cannot be met from the restore action, because the restore is an action of an
+*open* workspace and opening one mints its identifier (`REQ-SESSION-197`, W-18). The disaster-recovery
+journey this section describes — machine dies, clone, open, restore — therefore always arrives as case
+**(c)** with a freshly minted value on the workspace side, which is exactly the situation ESC-26 was
+ruled for. The code path for (b) exists and is tested in the workspace package; it is reachable only by
+a caller that restores without opening, which nothing does. The section is not wrong about what (b)
+*would* do; it is wrong about (b) occurring. **The verification run found this the honest way:** the
+scenario prepared for (b) was met by the second message box, which its script had no answer for, and a
+real native dialog blocked the run until its capture fired.
+
+**A second observation, not a defect.** A backup taken mid-run carries that run's session as `running`
+with its lock row, as `REQ-SESSION-201`'s "a state a reader could have observed at one moment" says it
+must; restored on the same machine after the run has ended, that session reads as stale (live status, a
+pid that is gone) and waits for ADR-0005's reap-and-repair, which is not built. The restore's
+foreign-lock drop (consequence 11) does not touch it because the row names this machine.
+
+**IC-5 discharged** — `store.test.ts`: against an artifact in the container layout (`store.db`,
+`manifest.json`), the restored directory holds `workspace.db`, no manifest, and `origin.txt` naming the
+project; the counterfactual (`skipArrange`, D7 as it was) opens, works, and is missing all three.
+**IC-4 half 1 discharged, half 2 prepared** — `../spikes/machine-identifier-rename.md`.
+
+**Not exercised:** the kill-in-the-gap case (README B2); two concurrent restores of one identifier; a
+restore from a network destination; D5's staging leftover (observed again: every successful restore
+leaves none, every reversal leaves `.restoring-1`).

@@ -23,6 +23,31 @@ export type IdentifierOutcome =
 
 const HEADER = '# This file names this workspace to its machine-local session store.\n# Removing it detaches this workspace from its recorded sessions.\n';
 
+export type IdentifierRead =
+  | { readonly state: 'readable'; readonly id: WorkspaceId }
+  | { readonly state: 'absent' }
+  | { readonly state: 'unreadable'; readonly raw: string };
+
+export const WORKSPACE_ID_HEADER = HEADER;
+
+export function workspaceIdFile(workspaceRoot: string): string {
+  return join(workspaceRoot, WORKSPACE_SCOPE_DIR, WORKSPACE_ID_FILE);
+}
+
+/** Read without minting — what a restore's assessment needs (ADR-0058's identifier cases). */
+export function readWorkspaceId(workspaceRoot: string): IdentifierRead {
+  const decode = (raw: string) => {
+    const line = raw.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
+    const id = line ? parseWorkspaceId(line) : undefined;
+    if (!id) throw new Error('not an identifier');
+    return id;
+  };
+  const r = guardedRead(workspaceIdFile(workspaceRoot), decode);
+  if (r.state === 'readable') return { state: 'readable', id: r.value };
+  if (r.state === 'unreadable') return { state: 'unreadable', raw: r.raw };
+  return { state: 'absent' };
+}
+
 export function establishWorkspaceId(workspaceRoot: string): IdentifierOutcome {
   const file = join(workspaceRoot, WORKSPACE_SCOPE_DIR, WORKSPACE_ID_FILE);
   const decode = (raw: string) => {

@@ -49,9 +49,10 @@ import { forgetSpelling, openStore, type StoreHandle } from './open.js';
  * open creates -wal/-shm in the target), D11 (the suffix against the engine's
  * path thresholds).
  *
- * TODO(IC-5): a test aimed at the layout conversion against an artifact whose
- * container layout differs from the store layout, asserting origin.txt names
- * the right project.
+ * IC-5: `store.test.ts` aims a test at the layout conversion against an artifact
+ * whose container layout differs from the store layout, with `skipArrange` as
+ * the counterfactual (D7 as it was). Discharged 2026-09-03; see the note on
+ * ADR-0058 and implementation-conditions.md.
  */
 
 export const ACK_BOUND_MS: Millis = millis(2_000);
@@ -83,6 +84,8 @@ export interface RestoreOptions {
   readonly stagingN?: number;
   /** Test hooks — counterfactuals. Each reproduces a measured defect and must stay available to the test. */
   readonly forceInstallFail?: 'target-exists';
+  /** IC-5's counterfactual: D7 as it was — the container's layout installed as the store's. */
+  readonly skipArrange?: boolean;
   readonly singleLiveness?: boolean;
   readonly oldReversal?: boolean;
   readonly stamp?: string;
@@ -149,8 +152,10 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   const dbFile = storeFile(workspacesRoot, id);
   const ackBound = opts.ackBoundMs ?? ACK_BOUND_MS;
 
-  let svc: StoreHandle | null = openStore(dbFile, { mustExist: true });
-  let dal: StoreDal | null = new StoreDal(svc);
+  // The target may not exist yet: a restore into an artifact's own store on a machine that never held it
+  // (ADR-0058 case (c) outcome 2, case (b)). Then there are no locks to judge and nothing to displace.
+  let svc: StoreHandle | null = existsSync(dbFile) ? openStore(dbFile, { mustExist: true }) : null;
+  let dal: StoreDal | null = svc ? new StoreDal(svc) : null;
 
   const abandon = async (refusal: Refusal): Promise<RestoreReport> => {
     if (svc) { try { svc.close(); } catch { /* */ } svc = null; dal = null; }
@@ -160,7 +165,8 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   };
 
   const judge = (): { live: string[]; foreign: string[] } => {
-    const locks = dal!.listLocks();
+    if (!dal) return { live: [], foreign: [] };
+    const locks = dal.listLocks();
     const foreign = locks.filter((l) => isLockForeign(l, thisMachine)).map((l) => l.session_id);
     const live = locks.filter((l) => !isLockForeign(l, thisMachine) && isLockLive(l, thisMachine)).map((l) => l.session_id);
     return { live, foreign };
@@ -202,17 +208,18 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
   }
 
   // 5 — the service closes its own connection.
-  svc!.close(); svc = null; dal = null;
-  forgetSpelling(target);
+  if (svc) { svc.close(); forgetSpelling(target); }
+  svc = null; dal = null;
   steps.push('5-close-service');
 
   // 6 — expand, arrange, drop foreign locks, open read-write.
   const stage = stagingDir(workspacesRoot, id, opts.stagingN ?? 1);
   rmSync(stage, { recursive: true, force: true });
   expandArtifact(ctx.artifact, stage);
-  arrangeStagingIntoStoreLayout(stage);
+  if (!opts.skipArrange) arrangeStagingIntoStoreLayout(stage);
+  else steps.push('6-arrange-SKIPPED(counterfactual)');
   try {
-    const stageDb = openStore(join(stage, STORE_FILE), { mustExist: true });
+    const stageDb = openStore(join(stage, opts.skipArrange ? CONTAINER_STORE_FILE : STORE_FILE), { mustExist: true });
     const check = stageDb.pragma('quick_check', { simple: true });
     if (check !== 'ok') { stageDb.close(); forgetSpelling(stage); leftovers.push(stage); return { ok: false, abandoned: false, error: `staging store failed quick_check: ${String(check)}`, leftovers, steps }; }
     new StoreDal(stageDb).deleteLocksNotOnHost(thisMachine);
@@ -224,9 +231,8 @@ export async function restoreStore(ctx: RestoreContext, opts: RestoreOptions = {
     return { ok: false, abandoned: false, error: `staging store did not open: ${String(e)}`, leftovers, steps };
   }
 
-  // 9a — origin.txt before the install.
-  writeFileSync(join(stage, ORIGIN_FILE), `${ctx.originLabel}\n`);
-  steps.push('9a-origin');
+  // 9a — origin.txt before the install (D7). The counterfactual leaves the container's layout as it was.
+  if (!opts.skipArrange) { writeFileSync(join(stage, ORIGIN_FILE), `${ctx.originLabel}\n`); steps.push('9a-origin'); }
 
   // 8 — displace the target. Milliseconds AND a counter; the rename is the claim.
   const stamp = opts.stamp ?? fileStamp(ctx.wall.instant());

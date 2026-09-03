@@ -195,6 +195,12 @@ if the store genuinely is reachable elsewhere, a run there may be writing now.
 **What it does not cover.** Whether two machines can reach one store at all, which is ESC-21's second
 premise and is owed separately.
 
+**Discharge, 2026-09-03 — half 1 discharged, half 2 prepared.** The foreign-lock report is shown three ways
+(`spikes/machine-identifier-rename.md`): one refusal naming the whole set, the risk stated in the
+confirmation, no per-row clearing. The rename experiment is a two-phase harness
+(`packages/platform/src/machine-id-rename.spike.test.ts`) the owner runs around a real rename and reboot; IC-4
+**stays open on that half** until its figures are recorded in the report.
+
 ---
 
 ## IC-5 — the artifact-layout conversion is tested by something aimed at it
@@ -217,6 +223,10 @@ layout differs from the store layout, because an artifact that already matches t
 
 **What would count as failing it.** Any of the three absent or wrong. A restored store the reclamation
 surface cannot describe is an orphan produced on the recovery path.
+
+**Discharged 2026-09-03** — `packages/store/src/store.test.ts`, "IC-5": against an artifact in the container
+layout, the restored directory holds `workspace.db`, no `manifest.json`, and `origin.txt` naming the project;
+the counterfactual (`skipArrange`, D7 as it was) opens, works, and is missing all three. Noted on ADR-0058.
 
 ---
 

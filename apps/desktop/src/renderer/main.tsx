@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { AppShell, WorkspaceView } from '@rotaris/ui';
+import { AppShell, SettingsView, WorkspaceView } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -70,6 +70,17 @@ function Workspace() {
   return <WorkspaceView session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} />;
 }
 
+/** REQ-SESSION-201's two actions: main supplies the dialogs, the workspace service the work. */
+async function workspaceAction(kind: 'workspace.backup' | 'workspace.restore'): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const r = await bridge.command({ kind });
+  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+}
+
+function Settings({ workspace }: { workspace: string | null }) {
+  const session = useStore(replica, (s) => s.session);
+  return <SettingsView session={session} workspace={workspace} onBackup={() => workspaceAction('workspace.backup')} onRestore={() => workspaceAction('workspace.restore')} />;
+}
+
 function App({ version, workspace, processes }: { version: string; workspace: string; processes: string[] }) {
   const counters = useStore(replica, (s) => s.counters);
   const session = useStore(replica, (s) => s.session);
@@ -98,7 +109,7 @@ function App({ version, workspace, processes }: { version: string; workspace: st
       version={version}
       workspaceLabel={workspace}
       statusItems={status}
-      views={{ workspace: <Workspace /> }}
+      views={{ workspace: <Workspace />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} /> }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
     />

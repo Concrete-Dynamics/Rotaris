@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { claimAsideName, CURRENT_SCHEMA_VERSION, establishWorkspaceId, migrateStore, openStore, openWorkspaceStore, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
+import { claimAsideName, CURRENT_SCHEMA_VERSION, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -238,6 +238,45 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
     const db = openStore(storeFile(root, id), { readonly: true, mustExist: true });
     expect(new StoreDal(db).listLocks()).toEqual([]);
     db.close();
+  });
+
+  it('IC-5: an artifact in the CONTAINER layout restores into the STORE layout — workspace.db under its name, no manifest inside, origin.txt naming the project', async () => {
+    seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+    const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+    // The container layout genuinely differs from the store's: store.db + manifest.json, and a stray sidecar.
+    const peek = mkdtempSync(join(tmpdir(), 'rotaris-peek-'));
+    expandArtifactInto(artifact, peek);
+    expect(readdirSync(peek).sort()).toEqual(['manifest.json', 'sessions', 'store.db'].filter((n) => existsSync(join(peek, n))).sort());
+    rmSync(peek, { recursive: true, force: true });
+    const r = await restoreStore({ ...ctx(fakeRunHost(root, id, { raceAtStep: 'none', closeAnswers: true }), artifact), originLabel: 'D:/the-right-project' });
+    expect(r.ok).toBe(true);
+    const dir = storeDir(root, id);
+    expect(existsSync(join(dir, 'workspace.db'))).toBe(true);
+    expect(existsSync(join(dir, 'store.db'))).toBe(false);
+    expect(existsSync(join(dir, 'manifest.json'))).toBe(false);
+    expect(readFileSync(join(dir, 'origin.txt'), 'utf8').trim()).toBe('D:/the-right-project');
+    expect(counts(root, id).sids).toEqual(['S-from-backup']);
+  });
+  it('IC-5 (counterfactual): D7 as it was — the container installed as the store — opens, works, and is missing all three', async () => {
+    seed(root, id, [{ sid: 'S-1', rows: 2 }]);
+    const artifact = makeArtifact(root, id, [{ sid: 'S-from-backup', rows: 3 }]);
+    const r = await restoreStore({ ...ctx(fakeRunHost(root, id, { raceAtStep: 'none', closeAnswers: true }), artifact), originLabel: 'D:/the-right-project' }, { skipArrange: true });
+    expect(r.ok).toBe(true);
+    const dir = storeDir(root, id);
+    expect(existsSync(join(dir, 'workspace.db'))).toBe(false);
+    expect(existsSync(join(dir, 'manifest.json'))).toBe(true);
+    expect(existsSync(join(dir, 'origin.txt'))).toBe(false);
+  });
+  it('a restore into a store this machine never held (case (c) outcome 2, case (b)) has nothing to judge or displace and installs whole', async () => {
+    const fresh = mintWorkspaceId('00000000000000000000000000000011');
+    const artifact = makeArtifact(root, fresh, [{ sid: 'S-from-backup', rows: 3 }]);
+    expect(existsSync(storeDir(root, fresh))).toBe(false);
+    const rh = fakeRunHost(root, fresh, { raceAtStep: 'none', closeAnswers: true });
+    const r = await restoreStore({ ...ctx(rh, artifact), id: fresh });
+    expect(r.ok).toBe(true);
+    expect(r.displaced).toBeUndefined();
+    expect(r.steps).toContain('8-displace(skipped)');
+    expect(counts(root, fresh).sids).toEqual(['S-from-backup']);
   });
 
   it('E4 (D6): under a forced stamp collision the counter is what makes the aside-name safe; both displaced stores survive', () => {

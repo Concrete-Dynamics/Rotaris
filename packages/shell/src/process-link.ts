@@ -1,5 +1,5 @@
 import type { Millis, Timers } from '@rotaris/kernel';
-import { CONTRACT_SCHEMA_VERSION, ProcessMessageSchema, type ProcessEvent, type ProcessReply, type ProcessRequestEnvelope, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, ProcessMessageSchema, type ProcessEvent, type ProcessReply, type ProcessRequestEnvelope, type RunHostRequest, type ServiceAnswerEnvelope, type ServiceAsk, type WorkspaceServiceRequest } from '@rotaris/contracts';
 
 /**
  * Main's side of the process protocol (ADR-0002): a request/reply link over
@@ -16,6 +16,7 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (r: ProcessReply) => void; reject: (e: Error) => void; cancel: () => void }>();
   private readonly eventListeners = new Set<(e: ProcessEvent) => void>();
+  private askHandler: ((ask: ServiceAsk) => Promise<ProcessReply>) | null = null;
   private readonly stop: () => void;
 
   constructor(private readonly port: MessagePortLike, private readonly timers: Timers) {
@@ -25,6 +26,13 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
       const m = parsed.data;
       if ('event' in m) {
         for (const l of this.eventListeners) l(m.event);
+        return;
+      }
+      if ('ask' in m) {
+        // ADR-0002 c.7: a narrow request back to main. Answered by the handler, or refused when none is set.
+        const answer = (reply: ProcessReply) => { const env: ServiceAnswerEnvelope = { v: CONTRACT_SCHEMA_VERSION, ask: m.ask, reply }; this.port.postMessage(env); };
+        if (!this.askHandler) { answer({ kind: 'refused', code: 'ask.unhandled', headline: 'main does not answer this request' }); return; }
+        this.askHandler(m.request).then(answer, (e) => answer({ kind: 'refused', code: 'ask.failed', headline: String(e) }));
         return;
       }
       const p = this.pending.get(m.id);
@@ -38,6 +46,11 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
   onEvent(fn: (e: ProcessEvent) => void): () => void {
     this.eventListeners.add(fn);
     return () => this.eventListeners.delete(fn);
+  }
+
+  /** The one handler for the child's narrow requests back to main. */
+  onAsk(fn: (ask: ServiceAsk) => Promise<ProcessReply>): void {
+    this.askHandler = fn;
   }
 
   request(request: Req, boundMs: Millis): Promise<ProcessReply> {

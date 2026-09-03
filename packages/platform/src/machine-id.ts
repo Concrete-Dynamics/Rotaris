@@ -12,9 +12,10 @@ import { exclusiveCreate } from './document.js';
  * it. Minted by exclusive create so two processes racing at first launch
  * agree on one value (D-29).
  *
- * TODO(IC-4): the rename experiment — actually rename the machine with lock
- * rows present and confirm `host` is unchanged and no row becomes foreign.
- * Discharged into a spike report and a note on ADR-0058.
+ * TODO(IC-4): the rename experiment — `machine-id-rename.spike.test.ts`, two
+ * phases the owner runs around a real rename and reboot; IC-4's first half
+ * (the foreign-lock report) is discharged. Figures go into
+ * docs/architecture/spikes/machine-identifier-rename.md.
  */
 export function readOrMintMachineId(file: string): MachineId {
   const fresh = mintMachineId(randomBytes(16).toString('hex'));

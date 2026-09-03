@@ -519,3 +519,13 @@ the iteration limit, ended by shutdown — the lock row was gone when the commit
 still leaves a live-looking row for the next start to reap; that path is unchanged and unbuilt.
 
 **Found: nothing in this record.**
+
+## First execution — 2026-09-03, the foreign-lock report (IC-4, half 1)
+
+*Recorded under GD-10; the report is `../spikes/machine-identifier-rename.md`.*
+
+The restore's assessment lists lock rows naming another machine **together**, separately from rows this
+machine can prove live; the confirmation names how many and which, states the risk (a run there may be
+writing now and the restore replaces what it writes), and proceeding clears nothing one at a time.
+Consequence 11's drop of foreign rows from the artifact ran on every restore. The rename half of IC-4 is
+prepared as a two-phase harness the owner runs around a real rename and reboot.

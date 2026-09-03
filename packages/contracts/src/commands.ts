@@ -31,6 +31,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** ADR-0010 channel 1 over channel 5: the shell resolves focus to a session id before sending (ADR-0013). */
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int() }),
+  /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
+  z.object({ kind: z.literal('workspace.backup') }),
+  z.object({ kind: z.literal('workspace.restore') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;

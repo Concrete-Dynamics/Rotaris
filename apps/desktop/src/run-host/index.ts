@@ -5,6 +5,7 @@ import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/
 import { RefusalLease, RUN_CONFIG_DEFAULTS, Sessions, type ModelSetup } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, terminalManagerFromHost } from './tools.js';
+import { createHookPort } from './hooks.js';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -171,6 +172,8 @@ const terminalReady: Promise<TerminalManager | null> = terminalManagerFromHost(c
 let terminal: TerminalManager | null = null;
 void terminalReady.then((t) => { terminal = t; });
 
+// REQ-HOOKS-032: a hook inherits exactly the environment this process was started with; the desktop supplies no override.
+const hostEnv: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string'));
 const sessions = new Sessions({
   clocks,
   pid: process.pid,
@@ -191,6 +194,9 @@ const sessions = new Sessions({
   attended: () => presenters.attended,
   runtime,
   sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
+  // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
+  hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: resolveUserDirs().config, env: hostEnv }),
+  notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
 });
 presenters.start();
 

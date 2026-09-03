@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { FakeClock } from '@rotaris/kernel';
 import type { ApprovalPayload } from '@rotaris/contracts';
 import { PendingApprovals, PresenterRegistry, type PresenterPort } from './approvals.js';
+import type { ToolHooks } from './gate.js';
 import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 
@@ -31,7 +32,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][] } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
@@ -48,6 +49,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
     sessionId: 'S1', workspaceRoot: ROOT, policy, approvals, attended: () => opts.attended ?? true, presenter: opts.presenter === undefined ? { present: async () => ({ ok: true }), close: () => undefined } : opts.presenter,
     headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`),
     monotonic: clock, wall: clock, timers: clock, sink: rec.sink, nextSequence: () => ++seq, newRequestId: () => `req${++seq}`,
+    hooks: opts.hooks ?? null,
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -249,5 +251,55 @@ describe('PendingApprovals (REQ-TOOLS-054) and PresenterRegistry (ADR-0019)', ()
     reg.revoke('w1');
     expect(reg.attended).toBe(false);
     reg.stop();
+  });
+});
+
+describe('the two hook slots (ADR-0015, REQ-HOOKS-004/005/047/068/071/072/074)', () => {
+  function recordingHooks(opts: { block?: boolean; feedback?: string } = {}) {
+    const calls: { slot: string; call: Parameters<ToolHooks['preTool']>[0] }[] = [];
+    const hooks: ToolHooks = {
+      preTool: async (call) => { calls.push({ slot: 'pre', call }); return opts.block ? { blocked: true, refusal: "Blocked by hook 'G'. no The 'terminal' call was not executed. Choose a different approach or ask the user to adjust the hook configuration." } : { blocked: false, refusal: '' }; },
+      postTool: async (call) => { calls.push({ slot: 'post', call }); return { feedback: opts.feedback ?? '' }; },
+    };
+    return { hooks, calls };
+  }
+  it('a pre_tool stop is a blocked result with the refusal, the tool never runs, the evidence record settles hook_blocked', async () => {
+    const rh = recordingHooks({ block: true });
+    const h = harness({ preset: 'autonomous', hooks: rh.hooks });
+    const r = await h.gate.dispatch(h.call('terminal', { command: 'git push origin main' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', isError: true });
+    expect(r.text).toMatch(/^Blocked by hook 'G'\./);
+    expect(r.blockedReason).toBe(r.text);
+    expect(h.executed).toEqual([]);
+    expect(rh.calls.map((c) => c.slot)).toEqual(['pre']);
+    expect(rh.calls[0]!.call).toMatchObject({ toolName: 'terminal', facetText: 'git push origin main', command: 'git push origin main', arguments: { command: 'git push origin main' } });
+    expect(h.rec.settles[0]).toMatchObject({ status: 'blocked', failure_kind: 'hook_blocked' });
+    // the decision was still audited as allow: the policy permitted, the hook refused (REQ-HOOKS-004)
+    expect(h.rec.decisions[0]).toMatchObject({ decision: 'allow' });
+  });
+  it('post_tool feedback rides in the same result for an observation and follows as a user message for an error; the facet for a file tool is its operation', async () => {
+    const rh = recordingHooks({ feedback: "Hook 'P' reported after the call: noted" });
+    const h = harness({ preset: 'autonomous', hooks: rh.hooks });
+    const ok = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(ok.text).toBe("wrote a.txt\nHook 'P' reported after the call: noted");
+    expect(ok.followUp).toBeUndefined();
+    expect(rh.calls.map((c) => c.slot)).toEqual(['pre', 'post']);
+    expect(rh.calls[0]!.call).toMatchObject({ facetText: 'create', command: '' });
+    expect(rh.calls[1]!.call.results).toEqual([{ kind: 'observation', text: 'wrote a.txt' }]);
+    const bad = await h.gate.dispatch(h.call('grep', { pattern: 'x' }), new AbortController().signal);
+    expect(bad.status).toBe('failed');
+    expect(bad.text).toMatch(/^The 'grep' call failed: disk on fire/);
+    expect(bad.followUp).toBe("Hook 'P' reported after the call: noted");
+    expect(rh.calls[3]!.call.results).toEqual([{ kind: 'error', text: bad.text }]);
+  });
+  it('REQ-HOOKS-004/068: a call the policy denies starts no hook; no hook port means one lookup and nothing more', async () => {
+    const rh = recordingHooks();
+    const h = harness({ preset: 'autonomous', hooks: rh.hooks });
+    const r = await h.gate.dispatch(h.call('terminal', { command: 'rm -rf build' }), new AbortController().signal);
+    expect(r.status).toBe('blocked');
+    expect(rh.calls).toEqual([]);
+    const none = harness({ preset: 'autonomous' });
+    const r2 = await none.gate.dispatch(h.call('write_file', { operation: 'create', path: 'b.txt' }), new AbortController().signal);
+    expect(r2.text).toBe('wrote b.txt');
   });
 });

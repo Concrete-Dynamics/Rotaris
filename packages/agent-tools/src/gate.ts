@@ -11,8 +11,8 @@ import type { Observation, ToolExecutor } from './tools/types.js';
  * ADR-0017 / REQ-TOOLS-011: the ONE gate. Every dispatch — built-in, plugin, MCP — comes through
  * `dispatch`, in REQ-TOOLS-175's order: the payload repaired and validated (REQ-TOOLS-032), the
  * permission resolved (never raises), an `ask` brokered to the approval flow or the headless policy
- * (ADR-0019), the decision audited whatever it was (REQ-TOOLS-027), *(pre-execution hooks: not built —
- * the slot is here and empty, ADR-0015)*, execution, *(post-execution hooks: not built)*, the
+ * (ADR-0019), the decision audited whatever it was (REQ-TOOLS-027), the pre-execution hooks (ADR-0015:
+ * only a permitted call reaches them, REQ-HOOKS-004/068), execution, the post-execution hooks, the
  * observation settled into the evidence record with its diagnostics issues (REQ-SESSION-136).
  * A deny returns REQ-TOOLS-013's exact text with the original call id and never aborts the run.
  *
@@ -28,6 +28,29 @@ export interface ToolCall {
   readonly agentName: string;
 }
 
+/**
+ * ADR-0015's two slots as the gate sees them: structurally identical to the engine's `ToolHookBridge`,
+ * filled at the run-host root with the same object. Only `preTool` can stop a call (REQ-HOOKS-047).
+ */
+export interface ToolHookCall {
+  readonly toolName: string;
+  readonly facetText: string;
+  readonly arguments: Readonly<Record<string, unknown>>;
+  readonly command: string;
+  readonly results?: readonly { readonly kind: 'observation' | 'error'; readonly text: string }[];
+}
+export interface ToolHooks {
+  preTool(call: ToolHookCall): Promise<{ readonly blocked: boolean; readonly refusal: string }>;
+  postTool(call: ToolHookCall): Promise<{ readonly feedback: string }>;
+}
+
+/** REQ-HOOKS-029: the facet a hook matcher is compared against — the same one the policy matches on. */
+export function hookFacet(toolName: string, args: Readonly<Record<string, unknown>>): string {
+  if (toolName === 'terminal' && typeof args['command'] === 'string') return args['command'] as string;
+  if (typeof args['operation'] === 'string') return args['operation'] as string;
+  return '';
+}
+
 export interface ToolResult {
   readonly callId: string;
   readonly name: string;
@@ -41,6 +64,10 @@ export interface ToolResult {
   /** The repaired, validated arguments (empty when the payload could not be read). */
   readonly args: Readonly<Record<string, unknown>>;
   readonly label: string;
+  /** The reason a `blocked` row shows: the policy's, or a pre_tool hook's refusal (REQ-HOOKS-071). */
+  readonly blockedReason?: string;
+  /** REQ-HOOKS-074: post_tool feedback for a call that produced no observation. */
+  readonly followUp?: string;
 }
 
 export interface GateSink {
@@ -77,6 +104,8 @@ export interface GateDeps {
   /** ADR-0019: the monotonic presentation sequence, run-host-wide. */
   readonly nextSequence: () => number;
   readonly newRequestId?: () => string;
+  /** ADR-0015: absent or null means no hook exists for the session (REQ-HOOKS-069/070). */
+  readonly hooks?: ToolHooks | null | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -194,10 +223,17 @@ export class Gate {
         metadata: { tool: call.name, rule: decision.ruleId, source: decision.source, persona: call.persona },
       });
       const text = denialText(decision.ruleId, decision.reason, call.name);
-      return finish({ text, isError: true, status: 'blocked', decision, observation: null }, { error: decision.reason });
+      return finish({ text, isError: true, status: 'blocked', decision, observation: null, blockedReason: decision.reason }, { error: decision.reason });
     }
 
-    // (2) pre-execution hooks: not built (ADR-0015). (3) execution.
+    // (2) pre-execution hooks (ADR-0015): only a permitted call reaches them; a stop is one refused invocation (REQ-HOOKS-071/072).
+    const hooks = deps.hooks ?? null;
+    const hookCall = { toolName: call.name, facetText: hookFacet(call.name, parsed.data as Record<string, unknown>), arguments: parsed.data as Record<string, unknown>, command: call.name === 'terminal' && typeof req.commandFacet === 'string' ? req.commandFacet : '' };
+    if (hooks) {
+      const pre = await hooks.preTool(hookCall);
+      if (pre.blocked) return finish({ text: pre.refusal, isError: true, status: 'blocked', decision, observation: null, blockedReason: pre.refusal }, { failure_kind: 'hook_blocked', error: 'stopped by a pre_tool hook' });
+    }
+    // (3) execution.
     let obs: Observation;
     try {
       obs = await executor.execute(parsed.data, {
@@ -208,9 +244,20 @@ export class Gate {
       const aborted = signal.aborted;
       obs = { text: aborted ? `The '${call.name}' call was cancelled before it completed.` : `The '${call.name}' call failed: ${String(cause instanceof Error ? cause.message : cause)}`, isError: true, failureKind: aborted ? 'cancelled' : 'execution_error' };
     }
-    // (4) post-execution hooks: not built. (5) diagnostics.
+    // (4) post-execution hooks: for a call that ran, errors included (REQ-HOOKS-005); feedback rides in the same result
+    // message, or follows as a user message when the call produced no observation (REQ-HOOKS-074).
+    let text = obs.text;
+    let followUp: string | undefined;
+    if (hooks) {
+      const post = await hooks.postTool({ ...hookCall, results: [{ kind: obs.isError ? 'error' : 'observation', text: obs.text }] });
+      if (post.feedback !== '') {
+        if (obs.isError) followUp = post.feedback;
+        else text = `${obs.text}\n${post.feedback}`;
+      }
+    }
+    // (5) diagnostics.
     const status: Exclude<ToolStatus, 'running'> = obs.isError ? 'failed' : 'ok';
-    const result = finish({ text: obs.text, isError: obs.isError, status, decision, observation: obs }, {
+    const result = finish({ text, isError: obs.isError, status, decision, observation: obs, ...(followUp === undefined ? {} : { followUp }) }, {
       ...(obs.outcomeKind === undefined ? {} : { outcome_kind: obs.outcomeKind }), ...(obs.exitCode === undefined ? {} : { exit_code: obs.exitCode }),
       ...(obs.failureKind === undefined ? {} : { failure_kind: obs.failureKind }), ...(obs.warnings === undefined ? {} : { warnings: obs.warnings }),
       error: obs.isError ? obs.text.slice(0, 500) : null,

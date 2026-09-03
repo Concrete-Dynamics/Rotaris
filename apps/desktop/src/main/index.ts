@@ -120,6 +120,7 @@ async function main(): Promise<void> {
   let noticeSeq = 0;
   let currentNotice: NoticeCurrent['current'] = null;
   const publishNotice = (n: NoticeCurrent['current']) => { currentNotice = n; relay.broadcast(CHANNEL.noticeCurrent, { v: CONTRACT_SCHEMA_VERSION, current: n } satisfies NoticeCurrent); };
+  const publishedNoticeKeys = new Set<string>();
   const raiseNotice = (severity: 'info' | 'warning' | 'error', headline: string, detail?: string) => {
     publishNotice({ id: ++noticeSeq, severity, headline, ...(detail === undefined ? {} : { detail }) });
   };
@@ -208,6 +209,12 @@ async function main(): Promise<void> {
       const idx = queue.findIndex((p) => p.request_id === e.requestId);
       if (idx >= 0) queue.splice(idx, 1);
       if (openDialog && openDialog.requestId === e.requestId) { openDialog.answered = true; if (!openDialog.win.isDestroyed()) openDialog.win.close(); }
+    }
+    else if (e.kind === 'notice.publish') {
+      // REQ-NOTIFY-224: once per key within this application session; nothing persists across a restart (REQ-NOTIFY-027).
+      if (e.key !== undefined) { if (publishedNoticeKeys.has(e.key)) return; publishedNoticeKeys.add(e.key); }
+      raiseNotice(e.severity, e.headline, e.detail);
+      log(`notice from the run host: ${e.headline}${e.action ? ` [${e.action}]` : ''}`);
     }
     else if (e.kind === 'run.result') {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.

@@ -199,6 +199,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
     sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
+    hooks: ctx.hooks ?? null,
   });
 
   return {
@@ -209,7 +210,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       return {
         text: r.text, isError: r.isError, status, durationMs: r.durationMs, label: r.label, args: r.args,
         ...(r.observation?.diff === undefined ? {} : { diff: r.observation.diff }),
-        ...(r.status === 'blocked' && r.decision ? { blockedReason: r.decision.reason } : {}),
+        ...(r.status === 'blocked' ? { blockedReason: r.blockedReason ?? r.decision?.reason ?? '' } : {}),
+        ...(r.followUp === undefined ? {} : { followUp: r.followUp }),
       };
     },
     cancelPending: () => approvals.cancelAll(),

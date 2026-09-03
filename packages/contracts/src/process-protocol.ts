@@ -183,6 +183,8 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('approval.close'), requestId: z.string() }),
   /** ADR-0019's liveness poll, on the channel that carries registration. */
   z.object({ kind: z.literal('presenter.poll'), seq: z.number().int().nonnegative() }),
+  /** ADR-0015 / REQ-HOOKS-054/086: the run's notices for the host's channel (ADR-0049 owns the one current notice in main). */
+  z.object({ kind: z.literal('notice.publish'), severity: z.enum(['info', 'warning', 'error']), headline: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional() }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

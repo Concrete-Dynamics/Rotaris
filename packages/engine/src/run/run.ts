@@ -14,6 +14,7 @@ import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import type { SummariserDeps } from '../children/report.js';
+import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 
 /**
@@ -99,6 +100,10 @@ export interface RunDeps {
   /** REQ-ORCH-080: default 120 s; 0 disables. */
   readonly drainTimeoutMs?: Millis | undefined;
   readonly permission: PermissionPosture;
+  /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
+  readonly hooks?: HookPort | null | undefined;
+  /** The host's notice channel (REQ-HOOKS-054/086/087). */
+  readonly notice?: ((n: RunNotice) => void) | undefined;
   readonly pid: number;
   readonly host: MachineId;
   readonly readSession: () => SessionRow | undefined;
@@ -145,9 +150,12 @@ export class Run {
   private rootId = 'root';
   /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
   private readonly ports = new Set<ToolPort>();
+  /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
+  private hooks: HookPort | null;
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
+    this.hooks = deps.hooks ?? null;
     this.todo = Todo.fresh(deps.taskId, deps.task, deps.config.consecutiveRetryLimit);
     this.aggregates = Aggregates.rehydrate(deps.readSession());
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
@@ -201,10 +209,20 @@ export class Run {
       const audit = writer.recordLaunchAudit({
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
         run_intent: { category: 'moderate_feature', confidence: null, reason: 'intent classification is not built; fallback', fallback: true, carried_over: false },
-        permission_mode: 'default', check_suite: null, resolved_playbooks: {}, hooks: [], config_snapshot: {},
+        permission_mode: 'default', check_suite: null, resolved_playbooks: {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: {},
       });
       if (audit.ok && !audit.value) this.deps.warn(`launch audit for ${this.sessionId} already existed and was not rewritten (REQ-SESSION-138)`);
       writer.appendTimeline('run_start', 'rotaris', `A run is starting for session ${this.sessionId}.`, { workspace_root: this.deps.workspaceRoot });
+      // ADR-0015 / REQ-HOOKS-085/086/127: the trust outcome announced once, ahead of the first hook-related event.
+      if (this.hooks) {
+        const trust = this.hooks.trust();
+        if (trust.loadWarning !== '') this.deps.warn(trust.loadWarning);
+        this.hooks.announceWithheld();
+        if (trust.withheld > 0) {
+          writer.recordIssue({ kind: 'hook_trust', severity: 'warning', actor: 'hooks', message: trust.notice, metadata: { blocked: trust.withheld, restored: trust.reinstated, workspace: trust.workspace } });
+          this.deps.notice?.({ severity: 'warning', headline: 'Workspace hooks need review', detail: trust.notice, action: 'hooks.review', key: `hooks.review:${trust.workspace}:${trust.fingerprint}` });
+        }
+      }
       // REQ-TOOLS-071: the effective mode announced — session state, and on a downgrade the transcript, the timeline and the log.
       const perm = this.deps.permission;
       if (perm.downgraded) {
@@ -214,6 +232,8 @@ export class Run {
       }
       this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0 });
       await this.drain();
+      // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
+      if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
 
       // REQ-ORCH-069: stop conditions between iterations, first match wins; the stop request wins over all.
       for (;;) {
@@ -283,6 +303,11 @@ export class Run {
       escalate = true;
     }
     writer.recordEvent('iteration.end', { task: task.text, outcome, summary }, iteration);
+    // REQ-HOOKS-075/077/080/082: iteration_end for N finishes before N+1 begins; the iteration's own state beside the dispatched outcome.
+    if (this.hooks) {
+      const iterationState = outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' || outcome === 'abandoned' ? 'failed' : 'succeeded';
+      await this.hooks.fireLifecycle('iteration_end', { iteration, outcome, child_name: this.rootId, status: iterationState, summary });
+    }
     this.iterationsCompleted += 1;
     this.saveRunning({});
     await this.drain();
@@ -312,7 +337,7 @@ export class Run {
         sessionId: this.sessionId, workspaceRoot: this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn,
         budget: this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
-        summariser: this.deps.summariser ?? null, ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        summariser: this.deps.summariser ?? null, hooks: this.hooks, ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
       }, iteration)
       : null;
     this.children = children;
@@ -436,6 +461,11 @@ export class Run {
     };
     this.result = result;
     const step = (name: string, fn: () => void) => { try { fn(); } catch (cause) { this.deps.warn(`teardown step ${name} failed on ${this.sessionId}: ${String(cause)}`); } };
+    // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `result.status` is
+    // the one string the payload and the session.end event below both carry.
+    if (this.hooks) {
+      try { await this.hooks.fireLifecycle('session_end', { status: result.status }); } catch (cause) { this.deps.warn(`the session_end hooks raised on ${this.sessionId}: ${String(cause)}`); }
+    }
 
     step('run_end', () => { writer.appendTimeline('run_end', 'rotaris', `The run ended ${status}.`, { execution_status: status, stop_reason: stopReason }); });
     step('flush-publications', () => owner.flushPending());
@@ -460,7 +490,13 @@ export class Run {
       if (r.ok) this.deps.onSaved?.(writer.lastGeneration);
     });
     try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the terminal pair failed on ${this.sessionId}: ${String(cause)}`); }
-    // (hooks notice: none are built.) Finally, every per-session binding goes (REQ-EVENTS-071).
+    // REQ-HOOKS-054/087/088: the switched-off advisory to the notice channel, then the attachment removed — nothing when nothing happened.
+    step('hooks-advisory', () => {
+      const adv = this.hooks?.advisory() ?? '';
+      if (adv !== '') this.deps.notice?.({ severity: 'warning', headline: 'Hooks need attention', detail: adv, action: 'hooks.settings' });
+      this.hooks = null;
+    });
+    // Finally, every per-session binding goes (REQ-EVENTS-071).
     step('remove-bindings', () => bus.detachSession(this.sessionId));
     this.ended = true;
     return result;

@@ -16,6 +16,7 @@ import { presentationChildState, type AgentRecord, type ChildState } from '@rota
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
+import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -50,6 +51,8 @@ export interface ToolPortContext {
   readonly delegation?: DelegationOps | undefined;
   readonly parentId?: string | undefined;
   readonly depth?: number | undefined;
+  /** ADR-0015: the session's tool hooks for the gate's two slots; absent means none. */
+  readonly hooks?: ToolHookBridge | undefined;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -89,6 +92,10 @@ export interface SessionsDeps {
   readonly sessionLogAppender?: (dal: StoreDal, sessionId: SessionId) => (line: string) => void;
   /** REQ-TOOLS-184: background terminal sessions in the running state, for the strip. */
   readonly backgroundSessions?: () => number;
+  /** ADR-0015: the session's hook port, built by the root at run start (REQ-HOOKS-131); absent means no hooks. */
+  readonly hooks?: (ctx: HookPortContext) => HookPort | null;
+  /** The host's notice channel. */
+  readonly notice?: (n: RunNotice) => void;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -225,7 +232,12 @@ export class Sessions {
 
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
     const runRef: { run?: Run } = {};
-    const baseCtx = { sessionId, workspaceRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); } };
+    // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
+    let hooks: HookPort | null = null;
+    if (this.deps.hooks) {
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, writer, warn, log: (m) => { log?.info(m); } }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
+    }
+    const baseCtx = { sessionId, workspaceRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
     live.tools = tools;
@@ -237,7 +249,7 @@ export class Sessions {
     const run = new Run({
       sessionId, workspaceRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
-      readSession: () => dal.getSession(sessionId), warn,
+      readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
       ...(this.deps.tools ? {
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth }),

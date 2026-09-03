@@ -11,6 +11,7 @@ import { childPayload, completionNotification, parseReport, priorAgentContext, r
 import { BUILT_IN_PERSONAS, type RoleName } from './personas.js';
 import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
+import type { HookPort } from '../hooks-port.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -44,6 +45,8 @@ export interface ChildrenDeps {
   readonly childTimeoutMs?: Millis;
   readonly runSignal: AbortSignal;
   readonly warn: (m: string) => void;
+  /** ADR-0015: `child_completed` fires once a child has finished, whatever its final state (REQ-HOOKS-003). */
+  readonly hooks?: HookPort | null | undefined;
 }
 
 export class IterationChildren implements DelegationOps {
@@ -237,6 +240,8 @@ export class IterationChildren implements DelegationOps {
     deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at });
     deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${report.status}: ${report.summary.slice(0, 120)}`, { task_id: row.task_id, status: report.status });
     deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+    // REQ-HOOKS-075: child_completed with the child's terminal state and its report status side by side.
+    if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
     const settledRow = this.ledger.get(row.task_id);
     if (settledRow) this.scheduler.settled(settledRow);
   }

@@ -32,6 +32,8 @@ export interface PortToolResult {
   readonly args: Readonly<Record<string, unknown>>;
   readonly diff?: string;
   readonly blockedReason?: string;
+  /** REQ-HOOKS-074: post_tool feedback for a call that produced no observation — delivered as a following user message. */
+  readonly followUp?: string;
 }
 export interface ModeChange {
   readonly requested: PermissionPreset;
@@ -105,6 +107,7 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       return { report: { ...report, usage }, messages, toolCallCount };
     }
     const results: ChatMessage['content'] = [];
+    const followUps: string[] = [];
     for (const c of calls) {
       if (signal.aborted) break;
       toolCallCount += 1;
@@ -125,9 +128,12 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
         if (r.diff !== undefined && r.status === 'ok') writer.appendRow('diff', r.diff, true, { persona: deps.persona, name: deps.agentName, callKey: c.callId, diff: r.diff });
       }
       (results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[]).push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
+      if (r.followUp !== undefined && r.followUp !== '') followUps.push(r.followUp);
     }
     if (signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages, toolCallCount };
     messages.push({ role: 'tool', content: results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[] });
+    // REQ-HOOKS-074: nothing is placed between the assistant's calls and their results; feedback for an errored call follows as a user message.
+    if (followUps.length > 0) messages.push({ role: 'user', content: [{ kind: 'text', text: followUps.join('\n') }] });
     owner.flushPending();
   }
 }

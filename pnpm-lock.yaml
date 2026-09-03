@@ -156,6 +156,9 @@ importers:
       '@rotaris/kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@rotaris/model':
+        specifier: workspace:*
+        version: link:../model
       '@rotaris/platform':
         specifier: workspace:*
         version: link:../platform

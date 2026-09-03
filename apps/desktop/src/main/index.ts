@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, utilityProcess, type UtilityProcess } from
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, type CommandOutcome, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 
@@ -103,10 +103,23 @@ async function main(): Promise<void> {
   log(`run host: ${JSON.stringify(rhHello)}`);
 
   const relay = new UpdateRelay();
+  // ADR-0049 / REQ-SHELL-114: ONE current persistent notice, owned here; acknowledge is compare-and-clear.
+  let noticeSeq = 0;
+  let currentNotice: NoticeCurrent['current'] = null;
+  const publishNotice = (n: NoticeCurrent['current']) => { currentNotice = n; relay.broadcast(CHANNEL.noticeCurrent, { v: CONTRACT_SCHEMA_VERSION, current: n } satisfies NoticeCurrent); };
+  const raiseNotice = (severity: 'info' | 'warning' | 'error', headline: string, detail?: string) => {
+    publishNotice({ id: ++noticeSeq, severity, headline, ...(detail === undefined ? {} : { detail }) });
+  };
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
     if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
     else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
+    else if (e.kind === 'run.result') {
+      // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
+      const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
+      raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
+      log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
+    }
     else if (e.kind === 'log') log(`run host ${e.level}: ${e.message}`);
   });
   const processes: ProcessKind[] = ['run-host'];
@@ -132,9 +145,21 @@ async function main(): Promise<void> {
       case 'session.start': {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
         const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt }, millis(10_000));
-        if (r.kind !== 'session.started') return refusal(r, 'The session could not be started');
+        if (r.kind !== 'session.started') {
+          // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
+          if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
+          return refusal(r, 'The session could not be started');
+        }
         return { ok: true, value: { sessionId: r.sessionId } };
       }
+      case 'session.control': {
+        // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
+        const r = await runHost.request({ kind: 'session.control', request: req.request }, millis(10_000));
+        return r.kind === 'control.result' ? { ok: true, value: r.result } : refusal(r, 'The control could not be delivered');
+      }
+      case 'notice.acknowledge':
+        if (currentNotice && currentNotice.id === req.noticeId) publishNotice(null);
+        return { ok: true };
       case 'session.prompt': {
         const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
@@ -201,7 +226,21 @@ async function main(): Promise<void> {
         });
       });
     }
-    clocks.timers.after(millis(prompt ? 3_000 : 1_500), async () => {
+    // ROTARIS_CAPTURE_STOP_MS: press the stop control with a real click at its measured position (REQ-SESSION-186).
+    const stopAt = Number(process.env['ROTARIS_CAPTURE_STOP_MS'] ?? 0);
+    if (prompt && stopAt > 0) {
+      clocks.timers.after(millis(stopAt), async () => {
+        const rect = await win.webContents.executeJavaScript(`(() => { const b = document.querySelector('.composer__actions .btn-danger'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, label: b.textContent }; })()`) as { x: number; y: number; label: string } | null;
+        if (!rect) { log('capture: no stop control on screen'); return; }
+        const wc = win.webContents;
+        wc.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        wc.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        log(`capture: clicked "${rect.label}" at ${Math.round(rect.x)},${Math.round(rect.y)}`);
+      });
+    }
+    // ROTARIS_CAPTURE_AFTER_MS lets a verification run wait for the run loop to finish before the capture.
+    const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
+    clocks.timers.after(millis(after), async () => {
       const img = await win.webContents.capturePage();
       writeFileSync(capture, img.toPNG());
       log(`captured ${capture}`);

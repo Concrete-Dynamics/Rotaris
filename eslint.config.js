@@ -42,7 +42,8 @@ const ALLOW = {
   contracts: ['kernel'],
   platform: ['kernel'],
   store: ['kernel', 'platform'],
-  engine: ['kernel', 'contracts', 'store', 'platform'],
+  // engine → model: the run loop drives `AgentBackend` (ADR-0026); model sits over kernel only, so the arrow still points down.
+  engine: ['kernel', 'contracts', 'store', 'platform', 'model'],
   'agent-tools': ['kernel', 'contracts', 'store', 'platform'],
   model: ['kernel'],
   mcp: ['kernel', 'platform'],

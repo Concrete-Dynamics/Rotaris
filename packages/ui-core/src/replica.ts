@@ -95,7 +95,11 @@ export function createReplicaStore(deps: ReplicaDeps): ReplicaStore {
       }
       // A whole-session update always SETS the expectation and replaces the session. The transcript is
       // re-delivered by the increment that follows it (REQ-SESSION-161), so it is cleared here.
-      set({ expect: p.seq + 1, session: p.session, rows: [], reachedOldest: false, reconciling: false, counters: bump(s.counters, 'reset') });
+      // REQ-MONITOR-216: the whole-session update OMITS the transcript, so it cannot say which rows survived —
+      // the rows are kept and the increment that follows an attach or a reconcile upserts over them. (The
+      // first form of this line cleared the rows; the first run loop's status saves, each a snapshot, then
+      // emptied a transcript that was still being written. ADR-0043's first-execution note records both.)
+      set({ expect: p.seq + 1, session: p.session, reconciling: false, counters: bump(s.counters, 'reset') });
       return 'reset';
     },
 

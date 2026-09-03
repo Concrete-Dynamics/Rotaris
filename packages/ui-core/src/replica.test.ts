@@ -3,10 +3,10 @@ import { createReplicaStore } from './index.js';
 
 const session = (seq: number) => ({
   v: 1, sessionId: 's', seq,
-  session: { id: 's', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: 'x', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [], tokenUsage: { input: 0, output: 0 } },
+  session: { id: 's', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: 'x', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [], tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, iterationsCompleted: 0, summary: null },
 });
 const inc = (seq: number, earliestChanged: number, rows: { index: number; body: string }[]) => ({
-  v: 1, sessionId: 's', seq, earliestChanged, rows: rows.map((r) => ({ ...r, kind: 'text', settled: true, at: 't' })), diffs: [], personas: [],
+  v: 1, sessionId: 's', seq, earliestChanged, rows: rows.map((r) => ({ ...r, kind: 'text', settled: true, at: 't', ts: '' })), diffs: [], personas: [],
 });
 
 describe('ui-core — the apply pipeline, step 0 (REQ-MONITOR-214, REQ-MONITOR-226, ADR-0046)', () => {
@@ -42,6 +42,16 @@ describe('ui-core — the apply pipeline, step 0 (REQ-MONITOR-214, REQ-MONITOR-2
     expect(store.getState().counters).toMatchObject({ applied: 3, reset: 2, superseded: 1, refused: 1, dropped: 1 });
   });
 
+  it('REQ-MONITOR-216: a snapshot carries no transcript, so a status save mid-run leaves the rows on display', () => {
+    const store = createReplicaStore({ requestReconcile: () => undefined });
+    store.getState().follow('s');
+    store.getState().applySnapshot(session(1));
+    store.getState().applyIncrement(inc(2, 0, [{ index: 0, body: 'r0' }, { index: 1, body: 'r1' }]));
+    expect(store.getState().rows.length).toBe(2);
+    store.getState().applySnapshot(session(3));
+    expect(store.getState().rows.map((r) => r.body)).toEqual(['r0', 'r1']);
+    expect(store.getState().expect).toBe(4);
+  });
   it('REQ-MONITOR-217: a snapshot REPLACES — a field the new payload does not carry does not survive', () => {
     const store = createReplicaStore({ requestReconcile: () => {} });
     store.getState().follow('s');
@@ -87,7 +97,7 @@ describe('ui-core — the apply pipeline, step 0 (REQ-MONITOR-214, REQ-MONITOR-2
     store.getState().follow('s');
     store.getState().applySnapshot(session(1));
     store.getState().applyIncrement(inc(2, 50, [{ index: 50, body: 'r50' }]));
-    store.getState().prependOlder([{ index: 48, kind: 'text', settled: true, body: 'r48', at: 't' }, { index: 49, kind: 'text', settled: true, body: 'r49', at: 't' }], false);
+    store.getState().prependOlder([{ index: 48, kind: 'text', settled: true, body: 'r48', at: 't', ts: '' }, { index: 49, kind: 'text', settled: true, body: 'r49', at: 't', ts: '' }], false);
     expect(store.getState().rows.map((r) => r.index)).toEqual([48, 49, 50]);
     expect(store.getState().reachedOldest).toBe(false);
   });

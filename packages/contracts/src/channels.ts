@@ -42,6 +42,11 @@ export const TranscriptRowSchema = z.object({
   body: z.string(),
   /** ISO-8601 UTC instant the row was recorded (REQ-CHAT-011 formats it HH:MM:SS). */
   at: z.string(),
+  /** REQ-SESSION-121: local wall-clock HH:MM:SS stamped at append. */
+  ts: z.string(),
+  /** REQ-SESSION-121: agent, thinking and tool rows name their agent and persona. */
+  persona: z.string().optional(),
+  name: z.string().optional(),
 });
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 
@@ -81,6 +86,13 @@ export const SessionRecordSchema = z.object({
   pendingApprovals: z.array(z.object({ requestId: z.string(), tool: z.string() })),
   pendingQuestions: z.array(z.object({ requestId: z.string(), prompt: z.string() })),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
+  /** Decimal string (ADR-0031). */
+  cost: z.string(),
+  /** REQ-SESSION-095 / REQ-ORCH-147: what the run recorded; null before any run ended. */
+  stopReason: z.string().nullable(),
+  iterationsCompleted: z.number().int().nonnegative(),
+  /** REQ-SESSION-074: the end-of-run summarisation, presented exactly once (REQ-SESSION-186). */
+  summary: z.object({ status: z.string(), severity: z.string(), message: z.string() }).nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

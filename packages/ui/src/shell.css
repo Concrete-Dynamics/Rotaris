@@ -87,3 +87,26 @@
 .composer__input { min-height: 48px; resize: none; }
 .composer__actions { display: flex; justify-content: flex-end; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
+
+/* ── Rows by kind, and a row still being written (REQ-CHAT-011, REQ-MONITOR-219) ── */
+.row--agent { border-color: var(--rt-border); }
+.row--system { border-style: dashed; color: var(--rt-text-secondary); }
+.row--system .row__body { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
+.row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+@keyframes rt-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
+.composer__hint { align-self: center; margin-right: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); }
+.composer__actions { gap: var(--rt-space-2, 8px); }
+
+/* ── The one persistent notice (REQ-SHELL-114/116, design G1: rule + glyph, never a filled background) ── */
+.notice { display: flex; align-items: flex-start; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 1px solid var(--rt-border); border-left: 3px solid var(--rt-info-300, var(--rt-accent-300)); border-radius: var(--rt-radius-md, 6px); background: var(--rt-surface); }
+.notice--warning { border-left-color: var(--rt-warn); }
+.notice--error { border-left-color: var(--rt-danger-300); }
+.notice__glyph { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid currentColor; font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text-secondary); }
+.notice--warning .notice__glyph { color: var(--rt-warn); }
+.notice--error .notice__glyph { color: var(--rt-danger-300); }
+.notice__text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.notice__headline { font-size: var(--rt-text-sm, 13px); color: var(--rt-text); }
+.notice__details summary { cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+.notice__detail { margin: 4px 0; padding: var(--rt-space-2, 8px); background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; user-select: text; }
+.notice__dismiss { align-self: center; }

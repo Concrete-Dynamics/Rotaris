@@ -13,7 +13,8 @@
  * spike 8 prices. Every later table lands with the mechanism that writes it,
  * in its own migration, so that the checkpoint period of the publish path
  * (measured at 135–136 commits, spike 21) is moved knowingly rather than by
- * accident.
+ * accident. v3 lands with the run loop: the run's columns on the session row,
+ * the launch audit and the timeline.
  */
 export interface Migration {
   readonly to: number;
@@ -95,6 +96,58 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX events_by_kind      ON events(session_id, kind, ordinal);
       CREATE INDEX events_by_at        ON events(session_id, at, ordinal);
       CREATE INDEX events_by_iteration ON events(session_id, iteration, ordinal);
+    `,
+  },
+  {
+    to: 3,
+    // v3 lands with the run loop (ADR-0008 aggregates / launch audit, ADR-0013, ADR-0014). Columns and two
+    // tables, NO new index: no budgeted query reads any of this yet. When one does, declare the index and
+    // assert its plan in store.test.ts (spike 8's rule).
+    sql: `
+      -- REQ-SESSION-121: the row dictionary's agent/thinking/tool rows carry name and persona; every row
+      -- carries ts in local HH:MM:SS as appended (the ISO instant stays in at).
+      ALTER TABLE transcript_rows ADD COLUMN persona TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN name    TEXT;
+      ALTER TABLE transcript_rows ADD COLUMN ts      TEXT NOT NULL DEFAULT '';
+
+      -- REQ-ORCH-147 / REQ-SESSION-095: what the run records on the session it ran.
+      ALTER TABLE sessions ADD COLUMN stop_reason          TEXT;
+      ALTER TABLE sessions ADD COLUMN iterations_completed INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sessions ADD COLUMN run_started_at       TEXT;
+      -- REQ-SESSION-168: the aggregates, copied in on every save, never computed by a scan. Cost is a
+      -- decimal string (ADR-0031): money is never a binary float.
+      ALTER TABLE sessions ADD COLUMN tokens_input  INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sessions ADD COLUMN tokens_output INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sessions ADD COLUMN cost          TEXT NOT NULL DEFAULT '0';
+      ALTER TABLE sessions ADD COLUMN tool_calls    INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE sessions ADD COLUMN compressions  INTEGER NOT NULL DEFAULT 0;
+      -- REQ-SESSION-074: the end-of-run summarisation, persisted beside the record.
+      ALTER TABLE sessions ADD COLUMN summary_status   TEXT;
+      ALTER TABLE sessions ADD COLUMN summary_severity TEXT;
+      ALTER TABLE sessions ADD COLUMN summary_text     TEXT;
+      -- REQ-ORCH-147: the todo state and the loop progress record, as documents carrying their own version.
+      ALTER TABLE sessions ADD COLUMN todo     TEXT;
+      ALTER TABLE sessions ADD COLUMN progress TEXT;
+
+      -- REQ-SESSION-138: exactly once per session; the primary key IS the one-shot. Absence reads as an
+      -- empty configuration snapshot (REQ-SESSION-036); no placeholder is ever created (REQ-SESSION-132).
+      CREATE TABLE launch_audits (
+        session_id  TEXT PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
+        recorded_at TEXT NOT NULL,
+        payload     TEXT NOT NULL
+      );
+      -- REQ-ORCH-139 / REQ-SESSION-087 / REQ-SESSION-094: the timeline, append-ordered by the writer's
+      -- ordinal (ADR-0008 "Emission order"). No cap: REQ-SESSION-133 names none for it.
+      CREATE TABLE timeline (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        ordinal    INTEGER NOT NULL,
+        at         TEXT NOT NULL,
+        name       TEXT NOT NULL,
+        actor      TEXT NOT NULL,
+        message    TEXT NOT NULL,
+        metadata   TEXT NOT NULL,
+        PRIMARY KEY (session_id, ordinal)
+      );
     `,
   },
 ];

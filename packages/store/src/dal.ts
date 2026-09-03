@@ -28,6 +28,37 @@ export interface SessionRow {
   readonly dropped_count: number;
   readonly trim_cap: number | null;
   readonly last_trim_at: string | null;
+  // v3 — what a run records on its session (REQ-ORCH-147, REQ-SESSION-095, REQ-SESSION-168, REQ-SESSION-074).
+  readonly stop_reason: string | null;
+  readonly iterations_completed: number;
+  readonly run_started_at: string | null;
+  readonly tokens_input: number;
+  readonly tokens_output: number;
+  /** Decimal string (ADR-0031). */
+  readonly cost: string;
+  readonly tool_calls: number;
+  readonly compressions: number;
+  readonly summary_status: string | null;
+  readonly summary_severity: string | null;
+  readonly summary_text: string | null;
+  readonly todo: string | null;
+  readonly progress: string | null;
+}
+/** The run-recorded columns a save may carry (REQ-SESSION-168: aggregates copied on every persist). */
+export interface SessionRunPatch {
+  readonly stop_reason?: string | null;
+  readonly iterations_completed?: number;
+  readonly run_started_at?: string | null;
+  readonly tokens_input?: number;
+  readonly tokens_output?: number;
+  readonly cost?: string;
+  readonly tool_calls?: number;
+  readonly compressions?: number;
+  readonly summary_status?: string | null;
+  readonly summary_severity?: string | null;
+  readonly summary_text?: string | null;
+  readonly todo?: string | null;
+  readonly progress?: string | null;
 }
 export interface LockRow extends LockRecord {
   readonly session_id: string;
@@ -40,6 +71,24 @@ export interface TranscriptRowRecord {
   readonly body: string;
   readonly page: number | null;
   readonly at: string;
+  readonly persona: string | null;
+  readonly name: string | null;
+  /** Local wall-clock HH:MM:SS at append (REQ-SESSION-121). */
+  readonly ts: string;
+}
+export interface LaunchAuditRow {
+  readonly session_id: string;
+  readonly recorded_at: string;
+  readonly payload: string;
+}
+export interface TimelineRow {
+  readonly session_id: string;
+  readonly ordinal: number;
+  readonly at: string;
+  readonly name: string;
+  readonly actor: string;
+  readonly message: string;
+  readonly metadata: string;
 }
 export interface EventRow {
   readonly session_id: string;
@@ -65,6 +114,29 @@ export class StoreDal {
         ON CONFLICT(session_id) DO UPDATE SET execution_status = excluded.execution_status, updated_at = excluded.updated_at`),
       touchSession: db.prepare('UPDATE sessions SET execution_status = ?, updated_at = ? WHERE session_id = ?'),
       openHistory: db.prepare('UPDATE sessions SET history_open = 1 WHERE session_id = ?'),
+      // REQ-SESSION-168: a save copies the aggregates; COALESCE keeps a column the patch did not name.
+      updateSessionRun: db.prepare(`
+        UPDATE sessions SET
+          stop_reason = coalesce(@stop_reason, stop_reason),
+          iterations_completed = coalesce(@iterations_completed, iterations_completed),
+          run_started_at = coalesce(@run_started_at, run_started_at),
+          tokens_input = coalesce(@tokens_input, tokens_input),
+          tokens_output = coalesce(@tokens_output, tokens_output),
+          cost = coalesce(@cost, cost),
+          tool_calls = coalesce(@tool_calls, tool_calls),
+          compressions = coalesce(@compressions, compressions),
+          summary_status = coalesce(@summary_status, summary_status),
+          summary_severity = coalesce(@summary_severity, summary_severity),
+          summary_text = coalesce(@summary_text, summary_text),
+          todo = coalesce(@todo, todo),
+          progress = coalesce(@progress, progress)
+        WHERE session_id = @session_id`),
+      // REQ-SESSION-138: a plain INSERT — the one-shot is the primary key, not a check a caller could skip.
+      insertLaunchAudit: db.prepare('INSERT INTO launch_audits (session_id, recorded_at, payload) VALUES (?, ?, ?)'),
+      getLaunchAudit: db.prepare('SELECT * FROM launch_audits WHERE session_id = ?'),
+      insertTimeline: db.prepare('INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+      maxTimelineOrdinal: db.prepare('SELECT max(ordinal) AS m FROM timeline WHERE session_id = ?'),
+      timelineOf: db.prepare('SELECT * FROM timeline WHERE session_id = ? ORDER BY ordinal'),
       listLocks: db.prepare('SELECT * FROM session_locks'),
       getLock: db.prepare('SELECT * FROM session_locks WHERE session_id = ?'),
       // REQ-SESSION-046: claimed by an operation that either succeeds or reports the existing holder.
@@ -76,7 +148,7 @@ export class StoreDal {
       countResident: db.prepare('SELECT count(*) AS c FROM transcript_rows WHERE session_id = ? AND page IS NULL'),
       maxRowIndex: db.prepare('SELECT max(row_index) AS m FROM transcript_rows WHERE session_id = ?'),
       maxPage: db.prepare('SELECT max(page) AS m FROM transcript_rows WHERE session_id = ?'),
-      appendRow: db.prepare('INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at) VALUES (?, ?, ?, ?, ?, ?)'),
+      appendRow: db.prepare('INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, persona, name, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       // REQ-SESSION-131: the settle path can only reach a RESIDENT row; a released row has no statement that updates it.
       settleRow: db.prepare('UPDATE transcript_rows SET body = ?, settled = 1 WHERE session_id = ? AND row_index = ? AND page IS NULL'),
       // REQ-SESSION-192: release the oldest resident rows as one whole page, index untouched.
@@ -139,6 +211,40 @@ export class StoreDal {
   openHistory(id: SessionId): void {
     this.stmts['openHistory']!.run(id);
   }
+  /** REQ-SESSION-168: the run's columns, inside the save's transaction. Unnamed columns are kept. */
+  updateSessionRun(id: SessionId, patch: SessionRunPatch): void {
+    this.stmts['updateSessionRun']!.run({
+      session_id: id,
+      stop_reason: patch.stop_reason ?? null, iterations_completed: patch.iterations_completed ?? null, run_started_at: patch.run_started_at ?? null,
+      tokens_input: patch.tokens_input ?? null, tokens_output: patch.tokens_output ?? null, cost: patch.cost ?? null,
+      tool_calls: patch.tool_calls ?? null, compressions: patch.compressions ?? null,
+      summary_status: patch.summary_status ?? null, summary_severity: patch.summary_severity ?? null, summary_text: patch.summary_text ?? null,
+      todo: patch.todo ?? null, progress: patch.progress ?? null,
+    });
+  }
+  /** REQ-SESSION-138: false when the audit already exists — the statement refuses, the caller does not check first. */
+  insertLaunchAudit(id: SessionId, recordedAt: string, payload: string): boolean {
+    try {
+      this.stmts['insertLaunchAudit']!.run(id, recordedAt, payload);
+      return true;
+    } catch (e) {
+      if (String((e as { code?: string }).code).startsWith('SQLITE_CONSTRAINT')) return false;
+      throw e;
+    }
+  }
+  getLaunchAudit(id: SessionId): LaunchAuditRow | undefined {
+    return this.stmts['getLaunchAudit']!.get(id) as LaunchAuditRow | undefined;
+  }
+  insertTimeline(id: SessionId, ordinal: number, at: string, name: string, actor: string, message: string, metadata: string): void {
+    this.stmts['insertTimeline']!.run(id, ordinal, at, name, actor, message, metadata);
+  }
+  nextTimelineOrdinal(id: SessionId): number {
+    const m = (this.stmts['maxTimelineOrdinal']!.get(id) as { m: number | null }).m;
+    return m === null ? 1 : m + 1;
+  }
+  timelineOf(id: SessionId): TimelineRow[] {
+    return this.stmts['timelineOf']!.all(id) as TimelineRow[];
+  }
 
   listLocks(): LockRow[] {
     return this.stmts['listLocks']!.all() as LockRow[];
@@ -160,8 +266,8 @@ export class StoreDal {
     return this.stmts['deleteLocksNotOnHost']!.run(host).changes;
   }
 
-  appendRow(id: SessionId, index: number, kind: string, settled: boolean, body: string, at = ''): void {
-    this.stmts['appendRow']!.run(id, index, kind, settled ? 1 : 0, body, at);
+  appendRow(id: SessionId, index: number, kind: string, settled: boolean, body: string, at = '', extra: { persona?: string | null; name?: string | null; ts?: string } = {}): void {
+    this.stmts['appendRow']!.run(id, index, kind, settled ? 1 : 0, body, at, extra.persona ?? null, extra.name ?? null, extra.ts ?? '');
   }
   /** False when the row is not resident — which REQ-SESSION-131 makes a refusal, not a repair. */
   settleRow(id: SessionId, index: number, body: string): boolean {

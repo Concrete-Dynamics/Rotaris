@@ -1,7 +1,8 @@
-import { err, ok, toIsoUtc, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { err, ok, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import type { TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, serializeEvent, type EventKind, type WireEvent } from './events.js';
+import { isActiveStatus } from './run/stop-conditions.js';
 
 /**
  * ADR-0008 — one ordered session writer per session, owning the session's
@@ -49,6 +50,35 @@ export interface Committed {
   /** Rows released from the resident window in this transaction, by index range. */
   readonly released?: { readonly fromIndex: number; readonly toIndex: number };
   readonly ordinal?: number;
+  /** The events this commit recorded, in ordinal order, as the wire lines the bus forwards (REQ-SESSION-147). */
+  readonly events?: readonly CommittedEvent[];
+}
+export interface CommittedEvent {
+  readonly ordinal: number;
+  readonly event: WireEvent;
+  readonly line: string;
+}
+export interface RowExtra {
+  readonly persona?: string;
+  readonly name?: string;
+}
+/** REQ-SESSION-094's terminal transaction, as one unit. */
+export interface EndRunArgs {
+  readonly status: string;
+  readonly patch: SessionRunPatch;
+  /** `session.end` then `result`, in that order (REQ-EVENTS-076). */
+  readonly events: readonly { readonly kind: EventKind; readonly payload: Record<string, unknown> }[];
+  /** REQ-SESSION-093's system row, recorded before the terminal pair. */
+  readonly systemRow?: string;
+  readonly pid: number;
+  readonly host: MachineId;
+}
+
+/** REQ-SESSION-121: local wall-clock HH:MM:SS. */
+export function localHms(i: Instant): string {
+  const d = new Date(i);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 export interface SessionWriterDeps {
@@ -65,12 +95,20 @@ export interface OpenSessionArgs {
   readonly workspaceRoot: string;
   readonly pid: number;
   readonly host: MachineId;
+  /** REQ-SESSION-090: what session.start carries. */
+  readonly task?: string;
+  readonly persona?: string;
+  readonly maxIterations?: number;
 }
 
-const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'error']);
+/** REQ-SESSION-070's "terminal": a status outside REQ-SESSION-055's active six and not the initial `idle`. */
+function isTerminalStatus(status: string): boolean {
+  return status !== 'idle' && !isActiveStatus(status);
+}
 
 export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
-  return { index: r.row_index, kind: r.kind, settled: r.settled === 1, body: r.body, at: r.at };
+  const row: TranscriptRow = { index: r.row_index, kind: r.kind, settled: r.settled === 1, body: r.body, at: r.at, ts: r.ts };
+  return { ...row, ...(r.persona === null ? {} : { persona: r.persona }), ...(r.name === null ? {} : { name: r.name }) };
 }
 
 export class SessionWriter {
@@ -80,6 +118,8 @@ export class SessionWriter {
   private dropped: number;
   private generation = 0;
   private failedReason: string | null = null;
+  /** The status the row carries; a row append touches `updated_at` without changing it. */
+  private status: string;
 
   constructor(private readonly deps: SessionWriterDeps) {
     const { dal, sessionId } = deps;
@@ -87,7 +127,13 @@ export class SessionWriter {
     this.nextIndex = dal.nextRowIndex(sessionId);
     this.nextOrdinal = dal.nextOrdinal(sessionId);
     this.residentCount = dal.residentCount(sessionId);
-    this.dropped = dal.getSession(sessionId)?.dropped_count ?? 0;
+    const s = dal.getSession(sessionId);
+    this.dropped = s?.dropped_count ?? 0;
+    this.status = s?.execution_status ?? 'idle';
+  }
+
+  get currentStatus(): string {
+    return this.status;
   }
 
   get sessionId(): SessionId {
@@ -124,18 +170,24 @@ export class SessionWriter {
       return err({ code: 'store', reason: String(cause) });
     }
     const w = new SessionWriter(deps);
-    // REQ-SESSION-089: published immediately after the record is opened. Its own transaction (no paired durable record).
-    w.recordEvent('session.start', { workspace_root: args.workspaceRoot, sandbox: false, permission_mode: 'default' });
+    // REQ-SESSION-089 / REQ-SESSION-090: published immediately after the record is opened, carrying enough
+    // to describe the run without opening the record. Its own transaction (no paired durable record).
+    w.recordEvent('session.start', {
+      task: args.task ?? '', workspace: args.workspaceRoot, persona: args.persona ?? 'orchestrator',
+      permission_mode: 'default', sandboxed: false, max_iterations: args.maxIterations ?? null,
+    });
     return ok(w);
   }
 
   /** REQ-EVENTS-052 first appearance (or the only event, when the row arrives settled). One transaction. */
-  appendRow(kind: string, body: string, settled: boolean): Result<TranscriptRow, WriteFailure> {
+  appendRow(kind: string, body: string, settled: boolean, extra: RowExtra = {}): Result<TranscriptRow, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
-    const at = toIsoUtc(wall.instant());
+    const now = wall.instant();
+    const at = toIsoUtc(now);
+    const ts = localHms(now);
     const index = this.nextIndex;
-    const row: TranscriptRow = { index, kind, settled, body, at };
+    const row: TranscriptRow = { index, kind, settled, body, at, ts, ...(extra.persona === undefined ? {} : { persona: extra.persona }), ...(extra.name === undefined ? {} : { name: extra.name }) };
     const ev = this.envelope('transcript.row', at, { index, row });
     const line = serializeEvent(ev);
     if (!line.ok) {
@@ -153,9 +205,9 @@ export class SessionWriter {
           this.residentCount -= moved;
           released = { fromIndex: oldest, toIndex: oldest + moved - 1 };
         }
-        dal.appendRow(sessionId, index, kind, settled, body, at);
+        dal.appendRow(sessionId, index, kind, settled, body, at, { persona: extra.persona ?? null, name: extra.name ?? null, ts });
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, line.value);
-        dal.touchSession(sessionId, 'idle', at);
+        dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
       return this.fail(cause);
@@ -163,7 +215,8 @@ export class SessionWriter {
     this.nextIndex += 1;
     this.residentCount += 1;
     const ordinal = line.ok ? this.nextOrdinal++ : undefined;
-    const c: Committed = released ? { kind: 'row', row, released, ...(ordinal === undefined ? {} : { ordinal }) } : { kind: 'row', row, ...(ordinal === undefined ? {} : { ordinal }) };
+    const events = ordinal === undefined || !line.ok ? [] : [{ ordinal, event: ev, line: line.value }];
+    const c: Committed = released ? { kind: 'row', row, released, events, ...(ordinal === undefined ? {} : { ordinal }) } : { kind: 'row', row, events, ...(ordinal === undefined ? {} : { ordinal }) };
     this.deps.onCommitted(c);
     this.trimIfOverflowed(at);
     return ok(row);
@@ -177,30 +230,33 @@ export class SessionWriter {
     const current = dal.residentRows(sessionId).find((r) => r.row_index === index);
     if (!current) return err({ code: 'row-not-resident', index });
     if (current.settled === 1) return err({ code: 'row-already-settled', index });
-    const row: TranscriptRow = { index, kind: current.kind, settled: true, body, at: current.at };
-    const line = serializeEvent(this.envelope('transcript.row', at, { index, row }));
+    const row: TranscriptRow = { ...toTranscriptRow(current), settled: true, body };
+    const ev = this.envelope('transcript.row', at, { index, row });
+    const line = serializeEvent(ev);
     if (!line.ok) this.deps.warn(`event transcript.row (settled) for row ${index} could not be serialised and was not recorded: ${line.error.reason}`);
     try {
       dal.transaction(() => {
         if (!dal.settleRow(sessionId, index, body)) throw new Error(`row ${index} is not resident`);
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, line.value);
-        dal.touchSession(sessionId, 'idle', at);
+        dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
       return this.fail(cause);
     }
     const ordinal = line.ok ? this.nextOrdinal++ : undefined;
-    this.deps.onCommitted({ kind: 'row', row, ...(ordinal === undefined ? {} : { ordinal }) });
+    const events = ordinal === undefined || !line.ok ? [] : [{ ordinal, event: ev, line: line.value }];
+    this.deps.onCommitted({ kind: 'row', row, events, ...(ordinal === undefined ? {} : { ordinal }) });
     this.trimIfOverflowed(at);
     return ok(row);
   }
 
-  /** An event with no paired durable record: its own transaction (ADR-0009 "Append"). */
-  recordEvent(kind: EventKind, payload: Record<string, unknown>): Result<number, WriteFailure> {
+  /** An event with no paired durable record: its own transaction (ADR-0009 "Append"). `iteration` fills the derived column. */
+  recordEvent(kind: EventKind, payload: Record<string, unknown>, iteration: number | null = null): Result<number, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
-    const line = serializeEvent(this.envelope(kind, at, payload));
+    const ev = this.envelope(kind, at, iteration === null ? payload : { ...payload, iteration });
+    const line = serializeEvent(ev);
     if (!line.ok) {
       this.deps.warn(`event ${kind} could not be serialised and was not recorded: ${line.error.reason}`);
       return err({ code: 'not-serializable', reason: line.error.reason });
@@ -208,37 +264,129 @@ export class SessionWriter {
     const ordinal = this.nextOrdinal;
     try {
       dal.transaction(() => {
-        dal.insertEvent(sessionId, ordinal, kind, at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertEvent(sessionId, ordinal, kind, at, EVENT_SCHEMA_VERSION, iteration, line.value);
       });
     } catch (cause) {
       return this.fail(cause);
     }
     this.nextOrdinal += 1;
-    this.deps.onCommitted({ kind: 'event', ordinal });
+    this.deps.onCommitted({ kind: 'event', ordinal, events: [{ ordinal, event: ev, line: line.value }] });
     this.trimIfOverflowed(at);
     return ok(ordinal);
   }
 
   /**
-   * REQ-SESSION-067/068: durable when it returns; captures the state at the instant of the
-   * call (here: the status). REQ-SESSION-070: a terminal status takes the stronger setting,
-   * so "readable by any other reader before the call returns" is literal.
+   * REQ-SESSION-138: exactly once per session, by run start-up. The statement refuses a second;
+   * this writer reports it as `false` rather than trusting call sites. Its own transaction.
    */
-  save(status: string): Result<number, WriteFailure> {
+  recordLaunchAudit(payload: Record<string, unknown>): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    try {
+      return ok(dal.transaction(() => dal.insertLaunchAudit(sessionId, at, JSON.stringify(payload))));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /** REQ-ORCH-139 / REQ-SESSION-087: a timeline entry, ordinal assigned here (ADR-0008 "Emission order"). Own transaction. */
+  appendTimeline(name: string, actor: string, message: string, metadata: Record<string, unknown>): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    try {
+      return ok(dal.transaction(() => {
+        const ordinal = dal.nextTimelineOrdinal(sessionId);
+        dal.insertTimeline(sessionId, ordinal, at, name, actor, message, JSON.stringify(metadata));
+        return ordinal;
+      }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * REQ-SESSION-067/068: durable when it returns; captures the state at the instant of the
+   * call (the status and, REQ-SESSION-168, the aggregates the patch carries). REQ-SESSION-070:
+   * a terminal status takes the stronger setting, so "readable by any other reader before the
+   * call returns" is literal.
+   */
+  save(status: string, patch: SessionRunPatch = {}): Result<number, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
     const generation = this.generation + 1;
-    const run = () => dal.touchSession(sessionId, status, at);
+    const run = () => {
+      dal.touchSession(sessionId, status, at);
+      dal.updateSessionRun(sessionId, patch);
+    };
     try {
-      if (TERMINAL.has(status)) dal.durableTransaction(run);
+      if (isTerminalStatus(status)) dal.durableTransaction(run);
       else dal.transaction(run);
     } catch (cause) {
       return this.fail(cause);
     }
+    this.status = status;
     this.generation = generation;
     this.deps.onCommitted({ kind: 'save' });
     return ok(generation);
+  }
+
+  /**
+   * REQ-SESSION-094's terminal unit, ONE durable transaction in the requirement's order: the
+   * system row of REQ-SESSION-093; the lock release; `session.end` then `result`
+   * (REQ-EVENTS-076); the terminal status with its patch. The writer holds the lock at the
+   * instant it records the pair and holds nothing when the commit is visible, which is the
+   * reading that satisfies REQ-EVENTS-098 and REQ-SESSION-094 together (recorded on ADR-0008).
+   * The commit hand-off carries the row, the events and the save, in that order.
+   */
+  endRun(args: EndRunArgs): Result<{ ordinals: number[] }, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const now = wall.instant();
+    const at = toIsoUtc(now);
+    const ts = localHms(now);
+    const rowIndex = this.nextIndex;
+    const row: TranscriptRow | undefined = args.systemRow === undefined ? undefined : { index: rowIndex, kind: 'system', settled: true, body: args.systemRow, at, ts };
+    const rowEv = row ? this.envelope('transcript.row', at, { index: rowIndex, row }) : undefined;
+    const rowLine = rowEv ? serializeEvent(rowEv) : undefined;
+    const lines = args.events.map((e) => ({ kind: e.kind, ev: this.envelope(e.kind, at, e.payload) })).map((x) => ({ ...x, line: serializeEvent(x.ev) }));
+    for (const l of lines) if (!l.line.ok) this.deps.warn(`event ${l.kind} could not be serialised and was not recorded: ${l.line.error.reason}`);
+    const committed: CommittedEvent[] = [];
+    const generation = this.generation + 1;
+    try {
+      dal.durableTransaction(() => {
+        let ordinal = this.nextOrdinal;
+        if (row) {
+          dal.appendRow(sessionId, rowIndex, 'system', true, row.body, at, { ts });
+          if (rowLine?.ok && rowEv) { dal.insertEvent(sessionId, ordinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, rowLine.value); committed.push({ ordinal, event: rowEv, line: rowLine.value }); ordinal += 1; }
+        }
+        dal.releaseLock(sessionId, args.pid, args.host);
+        for (const l of lines) {
+          if (!l.line.ok) continue;
+          dal.insertEvent(sessionId, ordinal, l.kind, at, EVENT_SCHEMA_VERSION, null, l.line.value);
+          committed.push({ ordinal, event: l.ev, line: l.line.value });
+          ordinal += 1;
+        }
+        dal.touchSession(sessionId, args.status, at);
+        dal.updateSessionRun(sessionId, args.patch);
+      });
+    } catch (cause) {
+      committed.length = 0;
+      return this.fail(cause);
+    }
+    if (row) { this.nextIndex += 1; this.residentCount += 1; }
+    this.nextOrdinal += committed.length;
+    this.status = args.status;
+    this.generation = generation;
+    const rowEvents = row ? committed.filter((c) => c.event.event === 'transcript.row') : [];
+    const terminal = committed.filter((c) => c.event.event !== 'transcript.row');
+    if (row) this.deps.onCommitted({ kind: 'row', row, events: rowEvents, ...(rowEvents[0] ? { ordinal: rowEvents[0].ordinal } : {}) });
+    this.deps.onCommitted({ kind: 'save' });
+    this.deps.onCommitted({ kind: 'event', events: terminal, ...(terminal[0] ? { ordinal: terminal[0].ordinal } : {}) });
+    this.trimIfOverflowed(at);
+    return ok({ ordinals: committed.map((c) => c.ordinal) });
   }
 
   /** REQ-SESSION-067: a no-op where nothing is outstanding — and with synchronous commits nothing ever is. */

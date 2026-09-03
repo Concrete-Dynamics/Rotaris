@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@rotaris/kernel": "workspace:*",
+    "@rotaris/model": "workspace:*",
     "@rotaris/contracts": "workspace:*",
     "@rotaris/platform": "workspace:*",
     "@rotaris/store": "workspace:*"

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ControlRequestSchema } from './control.js';
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -27,6 +28,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.unsubscribe'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.reconcile'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
+  /** ADR-0010 channel 1 over channel 5: the shell resolves focus to a session id before sending (ADR-0013). */
+  z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int() }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
 ]);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
+import { ControlRequestSchema, ControlResultSchema } from './control.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -17,6 +18,21 @@ const v = z.literal(CONTRACT_SCHEMA_VERSION);
 const id = z.number().int().nonnegative();
 
 export const ProcessKindSchema = z.enum(['run-host', 'workspace-service']);
+
+/** REQ-SESSION-095 / REQ-EVENTS-026: the one terminal result, as main presents it. */
+export const RunResultSchema = z.object({
+  status: z.string(),
+  session_id: z.string(),
+  stop_reason: z.string(),
+  summary: z.string(),
+  iterations_completed: z.number().int().nonnegative(),
+  tokens: z.object({ input: z.number().int(), output: z.number().int(), total: z.number().int() }),
+  cost: z.object({ total: z.string() }),
+  error: z.string().nullable(),
+  execution_status: z.string(),
+  severity: z.enum(['information', 'warning', 'error']),
+});
+export type RunResultPayload = z.infer<typeof RunResultSchema>;
 export type ProcessKind = z.infer<typeof ProcessKindSchema>;
 
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [
@@ -38,6 +54,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.detach'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.reconcile'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
+  /** ADR-0010 channel 1: a control against a live run, answered `{ok, value?}` and never raised (REQ-MONITOR-005/007). */
+  z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -68,6 +86,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */
   z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),
+  z.object({ kind: z.literal('control.result'), result: ControlResultSchema }),
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
@@ -82,6 +101,8 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   /** A publication, already stamped by the projection owner. Main relays; it adds nothing (ADR-0043 #2). */
   z.object({ kind: z.literal('publish.increment'), payload: TranscriptIncrementSchema }),
   z.object({ kind: z.literal('publish.snapshot'), payload: SessionSnapshotSchema }),
+  /** REQ-SESSION-186: the terminal result, presented once. Carried from the bus's in-process consumer (REQ-EVENTS-178). */
+  z.object({ kind: z.literal('run.result'), sessionId: z.string(), result: RunResultSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

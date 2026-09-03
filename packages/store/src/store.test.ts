@@ -254,6 +254,54 @@ describe('store — the corrected restore, re-measured (IC-1)', () => {
   });
 });
 
+describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, REQ-ORCH-139)', () => {
+  it('a v2 store migrates to v3 keeping its rows; the run columns read their defaults', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000088');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-v3');
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: '2026-09-03T00:00:00.000Z', updated_at: '2026-09-03T00:00:00.000Z' });
+    const s = dal.getSession(sid)!;
+    expect([s.stop_reason, s.iterations_completed, s.tokens_input, s.cost, s.todo, s.summary_status]).toEqual([null, 0, 0, '0', null, null]);
+    dal.appendRow(sid, 0, 'agent', false, 'hel', '2026-09-03T00:00:01.000Z', { persona: 'orchestrator', name: 'orchestrator', ts: '02:00:01' });
+    const row = dal.residentRows(sid)[0]!;
+    expect([row.persona, row.name, row.ts]).toEqual(['orchestrator', 'orchestrator', '02:00:01']);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('the launch audit is written exactly once: the second insert is refused by the statement, not by a check', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000089');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-audit');
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    expect(dal.getLaunchAudit(sid)).toBeUndefined();
+    expect(dal.insertLaunchAudit(sid, 't1', '{"run_intent":"moderate_feature"}')).toBe(true);
+    expect(dal.insertLaunchAudit(sid, 't2', '{"run_intent":"rewritten"}')).toBe(false);
+    expect(dal.getLaunchAudit(sid)?.payload).toContain('moderate_feature');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('a save patch copies the aggregates it names and keeps every column it does not; the timeline is append-ordered', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000090');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-agg');
+    dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    dal.updateSessionRun(sid, { tokens_input: 12, tokens_output: 34, cost: '0.001', run_started_at: 't0' });
+    dal.updateSessionRun(sid, { stop_reason: 'tasks_complete', iterations_completed: 1 });
+    const s = dal.getSession(sid)!;
+    expect([s.tokens_input, s.tokens_output, s.cost, s.run_started_at, s.stop_reason, s.iterations_completed]).toEqual([12, 34, '0.001', 't0', 'tasks_complete', 1]);
+    expect(dal.nextTimelineOrdinal(sid)).toBe(1);
+    dal.insertTimeline(sid, 1, 't1', 'run_start', 'rotaris', 'a run is starting for S-agg', '{"workspace_root":"C:/ws"}');
+    dal.insertTimeline(sid, 2, 't2', 'run_end', 'rotaris', 'the run ended', '{"execution_status":"completed"}');
+    expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(['run_start', 'run_end']);
+    expect(dal.nextTimelineOrdinal(sid)).toBe(3);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+});
+
 describe('store - a declared index is a claim about a query plan; the plan is asserted (spike 8)', () => {
   it('every budgeted query names its index in EXPLAIN QUERY PLAN', () => {
     const id = mintWorkspaceId('00000000000000000000000000000077');

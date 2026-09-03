@@ -6,7 +6,8 @@ import { asSessionId, FakeClock, millis, mintMachineId, mintWorkspaceId, type Ma
 import { migrateStore, openStore, RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { createReplicaStore } from '@rotaris/ui-core';
-import { ProjectionOwner, RefusalLease, SequenceCounters, SessionWriter, Sessions, parseEventLine, serializeEvent, toSessionRecord, toTranscriptRow, type Publisher } from './index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
+import { ProjectionOwner, RefusalLease, RUN_CONFIG_DEFAULTS, SequenceCounters, SessionWriter, Sessions, parseEventLine, serializeEvent, toSessionRecord, toTranscriptRow, type Publisher } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 
@@ -264,24 +265,26 @@ describe('engine — the session writer feeds the projection owner (ADR-0008, AD
     other.close();
   });
 
-  it('Sessions: start records the prompt as row 0 kind user and status idle; attach and pageOlder serve a surface (REQ-CHAT-011, REQ-CHAT-165)', () => {
+  it('Sessions: start records the prompt as row 0 kind user and runs it; attach and pageOlder serve a surface (REQ-CHAT-011, REQ-CHAT-165)', async () => {
     const pub = recorder();
     let n = 0;
-    const sessions = new Sessions({ clocks: clock, publisher: pub, pid: 1, host: HOST, retentionCap: 20_000, warn: () => {}, mintSessionId: () => `sid-${++n}` });
+    const model = { backend: new DefaultAgentBackend(new ScriptedModelClient([answer('done')])), config: { ...RUN_CONFIG_DEFAULTS, model: { providerId: 'p', modelId: 'm', dialect: 'chat' as const }, resolveCredential: async () => 'k' } };
+    const sessions = new Sessions({ clocks: clock, publisher: pub, pid: 1, host: HOST, retentionCap: 20_000, warn: () => {}, mintSessionId: () => `sid-${++n}`, model, sessionFilesDir: () => join(dir, 'sessions', `sid-${n}`) });
     const started = sessions.start(dal, 'C:\\ws', 'build me a thing');
     expect(started.ok).toBe(true);
     if (!started.ok) return;
     const sid: SessionId = started.value;
-    expect(dal.getSession(sid)!.execution_status).toBe('idle');
     expect(dal.residentRows(sid)[0]).toMatchObject({ row_index: 0, kind: 'user', body: 'build me a thing', settled: 1 });
+    await sessions.running(sid);
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
     expect(sessions.attach(sid)).toBe(true);
-    const snap = pub.seen.find((s) => s.channel === 'snap')!.payload as SessionSnapshot;
-    expect(snap.session).toMatchObject({ id: sid, executionStatus: 'idle', historyOpen: true, truncation: { truncated: false, droppedCount: 0 } });
+    const snap = pub.seen.filter((s) => s.channel === 'snap').at(-1)!.payload as SessionSnapshot;
+    expect(snap.session).toMatchObject({ id: sid, executionStatus: 'completed', historyOpen: true, truncation: { truncated: false, droppedCount: 0 }, stopReason: 'tasks_complete' });
     sessions.prompt(sid, 'and another');
     const page = sessions.pageOlder(sid, 1)!;
     expect(page.rows.map((r) => r.body)).toEqual(['build me a thing']);
     expect(page.oldest).toBe(true);
-    sessions.closeAll();
+    await sessions.closeAll();
     expect(dal.getLock(sid)).toBeUndefined();
   });
 });

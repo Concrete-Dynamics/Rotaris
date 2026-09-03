@@ -49,7 +49,7 @@ describe('contracts — the sequenced channels (REQ-MONITOR-214)', () => {
   it('a sequence number below 1 is rejected — the counter starts at 1', () => {
     const bad = SessionSnapshotSchema.safeParse({
       v: 1, sessionId: 's', seq: 0,
-      session: { id: 's', executionStatus: 'idle', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: 'x', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [], tokenUsage: { input: 0, output: 0 } },
+      session: { id: 's', executionStatus: 'idle', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: 'x', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [], tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, iterationsCompleted: 0, summary: null },
     });
     expect(bad.success).toBe(false);
   });

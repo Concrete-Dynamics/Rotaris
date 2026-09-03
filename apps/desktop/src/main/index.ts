@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, utilityProcess, type UtilityProces
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, type ApprovalPayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 
@@ -25,6 +25,9 @@ mkdirSync(dirs.data, { recursive: true });
 const machineId = readOrMintMachineId(layout.machineId);
 
 const log = (m: string) => console.log(`[main ${new Date().toISOString()}] ${m}`);
+// ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
+// error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
+process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`); });
 
 function workspaceFromArgv(argv: readonly string[]): string | undefined {
   // REQ-STARTUP-163: a directory the OS hands a launch. The product defines no argument vocabulary
@@ -120,10 +123,92 @@ async function main(): Promise<void> {
   const raiseNotice = (severity: 'info' | 'warning' | 'error', headline: string, detail?: string) => {
     publishNotice({ id: ++noticeSeq, severity, headline, ...(detail === undefined ? {} : { detail }) });
   };
+  /**
+   * ADR-0019 / REQ-TOOLS-063: main owns the per-window DIALOG QUEUE and nothing else — it never decides.
+   * One approval dialog open per window, oldest first by the payload's sequence, the next within 100 ms
+   * of the previous closing; a request answered or cancelled elsewhere closes its dialog; an
+   * undeliverable answer leaves the dialog open with the buttons disabled. Every dialog is a modal
+   * BrowserWindow painting the one renderer bundle with role=approval (ADR-0048, ADR-0056) — never a
+   * synchronous native dialog (ADR-0019's prohibition).
+   */
+  const dialogs = new Map<number, { requestId: string; win: BrowserWindow; answered: boolean }>();
+  const queue: ApprovalPayload[] = [];
+  let openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null = null;
+  const parentWindowIds = new Set<string>();
+  const presentNext = async (): Promise<void> => {
+    if (openDialog || queue.length === 0) return;
+    queue.sort((a, b) => a.sequence - b.sequence);
+    const payload = queue.shift()!;
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id));
+    if (!parent) { await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined); return; }
+    const dlg = new BrowserWindow({
+      parent, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: '#242424',
+      resizable: true, minimizable: false, maximizable: false,
+      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    const entry = { requestId: payload.request_id, win: dlg, answered: false };
+    openDialog = entry;
+    // Read once, up front: `webContents` on a destroyed window throws, and a throw from a `closed` handler is an
+    // uncaught exception that raises the platform's native error box and wedges main (found on first execution).
+    const dlgWcId = dlg.webContents.id;
+    dialogs.set(dlgWcId, entry);
+    dialogPayloads.set(dlgWcId, { payload, othersWaiting: queue.length });
+    dlg.setMenuBarVisibility(false);
+    dlg.on('closed', () => {
+      dialogs.delete(dlgWcId);
+      dialogPayloads.delete(dlgWcId);
+      if (openDialog === entry) openDialog = null;
+      // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
+      if (!entry.answered) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
+      clocks.timers.after(millis(50), () => { void presentNext(); });
+    });
+    try {
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?role=approval`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query: { role: 'approval' } });
+      dlg.show();
+      dlg.focus();
+      await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: true }, millis(5_000));
+      log(`approval ${payload.request_id} presented (${payload.tool_name}, rule ${payload.rule_id}); ${queue.length} waiting`);
+      // Verification seam (only with ROTARIS_CAPTURE_PNG): answer the dialog with a real click or Escape.
+      const scripted = capturing ? process.env['ROTARIS_CAPTURE_APPROVAL'] : undefined;
+      if (scripted) {
+        clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_APPROVAL_MS'] ?? 700)), async () => {
+          if (dlg.isDestroyed()) return;
+          const dialogPng = process.env['ROTARIS_CAPTURE_DIALOG_PNG'];
+          if (dialogPng) { const { writeFileSync } = await import('node:fs'); writeFileSync(dialogPng, (await dlg.webContents.capturePage()).toPNG()); log(`captured dialog ${dialogPng}`); }
+          if (scripted === 'escape') { dlg.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); dlg.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' }); log('capture: approval dialog → Escape'); return; }
+          const label = scripted === 'once' ? 'Approve once' : scripted === 'session' ? 'Approve for this session' : 'Deny';
+          const rect = await dlg.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(label)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+          if (!rect) { log(`capture: no "${label}" button in the approval dialog`); return; }
+          dlg.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+          dlg.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+          log(`capture: approval dialog → clicked "${label}"`);
+        });
+      }
+    } catch (cause) {
+      log(`approval ${payload.request_id} could not be presented: ${String(cause)}`);
+      entry.answered = true;
+      await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: String(cause) }, millis(5_000)).catch(() => undefined);
+      if (!dlg.isDestroyed()) dlg.close();
+    }
+  };
+  const dialogPayloads = new Map<number, { payload: ApprovalPayload; othersWaiting: number }>();
+
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
     if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
     else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
+    else if (e.kind === 'presenter.poll') {
+      // ADR-0019: the reply carries the windows main holds; answered at once, never from a blocked loop.
+      void runHost.request({ kind: 'presenter.pollReply', seq: e.seq, windows: [...parentWindowIds] }, millis(5_000)).catch(() => undefined);
+    }
+    else if (e.kind === 'approval.present') { queue.push(e.payload); void presentNext(); }
+    else if (e.kind === 'approval.close') {
+      // Answered or cancelled elsewhere: the open dialog closes without asking again; a queued one is dropped unshown.
+      const idx = queue.findIndex((p) => p.request_id === e.requestId);
+      if (idx >= 0) queue.splice(idx, 1);
+      if (openDialog && openDialog.requestId === e.requestId) { openDialog.answered = true; if (!openDialog.win.isDestroyed()) openDialog.win.close(); }
+    }
     else if (e.kind === 'run.result') {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
       const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
@@ -143,7 +228,14 @@ async function main(): Promise<void> {
   // `closed` handler during exit is an uncaught exception, which wedges the process (ADR-0044 note).
   const wcId = win.webContents.id;
   relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
-  win.on('closed', () => relay.detach(wcId));
+  // ADR-0019 c.1: registration is explicit and prompt — on creation, and revoked on close (the last one closing makes the application unattended).
+  parentWindowIds.add(String(wcId));
+  void runHost.request({ kind: 'presenter.register', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+  win.on('closed', () => {
+    relay.detach(wcId);
+    parentWindowIds.delete(String(wcId));
+    void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+  });
 
   /**
    * Verification seams for an unattended run (only with ROTARIS_CAPTURE_PNG set): the save and open
@@ -253,11 +345,15 @@ async function main(): Promise<void> {
     return { ok: false, code: rep.refusal ? `restore.${rep.refusal.why}` : 'restore.failed', headline: 'The restore was not performed', detail: why };
   };
 
-  const runCommand = async (raw: unknown): Promise<CommandOutcome> => {
+  const runCommand = async (raw: unknown, senderId = wcId): Promise<CommandOutcome> => {
     const parsed = CommandRequestSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
     const req = parsed.data;
     switch (req.kind) {
+      case 'approval.payload': {
+        const p = dialogPayloads.get(senderId);
+        return p ? { ok: true, value: p } : { ok: false, code: 'approval.none', headline: 'This window was not opened for an approval' };
+      }
       case 'shell.hello':
         return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`) } };
       case 'session.start': {
@@ -273,6 +369,12 @@ async function main(): Promise<void> {
       case 'session.control': {
         // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
         const r = await runHost.request({ kind: 'session.control', request: req.request }, millis(10_000));
+        if (req.request.op === 'answerApproval' && r.kind === 'control.result') {
+          // REQ-TOOLS-063: a delivered answer marks its dialog answered (the run host's close follows); an undeliverable one leaves it open.
+          const d = dialogs.get(senderId);
+          if (d && r.result.ok) d.answered = true;
+          log(`approval ${String(req.request.args['requestId'])} answered ${String(req.request.args['option'])} → ${r.result.ok ? 'delivered' : 'undeliverable'}`);
+        }
         return r.kind === 'control.result' ? { ok: true, value: r.result } : refusal(r, 'The control could not be delivered');
       }
       case 'notice.acknowledge':
@@ -322,7 +424,7 @@ async function main(): Promise<void> {
         return { ok: false, code: 'command.unimplemented', headline: `${req.kind} is not built yet` };
     }
   };
-  ipcMain.handle(CHANNEL.command, (_e, raw) => runCommand(raw));
+  ipcMain.handle(CHANNEL.command, (e, raw) => runCommand(raw, e.sender.id));
 
   surface = (h) => {
     // REQ-STARTUP-162/163: surface the window; honour a carried workspace.
@@ -383,6 +485,23 @@ async function main(): Promise<void> {
           const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === 'Project'); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
           if (rect) { wc.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 }); wc.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 }); }
         }
+      });
+    }
+    // ROTARIS_CAPTURE_MODE=<preset> at ROTARIS_CAPTURE_MODE_MS: click the mode selector's option, then the confirmation (REQ-TOOLS-077).
+    const modeAt = Number(process.env['ROTARIS_CAPTURE_MODE_MS'] ?? 0);
+    const modeWanted = process.env['ROTARIS_CAPTURE_MODE'];
+    if (modeWanted && modeAt > 0) {
+      const click = async (selector: string, text: string | null) => {
+        const rect = await win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => ${text === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(text)}`}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+        if (!rect) { log(`capture: no "${text ?? selector}" control on screen`); return false; }
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        log(`capture: clicked "${text ?? selector}"`);
+        return true;
+      };
+      clocks.timers.after(millis(modeAt), async () => {
+        if (!(await click('.seg-opt', modeWanted))) return;
+        if (modeWanted === 'autonomous') { await new Promise((r) => clocks.timers.after(millis(300), () => r(undefined))); await click('.dialog-actions .btn-danger', 'Switch to autonomous'); }
       });
     }
     // ROTARIS_CAPTURE_STOP_MS: press the stop control with a real click at its measured position (REQ-SESSION-186).

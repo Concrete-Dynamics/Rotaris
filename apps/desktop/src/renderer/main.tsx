@@ -1,9 +1,9 @@
 import { StrictMode, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type ApprovalOption, type ApprovalPayload, type PermissionPreset, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { AppShell, SettingsView, WorkspaceView } from '@rotaris/ui';
+import { AppShell, ApprovalDialog, SettingsView, WorkspaceView } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -64,10 +64,19 @@ async function stopRun(force: boolean): Promise<{ ok: true } | { ok: false; reas
   return result.ok ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
 }
 
+/** REQ-TOOLS-077 / REQ-MONITOR-150: the mode change goes to the focused session; the run decides what actually happened. */
+async function setMode(mode: PermissionPreset): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { ok: false, reason: 'No run is active.' };
+  const r = await bridge.command({ kind: 'session.control', request: { op: 'setPermissionMode', sessionId, args: { mode } } });
+  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+  return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run did not accept the mode change.' };
+}
+
 function Workspace() {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
-  return <WorkspaceView session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} />;
+  return <WorkspaceView session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} />;
 }
 
 /** REQ-SESSION-201's two actions: main supplies the dialogs, the workspace service the work. */
@@ -89,6 +98,8 @@ function App({ version, workspace, processes }: { version: string; workspace: st
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string.
       session ? `run ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'no session',
+      // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
+      `mode: ${session?.permissionMode ?? 'ask'}`, 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
       'rotaris-dim', ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
     [processes, counters, session],
@@ -116,7 +127,22 @@ function App({ version, workspace, processes }: { version: string; workspace: st
   );
 }
 
+/** The approval window: the same bundle, role by route (ADR-0056); it asks main for its request, answers through the control. */
+async function bootApproval(): Promise<void> {
+  const r = await bridge.command({ kind: 'approval.payload' });
+  const root = createRoot(document.getElementById('root')!);
+  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
+  const { payload, othersWaiting } = r.value as { payload: ApprovalPayload; othersWaiting: number };
+  document.title = 'Permission required';
+  const onAnswer = async (option: ApprovalOption): Promise<{ delivered: boolean }> => {
+    const c = await bridge.command({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option } } });
+    return { delivered: c.ok && (c.value as { ok: boolean }).ok };
+  };
+  root.render(<StrictMode><ApprovalDialog payload={payload} othersWaiting={othersWaiting} onAnswer={onAnswer} /></StrictMode>);
+}
+
 async function boot(): Promise<void> {
+  if (new URLSearchParams(window.location.search).get('role') === 'approval') { await bootApproval(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[] }) : { version: '?', workspace: '(no workspace)', processes: [] };
   createRoot(document.getElementById('root')!).render(

@@ -262,6 +262,13 @@ export class Sessions {
     }
   }
 
+  /** ADR-0019: a lapse or a teardown releases every waiting approval in every live session (REQ-TOOLS-054's bulk cancel). */
+  cancelAllPending(): number {
+    let n = 0;
+    for (const s of this.live.values()) n += s.tools?.cancelPending() ?? 0;
+    return n;
+  }
+
   /** ADR-0013: an answer is routed by looking the request id up across every live session. */
   answerApproval(requestId: string, option: ApprovalOption): boolean {
     for (const s of this.live.values()) if (s.tools?.answerApproval(requestId, option)) return true;

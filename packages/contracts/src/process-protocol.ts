@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
+import { ApprovalPayloadSchema } from './tools.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -57,6 +58,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /** ADR-0010 channel 1: a control against a live run, answered `{ok, value?}` and never raised (REQ-MONITOR-005/007). */
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   z.object({ kind: z.literal('runs.active'), workspaceId: z.string() }),
+  /** ADR-0019: the presenter is a capability main registers per window and revokes on close; the poll reply carries the windows it holds. */
+  z.object({ kind: z.literal('presenter.register'), windowId: z.string().min(1) }),
+  z.object({ kind: z.literal('presenter.revoke'), windowId: z.string().min(1) }),
+  z.object({ kind: z.literal('presenter.pollReply'), seq: z.number().int().nonnegative(), windows: z.array(z.string()) }),
+  /** REQ-TOOLS-063: main reports whether the dialog was put in front of a person; a failure denies with source presenter-error. */
+  z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -170,6 +177,12 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('publish.snapshot'), payload: SessionSnapshotSchema }),
   /** REQ-SESSION-186: the terminal result, presented once. Carried from the bus's in-process consumer (REQ-EVENTS-178). */
   z.object({ kind: z.literal('run.result'), sessionId: z.string(), result: RunResultSchema }),
+  /** ADR-0019: the gate posts a present-request; main owns the per-window dialog queue and nothing else. */
+  z.object({ kind: z.literal('approval.present'), payload: ApprovalPayloadSchema }),
+  /** A request answered or cancelled elsewhere closes its open dialog without asking again (REQ-TOOLS-063). */
+  z.object({ kind: z.literal('approval.close'), requestId: z.string() }),
+  /** ADR-0019's liveness poll, on the channel that carries registration. */
+  z.object({ kind: z.literal('presenter.poll'), seq: z.number().int().nonnegative() }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

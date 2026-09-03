@@ -124,3 +124,40 @@
 .settings__actions { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); margin-top: var(--rt-space-3, 12px); }
 .settings__action { display: flex; align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; }
 .settings__hint { font-size: var(--rt-text-xs, 12px); }
+
+/* ── Tool rows (REQ-CHAT-060/061), diff rows (REQ-CHAT-050), approval trailer rows (REQ-CHAT-051) ── */
+.tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }
+.tool__header--static { cursor: default; }
+.tool__header:disabled { color: var(--rt-text); opacity: 1; }
+.tool__chevron, .tool__name { color: var(--rt-accent-300); }
+.tool__outcome { margin-left: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+.tool__outcome--running { color: var(--rt-accent-300); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+.tool__outcome--failed, .tool__outcome--blocked { color: var(--rt-danger-300); }
+.tool--blocked .tool__name { color: var(--rt-danger-300); }
+.tool__preview { font-size: var(--rt-text-xs, 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tool__card { display: flex; flex-direction: column; gap: 4px; margin-top: var(--rt-space-2, 8px); }
+.tool__caption { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); color: var(--rt-text-tertiary); }
+.tool__pre { margin: 0; padding: var(--rt-space-2, 8px); max-height: 320px; overflow: auto; background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.tool__blocked { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
+.row--diff { border-style: dotted; }
+.row__body--diff { font-size: var(--rt-text-xs, 12px); }
+.row--approval { border-color: var(--rt-warn); }
+.row--approval .row__body { color: var(--rt-warn); }
+@media (prefers-reduced-motion: reduce) { .tool__outcome--running { animation: none; } }
+
+/* ── The permission-mode selector (REQ-TOOLS-077) ── */
+.mode { display: flex; align-items: center; gap: var(--rt-space-2, 8px); margin-right: auto; }
+.mode__label { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; }
+.seg-opt { border: 0; background: transparent; font: inherit; }
+.seg-opt:disabled { cursor: default; opacity: 0.6; }
+.seg-opt:focus-visible { outline: 2px solid var(--rt-accent-300); outline-offset: -2px; }
+
+/* ── The approval dialog window (REQ-TOOLS-063), one renderer bundle with role=approval ── */
+.approval { display: grid; place-items: center; height: 100vh; padding: var(--rt-space-4, 16px); background: var(--rt-bg); color: var(--rt-text); font-family: var(--rt-font-body, 'Manrope', system-ui, sans-serif); }
+.approval__dialog { width: 100%; max-width: 640px; }
+.approval__requester { margin: 0; }
+.approval__detail { margin: 0; padding: var(--rt-space-3, 12px); max-height: 140px; overflow: auto; background: var(--rt-chrome); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.approval__rule { margin: 0; font-size: var(--rt-text-xs, 12px); }
+.approval__queue { margin: 0; font-size: var(--rt-text-xs, 12px); }
+.approval__status { margin: 0; font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
+.approval__actions .btn:focus-visible { outline: 2px solid var(--rt-accent-300); outline-offset: 2px; }

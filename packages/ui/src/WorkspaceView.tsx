@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { isBusy, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, PERMISSION_PRESETS, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 
 /**
  * The Workspace view's conversation surface, at the point the mechanism has
  * reached: the transcript rows the replica holds and the composer
- * (REQ-CHAT-001, -003, -004, -005, -011, -012), the `user`, `agent` and
- * `system` rows with an unsettled row shown as still growing, and the stop
- * control of REQ-SESSION-186 while a run is busy (REQ-NOTIFY-050), whose
- * label says whether the next activation stops gracefully or forces.
- * Structure from docs/spec; language from docs/design/system (`.input`,
- * `.btn`, tokens). Not here yet: thinking/tool rows, the trailer rows,
+ * (REQ-CHAT-001, -003, -004, -005, -011, -012); `user`, `agent`, `system`,
+ * `tool` (REQ-CHAT-060/061) and `diff` (REQ-CHAT-050) rows, an unsettled row
+ * shown as still growing; the trailer rows for pending approvals
+ * (REQ-CHAT-051); the stop control of REQ-SESSION-186 while a run is busy;
+ * the permission-mode selector of REQ-TOOLS-077, strictest-first, with a
+ * confirmation before `autonomous`. Structure from docs/spec; language from
+ * docs/design/system. Not here yet: thinking rows, folding, the display caps,
  * search, paging on scroll, the draggable divider (REQ-CHAT-010).
  */
 export interface WorkspaceViewProps {
@@ -18,6 +19,8 @@ export interface WorkspaceViewProps {
   readonly onSubmit: (text: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** REQ-SESSION-186: first activation graceful, the second forces. */
   readonly onStop: (force: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** REQ-TOOLS-077 / REQ-MONITOR-150: forwarded to the running session; applies from the next tool call. */
+  readonly onSetMode?: ((mode: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
 }
 
 /** REQ-CHAT-004: the four placeholders, first condition wins. */
@@ -36,10 +39,11 @@ export function composerAction(session: SessionRecord | null, runActive: boolean
 export function stopLabel(stopPending: boolean): 'Stop run' | 'Force stop' {
   return stopPending ? 'Force stop' : 'Stop run';
 }
-/** REQ-CHAT-011: displayed role `you`; an agent row shows its persona; a system row is the product's. */
+/** REQ-CHAT-011/047: displayed role `you`; an agent row shows its persona; a system row is the product's; a tool row its agent. */
 export function rowRole(row: Pick<TranscriptRow, 'kind' | 'persona' | 'name'>): string {
   if (row.kind === 'user') return 'you';
   if (row.kind === 'system') return 'rotaris';
+  if (row.kind === 'diff') return 'edit';
   return row.persona ?? row.name ?? row.kind;
 }
 export function rowTime(at: string): string {
@@ -48,8 +52,106 @@ export function rowTime(at: string): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
+/** REQ-CHAT-060: `ok · 3.2s`, `failed`, `blocked · 0.0s`, a pulsing `◉ running…`; a value outside the four reads as failed. */
+export function toolOutcome(row: Pick<TranscriptRow, 'toolStatus' | 'durationMs' | 'settled'>): { text: string; state: 'running' | 'ok' | 'failed' | 'blocked' | 'none' } {
+  const s = row.toolStatus;
+  if (s === undefined || s === '') return { text: '', state: 'none' };
+  const secs = `${((row.durationMs ?? 0) / 1000).toFixed(1)}s`;
+  if (s === 'running') return row.settled ? { text: '', state: 'none' } : { text: '◉ running…', state: 'running' };
+  if (s === 'ok') return { text: `ok · ${secs}`, state: 'ok' };
+  if (s === 'blocked') return { text: `blocked · ${secs}`, state: 'blocked' };
+  return { text: 'failed', state: 'failed' };
+}
 
-export function WorkspaceView({ session, rows, onSubmit, onStop }: WorkspaceViewProps) {
+function ToolRow({ row }: { row: TranscriptRow }) {
+  const [open, setOpen] = useState(false);
+  const outcome = toolOutcome(row);
+  const expandable = (row.input !== undefined && row.input !== '') || (row.output !== undefined && row.output !== '');
+  const description = outcome.state === 'blocked' ? `Blocked: ${row.blockedReason ?? row.output ?? 'the call was not executed'}` : undefined;
+  return (
+    <article className={`row row--tool tool tool--${outcome.state}${row.settled ? '' : ' row--streaming'}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey}>
+      <header className="row__head">
+        <span className="row__role">{rowRole(row)}</span>
+        <time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time>
+      </header>
+      <button
+        type="button"
+        className={`tool__header mono${expandable ? '' : ' tool__header--static'}`}
+        onClick={() => { if (expandable) setOpen((o) => !o); }}
+        aria-expanded={expandable ? open : undefined}
+        aria-description={description}
+        disabled={!expandable}
+      >
+        <span className="tool__chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <span className="tool__name">{row.body}</span>
+        {outcome.text && <span className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>}
+      </button>
+      {!open && expandable && <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>}
+      {open && (
+        <div className="tool__card">
+          {row.input !== undefined && row.input !== '' && (<><div className="tool__caption">INPUT</div><pre className="tool__pre mono">{row.input}</pre></>)}
+          {row.output !== undefined && row.output !== '' && (<><div className="tool__caption">OUTPUT</div><pre className="tool__pre mono">{row.output}</pre></>)}
+          {outcome.state === 'blocked' && row.blockedReason && <div className="tool__blocked">{row.blockedReason}</div>}
+        </div>
+      )}
+    </article>
+  );
+}
+
+/** REQ-CHAT-051: one trailer row per pending approval, after every recorded row. */
+function ApprovalTrailerRow({ p }: { p: ApprovalPayload }) {
+  return (
+    <article className="row row--approval" data-request-id={p.request_id}>
+      <header className="row__head"><span className="row__role">{p.agent_id || p.persona}</span></header>
+      <div className="row__body">Approval needed — {p.command !== '' ? p.command : p.tool_name}</div>
+    </article>
+  );
+}
+
+/** REQ-TOOLS-077: strictest-first; `autonomous` needs an explicit confirmation; declining restores the previous selection. */
+function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
+  const [confirming, setConfirming] = useState<PermissionPreset | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const apply = async (m: PermissionPreset) => {
+    setConfirming(null);
+    const r = await onSetMode(m);
+    setError(r.ok ? null : r.reason);
+  };
+  return (
+    <div className="mode" aria-label="Permission mode">
+      <span className="mode__label text-secondary">mode</span>
+      <div className="seg" role="radiogroup" aria-label="Permission mode, strictest first">
+        {PERMISSION_PRESETS.map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={current === m}
+            className={`seg-opt${current === m ? ' is-active' : ''}`}
+            disabled={!enabled}
+            title={enabled ? `Switch the active run to '${m}'; it applies from the next tool call.` : 'Applies to the active run; the run starts in the configured mode.'}
+            onClick={() => { if (m === 'autonomous') setConfirming(m); else void apply(m); }}
+          >{m}</button>
+        ))}
+      </div>
+      {error && <span className="composer__error" role="alert">{error}</span>}
+      {confirming && (
+        <div className="dialog-backdrop" role="presentation">
+          <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="mode-confirm-title">
+            <h2 id="mode-confirm-title" className="dialog-title">Run without asking?</h2>
+            <p className="dialog-body">In 'autonomous' mode the agent runs commands and edits files without asking, except for the destructive commands the starter rules always deny.</p>
+            <div className="dialog-actions">
+              <button type="button" className="btn btn-secondary" autoFocus onClick={() => setConfirming(null)}>Keep current mode</button>
+              <button type="button" className="btn btn-danger" onClick={() => { void apply(confirming); }}>Switch to autonomous</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode }: WorkspaceViewProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,8 +162,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop }: WorkspaceView
   // A pending stop is one requested against the run that is still active; a new run begins from a submit, which resets it.
   const stopPending = runActive && stopRequested;
   const lastBodyLength = rows.at(-1)?.body.length ?? 0;
+  const pending = session?.pendingApprovals ?? [];
 
-  useEffect(() => { tail.current?.scrollIntoView({ block: 'end' }); }, [rows.length, lastBodyLength]);
+  useEffect(() => { tail.current?.scrollIntoView({ block: 'end' }); }, [rows.length, lastBodyLength, pending.length]);
 
   const submit = async () => {
     const value = text;
@@ -95,6 +198,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop }: WorkspaceView
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); }
   };
 
+  const mode = (session?.permissionMode ?? null) as PermissionPreset | null;
   return (
     <div className="workspace">
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
@@ -103,16 +207,17 @@ export function WorkspaceView({ session, rows, onSubmit, onStop }: WorkspaceView
             <span className="empty-state-title">{session ? 'No rows yet' : 'Describe the outcome you want…'}</span>
           </div>
         )}
-        {rows.map((r) => (
+        {rows.map((r) => (r.kind === 'tool' ? <ToolRow key={r.index} row={r} /> : (
           <article key={r.index} className={`row row--${r.kind}${r.settled ? '' : ' row--streaming'}`} data-index={r.index} data-settled={r.settled}>
             <header className="row__head">
               <span className="row__role">{rowRole(r)}</span>
               <time className="row__time mono" dateTime={r.at}>{r.ts || rowTime(r.at)}</time>
               {!r.settled && <span className="row__streaming" aria-label="still being written">…</span>}
             </header>
-            <div className="row__body">{r.body}</div>
+            <div className={`row__body${r.kind === 'diff' ? ' mono row__body--diff' : ''}`}>{r.body}</div>
           </article>
-        ))}
+        )))}
+        {pending.map((p) => <ApprovalTrailerRow key={p.request_id} p={p} />)}
         <div ref={tail} />
       </div>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
@@ -131,6 +236,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop }: WorkspaceView
           rows={3}
         />
         <div className="composer__actions">
+          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} />}
           {runActive ? (
             <button type="button" className="btn btn-danger" onClick={() => { void stop(); }} aria-describedby="stop-hint">{stopLabel(stopPending)}</button>
           ) : (

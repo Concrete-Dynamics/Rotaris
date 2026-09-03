@@ -35,6 +35,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
+  /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
+  z.object({ kind: z.literal('approval.payload') }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

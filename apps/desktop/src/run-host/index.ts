@@ -3,6 +3,8 @@ import { asSessionId, millis, ok, type Clocks, type WorkspaceId } from '@rotaris
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
 import { RefusalLease, RUN_CONFIG_DEFAULTS, Sessions, type ModelSetup } from '@rotaris/engine';
+import { PresenterRegistry, type FileToolState } from '@rotaris/agent-tools';
+import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv } from './tools.js';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -44,14 +46,41 @@ function log(message: string, level: 'info' | 'warn' = 'info'): void {
   send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level, message } });
 }
 
-/** Verification only: answers every call with a short streamed reply, one delta per 120 ms so the growth tick is visible. */
+/**
+ * Verification only: a scripted client. `ROTARIS_SCRIPT` names the steps, comma-separated, one per model
+ * call — `glob`, `read`, `write`, `rm`, `git`, `edit` request a tool call; anything else, or the end of
+ * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
+ */
 function scriptedClient(c: Clocks): ModelClient {
+  const steps = (process.env['ROTARIS_SCRIPT'] ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
+  let call = 0;
+  const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
+    glob: { name: 'glob', args: { pattern: '**/*.md' } },
+    read: { name: 'read_file', args: { path: 'README.md' } },
+    write: { name: 'write_file', args: { operation: 'create', path: 'NOTES.md', content: '# Notes\n\nWritten by the scripted agent through the gate.\n' } },
+    edit: { name: 'write_file', args: { operation: 'edit', path: 'NOTES.md', old_string: 'scripted agent', new_string: 'scripted agent (edited)' } },
+    rm: { name: 'terminal', args: { command: 'rm -rf build' } },
+    git: { name: 'terminal', args: { command: 'git status' } },
+    todo: { name: 'todo', args: { operation: 'add_phase', name: 'main' } },
+  };
   return {
     async *stream(req: ModelRequest) {
       await req.resolveCredential();
-      const last = req.messages.at(-1)?.content.find((p) => p.kind === 'text');
-      const task = last && last.kind === 'text' ? last.text : '';
-      const words = `I read your request — "${task.slice(0, 80)}" — and, with no tools yet, this is a scripted reply from the run loop.`.split(' ');
+      const step = steps[call] ?? 'answer';
+      call += 1;
+      const tool = TOOL_STEPS[step];
+      if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
+        yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });
+        yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: tool.name, argsDelta: JSON.stringify(tool.args) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+        return;
+      }
+      const last = req.messages.filter((m) => m.role === 'tool').at(-1)?.content[0];
+      const seen = last && last.kind === 'tool-result' ? ` The last tool said: "${last.result.slice(0, 60).replace(/\s+/g, ' ')}".` : '';
+      const first = req.messages.find((m) => m.role === 'user')?.content.find((p) => p.kind === 'text');
+      const task = first && first.kind === 'text' ? first.text : '';
+      const words = `I read your request — "${task.slice(0, 60)}" — and this is the scripted reply from the run loop.${seen}`.split(' ');
       for (const w of words) {
         if (req.signal.aborted) { yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
         await new Promise<void>((resolve) => c.timers.after(millis(120), resolve));
@@ -86,6 +115,30 @@ function modelFromEnv(): ModelSetup | null {
   };
 }
 
+/**
+ * ADR-0019: attendedness is a boolean THIS process maintains — true while main holds a live presenter
+ * registration and the liveness poll has not lapsed. A lapse cancels every waiting approval (they
+ * resolve `cancelled`); the next reply clears it. Decision 5 of the plan: 250 ms poll, 3,000 ms lapse.
+ */
+const presenters = new PresenterRegistry({
+  monotonic: clocks.monotonic, timers: clocks.timers,
+  poll: (seq) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'presenter.poll', seq } }),
+  onLapse: () => {
+    const n = sessions.cancelAllPending();
+    log(`presenter liveness lapsed (> ${presenters.lapseMs} ms without a reply): ${n} waiting approval(s) cancelled; the application is unattended until main answers (ADR-0019)`, 'warn');
+  },
+});
+const presenter = new RunHostPresenter({
+  post: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'approval.present', payload } }),
+  close: (requestId) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'approval.close', requestId } }),
+  clocks, shownBoundMs: 10_000,
+});
+const runtime = runtimeFromEnv();
+for (const w of runtime.warnings) log(w, 'warn');
+log(`runtime (env stopgap): permission_mode=${runtime.permissionMode} approval_timeout=${runtime.approvalTimeoutMs / 1000}s headless=${runtime.headlessPolicy} allow_outside_workspace=${runtime.allowOutsideWorkspace} sandbox=off (no backend on this platform, ADR-0022)`);
+const fileStates = new Map<string, FileToolState>();
+let approvalSequence = 0;
+
 const sessions = new Sessions({
   clocks,
   pid: process.pid,
@@ -101,7 +154,12 @@ const sessions = new Sessions({
     snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
   },
   onRunResult: (sessionId, result) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }),
+  tools: (ctx) => createToolPort(ctx, { clocks, runtime, presenter, nextSequence: () => ++approvalSequence, fileStates }),
+  attended: () => presenters.attended,
+  runtime,
+  sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
 });
+presenters.start();
 
 async function handle(req: RunHostRequest): Promise<ProcessReply> {
   switch (req.kind) {
@@ -164,6 +222,17 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     case 'runs.active':
       // ADR-0013: the registry's predicate. Sessions are not keyed by workspace yet; the count is instance-wide.
       return { kind: 'runs.count', workspaceId: req.workspaceId, count: sessions.activeRunCount() };
+    case 'presenter.register':
+      presenters.register(req.windowId);
+      return { kind: 'ack' };
+    case 'presenter.revoke':
+      presenters.revoke(req.windowId);
+      return { kind: 'ack' };
+    case 'presenter.pollReply':
+      presenters.pollReplied(req.windows);
+      return { kind: 'ack' };
+    case 'approval.shown':
+      return presenter.shown(req.requestId, req.ok, req.error) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
     case 'session.attach':
       return sessions.attach(asSessionId(req.sessionId)) ? { kind: 'ack' } : { kind: 'refused', code: 'session.not-live', headline: 'That session is not live' };
     case 'session.detach':
@@ -177,6 +246,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'shutdown': {
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their terminal results.
+      presenters.stop();
       await sessions.closeAll();
       for (const s of stores.values()) { try { s.db?.close(); } catch { /* */ } }
       stores.clear();

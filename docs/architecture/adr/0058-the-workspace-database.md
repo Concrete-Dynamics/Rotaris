@@ -1686,6 +1686,27 @@ maintained, and is not consulted — so there is nothing for the store to disagr
    shape** — a confirmed identifier establishment leaves the old identifier's store intact and merely
    unreferenced — so the surface is now the only route back to a store a user may well want, rather than
    only the only route to clearing one they do not.
+
+   > **Corrected 2026-09-03. This consequence is the one that tracks leftovers and it had stopped tracking
+   > them.** It named three producers and three shapes while the mechanism above produces **five**, and it
+   > was not updated when the corrected reversal added one. The full set, each stated with whether anything
+   > deletes it:
+   >
+   > | Shape | Produced by | Deleted by |
+   > |---|---|---|
+   > | `<identifier>.displaced-<stamp>` | a restore, displacing the store it replaces | nothing — kept on purpose |
+   > | `<identifier>.displaced-<stamp>` | the corruption ladder | nothing — kept on purpose |
+   > | the old identifier's whole store | ESC-26's confirmed establishment | nothing — kept on purpose, and it is the undo |
+   > | `<identifier>.restoring-<n>` | **every** restore, staging the artifact | ***nothing, and nothing knows it exists*** |
+   > | `<identifier>.obstruction-<stamp>` | the R1/R2 reversal, displacing whatever occupied the target | ***nothing, and nothing knows it exists*** |
+   >
+   > **The last two are defect D5 and it is open.** The staging copy was left behind in every measured
+   > failure of spike 22 — 30 of 30 on the literal reading, 30 of 30 with a file manager holding the store
+   > directory, 30 of 30 at second-granularity collision, and the timeout case — and the layout block above
+   > calls it "transient" while no step deletes it. It is the size of the store. The obstruction aside was
+   > added by the correction and IC-1 observed **both** leftovers beside the target on every reversal run.
+   > The first three are kept deliberately and are the reclamation surface's business; the last two are not
+   > kept deliberately by anybody, which is the difference this table exists to show.
 6. **The backup is O(store), and it now has one number rather than none.** `VACUUM INTO` copies the whole
    store and pins the write-ahead log for the duration. Measured against a 41 MB store with 108,525 commits
    landing during the run, it produced **8 valid snapshots out of 8** at a **median 1,077 ms** each (min
@@ -1757,8 +1778,9 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     route by which `PRAGMA synchronous` silently fails to apply. Both belong in the thin data-access module
     alternative B exists to keep swappable, and both are the kind of thing that is rediscovered as an
     intermittent crash if it is not written down.
-17. **Three mechanisms in the architecture record have now been built for the first time, and every one of
+17. **Four mechanisms in the architecture record have now been built for the first time, and every one of
     them contained a defect that no amount of reading had caught. That is the number, and it belongs here.**
+    *This consequence read "three" until 2026-09-03; the fourth is stated at the end of it.*
     ADR-0054's commit step, which renamed a prepared directory onto an existing one — a thing this platform
     does not do, so a damaged preparation was never repaired and one case launched to no window at all.
     ADR-0054's completeness check, which passed a preparation whose image was damaged, after which the
@@ -1767,12 +1789,22 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     Each was found on first execution and none by review. Each is corrected in place, here or in the record
     that owns it.
 
-    **What that licenses and what it does not.** Three of three is a sample of three and it is the only
+    **And the fourth, which says most about the other three: the harness built to measure this record's
+    corrected restore had three defects on its first run.** One of them would have reported a **pass while
+    testing nothing it claimed to test** — the raced run took its lock on the wrong side of the first
+    liveness evaluation, so the first caught it and the second, the one under test, never ran. A second was
+    **defect D8 arriving uninvited**: the byte-identical check counted the `-wal` and `-shm` files any open
+    connection creates. The third asserted byte-identity in the one experiment whose entire premise is that
+    a live run keeps writing. **A harness is a mechanism**, decided on paper like the rest, and it was
+    written by someone who had just finished writing up the other three. See
+    `../spikes/corrected-restore-rerun.md` section 8.
+
+    **What that licenses and what it does not.** Four of four is a sample of four and it is the only
     sample this project has, so it is the best available estimate of how much of what remains unmeasured is
     wrong, and the estimate is not small. It does not license measuring everything; that is not available.
     It settles two narrower things. First, **a mechanism this record describes and nobody has executed is
     not evidence that the mechanism works**, and must not be cited as though the writing were the testing —
-    every one of these three read correctly to everyone who read it, including the readers who wrote it.
+    every one of these four read correctly to everyone who read it, including the readers who wrote it.
     Second, **when one of them is built and does not work, the defect and its measurement belong in the
     record in place**, rather than being repaired quietly in code, because the reason for a fix is the only
     thing that stops the next reader removing it. Every correction in the restore section above is written
@@ -1784,6 +1816,41 @@ maintained, and is not consulted — so there is nothing for the store to disagr
     records, by two measurements, neither of which was looking for it. The displace-then-rename shape is now
     in both. A third mechanism in this product that renames a directory onto a name that might be occupied
     has the same defect and has simply not been run yet.
+
+18. **What in this record is known to be wrong, or known to be silent, and is not fixed. Added 2026-09-03 by
+    the Architecture Gate's ruling on item 4.** The gate's standard is that a defect **stated in the record**
+    that would not cause a conformant implementation to be built wrong does not block building against that
+    record. The standard is only worth anything if the statement exists, and until this consequence was
+    written this ADR was the one carrying open defects and not naming them. **Three are open. None is in the
+    build-wrong class. A builder is expected to meet all three.**
+
+    - **D5 — nothing deletes a leftover staging copy or an obstruction aside, and nothing knows they
+      exist.** The full table is in consequence 5 above. Each is the size of a store. What is owed is
+      OQ-48's inspect-and-delete surface, which the specification still does not have.
+    - **D8 — the three gates before the swap are not read-only at the filesystem level.** The liveness
+      gate's read-only open of a write-ahead-logged store creates `workspace.db-shm` (32,768 B) and
+      `workspace.db-wal` (0 B) **in the target store directory**, measured before and after. No row is
+      written and the data is unchanged, so the intent of "none of them touching the target" holds and the
+      literal sentence does not — **a refused restore leaves the target directory different from how it
+      found it**. It is stated here rather than repaired because this record is cited for exactly this kind
+      of guarantee, and it met the defect a second time inside the IC-1 harness, uninvited.
+    - **D11 — the `.displaced-` suffix can make the kept store unreadable, and the kept store is the whole
+      point.** The suffix costs +35 characters. The store binding throws `unable to open database file` on
+      any statement at an absolute database path of 252–259 characters and on open at ≥ 260, **while Node's
+      own filesystem calls worked at 328** and `LongPathsEnabled` was `1` on the measuring machine: the
+      registry opt-in does not reach the store engine. A live store at 230–251 characters works perfectly
+      and its displaced copy cannot afterwards be opened by the product at all; the rename always succeeds.
+      **Not reachable at the shipped location** (96 characters, fixed-length by construction); reachable
+      with a long account name, a redirected profile, or a junctioned per-user directory. *This also
+      corrects consequence 13, which names the right hazard and points at the deepest path when the limit
+      bites at the shallowest one, `workspace.db`, because it is the engine and not the filesystem that
+      refuses.*
+
+    **Two rules this record owns are not defects and are owed evidence rather than a fix**, and they are
+    named here so the list is the whole list: rule 6's canonical path spelling **needs a conformance test
+    that opens one store two ways and asserts the product refuses**, because its violation is silent and
+    there is no error to detect (consequence 15); and ADR-0055's stand-down rule for a recovered process has
+    no measurement behind it at all.
 
 ## Revisit if
 

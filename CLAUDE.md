@@ -28,9 +28,28 @@ never valid reasons to cross the boundary.
 
 ## Process state
 
-Implementation has **not** been authorized. The Specification Gate and the mandatory Architecture
-Gate must both be approved by the user before any production code is written. Architectural spikes
-that do not implement product behavior are allowed before that point.
+**Both gates are closed and implementation is authorized, bounded.** The Specification Gate closed
+2026-08-31 (`docs/clean-room/specification-gate.md`); the Architecture Gate closed 2026-09-03
+(`docs/clean-room/architecture-gate.md`). What is authorized is **the mechanism** — process topology,
+the store, the run flow, the event stream, settings, permissions, the backup and the restore.
+
+**Two bounds are not waived and no agent may treat them as advice:**
+
+- **No screen, view, benchmark card or diagnostics surface may be built** until the approved visual
+  design reference exists (**IC-2**). Mechanism that a screen will later use is not a screen.
+- **No Linux or macOS release artifact may be produced** until the build hosts exist (**IC-3**).
+
+`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-6**. A condition binds the work it
+names: that work may not be reported complete until the condition is discharged, discharging means
+recording the result in the record whether or not it passed, and **no condition may be downgraded by
+the person doing the work**.
+
+**A mechanism's first execution reports back into the record that decided it**, in place, including
+when it found nothing — standing policy, ruled at the Architecture Gate. Four mechanisms in this
+record have gone from paper to first execution and every one held a defect no reading had caught.
+Keep a falsified reason beside its replacement; never repair it quietly in the code that meets it.
+
+**A spike is taken as the first act of building the thing it prices**, not before and not later.
 
 ## Traceability
 

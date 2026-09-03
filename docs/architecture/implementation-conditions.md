@@ -1,6 +1,7 @@
 # Conditions that bind at implementation time
 
-Created 2026-09-02 by owner ruling GD-3.
+Created 2026-09-02 by owner ruling GD-3. **Extended 2026-09-03 by the Architecture Gate**, which added
+IC-4, IC-5 and IC-6 under its decision 2 and recorded its decision 3 at the end of this file.
 
 This file holds obligations that are **not** conditions of the Architecture Gate but **are** conditions on
 building the thing they name. It exists because the alternative to holding a whole gate for one mechanism's
@@ -118,3 +119,112 @@ things this record has never executed, and every mechanism this record has taken
 execution has held a defect no reading caught — three for three. **An implementation that reaches a Linux or
 macOS artifact before this condition is discharged is shipping on an untested platform.**
 
+---
+
+## IC-4 — the foreign-host lock row's fix is measured before the restore is signed off
+
+**Set by:** the Architecture Gate, decision 2, 2026-09-03. **Binds:** the first implementation of
+`REQ-SESSION-046`'s machine identifier and of `REQ-SESSION-201`'s foreign-lock report.
+**Discharged into:** a dated spike report in `docs/architecture/spikes/`, and a note on ADR-0058.
+
+**Why it exists.** D9 was the last specification defect in the build-wrong class and it was closed at both
+ends on argument. **Spike 22 measured the defect; nothing has measured the fix.** The two halves fail
+differently and neither covers the other, so both are named:
+
+1. **The root cause.** `REQ-SESSION-046` now requires `host` to be an identifier the product mints once for
+   this machine and keeps machine-locally — never the operating-system name, never anything a user or an
+   administrator can change — and **renaming a machine must not change it**. The whole defect was that the
+   field was described as stable and left unsourced, and the obvious source is the one thing that is not.
+2. **The deadlock.** `REQ-SESSION-201` no longer lets a lock row naming another machine block recovery.
+   Such rows are reported **together, as one condition**, and the user may confirm and proceed on a
+   confirmation that **states the risk** — never per-session clearing as a precondition, never a bare
+   refusal.
+
+**What must be shown.** Rename the machine — actually rename it, not simulate the rename — with a store
+holding lock rows, and confirm that `host` is unchanged, that no row becomes foreign, and that a restore
+proceeds without any release action by the user. Separately, with a genuinely foreign row present, confirm
+the restore reports the whole set as one condition, that the confirmation states the risk rather than only
+the condition, and that proceeding does not require clearing rows one at a time.
+
+**What would count as failing it.** `host` moving for any reason a rename can cause. A report that names
+sessions individually as things to clear. A confirmation that states the condition without the risk — that
+if the store genuinely is reachable elsewhere, a run there may be writing now.
+
+**What it does not cover.** Whether two machines can reach one store at all, which is ESC-21's second
+premise and is owed separately.
+
+---
+
+## IC-5 — the artifact-layout conversion is tested by something aimed at it
+
+**Set by:** the Architecture Gate, decision 2, 2026-09-03. **Binds:** the first implementation of ADR-0058's
+restore steps 6, 9 and 9a. **Discharged into:** a dated spike report or a conformance test, and a note on
+ADR-0058.
+
+**Why it exists.** D7's correction — staging is *arranged into the store's layout* before the install
+rename, the manifest stays outside the store, and `origin.txt` is written by the restore — **ran on every
+successful path of IC-1 and never failed.** That is not a test of it. It is the weakest evidence in the set
+and the spike report says so in its own section 7. The failure mode is quiet in exactly the way the original
+was: a restored store that opens, works, and is missing the one field the reclamation surface identifies it
+by.
+
+**What must be shown.** After a restore, the store directory holds the layout this record fixes and not the
+container's: the database under the name the layout block fixes, no `manifest.json` inside the live store,
+and **`origin.txt` present and naming the right project**. Show it against an artifact whose container
+layout differs from the store layout, because an artifact that already matches tests nothing.
+
+**What would count as failing it.** Any of the three absent or wrong. A restored store the reclamation
+surface cannot describe is an orphan produced on the recovery path.
+
+---
+
+## IC-6 — the build rule that replaced a command's exit status is shown to catch what the command hid
+
+**Set by:** the Architecture Gate, decision 2, 2026-09-03. **Binds:** the first construction of ADR-0056's
+build. **Discharged into:** a note on ADR-0056 and, for the per-runner half, IC-3 item 3.
+
+**Why it exists.** D10 measured that `electron-rebuild` **exits 0, prints `✔ Rebuild Complete`, and produces
+no `.node`**, and that the binding's loader prefers a shipped prebuild over anything built beside it.
+ADR-0056 rule 1a therefore makes the *artifact* the evidence rather than the command, and rule 4's load is
+now the entire check. **The rule has never been run.** It closed a defect on argument, and the defect it
+closed was itself a check that reported success without checking anything — which is the one shape a builder
+must not take on trust twice.
+
+**What must be shown, and it can be shown on the machine this record was produced on.** Construct the
+condition D10 measured — a rebuild that exits 0 and compiles nothing — and confirm the build **fails**:
+that rule 1a finds no binary newer than the rebuild step, and that rule 4's load resolves and loads the file
+the loader actually reaches rather than one sitting beside it. A rule that passes only when everything is
+already fine has not been demonstrated.
+
+**What would count as failing it.** The build passing under D10's measured condition. That is the original
+defect with an extra step.
+
+**What it does not cover.** Whether the rule is constructible on the macOS and Linux release runners, which
+is IC-3 item 3 and is deferred to hardware by GD-5.
+
+---
+
+## How the unstarted spikes bind — the Architecture Gate's ruling on decision 3, 2026-09-03
+
+**No unstarted spike is a condition of anything by itself, and none is a gate condition.** Eleven numbered
+spikes have never been started and four sub-cases are owed; each one **prices a decision that has already
+been taken** rather than blocking one. The ruling is that **a spike is taken as the first act of building
+the thing it prices**, and its result goes into the record that made the decision — whether or not it
+passes, and whether or not it found anything.
+
+Taking them up front delays every decision they price and measures nothing that is being built yet. Leaving
+them to judgement is how a measurement becomes a paragraph nobody owns; the difference between the two is
+this paragraph.
+
+**Three are named because a build reaches them first and cannot honestly proceed past them**, and naming
+them is not promoting them to conditions:
+
+- **Spike 8** — store query latency against **declared** indexes, plus store open, log recovery, an
+  integrity check on the startup path, long-path behaviour, and the cost of `REQ-EVENTS-179`'s write probe.
+  Spike 21 measured a schema with no indexes beyond two primary keys and one listing index, so
+  `REQ-SESSION-042`'s listing budget and `REQ-TRACE-239`'s board budget are unmeasured against anything real.
+- **Spike 18** — two run hosts on one store, which `REQ-TOOLS-089` and `REQ-SANDBOX-038` permit and which no
+  spike has measured; spike 21 measured only run-host-against-workspace-service.
+- **The power-loss test** — OQ-12's outstanding half, and now the **sole** stated ground for forcing the
+  stronger durability setting on a terminal save. No spike has performed one, and it is the only route to an
+  absent store directory that the restore's corrections do not close.

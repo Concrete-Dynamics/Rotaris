@@ -1,8 +1,10 @@
 # Rotaris-crw — system architecture
 
-- **Status:** proposed. **The Architecture Gate is OPEN as of 2026-09-03** — held, with its verdict and
-  the five decisions it asks for in [`../clean-room/architecture-gate.md`](../clean-room/architecture-gate.md),
-  and **awaiting the product owner's decision. Implementation is not authorised.**
+- **Status:** **ACCEPTED. The Architecture Gate CLOSED on 2026-09-03** and **implementation is authorised**
+  — bounded, for the mechanism, subject to IC-1 to IC-6 in [`implementation-conditions.md`](implementation-conditions.md).
+  The verdict, the five decisions and the record of decision are in
+  [`../clean-room/architecture-gate.md`](../clean-room/architecture-gate.md). **No screen may be built before
+  IC-2's design reference exists, and no Linux or macOS artifact before IC-3's hosts do.**
 - **Behavioural target:** `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - **Evidence base:** [`constraints.md`](constraints.md) — what the specification forces, with requirement identifiers — read together with [`../spec/resolutions/`](../spec/resolutions/), the twenty-one records disposing of every open question each domain draft raised. A resolution sometimes narrows what a requirement appears to license; `constraints.md` says where and why.
 - **Measurements:** [`spikes/`](spikes/) — **ten reports covering nine live spikes and one withdrawn one**, two dated 2026-08-31, two dated 2026-09-01 and six dated 2026-09-02 *(this read "four dated 2026-09-01"; two of those four are 2026-08-31)*, and **the only real evidence this record has**. Several of them overturn something it asserted, and the 2026-09-02 group overturned more than the first four did: **three platform facts this record had asserted were disproved, one ADR's own stated gate trigger fired, and one mechanism this record had decided and never run was found not to work at all.** They are named inline wherever a claim rests on one, and the ADRs that depend on them carry an `Evidence:` header field. **Where a measurement disproved a *reason* but not a *conclusion*, both records say so in as many words** — the conclusion, that the original reason was tested and found false, and the reason that actually holds. That sentence is what stops a later reader "simplifying" the decision back into the defect. **Where a measurement disproved a *mechanism*, which has now happened four times, the record carries the failure in place beside the corrected step** — see the finding in section 6, which is now
@@ -10,7 +12,7 @@
 - **Decisions:** [`adr/`](adr/) — 58 records, numbered in dependency order. **Every requirement identifier cited anywhere in `adr/` — 1,214 of them, drawn from a corpus of 4,397 — resolves to a requirement the specification defines. Zero dangling citations.** Re-checked mechanically on 2026-09-02 after the last of the three rounds of that date, which minted `REQ-EVENTS-179`, `REQ-MONITOR-306`, `REQ-SHELL-169` and `REQ-SESSION-202` and edited nine ADRs between them; what it does *not* establish is that every citation still says what the ADR claims it says, which is a different sweep and is reported in section 6.
 - **Unresolved:** [`open-questions.md`](open-questions.md) — **thirty-one escalations: twenty-nine ruled, two closed by the specification itself, NONE open**; forty-seven specification questions (**nine** closed with their reasons, **thirty-eight** open, OQ-31 closed 2026-09-02 by GD-1); **one** design-reference dependency, OQ-30, which is IC-2 rather than a gate condition; twenty-two numbered spikes of which one is withdrawn, **eight discharged** and one discharged for Windows only — **twelve outstanding**, plus four sub-cases owed inside spikes that passed
 - **Binding at build time:** [`implementation-conditions.md`](implementation-conditions.md) — obligations that are **not** gate conditions but **are** conditions on building the thing they name. Created 2026-09-02 by ruling GD-3, which checked rather than assumed that such a register existed and found it did not. Two entries: **IC-1**, the corrected restore is re-measured before its implementation is signed off; **IC-2**, no screen is built before the approved visual design reference is available. An entry here binds the work it names and is removed only by the authority that set it.
-- **Ruled on:** [`owner-decisions.md`](owner-decisions.md) — ESC-1 to ESC-22, ESC-24 and ESC-26 to ESC-31, and nine structural rulings, SR-1 to SR-9. ESC-19, ESC-20 and ESC-21 were ruled on 2026-09-01 by **comparison with seven other coding harnesses** rather than from first principles — that comparison, with its sources, is in `owner-decisions.md` and is evidence, not illustration. **ESC-26 was ruled on 2026-09-01 and has landed in the specification**: `REQ-SESSION-197` gains one narrow exception, bound by five conditions, available only inside `REQ-SESSION-201`'s restore. ESC-23 and ESC-25 needed no ruling in the end: the amendment answered both, and answered ESC-25 *against* what this record had argued. ***No escalation is open.*** The seven that were — ESC-22, ESC-24 and ESC-27 to ESC-31 — were **ruled together on 2026-09-02** and all seven have landed in requirements. Read SR-4's own correction block before citing SR-4: an earlier version of that ruling claimed the store dissolves OQ-41 and it does not (ESC-14) — **cite the corrected form, never the withdrawn one**. Two rulings carried a *reason* a measurement disproved — **ESC-15**'s stated mechanism and **SR-7**'s statement of how the artifact is identified. **Both were corrected in place on 2026-09-02 by ruling GD-2, with the conclusions unchanged**, and each now carries a dated correction block giving what was measured against what was claimed; cite the corrected form. The four decisions the Architecture Gate verdict left with the owner were **all ruled on 2026-09-02 as GD-1 to GD-4**, and nothing in this record now waits on a person.
+- **Ruled on:** [`owner-decisions.md`](owner-decisions.md) — ESC-1 to ESC-22, ESC-24 and ESC-26 to ESC-31, and nine structural rulings, SR-1 to SR-9. ESC-19, ESC-20 and ESC-21 were ruled on 2026-09-01 by **comparison with seven other coding harnesses** rather than from first principles — that comparison, with its sources, is in `owner-decisions.md` and is evidence, not illustration. **ESC-26 was ruled on 2026-09-01 and has landed in the specification**: `REQ-SESSION-197` gains one narrow exception, bound by five conditions, available only inside `REQ-SESSION-201`'s restore. ESC-23 and ESC-25 needed no ruling in the end: the amendment answered both, and answered ESC-25 *against* what this record had argued. ***No escalation is open.*** The seven that were — ESC-22, ESC-24 and ESC-27 to ESC-31 — were **ruled together on 2026-09-02** and all seven have landed in requirements. Read SR-4's own correction block before citing SR-4: an earlier version of that ruling claimed the store dissolves OQ-41 and it does not (ESC-14) — **cite the corrected form, never the withdrawn one**. Two rulings carried a *reason* a measurement disproved — **ESC-15**'s stated mechanism and **SR-7**'s statement of how the artifact is identified. **Both were corrected in place on 2026-09-02 by ruling GD-2, with the conclusions unchanged**, and each now carries a dated correction block giving what was measured against what was claimed; cite the corrected form. The four decisions the Architecture Gate verdict left with the owner were **all ruled on 2026-09-02 as GD-1 to GD-4**, and nothing in this record now waits on a person. **The gate itself closed on 2026-09-03**, and its five rulings are **GD-6 to GD-10**.
 
 This document describes the system one Electron desktop application makes: what its parts are, which
 process each runs in, how they talk, where state lives, and what happens end to end when a user starts a
@@ -1266,9 +1268,37 @@ defended on the clause it does not need. **In every case the failing configurati
 is the shape of defect this discipline exists to catch, and in every case the correction is in the record
 beside the argument it replaced.
 
+**A mechanism's first execution reports back into the record that decided it — in place, and including when
+it found nothing.** *Standing policy, ruled by the Architecture Gate on 2026-09-03 (decision 5). It was this
+record's practice already; the gate made it a rule, because the practice's value arrives at exactly the
+moment the record stops being read, which is the moment implementation begins.*
+
+What that means concretely. The first person to build a mechanism this record decided writes what they found
+into the ADR that decided it, beside the claim it bears on. **A falsified reason is kept next to its
+replacement, not overwritten** — a record whose conclusions are right and whose reasons are false is a
+record that gets "simplified" back into the defect by the next reader, and this record has watched that
+nearly happen four times. **A clean first execution is also reported**, in one line, because "nobody
+recorded a problem" and "somebody ran it and there was no problem" are different states and only one of
+them is evidence. And **a defect found this way is not repaired quietly in the code that meets it**: the
+code is the fix, the record is where the reason lives, and the reason is the only thing that stops the fix
+being removed.
+
+The cost is a paragraph per mechanism. The alternative is the four-for-four finding in section 6 continuing
+to be discovered rather than known.
+
 ---
 
 ## 6. What this record does not settle, and the Architecture Gate verdict
+
+> **THE GATE CLOSED ON 2026-09-03 AND IMPLEMENTATION IS AUTHORISED, BOUNDED.** This section is the verdict
+> the gate was decided on and it is kept as it stood, because a decision is only readable against what it
+> was given. The decision itself is [`../clean-room/architecture-gate.md`](../clean-room/architecture-gate.md)
+> and the five rulings are **GD-6 to GD-10** in [`owner-decisions.md`](owner-decisions.md). What they changed
+> in this record: the three closures that rested on argument are bound as **IC-4, IC-5 and IC-6**; the
+> unstarted spikes are bound to the work each prices, with spike 8, spike 18 and the power-loss test named
+> as the ones a build reaches first; **ADR-0058 now states its own open defects** in a new consequence 18,
+> and its consequence 5 tabulates all five leftover shapes where it had been tracking three; and the
+> first-execution recording rule is standing policy, in section 5 above.
 
 **The specification is done, every owner escalation is ruled, and the architecture has caught up on
 evidence but not on obligations.** All thirty-one escalations have landed in `docs/spec/`, and every one of

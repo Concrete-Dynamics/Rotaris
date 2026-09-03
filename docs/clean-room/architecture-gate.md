@@ -1,7 +1,8 @@
 # Architecture Gate
 
-**Status: OPEN — held 2026-09-03, awaiting the product owner's decision. Implementation remains
-unauthorized until this gate closes.**
+**Status: CLOSED 2026-09-03 — the architecture is approved as sufficient to begin implementation, and
+implementation is authorized within the bounds recorded below. This is the first authorization of
+production code in this repository.**
 
 This gate asks one question: *is the architecture good enough to begin building the product?* It is not
 asking whether the architecture is finished, and it is not asking whether every measurement has been taken.
@@ -76,6 +77,9 @@ implementation and authorizing it as if the record were verified. It is not veri
 four times out of four where argument met execution, execution won.**
 
 ## Decisions this gate should settle
+
+***All five were ruled on 2026-09-03 and the record of decision is at the end of this file. The options and
+recommendations are kept as written, because a decision is only readable against what it chose between.***
 
 These are choices no agent should make silently. Each states the options and this record's recommendation;
 the recommendation is not a decision.
@@ -175,13 +179,48 @@ about which is which.
 
 ## Record of decision
 
-*Not yet recorded. The gate is open.*
+Recorded 2026-09-03 from the product owner, who accepted this record's recommendation on all five items.
 
 | Item | Decision | Date |
 |------|----------|------|
-| 1. Authorization and scope | — | — |
-| 2. The argued closures | — | — |
-| 3. The unstarted spikes | — | — |
-| 4. ADR ratification standard | — | — |
-| 5. First-execution recording rule | — | — |
-| **Gate** | **OPEN** | — |
+| 1. Authorization and scope | **APPROVED, BOUNDED.** Implementation is authorized for everything not blocked by an implementation condition. **IC-2** keeps every screen shut until the approved visual design reference exists; **IC-3** keeps the Linux and macOS artifacts shut until the hosts exist. What is authorized is the mechanism: process topology, the store, the run flow, the event stream, settings, permissions, the backup and the restore. | 2026-09-03 |
+| 2. The argued closures | **BOUND AS CONDITIONS.** The three closures that rest on argument rather than on measurement against the defect they close are now **IC-4** (the foreign-host lock row's fix, both halves), **IC-5** (the artifact-layout conversion and `origin.txt`, which IC-1 exercised without aiming at), and **IC-6** (the build rule that replaced `electron-rebuild`'s exit status with the artifact). Each names what must be shown and where the result goes. | 2026-09-03 |
+| 3. The unstarted spikes | **BOUND TO THE WORK EACH PRICES.** A spike is taken as the first act of building the thing it measures, and its result goes into the record that made the decision whether or not it passes. Spike 8, spike 18 and the power-loss test are named as the ones a build reaches first. Recorded at the end of `implementation-conditions.md`. | 2026-09-03 |
+| 4. ADR ratification standard | **A DEFECT STATED IN THE RECORD, AND NOT BUILD-WRONG, DOES NOT BLOCK IMPLEMENTING AGAINST THAT RECORD.** The standard is worthless unless the statement exists, so ADR-0058 now carries **consequence 18**, naming D5, D8 and D11 with what each costs, and **consequence 5** now tabulates all five leftover shapes with whether anything deletes each — it had been tracking three while the mechanism produced five. | 2026-09-03 |
+| 5. First-execution recording rule | **STANDING POLICY.** A mechanism's first execution reports back into the record that decided it, in place, including when it found nothing. Recorded as a discipline in `../architecture/README.md` section 5. | 2026-09-03 |
+| **Gate** | **CLOSED — approved 2026-09-03.** The product owner reviewed the verdict and authorized implementation within the bounds above. | 2026-09-03 |
+
+## Gate closed
+
+**The architecture is approved as sufficient to begin implementation.** Production code may be written
+against these records, for the mechanism, subject to every condition in
+[`../architecture/implementation-conditions.md`](../architecture/implementation-conditions.md).
+
+**State at closure.** Fifty-eight ADRs; thirty-one constraints; forty-three owner rulings with no escalation
+open; ten spike reports; forty open questions of forty-nine raised; 1,214 requirement citations against a
+corpus of 4,397 with zero dangling. **The build-wrong defect class is empty.** Open and not build-wrong:
+D5, D8 and D11, all three now stated in ADR-0058's own consequence 18, plus two architecture rules owed
+evidence rather than a fix — rule 6's canonical path spelling, which needs a conformance test, and
+ADR-0055's stand-down rule, which has no measurement behind it.
+
+**What closing this gate does not do.** It does not waive IC-2 or IC-3. It does not ratify any ADR. It does
+not make the record verified. **Of the five defects that were in the build-wrong class, two were measured
+against the defect they close, one was exercised without being aimed at, and two rest on argument alone**;
+decision 2 binds the latter three rather than pretending the difference away. Four mechanisms in this record
+have been decided on paper and then built for the first time, and every one held a defect no reading had
+caught. **The remainder — eleven unstarted spikes, four sub-cases, a power-loss test and four build-host
+obligations — has no basis for a lower rate, and four data points against it.**
+
+**What the first implementation owes, before anything else it does.** Nothing here is a reason to delay
+starting. Every one of these binds a specific piece of work at the moment that work is done, and each is
+written where the work will find it:
+
+| When the build reaches | It owes |
+|---|---|
+| the restore, and the machine identifier | **IC-4**, **IC-5** — and IC-1's harness is already in `spikes/` |
+| the build toolchain | **IC-6**, then **IC-3** item 3 when the runners exist |
+| the store's read paths | **spike 8**, against declared indexes |
+| two run hosts on one store | **spike 18** |
+| a terminal save's durability | **the power-loss test**, which is now its sole stated ground |
+| any screen at all | **IC-2** — and the reference does not exist yet |
+| a Linux or macOS artifact | **IC-3**, deferred to hardware by GD-5, owed and not waived |

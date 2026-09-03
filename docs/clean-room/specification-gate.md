@@ -2,8 +2,8 @@
 
 **Status: CLOSED 2026-08-31 — the specification is approved as sufficient, and architecture design is
 authorized. Implementation remains unauthorized until the Architecture Gate closes.**
-**The [Architecture Gate](architecture-gate.md) was held on 2026-09-03 and is OPEN, awaiting the product
-owner's decision.**
+**The [Architecture Gate](architecture-gate.md) CLOSED on 2026-09-03. Implementation is authorized within
+the bounds recorded there.**
 
 This gate asks one question: *is the behavioral specification good enough to begin architecture
 design?* It is not asking whether the specification is finished. Specifications are never finished;
@@ -152,7 +152,8 @@ Recorded 2026-08-30 from the product owner.
 
 The specification is approved as sufficient to begin architecture design. Implementation remains
 unauthorized: the Architecture Gate must be approved separately before any production code is
-written. That gate is [`architecture-gate.md`](architecture-gate.md), held 2026-09-03 and open.
+written. That gate is [`architecture-gate.md`](architecture-gate.md); it **closed on 2026-09-03**, and
+implementation is authorized from that date within the bounds it records.
 
 State at closure: 3,693 live shipping requirements across nineteen domains (3,930 identifiers
 including 237 withdrawn in place), plus 444 identifiers in the two retired domains. This sentence

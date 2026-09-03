@@ -248,3 +248,9 @@ at 10,000 rounds warns and stops rather than spins. **Consequence 6** (one crash
 the artifact index and attachments in the payload (ADR-0041), the verifier prefix, the delegation-context header
 row and the scope toggle (REQ-CHAT-068/069), the three-failed-attempts refusal per todo item (REQ-ORCH-030 — the
 loop's todo is the run's, not yet the coordinator's).
+
+**Second execution, 2026-09-04, the BUDGET clamp (REQ-ORCH-024).** The fixed `normal` cell that stood in
+for the playbooks is gone: the run clamps the configured policy by the entry role's resolved BUDGET variant
+— `tight` {2, 6, 2}, `normal` {4, 12, 3}, `wide` no clamp — and with no pre-flight the configured policy stands
+unchanged. In the built app a `question` (the answer group, `tight`) admitted two children and refused the
+third with `Max active children 2 exceeded`. **Found: nothing.**

@@ -156,3 +156,10 @@ client selected by an environment variable.
 **Found: nothing in this record.** The second backend (`claude-code`) is not built and OQ-17 is where it
 was. The conformance suite of consequence 1 has one backend to run against and does not yet exist as a
 parameterised suite.
+
+**Second execution, 2026-09-04, structured output (REQ-ORCH-010).** `ModelRequest` and `TurnInput` gain an
+optional `output` — a strict JSON schema or JSON-object mode — and the AI SDK client maps it to `streamText`'s
+`output` (`Output.object` / `Output.json`, present on the pinned 7.0.92). The classifier's ladder reads a
+provider's HTTP 400/422 naming `response_format`, `json_schema` or JSON mode as a rung rejection and steps
+down; anything else is a failure. Exercised against the scripted client only: the live half of spike 6 is
+still owed and the rejection heuristic has met no real provider. **Found: nothing** at the port.

@@ -387,3 +387,10 @@ top-level key was carried and ignored. **Not built:** the four merge classes bey
 the validating wrapper, the placeholder and secret passes, the four writers, the discovery layer, the
 runtime keys — those stay environment stopgaps at the run-host root. Neither timing contingency of "Revisit
 if" is measured yet: the hooks read is a few kilobytes and no settings save exists.
+
+**Two more readers, 2026-09-04, for the playbooks and the intent gate.** `readPlaybookOverrides(dir)` reads a
+directory of YAML files as `SLOT: { variant: text }` (decision 5 of the plan: the format is this build's, the
+specification fixing none) and `readIntentMapping(file)` reads `intent-tools.yaml` as intent → `direct-work`
+| `none`, rejecting any other value as REQ-ORCH-017's "obsolete instruction-text entry". Both are fresh reads
+on every run (REQ-CONFIG-014); an unknown slot or variant is the engine's to warn about against the
+catalogue. The loader still holds no merge classes, no writers, no runtime keys.

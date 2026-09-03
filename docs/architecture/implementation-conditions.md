@@ -319,3 +319,14 @@ REQ-HOOKS-013 consequence a reviewer will read as a bug. The eighth defect of de
 it and not in it: kernel's redaction pass (ADR-0007) was quadratic and had never run at size. Owed and stated:
 worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, ADR-0049's single notice
 slot losing the advisory, the benchmark harness for REQ-HOOKS-139.
+
+## Intent classification and the playbooks — 2026-09-04: no condition bound; found nothing
+
+REQ-ORCH-005..027 were built and run without a condition naming them and without an unstarted spike pricing
+them; the first-execution notes are on ADR-0016 (the bundle by facet), ADR-0026 (structured output on the
+port), ADR-0012 (the BUDGET clamp) and ADR-0036 (two readers). Every mechanism ran clean against the scripted
+client: the four fallback arms, the ladder's degradation to text, the grant, the override, the clamp. What that
+leaves owed, stated so it is not mistaken for discharged: the classifier against a real provider (the
+rejection heuristic of REQ-ORCH-010 has met none); REQ-ORCH-012/013 in the product, which need a resumed
+session (the same missing `continue` route as REQ-ORCH-053); the three model slots and the tier, still
+environment stopgaps; plan mode (REQ-ORCH-152..154), which reads the intent and is not built.

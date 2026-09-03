@@ -121,3 +121,11 @@ for is removed and logged, which is how `terminal` was removed on every run befo
 
 **Found: nothing.** The persona whose tools are declared is a built-in table at the run-host root until
 ADR-0036 loads `agents.yaml` (decision 2 of the plan in `codebase.md`).
+
+**Third execution, 2026-09-04, the intent gate (REQ-ORCH-016).** The direct-work bundle is resolved **by
+facet** against `DECLARATIONS` (`directWorkBundle()`: todo, the delegation trio, `grep`/`glob`, `fetch`, the
+two artifact reads, and every name declaring a read, a write or a command), never by a literal list; a tool
+added to the table joins or stays out by its own declaration. At the run-host root the grant unions the bundle
+into the entry role's declared tools and drops `coordinator_only`; the removals for prerequisites still apply
+(`fetch`, `git_commit` and the artifact reads left the set as `executor_absent`/`artifact_store_absent` in the
+built app — the bundle is a grant, not a promise the executor exists). **Found: nothing** beyond that reading.

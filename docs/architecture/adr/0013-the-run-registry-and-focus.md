@@ -176,3 +176,6 @@ things in it.
 every live session (`Sessions.answerApproval`) and reported undeliverable when none waits (`REQ-MONITOR-254`);
 a permission-mode change is addressed to the one session id the sending window resolved (`REQ-MONITOR-254`'s
 other half). Consequence 1 held as written: two policies, one addressing. **Found: nothing.**
+
+**Third execution, 2026-09-03, with children.** `cancelAgent` is addressed by session id and task id; the reserved
+run id cancels the run (`REQ-MONITOR-009`); an unknown or terminal child answers `false`. **Found: nothing.**

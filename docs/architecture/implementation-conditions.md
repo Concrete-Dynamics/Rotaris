@@ -300,3 +300,12 @@ here so it is not mistaken for discharged: the export of the four records (`REQ-
 the `fetch` executor over ADR-0023's classifier (needs ADR-0036), confinement (ADR-0022, no backend on this
 platform), the terminal's live streaming (ADR-0021), and the sizing of ADR-0019's lapse window under load
 (OQ-39 — the window is 3,000 ms as a first figure, not a measurement).
+
+## Children and the scheduler — 2026-09-03: no condition bound; one route found missing
+
+ADR-0012 was built and run without a condition naming it and without an unstarted spike pricing it. Its
+first-execution note holds the slot-cap reading (a slot is held from the claim) and one finding: REQ-ORCH-053's
+settle-on-continue sweep has no route in the product until the `continue`/`resume` controls land, because every
+prompt mints a new session. Owed and stated: the loop supervisor, the fallback-model and rate-limit paths, the
+artifact payload items, REQ-ORCH-030's per-item attempt limit, and the persisted `runtime.*` keys and personas
+(ADR-0036).

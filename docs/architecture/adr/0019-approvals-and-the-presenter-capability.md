@@ -575,3 +575,10 @@ rather than amended.
 an `approval.present` event and awaits main's `approval.shown` request, bounded at 10 s; a late or absent
 confirmation is a presenter error. Main reports `ok: false` when no main window exists, which is the
 unattended case reached without a lapse.
+
+**Second execution, 2026-09-03, with children.** `PendingApprovals` is per TOOL PORT, and with delegation every
+agent — the root and each child — holds its own port. A session-level route for an answer would have reached the
+one port the session was created with and missed every agent's; caught in the code before it ran, so it is not
+counted with the seven, but it is a fact this record did not state: **the run fans an answer, a cancel and a mode
+change out over every port it created** (`Run.answerApproval`, `Run.cancelPending`, `Run.setPermissionMode`), and
+`REQ-TOOLS-030`'s "every live agent of the session" is met by that fan-out rather than by one registry.

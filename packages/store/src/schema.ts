@@ -246,6 +246,54 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 5,
+    // v5 lands with children and the scheduler (ADR-0012 under SR-4: the ledger is one row per child, written
+    // through the session writer; every state change is one transaction with its child.transition event).
+    // NO new index: every query names (session_id, task_id) or scans one session's children, which the
+    // primary key serves; REQ-ORCH-151's isolation is a predicate — every statement over these tables
+    // carries session_id, and a test reads the statements to say so.
+    sql: `
+      -- REQ-ORCH-043 / REQ-MONITOR-022: the persisted per-child record.
+      CREATE TABLE children (
+        session_id        TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        task_id           TEXT NOT NULL,
+        canonical_name    TEXT NOT NULL,
+        given_name        TEXT NOT NULL,
+        persona           TEXT NOT NULL,
+        state             TEXT NOT NULL,
+        parent_id         TEXT NOT NULL,
+        depth             INTEGER NOT NULL,
+        iteration         INTEGER NOT NULL,
+        launch_generation INTEGER NOT NULL DEFAULT 0,
+        model_key         TEXT NOT NULL,
+        category          TEXT NOT NULL DEFAULT '',
+        background        INTEGER NOT NULL DEFAULT 1,
+        task              TEXT NOT NULL,
+        depends_on        TEXT NOT NULL DEFAULT '[]',
+        inherited_context TEXT NOT NULL DEFAULT '[]',
+        granted_tools     TEXT NOT NULL DEFAULT '[]',
+        granted_mcp       TEXT NOT NULL DEFAULT '{}',
+        todo              TEXT,
+        spawned_at        TEXT NOT NULL,
+        completed_at      TEXT,
+        report            TEXT,
+        report_stored     INTEGER NOT NULL DEFAULT 0,
+        observed          INTEGER NOT NULL DEFAULT 0,
+        context_injected  INTEGER NOT NULL DEFAULT 0,
+        tool_calls        INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (session_id, task_id)
+      );
+      -- REQ-ORCH-050 / REQ-MONITOR-020: held children per model key, released in the order they were held.
+      CREATE TABLE model_slot_queue (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        model_key  TEXT NOT NULL,
+        position   INTEGER NOT NULL,
+        task_id    TEXT NOT NULL,
+        PRIMARY KEY (session_id, model_key, position)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

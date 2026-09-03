@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { isBusy, PERMISSION_PRESETS, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { AgentTree } from './AgentTree.js';
 
 /**
  * The Workspace view's conversation surface, at the point the mechanism has
@@ -21,6 +22,10 @@ export interface WorkspaceViewProps {
   readonly onStop: (force: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** REQ-TOOLS-077 / REQ-MONITOR-150: forwarded to the running session; applies from the next tool call. */
   readonly onSetMode?: ((mode: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-MONITOR-009 / REQ-ORCH-133: cancel one child from the tree's run header. */
+  readonly onCancelAgent?: ((id: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** For the tree's elapsed labels; the surface's own clock, never a run's. */
+  readonly nowIso?: string | null | undefined;
 }
 
 /** REQ-CHAT-004: the four placeholders, first condition wins. */
@@ -151,7 +156,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode }: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null }: WorkspaceViewProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -199,8 +204,22 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode }: Wo
   };
 
   const mode = (session?.permissionMode ?? null) as PermissionPreset | null;
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const agents = session?.agents ?? [];
+  const selected = agents.find((a) => a.id === selectedAgent) ?? null;
   return (
-    <div className="workspace">
+    <div className={`workspace${agents.length > 0 ? ' workspace--with-agents' : ''}`}>
+      {agents.length > 0 && (
+        <aside className="agents" aria-label="Delegation">
+          <div className="agents__header">
+            <span className="agents__title">Agents</span>
+            {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
+              <button type="button" className="btn btn-ghost agents__cancel" onClick={() => { void onCancelAgent(selected.id).then((r) => { if (!r.ok) setError(r.reason); }); }}>Cancel {selected.name}</button>
+            )}
+          </div>
+          <AgentTree agents={agents} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} />
+        </aside>
+      )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {rows.length === 0 && (
           <div className="empty-state">

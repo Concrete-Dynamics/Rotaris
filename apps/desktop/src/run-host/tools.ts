@@ -6,7 +6,8 @@ import {
   buildPolicy, effectiveMode, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { parseLogLevel, type ModeChange, type PortToolCall, type PortToolResult, type RuntimePosture, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, type ModeChange, type PortToolCall, type PortToolResult, type RoleName, type RuntimePosture, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
 /**
@@ -24,6 +25,10 @@ export const RUNTIME_ENV_KEYS = {
   allowOutsideWorkspace: 'ROTARIS_ALLOW_OUTSIDE_WORKSPACE',
   sessionLogLevel: 'ROTARIS_SESSION_LOG_LEVEL',
   shellCommandTimeoutS: 'ROTARIS_SHELL_COMMAND_TIMEOUT_S',
+  /** REQ-ORCH-025: `single` | `swarm` | unset (decision 2 of the plan). */
+  runOverride: 'ROTARIS_RUN_OVERRIDE',
+  /** REQ-ORCH-050: a per-model cap the user set; unset = uncapped. */
+  modelConcurrencyCap: 'ROTARIS_MODEL_CONCURRENCY_CAP',
 } as const;
 
 export interface RuntimeFromEnv extends RuntimePosture {
@@ -32,6 +37,7 @@ export interface RuntimeFromEnv extends RuntimePosture {
   readonly allowOutsideWorkspace: boolean;
   /** REQ-CONFIG-116: `runtime.shell_command_timeout`, seconds, default 100. */
   readonly shellCommandTimeoutS: number;
+  readonly runOverride: 'single' | 'swarm' | null;
   readonly warnings: string[];
 }
 
@@ -60,10 +66,20 @@ export function runtimeFromEnv(env: NodeJS.ProcessEnv = process.env): RuntimeFro
     if (!Number.isFinite(n) || n <= 0) warnings.push(`runtime.shell_command_timeout must be a positive number of seconds; '${shellRaw}' was rejected and the default 100 stands (REQ-CONFIG-116)`);
     else shellCommandTimeoutS = n;
   }
+  const overrideRaw = (env[RUNTIME_ENV_KEYS.runOverride] ?? '').trim().toLowerCase();
+  const runOverride = overrideRaw === 'single' ? 'single' : overrideRaw === 'swarm' ? 'swarm' : null;
+  if (overrideRaw !== '' && runOverride === null) warnings.push(`unrecognised run override '${overrideRaw}'; ignored (REQ-ORCH-025)`);
+  const capRaw = env[RUNTIME_ENV_KEYS.modelConcurrencyCap];
+  let modelConcurrencyCap: number | null = null;
+  if (capRaw !== undefined && capRaw.trim() !== '') {
+    const n = Number(capRaw);
+    if (!Number.isInteger(n) || n < 1) warnings.push(`the per-model concurrency cap must be a positive integer; '${capRaw}' was rejected and models are uncapped (REQ-ORCH-050)`);
+    else modelConcurrencyCap = n;
+  }
   return {
     permissionMode: mode.preset, allowUnsandboxedAutonomous: false,
     sandbox: { requested: false, available: false, backend: '' },
-    sessionLogLevel: level.level, approvalTimeoutMs, headlessPolicy, allowOutsideWorkspace, shellCommandTimeoutS, warnings,
+    sessionLogLevel: level.level, approvalTimeoutMs, headlessPolicy, allowOutsideWorkspace, shellCommandTimeoutS, runOverride, modelConcurrencyCap, warnings,
   };
 }
 
@@ -149,17 +165,26 @@ function executorsFor(root: string, deps: ToolPortDeps, todo: TodoList): Map<str
   return new Map(list.map((e) => [e.name, e]));
 }
 
-/** REQ-ORCH-028's entry persona, as a built-in until ADR-0036 loads agents.yaml (decision 2). */
-const ORCHESTRATOR_TOOLS = ['read_file', 'write_file', 'haet_read', 'haet_edit', 'haet', 'grep', 'glob', 'todo', 'terminal'];
-
 export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPort {
   const root = realPathOf(ctx.workspaceRoot);
   const todo = new TodoList();
   const executors = executorsFor(root, deps, todo);
+  // Decision 2: the persona from the engine's built-in table until ADR-0036 loads agents.yaml.
+  const persona = BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
+  const isEntry = ctx.persona === 'orchestrator';
+  // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
+  const single = deps.runtime.runOverride === 'single';
+  const delegationAvailable = ctx.delegation !== undefined && !single;
+  if (delegationAvailable && ctx.delegation) {
+    const parentId = ctx.parentId ?? 'root';
+    executors.set('delegate', delegateTool(ctx.delegation, parentId) as ToolExecutor);
+    executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
+    executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
+  }
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
-  const resolved = resolveToolSet({ name: ctx.persona, tools: ORCHESTRATOR_TOOLS }, {}, {
-    delegationRuntime: false, userPromptChannel: false, artifactStore: false, canPublishArtifacts: false, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
-  }, true);
+  const resolved = resolveToolSet({ name: ctx.persona, tools: persona.tools, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !single, readOnly: persona.readOnly }, {}, {
+    delegationRuntime: delegationAvailable, userPromptChannel: false, artifactStore: false, canPublishArtifacts: false, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
+  }, isEntry);
   for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }

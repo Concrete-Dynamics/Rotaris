@@ -142,6 +142,37 @@ export interface ToolCallRow {
   readonly is_error: number;
   readonly entry: string;
 }
+/** v5 — REQ-ORCH-043 / REQ-MONITOR-022: one row per delegated child. */
+export interface ChildRow {
+  readonly session_id: string;
+  readonly task_id: string;
+  readonly canonical_name: string;
+  readonly given_name: string;
+  readonly persona: string;
+  readonly state: string;
+  readonly parent_id: string;
+  readonly depth: number;
+  readonly iteration: number;
+  readonly launch_generation: number;
+  readonly model_key: string;
+  readonly category: string;
+  readonly background: number;
+  readonly task: string;
+  readonly depends_on: string;
+  readonly inherited_context: string;
+  readonly granted_tools: string;
+  readonly granted_mcp: string;
+  readonly todo: string | null;
+  readonly spawned_at: string;
+  readonly completed_at: string | null;
+  readonly report: string | null;
+  readonly report_stored: number;
+  readonly observed: number;
+  readonly context_injected: number;
+  readonly tool_calls: number;
+}
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo'> & { readonly todo?: string | null };
+
 export interface IssueRow {
   readonly session_id: string;
   readonly ordinal: number;
@@ -277,7 +308,66 @@ export class StoreDal {
         VALUES (@session_id, @ordinal, @id, @recorded_at, @kind, @severity, @actor, @message, @evidence_ref, @metadata)`),
       oldestIssue: db.prepare('DELETE FROM issues WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM issues WHERE session_id = ?)'),
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
+
+      // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at)`),
+      getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
+      childrenOf: db.prepare('SELECT * FROM children WHERE session_id = ? ORDER BY spawned_at, task_id'),
+      childrenOfIteration: db.prepare('SELECT * FROM children WHERE session_id = ? AND iteration = ? ORDER BY spawned_at, task_id'),
+      // The transition's one write: state and, on a terminal state, the completion timestamp (REQ-MONITOR-017).
+      setChildState: db.prepare('UPDATE children SET state = ?, completed_at = coalesce(?, completed_at) WHERE session_id = ? AND task_id = ?'),
+      // REQ-ORCH-049: the start claim is ONE conditional update; its affected-row count is the claim's outcome.
+      claimChildStart: db.prepare("UPDATE children SET state = 'starting', launch_generation = launch_generation + 1 WHERE session_id = ? AND task_id = ? AND state = 'queued'"),
+      setChildReport: db.prepare('UPDATE children SET report = ?, report_stored = 1 WHERE session_id = ? AND task_id = ?'),
+      setChildObserved: db.prepare('UPDATE children SET observed = 1 WHERE session_id = ? AND task_id = ?'),
+      setChildContextInjected: db.prepare('UPDATE children SET context_injected = 1 WHERE session_id = ? AND task_id = ?'),
+      setChildTodo: db.prepare('UPDATE children SET todo = ?, tool_calls = ? WHERE session_id = ? AND task_id = ?'),
+      enqueueSlot: db.prepare('INSERT INTO model_slot_queue (session_id, model_key, position, task_id) VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM model_slot_queue WHERE session_id = ? AND model_key = ?), ?)'),
+      slotQueueOf: db.prepare('SELECT task_id FROM model_slot_queue WHERE session_id = ? AND model_key = ? ORDER BY position'),
+      dequeueSlot: db.prepare('DELETE FROM model_slot_queue WHERE session_id = ? AND model_key = ? AND task_id = ?'),
     };
+  }
+
+  insertChild(row: ChildInsert): void {
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null });
+  }
+  getChild(id: SessionId, taskId: string): ChildRow | undefined {
+    return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;
+  }
+  childrenOf(id: SessionId): ChildRow[] {
+    return this.stmts['childrenOf']!.all(id) as ChildRow[];
+  }
+  childrenOfIteration(id: SessionId, iteration: number): ChildRow[] {
+    return this.stmts['childrenOfIteration']!.all(id, iteration) as ChildRow[];
+  }
+  setChildState(id: SessionId, taskId: string, state: string, completedAt: string | null): boolean {
+    return this.stmts['setChildState']!.run(state, completedAt, id, taskId).changes === 1;
+  }
+  /** True when THIS pass won the claim; zero rows is a losing claim, an observation the caller records (REQ-ORCH-049). */
+  claimChildStart(id: SessionId, taskId: string): boolean {
+    return this.stmts['claimChildStart']!.run(id, taskId).changes === 1;
+  }
+  setChildReport(id: SessionId, taskId: string, report: string): void {
+    this.stmts['setChildReport']!.run(report, id, taskId);
+  }
+  setChildObserved(id: SessionId, taskId: string): void {
+    this.stmts['setChildObserved']!.run(id, taskId);
+  }
+  setChildContextInjected(id: SessionId, taskId: string): void {
+    this.stmts['setChildContextInjected']!.run(id, taskId);
+  }
+  setChildTodo(id: SessionId, taskId: string, todo: string | null, toolCalls: number): void {
+    this.stmts['setChildTodo']!.run(todo, toolCalls, id, taskId);
+  }
+  enqueueSlot(id: SessionId, modelKey: string, taskId: string): void {
+    this.stmts['enqueueSlot']!.run(id, modelKey, id, modelKey, taskId);
+  }
+  slotQueueOf(id: SessionId, modelKey: string): string[] {
+    return (this.stmts['slotQueueOf']!.all(id, modelKey) as { task_id: string }[]).map((r) => r.task_id);
+  }
+  dequeueSlot(id: SessionId, modelKey: string, taskId: string): boolean {
+    return this.stmts['dequeueSlot']!.run(id, modelKey, taskId).changes === 1;
   }
 
   /**

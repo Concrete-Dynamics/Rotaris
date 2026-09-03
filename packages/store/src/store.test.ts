@@ -370,7 +370,7 @@ describe('store — v4: the evidence rings (ADR-0024, REQ-SESSION-133/135/136/13
   }
   it('the schema is v4; the session and row columns read their defaults; a tool row keeps its untruncated input and output', () => {
     const { r, dal, sid } = open('91');
-    expect(CURRENT_SCHEMA_VERSION).toBe(4);
+    expect(CURRENT_SCHEMA_VERSION).toBeGreaterThanOrEqual(4);
     const s = dal.getSession(sid)!;
     expect([s.permission_mode, s.sandboxed, s.pending_approvals]).toEqual([null, 0, '[]']);
     dal.appendRow(sid, 0, 'tool', false, 'glob **/*.ts', 't', { tool_name: 'glob', tool_status: 'running', call_key: 'c1', started_at: 't', input: '{"pattern":"**/*.ts"}' });
@@ -432,5 +432,53 @@ describe('store — v4: the evidence rings (ADR-0024, REQ-SESSION-133/135/136/13
     void dal;
     r.db.close();
     forgetSpelling(r.dir);
+  });
+});
+
+describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', () => {
+  function open(n: string) {
+    const id = mintWorkspaceId(`000000000000000000000000000000${n}`);
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId(`S-${n}`);
+    dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    return { r, dal, sid };
+  }
+  const child = (sid: string, taskId: string, state = 'queued') => ({
+    session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
+    model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
+  });
+  it('the schema is v5; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+    const { r, dal, sid } = open('96');
+    expect(CURRENT_SCHEMA_VERSION).toBe(5);
+    dal.insertChild(child(sid, 'bg_00000001'));
+    const c = dal.getChild(sid, 'bg_00000001')!;
+    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
+    expect(dal.claimChildStart(sid, 'bg_00000001')).toBe(true);
+    expect(dal.claimChildStart(sid, 'bg_00000001')).toBe(false);
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'starting', launch_generation: 1 });
+    expect(dal.setChildState(sid, 'bg_00000001', 'running', null)).toBe(true);
+    expect(dal.setChildState(sid, 'bg_00000001', 'succeeded', '2026-09-03T00:00:00.000Z')).toBe(true);
+    expect(dal.getChild(sid, 'bg_00000001')!.completed_at).toBe('2026-09-03T00:00:00.000Z');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('the slot queue is FIFO per model key and per session', () => {
+    const { r, dal, sid } = open('97');
+    dal.enqueueSlot(sid, 'm', 'bg_0000000a');
+    dal.enqueueSlot(sid, 'm', 'bg_0000000b');
+    dal.enqueueSlot(sid, 'other', 'bg_0000000c');
+    expect(dal.slotQueueOf(sid, 'm')).toEqual(['bg_0000000a', 'bg_0000000b']);
+    expect(dal.dequeueSlot(sid, 'm', 'bg_0000000a')).toBe(true);
+    expect(dal.slotQueueOf(sid, 'm')).toEqual(['bg_0000000b']);
+    expect(dal.slotQueueOf(asSessionId('S-elsewhere'), 'm')).toEqual([]);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  it('REQ-ORCH-151: every ledger statement carries session_id — read from the DAL source, so a cross-run leak cannot be written unnoticed', () => {
+    const src = readFileSync(join(__dirname, 'dal.ts'), 'utf8');
+    const statements = [...src.matchAll(/db\.prepare\((`[\s\S]*?`|'[^']*')\)/g)].map((m) => m[1]!).filter((sql) => /\b(children|model_slot_queue)\b/.test(sql));
+    expect(statements.length).toBeGreaterThanOrEqual(12);
+    for (const sql of statements) expect(sql, sql).toMatch(/session_id/);
   });
 });

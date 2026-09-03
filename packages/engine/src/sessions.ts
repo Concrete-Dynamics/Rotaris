@@ -1,4 +1,4 @@
-import { asSessionId, err, ok, type Clocks, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
+import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, resolvePreset, type ApprovalOption, type ControlRequest, type ControlResult, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { RELEASE_PAGE_SIZE, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend } from '@rotaris/model';
@@ -9,6 +9,11 @@ import { EventBus } from './run/event-bus.js';
 import { Run, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
+import { settleStaleChildren } from './children/orchestration.js';
+import type { DelegationOps } from './children/delegation.js';
+import { clampBudget, DEFAULT_BUDGET, NORMAL_CELL, type Budget } from './children/ledger.js';
+import { presentationChildState, type AgentRecord, type ChildState } from '@rotaris/contracts';
+import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 
@@ -41,6 +46,10 @@ export interface ToolPortContext {
   readonly warn: (message: string) => void;
   /** REQ-TOOLS-065's abort hook: stops this run. */
   readonly abortRun: () => void;
+  /** Part B: the agent's delegation identity — its operations, its own id as a parent, and its depth. */
+  readonly delegation?: DelegationOps | undefined;
+  readonly parentId?: string | undefined;
+  readonly depth?: number | undefined;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -50,6 +59,11 @@ export interface RuntimePosture {
   /** ADR-0022: on Windows there is no backend, so this is `{ available: false, backend: '' }`. */
   readonly sandbox: { readonly requested: boolean; readonly available: boolean; readonly backend: string };
   readonly sessionLogLevel: LogLevel;
+  /** REQ-ORCH-050 / REQ-MONITOR-021: a per-model cap the user set; null = uncapped. */
+  readonly modelConcurrencyCap?: number | null;
+  /** REQ-ORCH-046's three limits; REQ-ORCH-024's `normal` cell clamps them until playbooks are built. */
+  readonly childBudget?: Budget;
+  readonly drainTimeoutMs?: number;
 }
 
 export interface SessionsDeps {
@@ -131,6 +145,19 @@ export function toSessionRecord(r: SessionRow): SessionRecord {
   };
 }
 
+/** REQ-MONITOR-044/046/047: a child row as a surface sees it. */
+export function toAgentRecord(c: ChildRow, clocks: Clocks): AgentRecord {
+  const state = c.state as ChildState;
+  const ps = presentationChildState(state);
+  void clocks;
+  return {
+    id: c.task_id, name: c.canonical_name, givenName: c.given_name, persona: c.persona, state, presentationState: ps, parentId: c.parent_id,
+    dependencies: (() => { try { return JSON.parse(c.depends_on) as string[]; } catch { return []; } })(),
+    activity: c.task.slice(0, 180), model: c.model_key, depth: c.depth, background: c.background === 1, category: c.category,
+    spawnedAt: c.spawned_at, completedAt: c.completed_at, toolCalls: c.tool_calls, delegationTask: c.task, live: ps === 'running',
+  };
+}
+
 /** REQ-TOOLS-060: the mirror is a JSON array of payloads; an unreadable mirror reads as empty rather than failing the record. */
 function parsePending(json: string): SessionRecord['pendingApprovals'] {
   try {
@@ -187,7 +214,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => ({ ...toSessionRecord(dal.getSession(sessionId)!), backgroundSessions: this.deps.backgroundSessions?.() ?? 0 }),
+      readSession: () => ({ ...toSessionRecord(dal.getSession(sessionId)!), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0 }),
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -198,17 +225,26 @@ export class Sessions {
 
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
     const runRef: { run?: Run } = {};
-    const tools = this.deps.tools?.({
-      sessionId, workspaceRoot, writer, persona: model.config.persona, agentName: model.config.persona, requestedMode: permission.effective,
-      attended: () => this.deps.attended?.() ?? false, warn,
-      abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); },
-    }) ?? null;
+    const baseCtx = { sessionId, workspaceRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); } };
+    // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
+    const tools: ToolPort | null = null;
     live.tools = tools;
+    // REQ-ORCH-053: a run that has just taken the lock settles every non-terminal child a previous run left, before its first iteration.
+    const stale = settleStaleChildren(dal, writer, sessionId, warn);
+    if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first iteration (REQ-ORCH-053)`);
+    const budget = clampBudget(this.deps.runtime?.childBudget ?? DEFAULT_BUDGET, NORMAL_CELL);
+    const cap = this.deps.runtime?.modelConcurrencyCap ?? null;
     const run = new Run({
       sessionId, workspaceRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
       readSession: () => dal.getSession(sessionId), warn,
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
+      ...(this.deps.tools ? {
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth }),
+        dal, budget, modelCap: () => cap,
+        summariser: { backend: model.backend, model: model.config.model, thinking: model.config.thinking, timers: this.deps.clocks.timers, resolveCredential: model.config.resolveCredential },
+      } : {}),
+      ...(this.deps.runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: this.deps.runtime.drainTimeoutMs as Millis }),
     });
     runRef.run = run;
     for (const c of entry.held.splice(0)) run.onCommitted(c);
@@ -252,6 +288,12 @@ export class Sessions {
         const r = run.setPermissionMode(mode, 'user');
         return r.ok ? { ok: true } : { ok: false };
       }
+      case 'cancelAgent': {
+        // REQ-MONITOR-008/009: an empty id is refused; the reserved run id cancels the run.
+        const agentId = req.args['agentId'];
+        if (typeof agentId !== 'string' || agentId.trim() === '') return { ok: false };
+        return run.cancelAgent(agentId) ? { ok: true } : { ok: false };
+      }
       case 'answerApproval': {
         // REQ-MONITOR-010: an unrecognised option is refused; REQ-MONITOR-254: routed by request id, undeliverable → false.
         const requestId = req.args['requestId'];
@@ -267,13 +309,16 @@ export class Sessions {
   /** ADR-0019: a lapse or a teardown releases every waiting approval in every live session (REQ-TOOLS-054's bulk cancel). */
   cancelAllPending(): number {
     let n = 0;
-    for (const s of this.live.values()) n += s.tools?.cancelPending() ?? 0;
+    for (const s of this.live.values()) n += s.run && !s.run.isEnded ? s.run.cancelPending() : s.tools?.cancelPending() ?? 0;
     return n;
   }
 
   /** ADR-0013: an answer is routed by looking the request id up across every live session. */
   answerApproval(requestId: string, option: ApprovalOption): boolean {
-    for (const s of this.live.values()) if (s.tools?.answerApproval(requestId, option)) return true;
+    for (const s of this.live.values()) {
+      if (s.run && s.run.answerApproval(requestId, option)) return true;
+      if (s.tools?.answerApproval(requestId, option)) return true;
+    }
     return false;
   }
 

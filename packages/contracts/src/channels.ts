@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ApprovalPayloadSchema } from './tools.js';
+import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 
 /**
@@ -95,7 +96,8 @@ export const SessionRecordSchema = z.object({
     cap: z.number().int().nullable(),
     lastTrimAt: z.string().nullable(),
   }),
-  agents: z.array(z.object({ id: z.string(), state: z.string(), depth: z.number().int() })),
+  /** REQ-MONITOR-044/036: the delegated children as presented; the tree is derived from parentId. */
+  agents: z.array(AgentRecordSchema),
   pendingQuestions: z.array(z.object({ requestId: z.string(), prompt: z.string() })),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
   /** Decimal string (ADR-0031). */

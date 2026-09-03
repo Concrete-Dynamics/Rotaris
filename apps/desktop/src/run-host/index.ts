@@ -52,7 +52,10 @@ function log(message: string, level: 'info' | 'warn' = 'info'): void {
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
  */
 function scriptedClient(c: Clocks): ModelClient {
-  const steps = (process.env['ROTARIS_SCRIPT'] ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
+  const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
+  // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
+  const scripts: Record<string, string[]> = { orchestrator: parse(process.env['ROTARIS_SCRIPT']), child: parse(process.env['ROTARIS_CHILD_SCRIPT']) };
+  const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0 };
   let call = 0;
   const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
     glob: { name: 'glob', args: { pattern: '**/*.md' } },
@@ -66,8 +69,31 @@ function scriptedClient(c: Clocks): ModelClient {
   return {
     async *stream(req: ModelRequest) {
       await req.resolveCredential();
-      const step = steps[call] ?? 'answer';
+      const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
+      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : 'child';
       call += 1;
+      calls[who] = (calls[who] ?? 0) + 1;
+      if (who === 'summariser') {
+        yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify({ summary: 'The child carried out its task (scripted summary).', key_findings: ['scripted'], tags: ['implementation'] }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 20, output: 10 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      const step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
+      if (step === 'fail') {
+        yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
+        return;
+      }
+      // delegate:<persona>:<name>[:after] — `after` depends on the last task id a tool result reported.
+      const delegate = /^delegate:([a-z-]+):([^:]+)(:after)?$/.exec(step);
+      if (delegate && (req.tools ?? []).some((t) => t.name === 'delegate')) {
+        const lastId = delegate[3] ? [...req.messages].reverse().flatMap((m) => [...m.content] as { kind: string; result?: string }[]).map((p) => (p.kind === 'tool-result' && p.result ? /task_id: (bg_[0-9a-f]{8})/.exec(p.result)?.[1] : undefined)).find((x) => x !== undefined) : undefined;
+        yield ok<StreamPart>({ kind: 'text', delta: `Delegating to ${delegate[1]}. ` });
+        yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}) }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+        return;
+      }
       const tool = TOOL_STEPS[step];
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });

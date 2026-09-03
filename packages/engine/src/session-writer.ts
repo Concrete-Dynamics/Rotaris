@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import type { TranscriptRow } from '@rotaris/contracts';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 
@@ -634,6 +634,124 @@ export class SessionWriter {
     if (ev && line?.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(id);
+  }
+
+  /**
+   * ADR-0012: the child row and its `child.spawn` in ONE transaction (REQ-EVENTS-077: announced exactly once,
+   * ahead of every other event naming the child).
+   */
+  spawnChild(row: Omit<ChildInsert, 'session_id' | 'spawned_at'>): Result<ChildRow, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.spawn', at, { child_id: row.task_id, agent_name: row.canonical_name, task: row.task });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.spawn could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.insertChild({ ...row, session_id: sessionId, spawned_at: at });
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.spawn', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, row.task_id)!);
+  }
+
+  /**
+   * ADR-0012: the SOLE implementation of REQ-MONITOR-300's moves. Validates against the table (or a settling
+   * path), stamps the completion timestamp on a terminal state, writes the row and `child.transition` in ONE
+   * transaction — a refused move commits nothing and names both states (REQ-MONITOR-016), and there is no
+   * interval in which the row has moved but its event has not.
+   */
+  transitionChild(taskId: string, to: ChildState, via: SettlingPath | null = null): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current) return err({ code: 'illegal-move', from: '(none)', to, reason: `child ${taskId} does not exist in session ${sessionId}` });
+    const from = current.state as ChildState;
+    if (!isLegalChildMove(from, to, via)) {
+      return err({ code: 'illegal-move', from, to, reason: `child ${taskId} is in state '${from}' and cannot move to '${to}'${via ? ` by ${via}` : ''} (REQ-MONITOR-300)` });
+    }
+    const at = toIsoUtc(wall.instant());
+    const completedAt = isTerminalChildState(to) ? at : null;
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: from, to_state: to });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.setChildState(sessionId, taskId, to, completedAt);
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * REQ-ORCH-049: the start claim — one conditional update `queued → starting`; a losing claim (zero rows)
+   * is recorded IN THE SAME TRANSACTION as a `child_launch_suppressed` timeline entry and a
+   * `stale_child_launch_claim` issue, so a suppressed race can never go unrecorded. The winning claim also
+   * carries its `child.transition` and a `child_start` timeline entry.
+   */
+  claimChildStart(taskId: string, canonicalName: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const current = dal.getChild(sessionId, taskId);
+    const from = current?.state ?? '(none)';
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: 'queued', to_state: 'starting' });
+    const line = serializeEvent(ev);
+    let won = false;
+    let issueRef = '';
+    try {
+      dal.transaction(() => {
+        won = dal.claimChildStart(sessionId, taskId);
+        if (won) {
+          if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+          dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_start', 'rotaris', `Child ${canonicalName} (${taskId}) started.`, JSON.stringify({ task_id: taskId, canonical_name: canonicalName }));
+        } else {
+          const id = issueId();
+          dal.ringInsert('issues', sessionId, (o) => {
+            dal.insertIssue({ session_id: sessionId, ordinal: o, id, recorded_at: at, kind: 'stale_child_launch_claim', severity: 'warning', actor: 'rotaris', message: `A start claim for child ${canonicalName} (${taskId}) was suppressed: the record reads '${from}', not 'queued'.`, evidence_ref: '', metadata: JSON.stringify({ task_id: taskId, canonical_name: canonicalName, state: from }) });
+          });
+          issueRef = id;
+          dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_launch_suppressed', 'rotaris', `A start of child ${canonicalName} (${taskId}) was suppressed.`, JSON.stringify({ task_id: taskId, canonical_name: canonicalName, state: from, issue_id: id }));
+        }
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (won && line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    void issueRef;
+    this.trimIfOverflowed(at);
+    return ok(won);
+  }
+
+  /** REQ-ORCH-051/108: the report stored with the record, and `child.complete` in the same transaction. */
+  storeChildReport(taskId: string, report: Record<string, unknown>): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.complete', at, { child_id: taskId, report });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.complete could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.setChildReport(sessionId, taskId, JSON.stringify(sortKeys(report)));
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.complete', at, EVENT_SCHEMA_VERSION, null, line.value);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(undefined);
   }
 
   /** REQ-SESSION-067: a no-op where nothing is outstanding — and with synchronous commits nothing ever is. */

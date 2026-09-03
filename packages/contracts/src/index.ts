@@ -6,3 +6,4 @@ export * from './process-protocol.js';
 export * from './views.js';
 export * from './status.js';
 export * from './tools.js';
+export * from './children.js';

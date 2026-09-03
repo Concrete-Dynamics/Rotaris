@@ -1,7 +1,7 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
-import type { PermissionPreset } from '@rotaris/contracts';
-import type { AgentBackend, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
+import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
+import type { AgentBackend, ChatMessage, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
@@ -10,6 +10,11 @@ import { classifyStop, statusForResult, stopCondition, summarise, type StopReaso
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
 import { runTurn, type ToolPort } from './turn.js';
+import { IterationChildren } from '../children/orchestration.js';
+import type { DelegationOps } from '../children/delegation.js';
+import type { Budget as ChildBudget } from '../children/ledger.js';
+import type { SummariserDeps } from '../children/report.js';
+import type { ChildRow, StoreDal } from '@rotaris/store';
 
 /**
  * The run loop, in its first conformant slice: one root agent, one model
@@ -84,6 +89,15 @@ export interface RunDeps {
   readonly config: RunConfig;
   /** Null: no tool surface — the model is offered no tool and a requested call ends the turn. */
   readonly tools: ToolPort | null;
+  /** Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation. */
+  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null) | undefined;
+  readonly dal?: StoreDal | undefined;
+  readonly budget?: ChildBudget | undefined;
+  readonly modelCap?: ((modelKey: string) => number | null) | undefined;
+  readonly summariser?: SummariserDeps | null | undefined;
+  readonly childTimeoutMs?: Millis | undefined;
+  /** REQ-ORCH-080: default 120 s; 0 disables. */
+  readonly drainTimeoutMs?: Millis | undefined;
   readonly permission: PermissionPosture;
   readonly pid: number;
   readonly host: MachineId;
@@ -126,6 +140,11 @@ export class Run {
   private aggregates: Aggregates;
   private result: RunResult | null = null;
   private readonly dispatched = new Map<string, string>();
+  private children: IterationChildren | null = null;
+  /** REQ-ORCH-072: the root agent's own child identity for this iteration. */
+  private rootId = 'root';
+  /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
+  private readonly ports = new Set<ToolPort>();
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
@@ -134,7 +153,7 @@ export class Run {
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
       // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops.
-      try { this.deps.tools?.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
+      try { this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
       this.abort.abort();
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
@@ -283,16 +302,79 @@ export class Run {
     }
   }
 
-  /** One turn: the tool loop of `turn.ts`, every model step streamed into its own `agent` row. */
+  /** One turn: the tool loop of `turn.ts`, every model step streamed into its own `agent` row; with children, the resume loop. */
   private async turn(task: string): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
-    const outcome = await runTurn({
-      writer, owner, backend, tools: this.deps.tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
+    const iteration = this.iterationsCompleted + 1;
+    this.rootId = `root:${iteration}`;
+    const children = this.deps.toolsFor && this.deps.dal
+      ? new IterationChildren({
+        sessionId: this.sessionId, workspaceRoot: this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
+        modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn,
+        budget: this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
+        summariser: this.deps.summariser ?? null, ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+      }, iteration)
+      : null;
+    this.children = children;
+    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
+    const turnFn = (text: string, history: readonly ChatMessage[]) => runTurn({
+      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
       systemPrompt: config.systemPrompt, model: config.model, thinking: config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
-    }, task, [], this.abort.signal);
-    this.aggregates.addToolCalls(outcome.toolCallCount);
-    return outcome.report;
+    }, text, history, this.abort.signal);
+    try {
+      const outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
+      this.aggregates.addToolCalls(outcome.toolCallCount);
+      // REQ-ORCH-080: a stop with active background children drains before anything is cancelled.
+      if (children && this.stop.requested && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
+      return outcome.report;
+    } finally {
+      // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
+      if (children) { const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup'); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`); }
+    }
+  }
+
+  private register(port: ToolPort | null): ToolPort | null {
+    if (port) this.ports.add(port);
+    return port;
+  }
+  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number): ToolPort | null => {
+    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth) : null;
+    return this.register(p);
+  };
+
+  /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval of every agent in this run. */
+  cancelPending(): number {
+    let n = 0;
+    for (const p of this.ports) n += p.cancelPending();
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) n += this.deps.tools.cancelPending();
+    return n;
+  }
+  /** ADR-0013: an answer is routed by request id to whichever agent's registry holds it. */
+  answerApproval(requestId: string, option: ApprovalOption): boolean {
+    for (const p of this.ports) if (p.answerApproval(requestId, option)) return true;
+    return this.deps.tools?.answerApproval(requestId, option) ?? false;
+  }
+
+  /** REQ-MONITOR-009 / REQ-ORCH-133: cancel one child; the reserved run id is a full cancellation. */
+  cancelAgent(taskId: string): boolean {
+    if (this.ended) return false;
+    if (taskId === 'run' || taskId === this.rootId) { this.stop.request('user_cancelled'); return true; }
+    const ch = this.children;
+    if (!ch) return false;
+    const row = ch.ledger.get(taskId);
+    if (!row || ['succeeded', 'failed', 'cancelled', 'blocked'].includes(row.state)) return false;
+    const r = ch.ledger.transition(taskId, 'cancelled', 'cancellation');
+    if (!r.ok) return false;
+    ch.ledger.storeReport(taskId, { agent_name: row.canonical_name, role: row.persona, status: 'cancelled', summary: 'The user cancelled this child.', key_findings: [], last_response: '', final_response: '', errors: [] });
+    this.deps.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${row.canonical_name} (${taskId}).`, { task_id: taskId });
+    ch.scheduler.settled(r.row);
+    return true;
+  }
+
+  /** For the projection: this iteration's children. */
+  currentChildren(): readonly ChildRow[] {
+    return this.children?.children() ?? [];
   }
 
   /**
@@ -300,9 +382,11 @@ export class Run {
    * audited in the same series as the decisions; the transcript row states what actually happened.
    */
   setPermissionMode(mode: string, source = 'user'): { ok: true; effective: PermissionPreset } | { ok: false } {
-    const tools = this.deps.tools;
-    if (!tools || this.ended) return { ok: false };
-    const change = tools.setMode(mode, source);
+    const all = [...this.ports, ...(this.deps.tools && !this.ports.has(this.deps.tools) ? [this.deps.tools] : [])];
+    if (all.length === 0 || this.ended) return { ok: false };
+    // REQ-TOOLS-030/073: every live agent of the session receives the new preset; the first port's change is reported.
+    const changes = all.map((p) => p.setMode(mode, source));
+    const change = changes[0]!;
     const { writer } = this.deps;
     writer.recordModeChange({
       timestamp: toIsoUtc(this.deps.clocks.wall.instant()), event: 'permission_mode_change', session_id: this.sessionId, agent_id: source,

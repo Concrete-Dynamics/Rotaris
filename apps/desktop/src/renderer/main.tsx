@@ -73,10 +73,19 @@ async function setMode(mode: PermissionPreset): Promise<{ ok: true } | { ok: fal
   return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run did not accept the mode change.' };
 }
 
+/** REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. */
+async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { ok: false, reason: 'No run is active.' };
+  const r = await bridge.command({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
+  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+  return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' };
+}
+
 function Workspace() {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
-  return <WorkspaceView session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} />;
+  return <WorkspaceView session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={session?.updatedAt ?? null} />;
 }
 
 /** REQ-SESSION-201's two actions: main supplies the dialogs, the workspace service the work. */

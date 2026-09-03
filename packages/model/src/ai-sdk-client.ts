@@ -1,8 +1,8 @@
 import { err, ok, type Result } from '@rotaris/kernel';
-import { APICallError, streamText, type LanguageModel, type ModelMessage } from 'ai';
+import { APICallError, jsonSchema, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type StreamPart } from './ports.js';
+import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type StreamPart, type ToolSpec } from './ports.js';
 
 /**
  * ADR-0027 — the AI SDK behind `ModelClient`, for the request-and-stream
@@ -45,15 +45,44 @@ export function redactHeaders(h: Record<string, string>): Record<string, string>
   return out;
 }
 
+function parseArgs(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { _raw: text };
+  }
+}
+
 function toModelMessages(messages: readonly ChatMessage[]): ModelMessage[] {
   return messages.map((m): ModelMessage => {
     if (m.role === 'system') return { role: 'system', content: m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') };
-    if (m.role === 'assistant') return { role: 'assistant', content: m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') };
+    if (m.role === 'assistant') {
+      return {
+        role: 'assistant',
+        content: m.content.map((p) => (p.kind === 'text' ? { type: 'text' as const, text: p.text }
+          : p.kind === 'tool-call' ? { type: 'tool-call' as const, toolCallId: p.callId, toolName: p.name, input: parseArgs(p.args) }
+            : { type: 'text' as const, text: '' })),
+      };
+    }
+    if (m.role === 'tool') {
+      return {
+        role: 'tool',
+        content: m.content.map((p) => ({ type: 'tool-result' as const, toolCallId: p.callId, toolName: p.name, output: p.isError ? { type: 'error-text' as const, value: p.result } : { type: 'text' as const, value: p.result } })),
+      };
+    }
     return {
       role: 'user',
       content: m.content.map((p) => (p.kind === 'text' ? { type: 'text' as const, text: p.text } : { type: 'image' as const, image: p.base64, mediaType: p.mediaType })),
     };
   });
+}
+
+/** The callable set as the SDK wants it; no `execute`, so the SDK returns the calls and the engine runs them. */
+function toToolSet(specs: readonly ToolSpec[] | undefined): ToolSet | undefined {
+  if (!specs || specs.length === 0) return undefined;
+  const set: ToolSet = {};
+  for (const s of specs) set[s.name] = tool({ description: s.description, inputSchema: jsonSchema(s.parameters as Parameters<typeof jsonSchema>[0]) });
+  return set;
 }
 
 function fromError(cause: unknown, aborted: boolean): ModelError {
@@ -110,8 +139,9 @@ export class AiSdkModelClient implements ModelClient {
     const timeoutSignal = AbortSignal.timeout(req.timeoutMs);
     const signal = AbortSignal.any([req.signal, timeoutSignal]);
     try {
+      const tools = toToolSet(req.tools);
       const result = streamText({
-        model, messages: toModelMessages(req.messages), abortSignal: signal, maxRetries: req.retries,
+        model, messages: toModelMessages(req.messages), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}),
         ...(req.thinking === 'unset' ? {} : { providerOptions: { openai: { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking } } }),
       });
       let usage: { input: number; output: number } | null = null;

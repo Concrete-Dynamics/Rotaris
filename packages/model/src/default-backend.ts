@@ -1,14 +1,10 @@
-import type { AgentBackend, ChatMessage, ModelClient, TurnInput, TurnReport, TurnSink, Usage } from './ports.js';
+import type { AgentBackend, ChatMessage, ModelClient, ToolCallRequest, TurnInput, TurnReport, TurnSink, Usage } from './ports.js';
 
 /**
- * The default `AgentBackend`: one streaming call over `ModelClient`, the
- * engine driving the loop (REQ-ORCH-146's non-native case). Text deltas go to
- * the sink as they arrive; the report carries the whole text, the provider's
- * usage, and the finish reason folded into the status.
- *
- * No tools yet: a `tool-call` part is carried through as nothing (the tool
- * surface lands with ADR-0016 to ADR-0019). Reasoning parts reach the sink and
- * are not part of the text.
+ * The default `AgentBackend`: ONE streaming call over `ModelClient` per step, the engine driving the
+ * loop (REQ-ORCH-146's non-native case). Text deltas go to the sink as they arrive; tool-call parts are
+ * assembled by call id (a provider may stream the arguments in pieces); the report carries the whole
+ * text, the tool calls requested, the provider's usage, and the finish reason folded into the status.
  */
 export class DefaultAgentBackend implements AgentBackend {
   readonly ownsTheLoop = false;
@@ -18,17 +14,17 @@ export class DefaultAgentBackend implements AgentBackend {
   async runTurn(input: TurnInput, sink: TurnSink, signal: AbortSignal): Promise<TurnReport> {
     const messages: ChatMessage[] = [
       { role: 'system', content: [{ kind: 'text', text: input.systemPrompt }] },
-      ...input.history,
-      { role: 'user', content: [{ kind: 'text', text: input.task }] },
+      ...input.messages,
     ];
     let text = '';
     let usage: Usage = { input: 0, output: 0 };
     let finish: 'stop' | 'length' | 'other' | null = null;
+    const calls = new Map<string, { name: string; args: string }>();
     for await (const part of this.client.stream({
       model: input.model, messages, thinking: input.thinking, signal,
-      timeoutMs: input.timeoutMs, retries: input.retries, resolveCredential: input.resolveCredential,
+      timeoutMs: input.timeoutMs, retries: input.retries, resolveCredential: input.resolveCredential, tools: input.tools,
     })) {
-      if (!part.ok) return { status: 'failed', text, usage, error: part.error };
+      if (!part.ok) return { status: 'failed', text, usage, error: part.error, toolCalls: [...calls].map(([callId, c]) => ({ callId, ...c })) };
       switch (part.value.kind) {
         case 'text':
           text += part.value.delta;
@@ -44,11 +40,16 @@ export class DefaultAgentBackend implements AgentBackend {
         case 'finish':
           finish = part.value.reason;
           break;
-        case 'tool-call':
+        case 'tool-call': {
+          const cur = calls.get(part.value.callId);
+          if (cur) cur.args += part.value.argsDelta;
+          else calls.set(part.value.callId, { name: part.value.name, args: part.value.argsDelta });
           break;
+        }
       }
     }
-    if (finish === 'length') return { status: 'partial', text, usage };
-    return { status: 'succeeded', text, usage };
+    const toolCalls: ToolCallRequest[] = [...calls].map(([callId, c]) => ({ callId, name: c.name, args: c.args }));
+    if (finish === 'length') return { status: 'partial', text, usage, toolCalls };
+    return { status: 'succeeded', text, usage, toolCalls };
   }
 }

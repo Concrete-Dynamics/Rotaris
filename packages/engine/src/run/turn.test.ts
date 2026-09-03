@@ -1,0 +1,206 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
+import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type ToolPort } from '../index.js';
+
+const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
+const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
+
+/** A tool port that records calls and answers by name; `hold` parks a dispatch until released. */
+function fakePort(opts: { hold?: Promise<void>; holdOn?: string } = {}) {
+  const calls: PortToolCall[] = [];
+  const pending = { cancelled: 0, answered: [] as string[] };
+  let mode: 'restricted' | 'ask' | 'autonomous' = 'ask';
+  const port: ToolPort = {
+    specs: () => [{ name: 'glob', description: 'find files', parameters: { type: 'object' } }, { name: 'write_file', description: 'write', parameters: { type: 'object' } }],
+    dispatch: async (c, signal): Promise<PortToolResult> => {
+      calls.push(c);
+      if (opts.hold && c.name === (opts.holdOn ?? c.name)) await Promise.race([opts.hold, new Promise<void>((r) => signal.addEventListener('abort', () => r(), { once: true }))]);
+      if (signal.aborted) return { text: 'cancelled', isError: true, status: 'failed', durationMs: 1, label: c.name, args: {} };
+      if (c.name === 'write_file') return { text: 'wrote a.txt', isError: false, status: 'ok', durationMs: 2, label: 'write_file a.txt', args: JSON.parse(c.rawArgs) as Record<string, unknown>, diff: 'a.txt [Created] +1 -0\n[1]+ hello' };
+      if (c.name === 'terminal') return { text: "Permission denied by rule 'starter:deny-recursive-delete'. …", isError: true, status: 'blocked', durationMs: 0, label: 'terminal: $ rm -rf x', args: {}, blockedReason: 'recursive delete' };
+      return { text: 'a.ts\nb.ts', isError: false, status: 'ok', durationMs: 3, label: 'glob **/*.ts', args: {} };
+    },
+    cancelPending: () => { pending.cancelled += 1; return 0; },
+    setMode: (m, _source): ModeChange => { const previous = mode; mode = m as typeof mode; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; },
+    currentMode: () => mode,
+    answerApproval: (id) => { pending.answered.push(id); return id === 'known'; },
+  };
+  return { port, calls, pending };
+}
+
+describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-ORCH-141, REQ-CHAT-046/050/060, REQ-MONITOR-012/150..153)', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let clock: FakeClock;
+  const warnings: string[] = [];
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-turn-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    clock = new FakeClock();
+    warnings.length = 0;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, resolveCredential: async () => 'k', ...over });
+
+  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string } } = {}) {
+    const client = new ScriptedModelClient(calls);
+    let n = 0;
+    const logLines: string[] = [];
+    const sessions = new Sessions({
+      clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
+      model: { backend: new DefaultAgentBackend(client), config: config() }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+      ...(port ? { tools: () => port } : {}), attended: () => extra.attended ?? true,
+      runtime: { permissionMode: extra.runtime?.permissionMode ?? 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
+      sessionLogAppender: () => (line) => { logLines.push(line); },
+    });
+    return { sessions, client, logLines };
+  }
+  const events = (sid: SessionId) => dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind);
+  const rows = (sid: SessionId) => dal.residentRows(sid).map((r) => ({ kind: r.kind, body: r.body, status: r.tool_status }));
+
+  it('the model calls two tools then answers: tool rows running → ok, a diff row beneath the write, results fed back, one iteration', async () => {
+    const { port, calls } = fakePort();
+    const { sessions, client } = sessionsWith([
+      toolCalls([{ callId: 'c1', name: 'glob', args: { pattern: '**/*.ts' } }], 'Let me look.'),
+      toolCalls([{ callId: 'c2', name: 'write_file', args: { operation: 'create', path: 'a.txt' } }]),
+      answer('Done: a.txt written.'),
+    ], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'write a file') as { value: SessionId }).value;
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('completed');
+    expect(calls.map((c) => c.name)).toEqual(['glob', 'write_file']);
+    expect(rows(sid)).toEqual([
+      { kind: 'user', body: 'write a file', status: null },
+      { kind: 'agent', body: 'Let me look.', status: null },
+      { kind: 'tool', body: 'glob **/*.ts', status: 'ok' },
+      { kind: 'tool', body: 'write_file a.txt', status: 'ok' },
+      { kind: 'diff', body: 'a.txt [Created] +1 -0\n[1]+ hello', status: null },
+      { kind: 'agent', body: 'Done: a.txt written.', status: null },
+      { kind: 'system', body: 'The run completed.', status: null },
+    ]);
+    const toolRow = dal.residentRows(sid)[2]!;
+    expect(toolRow).toMatchObject({ tool_name: 'glob', call_key: 'c1', duration_ms: 3, output: 'a.ts\nb.ts' });
+    expect(toolRow.input).toBe('{"pattern":"**/*.ts"}');
+    // the third model call saw the tool results in its messages
+    const third = client.requests[2]!;
+    expect(third.messages.filter((m) => m.role === 'tool')).toHaveLength(2);
+    expect(third.tools?.map((t) => t.name)).toEqual(['glob', 'write_file']);
+    expect(dal.getSession(sid)).toMatchObject({ iterations_completed: 1, tool_calls: 2, permission_mode: 'ask', sandboxed: 0 });
+    expect(events(sid).filter((k) => k === 'iteration.start')).toHaveLength(1);
+    const start = JSON.parse(dal.eventsOfKind(sid, 'session.start')[0]!.payload) as { permission_mode: string; sandboxed: boolean };
+    expect(start).toMatchObject({ permission_mode: 'ask', sandboxed: false });
+  });
+
+  it('a blocked call: the row reads blocked with its reason, the refusal text goes back to the model, and the run continues', async () => {
+    const { port } = fakePort();
+    const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'terminal', args: { command: 'rm -rf x' } }]), answer('I will not do that.')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'clean') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(dal.residentRows(sid)[1]).toMatchObject({ kind: 'tool', tool_status: 'blocked', blocked_reason: 'recursive delete' });
+    const second = client.requests[1]!;
+    const toolMsg = second.messages.find((m) => m.role === 'tool')!;
+    expect(toolMsg.content[0]).toMatchObject({ kind: 'tool-result', callId: 'c1', isError: true });
+    expect((toolMsg.content[0] as { result: string }).result).toMatch(/^Permission denied by rule/);
+  });
+
+  it('REQ-ORCH-141: a replayed call id is not dispatched again', async () => {
+    const { port, calls } = fakePort();
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'same', name: 'glob', args: {} }]), toolCalls([{ callId: 'same', name: 'glob', args: {} }]), answer('ok')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(calls).toHaveLength(1);
+  });
+
+  it('REQ-MONITOR-012: a stop releases the pending approvals first, aborts the tool in flight, and the run ends interrupted', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port, pending } = fakePort({ hold, holdOn: 'write_file' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    expect(dal.residentRows(sid).at(-1)).toMatchObject({ kind: 'tool', tool_status: 'running' });
+    expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+    expect(pending.cancelled).toBe(1);
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(dal.residentRows(sid).find((r) => r.kind === 'tool')).toMatchObject({ tool_status: 'failed' });
+    release();
+  });
+
+  it('REQ-MONITOR-150..153 / REQ-TOOLS-082: setPermissionMode applies to the next call, writes the audit entry and the system row; empty mode refused', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port } = fakePort({ hold, holdOn: 'glob' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('ok')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: '' } })).toEqual({ ok: false });
+    expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+    expect(port.currentMode()).toBe('autonomous');
+    const audit = dal.auditOf(sid);
+    expect(audit).toHaveLength(1);
+    expect(JSON.parse(audit[0]!.entry)).toMatchObject({ event: 'permission_mode_change', requested_mode: 'autonomous', previous_mode: 'ask', skipped_personas: [] });
+    expect(dal.residentRows(sid).find((r) => r.kind === 'system')?.body).toBe("Permission mode is now 'autonomous'; it applies from the next tool call.");
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('permission_mode_changed');
+    expect(dal.getSession(sid)!.permission_mode).toBe('autonomous');
+    release();
+    await sessions.running(sid)!;
+    // REQ-TOOLS-075: the override is discarded at run end — a later control is refused because no run is live.
+    expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'ask' } })).toEqual({ ok: false });
+  });
+
+  it('answerApproval routes by request id across live sessions; unknown id or option is refused (REQ-MONITOR-010/254)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port, pending } = fakePort({ hold, holdOn: 'glob' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('ok')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'answerApproval', sessionId: sid, args: { requestId: 'known', option: 'once' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'answerApproval', sessionId: sid, args: { requestId: 'nope', option: 'once' } })).toEqual({ ok: false });
+    expect(sessions.control({ op: 'answerApproval', sessionId: sid, args: { requestId: 'known', option: 'maybe' } })).toEqual({ ok: false });
+    expect(pending.answered).toEqual(['known', 'nope']);
+    release();
+    await sessions.running(sid)!;
+  });
+
+  it('REQ-TOOLS-067/071: autonomous requested while unattended and unsandboxed is downgraded to ask, announced in the row, the timeline, the log and session.start', async () => {
+    const { port } = fakePort();
+    const { sessions, logLines } = sessionsWith([answer('hi')], port, { attended: false, runtime: { permissionMode: 'autonomous' } });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.permission_mode).toBe('ask');
+    expect(dal.residentRows(sid)[1]!.body).toMatch(/^Permission mode 'autonomous' was downgraded to 'ask' for this run/);
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('permission_mode_downgraded');
+    expect(logLines.some((l) => /WARNING.*downgraded/.test(l))).toBe(true);
+    expect(JSON.parse(dal.eventsOfKind(sid, 'session.start')[0]!.payload)).toMatchObject({ permission_mode: 'ask' });
+  });
+
+  it('with no tool port the model is offered no tool and a requested call ends the turn with a warning', async () => {
+    const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'text')], null);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests[0]!.tools).toEqual([]);
+    expect(warnings.some((w) => /no tool port/.test(w))).toBe(true);
+  });
+
+  it('REQ-SESSION-142: the session log takes WARNING and above by default and nothing after run end', async () => {
+    const { port } = fakePort();
+    const { sessions, logLines } = sessionsWith([answer('hi')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const before = logLines.length;
+    sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+    expect(logLines.length).toBe(before);
+    expect(logLines.every((l) => /^\d{4}-\d\d-\d\dT.*(WARNING|ERROR)/.test(l))).toBe(true);
+  });
+});

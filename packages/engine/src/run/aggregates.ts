@@ -46,6 +46,11 @@ export class Aggregates {
     this.tokensOutput += u.output;
   }
 
+  /** REQ-ORCH-097 / REQ-SESSION-139: per-turn tool-call counters accumulate. */
+  addToolCalls(n: number): void {
+    this.toolCalls += n;
+  }
+
   get figures(): AggregateFigures {
     return { tokensInput: this.tokensInput, tokensOutput: this.tokensOutput, cost: this.cost, toolCalls: this.toolCalls, compressions: this.compressions };
   }

@@ -3,7 +3,7 @@ import { answer, DefaultAgentBackend, isTransient, modelError, ScriptedModelClie
 
 const model: ModelRef = { providerId: 'p', modelId: 'm', dialect: 'chat' };
 const input = (task: string): TurnInput => ({
-  persona: 'orchestrator', systemPrompt: 'You are the orchestrator.', task, history: [], model, thinking: 'unset', timeoutMs: 1000, retries: 0,
+  persona: 'orchestrator', systemPrompt: 'You are the orchestrator.', messages: [{ role: 'user', content: [{ kind: 'text', text: task }] }], tools: [], model, thinking: 'unset', timeoutMs: 1000, retries: 0,
   resolveCredential: async () => 'k',
 });
 function sink(): TurnSink & { deltas: string[]; usages: { input: number; output: number }[] } {
@@ -30,7 +30,7 @@ describe('model — the default backend over a scripted client (ADR-0026 alterna
     const be = new DefaultAgentBackend(client);
     const s = sink();
     const r = await be.runTurn(input('say hi'), s, new AbortController().signal);
-    expect(r).toEqual({ status: 'succeeded', text: 'hello world', usage: { input: 7, output: 2 } });
+    expect(r).toMatchObject({ status: 'succeeded', text: 'hello world', usage: { input: 7, output: 2 } });
     expect(s.deltas.join('')).toBe('hello world');
     expect(s.usages).toEqual([{ input: 7, output: 2 }]);
     // The credential resolver ran inside the request path, and the system prompt led the messages.

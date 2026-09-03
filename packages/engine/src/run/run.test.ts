@@ -168,7 +168,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
     const created = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: (c) => { owner?.onCommitted(c); run?.onCommitted(c); } }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST, task: 't' });
     if (!created.ok) throw new Error('create');
     owner = new ProjectionOwner({ sessionId: sid, seq: new SequenceCounters(), timers: clock, publisher: recorder(), readSession: () => toSessionRecord(dal.getSession(sid)!), readResident: () => dal.residentRows(sid).map(toTranscriptRow) });
-    run = new Run({ sessionId: sid, workspaceRoot: 'C:/ws', task: 't', taskId: 'T', writer: created.value, owner, bus, clocks: clock, backend, config: config(), pid: 1, host: HOST, readSession: () => dal.getSession(sid), warn: () => undefined });
+    run = new Run({ sessionId: sid, workspaceRoot: 'C:/ws', task: 't', taskId: 'T', writer: created.value, owner, bus, clocks: clock, backend, config: config(), tools: null, permission: { requested: 'ask', effective: 'ask', downgraded: false, reason: '', sandboxed: false, sandboxBackend: '' }, pid: 1, host: HOST, readSession: () => dal.getSession(sid), warn: () => undefined });
     run.stop.request('user_cancelled');
     const result = await run.start();
     expect(result.status).toBe('interrupted');

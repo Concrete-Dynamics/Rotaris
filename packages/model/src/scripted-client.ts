@@ -75,3 +75,13 @@ export function answer(text: string, usage = { input: 10, output: 5 }, chunks = 
   parts.push({ part: { kind: 'finish', reason: 'stop' } });
   return { parts };
 }
+
+/** A script that requests tool calls (after optional `text`), finishing `other` as a provider does on a tool step. */
+export function toolCalls(calls: readonly { callId: string; name: string; args: Record<string, unknown> | string }[], text = '', usage = { input: 10, output: 5 }): ScriptedCall {
+  const parts: ScriptedPart[] = [];
+  if (text) parts.push({ part: { kind: 'text', delta: text } });
+  for (const c of calls) parts.push({ part: { kind: 'tool-call', callId: c.callId, name: c.name, argsDelta: typeof c.args === 'string' ? c.args : JSON.stringify(c.args) } });
+  parts.push({ part: { kind: 'usage', usage } });
+  parts.push({ part: { kind: 'finish', reason: 'other' } });
+  return { parts };
+}

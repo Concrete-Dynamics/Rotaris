@@ -1,5 +1,6 @@
-import { Budget, millis, type Clocks, type MachineId, type Millis, type SessionId } from '@rotaris/kernel';
+import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
+import type { PermissionPreset } from '@rotaris/contracts';
 import type { AgentBackend, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -8,6 +9,7 @@ import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
+import { runTurn, type ToolPort } from './turn.js';
 
 /**
  * The run loop, in its first conformant slice: one root agent, one model
@@ -41,6 +43,8 @@ export interface RunConfig {
   readonly transientRetries: number;
   /** REQ-ORCH-077: default 3. */
   readonly consecutiveRetryLimit: number;
+  /** A bound on model steps per turn standing in for the loop supervisor (REQ-ORCH-099..107, not built). */
+  readonly maxStepsPerTurn: number;
   readonly resolveCredential: () => Promise<string>;
 }
 
@@ -54,7 +58,18 @@ export const RUN_CONFIG_DEFAULTS: Omit<RunConfig, 'model' | 'resolveCredential'>
   timeLimitMs: null,
   transientRetries: 1,
   consecutiveRetryLimit: 3,
+  maxStepsPerTurn: 100,
 };
+
+/** REQ-TOOLS-071: what the run announces at start about its permission posture. */
+export interface PermissionPosture {
+  readonly requested: PermissionPreset;
+  readonly effective: PermissionPreset;
+  readonly downgraded: boolean;
+  readonly reason: string;
+  readonly sandboxed: boolean;
+  readonly sandboxBackend: string;
+}
 
 export interface RunDeps {
   readonly sessionId: SessionId;
@@ -67,6 +82,9 @@ export interface RunDeps {
   readonly clocks: Clocks;
   readonly backend: AgentBackend;
   readonly config: RunConfig;
+  /** Null: no tool surface — the model is offered no tool and a requested call ends the turn. */
+  readonly tools: ToolPort | null;
+  readonly permission: PermissionPosture;
   readonly pid: number;
   readonly host: MachineId;
   readonly readSession: () => SessionRow | undefined;
@@ -107,6 +125,7 @@ export class Run {
   private todo: Todo;
   private aggregates: Aggregates;
   private result: RunResult | null = null;
+  private readonly dispatched = new Map<string, string>();
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
@@ -114,6 +133,8 @@ export class Run {
     this.aggregates = Aggregates.rehydrate(deps.readSession());
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
+      // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops.
+      try { this.deps.tools?.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
       this.abort.abort();
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
@@ -165,7 +186,14 @@ export class Run {
       });
       if (audit.ok && !audit.value) this.deps.warn(`launch audit for ${this.sessionId} already existed and was not rewritten (REQ-SESSION-138)`);
       writer.appendTimeline('run_start', 'rotaris', `A run is starting for session ${this.sessionId}.`, { workspace_root: this.deps.workspaceRoot });
-      this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null });
+      // REQ-TOOLS-071: the effective mode announced — session state, and on a downgrade the transcript, the timeline and the log.
+      const perm = this.deps.permission;
+      if (perm.downgraded) {
+        writer.appendRow('system', perm.reason, true);
+        writer.appendTimeline('permission_mode_downgraded', 'rotaris', perm.reason, { requested_mode: perm.requested, effective_mode: perm.effective });
+        this.deps.warn(perm.reason);
+      }
+      this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0 });
       await this.drain();
 
       // REQ-ORCH-069: stop conditions between iterations, first match wins; the stop request wins over all.
@@ -255,37 +283,47 @@ export class Run {
     }
   }
 
-  /** One turn, streamed into one `agent` row: first delta appends it unsettled, growth ticks, the end settles it. */
+  /** One turn: the tool loop of `turn.ts`, every model step streamed into its own `agent` row. */
   private async turn(task: string): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
-    let index: number | null = null;
-    let text = '';
-    const sink = {
-      delta: (d: string) => {
-        text += d;
-        if (index === null) {
-          const r = writer.appendRow('agent', text, false, { persona: config.persona, name: config.persona });
-          if (r.ok) index = r.value.index;
-        } else {
-          owner.grow(index, text);
-        }
-      },
-      reasoning: () => undefined,
-      usage: () => undefined,
-    };
-    const report = await backend.runTurn({
-      persona: config.persona, systemPrompt: config.systemPrompt, task, history: [], model: config.model, thinking: config.thinking,
-      timeoutMs: config.modelTimeoutMs, retries: config.modelRetries, resolveCredential: config.resolveCredential,
-    }, sink, this.abort.signal);
-    if (index !== null) writer.settleRow(index, report.text || text);
-    return report;
+    const outcome = await runTurn({
+      writer, owner, backend, tools: this.deps.tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
+      systemPrompt: config.systemPrompt, model: config.model, thinking: config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
+    }, task, [], this.abort.signal);
+    this.aggregates.addToolCalls(outcome.toolCallCount);
+    return outcome.report;
   }
 
-  private saveRunning(extra: { run_started_at?: string | null }): void {
+  /**
+   * REQ-TOOLS-073/074/076/082, REQ-MONITOR-150..153: the mode change applies to the next tool call; it is
+   * audited in the same series as the decisions; the transcript row states what actually happened.
+   */
+  setPermissionMode(mode: string, source = 'user'): { ok: true; effective: PermissionPreset } | { ok: false } {
+    const tools = this.deps.tools;
+    if (!tools || this.ended) return { ok: false };
+    const change = tools.setMode(mode, source);
+    const { writer } = this.deps;
+    writer.recordModeChange({
+      timestamp: toIsoUtc(this.deps.clocks.wall.instant()), event: 'permission_mode_change', session_id: this.sessionId, agent_id: source,
+      requested_mode: change.requested, effective_mode: change.effective, previous_mode: change.previous, source, reason: change.reason, skipped_personas: [],
+    });
+    writer.appendTimeline('permission_mode_changed', source, `Permission mode changed from '${change.previous}' to '${change.effective}'${change.reason ? ` — ${change.reason}` : ''}`, { requested_mode: change.requested, effective_mode: change.effective, previous_mode: change.previous });
+    const row = change.downgraded
+      ? change.reason
+      : `Permission mode is now '${change.effective}'; it applies from the next tool call.`;
+    writer.appendRow('system', row, true);
+    this.saveRunning({ permission_mode: change.effective });
+    return { ok: true, effective: change.effective };
+  }
+
+  private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }): void {
     const r = this.deps.writer.save('running', {
       ...this.aggregates.patch(), iterations_completed: this.iterationsCompleted,
       todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()),
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),
+      ...(extra.permission_mode === undefined ? {} : { permission_mode: extra.permission_mode }),
+      ...(extra.sandboxed === undefined ? {} : { sandboxed: extra.sandboxed }),
     });
     if (r.ok) this.deps.onSaved?.(r.value);
   }

@@ -198,6 +198,9 @@ export interface OpenSessionArgs {
   readonly task?: string;
   readonly persona?: string;
   readonly maxIterations?: number;
+  /** REQ-TOOLS-181 / REQ-TOOLS-071: the effective preset and the sandbox verdict. */
+  readonly permissionMode?: string;
+  readonly sandboxed?: boolean;
 }
 
 /** REQ-SESSION-070's "terminal": a status outside REQ-SESSION-055's active six and not the initial `idle`. */
@@ -280,7 +283,7 @@ export class SessionWriter {
     // to describe the run without opening the record. Its own transaction (no paired durable record).
     w.recordEvent('session.start', {
       task: args.task ?? '', workspace: args.workspaceRoot, persona: args.persona ?? 'orchestrator',
-      permission_mode: 'default', sandboxed: false, max_iterations: args.maxIterations ?? null,
+      permission_mode: args.permissionMode ?? 'ask', sandboxed: args.sandboxed ?? false, max_iterations: args.maxIterations ?? null,
     });
     return ok(w);
   }

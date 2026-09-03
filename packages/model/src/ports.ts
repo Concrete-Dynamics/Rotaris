@@ -33,10 +33,30 @@ export type ContentPart =
   /** REQ-CHAT-171 / REQ-PROVIDER-149: an image part, base64 with its media type. */
   | { readonly kind: 'image'; readonly mediaType: string; readonly base64: string };
 
-export interface ChatMessage {
-  readonly role: 'system' | 'user' | 'assistant';
-  readonly content: readonly ContentPart[];
+/** A tool the model may call: name, description, JSON-schema parameters — the ONE resolution's listing (REQ-TOOLS-010). */
+export interface ToolSpec {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Readonly<Record<string, unknown>>;
 }
+
+/** A tool call the model requested in a step; `args` is the raw JSON text as produced (repaired by the gate, REQ-TOOLS-032). */
+export interface ToolCallRequest {
+  readonly callId: string;
+  readonly name: string;
+  readonly args: string;
+}
+
+export type AssistantPart =
+  | ContentPart
+  | { readonly kind: 'tool-call'; readonly callId: string; readonly name: string; readonly args: string };
+
+export type ToolResultPart = { readonly kind: 'tool-result'; readonly callId: string; readonly name: string; readonly result: string; readonly isError: boolean };
+
+export type ChatMessage =
+  | { readonly role: 'system' | 'user'; readonly content: readonly ContentPart[] }
+  | { readonly role: 'assistant'; readonly content: readonly AssistantPart[] }
+  | { readonly role: 'tool'; readonly content: readonly ToolResultPart[] };
 
 export interface Usage {
   readonly input: number;
@@ -90,18 +110,24 @@ export interface ModelRequest {
   /** Invoked inside the request path, per request (REQ-PROVIDER-092). */
   readonly resolveCredential: () => Promise<string>;
   readonly headers?: Readonly<Record<string, string>>;
+  /** The callable set; absent or empty means the model is offered no tool. */
+  readonly tools?: readonly ToolSpec[];
 }
 
 export interface ModelClient {
   stream(req: ModelRequest): AsyncIterable<Result<StreamPart, ModelError>>;
 }
 
-/** One turn as the loop hands it to a backend. */
+/**
+ * One STEP as the loop hands it to a backend: one model call over the conversation so far. The engine
+ * owns the tool loop (REQ-ORCH-146's non-native case, REQ-TOOLS-180): it dispatches the step's tool
+ * calls, appends their results, and steps again until a step requests none.
+ */
 export interface TurnInput {
   readonly persona: string;
   readonly systemPrompt: string;
-  readonly task: string;
-  readonly history: readonly ChatMessage[];
+  readonly messages: readonly ChatMessage[];
+  readonly tools: readonly ToolSpec[];
   readonly model: ModelRef;
   readonly thinking: ThinkingLevel;
   readonly timeoutMs: number;
@@ -116,10 +142,10 @@ export interface TurnSink {
 }
 
 export type TurnReport =
-  | { readonly status: 'succeeded'; readonly text: string; readonly usage: Usage }
+  | { readonly status: 'succeeded'; readonly text: string; readonly usage: Usage; readonly toolCalls?: readonly ToolCallRequest[] }
   /** The model stopped before it was done (a length stop): the task is returned to pending (REQ-ORCH-074). */
-  | { readonly status: 'partial'; readonly text: string; readonly usage: Usage }
-  | { readonly status: 'failed'; readonly text: string; readonly usage: Usage; readonly error: ModelError };
+  | { readonly status: 'partial'; readonly text: string; readonly usage: Usage; readonly toolCalls?: readonly ToolCallRequest[] }
+  | { readonly status: 'failed'; readonly text: string; readonly usage: Usage; readonly error: ModelError; readonly toolCalls?: readonly ToolCallRequest[] };
 
 export interface AgentBackend {
   /** True where the provider drives its own loop and the engine must not (REQ-ORCH-146). */

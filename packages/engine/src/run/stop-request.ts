@@ -7,7 +7,8 @@
  * `forced`; nothing ever lowers it. The reason is the closed stop-reason
  * token the request carries into the terminal result (REQ-MONITOR-301).
  */
-export type StopReasonToken = 'user_cancelled' | 'application_shutdown';
+/** REQ-TOOLS-065: the headless abort hook ends the run as agent_session_aborted. */
+export type StopReasonToken = 'user_cancelled' | 'application_shutdown' | 'agent_session_aborted';
 
 export interface StopState {
   readonly requested: boolean;

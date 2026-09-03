@@ -85,3 +85,14 @@ describe('kernel — similarity (REQ-TOOLS-188)', () => {
     expect(editDistance('😀x', 'x')).toBe(1);
   });
 });
+
+describe('the pass at size (REQ-HOOKS-139, found on first execution)', () => {
+  it('stays linear over a 100 KB alphanumeric run', () => {
+    const started = process.hrtime.bigint();
+    const out = redact('x'.repeat(100_000));
+    expect(out.length).toBe(100_000);
+    expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(50);
+    expect(redact(`${'a'.repeat(200)}=secret`)).toBe(`${'a'.repeat(200)}=secret`);
+    expect(redact(`${'a'.repeat(120)}_token=secret`)).toBe(`${'a'.repeat(120)}_token=***`);
+  });
+});

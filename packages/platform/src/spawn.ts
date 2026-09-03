@@ -12,6 +12,8 @@ export interface SpawnSpec {
   readonly cwd?: string;
   readonly env: Readonly<Record<string, string>>;
   readonly stdio?: SpawnOptions['stdio'];
+  /** ADR-0015: a hook's command reaches the interpreter as ONE argument, unquoted by Node (Windows only). */
+  readonly windowsVerbatimArguments?: boolean;
 }
 
 export function spawnChild(spec: SpawnSpec): ChildProcess {
@@ -23,6 +25,7 @@ export function spawnChild(spec: SpawnSpec): ChildProcess {
     detached: false,
   } as SpawnOptions;
   if (spec.cwd !== undefined) opts.cwd = spec.cwd;
+  if (spec.windowsVerbatimArguments !== undefined) opts.windowsVerbatimArguments = spec.windowsVerbatimArguments;
   return spawn(spec.command, [...spec.args], opts);
 }
 

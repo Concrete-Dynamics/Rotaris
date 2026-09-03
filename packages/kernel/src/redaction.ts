@@ -54,7 +54,14 @@ export function namesCredential(key: string): boolean {
 
 const SCHEME_WORDS = /^(bearer|basic|token)$/i;
 const VALUE = String.raw`("[^"]*"|'[^']*'|[^\s"']+)`;
-const KEY = String.raw`(-{0,2}[A-Za-z0-9][A-Za-z0-9_.\-]*)`;
+/**
+ * Bounded at 128 characters (first execution under REQ-HOOKS-139's 100 KB payload bound, 2026-09-03): an
+ * unbounded `[A-Za-z0-9_.\-]*` made every layer quadratic over a long alphanumeric run — 26 s on 100,000
+ * `x` — because each start position re-scanned the whole run looking for the separator that never came.
+ * No credential-naming key is longer than this (REQ-TOOLS-172's segments are short words), so the bound
+ * changes no masking outcome and is recorded on ADR-0007.
+ */
+const KEY = String.raw`(-{0,2}[A-Za-z0-9][A-Za-z0-9_.\-]{0,127})`;
 
 /** Replace the credential part of one value token; quotes are kept around the mark. */
 function maskToken(value: string): string {
@@ -71,7 +78,7 @@ function layerAssignments(text: string): string {
     if (!isSecretLookingName(key) || SCHEME_WORDS.test(value)) return m;
     return `${pre}${key}${sep}${maskToken(value)}`;
   });
-  const quoted = new RegExp(String.raw`(^|\s)(["'])([A-Za-z0-9_.\-]+)\2(\s+)${VALUE}`, 'g');
+  const quoted = new RegExp(String.raw`(^|\s)(["'])([A-Za-z0-9_.\-]{1,128})\2(\s+)${VALUE}`, 'g');
   return text.replace(quoted, (m, pre: string, q: string, key: string, ws: string, value: string) => {
     if (!isSecretLookingName(key) || SCHEME_WORDS.test(value)) return m;
     return `${pre}${q}${key}${q}${ws}${maskToken(value)}`;
@@ -80,7 +87,7 @@ function layerAssignments(text: string): string {
 
 function layerFlags(text: string): string {
   // (2) --flag value with a secret-looking flag.
-  const re = new RegExp(String.raw`(^|\s)(-{1,2}[A-Za-z][A-Za-z0-9_.\-]*)(\s+)${VALUE}`, 'g');
+  const re = new RegExp(String.raw`(^|\s)(-{1,2}[A-Za-z][A-Za-z0-9_.\-]{0,127})(\s+)${VALUE}`, 'g');
   return text.replace(re, (m, pre: string, flag: string, ws: string, value: string) => {
     if (!isSecretLookingName(flag) || SCHEME_WORDS.test(value) || value.startsWith('-')) return m;
     return `${pre}${flag}${ws}${maskToken(value)}`;
@@ -104,7 +111,10 @@ function layerShapes(text: string): string {
 
 function urlPasswords(text: string): string {
   // REQ-EVENTS-060: scheme://user:password@host — the password alone.
-  return text.replace(/([A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s:@/]+:)([^\s@/]+)(@)/g, (_m, a: string, _p: string, c: string) => `${a}${REDACTION_MARK}${c}`);
+  // The scheme starts at a boundary and is bounded at 64 characters, for the same reason KEY is bounded
+  // above: unbounded and unanchored, this layer alone cost 13 s over 100,000 `x`, and bounded but
+  // unanchored still 46 ms (each position re-scanned up to 64 characters for a `://` that never came).
+  return text.replace(/(^|[^A-Za-z0-9+.\-])([A-Za-z][A-Za-z0-9+.-]{0,63}:\/\/[^\s:@/]+:)([^\s@/]+)(@)/g, (_m, pre: string, a: string, _p: string, c: string) => `${pre}${a}${REDACTION_MARK}${c}`);
 }
 
 function pemBodies(text: string): string {

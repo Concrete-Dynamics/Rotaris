@@ -6,3 +6,4 @@ export * from './trust.js';
 export * from './engine.js';
 export * from './policy.js';
 export * from './summary.js';
+export * from './external.js';

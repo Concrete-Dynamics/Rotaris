@@ -1,5 +1,5 @@
 import { hookDisplayName, loadHooksConfig, type HookEntry } from '@rotaris/config';
-import { applyGate, buildSummary, clearDecision, HookEngine, hookOn, policyPath, readPolicy, withToggle, writeDecision, writePolicy, type HookSinks } from '@rotaris/hooks';
+import { applyGate, buildSummary, claudeSettingsPath, clearDecision, discoverClaudeCodeHooks, HookEngine, hookOn, importedEntry, policyPath, readPolicy, withToggle, writeDecision, writePolicy, type HookSinks } from '@rotaris/hooks';
 import { asSessionId, err, ok, redact, type Clocks, type Result } from '@rotaris/kernel';
 import type { HookAgentId, HooksSummary } from '@rotaris/contracts';
 import type { StoreDal } from '@rotaris/store';
@@ -37,7 +37,9 @@ export function createHookPort(ctx: HookPortContext, deps: HookRootDeps): HookPo
     const gate = applyGate(load.value, ctx.workspaceRoot);
     // REQ-HOOKS-116/117/131: the policy toggles are read once here, when the set is assembled, and never again for this run.
     const policy = readPolicy(policyPath(deps.env, deps.globalDir));
-    permitted = gate.permitted.filter((h) => hookOn(policy, 'rotaris', h.id));
+    // REQ-HOOKS-116/117: the surviving native, trust-gated hooks in declaration order, then the enabled usable imported ones.
+    const imported = discoverClaudeCodeHooks(claudeSettingsPath(deps.env)).records.filter((r) => r.usable && hookOn(policy, 'claude-code', r.id)).map(importedEntry);
+    permitted = [...gate.permitted.filter((h) => hookOn(policy, 'rotaris', h.id)), ...imported];
     withheld = gate.withheld;
     gateNotice = gate.notice;
     reinstated = gate.reinstated.length;
@@ -78,7 +80,8 @@ export function hooksSummaryFor(o: { readonly workspaceRoot: string; readonly gl
   const timeline = sid && o.dal ? o.dal.timelineOf(sid) : [];
   const issues = sid && o.dal ? o.dal.issuesOf(sid) : [];
   const switchedOff = issues.filter((i) => i.kind === 'hook_failure' && i.message.includes('is disabled for the rest of this session')).flatMap((i) => { try { const m = JSON.parse(i.metadata) as { hook_id?: string }; return m.hook_id ? [m.hook_id] : []; } catch { return []; } });
-  return buildSummary({ workspace: o.workspaceRoot, load, gate, policy, imported: [], timeline, switchedOff });
+  const imported = discoverClaudeCodeHooks(claudeSettingsPath(o.env)).records;
+  return buildSummary({ workspace: o.workspaceRoot, load, gate, policy, imported, timeline, switchedOff });
 }
 
 /** REQ-HOOKS-092/093/096/097: the decision is recorded against the fingerprint of the in-memory set just resolved. */

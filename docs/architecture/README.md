@@ -1,9 +1,12 @@
 # Rotaris-crw — system architecture
 
-- **Status:** proposed. The Architecture Gate has not been held and implementation is not authorised.
+- **Status:** proposed. **The Architecture Gate is OPEN as of 2026-09-03** — held, with its verdict and
+  the five decisions it asks for in [`../clean-room/architecture-gate.md`](../clean-room/architecture-gate.md),
+  and **awaiting the product owner's decision. Implementation is not authorised.**
 - **Behavioural target:** `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - **Evidence base:** [`constraints.md`](constraints.md) — what the specification forces, with requirement identifiers — read together with [`../spec/resolutions/`](../spec/resolutions/), the twenty-one records disposing of every open question each domain draft raised. A resolution sometimes narrows what a requirement appears to license; `constraints.md` says where and why.
-- **Measurements:** [`spikes/`](spikes/) — **ten reports covering nine live spikes and one withdrawn one**, four dated 2026-09-01 and six dated 2026-09-02, and **the only real evidence this record has**. Several of them overturn something it asserted, and the 2026-09-02 group overturned more than the first four did: **three platform facts this record had asserted were disproved, one ADR's own stated gate trigger fired, and one mechanism this record had decided and never run was found not to work at all.** They are named inline wherever a claim rests on one, and the ADRs that depend on them carry an `Evidence:` header field. **Where a measurement disproved a *reason* but not a *conclusion*, both records say so in as many words** — the conclusion, that the original reason was tested and found false, and the reason that actually holds. That sentence is what stops a later reader "simplifying" the decision back into the defect. **Where a measurement disproved a *mechanism*, which has now happened three times, the record carries the failure in place beside the corrected step** — see the three-for-three finding in section 6.
+- **Measurements:** [`spikes/`](spikes/) — **ten reports covering nine live spikes and one withdrawn one**, two dated 2026-08-31, two dated 2026-09-01 and six dated 2026-09-02 *(this read "four dated 2026-09-01"; two of those four are 2026-08-31)*, and **the only real evidence this record has**. Several of them overturn something it asserted, and the 2026-09-02 group overturned more than the first four did: **three platform facts this record had asserted were disproved, one ADR's own stated gate trigger fired, and one mechanism this record had decided and never run was found not to work at all.** They are named inline wherever a claim rests on one, and the ADRs that depend on them carry an `Evidence:` header field. **Where a measurement disproved a *reason* but not a *conclusion*, both records say so in as many words** — the conclusion, that the original reason was tested and found false, and the reason that actually holds. That sentence is what stops a later reader "simplifying" the decision back into the defect. **Where a measurement disproved a *mechanism*, which has now happened four times, the record carries the failure in place beside the corrected step** — see the finding in section 6, which is now
+**four for four**: the fourth mechanism was the harness built to measure the third.
 - **Decisions:** [`adr/`](adr/) — 58 records, numbered in dependency order. **Every requirement identifier cited anywhere in `adr/` — 1,214 of them, drawn from a corpus of 4,397 — resolves to a requirement the specification defines. Zero dangling citations.** Re-checked mechanically on 2026-09-02 after the last of the three rounds of that date, which minted `REQ-EVENTS-179`, `REQ-MONITOR-306`, `REQ-SHELL-169` and `REQ-SESSION-202` and edited nine ADRs between them; what it does *not* establish is that every citation still says what the ADR claims it says, which is a different sweep and is reported in section 6.
 - **Unresolved:** [`open-questions.md`](open-questions.md) — **thirty-one escalations: twenty-nine ruled, two closed by the specification itself, NONE open**; forty-seven specification questions (**nine** closed with their reasons, **thirty-eight** open, OQ-31 closed 2026-09-02 by GD-1); **one** design-reference dependency, OQ-30, which is IC-2 rather than a gate condition; twenty-two numbered spikes of which one is withdrawn, **eight discharged** and one discharged for Windows only — **twelve outstanding**, plus four sub-cases owed inside spikes that passed
 - **Binding at build time:** [`implementation-conditions.md`](implementation-conditions.md) — obligations that are **not** gate conditions but **are** conditions on building the thing they name. Created 2026-09-02 by ruling GD-3, which checked rather than assumed that such a register existed and found it did not. Two entries: **IC-1**, the corrected restore is re-measured before its implementation is signed off; **IC-2**, no screen is built before the approved visual design reference is available. An entry here binds the work it names and is removed only by the authority that set it.
@@ -1284,8 +1287,8 @@ and the gate turns on distinctions that such a list destroys: **what is a defect
 rather than reasoning**; and **what is an owner's decision**. Implementation is authorised off the back of
 this verdict, so an optimistic verdict costs more than a pessimistic one. All four categories are stated
 separately below, **nothing is moved between them for tidiness**, and a fifth section states the one finding
-that spans them: **three mechanisms decided on paper have now been built for the first time, and every one
-of the three contained a defect no reading had caught.**
+that spans them: **four mechanisms decided on paper have now been built for the first time, and every one
+of the four contained a defect no reading had caught.**
 
 ### The escalations: twenty-nine ruled, two answered by amendment, NONE open
 
@@ -1443,10 +1446,12 @@ are closed by the amendment recorded in
    `REQ-EVENTS-145`'s one-step obligation and **no ladder**, and whether that document should cite
    `REQ-TRACE-061` or state its own is recorded as unsettled in that domain's resolutions.
 
-**A2. The architecture side, and this is where the balance moved.** Seven defects are open here and
-**three of them would cause a conformant implementation to be built wrong**. All seven come from spike 22 —
-the first execution of `REQ-SESSION-201`'s restore — and are stated with the measurement rather than the
-argument, because every one of them survived being read.
+**A2. The architecture side, and this is where the balance moved.** Seven defects were raised here and
+**three of them would have caused a conformant implementation to be built wrong**; *those three, and the
+fourth adjacent to them, were closed on 2026-09-02 and are marked below where they were raised — this
+sentence read "seven defects are open here" and that count is the round's, not the current state's.* All
+seven come from spike 22 — the first execution of `REQ-SESSION-201`'s restore — and are stated with the
+measurement rather than the argument, because every one of them survived being read.
 
 3. **THE CLOSE HANDSHAKE HAS NO BOUND AND DOES NOT TERMINATE. CLOSED 2026-09-02.** ADR-0058's step 1 says both
    closes are acknowledged before anything moves and says nothing about their not coming; ADR-0002
@@ -1528,14 +1533,17 @@ argument, because every one of them survived being read.
 **Eleven entries. Two are the specification's, seven are architecture defects the restore measurement
 found, and two are architecture rules the record owes a test or a measurement.** None of the eleven is
 blocked on a measurement, and **none of them was visible to any reading of the records that contain them.**
-**Four would cause a conformant implementation to be built wrong** — items 1, 3, 4 and 5 — and **item 8
-would cause a build to certify something it never checked**, which is a different and quieter failure.
-Items 6, 7, 9, 10 and 11 are real and are not in that class.
+**Four would have caused a conformant implementation to be built wrong** — items 1, 3, 4 and 5 — and
+**item 8 would have caused a build to certify something it never checked**, which is a different and
+quieter failure. *All five are closed as of 2026-09-02; the counts in this paragraph are the round's
+findings, kept because the closures below are only readable against them.* Items 6, 7, 9, 10 and 11 are
+real, are **not** in that class, and **are still open**: D5, D8, D11 and the two carried-over architecture
+rules are what category A actually holds today.
 
 **A3. How each build-wrong defect was closed, 2026-09-02.** Each entry above keeps its measurement; this
 says what changed and where, so the two can be read against each other. **None of these is re-measured
 yet**, which is the whole content of IC-1 in [`implementation-conditions.md`](implementation-conditions.md)
-and of the three-for-three finding below.
+and of the four-for-four finding below.
 
 - **D9, item 1 — closed at the root and at the deadlock, because either alone leaves the defect.**
   `REQ-SESSION-046` now fixes **what supplies `host`**: an identifier the product mints once for this
@@ -1594,8 +1602,11 @@ before the Architecture Gate, not after" — **has been run**. What is owed belo
 condition anybody wrote down. *Whether one of it should become one is category D's question, and this
 record's recommendation is stated there.*
 
-**B1. Nine numbered spikes have never been started, and none of them blocks a decision that has already
-been taken; each prices one that has.** Spikes 2 (Windows access-control read-back), 3 (tool-server
+**B1. Eleven numbered spikes have never been started, and none of them blocks a decision that has already
+been taken; each prices one that has.** *This count read "nine" while the list beneath it named eleven,
+from the round that wrote it until 2026-09-03; the list was right and the count was wrong. Corrected rather
+than quietly adjusted, because a summary that undercounts its own list is the failure this record spent
+three rounds finding in other people's summaries.* Spikes 2 (Windows access-control read-back), 3 (tool-server
 negotiation over our own transport), 4 (console suppression), 5 (the reserved-token branch), 6 (the
 Responses dialect), 7 (the board projection crossing), 8 (store query latency against **declared** indexes,
 plus store open, log recovery, an integrity check on the startup path, long-path behaviour, and the cost of
@@ -1606,9 +1617,11 @@ recycler-pool scale), 15 (echo latency) and 18 (two run hosts on one store, whic
 **B2. Four sub-cases went unmeasured inside spikes that otherwise passed, and they are listed rather than
 absorbed, because a sub-case folded into a discharged spike is a gap nobody can see.**
 
-- ***The re-run of the corrected restore. This is the one a product owner should weigh.*** All three
-  corrections spike 22 produced are, at this moment, **exactly the paper reasoning that the three-for-three
-  finding below says is not evidence**. The re-run is bounded and its two experiments are stated: race a
+- ***The re-run of the corrected restore. TAKEN AND DISCHARGED as IC-1 on 2026-09-02***
+  (`spikes/corrected-restore-rerun.md`); **all five experiments pass and every counterfactual reproduces the
+  original defect**. It is kept here rather than deleted because the entry is what the discharge answers.
+  When it was written, all three corrections spike 22 produced were **exactly the paper reasoning that the
+  four-for-four finding below says is not evidence**. The re-run is bounded and its two experiments are stated: race a
   launch into the window between the refusal of new runs and the run host's acknowledgement and confirm the
   second liveness evaluation catches it; and force the install rename to fail with the target name occupied
   and confirm the displace-then-rename reversal leaves the store byte-identical. It is **not** a stated gate
@@ -1682,7 +1695,7 @@ rather than by the ones that were written down.
   invalidation across an update did **not** produce the failure ADR-0054 called "the one outcome that
   would make the design wrong rather than slow". It also found **two defects in the mechanism as the ADR
   described it** — both fixed there, both invisible in any build that never meets a damaged preparation.
-  See the three-for-three finding below.
+  See the four-for-four finding below.
 - **Spikes 14 and 16 — `presenter-liveness-and-instance-claim.md`. Spike 16 discharged and its ADR's rule
   fired; spike 14 measured but OQ-39 not closed.** The instance-claim consequence is in section 1 above.
   The liveness consequence is in section 4. **What spike 14 did not settle is the thing it was raised
@@ -1796,13 +1809,18 @@ out whether anything is still waiting on a person: **nothing is.**
    enumerating cases with the residue undefined — that produced `REQ-SESSION-043`'s defect.
 
 **What this does not change.** The gate verdict does not turn on this category and did not before. It
-turns on **A** and **C** — the four build-wrong defects and the four build-host obligations — and both are
-unchanged by these rulings.
+turns on **A** and **C** — the build-wrong defects and the build-host obligations — and neither was
+changed by these rulings. *Both moved later the same day and by other means: A's build-wrong class was
+emptied by the defect-closure round, and C was deferred to hardware by GD-5 without being waived.*
 
-#### THE THREE-FOR-THREE FINDING — stated in the verdict rather than in a footnote
+#### THE FOUR-FOR-FOUR FINDING — stated in the verdict rather than in a footnote
 
-**Three mechanisms in this record have now been decided on paper, implemented for the first time by someone
-measuring them, and every one of the three contained a defect that no reading had caught.** They are
+*This heading read **THE THREE-FOR-THREE FINDING** until 2026-09-03. The fourth arrived on 2026-09-02 and
+is the one that says most about the other three, so the count is corrected rather than the entry appended
+under a stale title.*
+
+**Four mechanisms in this record have now been decided on paper, implemented for the first time by someone
+measuring them, and every one of the four contained a defect that no reading had caught.** They are
 recorded as ADR-0058 consequence 17 and they are named here because a product owner authorising
 implementation should be told them together rather than meet them one at a time.
 
@@ -1825,24 +1843,32 @@ implementation should be told them together rather than meet them one at a time.
 - **ADR-0058's restore could not complete, in 30 of 30 attempts**, and two of its remaining steps each
   destroyed something: a live session, and the store's own recoverability. List A, items 3 to 9 and section 3
   above.
+- **The harness built to measure the corrected restore had three defects on its first run**, and it is the
+  fourth entry because **a harness is a mechanism** and this one was decided on paper like the rest. One of
+  the three would have reported a **pass while testing nothing it claimed to test**: the race landed on the
+  wrong side of the first liveness evaluation, so the first evaluation caught it and the second never ran.
+  A second was **defect D8 arriving uninvited** — the byte-identical test counted the `-wal` and `-shm` any
+  open connection creates. The third asserted byte-identity in the one experiment whose whole point is that
+  a live run keeps writing. Recorded in [`spikes/corrected-restore-rerun.md`](spikes/corrected-restore-rerun.md)
+  section 8. *It was written by someone who had just finished writing up the other three.*
 
 **What this licenses and what it does not.** It licenses **no** universal measurement obligation — the
 record cannot afford one and the finding does not support one. It settles two narrower things. **An unrun
 mechanism is not evidence that it works**; a record may not treat "every step is individually argued" as a
-substitute, and this record did, three times. And **a defect found this way belongs in the record in place**,
+substitute, and this record did, four times. And **a defect found this way belongs in the record in place**,
 beside the claim it falsified, rather than repaired quietly in the code that meets it — because a record
 whose conclusions are right and whose reasons are false is a record that gets "simplified" back into the
 defect by the next reader. *One detail is worth the space: the same platform fact — a directory cannot be
 renamed onto an existing directory — broke ADR-0054's commit and ADR-0058's reversal independently, in two
 records, months of reasoning apart, and neither reading caught it in the other.*
 
-**And the honest use of it at the gate.** **Three of three is the best available estimate of what the
-unmeasured remainder holds.** Nine numbered spikes have never been started and four sub-cases are owed. This
-record has no basis for saying that the rate is lower there, and it has three data points saying it is not.
+**And the honest use of it at the gate.** **Four of four is the best available estimate of what the
+unmeasured remainder holds.** Eleven numbered spikes have never been started and four sub-cases are owed. This
+record has no basis for saying that the rate is lower there, and it has four data points saying it is not.
 **That does not block the gate** — the defects the estimate predicts are the kind that first execution finds
 cheaply, which is what all three of these were — but it prices the difference between authorising
 implementation and authorising it as if the record were verified. **It is not verified. It is argued, and
-three times out of three where argument met execution, execution won.**
+four times out of four where argument met execution, execution won.**
 
 #### The verdict
 
@@ -1886,10 +1912,10 @@ a conformant implementation to be built wrong has been closed at its definition.
   this record to be corrected on paper and then measured before anything was built on it**, and it is the
   first to survive first execution — because it was not its first execution.
 
-- ***Three mechanisms decided on paper have now been implemented for the first time and every one held a
+- ***Four mechanisms decided on paper have now been implemented for the first time and every one held a
   defect no reading caught.*** That is the section above and it is deliberately not a footnote. It blocks
   nothing by itself. It is the best available estimate of what the unmeasured remainder holds, and the
-  remainder is nine unstarted spikes and four sub-cases.
+  remainder is eleven unstarted spikes and four sub-cases.
 - **Five measurements landed and every owner ruling survived. Several ADRs reached the right conclusion by
   reasoning the measurements disproved**, and those reasons are corrected in place with the falsified claim
   kept beside its replacement. The single correction most likely to be unwound is still the durability one:
@@ -1920,40 +1946,82 @@ the eleven defects that run exposed, **three are corrected and eight are not**. 
 want of a measurement. **It is unratifiable because it is currently wrong or silent in seven enumerated
 places** — list A items 3 to 9 — three of which are in the build-wrong class.
 
-***THE ONE QUESTION THE GATE TURNS ON — is there anything left that would cause a conformant implementation
-to be built wrong? YES. FOUR THINGS, and the shape of the answer has changed.***
+***THE ONE QUESTION THE GATE TURNS ON — is there anything left that would cause a conformant
+implementation to be built wrong? NO.***
+
+*This block previously answered **"YES. FOUR THINGS, and the shape of the answer has changed"**, and that
+answer is **withdrawn on 2026-09-02** rather than deleted. The four are kept below with the closure beside
+each, under this record's standing rule: a record that quietly loses a question it once answered yes cannot
+be re-derived, and the next reader has no way to tell a closure from an omission.*
+
+**All four are closed, and the fifth adjacent to them is closed with them. What is not uniform is what each
+closure rests on**, and the gate is entitled to that distinction rather than to a single word. Two are
+measured against the defect they close, one was exercised without being aimed at, and two rest on argument
+alone.
 
 1. **A machine rename makes every session's lock foreign, every foreign lock is live by construction and is
-   never reaped, and a restore is refused while any session is live.** A build that implements
-   `REQ-SESSION-056`, `REQ-SESSION-047`, `REQ-SESSION-201` and `REQ-SESSION-183` exactly as written produces
-   a workspace whose backup cannot be restored until the user releases each session by hand — and this
-   round's durative refusal, which is a correct fix for a worse defect, makes it bite harder. *Specification.
-   Unowned.*
+   never reaped, and a restore is refused while any session is live. CLOSED at both ends, on argument.**
+   `REQ-SESSION-046` now fixes what supplies `host` — an identifier the product mints once per machine and
+   keeps machine-locally, never the operating-system name, and a machine rename must not change it — which
+   removes the mass case at its source; `REQ-SESSION-201` reports foreign rows **together, as one
+   condition**, and lets the user confirm and proceed on a confirmation that states the risk, which removes
+   the deadlock in which the recovery action was blocked by exactly the records it was about to replace.
+   ***Neither half has been run.*** Spike 22 measured the defect and its counterfactual; nothing has
+   measured the fix. *Specification. Owned now — it was the entry marked "unowned" and it is not.*
 2. **A build implementing ADR-0058's close handshake as written waits for an acknowledgement that may never
-   come, with no bound anywhere in the record.** Measured twice at no result inside 15,000 ms, with a window
-   painting throughout. A user sees a restore that never finishes and never fails. *Architecture.*
+   come. CLOSED, and MEASURED against the defect.** The acknowledgement is bounded at 2,000 ms and
+   **expiry refuses rather than proceeds**, because a bound that proceeds was measured to fail later, after
+   mutation; the run host's refusal is a lease it expires by itself at 30,000 ms, so a dead workspace
+   service releases the workspace by doing nothing. IC-1 E3a refused in **2,008–2,020 ms, 10 of 10**, with
+   the target byte-identical and no staging left, against the original's no result and no error inside a
+   15,000 ms watchdog; E3b re-admitted runs **10 of 10** where that state had persisted for the life of the
+   instance. *Architecture.*
 3. **A build choosing second resolution for the displaced store's UTC timestamp fails the first mutating
-   step of the restore, 30 times out of 30.** The record fixes no granularity and the recovery ladder uses
-   the same name shape. One word. *Architecture.*
+   step of the restore. CLOSED, and MEASURED against the defect — including which half of the fix is
+   load-bearing.** IC-1 E4 forced the collision the correction exists for, because at millisecond
+   granularity it never arose on its own and **a correction that is never exercised is not measured**. The
+   counter was needed in **30 of 30** and both displaced stores survived openable; the pre-correction name
+   failed `EPERM` **30 of 30** and lost a displaced store every time. **It is the counter, not the
+   granularity**: finer resolution only makes the collision rarer. *Architecture.*
 4. **A build expanding the artifact "in full" into staging and renaming staging onto the identifier produces
-   a store directory holding the container's layout rather than the store's** — the snapshot under the wrong
-   filename, the manifest inside the live store, and **no `origin.txt`**, which is the only field the
-   reclamation surface has for saying which project a store belongs to. Measured on every successful restore.
-   *Architecture.*
+   a store directory holding the container's layout rather than the store's. CLOSED, on argument, and
+   exercised without being aimed at.** Staging is arranged into the store's layout as a step before the
+   install rename, the manifest stays outside the store, and `origin.txt` is written by the restore.
+   IC-1 ran both on every successful path and neither failed, **which is weaker than a test of either** and
+   is recorded as such in that spike's section 7. *Architecture.*
 
-**A fifth is adjacent and belongs with them: a release build that runs `electron-rebuild` and trusts its
-exit status has verified nothing** — it exits 0, prints success, compiles nothing, and the loader would
-prefer the prebuild anyway. Harmless on this binding version. The check, not the outcome, is what is broken.
+**And the fifth, adjacent: a release build that runs `electron-rebuild` and trusts its exit status has
+verified nothing** — it exits 0, prints success, compiles nothing, and the loader prefers the prebuild
+anyway. **CLOSED as a rule and unrun as a rule.** ADR-0056 rule 1a makes the artifact the evidence rather
+than the command, and rule 4's load is now the entire check — **which is precisely why it is IC-3 item 3,
+owed on all three release runners and taken on none.** Harmless on this binding version, by luck rather
+than by the check working.
+
+***The honest ledger, because "closed" is doing different work in each row.*** Two of the five are measured
+against the defect they close (2 and 3). One was exercised on every successful run of a measurement built
+for something else (4). Two rest on argument alone (1 and 5), and the record's own four-for-four finding is the estimate of what argument alone is worth. **That does not reopen the question
+this section asks**, because nothing in items 1, 4 or 5 is a defect anybody has found; it prices the
+difference between a closure that was tested and a closure that was reasoned, and the gate should be told
+which is which rather than shown a uniform word.
 
 ***Everything else outstanding is a measurement, a build host, or an owner's decision, and each is listed
-under its own heading above with nothing moved between them.*** Four of the five above are one clause or one
-paragraph each in a record that already contains the measurement they should be written against; the first is
-a product decision nobody has been assigned.
+under its own heading above with nothing moved between them.*** Category D is empty — all four owner
+decisions were ruled on 2026-09-02 and nothing waits on a person. Category C is four obligations deferred
+to hardware by GD-5, owed and not waived, bound as IC-3. Category B holds eleven unstarted spikes and four
+sub-cases, **one of which — the re-run of the corrected restore — has since been taken and discharged as
+IC-1**, and none of which any record named as a gate condition. Category A holds D5, D8, D11 and the two
+carried-over architecture rules, each stated with what it costs and **none of them in the build-wrong
+class**.
 
 ### The open questions
 
-**Thirty-nine specification questions are open** and **eight** are closed with their reasons — OQ-3,
-OQ-11, OQ-14, OQ-26, OQ-27, OQ-28, OQ-44 and OQ-49. *Two of those eight closed on 2026-09-02 and each had
+**Forty-nine questions have been raised; nine are closed with their reasons and forty are open** — the
+nine are OQ-3, OQ-11, OQ-14, OQ-26, OQ-27, OQ-28, **OQ-31**, OQ-44 and OQ-49. *This sentence read
+"thirty-nine open and eight closed", which counted OQ-30 and OQ-31 outside the total as the visual design
+reference's pair; **OQ-31 was closed by GD-1 without the reference**, so the pair is now one and counting
+it separately hides rather than clarifies. **OQ-30 alone is the reference's, and it is bound by IC-2.***
+*Three of the nine closed on 2026-09-02 and two of those had each been carrying an assertion of fact that
+the amendment made false, so each was corrected rather than
 been carrying an assertion of fact that the amendment made false, so each was corrected rather than
 deleted.* **OQ-14** is closed by `REQ-CONFIG-216`, which now fixes `secrets.yaml` at `0600` **explicitly on
 every write** rather than inheriting it, denies `REQ-CONFIG-444`'s platform-default fallback to that one
@@ -2066,7 +2134,7 @@ NINE reports exist, all in [`spikes/`](spikes/) — eight for live spikes and on
 | `windows-writer-handle-compaction.md` | **9 — withdrawn** | historically: that the deleted rule 3 was right, and **three corrections that outlive its subject** (share-delete *is* requested; a directory flush works on a write-opened handle; what actually blocks a replace, and what closes it) | whether a replace survives a power cut, on any platform; and every filesystem but `C:` NTFS — the storage spike has since covered network shares and contradicts its directory-flush figure on a read-only handle (section 3) |
 | `commit-on-the-publish-path.md` | **21 — discharged** | ADR-0058's own open item on the commit; `REQ-MONITOR-221`, `REQ-MONITOR-222`, `REQ-MONITOR-223`, `REQ-ORCH-155` and `REQ-EVENTS-029` **with the commit in the interval**; the checkpoint period as arithmetic; that the readability clause does not need the stronger durability setting; that ADR-0002, ADR-0008 and ADR-0010 are not reopened | a real schema with declared indexes (spike 8); two run hosts contending; **any failure path at all**; packaging and the native module's unpacking obligation; power loss, which is now the sole ground for forcing the stronger setting; macOS and Linux |
 | `remote-and-synchronised-storage.md` | **19 — discharged on its own question** | ESC-15 on stronger evidence, and its stated mechanism disproved; the read-back guard as necessary-but-insufficient; that a naive copy of a live store is not a backup and the engine snapshot is; that exclusive create is a genuine primitive over a network share; that `REQ-STARTUP-166`'s classification is implementable, precise and cheap | **ESC-21's second premise — no second machine, and it declined to fake one**; no synchronisation client was written to; no Electron; one binding, one store engine version; loopback rather than a network, so the 12 ms rename and the 6.2 % failure rate are both floors; no power loss |
-| `cached-portable-launch.md` | **20 — discharged; SR-7's gate condition met** | the cached-launch figure, the fast-path check's cost, cache invalidation across an update; that self-update is **rescued** rather than merely preserved by SR-7; **two defects in ADR-0054's own mechanism** — the first two of the three-for-three finding above | `REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice — **not attempted**; clause (d) independently verified; a read-only volume rather than an access-control approximation; the commit's durability discipline; a real download with the platform's reputation check |
+| `cached-portable-launch.md` | **20 — discharged; SR-7's gate condition met** | the cached-launch figure, the fast-path check's cost, cache invalidation across an update; that self-update is **rescued** rather than merely preserved by SR-7; **two defects in ADR-0054's own mechanism** — the first two of the four-for-four finding above | `REQ-STARTUP-165`(c)'s "no usable preparation at all" branch and its notice — **not attempted**; clause (d) independently verified; a read-only volume rather than an access-control approximation; the commit's durability discipline; a real download with the platform's reputation check |
 | `presenter-liveness-and-instance-claim.md` | **14 and 16 — 16 discharged and its ADR's rule fired; 14 measured, OQ-39 not closed** | that the liveness poll works and must be **gap-based**; that the exposure is every synchronous native dialog and not the approval dialog; that the run host dies with main and never sees the channel close; that the platform single-instance primitive **fails** `REQ-STARTUP-164` on Windows | **macOS and Linux — zero coverage, on both sides of the decision**; the decision path (no gate, no pending-approval map, no headless policy), so *never a silent allow* is unexercised; sizing the lapse window under product-shaped load; whether every native dialog the product needs has a non-blocking form on every platform; packaged builds |
 
 | `backup-restore-mechanism.md` | **22 — discharged; the mechanism did not work** | that ADR-0058's restore as written fails **0 of 30**; that a run admitted between the liveness gate and the swap **is destroyed by it**, measured mid-write; that the reversal fails identically wherever the install failed on an occupied name; all three refusal gates including the older-schema case that must **not** refuse; ESC-26's three identifier cases and all five unreadable shapes; **ADR-0005 consequence 11 against its own counterfactual**; the one-rename installation (20 of 20, absent and never mixed); the whole cost curve, store unavailable 64 ms / 144 ms / **1.45 s**, renames flat at 3–5 ms; and ADR-0056's owed Electron-ABI figure, whose answer is that **no rebuild is needed for this binding** | **the corrected mechanism — none of the three fixes has been run**; **the kill-in-the-gap case**; a restore of an artifact read from a network destination; **two concurrent restores of one identifier**; packaging, so the asar-unpack obligation is still untested; any user interface; and **eight defects it found and did not fix** — list A above |
@@ -2225,7 +2293,7 @@ two should expect the offset.
 | 0055 | Startup sequencing, the instance claim, and the first-paint budget *(gains phase −1; **the chosen alternative for the claim changed from the platform primitive to our own record file, on measurement, on every platform** — the primitive is marked refused rather than not considered; the update-restart hand-over now meets `REQ-STARTUP-121` by construction and the concession is withdrawn rather than relocated)* | packaged-first-paint, cached-portable-launch, presenter-liveness-and-instance-claim |
 | 0056 | The build toolchain *(gains a fifth output, the portable's launcher stub, **and the native-module Electron-ABI obligation with a build-time load proof** — the only check in the record that catches an unloadable store binding)* | packaged-first-paint |
 | 0057 | The renderer framework and the renderer state store *(numbered out of dependency order — see above)* | |
-| 0058 | The workspace store: **machine-local, found by a workspace identifier, and how it is backed up** *(numbered after everything it constrains — see above; **carries ESC-19's backup and restore — BOTH halves are now measured, and the restore as this record wrote it failed 0 of 30**; revised a third time against spike 22, gaining a staging-close step, both liveness evaluations and the refusal of new runs inside the swap, an abandonment path that releases the run host, a displace-then-rename reversal, and **consequence 17, the three-for-three finding**; **the spike found ELEVEN defects, three are corrected here and EIGHT are not — seven of the eight architecture's or the build's, one the specification's, and four of the eight in the build-wrong class; see §6 list A**; **the machine-local argument is now about path spelling rather than about network filesystems, and ESC-15's chain is replaced by a per-link verdict table**; gains a **write probe**, a **canonical-spelling rule**, ESC-26's confirmed-establishment restore path, and the re-grounding of terminal-save durability on power loss)* | remote-and-synchronised-storage, commit-on-the-publish-path, backup-restore-mechanism |
+| 0058 | The workspace store: **machine-local, found by a workspace identifier, and how it is backed up** *(numbered after everything it constrains — see above; **carries ESC-19's backup and restore — BOTH halves are now measured, and the restore as this record wrote it failed 0 of 30**; revised a third time against spike 22 and **a fourth time, then re-measured, against IC-1**, gaining a staging-close step, both liveness evaluations and the refusal of new runs inside the swap, an abandonment path that releases the run host, a displace-then-rename reversal, and **consequence 17, the four-for-four finding**; **the spike found ELEVEN defects, three were corrected here and EIGHT were not; **the four that were in the build-wrong class are all CLOSED as of 2026-09-02 and the corrections were MEASURED as IC-1 on the same day**, leaving D5, D8 and D11 open and none of them build-wrong; see §6 list A**; **the machine-local argument is now about path spelling rather than about network filesystems, and ESC-15's chain is replaced by a per-link verdict table**; gains a **write probe**, a **canonical-spelling rule**, ESC-26's confirmed-establishment restore path, and the re-grounding of terminal-save durability on power loss)* | remote-and-synchronised-storage, commit-on-the-publish-path, backup-restore-mechanism |
 
 The five slice proposals these were consolidated from are retained in [`proposals/`](proposals/). Where a
 proposal argued a case that the consolidated decision reverses or qualifies, the argument is preserved in

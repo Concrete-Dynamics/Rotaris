@@ -529,3 +529,19 @@ machine can prove live; the confirmation names how many and which, states the ri
 writing now and the restore replaces what it writes), and proceeding clears nothing one at a time.
 Consequence 11's drop of foreign rows from the artifact ran on every restore. The rename half of IC-4 is
 prepared as a two-phase harness the owner runs around a real rename and reboot.
+
+## First execution — 2026-09-05, the lock re-claimed on resume, and the one reap
+
+*Recorded under GD-10.*
+
+**Built and run:** `SessionWriter.open` claims an existing session's lock row for a resume (`Sessions.resume`)
+through the same `INSERT OR IGNORE` the create path uses. A held row naming this machine whose pid probes
+dead is released and re-claimed **once** (`REQ-SESSION-047`); a held row naming this machine with a live pid
+is refused naming the pid; a row naming another machine is refused naming the machine and its acquisition
+time and saying liveness cannot be established (`REQ-SESSION-048`) — the three outcomes are one test over a
+planted row each (`session-resume.test.ts`). The session browser's list marks a session **stale** when its
+status is active and no live holder can be shown, and reaps nothing (`REQ-SESSION-056/057`). In the built
+app the resumed session's lock was claimed by the second process, held through the continued run, and
+released by its teardown: `session_locks` was empty at exit.
+
+**Found: nothing in this record.**

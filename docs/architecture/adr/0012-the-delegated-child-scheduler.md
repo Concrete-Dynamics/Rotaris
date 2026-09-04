@@ -254,3 +254,12 @@ for the playbooks is gone: the run clamps the configured policy by the entry rol
 — `tight` {2, 6, 2}, `normal` {4, 12, 3}, `wide` no clamp — and with no pre-flight the configured policy stands
 unchanged. In the built app a `question` (the answer group, `tight`) admitted two children and refused the
 third with `Max active children 2 exceeded`. **Found: nothing.**
+
+**Third execution, 2026-09-05, the sweep's route and the supervisor.** The finding above is closed: `continue`
+exists — `Sessions.prompt` on a loaded session appends the row and starts a run on the same session, and
+`Sessions.resume` claims the lock of a stored one — and the settle-on-continue sweep ran in the built app on
+the product's route: a `running` child row planted after a completed run was `cancelled`, with its report,
+before the first continuation iteration (`pnpm part-h-proof`; `REQ-ORCH-053`, `REQ-SESSION-065`). The loop
+supervisor is built and recorded as ADR-0059, which holds the tenth defect of the pattern. Still not built
+from the list above: the fallback model and rate-limit paths, ADR-0041's artifacts, the verifier prefix,
+`REQ-CHAT-068/069`, `REQ-ORCH-030`.

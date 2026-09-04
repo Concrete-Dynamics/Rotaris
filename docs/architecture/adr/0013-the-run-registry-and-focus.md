@@ -179,3 +179,9 @@ other half). Consequence 1 held as written: two policies, one addressing. **Foun
 
 **Third execution, 2026-09-03, with children.** `cancelAgent` is addressed by session id and task id; the reserved
 run id cancels the run (`REQ-MONITOR-009`); an unknown or terminal child answers `false`. **Found: nothing.**
+
+**Fourth execution, 2026-09-05, with a resumed session.** `Sessions.resume` places a stored session in the
+map with no run; `Sessions.prompt` on it starts a run on the same writer and owner, so the predicates and
+the controls address the continued run as they addressed the first. `session.resume` is refused with
+"Finish or cancel the active run before switching sessions." while any run is active on the single-run host
+(`REQ-SHELL-126`), checked at both ends of the boundary. **Found: nothing.**

@@ -166,6 +166,19 @@ not a settings surface: `ROTARIS_MODEL_BASE_URL`, `ROTARIS_MODEL_ID`, `ROTARIS_M
 run is refused before it starts with one `result` of status `error` (REQ-EVENTS-021). It goes when
 ADR-0036 (configuration) and ADR-0029 (credentials) land.
 
+14. **the loop supervisor and `continue` (2026-09-05):** one hidden observer per agent conversation, fed by the turn
+   after every assistant message and tool call and asked before every model step; triggers in `REQ-ORCH-101`'s
+   order over actions (whole-argument sameness), a small-model classifier on the intent ladder bounded by
+   `runtime.loop_classification_timeout`, `REQ-ORCH-104`'s fallbacks, escalation at the third consecutive
+   activation — the child failed with `circuit_breaker_escalation`, the root's run ended `agent_session_aborted`;
+   `circuit_breaker:` in `agents.yaml`; "● CB armed" in the status strip. A stored session is listed and opened
+   from the title bar's "Sessions" browser (`REQ-SHELL-126`), its lock re-claimed with one local reap, its
+   orphaned children settled `cancelled` before the first iteration (`REQ-ORCH-053`'s route), and the next prompt
+   **continues** it: the row first, then a run on the same session with the previous intent carried over when
+   the fresh classification is unusable and the `REQ-SESSION-115` payload under its budgets; ordinals continue
+   the series. **Found:** the supervisor's repetition and cycle triggers were judged over a series holding the
+   assistant's text — the tenth defect (ADR-0059).
+
 13. **intent classification and the playbooks (2026-09-04):** before the coordinator exists the prompt is classified
    through the first configured model slot over a three-rung ladder bounded at 8.0 s — every failure the fallback
    intent with a reason, shown in the Workspace view and recorded in the launch audit with the grant and the
@@ -195,7 +208,7 @@ ADR-0036 (configuration) and ADR-0029 (credentials) land.
    and tool grant, tags its rows by its canonical name, produces its report through the bounded summarising pass,
    settles it through the one transition function, and resumes the parent with the report. The tree beside the
    transcript paints every child's state; the run header cancels one. **Found:** the slot is held from the claim,
-   not from `running` (a reading pinned by test); REQ-ORCH-053's sweep has no route until `continue` exists.
+   not from `running` (a reading pinned by test); REQ-ORCH-053's sweep has no route until `continue` exists — the route exists since 2026-09-05 (entry 14).
 
 10. **the permission gate and the first tools (2026-09-03):** the model is offered the ONE resolution's tool
    listing; a step's tool calls go through the gate — payload repaired and validated, permission resolved
@@ -227,8 +240,8 @@ no deadline), `ROTARIS_HEADLESS_APPROVAL_POLICY` (`deny`), `ROTARIS_ALLOW_OUTSID
 `ROTARIS_SHELL_COMMAND_TIMEOUT_S` (100), `ROTARIS_SESSION_LOG_LEVEL` (WARNING). `sandbox_mode` is fixed `off`
 (ADR-0022 has no backend here). **The entry persona is a built-in table** in the same file until ADR-0036 loads
 `agents.yaml`; it holds the direct-work bundle until Part B brings `delegate` and the coordinator role. **A bound
-of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) stands in for the loop supervisor
-(`REQ-ORCH-099..107`, not built). **The persona table** (`engine/src/children/personas.ts`: REQ-ORCH-028's thirteen
+of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor
+(`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). **The persona table** (`engine/src/children/personas.ts`: REQ-ORCH-028's thirteen
 roles, the two aliases, our own system prompts) and **the run override** (`ROTARIS_RUN_OVERRIDE`) stand in for
 `agents.yaml` and the start dialog; **the child budget** is REQ-ORCH-046's defaults clamped by REQ-ORCH-024's `normal`
 cell until playbooks exist; **`ROTARIS_MODEL_CONCURRENCY_CAP`** is the per-model cap. `ROTARIS_CHILD_SCRIPT` and the
@@ -262,13 +275,31 @@ renderer errors, then writes its result table under `.theme-proof/`. Two counter
 focus contrast and must exit non-zero. The first execution and its coverage boundary are
 `spikes/theme-proof.md`.
 
+**The loop supervisor and `continue`.** `packages/engine/src/run/supervisor.ts` (ADR-0059) and
+`packages/config/src/circuit-breaker-section.ts`; the classifier at the run-host root (`run-host/loop.ts`).
+`SessionWriter.open` and `Sessions.resume`/`prompt` (`engine/src/sessions.ts`) are the route; `session.list`
+and `session.resume` cross the boundary as commands and run-host requests; `ui/src/SessionBrowser.tsx` is the
+surface, a window-modal overlay opened from the title bar. The host-level circuit-breaker toggle is the
+environment stopgap `ROTARIS_CIRCUIT_BREAKER=off` until Settings → Runtime (`REQ-CONFIG-323`).
+`ROTARIS_SCRIPT=loop:<tool>:<n>`, `ROTARIS_LOOP_SCRIPT` and `ROTARIS_CAPTURE_RESUME` are verification seams.
+Decisions taken here for the owner: the supervisor's shape (ADR-0059); the belt of 100 steps stays; the
+browser offers **open** only; steering and todo corrections wait, and with them the consecutive counter's
+reset on anything but a real prompt.
+
+**What `pnpm part-h-proof` does.** It builds Electron and launches the app three times against scratch stores:
+once with a scripted agent repeating one tool call (asserting three activations, one escalation issue and the
+`agent_session_aborted` stop reason from the store); then a first run that completes, a `running` child row
+planted by hand, and a relaunch that opens the stored session from the Sessions browser and continues it
+(asserting the identity, the row order, the carried-intent status row, the settled child, one ordinal series
+and no lock left behind). Its evidence lands under `.part-h-proof/`.
+
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half (an endpoint from the owner); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04** — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks` | the loop supervisor (`REQ-ORCH-099..107`), the fallback-model and rate-limit paths, `REQ-ORCH-030`, the `continue`/`resume` controls that give `REQ-ORCH-053` a route, the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021), OQ-39's sizing under load; the remaining 17 control ops; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049), the rest of ADR-0036 (the runtime keys still come from the environment); for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the pause-resolution dialogs (`REQ-ORCH-086`, `REQ-SESSION-109/110`), steering and todo corrections, the stuck report's producer (`REQ-ORCH-096`), Settings → Runtime's circuit-breaker toggle (`REQ-CONFIG-323`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021), OQ-39's sizing under load; the remaining 17 control ops; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049), the rest of ADR-0036 (the runtime keys still come from the environment); for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |

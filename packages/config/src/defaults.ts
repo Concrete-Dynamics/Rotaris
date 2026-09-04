@@ -1,0 +1,43 @@
+import { BUILT_IN_ROLE_NAMES, type BuiltInRoleName } from '@rotaris/contracts';
+import { clonePlain, type PlainMap } from './merge.js';
+import type { TierAlias } from './keys.js';
+
+/**
+ * The built-in default layer (REQ-CONFIG-031 layer 1), copied per load so no load can mutate the shipped
+ * defaults (REQ-CONFIG-032). Slots per REQ-CONFIG-063..067, the two shipped models per REQ-CONFIG-097.
+ * The section defaults live with their readers (an absent section reads as its defaults).
+ *
+ * The thirteen built-in roles are declared here with their default tier only — the prompts and tool
+ * grants stay in the engine's persona table (decision 3 of the plan) — so a `personas:` override that
+ * states one field merges onto a complete entry and validates. The tiers are this build's proposal:
+ * the coordinating and designing roles on the large tier, every other role on the medium tier.
+ */
+export const BUILT_IN_ROLE_TIERS: Readonly<Record<BuiltInRoleName, TierAlias>> = Object.freeze({
+  orchestrator: 'large_model', architect: 'large_model', planner: 'large_model',
+  'requirements-engineer': 'medium_model', 'codebase-analyst': 'medium_model', librarian: 'medium_model', 'coding-agent': 'medium_model',
+  tester: 'medium_model', 'docs-writer': 'medium_model', refactorer: 'medium_model', verifier: 'medium_model', 'ui-verifier': 'medium_model', gatekeeper: 'medium_model',
+});
+
+export const SHIPPED_MODELS: PlainMap = {
+  'gpt-4o': { provider: 'openai', model_id: 'gpt-4o', api_key_env: 'OPENAI_API_KEY' },
+  'gpt-4o-mini': { provider: 'openai', model_id: 'gpt-4o-mini', api_key_env: 'OPENAI_API_KEY' },
+};
+
+const DEFAULT_LAYER: PlainMap = {
+  default_persona: 'orchestrator',
+  small_model: 'gpt-4o-mini',
+  medium_model: 'gpt-4o-mini',
+  large_model: 'gpt-4o',
+  default_summary_model: 'small_model',
+  fallback_model: 'small_model',
+  improvement_collector_model: null,
+  gatekeeper_model: null,
+  worktree_storage_subpath: 'worktrees',
+  inject_agents_md: true,
+  models: SHIPPED_MODELS,
+  personas: Object.fromEntries(BUILT_IN_ROLE_NAMES.map((role) => [role, { name: role, model: BUILT_IN_ROLE_TIERS[role] }])),
+};
+
+export function builtInDefaults(): PlainMap {
+  return clonePlain(DEFAULT_LAYER);
+}

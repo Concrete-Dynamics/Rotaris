@@ -1,3 +1,4 @@
+import { BUILT_IN_ROLE_NAMES, ROLE_SPAWN_ALIASES, type BuiltInRoleName } from '@rotaris/contracts';
 /**
  * Decision 2 of the plan: REQ-ORCH-028's thirteen roles and the two aliases as a BUILT-IN table, each
  * with a tool declaration and a short system prompt of our own authorship, until ADR-0036 loads
@@ -22,11 +23,11 @@ function persona(name: string, tools: readonly string[], prompt: string, extra: 
   return { name, tools, coordinatorOnly: false, readOnly: false, systemPrompt: prompt, implementer: tools.some((t) => WRITE_TOOLS.includes(t) || t === 'terminal'), ...extra };
 }
 
-export const ROLE_VOCABULARY = ['orchestrator', 'requirements-engineer', 'codebase-analyst', 'librarian', 'architect', 'planner', 'coding-agent', 'tester', 'docs-writer', 'refactorer', 'verifier', 'ui-verifier', 'gatekeeper'] as const;
-export type RoleName = (typeof ROLE_VOCABULARY)[number];
+export const ROLE_VOCABULARY = BUILT_IN_ROLE_NAMES;
+export type RoleName = BuiltInRoleName;
 
-/** REQ-ORCH-034 / REQ-TOOLS-152: the two aliases, resolved only when the target exists. */
-export const ROLE_ALIASES: Readonly<Record<string, RoleName>> = Object.freeze({ coder: 'coding-agent', playwright: 'ui-verifier' });
+/** REQ-ORCH-034 / REQ-TOOLS-152: the two aliases, resolved only when the target exists (the vocabulary is contracts'). */
+export const ROLE_ALIASES: Readonly<Record<string, RoleName>> = ROLE_SPAWN_ALIASES;
 
 const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst; a question answerable only from outside the repository → librarian; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
 

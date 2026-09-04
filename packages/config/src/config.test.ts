@@ -6,18 +6,11 @@ import { commandPatternMatches, segmentCommandLine, tokenizeHookPattern } from '
 import { parseConfig, triOf } from './document.js';
 import { hookDisplayName, mergeHooks, readHooksSection, type HooksLayer } from './hooks-section.js';
 import { loadHooksConfig } from './loader.js';
-import { CIRCUIT_BREAKER_DEFAULTS, loadCircuitBreakerConfig, mergeCircuitBreaker, readCircuitBreakerSections } from './circuit-breaker-section.js';
 
 function section(text: string, scope: 'global' | 'workspace' = 'workspace') {
   const p = parseConfig(text);
   if (!p.ok) throw new Error(p.error.reason);
   return readHooksSection(p.value, scope);
-}
-
-function breakerSection(text: string) {
-  const p = parseConfig(text);
-  if (!p.ok) throw new Error(p.error.reason);
-  return readCircuitBreakerSections(p.value);
 }
 
 describe('the document tree (ADR-0036 alternative B)', () => {
@@ -154,41 +147,5 @@ describe('the loader', () => {
     if (r.ok) return;
     expect(r.error.errors.map((e) => e.scope)).toEqual(['global', 'workspace']);
     expect(r.error.errors[1]!.path).toBe('hooks.entries.0.event');
-  });
-});
-
-describe('REQ-CONFIG-136/467 circuit_breaker and runtime sections', () => {
-  const dirs: string[] = [];
-  const tmp = () => { const d = mkdtempSync(join(tmpdir(), 'rotaris-breaker-')); dirs.push(d); return d; };
-  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
-
-  it('uses the registered defaults when both sections are absent', () => {
-    const r = breakerSection('hooks: []\n');
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(mergeCircuitBreaker([r.value])).toEqual(CIRCUIT_BREAKER_DEFAULTS);
-  });
-
-  it('parses the closed section and keeps the timeout under runtime', () => {
-    const r = breakerSection('circuit_breaker:\n  enabled: false\n  model: local-small\n  activation_mode: weighted\nruntime:\n  loop_classification_timeout: 1.25\n');
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(mergeCircuitBreaker([r.value])).toEqual({ enabled: false, model: 'local-small', activationMode: 'weighted', loopClassificationTimeout: 1.25 });
-  });
-
-  it('reports timeout_seconds and every other unknown breaker key', () => {
-    const r = breakerSection('circuit_breaker:\n  timeout_seconds: 4\n  mystery: true\n');
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.map((e) => e.path)).toEqual(['circuit_breaker.timeout_seconds', 'circuit_breaker.mystery']);
-  });
-
-  it('loads global then workspace agents.yaml as real file layers', () => {
-    const root = tmp();
-    const globalDir = join(root, 'config');
-    const workspace = join(root, 'workspace');
-    mkdirSync(join(workspace, '.rotaris'), { recursive: true });
-    mkdirSync(globalDir, { recursive: true });
-    writeFileSync(join(globalDir, 'agents.yaml'), 'circuit_breaker:\n  activation_mode: weighted\nruntime:\n  loop_classification_timeout: 3\n');
-    writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'circuit_breaker:\n  enabled: false\n');
-    const r = loadCircuitBreakerConfig(globalDir, workspace);
-    expect(r).toEqual({ ok: true, value: { enabled: false, model: 'small_model', activationMode: 'weighted', loopClassificationTimeout: 3 } });
   });
 });

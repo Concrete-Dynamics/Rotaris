@@ -8,7 +8,7 @@ import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, termina
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
-import { loadCircuitBreakerConfig } from '@rotaris/config';
+import { loadConfiguration } from '@rotaris/config';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -204,12 +204,13 @@ const configDir = resolveUserDirs().config;
 const rungMemory = new RungMemory();
 const modelSetup = modelFromEnv();
 const circuitBreakerFor = (workspaceRoot: string) => {
-  const loaded = loadCircuitBreakerConfig(configDir, workspaceRoot);
+  const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
   if (!loaded.ok) {
-    for (const error of loaded.error) log(`circuit breaker config ${error.file ?? 'agents.yaml'} ${error.path}: ${error.message}`, 'warn');
+    log(`configuration: ${loaded.error.lines.join('; ')}`, 'warn');
     return null;
   }
-  return { ...loaded.value, enabled: loaded.value.enabled && process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
+  const cb = loaded.value.circuitBreaker;
+  return { enabled: cb.enabled && process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off', model: cb.model, activationMode: cb.activation_mode, loopClassificationTimeout: loaded.value.runtime.loop_classification_timeout };
 };
 // Decision 4: the scripted client classifies itself unless ROTARIS_INTENT_SCRIPT=none; a real model needs the slot ids.
 const intentEnv: Record<string, string | undefined> = process.env['ROTARIS_MODEL_DIALECT'] === 'scripted' && (process.env['ROTARIS_INTENT_SCRIPT'] ?? '') !== 'none'

@@ -64,6 +64,15 @@ export type ControlResult = z.infer<typeof ControlResultSchema>;
 export const PAUSE_RESOLUTIONS = ['continue', 'double', 'cancel'] as const;
 export type PauseResolution = (typeof PAUSE_RESOLUTIONS)[number];
 
+/** REQ-ORCH-086 / REQ-SESSION-109: what the pause dialog shows — the count, the limit in force, the two token figures. */
+export const PausePayloadSchema = z.object({
+  sessionId: z.string().min(1),
+  count: z.number().int().nonnegative(),
+  limit: z.number().int().nullable(),
+  tokens: z.object({ input: z.number().int().nonnegative(), output: z.number().int().nonnegative() }),
+});
+export type PausePayload = z.infer<typeof PausePayloadSchema>;
+
 /** REQ-CHAT-038: a queued prompt's status series. */
 export const QUEUED_PROMPT_STATUSES = ['QUEUED', 'TRIGGERED', 'COMPLETED'] as const;
 export type QueuedPromptStatus = (typeof QUEUED_PROMPT_STATUSES)[number];

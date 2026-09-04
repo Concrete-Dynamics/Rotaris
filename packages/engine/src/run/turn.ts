@@ -145,7 +145,8 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       // REQ-ORCH-096: an empty reply with no call is the runtime's "cannot make progress" report — the stuck path of the supervisor.
       if (calls.length === 0 && report.text.trim() === '') deps.supervisor?.observeStuck();
       // REQ-MONITOR-136: a steer that arrived while the agent was finishing makes it take another round.
-      if (calls.length === 0 && (deps.steering?.().length ?? 0) > 0 && !signal.aborted) { injectSteering(deps, messages); continue; }
+      // (First execution: a peek that drained the queue lost the steer and bought a spurious round; the injection is the one read.)
+      if (calls.length === 0 && !signal.aborted && injectSteering(deps, messages) > 0) continue;
       return { report: { ...report, usage }, messages, toolCallCount };
     }
     const results: ChatMessage['content'] = [];

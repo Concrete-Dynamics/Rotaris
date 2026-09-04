@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, pendingFrom, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -93,10 +93,39 @@ async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false;
   return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' };
 }
 
-function Workspace() {
+/** ADR-0010 channel 1: one control against the focused session, `false` named as a refusal (REQ-MONITOR-006). */
+async function control(op: Parameters<typeof bridge.command>[0] extends infer R ? R extends { kind: 'session.control'; request: { op: infer O } } ? O : never : never, args: Record<string, string | number | boolean | null>, refusal: string): Promise<{ ok: true; value?: string } | { ok: false; reason: string }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { ok: false, reason: 'No run is active.' };
+  const r = await bridge.command({ kind: 'session.control', request: { op, sessionId, args } });
+  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+  const v = r.value as { ok: boolean; value?: string };
+  return v.ok ? { ok: true, ...(v.value === undefined ? {} : { value: v.value }) } : { ok: false, reason: refusal };
+}
+
+/** REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. */
+async function continueSession(action: PauseResolution = 'continue'): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
+  const r = await bridge.command({ kind: 'session.continue', sessionId, action });
+  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+}
+
+function Workspace({ models }: { models: readonly string[] }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
-  return <WorkspaceView session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={session?.updatedAt ?? null} />;
+  return <WorkspaceView
+    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={session?.updatedAt ?? null}
+    models={models}
+    onQueue={(text) => control('createQueuedPrompt', { text }, 'The run no longer accepts prompts.')}
+    onEditQueued={(promptId, text) => control('editQueuedPrompt', { promptId, text }, 'Queued message was already picked up and cannot be edited.')}
+    onRemoveQueued={(promptId) => control('removeQueuedPrompt', { promptId }, 'Queued message was already picked up and cannot be deleted.')}
+    onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
+    onContinue={() => continueSession('continue')}
+    onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
+    onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
+    onSetReasoning={(level) => control('setReasoning', { level }, 'The run did not accept that reasoning level.')}
+  />;
 }
 
 /** REQ-SESSION-201's two actions: main supplies the dialogs, the workspace service the work. */
@@ -246,7 +275,23 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   const [browserSessions, setBrowserSessions] = useState<readonly SessionListItemPayload[]>([]);
   const [browserLoading, setBrowserLoading] = useState(false);
   const [browserError, setBrowserError] = useState<string | null>(null);
+  const [models, setModels] = useState<readonly string[]>([]);
   useEffect(() => { themeSubscribers.add(setTheme); return () => { themeSubscribers.delete(setTheme); }; }, []);
+  // REQ-MONITOR-144: the run header's model selector offers the configured models.
+  useEffect(() => {
+    if (workspace === '(no workspace)') return;
+    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) setModels((r.value as ConfigSnapshot).models); }); });
+    return bridge.onConfigChanged((p) => setModels((p as { snapshot: ConfigSnapshot }).snapshot.models));
+  }, [workspace]);
+  // REQ-SESSION-109: a session found paused at the message limit presents the dialog at once, once per pause.
+  const presentedPause = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session || session.executionStatus !== 'paused_message_limit') { if (session && session.executionStatus !== 'paused_message_limit') presentedPause.current = null; return; }
+    const key = `${session.id}:${session.pausedAtCount ?? ''}`;
+    if (presentedPause.current === key) return;
+    presentedPause.current = key;
+    void bridge.command({ kind: 'pause.present', payload: { sessionId: session.id, count: session.pausedAtCount ?? session.iterationsCompleted, limit: session.messageLimit, tokens: session.tokenUsage } });
+  }, [session]);
   const changeTheme = useCallback(async (name: ThemeName) => {
     const r = await bridge.command({ kind: 'theme.set', name });
     if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
@@ -317,7 +362,7 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       version={version}
       workspaceLabel={workspace}
       statusItems={status}
-      views={{ workspace: <Workspace />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} /> }}
+      views={{ workspace: <Workspace models={models} />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} /> }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
       onRecover={recover}
@@ -339,6 +384,25 @@ async function bootApproval(): Promise<void> {
     return { delivered: c.ok && (c.value as { ok: boolean }).ok };
   };
   root.render(<StrictMode><ApprovalDialog payload={payload} othersWaiting={othersWaiting} onAnswer={onAnswer} /></StrictMode>);
+}
+
+/** REQ-ORCH-086 / REQ-SESSION-109: the pause window; it resolves through the session command and closes itself. */
+async function bootPause(): Promise<void> {
+  const r = await bridge.command({ kind: 'pause.payload' });
+  const root = createRoot(document.getElementById('root')!);
+  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
+  const payload = r.value as PausePayload;
+  document.title = 'Run paused';
+  const onResolve = async (action: PauseResolution): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const c = await bridge.command({ kind: 'session.continue', sessionId: payload.sessionId, action });
+    if (!c.ok) return { ok: false, reason: c.detail ?? c.headline };
+    window.close();
+    return { ok: true };
+  };
+  root.render(<StrictMode><PauseDialog payload={payload} onResolve={onResolve} /></StrictMode>);
+  // Verification only: the proof answers the dialog through a query the main process set from its seam.
+  const scripted = new URLSearchParams(window.location.search).get('answer');
+  if (scripted === 'continue' || scripted === 'double' || scripted === 'cancel') setTimeout(() => { void onResolve(scripted); }, 400);
 }
 
 /** REQ-HOOKS-106/107: the review window — the only surface that displays a hook command. */
@@ -368,6 +432,7 @@ async function boot(): Promise<void> {
   const settingsCategory = categoryReply.ok ? String((categoryReply.value as { value?: string }).value ?? 'models') : 'models';
   const role = new URLSearchParams(window.location.search).get('role');
   if (role === 'approval') { await bootApproval(); return; }
+  if (role === 'pause') { await bootPause(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };

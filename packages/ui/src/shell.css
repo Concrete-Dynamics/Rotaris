@@ -267,3 +267,19 @@
 .settings__raw { margin: 0; padding: var(--rt-space-2, 8px); background: var(--rt-bg); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 5px); font-size: var(--rt-text-xs, 12px); user-select: text; white-space: pre-wrap; }
 .settings__fatal, .settings__referential { margin: var(--rt-space-2, 8px) 0; }
 .settings__referential ul { margin: 0; padding-left: var(--rt-space-4, 16px); }
+
+/* The control channel's surfaces (REQ-CHAT-036/037, REQ-MONITOR-125/126/128/144, REQ-ORCH-086). */
+.queue { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px) 0; }
+.queue__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+.queue__hint { color: var(--rt-text-tertiary); }
+.queue__list { max-height: 150px; overflow: auto; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.queue__row { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
+.queue__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--rt-text-sm, 13px); }
+.queue__editor { flex: 1; min-height: 28px; }
+.run-controls { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.run-controls .select { width: max-content; min-height: 28px; padding: 3px 26px 3px 8px; font-size: var(--rt-text-xs, 12px); }
+.pause { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-5, 24px); }
+.pause__figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--rt-space-2, 8px); margin: 0; font-size: var(--rt-text-sm, 13px); }
+.pause__figures dt { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
+.pause__figures dd { margin: 0; }
+.steer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }

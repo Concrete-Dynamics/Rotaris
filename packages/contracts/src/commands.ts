@@ -1,3 +1,4 @@
+import { PAUSE_RESOLUTIONS, PausePayloadSchema } from './control.js';
 import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema } from './config.js';
 import { z } from 'zod';
 import { ControlRequestSchema } from './control.js';
@@ -31,6 +32,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
+  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. */
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS) }),
+  /** REQ-SESSION-109: a surface attached to a session paused at the limit asks main for the dialog; the dialog window reads its payload. */
+  z.object({ kind: z.literal('pause.present'), payload: PausePayloadSchema }),
+  z.object({ kind: z.literal('pause.payload') }),
   /** Begin following: every attach starts with a whole-session update (REQ-MONITOR-214). */
   z.object({ kind: z.literal('session.subscribe'), sessionId: z.string() }),
   z.object({ kind: z.literal('session.unsubscribe'), sessionId: z.string() }),

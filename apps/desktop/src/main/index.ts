@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type 
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 
@@ -163,6 +163,35 @@ async function main(): Promise<void> {
    * synchronous native dialog (ADR-0019's prohibition).
    */
   const dialogs = new Map<number, { requestId: string; win: BrowserWindow; answered: boolean }>();
+  // REQ-ORCH-086 / REQ-SESSION-109: one pause window per session; its payload read by the window's own command.
+  const pauseWindows = new Map<string, BrowserWindow>();
+  const pausePayloads = new Map<number, PausePayload>();
+  const presentPause = async (payload: PausePayload): Promise<void> => {
+    const existing = pauseWindows.get(payload.sessionId);
+    if (existing && !existing.isDestroyed()) { existing.focus(); return; }
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id));
+    if (!parent) { log('pause: no main window to present the dialog over'); return; }
+    const dlg = new BrowserWindow({
+      parent, modal: true, width: 560, height: 360, minWidth: 560, minHeight: 360, show: false, title: 'Run paused', backgroundColor: themeBackground(),
+      resizable: true, minimizable: false, maximizable: false,
+      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    const wc = dlg.webContents.id;
+    pauseWindows.set(payload.sessionId, dlg);
+    pausePayloads.set(wc, payload);
+    dlg.setMenuBarVisibility(false);
+    dlg.on('closed', () => { pausePayloads.delete(wc); if (pauseWindows.get(payload.sessionId) === dlg) pauseWindows.delete(payload.sessionId); });
+    const answer = process.env['ROTARIS_CAPTURE_PNG'] ? process.env['ROTARIS_CAPTURE_PAUSE_ANSWER'] : undefined;
+    const query = { role: 'pause', ...(answer ? { answer } : {}) };
+    try {
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+      dlg.show();
+      dlg.focus();
+    } catch (cause) {
+      log(`pause dialog could not be shown: ${String(cause)}`);
+    }
+  };
   const queue: ApprovalPayload[] = [];
   let openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null = null;
   const parentWindowIds = new Set<string>();
@@ -301,6 +330,11 @@ async function main(): Promise<void> {
     else if (e.kind === 'notice.publish') {
       const shown = e.key !== undefined ? raiseNoticeKeyed(e.key, e.severity, e.headline, e.detail, recoveryFor(e.action)) : (raiseNotice(e.severity, e.headline, e.detail, recoveryFor(e.action)), true);
       log(`notice from the run host: ${e.headline}${e.action ? ` [${e.action}]` : ''}${shown ? '' : ' (already shown this session)'}`);
+    }
+    else if (e.kind === 'run.paused') {
+      // REQ-ORCH-085/086: the host is told; the dialog is a modal window over the main window.
+      log(`run ${e.sessionId} paused at the message limit: ${e.count} of ${e.limit ?? 'no limit'}`);
+      void presentPause({ sessionId: e.sessionId, count: e.count, limit: e.limit, tokens: e.tokens });
     }
     else if (e.kind === 'run.result') {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
@@ -446,6 +480,21 @@ async function main(): Promise<void> {
         const p = dialogPayloads.get(senderId);
         return p ? { ok: true, value: p } : { ok: false, code: 'approval.none', headline: 'This window was not opened for an approval' };
       }
+      case 'pause.payload': {
+        const p = pausePayloads.get(senderId);
+        return p ? { ok: true, value: p } : { ok: false, code: 'pause.none', headline: 'This window was not opened for a pause' };
+      }
+      case 'pause.present':
+        void presentPause(req.payload);
+        return { ok: true };
+      case 'session.continue': {
+        const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action }, millis(10_000));
+        if (r.kind !== 'session.continued') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The session could not be continued'); }
+        const open = pauseWindows.get(req.sessionId);
+        if (open && !open.isDestroyed()) open.close();
+        log(`session ${req.sessionId} ${req.action}: ${r.resumed ? 'continued' : 'left paused'}`);
+        return { ok: true, value: { resumed: r.resumed, messageLimit: r.messageLimit } };
+      }
       case 'hooks.summary': {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace to see its hooks' };
         const r = await runHost.request({ kind: 'hooks.summary', workspaceId: currentWorkspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));
@@ -575,6 +624,7 @@ async function main(): Promise<void> {
           if (d && r.result.ok) d.answered = true;
           log(`approval ${String(req.request.args['requestId'])} answered ${String(req.request.args['option'])} → ${r.result.ok ? 'delivered' : 'undeliverable'}`);
         }
+        if (req.request.op !== 'answerApproval') log(`control ${req.request.op} on ${req.request.sessionId} → ${r.kind === 'control.result' ? (r.result.ok ? `ok${r.result.value ? ` (${r.result.value})` : ''}` : 'false') : r.kind}`);
         return r.kind === 'control.result' ? { ok: true, value: r.result } : refusal(r, 'The control could not be delivered');
       }
       case 'notice.acknowledge':
@@ -815,6 +865,20 @@ async function main(): Promise<void> {
         log(`capture: clicked "${step.arg ?? step.selector}"`);
       });
     }
+    // ROTARIS_CAPTURE_TYPE="text@ms;;…": real key events into whatever control holds focus, then Enter (the composer's submit, REQ-CHAT-001).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE'])) {
+      clocks.timers.after(millis(step.at), () => {
+        const wc = win.webContents;
+        // `>>composer` first focuses the composer with Ctrl+L (REQ-CHAT-002); `>>no-enter` leaves the text in the focused control.
+        if (step.arg === 'composer') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] }); }
+        for (const ch of step.selector) wc.sendInputEvent({ type: 'char', keyCode: ch });
+        if (step.arg !== 'no-enter') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' }); wc.sendInputEvent({ type: 'char', keyCode: 'Return' }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' }); }
+        log(`capture: typed "${step.selector}"`);
+      });
+    }
+    // ROTARIS_CAPTURE_QUIT_MS: a user-initiated close of the main window at that time — the quit path of REQ-MONITOR-131, not the capture's exit.
+    const quitAt = Number(process.env['ROTARIS_CAPTURE_QUIT_MS'] ?? 0);
+    if (quitAt > 0) clocks.timers.after(millis(quitAt), () => { log('capture: closing the main window (user-initiated)'); win.close(); });
     for (const step of steps(process.env['ROTARIS_CAPTURE_SELECT'])) {
       clocks.timers.after(millis(step.at), async () => {
         const done = await win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.arg ?? '')}); el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`) as boolean;

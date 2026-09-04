@@ -326,6 +326,13 @@ of one document) is exactly the shape the remaining stores have.
    available and costs about a tenth of a millisecond; that is now a decision with a price rather than a
    platform limitation.
 
+   **The call is now in a harness beside the rule's own shape (2026-09-04, `spikes/power-loss.md`).** The
+   power-loss writer replaces two documents on every twenty-fifth commit: one by this rule's shape and one by
+   the same shape followed by the write-opened directory `fsync`. After a process death both were whole and
+   current, ten of ten, which the rule already predicts. What the directory `fsync` guarantees — the *revisit
+   if* below — is read from the two documents' lag against each other after the owner's fault, and that
+   table is empty until the owner fills it.
+
    **A second measurement now supports the rule from the other side, and the two must be read together
    rather than one replacing the other.** The remote-storage spike found directory `fsync` returning
    `EPERM` on **every** spelling including local NTFS, where the writer-handle spike found it succeeding

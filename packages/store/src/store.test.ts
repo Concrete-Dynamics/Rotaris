@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -480,5 +481,26 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     const statements = [...src.matchAll(/db\.prepare\((`[\s\S]*?`|'[^']*')\)/g)].map((m) => m[1]!).filter((sql) => /\b(children|model_slot_queue)\b/.test(sql));
     expect(statements.length).toBeGreaterThanOrEqual(12);
     for (const sql of statements) expect(sql, sql).toMatch(/session_id/);
+  });
+});
+
+describe('store — the power-loss writer runs under the settings open.ts applies (OQ-12 harness)', () => {
+  it('journal mode, synchronous, busy_timeout and the write probe read back equal from the writer and from openStore', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-pl-probe-'));
+    try {
+      const writer = join(__dirname, '..', 'spike', 'power-loss-writer.cjs');
+      const r = spawnSync(process.execPath, [writer, '--dir', join(dir, 'w'), '--probe'], { encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      const theirs = JSON.parse(r.stdout.trim().split(/\r?\n/).at(-1)!) as Record<string, unknown>;
+      mkdirSync(join(dir, 'o'));
+      const db = openStore(join(dir, 'o', 'workspace.db'));
+      const ours = { journal_mode: db.pragma('journal_mode', { simple: true }), synchronous: db.pragma('synchronous', { simple: true }), busy_timeout: db.pragma('busy_timeout', { simple: true }), probeTable: (db.prepare("SELECT count(*) AS c FROM sqlite_master WHERE name = '__probe'").get() as { c: number }).c };
+      db.close();
+      forgetSpelling(join(dir, 'o'));
+      expect(theirs).toEqual(ours);
+      expect(ours).toEqual({ journal_mode: 'wal', synchronous: 1, busy_timeout: 5000, probeTable: 0 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

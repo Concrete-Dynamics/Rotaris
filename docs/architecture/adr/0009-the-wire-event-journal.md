@@ -515,7 +515,9 @@ than a generic refusal.
    - **`NORMAL` still buys no power-loss durability**, as stated under *Append*. `FULL` was measured at
      **4.4× the `NORMAL` p50** (812.1 µs), and the delta is one `fsync` on this device (559.3 µs p50). No
      append forces it, so the history never pays it — which is a consequence of the durability decision,
-     not evidence for it.
+     not evidence for it. **Instrumented 2026-09-04** (`spikes/power-loss.md`): how much a `NORMAL` frame
+     loses under a real cut — in commits and in milliseconds — is the number the harness's `verify` phase
+     reports once the owner has performed the fault; a process death alone lost none, ten of ten.
 3. **Three branches of the specification are unreachable from our own store, and the specification now
    says so rather than this record reporting it for amendment.** `REQ-EVENTS-106` states it directly:
    its four damage cases "remain implemented in full, because the reader also reads line sequences the

@@ -1339,6 +1339,19 @@ The store's own durability is decided separately and explicitly in W-06 and is *
 question; it is neither better nor worse than the file design's userspace flush against the failures
 `REQ-EVENTS-029` names, and W-06 says which failures those are.
 
+***Taken 2026-09-04 in its harness half — `spikes/power-loss.md`.*** The measurement now has an instrument:
+a writer committing at `NORMAL` with periodic `FULL` commits and both replace shapes (ADR-0004's, and the
+same plus a write-handle directory `fsync`), a process-death baseline (ten of ten lost nothing, gap-free,
+whole), and a verifier whose dry run — a WAL tail truncated at a recorded `FULL` commit — reports exactly the
+rows after the cut lost and everything before it present, ten of ten. **None of that is evidence about a
+power cut**, and the report says so in its own section 3. The fault itself is a physical act on this machine
+that only the owner can perform — a forced power-off, or a kernel crash that loses the operating-system
+cache while the disk stays powered, which separates the software claim from the device's honesty — and the
+report carries the steps and an empty table. This entry closes or narrows when that table is filled; both of
+the figures it decides (whether a returned `FULL` commit survives; how far behind a `NORMAL` record can be,
+in commits and milliseconds) come from the same run, and the directory-`fsync` half gets its answer from the
+two documents' lag against each other.
+
 **OQ-13 — Stderr in foreground capture.** *(ADR-0020.)* `REQ-TOOLS-098` requires the soft-pause detail to
 tell the agent the process "may be writing to stderr" and to suggest re-running with a redirection, which
 only makes sense if stderr is **not** captured — while a pseudo-terminal-backed persistent shell, required

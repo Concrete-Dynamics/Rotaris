@@ -33,6 +33,24 @@ function findDatabases(root) {
   return found;
 }
 
+function scratchAgentsYaml(workspace) {
+  // The stopgaps `ROTARIS_PERMISSION_MODE` and `ROTARIS_RUN_OVERRIDE` are gone: the run reads its files (ADR-0036).
+  mkdirSync(join(workspace, '.rotaris'), { recursive: true });
+  writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
+    '# scratch configuration written by the proof script',
+    'models:',
+    '  scripted: { provider: scripted, model_id: scripted }',
+    'small_model: scripted',
+    'medium_model: scripted',
+    'large_model: scripted',
+    'runtime:',
+    '  permission_mode: autonomous',
+    'rotaris:',
+    '  delegation_strategy: single',
+    '',
+  ].join('\n'));
+}
+
 function cleanEnvironment() {
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
@@ -52,8 +70,6 @@ function launch(name, workspace, local, preferences, extra) {
       APPDATA: join(dirname(local), 'roaming'),
       ROTARIS_PREFERENCES_ROOT: preferences,
       ROTARIS_MODEL_DIALECT: 'scripted',
-      ROTARIS_PERMISSION_MODE: 'autonomous',
-      ROTARIS_RUN_OVERRIDE: 'single',
       ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,
@@ -78,6 +94,7 @@ const loopLocal = join(loopRoot, 'local');
 mkdirSync(loopWorkspace, { recursive: true });
 mkdirSync(loopLocal, { recursive: true });
 writeFileSync(join(loopWorkspace, 'README.md'), '# loop proof\n');
+scratchAgentsYaml(loopWorkspace);
 launch('loop-supervisor', loopWorkspace, loopLocal, join(loopRoot, 'preferences'), {
   ROTARIS_SCRIPT: 'loop:read:20',
   ROTARIS_LOOP_SCRIPT: 'detected',
@@ -102,6 +119,7 @@ const resumePreferences = join(resumeRoot, 'preferences');
 mkdirSync(resumeWorkspace, { recursive: true });
 mkdirSync(resumeLocal, { recursive: true });
 writeFileSync(join(resumeWorkspace, 'README.md'), '# resume proof\n');
+scratchAgentsYaml(resumeWorkspace);
 launch('resume-before', resumeWorkspace, resumeLocal, resumePreferences, {
   ROTARIS_CAPTURE_PROMPT: 'finish the first run',
   ROTARIS_CAPTURE_AFTER_MS: '6500',

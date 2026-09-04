@@ -1,4 +1,4 @@
-import { isRungRejection, selectSlot, type LoopActivation, type RungMemory, type LoopClassification, type LoopClassifier, type Rung } from '@rotaris/engine';
+import { isRungRejection, selectSlot, type ClassifierSlots, type LoopActivation, type RungMemory, type LoopClassification, type LoopClassifier, type Rung } from '@rotaris/engine';
 import type { AgentBackend, ModelRef, OutputSpec, ThinkingLevel } from '@rotaris/model';
 
 const LOOP_SCHEMA: Readonly<Record<string, unknown>> = {
@@ -31,25 +31,15 @@ export interface LoopClassifierDeps {
   readonly thinking: ThinkingLevel;
   readonly resolveCredential: () => Promise<string>;
   readonly memory: RungMemory;
-  readonly configuredModel: string;
+  /** `circuit_breaker.model` resolved to a reference, or the small slot when it named the alias. */
+  readonly configuredModel: ModelRef | null;
+  readonly slots: ClassifierSlots;
   readonly modelTimeoutMs: number;
-  readonly env: Readonly<Record<string, string | undefined>>;
-}
-
-function withId(base: ModelRef, id: string | undefined): ModelRef | null {
-  return id && id.trim() ? { ...base, modelId: id.trim() } : null;
 }
 
 /** REQ-ORCH-100/103: the small-slot classifier behind the engine's port. */
 export function createLoopClassifier(deps: LoopClassifierDeps): LoopClassifier | null {
-  const slots = {
-    small: withId(deps.runModel, deps.env['ROTARIS_SMALL_MODEL_ID']) ?? (deps.runModel.providerId === 'scripted' ? deps.runModel : null),
-    fallback: withId(deps.runModel, deps.env['ROTARIS_FALLBACK_MODEL_ID']),
-    summary: withId(deps.runModel, deps.env['ROTARIS_SUMMARY_MODEL_ID']),
-  };
-  const selected = deps.configuredModel === 'small_model'
-    ? selectSlot(slots)
-    : { model: withId(deps.runModel, deps.configuredModel) ?? deps.runModel, slot: 'small_model' as const };
+  const selected = deps.configuredModel ? { model: deps.configuredModel, slot: 'small_model' as const } : selectSlot(deps.slots);
   if (!selected) return null;
 
   return {

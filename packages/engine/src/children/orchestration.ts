@@ -8,7 +8,7 @@ import { runTurn, type ToolPort, type TurnOutcome } from '../run/turn.js';
 import type { BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { ChildLedger, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
-import { BUILT_IN_PERSONAS, type RoleName } from './personas.js';
+import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import type { HookPort } from '../hooks-port.js';
@@ -54,6 +54,12 @@ export interface ChildrenDeps {
   /** REQ-ORCH-015: on the answer route the answered category is accepted at once. */
   readonly route?: 'answer' | 'work' | undefined;
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
+  /** ADR-0036: the configured personas over the built-in table; absent means the built-in table alone. */
+  readonly personas?: PersonaResolver | undefined;
+}
+
+function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
+  return deps.personas ? deps.personas.resolve(name)?.persona : BUILT_IN_PERSONAS[name as RoleName];
 }
 
 export class IterationChildren implements DelegationOps {
@@ -64,7 +70,7 @@ export class IterationChildren implements DelegationOps {
   private readonly resumeWaiters = new Map<string, () => void>();
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
-    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn });
+    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas });
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.execute(row), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
   }
@@ -78,10 +84,10 @@ export class IterationChildren implements DelegationOps {
   async delegate(parentId: string, req: DelegateRequest): Promise<DelegateOutcome> {
     const parent = this.ledger.get(parentId);
     const parentDepth = parent ? parent.depth : 0;
-    const persona = BUILT_IN_PERSONAS[req.persona as RoleName];
+    const persona = personaOf(this.deps, req.persona);
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
-      category: req.category, background: req.runInBackground, modelKey: this.deps.model.modelId, grantedTools: persona?.tools ?? [],
+      category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved } = r.value;
@@ -182,7 +188,7 @@ export class IterationChildren implements DelegationOps {
     this.startedAt.set(row.task_id, started);
     const moved = this.ledger.transition(row.task_id, 'running');
     if (!moved.ok) { deps.warn(moved.reason); return; }
-    const persona = BUILT_IN_PERSONAS[row.persona as RoleName];
+    const persona = personaOf(deps, row.persona);
     const controller = new AbortController();
     const onRunAbort = () => controller.abort();
     deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
@@ -192,7 +198,7 @@ export class IterationChildren implements DelegationOps {
     const dispatched = new Map<string, string>();
     const turn = (task: string, history: readonly ChatMessage[]) => runTurn({
       writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
-      systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: deps.model, thinking: deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
+      systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
       resolveCredential: deps.resolveCredential, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
       ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
     }, task, history, controller.signal);

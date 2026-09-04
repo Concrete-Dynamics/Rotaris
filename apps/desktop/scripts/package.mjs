@@ -86,14 +86,15 @@ appRun = step('the packaged app opens a store and runs a terminal call', () => {
   mkdirSync(ws, { recursive: true });
   mkdirSync(lad, { recursive: true });
   writeFileSync(join(ws, 'README.md'), '# scratch\n');
+  // The run reads its files (ADR-0036): the scripted model, an autonomous mode and the single strategy.
+  mkdirSync(join(ws, '.rotaris'), { recursive: true });
+  writeFileSync(join(ws, '.rotaris', 'agents.yaml'), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n');
   spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
   const png = join(RELEASE, 'load-proof.png');
   const env = {
     ...process.env,
     LOCALAPPDATA: lad,
     ROTARIS_MODEL_DIALECT: 'scripted',
-    ROTARIS_PERMISSION_MODE: 'autonomous',
-    ROTARIS_RUN_OVERRIDE: 'single',
     ROTARIS_SCRIPT: 'git',
     ROTARIS_CAPTURE_PNG: png,
     ROTARIS_CAPTURE_PROMPT: 'show me the tree',

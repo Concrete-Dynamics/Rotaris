@@ -7,18 +7,15 @@ import type { AgentBackend, ModelRef } from '@rotaris/model';
 import type { Clocks } from '@rotaris/kernel';
 
 /**
- * The run-host root's pre-flight (REQ-ORCH-005): classify, grant, resolve the playbooks, clamp. Decision 4
- * of the plan: the three model slots and the tier are environment stopgaps until ADR-0036/0028 —
- * `ROTARIS_SMALL_MODEL_ID`, `ROTARIS_FALLBACK_MODEL_ID`, `ROTARIS_SUMMARY_MODEL_ID` (ids on the run model's
- * base URL and credential; none set → no request, the fallback intent with the stated reason) and
- * `ROTARIS_MODEL_TIER` (unset → undetermined → medium with REQ-ORCH-023's header). Decision 5: the intent
- * mapping may be overridden by `<config>/intent-tools.yaml`; playbook overrides live in `<config>/playbooks/`
- * and `<workspace>/.rotaris/playbooks/`. Every read is a fresh read (REQ-CONFIG-014, REQ-ORCH-026's reload).
+ * The run-host root's pre-flight (REQ-ORCH-005): classify, grant, resolve the playbooks, clamp. The three
+ * model slots come from the configuration resolved for the run (ADR-0036: `small_model`, `fallback_model`,
+ * `default_summary_model`; none reachable → no request, the fallback intent with the stated reason).
+ * `ROTARIS_MODEL_TIER` stays an environment stopgap until ADR-0028 (unset → undetermined → medium with
+ * REQ-ORCH-023's header). Decision 5: the intent mapping may be overridden by `<config>/intent-tools.yaml`;
+ * playbook overrides live in `<config>/playbooks/` and `<workspace>/.rotaris/playbooks/`. Every read is a
+ * fresh read (REQ-CONFIG-014, REQ-ORCH-026's reload).
  */
 export const INTENT_ENV_KEYS = {
-  smallModel: 'ROTARIS_SMALL_MODEL_ID',
-  fallbackModel: 'ROTARIS_FALLBACK_MODEL_ID',
-  summaryModel: 'ROTARIS_SUMMARY_MODEL_ID',
   modelTier: 'ROTARIS_MODEL_TIER',
 } as const;
 
@@ -30,14 +27,10 @@ export interface PreflightDeps {
   readonly modelTimeoutMs: number;
   readonly globalDir: string;
   readonly env: Readonly<Record<string, string | undefined>>;
+  readonly slots: ClassifierSlots;
   readonly runOverride: 'single' | 'swarm' | null;
   readonly memory: RungMemory;
   readonly log: (m: string) => void;
-}
-
-export function slotsFromEnv(env: Readonly<Record<string, string | undefined>>, runModel: ModelRef): ClassifierSlots {
-  const ref = (key: string): ModelRef | null => { const id = (env[key] ?? '').trim(); return id === '' ? null : { ...runModel, modelId: id }; };
-  return { small: ref(INTENT_ENV_KEYS.smallModel), fallback: ref(INTENT_ENV_KEYS.fallbackModel), summary: ref(INTENT_ENV_KEYS.summaryModel) };
 }
 
 export function tierFromEnv(env: Readonly<Record<string, string | undefined>>, warn: (m: string) => void): ModelTier | null {
@@ -53,7 +46,7 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
   const warn = (m: string) => { warnings.push(m); ctx.warn(m); };
   const freshIntent = await classifyIntent(
     { prompt: ctx.prompt, metadata: { entrypoint: 'desktop', workspace_hash: String(ctx.workspaceRoot.length) } },
-    slotsFromEnv(deps.env, deps.runModel),
+    deps.slots,
     { backend: deps.backend, timers: deps.clocks.timers, resolveCredential: deps.resolveCredential, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
     ctx.signal,
   );

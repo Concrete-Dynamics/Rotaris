@@ -121,10 +121,10 @@ export class AiSdkModelClient implements ModelClient {
       return base(input, { ...init, headers });
     };
     if (req.model.dialect === 'responses') {
-      const openai = createOpenAI({ baseURL: this.opts.baseUrl, apiKey: 'resolved-per-request', fetch: decorated });
+      const openai = createOpenAI({ baseURL: req.model.baseUrl ?? this.opts.baseUrl, apiKey: 'resolved-per-request', fetch: decorated });
       return openai.responses(req.model.modelId);
     }
-    const provider = createOpenAICompatible({ name: req.model.providerId, baseURL: this.opts.baseUrl, includeUsage: true, fetch: decorated });
+    const provider = createOpenAICompatible({ name: req.model.providerId, baseURL: req.model.baseUrl ?? this.opts.baseUrl, includeUsage: true, fetch: decorated });
     return provider.chatModel(req.model.modelId);
   }
 

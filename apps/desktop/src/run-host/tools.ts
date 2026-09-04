@@ -1,12 +1,13 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
-import { resolvePreset, type ApprovalPayload, type HeadlessPolicy, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
+import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   buildPolicy, directWorkBundle, effectiveMode, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, type ModeChange, type PortToolCall, type PortToolResult, type RoleName, type RuntimePosture, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import type { RuntimeFromConfiguration } from './configuration.js';
 import { backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -14,75 +15,10 @@ import { z } from 'zod';
  * The run-host root's side of the tool surface: it builds the ONE gate per session from agent-tools,
  * fills the engine's `ToolPort` with it, and fills the gate's `GateSink` with the session writer — so
  * the engine never imports agent-tools and agent-tools never imports the engine (ADR-0002's boundaries
- * stay structural). Decision 1 of the plan: the runtime keys are read from the environment here until
- * the configuration loader (ADR-0036) owns them; decision 2: the entry persona holds the direct-work
- * bundle until Part B brings `delegate` and the coordinator role.
+ * stay structural). The runtime keys and the personas come from the configuration resolved at run start
+ * (ADR-0036/0037, `configuration.ts`), per workspace; the entry role's direct-work bundle is the
+ * pre-flight's grant or a `single` strategy (REQ-ORCH-025).
  */
-export const RUNTIME_ENV_KEYS = {
-  permissionMode: 'ROTARIS_PERMISSION_MODE',
-  approvalTimeoutS: 'ROTARIS_APPROVAL_TIMEOUT_S',
-  headlessApprovalPolicy: 'ROTARIS_HEADLESS_APPROVAL_POLICY',
-  allowOutsideWorkspace: 'ROTARIS_ALLOW_OUTSIDE_WORKSPACE',
-  sessionLogLevel: 'ROTARIS_SESSION_LOG_LEVEL',
-  shellCommandTimeoutS: 'ROTARIS_SHELL_COMMAND_TIMEOUT_S',
-  /** REQ-ORCH-025: `single` | `swarm` | unset (decision 2 of the plan). */
-  runOverride: 'ROTARIS_RUN_OVERRIDE',
-  /** REQ-ORCH-050: a per-model cap the user set; unset = uncapped. */
-  modelConcurrencyCap: 'ROTARIS_MODEL_CONCURRENCY_CAP',
-} as const;
-
-export interface RuntimeFromEnv extends RuntimePosture {
-  readonly approvalTimeoutMs: number;
-  readonly headlessPolicy: HeadlessPolicy;
-  readonly allowOutsideWorkspace: boolean;
-  /** REQ-CONFIG-116: `runtime.shell_command_timeout`, seconds, default 100. */
-  readonly shellCommandTimeoutS: number;
-  readonly runOverride: 'single' | 'swarm' | null;
-  readonly warnings: string[];
-}
-
-/** REQ-TOOLS-046/055/065/130 defaults; ADR-0022: no sandbox backend exists on this platform. */
-export function runtimeFromEnv(env: NodeJS.ProcessEnv = process.env): RuntimeFromEnv {
-  const warnings: string[] = [];
-  const mode = resolvePreset(env[RUNTIME_ENV_KEYS.permissionMode]);
-  if (mode.warned) warnings.push(`unrecognised permission mode '${env[RUNTIME_ENV_KEYS.permissionMode]}'; using the strictest preset (restricted) (REQ-TOOLS-046)`);
-  const timeoutRaw = env[RUNTIME_ENV_KEYS.approvalTimeoutS];
-  let approvalTimeoutMs = 300_000;
-  if (timeoutRaw !== undefined && timeoutRaw.trim() !== '') {
-    const n = Number(timeoutRaw);
-    if (!Number.isFinite(n) || n < 0) warnings.push(`runtime.approval_timeout_seconds must be a number of at least 0; '${timeoutRaw}' was rejected and the default 300 stands (REQ-TOOLS-055)`);
-    else approvalTimeoutMs = Math.round(n * 1000);
-  }
-  const headlessRaw = (env[RUNTIME_ENV_KEYS.headlessApprovalPolicy] ?? 'deny').trim().toLowerCase();
-  const headlessPolicy: HeadlessPolicy = headlessRaw === 'abort' ? 'abort' : 'deny';
-  if (headlessRaw !== 'deny' && headlessRaw !== 'abort') warnings.push(`unrecognised headless approval policy '${headlessRaw}'; behaving as deny (REQ-TOOLS-065)`);
-  const allowOutsideWorkspace = /^(1|true|yes)$/i.test(env[RUNTIME_ENV_KEYS.allowOutsideWorkspace] ?? '');
-  const level = parseLogLevel(env[RUNTIME_ENV_KEYS.sessionLogLevel]);
-  if (level.warning) warnings.push(level.warning);
-  let shellCommandTimeoutS = 100;
-  const shellRaw = env[RUNTIME_ENV_KEYS.shellCommandTimeoutS];
-  if (shellRaw !== undefined && shellRaw.trim() !== '') {
-    const n = Number(shellRaw);
-    if (!Number.isFinite(n) || n <= 0) warnings.push(`runtime.shell_command_timeout must be a positive number of seconds; '${shellRaw}' was rejected and the default 100 stands (REQ-CONFIG-116)`);
-    else shellCommandTimeoutS = n;
-  }
-  const overrideRaw = (env[RUNTIME_ENV_KEYS.runOverride] ?? '').trim().toLowerCase();
-  const runOverride = overrideRaw === 'single' ? 'single' : overrideRaw === 'swarm' ? 'swarm' : null;
-  if (overrideRaw !== '' && runOverride === null) warnings.push(`unrecognised run override '${overrideRaw}'; ignored (REQ-ORCH-025)`);
-  const capRaw = env[RUNTIME_ENV_KEYS.modelConcurrencyCap];
-  let modelConcurrencyCap: number | null = null;
-  if (capRaw !== undefined && capRaw.trim() !== '') {
-    const n = Number(capRaw);
-    if (!Number.isInteger(n) || n < 1) warnings.push(`the per-model concurrency cap must be a positive integer; '${capRaw}' was rejected and models are uncapped (REQ-ORCH-050)`);
-    else modelConcurrencyCap = n;
-  }
-  return {
-    permissionMode: mode.preset, allowUnsandboxedAutonomous: false,
-    sandbox: { requested: false, available: false, backend: '' },
-    sessionLogLevel: level.level, approvalTimeoutMs, headlessPolicy, allowOutsideWorkspace, shellCommandTimeoutS, runOverride, modelConcurrencyCap, warnings,
-  };
-}
-
 /** REQ-SESSION-142: the session's log file, appended line by line; the directory is made on first write. */
 export function fileAppender(file: string): (line: string) => void {
   let made = false;
@@ -120,7 +56,10 @@ export class RunHostPresenter implements PresenterPort {
 
 export interface ToolPortDeps {
   readonly clocks: Clocks;
-  readonly runtime: RuntimeFromEnv;
+  /** The runtime resolved for the workspace's current run (ADR-0037 Tier B). */
+  readonly runtime: (workspaceRoot: string) => RuntimeFromConfiguration;
+  /** ADR-0036: the configured personas over the built-in table, per workspace; null means the built-in table. */
+  readonly personas: (workspaceRoot: string) => PersonaResolver | null;
   readonly presenter: PresenterPort;
   readonly nextSequence: () => number;
   /** Shared per workspace root: the read record and the undo stacks (REQ-TOOLS-137). */
@@ -152,8 +91,9 @@ function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, wa
 }
 
 /** The executors this build registers (decision 3 of the plan); the registry removes any other declared name (REQ-TOOLS-004). */
-function executorsFor(root: string, deps: ToolPortDeps, todo: TodoList): Map<string, ToolExecutor> {
-  const fence = { workspaceRoot: root, allowOutsideWorkspace: deps.runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [] as string[] };
+function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todo: TodoList): Map<string, ToolExecutor> {
+  // REQ-CONFIG-468: the additional read-only roots reach the fence; the file-tool state is per workspace root and keeps the first fence it saw.
+  const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots] };
   let state = deps.fileStates.get(root);
   if (!state) { state = new FileToolState(fence); deps.fileStates.set(root, state); }
   const list: ToolExecutor[] = [
@@ -161,19 +101,21 @@ function executorsFor(root: string, deps: ToolPortDeps, todo: TodoList): Map<str
     haetEditTool(state, 'haet_edit') as ToolExecutor, haetEditTool(state, 'haet') as ToolExecutor,
     grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, todoTool(todo) as ToolExecutor,
   ];
-  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: deps.runtime.shellCommandTimeoutS }) as ToolExecutor);
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
 }
 
 export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPort {
   const root = realPathOf(ctx.workspaceRoot);
+  const runtime = deps.runtime(ctx.workspaceRoot);
   const todo = new TodoList();
-  const executors = executorsFor(root, deps, todo);
-  // Decision 2: the persona from the engine's built-in table until ADR-0036 loads agents.yaml.
-  const persona = BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
-  const isEntry = ctx.persona === 'orchestrator';
+  const executors = executorsFor(root, deps, runtime, todo);
+  // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
+  const resolver = deps.personas(ctx.workspaceRoot);
+  const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
+  const isEntry = ctx.parentId === undefined || ctx.parentId === 'root';
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
-  const single = deps.runtime.runOverride === 'single';
+  const single = runtime.runOverride === 'single';
   // REQ-ORCH-016/018: the pre-flight's grant reaches the entry role only; the bundle is resolved by facet against the registry.
   const directWork = isEntry && (single || ctx.grant === 'direct-work');
   const declared = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
@@ -198,7 +140,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const approvals = new PendingApprovals(deps.clocks.timers);
   const gate = new Gate({
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter,
-    headlessPolicy: deps.runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: deps.runtime.approvalTimeoutMs,
+    headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
     sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
@@ -222,7 +164,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       const previous = mode;
       const wanted = resolvePreset(requested).preset;
       // REQ-TOOLS-073: re-resolved through the downgrade for this run's context.
-      const e = effectiveMode({ requested: wanted, attended: ctx.attended(), sandboxed: false, allowUnsandboxedAutonomous: deps.runtime.allowUnsandboxedAutonomous });
+      const e = effectiveMode({ requested: wanted, attended: ctx.attended(), sandboxed: false, allowUnsandboxedAutonomous: runtime.allowUnsandboxedAutonomous });
       mode = e.effective;
       policy.replace(buildPolicy({ preset: mode, workspaceRoot: root }));
       return { requested: wanted, effective: mode, downgraded: e.downgraded, reason: e.reason, previous };

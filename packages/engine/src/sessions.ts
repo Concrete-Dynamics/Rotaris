@@ -21,6 +21,7 @@ import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import type { TodoDocument } from './run/todo.js';
+import type { PersonaResolver } from './children/personas.js';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -71,6 +72,8 @@ export interface RuntimePosture {
   readonly sessionLogLevel: LogLevel;
   /** REQ-ORCH-050 / REQ-MONITOR-021: a per-model cap the user set; null = uncapped. */
   readonly modelConcurrencyCap?: number | null;
+  /** REQ-CONFIG-094: the cap per `models:` entry, by key; wins over the flat cap when present. */
+  readonly modelCapFor?: ((modelKey: string) => number | null) | undefined;
   /** REQ-ORCH-046's three limits; REQ-ORCH-024's `normal` cell clamps them until playbooks are built. */
   readonly childBudget?: Budget;
   readonly drainTimeoutMs?: number;
@@ -108,6 +111,21 @@ export interface SessionsDeps {
   /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
   readonly supervisor?: ((workspaceRoot: string) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
   readonly isProcessAlive?: ((pid: number) => boolean) | undefined;
+  /**
+   * ADR-0036/0037: the run's configuration, resolved at run start from the files with the live state on top
+   * (Tier B). Present, it supplies the model and the runtime for that run; absent, `model` and `runtime` stand.
+   */
+  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean }) => Result<RunSetup, { readonly reason: string }>) | undefined;
+}
+
+/** What a run starts with once configuration resolves it. */
+export interface RunSetup {
+  readonly model: ModelSetup;
+  readonly runtime: RuntimePosture;
+  readonly retentionCap?: number | undefined;
+  readonly personas?: PersonaResolver | undefined;
+  /** Warnings the load produced (REQ-CONFIG-233's warn-and-continue and the referential list while attended). */
+  readonly warnings?: readonly string[] | undefined;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -348,25 +366,23 @@ export class Sessions {
 
   /** REQ-CHAT-011 with no session: create it, record the prompt as row 0, start the run. */
   start(dal: StoreDal, workspaceRoot: string, prompt: string): Result<SessionId, StartRefusal | { code: string; reason: string }> {
-    const model = this.deps.model;
-    if (!model) {
-      // REQ-EVENTS-021: refused before it starts; no session.start, no session, exactly one result of status error.
-      const summary = 'No model is configured, so the run was refused before it started.';
-      return err({ code: 'no-model', reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
-    }
-    const sessionId = asSessionId(this.deps.mintSessionId());
     const attendedNow = this.deps.attended?.() ?? false;
-    const permission = postureAtStart(this.deps.runtime, attendedNow);
+    const setup = this.setupFor(workspaceRoot, attendedNow);
+    if (!setup.ok) return err(setup.error);
+    const { model, runtime } = setup.value;
+    const sessionId = asSessionId(this.deps.mintSessionId());
+    const permission = postureAtStart(runtime, attendedNow);
     // REQ-SESSION-142: the session's log, opened before anything else the run says; closed at run end.
     const appender = this.deps.sessionLogAppender?.(dal, sessionId);
-    const log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: this.deps.runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
+    const log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
     const warn = (m: string) => { log?.warn(m); this.deps.warn(m); };
+    for (const w of setup.value.warnings ?? []) warn(w);
     // session.start and row 0 commit before the run exists; their wire lines are held and replayed into the
     // run's forward queue so a consumer attached ahead of the start sees them too (REQ-EVENTS-069, REQ-SESSION-147).
     const entry: { owner?: ProjectionOwner; run?: Run; held: Committed[] } = { held: [] };
     const created = SessionWriter.create(
       {
-        dal, sessionId, wall: this.deps.clocks.wall, retentionCap: this.deps.retentionCap, warn,
+        dal, sessionId, wall: this.deps.clocks.wall, retentionCap: setup.value.retentionCap ?? this.deps.retentionCap, warn,
         onCommitted: (c) => { entry.owner?.onCommitted(c); if (entry.run) entry.run.onCommitted(c); else entry.held.push(c); },
       },
       {
@@ -412,11 +428,13 @@ export class Sessions {
     const stale = settleStaleChildren(dal, writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first iteration (REQ-ORCH-053)`);
     // REQ-ORCH-024: the configured policy; the run clamps it by the pre-flight's BUDGET cell (the `normal` cell stood in until playbooks existed).
-    const budget = this.deps.runtime?.childBudget ?? DEFAULT_BUDGET;
-    const cap = this.deps.runtime?.modelConcurrencyCap ?? null;
+    const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
+    const cap = runtime?.modelConcurrencyCap ?? null;
+    const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
     const run = new Run({
       sessionId, workspaceRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
+      ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
       readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
@@ -424,10 +442,10 @@ export class Sessions {
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
-        dal, budget, modelCap: () => cap,
+        dal, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.config.model, thinking: model.config.thinking, timers: this.deps.clocks.timers, resolveCredential: model.config.resolveCredential },
       } : {}),
-      ...(this.deps.runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: this.deps.runtime.drainTimeoutMs as Millis }),
+      ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
     });
     runRef.run = run;
     for (const c of entry.held.splice(0)) run.onCommitted(c);
@@ -443,9 +461,10 @@ export class Sessions {
 
   /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
   prompt(sessionId: SessionId, prompt: string): Result<TranscriptRow, { code: string; reason: string }> {
-    if (!this.deps.model) return err({ code: 'no-model', reason: 'No model is configured, so the run was refused before it started.' });
     let s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const setup = this.setupFor(s.dal.getSession(sessionId)?.workspace_root ?? '', this.deps.attended?.() ?? false);
+    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
@@ -460,21 +479,34 @@ export class Sessions {
     const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value);
     const row = s.writer.appendRow('user', prompt, true);
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
-    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId));
+    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value);
     return ok(row.value);
   }
 
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null): void {
-    const model = this.deps.model!;
+  /** The run's setup: the root's `configure` (files + live state, ADR-0037 Tier B) or the process-wide model and runtime. */
+  private setupFor(workspaceRoot: string, attended: boolean): Result<RunSetup, StartRefusal> {
+    const refused = (code: string, summary: string): StartRefusal => ({ code, reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
+    if (this.deps.configure) {
+      const r = this.deps.configure(workspaceRoot, { attended });
+      // REQ-EVENTS-021 / REQ-CONFIG-478: refused before it starts, carrying the report.
+      return r.ok ? ok(r.value) : err(refused('configuration', r.error.reason));
+    }
+    if (!this.deps.model) return err(refused('no-model', 'No model is configured, so the run was refused before it started.'));
+    return ok({ model: this.deps.model, ...(this.deps.runtime ? { runtime: this.deps.runtime } : { runtime: { permissionMode: '', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } }) });
+  }
+
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup): void {
+    const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const workspaceRoot = s.dal.getSession(sessionId)!.workspace_root;
-    const permission = postureAtStart(this.deps.runtime, this.deps.attended?.() ?? false);
+    const permission = postureAtStart(runtime, this.deps.attended?.() ?? false);
     // REQ-SESSION-142: one log per run — the one `resume` opened closes when the first continuation ends, so
     // every continuation opens its own rather than writing into a closed one.
     s.log?.close();
     const appender = this.deps.sessionLogAppender?.(s.dal, sessionId);
-    s.log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: this.deps.runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
+    s.log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
     const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    for (const w of setupIn.warnings ?? []) warn(w);
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(s.dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
     const runRef: { run?: Run } = {};
     let hooks: HookPort | null = null;
@@ -488,11 +520,13 @@ export class Sessions {
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot) ?? null;
     const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers) : null;
-    const budget = this.deps.runtime?.childBudget ?? DEFAULT_BUDGET;
-    const cap = this.deps.runtime?.modelConcurrencyCap ?? null;
+    const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
+    const cap = runtime?.modelConcurrencyCap ?? null;
+    const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
     const run = new Run({
       sessionId, workspaceRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
+      ...(setupIn.personas ? { personas: setupIn.personas } : {}),
       writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}),
@@ -501,10 +535,10 @@ export class Sessions {
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
-        dal: s.dal, budget, modelCap: () => cap,
+        dal: s.dal, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.config.model, thinking: model.config.thinking, timers: this.deps.clocks.timers, resolveCredential: model.config.resolveCredential },
       } : {}),
-      ...(this.deps.runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: this.deps.runtime.drainTimeoutMs as Millis }),
+      ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
     });
     runRef.run = run;
     s.commitTarget!.run = run;

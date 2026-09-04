@@ -1,4 +1,5 @@
 import { BUILT_IN_ROLE_NAMES, ROLE_SPAWN_ALIASES, type BuiltInRoleName } from '@rotaris/contracts';
+import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 /**
  * Decision 2 of the plan: REQ-ORCH-028's thirteen roles and the two aliases as a BUILT-IN table, each
  * with a tool declaration and a short system prompt of our own authorship, until ADR-0036 loads
@@ -13,6 +14,15 @@ export interface Persona {
   readonly systemPrompt: string;
   /** REQ-ORCH-028: a role whose tools write workspace files holds implementation delegations. */
   readonly implementer: boolean;
+  /** REQ-CONFIG-098: the role's own model once configuration resolves it; absent means the run's model. */
+  readonly modelRef?: ModelRef | undefined;
+  readonly thinking?: ThinkingLevel | undefined;
+}
+
+/** ADR-0036: the configured `personas:` overlaid on the built-in table, resolved per run by the root. */
+export interface PersonaResolver {
+  readonly resolve: (name: string) => { readonly persona: Persona; readonly alias: string | null } | null;
+  readonly knownRoles: () => readonly string[];
 }
 
 const READ_TOOLS = ['read_file', 'haet_read', 'grep', 'glob'];

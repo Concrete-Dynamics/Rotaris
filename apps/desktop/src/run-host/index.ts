@@ -2,14 +2,15 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSc
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
-import { CATALOGUE, RefusalLease, RUN_CONFIG_DEFAULTS, RungMemory, Sessions, SUPERVISOR_DEFAULTS, type ModelSetup } from '@rotaris/engine';
+import { CATALOGUE, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
-import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, terminalManagerFromHost } from './tools.js';
+import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
-import { loadConfiguration } from '@rotaris/config';
-import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
+import { RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
+import { classifierSlotsOf, configureRun, modelRefOf, type ConfiguredRun } from './configuration.js';
+import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 
@@ -27,12 +28,11 @@ import { dirname, join } from 'node:path';
  * itself, so a workspace service that died releases the workspace by doing
  * nothing.
  *
- * WHERE THE MODEL COMES FROM — a stopgap at this composition root, recorded
- * in docs/architecture/codebase.md: no configuration loader (ADR-0036) and no
- * credential store (ADR-0029) exist yet, so the model is read from the
- * environment. `ROTARIS_MODEL_DIALECT=scripted` selects a built-in scripted
- * client (verification only). With nothing set, a run is refused before it
- * starts (REQ-EVENTS-021). This is not a settings surface.
+ * WHERE THE MODEL AND THE RUNTIME COME FROM — the configuration files, loaded
+ * per run start with the live state on top (ADR-0036/0037, `configuration.ts`).
+ * `ROTARIS_MODEL_DIALECT=scripted` selects a built-in scripted client for every
+ * model (verification only). A fatal file or an unreachable entry model refuses
+ * the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478).
  */
 const port = process.parentPort;
 const clocks = nodeClocks();
@@ -144,29 +144,6 @@ function scriptedClient(c: Clocks): ModelClient {
   };
 }
 
-function modelFromEnv(): ModelSetup | null {
-  const dialect = process.env['ROTARIS_MODEL_DIALECT'];
-  if (dialect === 'scripted') {
-    log('model: the scripted client (ROTARIS_MODEL_DIALECT=scripted) — verification only');
-    return { backend: new DefaultAgentBackend(scriptedClient(clocks)), config: { ...RUN_CONFIG_DEFAULTS, model: { providerId: 'scripted', modelId: 'scripted', dialect: 'chat' }, resolveCredential: async () => '' } };
-  }
-  const baseUrl = process.env['ROTARIS_MODEL_BASE_URL'];
-  const modelId = process.env['ROTARIS_MODEL_ID'];
-  const keyEnv = process.env['ROTARIS_MODEL_API_KEY_ENV'];
-  if (!baseUrl || !modelId) {
-    log('model: none configured (ROTARIS_MODEL_BASE_URL / ROTARIS_MODEL_ID unset); every run is refused before it starts (REQ-EVENTS-021)', 'warn');
-    return null;
-  }
-  // The key is read from the variable NAMED by ROTARIS_MODEL_API_KEY_ENV, inside the request path, per request.
-  const resolveCredential = async () => (keyEnv ? process.env[keyEnv] ?? '' : '');
-  const client = new AiSdkModelClient({ baseUrl, onRequest: (i) => log(`model request ${i.method} ${i.url}`) });
-  log(`model: ${modelId} at ${baseUrl} (${dialect === 'responses' ? 'responses' : 'chat'}; key from ${keyEnv ?? '(none)'})`);
-  return {
-    backend: new DefaultAgentBackend(client),
-    config: { ...RUN_CONFIG_DEFAULTS, model: { providerId: 'env', modelId, dialect: dialect === 'responses' ? 'responses' : 'chat' }, resolveCredential },
-  };
-}
-
 /**
  * ADR-0019: attendedness is a boolean THIS process maintains — true while main holds a live presenter
  * registration and the liveness poll has not lapsed. A lapse cancels every waiting approval (they
@@ -185,13 +162,10 @@ const presenter = new RunHostPresenter({
   close: (requestId) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'approval.close', requestId } }),
   clocks, shownBoundMs: 10_000,
 });
-const runtime = runtimeFromEnv();
-for (const w of runtime.warnings) log(w, 'warn');
-log(`runtime (env stopgap): permission_mode=${runtime.permissionMode} approval_timeout=${runtime.approvalTimeoutMs / 1000}s headless=${runtime.headlessPolicy} allow_outside_workspace=${runtime.allowOutsideWorkspace} sandbox=off (no backend on this platform, ADR-0022)`);
 const fileStates = new Map<string, FileToolState>();
 let approvalSequence = 0;
 // ADR-0020 / REQ-TOOLS-104: the terminal backend is decided once, by presence; the sessions live for the application.
-const terminalReady: Promise<TerminalManager | null> = terminalManagerFromHost(clocks, (m) => log(m, 'warn'), runtime.shellCommandTimeoutS)
+const terminalReady: Promise<TerminalManager | null> = terminalManagerFromHost(clocks, (m) => log(m, 'warn'), RUNTIME_DEFAULTS.shell_command_timeout)
   .then((t) => { log(t ? `terminal: PowerShell backend present (single-session)` : 'terminal: no shell found on PATH; the tool is removed from every persona (REQ-TOOLS-104)', t ? 'info' : 'warn'); return t; })
   .catch((e) => { log(`terminal: the PTY could not be loaded: ${String(e)}; the tool is removed`, 'warn'); return null; });
 let terminal: TerminalManager | null = null;
@@ -202,29 +176,43 @@ const hostEnv: Record<string, string> = Object.fromEntries(Object.entries(proces
 const configDir = resolveUserDirs().config;
 // REQ-ORCH-010: a rung a model rejected is remembered for the session — this process's lifetime.
 const rungMemory = new RungMemory();
-const modelSetup = modelFromEnv();
-const circuitBreakerFor = (workspaceRoot: string) => {
-  const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
-  if (!loaded.ok) {
-    log(`configuration: ${loaded.error.lines.join('; ')}`, 'warn');
-    return null;
-  }
-  const cb = loaded.value.circuitBreaker;
-  return { enabled: cb.enabled && process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off', model: cb.model, activationMode: cb.activation_mode, loopClassificationTimeout: loaded.value.runtime.loop_classification_timeout };
+// ADR-0037 Tier B: the settings store's current values, as main last told this process; empty until it does.
+let liveState: LiveState = {};
+// The configuration resolved for each workspace's latest run start; every port of that run reads it.
+const configured = new Map<string, ConfiguredRun>();
+const configure = (workspaceRoot: string, attended: boolean) => {
+  const r = configureRun(workspaceRoot, attended, {
+    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks),
+    onRequest: (i) => log(`model request ${i.method} ${i.url}`), log: (m) => log(m), liveState: () => liveState,
+  });
+  if (r.ok) configured.set(workspaceRoot, r.value);
+  return r;
 };
-// Decision 4: the scripted client classifies itself unless ROTARIS_INTENT_SCRIPT=none; a real model needs the slot ids.
-const intentEnv: Record<string, string | undefined> = process.env['ROTARIS_MODEL_DIALECT'] === 'scripted' && (process.env['ROTARIS_INTENT_SCRIPT'] ?? '') !== 'none'
-  ? { ...process.env, ROTARIS_SMALL_MODEL_ID: process.env['ROTARIS_SMALL_MODEL_ID'] ?? 'scripted' }
-  : { ...process.env };
+/** Only a tool port built outside a run start reaches this; the run path always configures first. */
+const configureRunFallback = () => {
+  throw new Error('a tool port was requested for a workspace no run has configured');
+};
+const configuredFor = (workspaceRoot: string): ConfiguredRun | null => {
+  const known = configured.get(workspaceRoot);
+  if (known) return known;
+  const r = configure(workspaceRoot, presenters.attended);
+  if (!r.ok) log(r.error.reason, 'warn');
+  return r.ok ? r.value : null;
+};
 const sessions = new Sessions({
   clocks,
   pid: process.pid,
   host,
-  // REQ-CONFIG-473's default until the configuration loader (ADR-0036) supplies the key.
-  retentionCap: 20_000,
+  // REQ-CONFIG-473: the loaded `event_retention_per_session` per run; this is the shipped default behind it.
+  retentionCap: RUNTIME_DEFAULTS.event_retention_per_session,
   warn: (m) => log(m, 'warn'),
   mintSessionId: () => randomUUID(),
-  model: modelSetup,
+  model: null,
+  // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
+  configure: (workspaceRoot, ctx) => {
+    const r = configure(workspaceRoot, ctx.attended);
+    return r.ok ? r : { ok: false as const, error: { reason: r.error.reason } };
+  },
   isProcessAlive: (pid) => probePid(pid) === 'alive',
   sessionFilesDir: (dal, sid) => join(dirname(dal.db.name), 'sessions', sid),
   publisher: {
@@ -232,31 +220,45 @@ const sessions = new Sessions({
     snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
   },
   onRunResult: (sessionId, result) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }),
-  tools: (ctx) => createToolPort(ctx, { clocks, runtime, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal }),
+  tools: (ctx) => createToolPort(ctx, {
+    clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal,
+    runtime: (workspaceRoot) => configuredFor(workspaceRoot)?.runtime ?? configureRunFallback(),
+    personas: (workspaceRoot) => configuredFor(workspaceRoot)?.personas ?? null,
+  }),
   backgroundSessions: () => terminal?.runningBackground ?? 0,
   attended: () => presenters.attended,
-  runtime,
   sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
   // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
   hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
   supervisor: (workspaceRoot) => {
-    const loaded = circuitBreakerFor(workspaceRoot);
-    if (!loaded?.enabled || !modelSetup) return null;
+    const run = configuredFor(workspaceRoot);
+    if (!run) return null;
+    const cb = run.cfg.circuitBreaker;
+    if (!cb.enabled || process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off') return null;
+    const timeoutMs = Math.round(run.runtime.loopClassificationTimeoutS * 1_000);
     const classifier = createLoopClassifier({
-      backend: modelSetup.backend, runModel: modelSetup.config.model, thinking: modelSetup.config.thinking,
-      resolveCredential: modelSetup.config.resolveCredential, memory: rungMemory, configuredModel: loaded.model,
-      modelTimeoutMs: Math.round(loaded.loopClassificationTimeout * 1_000), env: process.env,
+      backend: run.model.backend, runModel: run.model.config.model, thinking: run.model.config.thinking, resolveCredential: run.model.config.resolveCredential,
+      memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted), modelTimeoutMs: timeoutMs,
     });
-    return classifier ? { config: { ...SUPERVISOR_DEFAULTS, activationMode: loaded.activationMode, classificationTimeoutMs: Math.round(loaded.loopClassificationTimeout * 1_000) }, classifier } : null;
+    return classifier ? {
+      config: {
+        ...SUPERVISOR_DEFAULTS, activationMode: cb.activation_mode, classificationTimeoutMs: timeoutMs,
+        toolThreshold: cb.tool_call_threshold, messageThreshold: cb.message_count_threshold, toolWeight: cb.tool_weight, messageWeight: cb.message_weight, targetScore: cb.target_score,
+        eventWindow: cb.max_recent_events, excerptCap: cb.max_transcript_chars, repetitionThreshold: cb.repetition_threshold, cycleThreshold: cb.cycle_threshold,
+      },
+      classifier,
+    } : null;
   },
-  // REQ-ORCH-005: the pre-flight before the coordinator exists; the classifier's slots and the tier come from the environment (decision 4).
-  ...(modelSetup ? {
-    preflight: (ctx) => runPreflight(ctx, {
-      clocks, backend: modelSetup.backend, runModel: modelSetup.config.model, resolveCredential: modelSetup.config.resolveCredential, modelTimeoutMs: modelSetup.config.modelTimeoutMs,
-      globalDir: configDir, env: intentEnv, runOverride: runtime.runOverride, memory: rungMemory, log: (m) => log(m),
-    }),
-  } : {}),
+  // REQ-ORCH-005: the pre-flight before the coordinator exists; the slots and the strategy from the run's configuration, the tier from the environment (ADR-0028's).
+  preflight: (ctx) => {
+    const run = configuredFor(ctx.workspaceRoot);
+    if (!run) throw new Error('the run has no configuration');
+    return runPreflight(ctx, {
+      clocks, backend: run.model.backend, runModel: run.model.config.model, resolveCredential: run.model.config.resolveCredential, modelTimeoutMs: run.model.config.modelTimeoutMs,
+      globalDir: configDir, env: process.env, slots: classifierSlotsOf(run.cfg, run.scripted), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
+    });
+  },
 });
 presenters.start();
 
@@ -301,7 +303,13 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     case 'circuit_breaker.status': {
       const s = stores.get(req.workspaceId);
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
-      return { kind: 'circuit_breaker.status', enabled: circuitBreakerFor(s.root)?.enabled ?? false };
+      const run = configuredFor(s.root);
+      return { kind: 'circuit_breaker.status', enabled: (run?.cfg.circuitBreaker.enabled ?? false) && process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
+    }
+    case 'config.liveState': {
+      // ADR-0037 Tier B: main hands over the settings store's current values; the next run start reads them.
+      liveState = req.state as LiveState;
+      return { kind: 'ack' };
     }
     case 'session.list': {
       const s = stores.get(req.workspaceId);

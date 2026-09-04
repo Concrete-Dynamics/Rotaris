@@ -19,6 +19,7 @@ import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
+import type { PersonaResolver } from '../children/personas.js';
 
 /**
  * The run loop, in its first conformant slice: one root agent, one model
@@ -119,6 +120,8 @@ export interface RunDeps {
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
   readonly resumeTodo?: TodoDocument | undefined;
   readonly continuation?: boolean | undefined;
+  /** ADR-0036: the configured personas over the built-in table. */
+  readonly personas?: PersonaResolver | undefined;
 }
 
 /** REQ-SESSION-095 / REQ-EVENTS-026: the one terminal result, computed once and used everywhere. */
@@ -369,6 +372,7 @@ export class Run {
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
+        ...(this.deps.personas ? { personas: this.deps.personas } : {}),
       }, iteration)
       : null;
     this.children = children;

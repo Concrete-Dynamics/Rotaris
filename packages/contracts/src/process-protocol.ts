@@ -52,6 +52,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-CHAT-011 / REQ-SESSION-089: create the session, take its lock, open its history, record row 0. */
   z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().min(1) }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
+  /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
+  z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),

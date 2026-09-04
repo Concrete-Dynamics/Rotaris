@@ -3,7 +3,7 @@ import { isTerminalChildState, type ChildState, type SettlingPath } from '@rotar
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import { canonicaliseName, mintTaskId, uniqueUnderParent } from './naming.js';
-import { knownRolesMessage, resolveRole, type Persona } from './personas.js';
+import { knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 
 /**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
@@ -51,7 +51,7 @@ export interface Spawned {
 }
 
 export class ChildLedger {
-  constructor(private readonly deps: { readonly dal: StoreDal; readonly writer: SessionWriter; readonly sessionId: SessionId; readonly iteration: number; readonly budget: Budget; readonly modelCap: (modelKey: string) => number | null; readonly warn: (m: string) => void }) {}
+  constructor(private readonly deps: { readonly dal: StoreDal; readonly writer: SessionWriter; readonly sessionId: SessionId; readonly iteration: number; readonly budget: Budget; readonly modelCap: (modelKey: string) => number | null; readonly warn: (m: string) => void; readonly personas?: PersonaResolver | undefined }) {}
 
   get sessionId(): SessionId {
     return this.deps.sessionId;
@@ -97,8 +97,8 @@ export class ChildLedger {
    * REQ-ORCH-034 aliases; REQ-ORCH-044/045 naming; the initial state per REQ-ORCH-040 and REQ-ORCH-050.
    */
   spawn(input: SpawnInput): { ok: true; value: Spawned } | { ok: false; error: SpawnRejection } {
-    const role = resolveRole(input.persona);
-    if (!role) return { ok: false, error: { reason: `Unknown persona '${input.persona}'. ${knownRolesMessage()}` } };
+    const role = this.deps.personas ? this.deps.personas.resolve(input.persona) : resolveRole(input.persona);
+    if (!role) return { ok: false, error: { reason: `Unknown persona '${input.persona}'. ${this.deps.personas ? `Known personas: ${this.deps.personas.knownRoles().join(', ')}.` : knownRolesMessage()}` } };
     const all = this.all();
     const b = this.deps.budget;
     const depth = input.parentDepth + 1;

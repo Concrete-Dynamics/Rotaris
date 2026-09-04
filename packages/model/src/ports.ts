@@ -26,6 +26,8 @@ export interface ModelRef {
   readonly providerId: string;
   readonly modelId: string;
   readonly dialect: Dialect;
+  /** The entry's own endpoint (REQ-CONFIG-084 `base_url`); absent means the client's base URL. */
+  readonly baseUrl?: string | undefined;
 }
 
 export type ContentPart =

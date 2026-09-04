@@ -17,13 +17,26 @@ export interface ShellState {
   readonly settingsCategory: string | null;
   openSettings(category: string): void;
   takeSettingsCategory(): void;
+  /** REQ-CONFIG-286/287: the unsaved-settings guard; asked before a view switch away from Settings while dirty. */
+  readonly navigationGuard: ((next: ViewId) => Promise<boolean>) | null;
+  setNavigationGuard(guard: ((next: ViewId) => Promise<boolean>) | null): void;
 }
 
-export const useShellState = create<ShellState>((set) => ({
+export const useShellState = create<ShellState>((set, get) => ({
   activeView: STARTUP_VIEW,
   switchView(id) {
     if (!isViewId(id)) return;
+    const state = get();
+    // REQ-CONFIG-287: the guard fires when leaving Settings for a different view; Settings-to-Settings is free.
+    if (state.activeView === 'settings' && id !== 'settings' && state.navigationGuard) {
+      void state.navigationGuard(id).then((proceed) => { if (proceed) set({ activeView: id }); });
+      return;
+    }
     set({ activeView: id });
+  },
+  navigationGuard: null,
+  setNavigationGuard(guard) {
+    set({ navigationGuard: guard });
   },
   settingsCategory: null,
   openSettings(category) {

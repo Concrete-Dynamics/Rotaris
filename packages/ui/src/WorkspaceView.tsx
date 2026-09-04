@@ -144,8 +144,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
             role="radio"
             aria-checked={current === m}
             className={`seg-opt${current === m ? ' is-active' : ''}`}
-            disabled={!enabled}
-            title={enabled ? `Switch the active run to '${m}'; it applies from the next tool call.` : 'Applies to the active run; the run starts in the configured mode.'}
+            title={enabled ? `Switch the active run to '${m}' from the next tool call, and write it as the configured mode.` : `Write '${m}' as the configured permission mode; the next run starts from it (REQ-CONFIG-288).`}
             onClick={() => { if (m === 'autonomous') setConfirming(m); else void apply(m); }}
           >{m}</button>
         ))}

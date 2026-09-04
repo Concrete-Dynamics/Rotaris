@@ -1,3 +1,4 @@
+import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema } from './config.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { PlaybookCatalogueSchema } from './intent.js';
@@ -140,6 +141,10 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.restore.assess'), workspaceRoot: z.string(), artifact: z.string() }),
   z.object({ kind: z.literal('workspace.restore.perform'), workspaceRoot: z.string(), artifact: z.string(), decisions: RestoreDecisionsSchema }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
+  /** ADR-0037 Tier A: the configuration read, the desktop save, the scoped per-field write — each followed by the load again. */
+  z.object({ kind: z.literal('config.read'), workspaceRoot: z.string() }),
+  z.object({ kind: z.literal('config.save'), workspaceRoot: z.string(), save: DesktopSaveSchema }),
+  z.object({ kind: z.literal('config.setField'), workspaceRoot: z.string(), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -174,6 +179,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('circuit_breaker.status'), enabled: z.boolean() }),
   z.object({ kind: z.literal('session.list'), sessions: z.array(SessionListItemSchema) }),
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string(), settledChildren: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */
   z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),

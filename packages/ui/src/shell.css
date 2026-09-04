@@ -250,3 +250,20 @@
 .session-browser__empty, .session-browser__loading { padding: var(--rt-space-5); text-align: center; color: var(--rt-text-tertiary); }
 .session-browser__loading { margin: 0; }
 .visually-hidden { position: absolute; width: var(--rt-hairline-width); height: var(--rt-hairline-width); padding: 0; margin: calc(-1 * var(--rt-hairline-width)); overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Settings — destination 1 (REQ-CONFIG-270, 280, 329, 338, 471). */
+.save-bar { display: flex; align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; padding: var(--rt-space-2, 8px) 0; border-bottom: 1px solid var(--rt-divider); margin-bottom: var(--rt-space-3, 12px); }
+.save-bar__status { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+.save-bar__status.is-dirty { color: var(--rt-text); font-weight: var(--rt-weight-medium, 500); }
+.settings__grid th { text-align: left; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); padding: 6px 8px; border-bottom: 1px solid var(--rt-divider); }
+.settings__grid td { padding: 6px 8px; vertical-align: top; border-bottom: 1px solid var(--rt-divider); }
+.settings__grid .select { width: max-content; max-width: 100%; }
+.settings__origin { font-size: var(--rt-text-2xs, 11px); }
+.settings__scope { font-size: var(--rt-text-xs, 12px); }
+.settings__scope > div { display: flex; align-items: center; gap: 6px; }
+.settings__tools { font-size: var(--rt-text-xs, 12px); max-width: 240px; }
+.settings__number { width: 5.5em; }
+.settings__card { margin: var(--rt-space-2, 8px) 0; display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
+.settings__raw { margin: 0; padding: var(--rt-space-2, 8px); background: var(--rt-bg); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 5px); font-size: var(--rt-text-xs, 12px); user-select: text; white-space: pre-wrap; }
+.settings__fatal, .settings__referential { margin: var(--rt-space-2, 8px) 0; }
+.settings__referential ul { margin: 0; padding-left: var(--rt-space-4, 16px); }

@@ -3,6 +3,7 @@ import { IntentStatusSchema } from './intent.js';
 import { ApprovalPayloadSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
+import { ConfigSnapshotSchema } from './config.js';
 
 /**
  * The five named, typed IPC channels of ADR-0044.
@@ -29,6 +30,7 @@ export const CHANNEL = {
   terminalFrames: 'terminal:frames',
   noticeCurrent: 'notice:current',
   themeChanged: 'theme:changed',
+  configChanged: 'config:changed',
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -156,12 +158,17 @@ export type NoticeCurrent = z.infer<typeof NoticeCurrentSchema>;
 export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['rotaris-dim', 'nocturne', 'high-contrast']) });
 export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
 
+/** ADR-0037: a configuration write happened (a save, a per-field write); every window repopulates from the snapshot. */
+export const ConfigChangedSchema = z.object({ v: schemaVersion, snapshot: ConfigSnapshotSchema });
+export type ConfigChanged = z.infer<typeof ConfigChangedSchema>;
+
 export const CHANNEL_SCHEMAS = {
   [CHANNEL.transcriptIncrement]: TranscriptIncrementSchema,
   [CHANNEL.sessionSnapshot]: SessionSnapshotSchema,
   [CHANNEL.terminalFrames]: TerminalFrameSchema,
   [CHANNEL.noticeCurrent]: NoticeCurrentSchema,
   [CHANNEL.themeChanged]: ThemeChangedSchema,
+  [CHANNEL.configChanged]: ConfigChangedSchema,
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

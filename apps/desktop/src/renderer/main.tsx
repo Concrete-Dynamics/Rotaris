@@ -1,9 +1,9 @@
-import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyTheme, AppShell, ApprovalDialog, HookReviewDialog, motionReduced, SessionBrowser, setStoredMotionPreference, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, pendingFrom, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -74,8 +74,11 @@ async function stopRun(force: boolean): Promise<{ ok: true } | { ok: false; reas
 
 /** REQ-TOOLS-077 / REQ-MONITOR-150: the mode change goes to the focused session; the run decides what actually happened. */
 async function setMode(mode: PermissionPreset): Promise<{ ok: true } | { ok: false; reason: string }> {
+  // REQ-CONFIG-288 / ADR-0037 ESC-1: the composer's control writes ITS key through the scoped per-field path, nothing else; refused loudly when the file cannot be read (REQ-CONFIG-442).
+  const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { permission_mode: mode } } });
+  if (!written.ok) return { ok: false, reason: written.detail ?? written.headline };
   const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No run is active.' };
+  if (!sessionId) return { ok: true };
   const r = await bridge.command({ kind: 'session.control', request: { op: 'setPermissionMode', sessionId, args: { mode } } });
   if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
   return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run did not accept the mode change.' };
@@ -110,9 +113,73 @@ interface AppearanceProps {
   readonly onMotion: (value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
 }
 
+/** ADR-0037: the pending settings state (destination 1), the save, the discard, the guard, and the live state handed to the run host. */
+function useConfiguration(workspace: string | null) {
+  const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
+  const [saved, setSaved] = useState<PendingSettings | null>(null);
+  const [pending, setPending] = useState<PendingSettings | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [guarding, setGuarding] = useState<{ resolve: (proceed: boolean) => void } | null>(null);
+  const dirty = saved !== null && pending !== null && isDirty(saved, pending);
+  const pendingRef = useRef<PendingSettings | null>(null);
+  useEffect(() => { pendingRef.current = pending; }, [pending]);
+  // REQ-CONFIG-419/425: a read repopulates from the file's values and marks the form clean; a change made elsewhere (the composer's write) lands in the pending state (decision 4 of the plan, REQ-CONFIG-423).
+  const adopt = useCallback((next: ConfigSnapshot, keepPending: boolean) => {
+    setSnapshot(next);
+    const fresh = pendingFrom(next);
+    setSaved(fresh);
+    setPending((current) => (keepPending && current ? { ...current, runtime: { ...current.runtime, permission_mode: next.runtime.permission_mode } } : fresh));
+  }, []);
+  const read = useCallback(async () => {
+    if (workspace === null) { setSnapshot(null); setSaved(null); setPending(null); return; }
+    setLoading(true);
+    const r = await bridge.command({ kind: 'config.read' });
+    setLoading(false);
+    if (r.ok) { adopt(r.value as ConfigSnapshot, false); setError(null); } else setError(r.detail ?? r.headline);
+  }, [workspace, adopt]);
+  useEffect(() => { queueMicrotask(() => { void read(); }); }, [read]);
+  useEffect(() => bridge.onConfigChanged((p) => { const payload = p as { snapshot: ConfigSnapshot }; adopt(payload.snapshot, true); }), [adopt]);
+  // ADR-0037 Tier B: the screen's current values reach the run host on every change (REQ-CONFIG-262).
+  useEffect(() => { if (pending) void bridge.command({ kind: 'config.liveState', state: liveStateOf(pending) }); }, [pending]);
+  const onChange = useCallback((change: PendingChange) => { setPending((current) => (current ? applyChange(current, change) : current)); }, []);
+  const onSave = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const current = pendingRef.current;
+    if (!saved || !current) return { ok: false, reason: 'No configuration is loaded.' };
+    const r = await bridge.command({ kind: 'config.save', save: savePayload(saved, current) });
+    if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+    adopt(r.value as ConfigSnapshot, false);
+    return { ok: true };
+  }, [saved, adopt]);
+  const onDiscard = useCallback(() => { if (saved) setPending(saved); }, [saved]);
+  const onSetField = useCallback(async (scope: 'workspace' | 'global', patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const r = await bridge.command({ kind: 'config.setField', scope, patch });
+    return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+  }, []);
+  // REQ-CONFIG-286/287: the guard — Save (default), Discard, Cancel — on a view switch away and on a user-initiated close.
+  const guard = useCallback((): Promise<boolean> => {
+    if (!dirty) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => setGuarding({ resolve }));
+  }, [dirty]);
+  useEffect(() => {
+    useShellState.getState().setNavigationGuard(dirty ? () => guard() : null);
+    (window as unknown as { __rotarisCloseGuard?: (() => Promise<boolean>) | undefined }).__rotarisCloseGuard = dirty ? guard : undefined;
+    return () => { useShellState.getState().setNavigationGuard(null); (window as unknown as { __rotarisCloseGuard?: (() => Promise<boolean>) | undefined }).__rotarisCloseGuard = undefined; };
+  }, [dirty, guard]);
+  const guardDialog = guarding ? (
+    <UnsavedGuardDialog
+      onSave={() => { void onSave().then((r) => { const g = guarding; setGuarding(null); g.resolve(r.ok); }); }}
+      onDiscard={() => { onDiscard(); const g = guarding; setGuarding(null); g.resolve(true); }}
+      onCancel={() => { const g = guarding; setGuarding(null); g.resolve(false); }}
+    />
+  ) : null;
+  return { config: { snapshot, pending, dirty, loading, error, serviceAvailable: workspace !== null, onChange, onSave, onDiscard, onSetField }, guardDialog };
+}
+
 function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, onMotion }: { workspace: string | null } & AppearanceProps) {
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
+  const { config, guardDialog } = useConfiguration(workspace);
   // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
   const [summary, setSummary] = useState<HooksSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -141,27 +208,32 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
     onToggle: (agent: HookAgentId, hookId: string | null, on: boolean) => { void act({ kind: 'hooks.setToggle', agent, hookId, on }); },
   };
   const initialCategory = settingsCategory === 'models' || settingsCategory === 'personas' || settingsCategory === 'runtime' || settingsCategory === 'interface' || settingsCategory === 'display' || settingsCategory === 'skills' || settingsCategory === 'instructions' || settingsCategory === 'hooks' || settingsCategory === 'mcp' || settingsCategory === 'plugins' || settingsCategory === 'tools' || settingsCategory === 'project' || settingsCategory === 'about' ? settingsCategory : 'models';
-  return <SettingsView
-    session={session}
-    workspace={workspace}
-    onBackup={() => workspaceAction('workspace.backup')}
-    onRestore={() => workspaceAction('workspace.restore')}
-    hooks={hooks}
-    playbooks={playbooks}
-    themes={THEMES}
-    activeTheme={theme.name}
-    reducedMotion={reducedMotion}
-    initialCategory={initialCategory}
-    onTheme={onTheme}
-    onReducedMotion={onMotion}
-    onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
-  />;
+  return (<>
+    <SettingsView
+      session={session}
+      workspace={workspace}
+      onBackup={() => workspaceAction('workspace.backup')}
+      onRestore={() => workspaceAction('workspace.restore')}
+      hooks={hooks}
+      playbooks={playbooks}
+      themes={THEMES}
+      activeTheme={theme.name}
+      reducedMotion={reducedMotion}
+      initialCategory={initialCategory}
+      onTheme={onTheme}
+      onReducedMotion={onMotion}
+      onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
+      config={config}
+    />
+    {guardDialog}
+  </>);
 }
 
 /** REQ-NOTIFY-223/224: a notice's action, resolved here to a command or a view. */
 function recover(command: string): void {
   if (command === 'hooks.review') { void bridge.command({ kind: 'hooks.review' }); return; }
   if (command === 'hooks.settings') { useShellState.getState().openSettings('hooks'); return; }
+  if (command === 'config.models') { useShellState.getState().openSettings('models'); return; }
 }
 
 function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed }: { version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {

@@ -153,7 +153,7 @@ async function main(): Promise<void> {
     return true;
   };
   /** REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's recovery entry. */
-  const recoveryFor = (action: string | undefined): Recovery => action === 'hooks.review' ? [{ label: 'Review hooks', command: 'hooks.review' }] : action === 'hooks.settings' ? [{ label: 'Open hook settings', command: 'hooks.settings' }] : [];
+  const recoveryFor = (action: string | undefined): Recovery => action === 'hooks.review' ? [{ label: 'Review hooks', command: 'hooks.review' }] : action === 'hooks.settings' ? [{ label: 'Open hook settings', command: 'hooks.settings' }] : action === 'config.models' ? [{ label: 'Open Models settings', command: 'config.models' }] : [];
   /**
    * ADR-0019 / REQ-TOOLS-063: main owns the per-window DIALOG QUEUE and nothing else — it never decides.
    * One approval dialog open per window, oldest first by the payload's sequence, the next within 100 ms
@@ -519,7 +519,7 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt }, millis(10_000));
         if (r.kind !== 'session.started') {
           // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
-          if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
+          if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
           return refusal(r, 'The session could not be started');
         }
         return { ok: true, value: { sessionId: r.sessionId } };
@@ -540,6 +540,31 @@ async function main(): Promise<void> {
         }
         raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
         return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
+      }
+      case 'config.read': {
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its configuration' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        const r = await svc.link.request({ kind: 'config.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(10_000));
+        return r.kind === 'config.snapshot' ? { ok: true, value: r.snapshot } : refusal(r, 'The configuration could not be read');
+      }
+      case 'config.save':
+      case 'config.setField': {
+        // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423).
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before changing its configuration' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        const root = canonicalPath(currentWorkspace);
+        const r = await svc.link.request(req.kind === 'config.save' ? { kind: 'config.save', workspaceRoot: root, save: req.save } : { kind: 'config.setField', workspaceRoot: root, ...(req.scope ? { scope: req.scope } : {}), patch: req.patch }, millis(30_000));
+        if (r.kind !== 'config.snapshot') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The configuration could not be written'); }
+        for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
+        log(`configuration ${req.kind === 'config.save' ? 'saved' : 'field written'} for ${root}`);
+        return { ok: true, value: r.snapshot };
+      }
+      case 'config.liveState': {
+        // ADR-0037 Tier B: the settings store's current values reach the run host ahead of the next run start.
+        const r = await runHost.request({ kind: 'config.liveState', state: req.state }, millis(5_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The live settings could not be handed over');
       }
       case 'session.control': {
         // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
@@ -611,6 +636,17 @@ async function main(): Promise<void> {
   };
   for (const h of pendingHandOvers.splice(0)) surface(h);
 
+  // REQ-CONFIG-287: a user-initiated close asks the window's unsaved-settings guard; a cancelled guard leaves the window open.
+  let closeConfirmed = false;
+  win.on('close', (event) => {
+    if (closeConfirmed || win.isDestroyed()) return;
+    event.preventDefault();
+    void win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true').then((proceed: unknown) => {
+      if (proceed === false) return;
+      closeConfirmed = true;
+      win.close();
+    }).catch(() => { closeConfirmed = true; win.close(); });
+  });
   win.once('ready-to-show', () => win.show());
   if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(process.env['ELECTRON_RENDERER_URL']);
   else await win.loadFile(join(__dirname, '../renderer/index.html'));
@@ -760,6 +796,29 @@ async function main(): Promise<void> {
       clocks.timers.after(millis(modeAt), async () => {
         if (!(await click('.seg-opt', modeWanted))) return;
         if (modeWanted === 'autonomous') { await new Promise((r) => clocks.timers.after(millis(300), () => r(undefined))); await click('.dialog-actions .btn-danger', 'Switch to autonomous'); }
+      });
+    }
+    // ROTARIS_CAPTURE_CLICKS="selector>>text@ms;;…" and ROTARIS_CAPTURE_SELECT="selector>>value@ms;;…": real clicks on
+    // Settings controls and a value chosen in a select, for the configuration proof (verification only).
+    const steps = (raw: string | undefined) => (raw ?? '').split(';;').map((s) => s.trim()).filter((s) => s !== '').map((s) => {
+      const at = Number(s.slice(s.lastIndexOf('@') + 1));
+      const body = s.slice(0, s.lastIndexOf('@'));
+      const sep = body.indexOf('>>');
+      return { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at };
+    });
+    for (const step of steps(process.env['ROTARIS_CAPTURE_CLICKS'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const rect = await win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(step.selector)})].find((x) => ${step.arg === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(step.arg)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+        if (!rect) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return; }
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        log(`capture: clicked "${step.arg ?? step.selector}"`);
+      });
+    }
+    for (const step of steps(process.env['ROTARIS_CAPTURE_SELECT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const done = await win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.arg ?? '')}); el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`) as boolean;
+        log(`capture: select ${step.selector} = ${step.arg ?? ''} → ${done ? 'chosen' : 'no such control'}`);
       });
     }
     // ROTARIS_CAPTURE_STOP_MS: press the stop control with a real click at its measured position (REQ-SESSION-186).

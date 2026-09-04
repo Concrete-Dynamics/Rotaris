@@ -1,3 +1,4 @@
+import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema } from './config.js';
 import { z } from 'zod';
 import { ControlRequestSchema } from './control.js';
 import { HOOK_AGENT_IDS } from './hooks.js';
@@ -53,6 +54,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
   /** REQ-ORCH-026: the built-in playbook catalogue for the settings listing. */
   z.object({ kind: z.literal('playbooks.catalogue') }),
+  /** ADR-0037: Tier A through the workspace service (read, save, write a field); Tier B's live state to the run host. */
+  z.object({ kind: z.literal('config.read') }),
+  z.object({ kind: z.literal('config.save'), save: DesktopSaveSchema }),
+  z.object({ kind: z.literal('config.setField'), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
+  z.object({ kind: z.literal('config.liveState'), state: LiveStateSchema }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];
@@ -65,5 +71,6 @@ export interface RendererBridge {
   readonly onTerminalFrame: (fn: (p: unknown) => void) => () => void;
   readonly onNotice: (fn: (p: unknown) => void) => () => void;
   readonly onThemeChanged: (fn: (p: unknown) => void) => () => void;
+  readonly onConfigChanged: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

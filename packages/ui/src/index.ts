@@ -10,3 +10,5 @@ export * from './HookReviewDialog.js';
 export * from './theme.js';
 export * from './motion.js';
 export * from './SessionBrowser.js';
+export * from './settings/config-state.js';
+export * from './settings/ConfigSettings.js';

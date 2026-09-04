@@ -57,6 +57,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
+  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session. */
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']) }),
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
   /** A surface begins following: snapshot first, then the resident transcript (REQ-MONITOR-214, REQ-SESSION-161). */
   z.object({ kind: z.literal('session.attach'), sessionId: z.string() }),
@@ -180,6 +182,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.list'), sessions: z.array(SessionListItemSchema) }),
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string(), settledChildren: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
+  z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */
   z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),
@@ -207,6 +210,8 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('publish.snapshot'), payload: SessionSnapshotSchema }),
   /** REQ-SESSION-186: the terminal result, presented once. Carried from the bus's in-process consumer (REQ-EVENTS-178). */
   z.object({ kind: z.literal('run.result'), sessionId: z.string(), result: RunResultSchema }),
+  /** REQ-ORCH-085: the host told the run paused at the message limit, with the count and the limit in force. */
+  z.object({ kind: z.literal('run.paused'), sessionId: z.string(), count: z.number().int(), limit: z.number().int().nullable(), tokens: z.object({ input: z.number().int(), output: z.number().int() }) }),
   /** ADR-0019: the gate posts a present-request; main owns the per-window dialog queue and nothing else. */
   z.object({ kind: z.literal('approval.present'), payload: ApprovalPayloadSchema }),
   /** A request answered or cancelled elsewhere closes its open dialog without asking again (REQ-TOOLS-063). */

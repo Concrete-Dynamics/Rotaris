@@ -120,6 +120,11 @@ export const SessionRecordSchema = z.object({
   backgroundSessions: z.number().int().nonnegative(),
   /** REQ-ORCH-014: the intent status — classifying, then the classified result; null before a run and for a session that never ran. */
   intent: IntentStatusSchema.nullable(),
+  /** REQ-CHAT-041 / REQ-MONITOR-141: exactly the QUEUED prompts of this session, on the whole-session update. */
+  queuedPrompts: z.array(z.object({ id: z.string(), content: z.string(), createdAt: z.string() })),
+  /** REQ-ORCH-084/087: the message limit in force (null = disabled) and, while paused at it, the count reached. */
+  messageLimit: z.number().int().nullable(),
+  pausedAtCount: z.number().int().nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

@@ -220,6 +220,8 @@ const sessions = new Sessions({
     snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
   },
   onRunResult: (sessionId, result) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }),
+  // REQ-ORCH-085: the host told the run paused at the message limit.
+  onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),
   tools: (ctx) => createToolPort(ctx, {
     clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal,
     runtime: (workspaceRoot) => configuredFor(workspaceRoot)?.runtime ?? configureRunFallback(),
@@ -336,6 +338,13 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       }
       log(`session ${r.value} started; row 0 recorded; the run is executing`);
       return { kind: 'session.started', sessionId: r.value };
+    }
+    case 'session.continue': {
+      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
+      const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
+      log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
+      return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
     }
     case 'session.prompt': {
       const r = sessions.prompt(asSessionId(req.sessionId), req.prompt);

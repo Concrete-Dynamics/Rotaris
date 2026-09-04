@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
@@ -789,6 +789,119 @@ export class SessionWriter {
   }
 
   /** REQ-SESSION-067: a no-op where nothing is outstanding — and with synchronous commits nothing ever is. */
+  /** REQ-CHAT-035/038: one queued prompt, its record and its timeline entry in one transaction. */
+  queuePrompt(promptId: string, content: string): Result<QueuedPromptRow, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    let row: QueuedPromptRow | null = null;
+    try {
+      dal.transaction(() => {
+        row = dal.insertQueuedPrompt(sessionId, promptId, content, at);
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_queued', 'user', `A prompt was queued for the next iteration (${promptId.slice(0, 8)}).`, JSON.stringify({ prompt_id: promptId }));
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(row!);
+  }
+
+  /** REQ-CHAT-037/038: an edit or a removal lands only on a QUEUED prompt; false names the refusal. */
+  editQueuedPrompt(promptId: string, content: string): Result<boolean, WriteFailure> {
+    return this.queuedMove(promptId, (dal, sessionId) => dal.updateQueuedPrompt(sessionId, promptId, content), 'prompt_edited', `A queued prompt was edited (${promptId.slice(0, 8)}).`);
+  }
+  removeQueuedPrompt(promptId: string): Result<boolean, WriteFailure> {
+    return this.queuedMove(promptId, (dal, sessionId) => dal.deleteQueuedPrompt(sessionId, promptId), 'prompt_removed', `A queued prompt was removed (${promptId.slice(0, 8)}).`);
+  }
+  private queuedMove(promptId: string, move: (dal: StoreDal, sessionId: SessionId) => boolean, name: string, message: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    let moved = false;
+    try {
+      dal.transaction(() => {
+        moved = move(dal, sessionId);
+        if (moved) dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, name, 'user', message, JSON.stringify({ prompt_id: promptId }));
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (moved) this.deps.onCommitted({ kind: 'save' });
+    return ok(moved);
+  }
+
+  /** REQ-CHAT-040: every QUEUED prompt of the session moved to TRIGGERED by the atomic move, one transaction, in queue order. */
+  triggerQueuedPrompts(): Result<readonly QueuedPromptRow[], WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const triggered: QueuedPromptRow[] = [];
+    try {
+      dal.transaction(() => {
+        for (const row of dal.queuedPromptsOf(sessionId)) {
+          if (row.status !== 'QUEUED') continue;
+          if (!dal.triggerQueuedPrompt(sessionId, row.prompt_id, at)) continue;
+          triggered.push({ ...row, status: 'TRIGGERED', triggered_at: at });
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_triggered', 'rotaris', `Queued Prompt: ${row.prompt_id.slice(0, 8)} became a task in phase "Queued Prompts".`, JSON.stringify({ prompt_id: row.prompt_id }));
+        }
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (triggered.length > 0) this.deps.onCommitted({ kind: 'save' });
+    return ok(triggered);
+  }
+  completeQueuedPrompt(promptId: string): void {
+    try { this.deps.dal.completeQueuedPrompt(this.deps.sessionId, promptId); } catch (cause) { this.deps.warn(`queued prompt ${promptId} could not be marked completed: ${String(cause)}`); }
+  }
+
+  /** REQ-ORCH-087: the pause recorded durably — status, count, limit — with its timeline entry, before the run stops. */
+  pauseAtLimit(count: number, limit: number | null, patch: SessionRunPatch): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const generation = this.generation + 1;
+    try {
+      dal.durableTransaction(() => {
+        dal.updateSessionRun(sessionId, patch);
+        dal.setPause(sessionId, 'paused_message_limit', count, limit, at);
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'run_paused_message_limit', 'rotaris', `The run paused at the message limit: ${count} of ${limit ?? 'no'} messages.`, JSON.stringify({ count, limit }));
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.status = 'paused_message_limit';
+    this.generation = generation;
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(generation);
+  }
+
+  /** REQ-SESSION-110: the resolution clears the paused-at-limit condition in the same durable act that writes the status. */
+  resolvePause(status: 'idle' | 'paused', messageLimit: number | null, action: string): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const generation = this.generation + 1;
+    try {
+      dal.durableTransaction(() => {
+        dal.setPause(sessionId, status, null, messageLimit, at);
+        if (action === 'cancel') dal.updateSessionRun(sessionId, { stop_reason: 'message_limit_reached' });
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'pause_resolved', 'user', `The pause was resolved: ${action}${messageLimit === null ? '' : ` (limit ${messageLimit})`}.`, JSON.stringify({ action, message_limit: messageLimit }));
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.status = status;
+    this.generation = generation;
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(generation);
+  }
+
+  private nextTimelineOrdinal(): number {
+    return this.deps.dal.nextTimelineOrdinal(this.deps.sessionId);
+  }
+
   flush(): void {
     /* every requested save has already returned durable */
   }

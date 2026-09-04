@@ -22,6 +22,8 @@ import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentS
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import type { TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
+import type { ModelRef, ThinkingLevel } from '@rotaris/model';
+import { randomUUID } from 'node:crypto';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -77,6 +79,8 @@ export interface RuntimePosture {
   /** REQ-ORCH-046's three limits; REQ-ORCH-024's `normal` cell clamps them until playbooks are built. */
   readonly childBudget?: Budget;
   readonly drainTimeoutMs?: number;
+  /** REQ-ORCH-084: `runtime.message_limit`; null = disabled. */
+  readonly messageLimit?: number | null;
 }
 
 export interface SessionsDeps {
@@ -93,6 +97,8 @@ export interface SessionsDeps {
   readonly sessionFilesDir: (dal: StoreDal, sessionId: SessionId) => string;
   /** REQ-SESSION-186: the terminal result, presented once. Reached through the bus, in process (REQ-EVENTS-178). */
   readonly onRunResult?: (sessionId: SessionId, result: RunResult) => void;
+  /** REQ-ORCH-085: the run paused at the message limit — the host is told the count and the limit. */
+  readonly onRunPaused?: ((sessionId: SessionId, info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
   /** The tool surface per session; absent means the model is offered no tool. */
   readonly tools?: (ctx: ToolPortContext) => ToolPort;
   /** REQ-TOOLS-053/069: whether a prompt can be put in front of a person, at the moment asked. */
@@ -124,6 +130,8 @@ export interface RunSetup {
   readonly runtime: RuntimePosture;
   readonly retentionCap?: number | undefined;
   readonly personas?: PersonaResolver | undefined;
+  /** REQ-MONITOR-142: a `models:` key resolved for a mid-run switch. */
+  readonly models?: ((key: string) => { model: ModelRef; thinking: ThinkingLevel } | null) | undefined;
   /** Warnings the load produced (REQ-CONFIG-233's warn-and-continue and the referential list while attended). */
   readonly warnings?: readonly string[] | undefined;
 }
@@ -231,7 +239,7 @@ export interface StartRefusal {
   readonly result: { status: 'error'; session_id: string; stop_reason: ''; summary: string; error: string };
 }
 
-export function toSessionRecord(r: SessionRow): SessionRecord {
+export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = []): SessionRecord {
   return {
     id: r.session_id,
     executionStatus: r.execution_status,
@@ -252,7 +260,15 @@ export function toSessionRecord(r: SessionRow): SessionRecord {
     sandboxed: r.sandboxed === 1,
     backgroundSessions: 0,
     intent: null,
+    queuedPrompts: [...queued],
+    messageLimit: r.message_limit,
+    pausedAtCount: r.paused_at_count,
   };
+}
+
+/** REQ-CHAT-041: exactly the QUEUED prompts of the session, in queue order. */
+function queuedOf(dal: StoreDal, sessionId: SessionId): { id: string; content: string; createdAt: string }[] {
+  return dal.queuedPromptsOf(sessionId).filter((p) => p.status === 'QUEUED').map((p) => ({ id: p.prompt_id, content: p.content, createdAt: p.created_at }));
 }
 
 /** REQ-ORCH-014: derived, not stored — `classifying` while the run is starting and no audit exists, then the audit's `run_intent`. */
@@ -354,7 +370,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -398,7 +414,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -435,6 +451,8 @@ export class Sessions {
     const run = new Run({
       sessionId, workspaceRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
+      ...(setup.value.models ? { models: setup.value.models } : {}),
+      messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
       readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
@@ -527,6 +545,8 @@ export class Sessions {
     const run = new Run({
       sessionId, workspaceRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
+      ...(setupIn.models ? { models: setupIn.models } : {}),
+      messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}),
@@ -555,6 +575,7 @@ export class Sessions {
     const s = this.live.get(asSessionId(req.sessionId));
     const run = s?.run;
     if (!run || run.isEnded) return { ok: false };
+    const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
       case 'cancel': {
         // REQ-SESSION-186: a second activation while the stop is pending forces.
@@ -563,6 +584,59 @@ export class Sessions {
         s!.writer.save('cancelling');
         return { ok: true };
       }
+      case 'pause':
+        // REQ-MONITOR-123: whole-run only; `pausing` is written only after the run accepted (REQ-MONITOR-296).
+        return run.pause() ? { ok: true } : { ok: false };
+      case 'submitSteeringPrompt': {
+        // REQ-MONITOR-008/133: both arguments required; the new prompt's id is the string value (REQ-MONITOR-005).
+        const agentId = text('agentId');
+        const content = text('text');
+        if (agentId === null || content === null) return { ok: false };
+        const id = run.steer(agentId, content);
+        return id === null ? { ok: false } : { ok: true, value: id };
+      }
+      case 'createQueuedPrompt': {
+        const content = text('text');
+        if (content === null) return { ok: false };
+        const r = s!.writer.queuePrompt(randomUUID(), content);
+        if (!r.ok) return { ok: false };
+        s!.owner.reconcile();
+        return { ok: true, value: r.value.prompt_id };
+      }
+      case 'editQueuedPrompt': {
+        const promptId = text('promptId');
+        const content = text('text');
+        if (promptId === null || content === null) return { ok: false };
+        const r = s!.writer.editQueuedPrompt(promptId, content);
+        if (r.ok && r.value) s!.owner.reconcile();
+        return r.ok && r.value ? { ok: true } : { ok: false };
+      }
+      case 'removeQueuedPrompt': {
+        const promptId = text('promptId');
+        if (promptId === null) return { ok: false };
+        const r = s!.writer.removeQueuedPrompt(promptId);
+        if (r.ok && r.value) s!.owner.reconcile();
+        return r.ok && r.value ? { ok: true } : { ok: false };
+      }
+      case 'editTodo': {
+        const op = text('op');
+        const id = text('id');
+        const body = typeof req.args['text'] === 'string' ? (req.args['text'] as string) : '';
+        if (id === null || (op !== 'add' && op !== 'update' && op !== 'remove') || (op !== 'remove' && body.trim() === '')) return { ok: false };
+        return run.editTodo(op, id, body) ? { ok: true } : { ok: false };
+      }
+      case 'setModel': {
+        const key = text('model');
+        return key !== null && run.setEntryModel(key) ? { ok: true } : { ok: false };
+      }
+      case 'setReasoning': {
+        const level = text('level');
+        return level !== null && ['low', 'medium', 'high', 'max', 'unset'].includes(level) && run.setEntryReasoning(level as ThinkingLevel) ? { ok: true } : { ok: false };
+      }
+      case 'announceShutdown':
+        // REQ-MONITOR-131: the run is asked to stop for shutdown; anything blocked on a person is released first (the stop's own rule).
+        run.stop.request('application_shutdown');
+        return { ok: true };
       case 'setPermissionMode': {
         // REQ-MONITOR-008: an empty required argument is refused before it reaches the run.
         const mode = req.args['mode'];
@@ -584,8 +658,56 @@ export class Sessions {
         return this.answerApproval(requestId, option as ApprovalOption) ? { ok: true } : { ok: false };
       }
       default:
+        // REQ-MONITOR-004's remaining operations have no mechanism behind them in this build (decision 9 of the plan) and answer false.
         return { ok: false };
     }
+  }
+
+  /**
+   * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause. At the message limit: continue → idle then a continuation run;
+   * double → the limit doubled for this session (null stays null), then continue; cancel → `paused` with stop reason
+   * `message_limit_reached`. A manually paused session continues the same way. Nothing here appends a user row.
+   */
+  continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel'): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const atLimit = stored.execution_status === 'paused_message_limit';
+    if (!atLimit && stored.execution_status !== 'paused') return err({ code: 'not-paused', reason: `Session ${sessionId} is not paused (${stored.execution_status}).` });
+    let limit = stored.message_limit;
+    if (atLimit) {
+      if (action === 'cancel') {
+        const r = s.writer.resolvePause('paused', limit, 'cancel');
+        if (!r.ok) return err({ code: r.error.code, reason: 'reason' in r.error ? r.error.reason : r.error.code });
+        s.owner.reconcile();
+        return ok({ resumed: false, messageLimit: limit });
+      }
+      if (limit === null) {
+        // REQ-SESSION-110: a session paused at a null limit cannot resume the prompt; it is set paused and the host warned.
+        const r = s.writer.resolvePause('paused', null, action);
+        if (!r.ok) return err({ code: r.error.code, reason: 'reason' in r.error ? r.error.reason : r.error.code });
+        s.owner.reconcile();
+        this.deps.notice?.({ severity: 'warning', headline: 'The paused session carries no message limit to resume from', detail: `Session ${sessionId} was paused at a message limit that is no longer recorded; it is now paused and can be continued from the composer.` });
+        return ok({ resumed: false, messageLimit: null });
+      }
+      if (action === 'double') limit = limit * 2;
+      const r = s.writer.resolvePause('idle', limit, action);
+      if (!r.ok) return err({ code: r.error.code, reason: 'reason' in r.error ? r.error.reason : r.error.code });
+    } else if (action === 'cancel') {
+      return ok({ resumed: false, messageLimit: limit });
+    }
+    // The continuation: the last user request stands, nothing new is appended (REQ-MONITOR-125's "resumed from the composer").
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false);
+    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
+    const todo = parseTodoDocument(stored);
+    if (!todo.ok) return todo;
+    const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value);
+    const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit);
+    return ok({ resumed: true, messageLimit: limit });
   }
 
   /** ADR-0019: a lapse or a teardown releases every waiting approval in every live session (REQ-TOOLS-054's bulk cancel). */

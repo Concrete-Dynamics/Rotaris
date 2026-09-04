@@ -4,7 +4,7 @@ import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotari
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
-import { runTurn, type ToolPort, type TurnOutcome } from '../run/turn.js';
+import { runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
 import type { BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { ChildLedger, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
@@ -56,6 +56,9 @@ export interface ChildrenDeps {
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
   /** ADR-0036: the configured personas over the built-in table; absent means the built-in table alone. */
   readonly personas?: PersonaResolver | undefined;
+  /** REQ-MONITOR-133: the pending steering prompts per child conversation. */
+  readonly steeringFor?: ((conversationId: string) => () => readonly SteeringPrompt[]) | undefined;
+  readonly shouldPause?: (() => boolean) | undefined;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -201,6 +204,8 @@ export class IterationChildren implements DelegationOps {
       systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
       resolveCredential: deps.resolveCredential, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
       ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
+      ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
+      ...(deps.shouldPause ? { shouldPause: deps.shouldPause } : {}),
     }, task, history, controller.signal);
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
     let prior = '';

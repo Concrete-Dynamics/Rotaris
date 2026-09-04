@@ -47,6 +47,9 @@ export interface SessionRow {
   readonly permission_mode: string | null;
   readonly sandboxed: number;
   readonly pending_approvals: string;
+  // v6 — REQ-ORCH-084/087: the message limit in force and the count reached while paused at it.
+  readonly message_limit: number | null;
+  readonly paused_at_count: number | null;
 }
 /** The run-recorded columns a save may carry (REQ-SESSION-168: aggregates copied on every persist). */
 export interface SessionRunPatch {
@@ -66,6 +69,17 @@ export interface SessionRunPatch {
   readonly summary_text?: string | null;
   readonly todo?: string | null;
   readonly progress?: string | null;
+  readonly message_limit?: number | null;
+}
+/** REQ-CHAT-038: one queued prompt as stored. */
+export interface QueuedPromptRow {
+  readonly session_id: string;
+  readonly prompt_id: string;
+  readonly position: number;
+  readonly content: string;
+  readonly status: string;
+  readonly created_at: string;
+  readonly triggered_at: string | null;
 }
 export interface LockRow extends LockRecord {
   readonly session_id: string;
@@ -241,8 +255,19 @@ export class StoreDal {
           summary_severity = coalesce(@summary_severity, summary_severity),
           summary_text = coalesce(@summary_text, summary_text),
           todo = coalesce(@todo, todo),
-          progress = coalesce(@progress, progress)
+          progress = coalesce(@progress, progress),
+          message_limit = coalesce(@message_limit, message_limit)
         WHERE session_id = @session_id`),
+      // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
+      setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
+      // REQ-CHAT-038: the prompt records; the QUEUED → TRIGGERED move is one conditional update whose row count is the claim.
+      insertQueuedPrompt: db.prepare('INSERT INTO queued_prompts (session_id, prompt_id, position, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
+      queuedPromptsOf: db.prepare('SELECT * FROM queued_prompts WHERE session_id = ? ORDER BY position'),
+      maxQueuedPosition: db.prepare('SELECT max(position) AS m FROM queued_prompts WHERE session_id = ?'),
+      updateQueuedPrompt: db.prepare("UPDATE queued_prompts SET content = ? WHERE session_id = ? AND prompt_id = ? AND status = 'QUEUED'"),
+      deleteQueuedPrompt: db.prepare("DELETE FROM queued_prompts WHERE session_id = ? AND prompt_id = ? AND status = 'QUEUED'"),
+      triggerQueuedPrompt: db.prepare("UPDATE queued_prompts SET status = 'TRIGGERED', triggered_at = ? WHERE session_id = ? AND prompt_id = ? AND status = 'QUEUED'"),
+      completeQueuedPrompt: db.prepare("UPDATE queued_prompts SET status = 'COMPLETED' WHERE session_id = ? AND prompt_id = ? AND status = 'TRIGGERED'"),
       // REQ-SESSION-138: a plain INSERT — the one-shot is the primary key, not a check a caller could skip.
       insertLaunchAudit: db.prepare('INSERT INTO launch_audits (session_id, recorded_at, payload) VALUES (?, ?, ?)'),
       getLaunchAudit: db.prepare('SELECT * FROM launch_audits WHERE session_id = ?'),
@@ -462,8 +487,34 @@ export class StoreDal {
       tokens_input: patch.tokens_input ?? null, tokens_output: patch.tokens_output ?? null, cost: patch.cost ?? null,
       tool_calls: patch.tool_calls ?? null, compressions: patch.compressions ?? null,
       summary_status: patch.summary_status ?? null, summary_severity: patch.summary_severity ?? null, summary_text: patch.summary_text ?? null,
-      todo: patch.todo ?? null, progress: patch.progress ?? null,
+      todo: patch.todo ?? null, progress: patch.progress ?? null, message_limit: patch.message_limit ?? null,
     });
+  }
+  /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */
+  setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {
+    this.stmts['setPause']!.run(status, pausedAtCount, messageLimit, updatedAt, id);
+  }
+  insertQueuedPrompt(id: SessionId, promptId: string, content: string, createdAt: string): QueuedPromptRow {
+    const position = ((this.stmts['maxQueuedPosition']!.get(id) as { m: number | null }).m ?? 0) + 1;
+    this.stmts['insertQueuedPrompt']!.run(id, promptId, position, content, 'QUEUED', createdAt);
+    return { session_id: id, prompt_id: promptId, position, content, status: 'QUEUED', created_at: createdAt, triggered_at: null };
+  }
+  queuedPromptsOf(id: SessionId): QueuedPromptRow[] {
+    return this.stmts['queuedPromptsOf']!.all(id) as QueuedPromptRow[];
+  }
+  /** REQ-CHAT-038: false when the prompt is unknown or no longer QUEUED. */
+  updateQueuedPrompt(id: SessionId, promptId: string, content: string): boolean {
+    return this.stmts['updateQueuedPrompt']!.run(content, id, promptId).changes === 1;
+  }
+  deleteQueuedPrompt(id: SessionId, promptId: string): boolean {
+    return this.stmts['deleteQueuedPrompt']!.run(id, promptId).changes === 1;
+  }
+  /** REQ-CHAT-038: the atomic QUEUED → TRIGGERED move; exactly one caller sees true. */
+  triggerQueuedPrompt(id: SessionId, promptId: string, at: string): boolean {
+    return this.stmts['triggerQueuedPrompt']!.run(at, id, promptId).changes === 1;
+  }
+  completeQueuedPrompt(id: SessionId, promptId: string): boolean {
+    return this.stmts['completeQueuedPrompt']!.run(id, promptId).changes === 1;
   }
   /** REQ-SESSION-138: false when the audit already exists — the statement refuses, the caller does not check first. */
   insertLaunchAudit(id: SessionId, recordedAt: string, payload: string): boolean {

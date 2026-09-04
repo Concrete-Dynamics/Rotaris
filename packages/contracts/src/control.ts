@@ -7,31 +7,37 @@ import { z } from 'zod';
  * optional string populated for exactly two operations (REQ-MONITOR-005);
  * a control answers `false` rather than raising (REQ-MONITOR-007).
  *
- * The 21 operations are REQ-MONITOR-004's. The skeleton fixes the names and
- * the envelope; each operation's arguments land with the engine.
+ * The operations are REQ-MONITOR-004's enumeration, one name each, in its
+ * order. The skeleton fixed a different list of twenty-one names (the
+ * runtime's own vocabulary — `start`, `resume`, `detach`, `releaseSession`,
+ * `requestCheckpoint`, `setDelegationStrategy` …), found against the
+ * requirement on the control channel's second execution (2026-09-05,
+ * ADR-0010's note): a session command is not a control on a live run, and a
+ * live-run operation the requirement names had no name here.
  */
 export const CONTROL_OPS = [
-  'start',
-  'resume',
-  'pause',
-  'continue',
-  'cancel',
-  'detach',
-  'submitSteeringPrompt',
-  'createQueuedPrompt',
-  'removeQueuedPrompt',
-  'reorderQueuedPrompt',
   'answerApproval',
   'answerQuestion',
-  'pauseAgent',
-  'cancelAgent',
+  'cancelQuestions',
+  'submitSteeringPrompt',
+  'createQueuedPrompt',
+  'editQueuedPrompt',
+  'removeQueuedPrompt',
+  'editTodo',
+  'setModel',
+  'setReasoning',
   'setPermissionMode',
-  'setDelegationStrategy',
-  'setDelegationDepth',
-  'requestCheckpoint',
-  'restoreCheckpoint',
-  'releaseSession',
-  'recheckSandbox',
+  'forceCompression',
+  'clearTranscript',
+  'cancelAgent',
+  'skipCheck',
+  'pause',
+  'cancel',
+  'announceShutdown',
+  'terminalInput',
+  'terminalResize',
+  'terminalInterrupt',
+  'terminalKill',
 ] as const;
 export type ControlOp = (typeof CONTROL_OPS)[number];
 
@@ -53,3 +59,11 @@ export const ControlResultSchema = z.union([
   z.object({ ok: z.literal(false) }),
 ]);
 export type ControlResult = z.infer<typeof ControlResultSchema>;
+
+/** REQ-SESSION-110 / REQ-ORCH-086: the three resolutions of a pause. */
+export const PAUSE_RESOLUTIONS = ['continue', 'double', 'cancel'] as const;
+export type PauseResolution = (typeof PAUSE_RESOLUTIONS)[number];
+
+/** REQ-CHAT-038: a queued prompt's status series. */
+export const QUEUED_PROMPT_STATUSES = ['QUEUED', 'TRIGGERED', 'COMPLETED'] as const;
+export type QueuedPromptStatus = (typeof QUEUED_PROMPT_STATUSES)[number];

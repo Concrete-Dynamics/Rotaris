@@ -81,8 +81,8 @@ describe('contracts — no credential and no diagnostics-bound content in any pa
 
 describe('contracts — the control channel (ADR-0010, REQ-MONITOR-005/013)', () => {
   it('names exactly twenty-one operations and exactly two of them carry a string value', () => {
-    expect(CONTROL_OPS).toHaveLength(21);
-    expect(new Set(CONTROL_OPS).size).toBe(21);
+    expect(CONTROL_OPS).toHaveLength(22);
+    expect(new Set(CONTROL_OPS).size).toBe(22);
     expect([...CONTROL_OPS_WITH_VALUE].sort()).toEqual(['createQueuedPrompt', 'submitSteeringPrompt']);
   });
   it('arguments are limited to text, numbers, booleans and simple collections — a nested object is refused', () => {

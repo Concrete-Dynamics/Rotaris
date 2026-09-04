@@ -59,6 +59,7 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration): RuntimeFromC
     shellCommandTimeoutS: r.shell_command_timeout,
     runOverride: cfg.delegationStrategy === 'single' ? 'single' : cfg.delegationStrategy === 'swarm' ? 'swarm' : null,
     retentionCap: r.event_retention_per_session,
+    messageLimit: r.message_limit,
     iterationLimit: r.max_iterations,
     consecutiveRetryLimit: r.task_consecutive_retry_limit,
     transientRetries: r.auto_retries_transient,
@@ -210,5 +211,7 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
     },
   };
   deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}`);
-  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, warnings, scripted: isScripted });
+  // REQ-MONITOR-142: a mid-run switch resolves a `models:` key the same way the entry model was.
+  const models = (key: string) => { const ref = modelRefOf(cfg, key, scripted); return ref ? { model: ref, thinking: thinkingOf(cfg.models[key]) } : null; };
+  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted });
 }

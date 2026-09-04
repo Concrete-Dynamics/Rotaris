@@ -20,6 +20,7 @@ import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { PersonaResolver } from '../children/personas.js';
+import { randomUUID } from 'node:crypto';
 
 /**
  * The run loop, in its first conformant slice: one root agent, one model
@@ -122,6 +123,18 @@ export interface RunDeps {
   readonly continuation?: boolean | undefined;
   /** ADR-0036: the configured personas over the built-in table. */
   readonly personas?: PersonaResolver | undefined;
+  /** REQ-ORCH-084: the message limit in force for the session; null = disabled. */
+  readonly messageLimit?: number | null | undefined;
+  /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
+  readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
+  /** REQ-MONITOR-142: a `models:` key resolved for a mid-run switch of the entry model. */
+  readonly models?: ((key: string) => { model: ModelRef; thinking: ThinkingLevel } | null) | undefined;
+}
+
+export interface SteeringSubmission {
+  readonly id: string;
+  readonly agentId: string;
+  readonly text: string;
 }
 
 /** REQ-SESSION-095 / REQ-EVENTS-026: the one terminal result, computed once and used everywhere. */
@@ -166,6 +179,13 @@ export class Run {
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
+  /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
+  private pauseRequested = false;
+  private pausedAtLimit: { count: number; limit: number | null } | null = null;
+  /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
+  private readonly steering = new Map<string, { id: string; text: string }[]>();
+  /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
+  private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
@@ -269,6 +289,9 @@ export class Run {
       // REQ-ORCH-069: stop conditions between iterations, first match wins; the stop request wins over all.
       for (;;) {
         if (this.stop.requested) { stopReason = this.stop.reason ?? 'user_cancelled'; break; }
+        if (this.pauseRequested) { stopReason = 'user_cancelled'; break; }
+        // REQ-CHAT-040: every QUEUED prompt becomes a task before completion is judged, so a run never reports done while prompts wait.
+        this.consumeQueued();
         stopReason = stopCondition({
           allTasksComplete: this.todo.allTasksComplete, pendingTasks: this.todo.pendingCount,
           iterationsCompleted: this.iterationsCompleted - this.initialIterations, iterationLimit: config.iterationLimit,
@@ -277,6 +300,9 @@ export class Run {
         if (stopReason) break;
         const escalated = await this.iterate();
         if (escalated) { stopReason = 'agent_session_aborted'; break; }
+        // REQ-ORCH-085/087: the limit in force is checked at the boundary; the pause is recorded durably before the loop stops.
+        const limit = this.deps.messageLimit ?? null;
+        if (limit !== null && this.iterationsCompleted >= limit && !this.stop.requested) return await this.pauseAtLimit(limit);
       }
       return await this.teardown(stopReason ?? 'no_pending_tasks');
     } catch (cause) {
@@ -314,6 +340,11 @@ export class Run {
         outcome = 'cancelled';
         task.state = 'pending';
         summary = 'the run was cancelled before the agent finished';
+      } else if (this.pauseRequested) {
+        // REQ-MONITOR-123: the current step finished; the task stays pending for the continuation.
+        outcome = 'cancelled';
+        task.state = 'pending';
+        summary = 'the run paused at the user\'s request before the agent finished';
       } else if (report.status === 'succeeded') {
         outcome = 'succeeded';
         this.todo.complete(task);
@@ -373,6 +404,7 @@ export class Run {
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
+        steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
       }, iteration)
       : null;
     this.children = children;
@@ -380,9 +412,10 @@ export class Run {
     const turnFn = (text: string, history: readonly ChatMessage[]) => runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
-      systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: config.model, thinking: config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
+      steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
     }, text, history, this.abort.signal);
     try {
       const outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
@@ -404,6 +437,100 @@ export class Run {
     const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth) : null;
     return this.register(p);
   };
+
+  /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
+  steer(agentId: string, text: string): string | null {
+    if (this.ended || text.trim() === '' || agentId.trim() === '') return null;
+    const key = agentId === 'run' || agentId === 'root' || agentId === this.rootId ? 'root' : agentId;
+    if (key !== 'root' && !this.children?.ledger.get(key)) return null;
+    const id = randomUUID();
+    const list = this.steering.get(key) ?? [];
+    list.push({ id, text });
+    this.steering.set(key, list);
+    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${key === 'root' ? this.deps.config.persona : key} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
+    return id;
+  }
+  private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {
+    const key = conversationId === this.rootId || conversationId === 'run' ? 'root' : conversationId;
+    return () => { const list = this.steering.get(key) ?? []; this.steering.delete(key); return list; };
+  }
+
+  /** REQ-MONITOR-123/124: graceful, whole-run only; the status reads `pausing` until the current step finishes. */
+  pause(): boolean {
+    if (this.ended || this.stop.requested || this.pauseRequested) return false;
+    this.pauseRequested = true;
+    this.deps.writer.save('pausing');
+    this.deps.writer.appendTimeline('run_pause_requested', 'user', 'The user asked the run to pause; the current step finishes first.', {});
+    return true;
+  }
+  get isPausedByUser(): boolean {
+    return this.pauseRequested;
+  }
+
+  /** REQ-CHAT-040: every QUEUED prompt becomes a task in phase "Queued Prompts"; the supervisor sees a user instruction. */
+  private consumeQueued(): void {
+    const r = this.deps.writer.triggerQueuedPrompts();
+    if (!r.ok || r.value.length === 0) return;
+    for (const p of r.value) this.todo.appendTask('Queued Prompts', p.prompt_id, p.content);
+    this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
+    this.saveRunning({});
+  }
+
+  /** REQ-MONITOR-004's todo edit; a todo correction counts as a user instruction for the supervisor (REQ-ORCH-105). */
+  editTodo(op: 'add' | 'update' | 'remove', id: string, text: string): boolean {
+    if (this.ended) return false;
+    if (!this.todo.editTask(op, id, text)) return false;
+    this.deps.writer.appendTimeline('todo_edited', 'user', `The user ${op === 'add' ? 'added' : op === 'update' ? 'updated' : 'removed'} todo item ${id}.`, { op, id });
+    this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
+    this.saveRunning({});
+    return true;
+  }
+
+  /** REQ-MONITOR-142: applies from the next iteration; a system row states the switch. */
+  setEntryModel(key: string): boolean {
+    if (this.ended || !this.deps.models) return false;
+    const resolved = this.deps.models(key);
+    if (!resolved) return false;
+    this.entryOverride = { ...this.entryOverride, model: resolved.model };
+    this.deps.writer.appendRow('system', `Entry model switched to ${key}; it applies from the next iteration.`, true);
+    this.deps.writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key });
+    return true;
+  }
+  setEntryReasoning(level: ThinkingLevel): boolean {
+    if (this.ended) return false;
+    this.entryOverride = { ...this.entryOverride, thinking: level };
+    this.deps.writer.appendRow('system', `Entry reasoning level switched to ${level}; it applies from the next iteration.`, true);
+    this.deps.writer.appendTimeline('entry_reasoning_switched', 'user', `The entry reasoning level switched to ${level}.`, { level });
+    return true;
+  }
+
+  /**
+   * REQ-ORCH-085/087: the pause at the limit — recorded durably (status `paused_message_limit`, the count, the limit)
+   * before the loop stops, the host told, no terminal result: the session is paused, not ended. Every binding goes.
+   */
+  private async pauseAtLimit(limit: number): Promise<RunResult> {
+    const { writer, owner, bus } = this.deps;
+    const count = this.iterationsCompleted;
+    this.pausedAtLimit = { count, limit };
+    writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
+    writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), iterations_completed: count, todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()) });
+    owner.flushPending();
+    try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the pause failed on ${this.sessionId}: ${String(cause)}`); }
+    const usage = this.aggregates.usagePayload();
+    this.deps.onPaused?.({ count, limit, tokens: usage.tokens });
+    if (this.hooks) { try { await this.hooks.fireLifecycle('session_end', { status: 'interrupted' }); } catch { /* recorded elsewhere */ } this.hooks = null; }
+    bus.detachSession(this.sessionId);
+    this.ended = true;
+    const result: RunResult = {
+      status: 'interrupted', session_id: this.sessionId, stop_reason: 'message_limit_reached', summary: `The run paused at the message limit (${count} of ${limit}).`,
+      iterations_completed: count, report: null, tokens: usage.tokens, cost: usage.cost, error: null, execution_status: 'paused_message_limit', severity: 'warning',
+    };
+    this.result = result;
+    return result;
+  }
+  get pausedAtMessageLimit(): { count: number; limit: number | null } | null {
+    return this.pausedAtLimit;
+  }
 
   /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval of every agent in this run. */
   cancelPending(): number {
@@ -509,7 +636,7 @@ export class Run {
     // (logging cleanup: the session log is not built — REQ-SESSION-142 lands with its own mechanism.)
     step('terminal-transaction', () => {
       // REQ-SESSION-093's row, REQ-SESSION-094's lock release, session.end then result (REQ-SESSION-095), the terminal save.
-      const systemRow = classified.result === 'interrupted' ? 'Run paused: interrupted by user.'
+      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
         : classified.result === 'failed' || classified.result === 'error' || status === 'failed' ? `Run failed: ${this.lastFailure ?? stopReason}`
           : summary.message;
       const r = writer.endRun({

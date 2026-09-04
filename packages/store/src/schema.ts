@@ -294,6 +294,27 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 6,
+    // v6 lands with the control channel (Part J): queued prompts as a session-owned table (REQ-CHAT-038/039/041,
+    // REQ-MONITOR-139) and the message-limit pause on the session row (REQ-ORCH-084/085/087, REQ-SESSION-107/110).
+    // NO new index: every statement names (session_id, prompt_id) or scans one session's prompts.
+    sql: `
+      CREATE TABLE queued_prompts (
+        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        prompt_id    TEXT NOT NULL,
+        position     INTEGER NOT NULL,
+        content      TEXT NOT NULL,
+        status       TEXT NOT NULL,
+        created_at   TEXT NOT NULL,
+        triggered_at TEXT,
+        PRIMARY KEY (session_id, prompt_id)
+      );
+      -- REQ-ORCH-084: the limit in force for the session (null = disabled); REQ-ORCH-087: the count reached while paused at it.
+      ALTER TABLE sessions ADD COLUMN message_limit   INTEGER;
+      ALTER TABLE sessions ADD COLUMN paused_at_count INTEGER;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

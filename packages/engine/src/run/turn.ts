@@ -76,6 +76,15 @@ export interface TurnDeps {
   /** REQ-ORCH-141: the call ids already dispatched in this run. */
   readonly dispatched: Map<string, string>;
   readonly supervisor?: LoopSupervisor | undefined;
+  /** REQ-MONITOR-134/135: the pending steering prompts for this conversation, drained at the agent's next step. */
+  readonly steering?: (() => readonly SteeringPrompt[]) | undefined;
+  /** REQ-MONITOR-123: a graceful pause — the turn stops before its next model step. */
+  readonly shouldPause?: (() => boolean) | undefined;
+}
+
+export interface SteeringPrompt {
+  readonly id: string;
+  readonly text: string;
 }
 
 export interface TurnOutcome {
@@ -83,6 +92,19 @@ export interface TurnOutcome {
   readonly messages: ChatMessage[];
   readonly toolCallCount: number;
   readonly escalation?: SupervisorEscalation | undefined;
+  /** REQ-MONITOR-123: the turn stopped for a pause; the task is left where it was. */
+  readonly paused?: boolean | undefined;
+}
+
+/** REQ-MONITOR-134: delivered as a message explicitly marked as a steering prompt; the supervisor counts it as a user instruction. */
+function injectSteering(deps: TurnDeps, messages: ChatMessage[]): number {
+  const pending = deps.steering?.() ?? [];
+  for (const s of pending) {
+    messages.push({ role: 'user', content: [{ kind: 'text', text: `[Steering prompt] ${s.text}` }] });
+    deps.writer.appendTimeline('steering_injected', 'user', `A steering prompt reached ${deps.agentName} (${s.id.slice(0, 8)}).`, { prompt_id: s.id, agent: deps.agentName });
+    deps.supervisor?.noteUserInstruction();
+  }
+  return pending.length;
 }
 
 export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal): Promise<TurnOutcome> {
@@ -94,6 +116,8 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
   let usage = { input: 0, output: 0 };
   for (;;) {
+    if (deps.shouldPause?.()) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages, toolCallCount, paused: true };
+    injectSteering(deps, messages);
     const supervision = await deps.supervisor?.check();
     if (supervision?.kind === 'inject') {
       messages.push({ role: 'user', content: [{ kind: 'text', text: supervision.message }] });
@@ -118,6 +142,10 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
     messages.push({ role: 'assistant', content: [...(report.text ? [{ kind: 'text' as const, text: report.text }] : []), ...calls.map((c) => ({ kind: 'tool-call' as const, callId: c.callId, name: c.name, args: c.args }))] });
     if (calls.length === 0 || !tools) {
       if (calls.length > 0) deps.warn(`the model requested ${calls.length} tool call(s) but this run has no tool port; the turn ends`);
+      // REQ-ORCH-096: an empty reply with no call is the runtime's "cannot make progress" report — the stuck path of the supervisor.
+      if (calls.length === 0 && report.text.trim() === '') deps.supervisor?.observeStuck();
+      // REQ-MONITOR-136: a steer that arrived while the agent was finishing makes it take another round.
+      if (calls.length === 0 && (deps.steering?.().length ?? 0) > 0 && !signal.aborted) { injectSteering(deps, messages); continue; }
       return { report: { ...report, usage }, messages, toolCallCount };
     }
     const results: ChatMessage['content'] = [];

@@ -55,6 +55,25 @@ export class Todo {
     phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0 });
   }
 
+  /** REQ-MONITOR-004's todo edit — add/update/remove by id; false when the id is unknown or the task is no longer editable. */
+  editTask(op: 'add' | 'update' | 'remove', id: string, text: string, phaseName = 'main'): boolean {
+    if (op === 'add') {
+      if (this.all().some((t) => t.id === id)) return false;
+      this.appendTask(phaseName, id, text);
+      return true;
+    }
+    for (const p of this.phases) {
+      const at = p.tasks.findIndex((t) => t.id === id);
+      if (at === -1) continue;
+      const task = p.tasks[at]!;
+      if (task.state === 'in_progress' && op === 'remove') return false;
+      if (op === 'update') { p.tasks[at] = { ...task, text }; return true; }
+      p.tasks.splice(at, 1);
+      return true;
+    }
+    return false;
+  }
+
   toDocument(): TodoDocument {
     return { schema_version: 1, phases: this.phases.map((p) => ({ name: p.name, tasks: p.tasks.map((t) => ({ ...t })) })) };
   }

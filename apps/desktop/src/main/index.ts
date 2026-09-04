@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     if (ack.kind === 'workspace.ack') currentWorkspaceId = opened.workspaceId;
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
-      clocks.timers.after(millis(800), () => {
+      clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review'));
         }).catch(() => undefined);
@@ -481,8 +481,12 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'hooks.setToggle', agent: req.agent, hookId: req.hookId, on: req.on }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The hook policy could not be saved');
       }
-      case 'shell.hello':
-        return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`) } };
+      case 'shell.hello': {
+        const cb = currentWorkspaceId
+          ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: currentWorkspaceId }, millis(5_000))
+          : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
+        return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`), circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled } };
+      }
       case 'theme.get':
         return { ok: true, value: { name: currentTheme.name } };
       case 'theme.set': {
@@ -519,6 +523,23 @@ async function main(): Promise<void> {
           return refusal(r, 'The session could not be started');
         }
         return { ok: true, value: { sessionId: r.sessionId } };
+      }
+      case 'session.list': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
+        const r = await runHost.request({ kind: 'session.list', workspaceId: currentWorkspaceId }, millis(5_000));
+        return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
+      }
+      case 'session.resume': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };
+        const active = await runHost.request({ kind: 'runs.active', workspaceId: currentWorkspaceId }, millis(5_000));
+        if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
+        const r = await runHost.request({ kind: 'session.resume', workspaceId: currentWorkspaceId, sessionId: req.sessionId }, millis(10_000));
+        if (r.kind !== 'session.resumed') {
+          if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
+          return refusal(r, 'The session could not be loaded');
+        }
+        raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
+        return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
       }
       case 'session.control': {
         // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
@@ -662,11 +683,33 @@ async function main(): Promise<void> {
         app.exit(rendererErrors.length === 0 ? 0 : 3);
       });
     } else {
+    // ROTARIS_CAPTURE_RESUME=<sessionId|latest>: the user's route to a stored session — the title bar's
+    // "Sessions" control opens the browser (REQ-SHELL-126), the row's "Open" loads it (REQ-SESSION-118).
+    // Runs after the workspace is open (the list is the workspace's); the prompt seam then continues it.
+    const resumeWanted = process.env['ROTARIS_CAPTURE_RESUME'];
+    if (resumeWanted) {
+      const clickAt = (rect: { x: number; y: number }) => {
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+      };
+      const centre = (finder: string) => win.webContents.executeJavaScript(`(() => { const b = ${finder}; if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as Promise<{ x: number; y: number } | null>;
+      clocks.timers.after(millis(600), async () => {
+        const control = await centre(`document.querySelector('.title-bar__sessions')`);
+        if (!control) { log('capture: no "Sessions" control on screen'); return; }
+        clickAt(control);
+        await new Promise((r) => clocks.timers.after(millis(700), () => r(undefined)));
+        const rowFinder = resumeWanted === 'latest' ? `document.querySelector('.session-browser tr[data-session-id] button')` : `document.querySelector('.session-browser tr[data-session-id=${JSON.stringify(resumeWanted)}] button')`;
+        const open = await centre(rowFinder);
+        if (!open) { log(`capture: no session row for "${resumeWanted}" in the browser`); return; }
+        clickAt(open);
+        log(`capture: opened session "${resumeWanted}" from the browser`);
+      });
+    }
     const prompt = process.env['ROTARIS_CAPTURE_PROMPT'];
     if (prompt) {
       // Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L focuses the
       // composer (REQ-CHAT-002), the text is typed, Enter submits (REQ-CHAT-001).
-      clocks.timers.after(millis(800), () => {
+      clocks.timers.after(millis(resumeWanted ? 2_600 : 800), () => {
         const wc = win.webContents;
         wc.sendInputEvent({ type: 'keyDown', keyCode: '2', modifiers: ['control'] });
         wc.sendInputEvent({ type: 'keyUp', keyCode: '2', modifiers: ['control'] });

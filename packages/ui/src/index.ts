@@ -9,3 +9,4 @@ export * from './HooksSettings.js';
 export * from './HookReviewDialog.js';
 export * from './theme.js';
 export * from './motion.js';
+export * from './SessionBrowser.js';

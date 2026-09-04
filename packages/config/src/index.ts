@@ -4,3 +4,4 @@ export * from './hooks-section.js';
 export * from './loader.js';
 export * from './playbooks-overrides.js';
 export * from './intent-mapping.js';
+export * from './circuit-breaker-section.js';

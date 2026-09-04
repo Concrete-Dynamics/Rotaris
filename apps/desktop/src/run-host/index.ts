@@ -1,12 +1,14 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, type ProcessMessage, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type WorkspaceId } from '@rotaris/kernel';
-import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
+import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
-import { CATALOGUE, RefusalLease, RUN_CONFIG_DEFAULTS, RungMemory, Sessions, type ModelSetup } from '@rotaris/engine';
+import { CATALOGUE, RefusalLease, RUN_CONFIG_DEFAULTS, RungMemory, Sessions, SUPERVISOR_DEFAULTS, type ModelSetup } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, runtimeFromEnv, terminalManagerFromHost } from './tools.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { runPreflight } from './intent.js';
+import { createLoopClassifier } from './loop.js';
+import { loadCircuitBreakerConfig } from '@rotaris/config';
 import { AiSdkModelClient, DefaultAgentBackend, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -56,8 +58,9 @@ function log(message: string, level: 'info' | 'warn' = 'info'): void {
 function scriptedClient(c: Clocks): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
-  const scripts: Record<string, string[]> = { orchestrator: parse(process.env['ROTARIS_SCRIPT']), child: parse(process.env['ROTARIS_CHILD_SCRIPT']) };
-  const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0 };
+  const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');
+  const scripts: Record<string, string[]> = { orchestrator: loopScript ? Array.from({ length: Number(loopScript[2]) }, () => loopScript[1]!) : parse(process.env['ROTARIS_SCRIPT']), child: parse(process.env['ROTARIS_CHILD_SCRIPT']) };
+  const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0, 'loop-classifier': 0 };
   let call = 0;
   const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
     glob: { name: 'glob', args: { pattern: '**/*.md' } },
@@ -73,7 +76,7 @@ function scriptedClient(c: Clocks): ModelClient {
     async *stream(req: ModelRequest) {
       await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
-      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You classify a user request/.test(system) ? 'classifier' : 'child';
+      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
       calls[who] = (calls[who] ?? 0) + 1;
       if (who === 'classifier') {
@@ -84,6 +87,15 @@ function scriptedClient(c: Clocks): ModelClient {
         const text = want === 'garbage' ? 'lol no' : want === 'reject' ? 'small_feature\nfrom the text rung' : req.output === undefined ? `${want}\nscripted` : JSON.stringify({ intent: want, confidence: 0.75, reason: 'scripted classification' });
         yield ok<StreamPart>({ kind: 'text', delta: text });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 12, output: 8 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
+      if (who === 'loop-classifier') {
+        const want = (process.env['ROTARIS_LOOP_SCRIPT'] ?? 'detected').trim();
+        if (want === 'timeout') { await new Promise<void>((resolve) => req.signal.addEventListener('abort', () => resolve(), { once: true })); yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
+        const loop_detected = want !== 'clear';
+        yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify({ loop_detected, reason: loop_detected ? 'scripted repeated work' : 'scripted progress', corrective_message: 'Pause and reassess the current path. Choose a different concrete approach and verify its viability first.' }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 12, output: 12 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }
@@ -191,6 +203,14 @@ const configDir = resolveUserDirs().config;
 // REQ-ORCH-010: a rung a model rejected is remembered for the session — this process's lifetime.
 const rungMemory = new RungMemory();
 const modelSetup = modelFromEnv();
+const circuitBreakerFor = (workspaceRoot: string) => {
+  const loaded = loadCircuitBreakerConfig(configDir, workspaceRoot);
+  if (!loaded.ok) {
+    for (const error of loaded.error) log(`circuit breaker config ${error.file ?? 'agents.yaml'} ${error.path}: ${error.message}`, 'warn');
+    return null;
+  }
+  return { ...loaded.value, enabled: loaded.value.enabled && process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
+};
 // Decision 4: the scripted client classifies itself unless ROTARIS_INTENT_SCRIPT=none; a real model needs the slot ids.
 const intentEnv: Record<string, string | undefined> = process.env['ROTARIS_MODEL_DIALECT'] === 'scripted' && (process.env['ROTARIS_INTENT_SCRIPT'] ?? '') !== 'none'
   ? { ...process.env, ROTARIS_SMALL_MODEL_ID: process.env['ROTARIS_SMALL_MODEL_ID'] ?? 'scripted' }
@@ -204,6 +224,7 @@ const sessions = new Sessions({
   warn: (m) => log(m, 'warn'),
   mintSessionId: () => randomUUID(),
   model: modelSetup,
+  isProcessAlive: (pid) => probePid(pid) === 'alive',
   sessionFilesDir: (dal, sid) => join(dirname(dal.db.name), 'sessions', sid),
   publisher: {
     increment: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.increment', payload } }),
@@ -218,6 +239,16 @@ const sessions = new Sessions({
   // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
   hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
+  supervisor: (workspaceRoot) => {
+    const loaded = circuitBreakerFor(workspaceRoot);
+    if (!loaded?.enabled || !modelSetup) return null;
+    const classifier = createLoopClassifier({
+      backend: modelSetup.backend, runModel: modelSetup.config.model, thinking: modelSetup.config.thinking,
+      resolveCredential: modelSetup.config.resolveCredential, memory: rungMemory, configuredModel: loaded.model,
+      modelTimeoutMs: Math.round(loaded.loopClassificationTimeout * 1_000), env: process.env,
+    });
+    return classifier ? { config: { ...SUPERVISOR_DEFAULTS, activationMode: loaded.activationMode, classificationTimeoutMs: Math.round(loaded.loopClassificationTimeout * 1_000) }, classifier } : null;
+  },
   // REQ-ORCH-005: the pre-flight before the coordinator exists; the classifier's slots and the tier come from the environment (decision 4).
   ...(modelSetup ? {
     preflight: (ctx) => runPreflight(ctx, {
@@ -265,6 +296,24 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (s?.db) { s.db.close(); forgetSpelling(s.file); }
       stores.delete(req.workspaceId);
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
+    }
+    case 'circuit_breaker.status': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      return { kind: 'circuit_breaker.status', enabled: circuitBreakerFor(s.root)?.enabled ?? false };
+    }
+    case 'session.list': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return { kind: 'session.list', sessions: sessions.list(s.dal, s.root) };
+    }
+    case 'session.resume': {
+      if (sessions.activeRunCount() > 0) return { kind: 'refused', code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const resumed = sessions.resume(s.dal, s.root, asSessionId(req.sessionId));
+      if (!resumed.ok) return { kind: 'refused', code: `session.${resumed.error.code}`, headline: 'The session could not be loaded', detail: resumed.error.reason };
+      return { kind: 'session.resumed', sessionId: resumed.value.sessionId, settledChildren: resumed.value.settledChildren };
     }
     case 'session.start': {
       if (lease.isRefusing(req.workspaceId as WorkspaceId)) return { kind: 'refused', code: 'workspace.refusing', headline: 'New runs are refused for this workspace while a restore is under way' };

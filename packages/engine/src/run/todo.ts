@@ -48,6 +48,13 @@ export class Todo {
     return t;
   }
 
+  /** REQ-ORCH-004: a resumed session appends its new top-level task to the existing state. */
+  appendTask(phaseName: string, taskId: string, text: string): void {
+    let phase = this.phases.find((p) => p.name === phaseName);
+    if (!phase) { phase = { name: phaseName, tasks: [] }; this.phases.push(phase); }
+    phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0 });
+  }
+
   toDocument(): TodoDocument {
     return { schema_version: 1, phases: this.phases.map((p) => ({ name: p.name, tasks: p.tasks.map((t) => ({ ...t })) })) };
   }

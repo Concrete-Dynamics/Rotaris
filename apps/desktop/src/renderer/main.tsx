@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyTheme, AppShell, ApprovalDialog, HookReviewDialog, motionReduced, setStoredMotionPreference, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
+import { applyTheme, AppShell, ApprovalDialog, HookReviewDialog, motionReduced, SessionBrowser, setStoredMotionPreference, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -164,12 +164,16 @@ function recover(command: string): void {
   if (command === 'hooks.settings') { useShellState.getState().openSettings('hooks'); return; }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory }: { version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed }: { version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
   const [theme, setTheme] = useState(initialTheme);
   const [reducedMotion, setReducedMotion] = useState(() => initialReducedMotion ?? motionReduced());
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserSessions, setBrowserSessions] = useState<readonly SessionListItemPayload[]>([]);
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [browserError, setBrowserError] = useState<string | null>(null);
   useEffect(() => { themeSubscribers.add(setTheme); return () => { themeSubscribers.delete(setTheme); }; }, []);
   const changeTheme = useCallback(async (name: ThemeName) => {
     const r = await bridge.command({ kind: 'theme.set', name });
@@ -187,15 +191,43 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     setReducedMotion(value);
     return { ok: true as const };
   }, []);
+  const loadSessions = useCallback(async (): Promise<readonly SessionListItemPayload[]> => {
+    setBrowserOpen(true);
+    setBrowserLoading(true);
+    setBrowserError(null);
+    const result = await bridge.command({ kind: 'session.list' });
+    setBrowserLoading(false);
+    if (!result.ok) {
+      setBrowserError(result.detail ?? result.headline);
+      return [];
+    }
+    const rows = (result.value as { sessions: SessionListItemPayload[] }).sessions;
+    setBrowserSessions(rows);
+    return rows;
+  }, []);
+  const openSession = useCallback(async (sessionId: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const result = await bridge.command({ kind: 'session.resume', sessionId });
+    if (!result.ok) return { ok: false, reason: result.detail ?? result.headline };
+    const current = replica.getState().sessionId;
+    if (current && current !== sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current });
+    replica.getState().follow(sessionId);
+    const subscribed = await bridge.command({ kind: 'session.subscribe', sessionId });
+    if (!subscribed.ok) return { ok: false, reason: subscribed.detail ?? subscribed.headline };
+    useShellState.getState().switchView('workspace');
+    setBrowserOpen(false);
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer__input')?.focus()));
+    return { ok: true };
+  }, []);
   const status = useMemo(
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string.
       session ? `run ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'no session',
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
       `mode: ${session?.permissionMode ?? 'ask'}`, 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
+      ...(circuitBreakerArmed ? ['● CB armed'] : []),
       theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session, theme],
+    [processes, counters, session, theme, circuitBreakerArmed],
   );
   useEffect(() => {
     // REQ-CHAT-002: Ctrl+L moves keyboard focus to the composer from anywhere in the window.
@@ -208,7 +240,7 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  return (
+  return (<>
     <AppShell
       version={version}
       workspaceLabel={workspace}
@@ -217,8 +249,10 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
       onRecover={recover}
+      onOpenSessions={() => { void loadSessions(); }}
     />
-  );
+    {browserOpen && <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)} />}
+  </>);
 }
 
 /** The approval window: the same bundle, role by route (ADR-0056); it asks main for its request, answers through the control. */
@@ -264,10 +298,10 @@ async function boot(): Promise<void> {
   if (role === 'approval') { await bootApproval(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
-  const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[] }) : { version: '?', workspace: '(no workspace)', processes: [] };
+  const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} settingsCategory={settingsCategory} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} />
     </StrictMode>,
   );
 }

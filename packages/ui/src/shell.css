@@ -26,6 +26,7 @@
 .title-bar__version { color: var(--rt-text-tertiary); font-size: 12px; }
 .title-bar__spacer { flex: 1; }
 .title-bar__workspace { color: var(--rt-text-secondary); font-size: 12px; }
+.title-bar__sessions { -webkit-app-region: no-drag; }
 .brand-mark {
   width: 16px; height: 16px; border-radius: 50%;
   border: 2px solid var(--rt-accent);
@@ -230,3 +231,22 @@
 .intent-status[data-phase='classified'] { border-left-color: var(--rt-accent-300); }
 .playbooks__slot { margin: var(--rt-space-3, 12px) 0 0; }
 .playbooks__variant { display: grid; grid-template-columns: 140px 1fr; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) 0; border-bottom: 1px solid var(--rt-divider); font-size: var(--rt-text-sm, 13px); }
+
+/* ── Stored-session browser (REQ-SHELL-126/127, REQ-SESSION-117/118) ── */
+.session-browser-backdrop { z-index: 20; }
+.session-browser { width: min(920px, 100%); max-height: min(720px, calc(100vh - 2 * var(--rt-space-4))); }
+.session-browser__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rt-space-4); }
+.session-browser__head .dialog-title, .session-browser__head .dialog-body { margin: 0; }
+.session-browser__search { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.session-browser__label { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.session-browser__table-wrap { min-height: 160px; overflow: auto; border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); }
+.session-browser__table td { vertical-align: middle; }
+.session-browser__table td:last-child { width: 1%; white-space: nowrap; text-align: right; }
+.session-browser__name, .session-browser__detail { display: block; }
+.session-browser__name { color: var(--rt-text); }
+.session-browser__detail { margin-top: var(--rt-space-1); color: var(--rt-text-tertiary); font-size: var(--rt-text-2xs); }
+.session-browser__stale { color: var(--rt-warn); border-color: var(--rt-warn); }
+.session-browser__error { margin: 0; color: var(--rt-danger-300); font-size: var(--rt-text-xs); }
+.session-browser__empty, .session-browser__loading { padding: var(--rt-space-5); text-align: center; color: var(--rt-text-tertiary); }
+.session-browser__loading { margin: 0; }
+.visually-hidden { position: absolute; width: var(--rt-hairline-width); height: var(--rt-hairline-width); padding: 0; margin: calc(-1 * var(--rt-hairline-width)); overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

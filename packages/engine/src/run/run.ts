@@ -8,7 +8,7 @@ import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
-import { Todo } from './todo.js';
+import { Todo, type TodoDocument } from './todo.js';
 import { runTurn, type ToolPort } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
@@ -18,6 +18,7 @@ import type { HookPort, RunNotice } from '../hooks-port.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
+import type { LoopSupervisor } from './supervisor.js';
 
 /**
  * The run loop, in its first conformant slice: one root agent, one model
@@ -51,7 +52,7 @@ export interface RunConfig {
   readonly transientRetries: number;
   /** REQ-ORCH-077: default 3. */
   readonly consecutiveRetryLimit: number;
-  /** A bound on model steps per turn standing in for the loop supervisor (REQ-ORCH-099..107, not built). */
+  /** A final belt behind the loop supervisor (REQ-ORCH-099..107). */
   readonly maxStepsPerTurn: number;
   readonly resolveCredential: () => Promise<string>;
 }
@@ -84,6 +85,7 @@ export interface RunDeps {
   readonly workspaceRoot: string;
   readonly task: string;
   readonly taskId: string;
+  readonly taskLabel?: string | undefined;
   readonly writer: SessionWriter;
   readonly owner: ProjectionOwner;
   readonly bus: EventBus;
@@ -114,6 +116,9 @@ export interface RunDeps {
   readonly warn: (message: string) => void;
   /** After every save's commit, off the path (REQ-SESSION-028's one file). */
   readonly onSaved?: (generation: number) => void;
+  readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
+  readonly resumeTodo?: TodoDocument | undefined;
+  readonly continuation?: boolean | undefined;
 }
 
 /** REQ-SESSION-095 / REQ-EVENTS-026: the one terminal result, computed once and used everywhere. */
@@ -144,6 +149,7 @@ export class Run {
   private startedAt: Millis | null = null;
   private hardCancel: Budget | null = null;
   private iterationsCompleted = 0;
+  private initialIterations = 0;
   private lastFailure: string | null = null;
   private todo: Todo;
   private aggregates: Aggregates;
@@ -161,8 +167,12 @@ export class Run {
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
     this.hooks = deps.hooks ?? null;
-    this.todo = Todo.fresh(deps.taskId, deps.task, deps.config.consecutiveRetryLimit);
-    this.aggregates = Aggregates.rehydrate(deps.readSession());
+    const stored = deps.readSession();
+    this.todo = deps.resumeTodo ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit) : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
+    if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
+    this.aggregates = Aggregates.rehydrate(stored);
+    this.iterationsCompleted = stored?.iterations_completed ?? 0;
+    this.initialIterations = this.iterationsCompleted;
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
       // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops.
@@ -215,13 +225,21 @@ export class Run {
       if (this.deps.preflight) {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
       }
+      if (this.deps.continuation) {
+        const intent = this.preflight?.intent ?? NO_PREFLIGHT_INTENT;
+        writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
+      }
       if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
-      const audit = writer.recordLaunchAudit({
+      const auditPayload = {
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
         run_intent: this.preflight?.intent ?? NO_PREFLIGHT_INTENT, intent_grant: this.preflight?.grant ?? 'none',
         permission_mode: 'default', check_suite: null, resolved_playbooks: this.preflight?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: {},
-      });
-      if (audit.ok && !audit.value) this.deps.warn(`launch audit for ${this.sessionId} already existed and was not rewritten (REQ-SESSION-138)`);
+      };
+      if (this.deps.continuation) writer.appendTimeline('run_continuation_intent', 'rotaris', `Continuation intent: ${auditPayload.run_intent.category}.`, auditPayload);
+      else {
+        const audit = writer.recordLaunchAudit(auditPayload);
+        if (audit.ok && !audit.value) this.deps.warn(`launch audit for ${this.sessionId} already existed and was not rewritten (REQ-SESSION-138)`);
+      }
       writer.appendTimeline('run_start', 'rotaris', `A run is starting for session ${this.sessionId}.`, { workspace_root: this.deps.workspaceRoot });
       // ADR-0015 / REQ-HOOKS-085/086/127: the trust outcome announced once, ahead of the first hook-related event.
       if (this.hooks) {
@@ -250,7 +268,7 @@ export class Run {
         if (this.stop.requested) { stopReason = this.stop.reason ?? 'user_cancelled'; break; }
         stopReason = stopCondition({
           allTasksComplete: this.todo.allTasksComplete, pendingTasks: this.todo.pendingCount,
-          iterationsCompleted: this.iterationsCompleted, iterationLimit: config.iterationLimit,
+          iterationsCompleted: this.iterationsCompleted - this.initialIterations, iterationLimit: config.iterationLimit,
           elapsedMs: clocks.monotonic.now() - (this.startedAt ?? clocks.monotonic.now()), timeLimitMs: config.timeLimitMs,
         });
         if (stopReason) break;
@@ -280,7 +298,8 @@ export class Run {
     let summary = '';
     let escalate = false;
     try {
-      const report = await this.turnWithRetry(task.text);
+      const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
+      const report = await this.turnWithRetry(modelTask);
       summary = report.text.slice(0, 200);
       if (report.usage.input + report.usage.output > 0) {
         this.aggregates.addTurnUsage(report.usage);
@@ -349,6 +368,7 @@ export class Run {
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
       }, iteration)
       : null;
     this.children = children;
@@ -358,6 +378,7 @@ export class Run {
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: config.model, thinking: config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
+      ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
     }, text, history, this.abort.signal);
     try {
       const outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);

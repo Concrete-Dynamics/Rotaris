@@ -51,6 +51,9 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.release'), workspaceId: z.string() }),
   /** REQ-CHAT-011 / REQ-SESSION-089: create the session, take its lock, open its history, record row 0. */
   z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().min(1) }),
+  z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
   /** A surface begins following: snapshot first, then the resident transcript (REQ-MONITOR-214, REQ-SESSION-161). */
   z.object({ kind: z.literal('session.attach'), sessionId: z.string() }),
@@ -75,6 +78,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
+
+export const SessionListItemSchema = z.object({
+  sessionId: z.string(), label: z.string(), status: z.string(), branch: z.string(), relativeTime: z.string(), detail: z.string(),
+  awaitingInput: z.boolean(), stale: z.boolean(),
+});
+export type SessionListItemPayload = z.infer<typeof SessionListItemSchema>;
 
 /** What a restore must convey before anything changes (REQ-SESSION-201), assessed read-only by the workspace service. */
 export const RestoreAssessmentSchema = z.object({
@@ -160,6 +169,9 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.opened'), workspaceId: z.string(), storeFile: z.string(), schemaVersion: z.number().int() }),
   z.object({ kind: z.literal('workspace.ack'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.started'), sessionId: z.string() }),
+  z.object({ kind: z.literal('circuit_breaker.status'), enabled: z.boolean() }),
+  z.object({ kind: z.literal('session.list'), sessions: z.array(SessionListItemSchema) }),
+  z.object({ kind: z.literal('session.resumed'), sessionId: z.string(), settledChildren: z.number().int().nonnegative() }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */
   z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),

@@ -33,6 +33,7 @@ export interface AppShellProps {
   readonly notice?: ShellNotice | null;
   readonly onAcknowledge?: ((id: number) => void) | undefined;
   readonly onRecover?: ((command: string) => void) | undefined;
+  readonly onOpenSessions?: (() => void) | undefined;
 }
 
 const GLYPH: Record<ShellNotice['severity'], string> = { info: 'i', warning: '!', error: '×' };
@@ -59,7 +60,7 @@ export function NoticeBanner({ notice, onAcknowledge, onRecover }: { notice: She
   );
 }
 
-export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge, onRecover }: AppShellProps) {
+export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge, onRecover, onOpenSessions }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
 
@@ -86,6 +87,7 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
         <span className="title-bar__name">Rotaris</span>
         <span className="title-bar__version mono">{version}</span>
         <span className="title-bar__spacer" />
+        {onOpenSessions && <button type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</button>}
         <span className="title-bar__workspace">{workspaceLabel}</span>
       </header>
       <div className="notice-slot" aria-live="polite">

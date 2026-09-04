@@ -3,6 +3,7 @@ import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
+import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -69,17 +70,19 @@ export interface TurnDeps {
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
   readonly resolveCredential: () => Promise<string>;
-  /** A stand-in bound until the loop supervisor (REQ-ORCH-099..107) is built; recorded in codebase.md. */
+  /** A final belt behind the loop supervisor. */
   readonly maxStepsPerTurn: number;
   readonly warn: (message: string) => void;
   /** REQ-ORCH-141: the call ids already dispatched in this run. */
   readonly dispatched: Map<string, string>;
+  readonly supervisor?: LoopSupervisor | undefined;
 }
 
 export interface TurnOutcome {
   readonly report: TurnReport;
   readonly messages: ChatMessage[];
   readonly toolCallCount: number;
+  readonly escalation?: SupervisorEscalation | undefined;
 }
 
 export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal): Promise<TurnOutcome> {
@@ -91,15 +94,26 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
   let usage = { input: 0, output: 0 };
   for (;;) {
+    const supervision = await deps.supervisor?.check();
+    if (supervision?.kind === 'inject') {
+      messages.push({ role: 'user', content: [{ kind: 'text', text: supervision.message }] });
+      writer.appendTimeline('loop_supervisor_activation', deps.agentName, supervision.message, { trigger: supervision.activation.trigger, reason: supervision.activation.reason, activation_count: supervision.activation.activationCount });
+    } else if (supervision?.kind === 'escalate') {
+      const headline = 'child aborted after repeated activations';
+      writer.recordIssue({ kind: 'circuit_breaker_escalation', severity: 'error', actor: deps.agentName, message: headline, metadata: { session_id: supervision.signal.sessionId, activation_count: supervision.signal.activationCount, reason: supervision.signal.reason } });
+      writer.appendTimeline('loop_supervisor_activation', deps.agentName, headline, { trigger: supervision.activation.trigger, reason: supervision.signal.reason, activation_count: supervision.signal.activationCount });
+      return { report: { status: 'failed', text: lastReport.text, usage, error: { code: 'unknown', headline, transient: false } }, messages, toolCallCount, escalation: supervision.signal };
+    }
     steps += 1;
     if (steps > deps.maxStepsPerTurn) {
-      deps.warn(`the turn exceeded ${deps.maxStepsPerTurn} model steps and was ended as partial (the loop supervisor is not built)`);
+      deps.warn(`the turn exceeded ${deps.maxStepsPerTurn} model steps and was ended as partial (the final step belt fired)`);
       return { report: { status: 'partial', text: lastReport.text, usage }, messages, toolCallCount };
     }
     const report = await step(deps, messages, specs, signal);
     lastReport = report;
     usage = { input: usage.input + report.usage.input, output: usage.output + report.usage.output };
     if (report.status === 'failed') return { report: { ...report, usage }, messages, toolCallCount };
+    deps.supervisor?.observe({ kind: 'message', text: report.text });
     const calls = report.toolCalls ?? [];
     messages.push({ role: 'assistant', content: [...(report.text ? [{ kind: 'text' as const, text: report.text }] : []), ...calls.map((c) => ({ kind: 'tool-call' as const, callId: c.callId, name: c.name, args: c.args }))] });
     if (calls.length === 0 || !tools) {
@@ -111,6 +125,7 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
     for (const c of calls) {
       if (signal.aborted) break;
       toolCallCount += 1;
+      deps.supervisor?.observe({ kind: 'tool', name: c.name, args: c.args });
       const prior = deps.dispatched.get(c.callId);
       if (prior !== undefined) {
         // REQ-ORCH-141: a replayed id is not dispatched again.

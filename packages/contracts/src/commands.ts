@@ -26,6 +26,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('prefs.set'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab']), value: z.union([z.boolean(), z.string()]) }),
   /** REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`. */
   z.object({ kind: z.literal('session.start'), prompt: z.string().min(1) }),
+  z.object({ kind: z.literal('session.list') }),
+  z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
   /** Begin following: every attach starts with a whole-session update (REQ-MONITOR-214). */

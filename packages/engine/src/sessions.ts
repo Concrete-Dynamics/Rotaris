@@ -19,6 +19,8 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
+import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
+import type { TodoDocument } from './run/todo.js';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -103,6 +105,9 @@ export interface SessionsDeps {
   readonly notice?: (n: RunNotice) => void;
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
   readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
+  /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
+  readonly supervisor?: ((workspaceRoot: string) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
+  readonly isProcessAlive?: ((pid: number) => boolean) | undefined;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -119,13 +124,85 @@ export function postureAtStart(runtime: RuntimePosture | undefined, attended: bo
 }
 
 interface Live {
-  readonly writer: SessionWriter;
-  readonly owner: ProjectionOwner;
+  writer: SessionWriter;
+  owner: ProjectionOwner;
   readonly dal: StoreDal;
   run: Run | null;
   running: Promise<RunResult> | null;
   tools: ToolPort | null;
   log: SessionLog | null;
+  commitTarget?: { owner?: ProjectionOwner; run?: Run } | undefined;
+}
+
+export interface SessionListItem {
+  readonly sessionId: string;
+  readonly label: string;
+  readonly status: string;
+  readonly branch: string;
+  readonly relativeTime: string;
+  readonly detail: string;
+  readonly awaitingInput: boolean;
+  readonly stale: boolean;
+}
+
+export interface ResumeSuccess {
+  readonly sessionId: SessionId;
+  readonly settledChildren: number;
+}
+
+type ResumeFailure = { readonly code: string; readonly reason: string };
+
+const cut = (text: string, cap: number): string => text.length <= cap ? text : `${text.slice(0, Math.max(0, cap - 3))}...`;
+
+function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, ResumeFailure> {
+  if (row.todo === null) return ok(undefined);
+  try {
+    const value = JSON.parse(row.todo) as Partial<TodoDocument>;
+    if (value.schema_version !== 1 || !Array.isArray(value.phases) || value.phases.some((phase) => typeof phase !== 'object' || phase === null || !Array.isArray(phase.tasks))) throw new Error('todo must be a schema_version 1 document with phase task lists');
+    return ok(value as TodoDocument);
+  } catch (cause) {
+    return err({ code: 'state-unreadable', reason: `session ${row.session_id} has unreadable stored state: ${String(cause instanceof Error ? cause.message : cause)}` });
+  }
+}
+
+function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | null {
+  const payload = dal.getLaunchAudit(sessionId)?.payload;
+  if (!payload) return null;
+  try {
+    const result = IntentResultSchema.safeParse((JSON.parse(payload) as { run_intent?: unknown }).run_intent);
+    return result.success ? result.data.category : null;
+  } catch { return null; }
+}
+
+export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
+  const recentRows = dal.residentRows(row.session_id as SessionId)
+    .filter((event) => (event.kind === 'user' || event.kind === 'agent') && event.body.trim() !== '')
+    .slice(-6);
+  const perEvent = Math.min(700, Math.floor((3_200 - Math.max(0, recentRows.length - 1)) / Math.max(1, recentRows.length)));
+  const recent = recentRows.map((event) => `${event.kind}: ${cut(event.body, Math.max(3, perEvent - event.kind.length - 2))}`);
+  const history = recent.join('\n');
+  const tasks = (todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => `- [${task.state}] ${cut(task.text, 80)}`));
+  const shownTasks = tasks.slice(0, 20);
+  if (tasks.length > 20) shownTasks.push('- [... additional todo tasks elided]');
+  const iterations = dal.timelineOf(row.session_id as SessionId).filter((entry) => entry.name === 'iteration_end').slice(-5).map((entry) => cut(entry.message, 700));
+  return [
+    'This is a follow-up within an existing session. Prior session context is authoritative; continue from its recorded state.',
+    '', 'Latest user request:', prompt,
+    '', 'Authoritative session handoff:',
+    'Artifacts: (no orchestrator artifact is recorded in this build)',
+    `Todo:\n${shownTasks.join('\n') || '- (empty)'}`,
+    `Progress: ${cut(row.progress ?? '(none recorded)', 700)}`,
+    `Recent iterations:\n${iterations.map((item) => `- ${item}`).join('\n') || '- (none recorded)'}`,
+    '', 'Recent session context:', history || '(none recorded)',
+  ].join('\n');
+}
+
+function relativeTime(updatedAt: string, now: number): string {
+  const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
+  if (elapsed < 60_000) return 'just now';
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m ago`;
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h ago`;
+  return `${Math.floor(elapsed / 86_400_000)}d ago`;
 }
 
 /** REQ-SESSION-082 / REQ-EVENTS-021: a refusal before the run starts is one `result` of status error, marked as such. */
@@ -205,6 +282,70 @@ export class Sessions {
     this.bus = new EventBus({ timers: deps.clocks.timers, warn: deps.warn });
   }
 
+  /** REQ-SESSION-042/154/182: read-only workspace listing with shared stale semantics. */
+  list(dal: StoreDal, workspaceRoot: string): SessionListItem[] {
+    const now = Number(this.deps.clocks.wall.instant());
+    return dal.listSessions().filter((row) => row.workspace_root === workspaceRoot).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map((row) => {
+      const firstPrompt = dal.residentRows(asSessionId(row.session_id)).find((event) => event.kind === 'user' && event.body.trim() !== '');
+      const lock = dal.getLock(asSessionId(row.session_id));
+      const live = lock !== undefined && (lock.host !== this.deps.host || lock.pid <= 0 || (this.deps.isProcessAlive?.(lock.pid) ?? true));
+      return {
+        sessionId: row.session_id,
+        label: cut(firstPrompt?.body.trim() || row.session_id, 80),
+        status: row.execution_status || 'idle',
+        branch: '—',
+        relativeTime: relativeTime(row.updated_at, now),
+        detail: row.workspace_root,
+        awaitingInput: parsePending(row.pending_approvals).length > 0,
+        stale: isActiveStatus(row.execution_status) && !live,
+      };
+    });
+  }
+
+  /** REQ-SESSION-083/112/118: load, validate, claim, sweep, then expose the projection. */
+  resume(dal: StoreDal, workspaceRoot: string, sessionId: SessionId): Result<ResumeSuccess, ResumeFailure> {
+    const row = dal.getSession(sessionId);
+    if (!row || row.workspace_root !== workspaceRoot) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const todo = parseTodoDocument(row);
+    if (!todo.ok) return todo;
+    if (row.progress !== null) {
+      try { JSON.parse(row.progress); }
+      catch (cause) { return err({ code: 'state-unreadable', reason: `session ${sessionId} has unreadable stored state: ${String(cause instanceof Error ? cause.message : cause)}` }); }
+    }
+    const existing = this.live.get(sessionId);
+    if (existing && this.isRunActive(sessionId)) return err({ code: 'run-active', reason: `Session ${sessionId} is already active in this application.` });
+    if (existing) return ok({ sessionId, settledChildren: 0 });
+
+    const appender = this.deps.sessionLogAppender?.(dal, sessionId);
+    const log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: this.deps.runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
+    const warn = (m: string) => { log?.warn(m); this.deps.warn(m); };
+    const entry: { owner?: ProjectionOwner } = {};
+    const opened = SessionWriter.open({
+      dal, sessionId, wall: this.deps.clocks.wall, retentionCap: this.deps.retentionCap, warn,
+      onCommitted: (c) => entry.owner?.onCommitted(c),
+    }, { pid: this.deps.pid, host: this.deps.host, isProcessAlive: this.deps.isProcessAlive ?? (() => true) });
+    if (!opened.ok) {
+      log?.close();
+      if (opened.error.code === 'no-session') return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+      if (opened.error.code === 'store') return err({ code: 'store', reason: `Session ${sessionId} could not be loaded: ${opened.error.reason}` });
+      const h = opened.error.holder;
+      return err(h.host === this.deps.host
+        ? { code: 'lock-held-local', reason: `Session ${sessionId} is held by another run in this application (pid ${h.pid}). Finish or stop that run first.` }
+        : { code: 'lock-held-foreign', reason: `Session ${sessionId} is held by a different machine (${h.host}) since ${h.acquiredAt}. This instance cannot establish whether that run is still going; explicitly release the lock after resolving why this machine-local store is reachable there.` });
+    }
+    const writer = opened.value;
+    const owner = new ProjectionOwner({
+      sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
+      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
+    });
+    entry.owner = owner;
+    const settled = settleStaleChildren(dal, writer, sessionId, warn);
+    if (settled > 0) warn(`${settled} child record(s) from a previous run were settled cancelled before continuation (REQ-ORCH-053)`);
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry });
+    return ok({ sessionId, settledChildren: settled });
+  }
+
   /** REQ-CHAT-011 with no session: create it, record the prompt as row 0, start the run. */
   start(dal: StoreDal, workspaceRoot: string, prompt: string): Result<SessionId, StartRefusal | { code: string; reason: string }> {
     const model = this.deps.model;
@@ -245,12 +386,16 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true);
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
 
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
+    const supervisorSetup = this.deps.supervisor?.(workspaceRoot) ?? null;
+    const supervisors = supervisorSetup
+      ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers)
+      : null;
     const runRef: { run?: Run } = {};
     // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
     let hooks: HookPort | null = null;
@@ -275,6 +420,7 @@ export class Sessions {
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
       readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
+      ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
@@ -291,18 +437,83 @@ export class Sessions {
       const onRunResult = this.deps.onRunResult;
       this.bus.attach(sessionId, { mode: 'blocking', deliver: (e) => { if (e.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
     }
-    live.running = run.start().finally(() => { log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
+    live.running = run.start().finally(() => { delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
     return ok(sessionId);
   }
 
-  /** REQ-CHAT-011 with a loaded session and no active run: append the user row. REQ-CHAT-012: refused while a run is active. */
+  /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
   prompt(sessionId: SessionId, prompt: string): Result<TranscriptRow, { code: string; reason: string }> {
-    const s = this.live.get(sessionId);
+    if (!this.deps.model) return err({ code: 'no-model', reason: 'No model is configured, so the run was refused before it started.' });
+    let s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const lock = s.dal.getLock(sessionId);
+    if (!lock || lock.pid !== this.deps.pid || lock.host !== this.deps.host) {
+      const reopened = this.resume(s.dal, stored.workspace_root, sessionId);
+      if (!reopened.ok) return reopened;
+      s = this.live.get(sessionId)!;
+    }
+    const todo = parseTodoDocument(stored);
+    if (!todo.ok) return todo;
+    const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value);
     const row = s.writer.appendRow('user', prompt, true);
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
+    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId));
     return ok(row.value);
+  }
+
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null): void {
+    const model = this.deps.model!;
+    const sessionId = s.writer.sessionId;
+    const workspaceRoot = s.dal.getSession(sessionId)!.workspace_root;
+    const permission = postureAtStart(this.deps.runtime, this.deps.attended?.() ?? false);
+    // REQ-SESSION-142: one log per run — the one `resume` opened closes when the first continuation ends, so
+    // every continuation opens its own rather than writing into a closed one.
+    s.log?.close();
+    const appender = this.deps.sessionLogAppender?.(s.dal, sessionId);
+    s.log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: this.deps.runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(s.dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
+    const runRef: { run?: Run } = {};
+    let hooks: HookPort | null = null;
+    if (this.deps.hooks) {
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); } }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
+    }
+    const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
+    const baseCtx = { sessionId, workspaceRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    s.tools = null;
+    const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
+    if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
+    const supervisorSetup = this.deps.supervisor?.(workspaceRoot) ?? null;
+    const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers) : null;
+    const budget = this.deps.runtime?.childBudget ?? DEFAULT_BUDGET;
+    const cap = this.deps.runtime?.modelConcurrencyCap ?? null;
+    const preflight = this.deps.preflight;
+    const run = new Run({
+      sessionId, workspaceRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
+      writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
+      tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
+      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}),
+      ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
+      onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
+      ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
+      ...(this.deps.tools ? {
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
+        dal: s.dal, budget, modelCap: () => cap,
+        summariser: { backend: model.backend, model: model.config.model, thinking: model.config.thinking, timers: this.deps.clocks.timers, resolveCredential: model.config.resolveCredential },
+      } : {}),
+      ...(this.deps.runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: this.deps.runtime.drainTimeoutMs as Millis }),
+    });
+    runRef.run = run;
+    s.commitTarget!.run = run;
+    s.run = run;
+    if (this.deps.onRunResult) {
+      const onRunResult = this.deps.onRunResult;
+      this.bus.attach(sessionId, { mode: 'blocking', deliver: (event) => { if (event.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
+    }
+    s.running = run.start().finally(() => { if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });
   }
 
   /** ADR-0010 channel 1: `{ok, value?}`; `false` when the run cannot honour it (REQ-MONITOR-007/011). */

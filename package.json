@@ -18,6 +18,7 @@
     "dev": "pnpm --filter @rotaris/desktop dev",
     "build": "pnpm --filter @rotaris/desktop build",
     "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",
+    "part-h-proof": "node apps/desktop/scripts/part-h-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

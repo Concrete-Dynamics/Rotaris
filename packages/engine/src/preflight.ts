@@ -27,6 +27,8 @@ export interface PreflightContext {
   readonly prompt: string;
   readonly signal: AbortSignal;
   readonly warn: (message: string) => void;
+  readonly previousIntent?: IntentResult['category'] | null | undefined;
+  readonly hasUnfinishedWork?: boolean | null | undefined;
 }
 
 export const NO_PREFLIGHT_INTENT: IntentResult = { category: 'moderate_feature', confidence: null, reason: 'intent classification is not wired for this run; fallback', fallback: true, carried_over: false };

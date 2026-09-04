@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, motionReduced, setStoredMotionPreference } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference } from './index.js';
 import { resolveTheme } from '@rotaris/contracts';
 
 describe('ui — shell state (REQ-SHELL-025, REQ-SHELL-026)', () => {
@@ -35,5 +35,19 @@ describe('ui — theme projection and motion', () => {
     setStoredMotionPreference(false);
     expect(motionReduced()).toBe(false);
     setStoredMotionPreference(undefined);
+  });
+});
+
+describe('ui — session browser (REQ-SHELL-126)', () => {
+  const rows = [
+    { sessionId: 'S-1', label: 'Refactor parser', status: 'completed', branch: '—', relativeTime: '2 minutes ago', detail: 'C:/work/one', awaitingInput: false, stale: false },
+    { sessionId: 'S-2', label: 'Review hooks', status: 'running', branch: 'feat/hooks', relativeTime: '1 hour ago', detail: 'C:/work/two', awaitingInput: true, stale: true },
+  ];
+
+  it('searches the complete presented row vocabulary', () => {
+    expect(filterSessions(rows, 'PARSER').map((row) => row.sessionId)).toEqual(['S-1']);
+    expect(filterSessions(rows, 'stale').map((row) => row.sessionId)).toEqual(['S-2']);
+    expect(filterSessions(rows, 'awaiting input').map((row) => row.sessionId)).toEqual(['S-2']);
+    expect(filterSessions(rows, '  ')).toEqual(rows);
   });
 });

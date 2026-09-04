@@ -203,6 +203,18 @@ export interface OpenSessionArgs {
   readonly sandboxed?: boolean;
 }
 
+export interface OpenExistingSessionArgs {
+  readonly pid: number;
+  readonly host: MachineId;
+  /** Resolve uncertainty toward alive before it reaches this port. */
+  readonly isProcessAlive: (pid: number) => boolean;
+}
+
+export type SessionOpenError =
+  | { readonly code: 'no-session'; readonly sessionId: string }
+  | { readonly code: 'lock-held'; readonly holder: { readonly pid: number; readonly host: string; readonly acquiredAt: string } }
+  | { readonly code: 'store'; readonly reason: string };
+
 /** REQ-SESSION-070's "terminal": a status outside REQ-SESSION-055's active six and not the initial `idle`. */
 function isTerminalStatus(status: string): boolean {
   return status !== 'idle' && !isActiveStatus(status);
@@ -286,6 +298,28 @@ export class SessionWriter {
       permission_mode: args.permissionMode ?? 'ask', sandboxed: args.sandboxed ?? false, max_iterations: args.maxIterations ?? null,
     });
     return ok(w);
+  }
+
+  /** REQ-SESSION-047/083/112: claim an existing session, with one local-dead-pid reap. */
+  static open(deps: SessionWriterDeps, args: OpenExistingSessionArgs): Result<SessionWriter, SessionOpenError> {
+    const { dal, sessionId, wall } = deps;
+    if (!dal.getSession(sessionId)) return err({ code: 'no-session', sessionId });
+    const now = toIsoUtc(wall.instant());
+    try {
+      let claimed = dal.claimLock(sessionId, args.pid, args.host, now);
+      if (!claimed.claimed) {
+        const holder = claimed.holder;
+        const locallyReapable = holder.host === args.host && Number.isInteger(holder.pid) && holder.pid > 0 && !args.isProcessAlive(holder.pid);
+        if (locallyReapable) {
+          dal.releaseLock(sessionId, holder.pid, args.host);
+          claimed = dal.claimLock(sessionId, args.pid, args.host, now);
+        }
+      }
+      if (!claimed.claimed) return err({ code: 'lock-held', holder: { pid: claimed.holder.pid, host: claimed.holder.host, acquiredAt: claimed.holder.acquired_at } });
+      return ok(new SessionWriter(deps));
+    } catch (cause) {
+      return err({ code: 'store', reason: String(cause) });
+    }
   }
 
   /** REQ-EVENTS-052 first appearance (or the only event, when the row arrives settled). One transaction. */

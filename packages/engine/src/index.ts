@@ -12,6 +12,7 @@ export * from './run/event-bus.js';
 export * from './run/summary.js';
 export * from './run/run.js';
 export * from './run/turn.js';
+export * from './run/supervisor.js';
 export * from './session-log.js';
 export * from './children/naming.js';
 export * from './children/personas.js';

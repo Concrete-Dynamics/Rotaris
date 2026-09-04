@@ -13,6 +13,7 @@ import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import type { HookPort } from '../hooks-port.js';
 import { withPlaybook } from '../run/run.js';
+import type { LoopSupervisor } from '../run/supervisor.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -52,6 +53,7 @@ export interface ChildrenDeps {
   readonly playbookFor?: ((role: string) => string) | null | undefined;
   /** REQ-ORCH-015: on the answer route the answered category is accepted at once. */
   readonly route?: 'answer' | 'work' | undefined;
+  readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
 }
 
 export class IterationChildren implements DelegationOps {
@@ -192,6 +194,7 @@ export class IterationChildren implements DelegationOps {
       writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
       systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: deps.model, thinking: deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
       resolveCredential: deps.resolveCredential, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
+      ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
     }, task, history, controller.signal);
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
     let prior = '';
@@ -232,7 +235,7 @@ export class IterationChildren implements DelegationOps {
     if (cancelled) status = 'cancelled';
     else if (timedOut) { status = 'failed'; errors.push({ type: 'timeout', message: `Child timed out after ${(deps.childTimeoutMs ?? CHILD_TIMEOUT_MS) / 1000}s` }); deps.writer.recordIssue({ kind: 'timeout', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} timed out after ${(deps.childTimeoutMs ?? CHILD_TIMEOUT_MS) / 1000}s.` }); }
     else if (error) { status = 'failed'; errors.push(error); }
-    else if (!outcome || outcome.report.status === 'failed') { status = 'failed'; if (outcome && outcome.report.status === 'failed') errors.push({ type: 'model', message: outcome.report.error.headline }); }
+    else if (!outcome || outcome.report.status === 'failed') { status = 'failed'; if (outcome && outcome.report.status === 'failed') errors.push({ type: outcome.escalation ? 'circuit_breaker_escalation' : 'model', message: outcome.report.error.headline }); }
     else if (toolCalls === 0 && lastText.trim() === '') { status = 'failed'; errors.push({ type: 'incomplete_execution', message: 'no_activity' }); deps.writer.recordIssue({ kind: 'incomplete_execution', severity: 'warning', actor: row.canonical_name, message: `Child ${row.canonical_name} ended with no activity after one re-prompt (category no_activity).` }); }
     else status = 'succeeded';
 

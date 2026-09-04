@@ -880,6 +880,15 @@ the transaction, so the raise-and-lower shape this record specifies is free — 
 will test the *stated* ground, find that `NORMAL` satisfies it, and drop `FULL` — and will be right about
 the reason and wrong about the decision. Re-grounding it on power-loss durability is what stops that.
 
+**The ground now has an instrument and awaits its measurement (2026-09-04, `spikes/power-loss.md`).** A writer
+commits at the publish path's setting with every fiftieth commit through the raise-and-lower shape above; a
+process death — ten of ten — lost nothing at `NORMAL`, which is the property this paragraph claims for it, and
+the verifier's dry run (a truncated WAL tail) shows the loss it is built to see. **What decides this paragraph
+is the fault half, which only the owner can inject**: a returned `FULL` commit absent after a real cut would
+mean the device does not honour a flush and the ~560 µs per terminal save buys nothing on that hardware —
+reopened for the owner, not repaired here. Until the report's table is filled, the ground is stated, not
+measured, and this paragraph should be read that way.
+
 **`REQ-EVENTS-029` is honoured, not weakened.** One event, one commit, before the event is observable on any
 channel; `NORMAL` in WAL keeps that true against the failure the requirement names — a run killed, a crash,
 a force-quit — because a committed WAL frame is recovered on the next open. The requirement's own reason is a
@@ -1966,7 +1975,7 @@ untouched: the publish-path transaction gained no statement.
 transcript on every whole-session update, which was harmless while only an attach published one and
 emptied a transcript still being written once the run loop's status saves did. Corrected there, with the
 falsified reason kept beside the fix. Every mechanism in this record that has gone from paper to first
-execution has now held a defect no reading caught, six times — seven with ADR-0020's, the first mechanism of the permission-gate part to run against something real, and eight with ADR-0007's, found not by its own first execution but by the first mechanism to run it at size.
+execution has now held a defect no reading caught, six times — seven with ADR-0020's, the first mechanism of the permission-gate part to run against something real, and eight with ADR-0007's, found not by its own first execution but by the first mechanism to run it at size — and **nine** with the first packaged launch (ADR-0056's second execution, 2026-09-04): a blank window, React twice in the renderer bundle, a fault the unpackaged build shared and no test rendered.
 
 ## First execution — 2026-09-03, the restore behind the real run host, and the backup from the Settings view
 
@@ -2019,3 +2028,8 @@ project; the counterfactual (`skipArrange`, D7 as it was) opens, works, and is m
 **Not exercised:** the kill-in-the-gap case (README B2); two concurrent restores of one identifier; a
 restore from a network destination; D5's staging leftover (observed again: every successful restore
 leaves none, every reversal leaves `.restoring-1`).
+
+**Consequence 1 confirmed under the loader, 2026-09-04** (`../spikes/native-load-proof.md`): the packaged
+Electron opened `app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node` — compiled
+by that build, no prebuild in the artifact — and read `journal_mode` back as `wal`; the packaged application
+then opened a workspace store at schema v5 in its real utility process. IC-6 is discharged.

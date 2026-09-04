@@ -75,6 +75,10 @@ export default defineConfig({
   renderer: {
     plugins: [react()],
     resolve: {
+      // One React. pnpm's hoisted layout hands packages/ui a node_modules/.pnpm path for react while the
+      // app resolves node_modules/react — one version, two real paths, two copies in the bundle, and
+      // react-dom's hooks dispatcher null in the components' copy (measured 2026-09-04: a blank window).
+      dedupe: ['react', 'react-dom', 'zustand'],
       alias: {
         ...workspaceAliases,
         '@design': designSystem,

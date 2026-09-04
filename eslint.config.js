@@ -87,7 +87,7 @@ const ENGINE_CODE = [
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', 'packages/kernel/src/generated/**'],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', 'packages/kernel/src/generated/**', 'apps/desktop/scripts/**', 'packages/*/spike/**'],
   },
   ...tseslint.configs.recommended,
   {

@@ -15,9 +15,21 @@ directories:
 files:
   - out/**
   - package.json
+  # ADR-0056 rule 1: prebuilt binaries are refused. Excluded from the artifact so each binding's own
+  # loader falls through to the binary this build compiled (better-sqlite3 prefers prebuilds/ first;
+  # node-pty prefers build/Release first — both are checked by the hooks, not assumed).
+  # Each binding's package is reduced to its JavaScript and the binaries this build compiled: no
+  # prebuild, no sources, no intermediate objects. Later patterns override earlier ones.
+  - "!**/node_modules/better-sqlite3/{prebuilds,build,deps,src}/**"
+  - "**/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+  - "!**/node_modules/node-pty/{prebuilds,build,deps,src,third_party,scripts}/**"
+  - "**/node_modules/node-pty/build/Release/{pty,conpty,conpty_console_list}.node"
+  - "**/node_modules/node-pty/build/Release/{winpty.dll,winpty-agent.exe}"
 asarUnpack:
-  # ADR-0058 consequence 1 / ADR-0056 rule 2: native bindings are unpacked.
+  # ADR-0058 consequence 1 / ADR-0056 rule 3: native bindings are unpacked, with the helper
+  # binaries node-pty's winpty path executes beside them.
   - "**/*.node"
+  - "**/node_modules/node-pty/build/Release/**"
 publish: null
 win:
   target:
@@ -32,6 +44,9 @@ nsis:
 # shipped Electron, configured explicitly even where it is the default.
 npmRebuild: true
 buildDependenciesFromSource: true
-# TODO(IC-6): rule 1a — the rebuild's exit status is not evidence; the build
-# must establish that a compiled binary exists, is newer than the rebuild
-# step, and is the file the loader resolves (rule 4's load). Not yet written.
+# ADR-0056 rule 1a: the rebuild's exit status is not evidence (defect D10). The
+# hooks establish that a compiled binary exists, is newer than the rebuild step,
+# is the file the artifact carries, and is the file the packaged Electron's
+# loader opens (rule 4). A miss refuses the build. See scripts/build-hooks.cjs.
+beforeBuild: ./scripts/build-hooks.cjs
+afterPack: ./scripts/build-hooks.cjs

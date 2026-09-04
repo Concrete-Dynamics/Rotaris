@@ -1,0 +1,129 @@
+/**
+ * `pnpm package` — ADR-0056's build, with its evidence (IC-6).
+ *
+ *   1. electron-vite build                  the five entries
+ *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a) → installer
+ *   3. the packaged app, launched           rule 4 (b): the product's own path opens a store in a real
+ *                                           utilityProcess and runs a terminal call; both settle in the store
+ *   4. release/load-proof.json              the merged report; a non-zero exit on any miss
+ *
+ * ROTARIS_PACKAGE_DIR_ONLY=1   stop at win-unpacked (no installer)
+ * ROTARIS_PACKAGE_SKIP_APP=1   skip step 3
+ * ROTARIS_IC6_COUNTERFACTUAL   see build-hooks.cjs; the build must then fail and this script reports where
+ */
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const RELEASE = join(APP, 'release');
+const REPORT = join(RELEASE, 'load-proof.json');
+const require = createRequire(import.meta.url);
+const t0 = Date.now();
+const report = { startedAt: new Date().toISOString(), steps: [], counterfactual: process.env['ROTARIS_IC6_COUNTERFACTUAL'] || null, ok: false };
+
+function step(name, fn) {
+  const at = Date.now();
+  process.stdout.write(`\n[package] ${name}\n`);
+  try {
+    const result = fn();
+    report.steps.push({ name, ms: Date.now() - at, ok: true, ...(result ?? {}) });
+    return result;
+  } catch (e) {
+    report.steps.push({ name, ms: Date.now() - at, ok: false, error: String(e && e.message ? e.message : e) });
+    throw e;
+  }
+}
+function run(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, { cwd: APP, stdio: 'inherit', shell: process.platform === 'win32', ...opts });
+  if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} exited ${r.status ?? r.signal}`);
+}
+function finish(ok, why) {
+  report.ok = ok;
+  report.ms = Date.now() - t0;
+  report.afterPack = existsSync(join(RELEASE, 'load-proof.afterpack.json')) ? JSON.parse(readFileSync(join(RELEASE, 'load-proof.afterpack.json'), 'utf8')) : null;
+  mkdirSync(RELEASE, { recursive: true });
+  writeFileSync(REPORT, JSON.stringify(report, null, 2));
+  process.stdout.write(`\n[package] ${ok ? 'PASSED' : 'REFUSED'}${why ? ` — ${why}` : ''} (${report.ms} ms) → ${REPORT}\n`);
+  process.exit(ok ? 0 : 1);
+}
+
+try {
+  rmSync(join(RELEASE, 'load-proof.afterpack.json'), { force: true });
+  step('electron-vite build', () => run('pnpm', ['exec', 'electron-vite', 'build']));
+  // The keep-prebuild counterfactual packs from the same configuration minus the prebuild exclusions, so the
+  // prebuild is in the asar index where the binding's own loader looks first. Rule 4 has to refuse it.
+  let config = 'electron-builder.yml';
+  if (process.env['ROTARIS_IC6_COUNTERFACTUAL'] === 'keep-prebuild') {
+    mkdirSync(RELEASE, { recursive: true });
+    const base = readFileSync(join(APP, 'electron-builder.yml'), 'utf8');
+    // The two "!…/{prebuilds,…}/**" lines lose their prebuilds member, so the prebuild directories are packed.
+    const variant = base.replace('better-sqlite3/{prebuilds,build,deps,src}/**', 'better-sqlite3/{build,deps,src}/**').replace('node-pty/{prebuilds,build,deps,src,third_party,scripts}/**', 'node-pty/{build,deps,src,third_party,scripts}/**');
+    if (variant === base) throw new Error('keep-prebuild: the exclusion lines were not found in electron-builder.yml');
+    config = join('release', 'electron-builder.keep-prebuild.yml');
+    writeFileSync(join(APP, config), variant);
+    process.stdout.write(`[package] COUNTERFACTUAL keep-prebuild: packing from ${config} (no prebuild exclusions)\n`);
+  }
+  step(`electron-builder --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', config]));
+} catch (e) {
+  finish(false, String(e.message));
+}
+
+if (process.env['ROTARIS_PACKAGE_SKIP_APP']) finish(true, 'rule 4 (b) skipped by ROTARIS_PACKAGE_SKIP_APP');
+
+// Rule 4 (b): the packaged app on the product's own path. Scratch profile and workspace under release/.
+let appRun;
+try {
+appRun = step('the packaged app opens a store and runs a terminal call', () => {
+  const exe = join(RELEASE, 'win-unpacked', 'Rotaris.exe');
+  if (!existsSync(exe)) throw new Error(`no packaged executable at ${exe}`);
+  const scratch = join(RELEASE, 'scratch');
+  rmSync(scratch, { recursive: true, force: true });
+  const ws = join(scratch, 'workspace');
+  const lad = join(scratch, 'LocalAppData');
+  mkdirSync(ws, { recursive: true });
+  mkdirSync(lad, { recursive: true });
+  writeFileSync(join(ws, 'README.md'), '# scratch\n');
+  spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
+  const png = join(RELEASE, 'load-proof.png');
+  const env = {
+    ...process.env,
+    LOCALAPPDATA: lad,
+    ROTARIS_MODEL_DIALECT: 'scripted',
+    ROTARIS_PERMISSION_MODE: 'autonomous',
+    ROTARIS_RUN_OVERRIDE: 'single',
+    ROTARIS_SCRIPT: 'git',
+    ROTARIS_CAPTURE_PNG: png,
+    ROTARIS_CAPTURE_PROMPT: 'show me the tree',
+    ROTARIS_CAPTURE_AFTER_MS: '9000',
+  };
+  for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_PROMPT: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
+  const r = spawnSync(exe, [ws], { env, encoding: 'utf8', timeout: 120_000, windowsHide: true });
+  const log = `${r.stdout || ''}\n${r.stderr || ''}`;
+  writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
+  const dbs = [];
+  const wsRoot = join(lad, 'rotaris', 'data', 'workspaces');
+  if (existsSync(wsRoot)) for (const d of readdirSync(wsRoot)) { const f = join(wsRoot, d, 'workspace.db'); if (existsSync(f)) dbs.push(f); }
+  if (dbs.length !== 1) throw new Error(`expected one workspace store under ${wsRoot}, found ${dbs.length} (app exit ${r.status ?? r.signal}); see load-proof.app.log`);
+  const Database = require('better-sqlite3');
+  const db = new Database(dbs[0], { readonly: true });
+  const userVersion = db.pragma('user_version', { simple: true });
+  const sessions = db.prepare('SELECT session_id, execution_status FROM sessions ORDER BY updated_at DESC').all();
+  const calls = db.prepare('SELECT tool_name, status, is_error FROM tool_calls ORDER BY ordinal').all();
+  db.close();
+  const terminal = calls.find((c) => c.tool_name === 'terminal');
+  const result = { exit: r.status, signal: r.signal, store: dbs[0], userVersion, sessions, calls, painted: existsSync(png), captured: /captured /.test(log) };
+  if (userVersion < 1) throw new Error(`the store was not migrated (user_version ${userVersion})`);
+  if (sessions.length !== 1) throw new Error(`expected one session, found ${sessions.length}`);
+  if (!terminal) throw new Error(`no terminal call was recorded; calls: ${JSON.stringify(calls)}`);
+  if (terminal.status === 'running') throw new Error(`the terminal call never settled: ${JSON.stringify(terminal)}`);
+  if (!result.painted) throw new Error('the packaged app did not paint (no capture)');
+  return result;
+});
+} catch (e) {
+  finish(false, String(e.message));
+}
+process.stdout.write(`[package] packaged app: session ${appRun.sessions[0].execution_status}, terminal call ${appRun.calls.find((c) => c.tool_name === 'terminal').status}, store v${appRun.userVersion}\n`);
+finish(true);

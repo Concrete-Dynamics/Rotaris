@@ -113,6 +113,22 @@ test had passed because none reads a query plan. `store.test.ts` now asserts the
 query (`REQ-EVENTS-117`'s axes, `REQ-SESSION-042`'s listing) names its index. Add one for every index
 you declare; a timing alone reads as "slow", not as "dead".
 
+## What `pnpm package` does, and refuses
+
+`apps/desktop/scripts/package.mjs`: `electron-vite build`; `electron-builder --win` with two hooks
+(`scripts/build-hooks.cjs`) — `beforeBuild` removes every copy's `build/`, stamps the rebuild marker and runs
+@electron/rebuild by name over the binding set, cold, from source; `afterPack` holds rule 1a (a compiled
+binary newer than the marker, byte-identical in `app.asar.unpacked`, no prebuild in the asar index), rule 4
+(`scripts/native-load-probe.cjs` as the packaged `Rotaris.exe` under `ELECTRON_RUN_AS_NODE`, reporting what
+`dlopen` opened) and the `REQ-STARTUP-031` name; then the packaged application runs a scripted session with a
+terminal call against a scratch store under `release/scratch/`. Evidence in `release/load-proof.json`.
+`ROTARIS_IC6_COUNTERFACTUAL=no-force|keep-prebuild` constructs D10's condition; the build must refuse.
+`ROTARIS_PACKAGE_DIR_ONLY=1` stops at `win-unpacked`; `ROTARIS_PACKAGE_SKIP_APP=1` skips the launch. A cold
+rebuild of both bindings is ~3 minutes on every run, by design. Windows only (IC-3). The app's `dependencies`
+are exactly what electron-vite externalises for main and the run host — the workspace packages are
+`devDependencies`, bundled through aliases; the renderer dedupes `react`, `react-dom` and `zustand`
+(`spikes/native-load-proof.md` §4).
+
 ## What the walking skeleton does, and nothing more
 
 `pnpm build` then `electron apps/desktop/out/main/index.js`:
@@ -238,7 +254,7 @@ for verification only. The `normal` cell no longer stands in: the BUDGET slot cl
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half (an endpoint from the owner); ADR-0026's parameterised conformance suite once a second backend exists |
 | ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04** — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks` | the loop supervisor (`REQ-ORCH-099..107`), the fallback-model and rate-limit paths, `REQ-ORCH-030`, the `continue`/`resume` controls that give `REQ-ORCH-053` a route, the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021), OQ-39's sizing under load; the remaining 17 control ops; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049), the rest of ADR-0036 (the runtime keys still come from the environment); for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
-| the build's load proof | `apps/desktop/electron-builder.yml` + a build script | IC-6 |
-| a terminal save's durability | `engine` (writer) | the power-loss test |
+| ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
+| ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |
 | the two undesigned themes | `ui` | IC-2 |
 | macOS / Linux artifacts | `electron-builder.yml`, `platform/src/instance.ts` | IC-3 |

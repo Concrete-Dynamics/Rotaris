@@ -232,6 +232,16 @@ the counterfactual (`skipArrange`, D7 as it was) opens, works, and is missing al
 
 ## IC-6 — the build rule that replaced a command's exit status is shown to catch what the command hid
 
+> **DISCHARGED 2026-09-04.** Run as `../spikes/native-load-proof.md`, the first packaging of the product.
+> **Under D10's condition the build fails at rule 1a** — the rebuild ran 138 s, exited 0, compiled nothing,
+> and the build was refused for want of a binary newer than the rebuild marker. **With a prebuild in the
+> loader's path the build fails at rule 4**, the packaged Electron's own `dlopen` naming
+> `better-sqlite3/prebuilds/win32-x64.node` as the file it opened. The straight build passes both, the
+> installer is produced, and the packaged application opens a store at schema v5 in a real utility process
+> and settles a terminal call through the compiled bindings. Ten runs, six findings, one of them the ninth
+> defect of the pattern: the first packaged window was blank. **The per-runner half is IC-3 item 3 and
+> stays with the hardware.** Kept rather than deleted, because what it required is now evidence.
+
 **Set by:** the Architecture Gate, decision 2, 2026-09-03. **Binds:** the first construction of ADR-0056's
 build. **Discharged into:** a note on ADR-0056 and, for the per-runner half, IC-3 item 3.
 
@@ -289,6 +299,11 @@ them is not promoting them to conditions:
 - **The power-loss test** — OQ-12's outstanding half, and now the **sole** stated ground for forcing the
   stronger durability setting on a terminal save. No spike has performed one, and it is the only route to an
   absent store directory that the restore's corrections do not close.
+  **Taken 2026-09-04 in its harness half** — `spikes/power-loss.md`: the writer, the process-death baseline
+  (ten of ten lost nothing at `NORMAL`), the verifier and its dry run (ten of ten detected a truncated tail
+  exactly). **The fault half awaits the owner** — a forced power-off or a kernel crash on this machine, the
+  steps and the empty table in the report's section 4. Two harness defects on first execution, in the
+  report's section 6; nothing in the product.
 
 ## The permission gate and the first tools — 2026-09-03: no condition bound, none was downgraded
 
@@ -330,3 +345,11 @@ leaves owed, stated so it is not mistaken for discharged: the classifier against
 rejection heuristic of REQ-ORCH-010 has met none); REQ-ORCH-012/013 in the product, which need a resumed
 session (the same missing `continue` route as REQ-ORCH-053); the three model slots and the tier, still
 environment stopgaps; plan mode (REQ-ORCH-152..154), which reads the intent and is not built.
+
+## The build's load proof — 2026-09-04: IC-6 discharged; the ninth defect was in the renderer
+
+ADR-0056's packaging ran for the first time under IC-6 and the condition is discharged above. Both
+counterfactuals refuse at the named rule. What the run found is on ADR-0056's second execution note — the
+ninth defect of decision 3's pattern was a blank packaged window, React twice in the renderer bundle, a fault
+the unpackaged build shared and no test rendered. Owed and stated: the portable and its stub (ADR-0054),
+signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3).

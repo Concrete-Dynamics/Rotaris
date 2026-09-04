@@ -124,3 +124,9 @@ port `observeStuck()` exists and is tested, nothing calls it. (b) The issue's ac
 
 **Not exercised:** the classifier against a real provider (the scripted client answers the JSON rung);
 `activation_mode: weighted` in the app; a child agent's escalation in the app (the unit path is tested).
+
+**Second execution, 2026-09-05, from the files.** `circuit_breaker.enabled`, `model`, `activation_mode` and the
+nine thresholds (REQ-CONFIG-136/137) reach the supervisor from the configuration resolved at run start; the
+classifier model is the section's `model` resolved through the slots; Settings → Runtime's "Circuit breaker"
+toggle writes the flag on Save (REQ-CONFIG-323) and the strip's "● CB armed" follows the loaded value.
+`ROTARIS_CIRCUIT_BREAKER=off` stays the host-level override. **Found: nothing.**

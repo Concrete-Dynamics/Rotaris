@@ -200,3 +200,7 @@ shows the displaced entries as `superseded` with the scope that replaced them (R
 `verifier_finished` never fires (no verifier); REQ-HOOKS-082's before-the-checkpoint guarantee is vacuous
 (no checkpoints); the notice slot is single (ADR-0049's note); the 50 ms / 10 ms / 1 ms bounds are tested
 under vitest on this workstation, not under a benchmark harness (ADR-0053).
+
+**2026-09-05, the hooks section inside the one configuration load.** ADR-0036's loader now reads `hooks:` as a
+section of the whole load (a hook fault is fatal to the load, REQ-CONFIG-233); the run's hook port and the
+Hooks category's summary keep `loadHooksConfig` for the per-file states they show. **Found: nothing.**

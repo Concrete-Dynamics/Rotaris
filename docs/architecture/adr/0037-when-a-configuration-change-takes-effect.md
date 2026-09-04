@@ -209,3 +209,31 @@ ESC-1 ruled; or a requirement moves a key between tiers, which changes what a us
 `REQ-CONFIG-266`'s 750 ms bound acquires a foreign writer to bound — under SR-1 there is no second
 instance, so the only change it now covers is one made by another process **of this instance**, which
 the publishing path already serves without waiting.
+
+## First execution — 2026-09-05, the three tiers in the built app
+
+*Recorded under GD-10.*
+
+**Tier A** is the workspace service's `config.read`, `config.save` and `config.setField`, each followed by the
+load again inside the same request; the reply is the reloaded snapshot, main broadcasts it to every window, and
+the screen repopulates from it clean (REQ-CONFIG-261, REQ-CONFIG-419/425). **Tier B** is `overlayLiveState`
+(`packages/config/src/tiers.ts`): the loaded configuration's merged document copied, the screen's current
+values laid on it — the five slots with their companions, the repointing of roles that followed a slot's
+previous value, the entry role, the session model and reasoning override, the eight runtime keys, the breaker
+flag, the compression threshold — and `resolveMerged`, the loader's own passes, run over the result; the run
+host receives the live state on every pending change (`config.liveState`) and applies it at the next run start,
+and the loaded configuration is untouched (a pure function, pinned by test). **Tier C** is documented as the
+absence of a mechanism in the loader's own header. Consequence 1 (purity load-bearing) held: the same function
+resolves a file load and a live overlay.
+
+**`REQ-CONFIG-423` under ESC-1 — the reading chosen.** Of the two candidates "Revisit if" left, this build takes
+the first: **the composer's per-field write also updates the pending settings state.** Main broadcasts the
+reloaded snapshot after the write and an open Settings screen repopulates the permission-mode field alone,
+equality-guarded, leaving the dirty flag and every other pending edit as they were. The observable the
+requirement fixes is preserved in the security-relevant control; the cost is one action with two effects
+(the file and the pending state). The requirement's text is not amended by this work and the gap ESC-1 opened
+is still reported. Consequence 4's sixth write occasion executed in the proof: the composer's control writes
+`runtime.permission_mode` and nothing else, with no run active — the control is enabled without a run now,
+where the tools part had disabled it, because the write is its own effect (REQ-CONFIG-328).
+
+**Found: nothing in this record.**

@@ -159,12 +159,22 @@ are exactly what electron-vite externalises for main and the run host — the wo
    forwarded on the bus with the 5 s bound. **No tool, no child, no hook, no intent classification, no
    verification**: one task, one agent, one turn per iteration.
 
-**Where the model comes from is a stopgap at the run-host root** (`apps/desktop/src/run-host/index.ts`),
-not a settings surface: `ROTARIS_MODEL_BASE_URL`, `ROTARIS_MODEL_ID`, `ROTARIS_MODEL_DIALECT` and
-`ROTARIS_MODEL_API_KEY_ENV` (the *name* of the variable holding the key) build the AI SDK client;
-`ROTARIS_MODEL_DIALECT=scripted` selects a built-in scripted client for verification; with nothing set a
-run is refused before it starts with one `result` of status `error` (REQ-EVENTS-021). It goes when
-ADR-0036 (configuration) and ADR-0029 (credentials) land.
+**Where the model comes from — the configuration files** (`apps/desktop/src/run-host/configuration.ts`,
+ADR-0036/0037, built 2026-09-05): the entry role's `models:` entry — its `base_url` or the provider's known endpoint
+(`openai`), `api_mode` → dialect, `api_key` or `api_key_env` read per request — loaded once per run start with the
+screen's live state on top. `ROTARIS_MODEL_DIALECT=scripted` selects the scripted client for every model
+(verification only); a `models:` entry with provider `scripted` does the same per entry. A fatal file or an
+unreachable entry model refuses the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478). The classifier,
+summariser and loop slots authenticate with the entry model's resolver until ADR-0029 (credentials) lands.
+
+15. **configuration as files (2026-09-05):** `agents.yaml` and `models.yml` at both scopes are loaded once per run
+   start with the screen's live state on top (ADR-0036, ADR-0037): the four merge classes, the typed `models:` /
+   `personas:` / `runtime:` / `compressor:` / `circuit_breaker:` sections, tier aliases and reasoning synthesis, the
+   two validation stages; a fatal file refuses the run naming file, scope and path, and correcting that key alone
+   loads. The four writers edit the document in place; Settings → Models, Personas and Runtime edit destination 1
+   with Save/Discard, the dirty state and the guard, the advanced card writing per field at once; the composer's
+   permission-mode control writes its one key. Every runtime environment stopgap is gone but `ROTARIS_MODEL_TIER` and
+   the scripted dialect. **Found:** re-emission collapses an inline comment's spacing — the eleventh defect (ADR-0036).
 
 14. **the loop supervisor and `continue` (2026-09-05):** one hidden observer per agent conversation, fed by the turn
    after every assistant message and tool call and asked before every model step; triggers in `REQ-ORCH-101`'s
@@ -232,19 +242,21 @@ ADR-0036 (configuration) and ADR-0029 (credentials) land.
    The previous store is displaced and kept. **Found:** ADR-0058's case (b) has no route in the product,
    because opening a workspace mints its identifier before a restore can be asked for.
 
-Every view body but Workspace and Settings reads "Not drawn yet"; Settings draws only Project.
+Every view body but Workspace and Settings reads "Not drawn yet"; Settings draws Models, Personas, Runtime, Interface, Hooks and Project.
 
-**Runtime keys are an environment stopgap at the run-host root too** (`apps/desktop/src/run-host/tools.ts`),
-until ADR-0036 owns them: `ROTARIS_PERMISSION_MODE` (default `ask`), `ROTARIS_APPROVAL_TIMEOUT_S` (300; `0` =
-no deadline), `ROTARIS_HEADLESS_APPROVAL_POLICY` (`deny`), `ROTARIS_ALLOW_OUTSIDE_WORKSPACE` (`false`),
-`ROTARIS_SHELL_COMMAND_TIMEOUT_S` (100), `ROTARIS_SESSION_LOG_LEVEL` (WARNING). `sandbox_mode` is fixed `off`
-(ADR-0022 has no backend here). **The entry persona is a built-in table** in the same file until ADR-0036 loads
-`agents.yaml`; it holds the direct-work bundle until Part B brings `delegate` and the coordinator role. **A bound
+**The runtime keys come from `runtime:`** (ADR-0036, 2026-09-05; `runtimeFromConfiguration` in
+`run-host/configuration.ts`): `permission_mode`, `approval_timeout_seconds`, `headless_approval_policy`,
+`allow_outside_workspace`, `allow_unsandboxed_autonomous`, `session_log_level`, `shell_command_timeout`,
+`additional_read_only_roots`, `max_depth`/`max_children`/`max_active_children` (the child budget, clamped by the
+BUDGET cell), `max_iterations`, `task_consecutive_retry_limit`, `auto_retries_transient`, `model_timeout`,
+`event_retention_per_session`, `shutdown_drain_timeout`, `loop_classification_timeout`. `sandbox_mode` is read
+and never honoured (ADR-0022 has no backend here). **The persona table** (`engine/src/children/personas.ts`:
+REQ-ORCH-028's thirteen roles, the two aliases, our own system prompts) is the built-in layer `personas:` overlays —
+stated fields win, `system_prompt`/`system_prompt_file` replace the prompt, a configured role is a new role
+(decision 3 of the plan); **the delegation strategy** is `rotaris.delegation_strategy` (`single` grants the entry
+role the direct-work bundle and withholds `delegate`); **the per-model cap** is each entry's `max_parallel`. **A bound
 of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor
-(`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). **The persona table** (`engine/src/children/personas.ts`: REQ-ORCH-028's thirteen
-roles, the two aliases, our own system prompts) and **the run override** (`ROTARIS_RUN_OVERRIDE`) stand in for
-`agents.yaml` and the start dialog; **the child budget** is REQ-ORCH-046's defaults clamped by REQ-ORCH-024's `normal`
-cell until playbooks exist; **`ROTARIS_MODEL_CONCURRENCY_CAP`** is the per-model cap. `ROTARIS_CHILD_SCRIPT` and the
+(`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). `ROTARIS_CHILD_SCRIPT` and the
 `delegate:<persona>:<name>[:after]` and `fail` steps drive the scripted client's children for verification only. The `todo` tool's list is per session in memory; its persistence waits on the
 per-child record of Part B (`REQ-ORCH-043`). `ROTARIS_SCRIPT` drives the scripted client's tool calls for
 verification only. **The hooks read their two file scopes for real** (`<config>/agents.yaml` and
@@ -252,12 +264,12 @@ verification only. **The hooks read their two file scopes for real** (`<config>/
 `ROTARIS_CLAUDE_SETTINGS_PATH` are the specification's own variables (REQ-HOOKS-110/115), not stopgaps.
 `ROTARIS_CAPTURE_HOOK_REVIEW`, `ROTARIS_CAPTURE_REVIEW_PNG`, `ROTARIS_CAPTURE_SETTINGS` and
 `ROTARIS_CAPTURE_ACTION=hooks-review` drive the review dialog and the Hooks tab for verification only.
-**The classifier's model slots and the tier are environment stopgaps** (`apps/desktop/src/run-host/intent.ts`, decision 4 of
-the plan) until ADR-0036/0028: `ROTARIS_SMALL_MODEL_ID`, `ROTARIS_FALLBACK_MODEL_ID`, `ROTARIS_SUMMARY_MODEL_ID` (ids on the
-run model's base URL and credential; none set → no request, the fallback intent) and `ROTARIS_MODEL_TIER` (unset →
-undetermined). `<config>/intent-tools.yaml` and the two `playbooks/` directories are this build's file formats (decision 5).
-`ROTARIS_INTENT_SCRIPT` (`<category>` | `garbage` | `timeout` | `reject` | `none`) drives the scripted client's classifier
-for verification only. The `normal` cell no longer stands in: the BUDGET slot clamps.
+**The classifier's model slots come from the configuration** (`small_model`, `fallback_model`, `default_summary_model`
+resolved to `models:` entries; ADR-0036) and **the tier is the one remaining environment stopgap** (`ROTARIS_MODEL_TIER`,
+ADR-0028's; unset → undetermined → medium with REQ-ORCH-023's header). `<config>/intent-tools.yaml` and the two
+`playbooks/` directories are this build's file formats (decision 5 of the intent part). `ROTARIS_INTENT_SCRIPT`
+(`<category>` | `garbage` | `timeout` | `reject` | `none`) drives the scripted client's classifier for verification
+only. The `normal` cell no longer stands in: the BUDGET slot clamps.
 
 **Themes and preferences.** Built-in themes are typed data in `packages/contracts/src/theme/`; the colour
 mathematics and static contrast assertions live beside the data because main needs the dark flag and window
@@ -293,13 +305,29 @@ planted by hand, and a relaunch that opens the stored session from the Sessions 
 (asserting the identity, the row order, the carried-intent status row, the settled child, one ordinal series
 and no lock left behind). Its evidence lands under `.part-h-proof/`.
 
+**Configuration.** `packages/config/src/` — `load.ts` (the one entry point, no database handle), `merge.ts` (the four
+classes; the overlay shared with the per-field writer through a mapping adapter), `sections/`, `slots.ts`, `validate.ts`,
+`writers.ts` (bootstrap, per-field, desktop save, model preferences), `tiers.ts` (Tier B), `preferences.ts` and
+`snapshot.ts` (what the screen reads). The run host resolves a run's setup in `run-host/configuration.ts`; the
+workspace service commits Tier A; contracts carry `ConfigSnapshot`, `DesktopSave`, `LiveState` and the `config:changed`
+channel. Decisions taken here for the owner: the built-in roles' default tiers; `api_key_env` as the credential until
+ADR-0029; the composer's write also updating the pending state (REQ-CONFIG-423); the proof scripts writing a scratch
+`agents.yaml`. `ROTARIS_CAPTURE_CLICKS` and `ROTARIS_CAPTURE_SELECT` are verification seams.
+
+**What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
+both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other
+line as written, the global file untouched); Settings → Models chooses a slot and its strength and saves; a toggle
+then Discard writes nothing; the composer's control writes `runtime.permission_mode` with no run active; a file
+with `max_depth: many` refuses the run naming the file, the workspace scope and `runtime.max_depth`, and the corrected
+file runs to completion. Its evidence lands under `.config-proof/`; the load time is read from the app log.
+
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half (an endpoint from the owner); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the pause-resolution dialogs (`REQ-ORCH-086`, `REQ-SESSION-109/110`), steering and todo corrections, the stuck report's producer (`REQ-ORCH-096`), Settings → Runtime's circuit-breaker toggle (`REQ-CONFIG-323`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021), OQ-39's sizing under load; the remaining 17 control ops; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049), the rest of ADR-0036 (the runtime keys still come from the environment); for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the pause-resolution dialogs (`REQ-ORCH-086`, `REQ-SESSION-109/110`), steering and todo corrections, the stuck report's producer (`REQ-ORCH-096`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021), OQ-39's sizing under load; the remaining 17 control ops; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the discovery layers and `mcp_servers`, secrets, providers and credentials (ADR-0028/0029, `ROTARIS_MODEL_TIER`), REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |

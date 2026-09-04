@@ -69,6 +69,8 @@ export interface LoadedConfiguration {
   /** Each scope's raw documents as plain values, for the surfaces that show what a file says (REQ-CONFIG-471). */
   readonly raw: Readonly<Record<ConfigScope, { readonly agents: PlainMap | null; readonly models: PlainMap | null }>>;
   readonly files: { global: ScopeFiles; workspace: ScopeFiles };
+  /** The merged plain document the typed sections were read from — ADR-0037's Tier B overlays THIS and resolves again. */
+  readonly merged: PlainMap;
   /** ADR-0036 "Revisit if": the load's time on the caller's monotonic clock; null when none was supplied. */
   readonly loadMs: number | null;
 }
@@ -192,8 +194,37 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
   }
 
   const merged = mergeLayers(layers);
+  const hooks = mergeHooks(hookLayers);
+  return resolveMerged(merged.value, {
+    workspaceRoot: opts.workspaceRoot, hooks, files, raw, problems, delegationStrategy: readDelegationStrategy(workspaceAgents),
+    mergeWarnings: merged.warnings.map((w) => `${w.source}: ${w.message}`), ...(opts.toolServers ? { toolServers: opts.toolServers } : {}),
+    loadMs: started === null || !opts.now ? null : opts.now() - started,
+  });
+}
+
+export interface ResolveContext {
+  readonly workspaceRoot: string;
+  readonly hooks: HooksResolved;
+  readonly files: { global: ScopeFiles; workspace: ScopeFiles };
+  readonly raw: Readonly<Record<ConfigScope, { readonly agents: PlainMap | null; readonly models: PlainMap | null }>>;
+  /** Fatal problems found before the merge (the hooks section's), each with its file. */
+  readonly problems?: readonly (Problem & { file: string; scope: ConfigScope })[];
+  readonly delegationStrategy: DelegationStrategy;
+  readonly mergeWarnings?: readonly string[];
+  readonly toolServers?: readonly string[];
+  readonly loadMs: number | null;
+}
+
+/**
+ * The passes over a merged document in REQ-CONFIG-035..037's order: the typed sections (schema, fatal),
+ * tier aliases and reasoning synthesis, then the referential list. The load calls this once; ADR-0037's
+ * Tier B calls it again over the same document with the live state overlaid — "exactly as the loader
+ * does" by construction, not by two implementations agreeing.
+ */
+export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<LoadedConfiguration, FatalLoadReport> {
+  const files = ctx.files;
+  const problems = ctx.problems ?? [];
   const sink: ProblemSink = { errors: [], warnings: [] };
-  const top = merged.value;
   const { slots, thinking } = readSlots(top, sink);
   const defaultPersona = new FieldReader(top, '', sink).string('default_persona', 'orchestrator');
   const worktree = new FieldReader(top, '', sink).string('worktree_storage_subpath', 'worktrees');
@@ -213,17 +244,17 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
 
   const draft = { slots, slotThinking: thinking, models, personas, compressorModel: compressor.model, circuitBreakerModel: circuitBreaker.model };
   const resolution = resolveSlotsAndReasoning(draft);
-  const hooks = mergeHooks(hookLayers);
-  const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, ...(opts.toolServers ? { toolServers: opts.toolServers } : {}) });
+  const hooks = ctx.hooks;
+  const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, ...(ctx.toolServers ? { toolServers: ctx.toolServers } : {}) });
 
   const warnings = [
-    ...merged.warnings.map((w) => `${w.source}: ${w.message}`),
+    ...(ctx.mergeWarnings ?? []),
     ...sink.warnings.map((w) => `${w.path}: ${w.message}`),
     ...resolution.warnings,
   ];
 
   return ok({
-    workspaceRoot: opts.workspaceRoot,
+    workspaceRoot: ctx.workspaceRoot,
     defaultPersona,
     slots: draft.slots,
     slotThinking: thinking,
@@ -235,12 +266,13 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
     hooks,
     worktreeStorageSubpath: worktree,
     injectAgentsMd,
-    delegationStrategy: readDelegationStrategy(workspaceAgents),
+    delegationStrategy: ctx.delegationStrategy,
     resolvedPersonaModelTiers: resolution.resolvedPersonaModelTiers,
     warnings,
     referential,
-    raw,
+    raw: ctx.raw,
     files,
-    loadMs: started === null || !opts.now ? null : opts.now() - started,
+    merged: top,
+    loadMs: ctx.loadMs,
   });
 }

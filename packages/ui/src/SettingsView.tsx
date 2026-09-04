@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isBusy, type SessionRecord } from '@rotaris/contracts';
+import { isBusy, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
@@ -41,18 +41,25 @@ export interface SettingsViewProps {
   readonly hooks?: HooksSettingsProps | undefined;
   /** REQ-ORCH-026: the built-in playbook catalogue — every slot, every variant, the text — listed under Personas. */
   readonly playbooks?: PlaybookCatalogue | null | undefined;
+  readonly themes?: readonly Theme[] | undefined;
+  readonly activeTheme?: ThemeName | undefined;
+  readonly onTheme?: ((name: ThemeName) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly reducedMotion?: boolean | undefined;
+  readonly onReducedMotion?: ((value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly initialCategory?: SettingsCategoryId | undefined;
+  readonly onCategory?: ((id: SettingsCategoryId) => void) | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks }: SettingsViewProps) {
-  // REQ-CONFIG-271: the selected category persists user-wide; until the preference store lands, `models` is the start.
-  const [chosen, setChosen] = useState<SettingsCategoryId>('models');
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory }: SettingsViewProps) {
+  const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
   const take = useShellState((s) => s.takeSettingsCategory);
   const category: SettingsCategoryId = wanted !== null && SETTINGS_CATEGORIES.some((c) => c.id === wanted) ? (wanted as SettingsCategoryId) : chosen;
-  const setCategory = (id: SettingsCategoryId) => { take(); setChosen(id); };
+  const setCategory = (id: SettingsCategoryId) => { take(); setChosen(id); onCategory?.(id); };
   const [busyAction, setBusyAction] = useState<'backup' | 'restore' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeName | undefined>(activeTheme);
   const runActive = session !== null && isBusy(session.executionStatus);
   const noWorkspace = workspace === null;
   const disabledReason = noWorkspace ? 'Open a workspace first.' : runActive ? 'Finish the active run first.' : null;
@@ -63,6 +70,17 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
     const r = await (which === 'backup' ? onBackup() : onRestore());
     setBusyAction(null);
     if (!r.ok) setMessage(r.reason);
+  };
+
+  const chooseTheme = async (name: ThemeName) => {
+    setSelectedTheme(name);
+    const result = await onTheme?.(name);
+    if (result && !result.ok) setMessage(result.reason);
+  };
+
+  const chooseMotion = async (value: boolean) => {
+    const result = await onReducedMotion?.(value);
+    if (result && !result.ok) setMessage(result.reason);
   };
 
   return (
@@ -89,7 +107,36 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
         </ul>
       </nav>
       <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}>
-        {category === 'project' ? (
+        {category === 'interface' ? (
+          <div className="settings__section">
+            <h1 className="display">Interface</h1>
+            <h2 className="settings__heading">Appearance</h2>
+            <div className="settings__action">
+              <label htmlFor="theme-select">Theme</label>
+              <select
+                id="theme-select"
+                className="input select settings__select"
+                aria-label="Theme"
+                aria-description="Choose the colour theme used by every Rotaris window."
+                value={selectedTheme}
+                onChange={(event) => { void chooseTheme(event.currentTarget.value as ThemeName); }}
+              >
+                {themes.map((theme) => <option key={theme.name} value={theme.name}>{theme.label}</option>)}
+              </select>
+              <span className="text-secondary settings__hint">{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</span>
+            </div>
+            <div className="settings__action">
+              <span>Reduce motion</span>
+              <button type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
+              <span className="text-secondary settings__hint">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</span>
+            </div>
+            <div className="settings__action">
+              <button type="button" className="btn btn-secondary" onClick={() => setMessage('Panel sizes already use their declared defaults; no divider is registered yet.')}>Reset panel sizes</button>
+              <span className="text-secondary settings__hint">Restores every resizable pane to its default size and takes effect immediately.</span>
+            </div>
+            {message && <div className="composer__error" role="status">{message}</div>}
+          </div>
+        ) : category === 'project' ? (
           <div className="settings__section">
             <h1 className="display">Project</h1>
             <h2 className="settings__heading">Session store</h2>

@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
 import { NavRail } from './NavRail.js';
 import { useShellState } from './shell-state.js';
+import { markMotionStart } from './motion.js';
 
 /**
  * REQ-SHELL-024 — vertical layout, top to bottom: title bar; a
@@ -38,7 +39,7 @@ const GLYPH: Record<ShellNotice['severity'], string> = { info: 'i', warning: '!'
 
 export function NoticeBanner({ notice, onAcknowledge, onRecover }: { notice: ShellNotice; onAcknowledge?: ((id: number) => void) | undefined; onRecover?: ((command: string) => void) | undefined }) {
   return (
-    <div className={`notice notice--${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'}>
+    <div ref={(element) => { if (element) markMotionStart(element); }} className={`notice notice--${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'}>
       <span className="notice__glyph" aria-hidden="true">{GLYPH[notice.severity]}</span>
       <div className="notice__text">
         <span className="notice__headline">{notice.headline}</span>

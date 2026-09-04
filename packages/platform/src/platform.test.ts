@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
-import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, environmentWithout } from './index.js';
+import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, environmentWithout, PreferenceStore, resolvePreferenceRoot } from './index.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-platform-')); });
@@ -174,5 +174,33 @@ describe('platform — FakeClock drives the document ladder without real waiting
     const r = await replaceDocument(f, 'new', { ladder: { delays: [millis(50), millis(100)] }, timers: clock });
     expect(r.ok && r.value.attempts).toBe(1);
     expect(clock.pendingCount()).toBe(0);
+  });
+});
+
+describe('platform — desktop preferences (ADR-0042)', () => {
+  it('uses the private proof root first and the machine-local application pair on Windows', () => {
+    expect(resolvePreferenceRoot({ platform: 'win32', env: { ROTARIS_PREFERENCES_ROOT: 'X:\\proof', LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe('X:\\proof');
+    expect(resolvePreferenceRoot({ platform: 'win32', env: { LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe(join('X:\\local', 'Rotaris', 'Rotaris'));
+  });
+
+  it('reads defaults without creating a file, preserves a stale theme, and flushes a theme write synchronously', () => {
+    const root = join(dir, 'preferences');
+    const store = new PreferenceStore(root);
+    expect(store.read('appearance/theme')).toBeUndefined();
+    expect(existsSync(store.file)).toBe(false);
+    mkdirSync(root, { recursive: true });
+    writeFileSync(store.file, '{"appearance/theme":"future-theme"}\n');
+    expect(store.read('appearance/theme')).toBe('future-theme');
+    expect(readFileSync(store.file, 'utf8')).toContain('future-theme');
+    store.writeThemeSync('nocturne');
+    expect(JSON.parse(readFileSync(store.file, 'utf8'))['appearance/theme']).toBe('nocturne');
+  });
+
+  it('coerces the registered values and round-trips ordinary writes atomically', async () => {
+    const store = new PreferenceStore(join(dir, 'preferences'));
+    await store.write('interface/settingsTab', 'interface');
+    await store.write('ui/reduced_motion', true);
+    expect(store.read('interface/settingsTab')).toBe('interface');
+    expect(store.read('ui/reduced_motion')).toBe(true);
   });
 });

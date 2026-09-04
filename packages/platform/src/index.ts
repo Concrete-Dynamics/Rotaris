@@ -6,3 +6,4 @@ export * from './machine-id.js';
 export * from './canonical.js';
 export * from './instance.js';
 export * from './spawn.js';
+export * from './preferences.js';

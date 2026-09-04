@@ -129,6 +129,13 @@ menus, caret, disabled text and form-control colour scheme, all of which the the
 colour-scheme mechanisms of ADR-0050 do control — and `REQ-SHELL-164` carves out the host's own dialogs.
 **This needs confirming rather than assuming** (OQ-29).
 
+**First execution on Windows, 2026-09-04:** the built-app proof confirmed the reading for the product-owned
+leg. Electron's native theme source follows each theme's dark flag before window creation; every document
+advertises the matching colour scheme; themed window grounds, carets, form controls and disabled text followed
+the active theme across all fifteen captures. The operating-system folder chooser remains governed by the
+host's theme under the `REQ-SHELL-164` carve-out. Platform-specific confirmation continues with IC-3 for macOS
+and Linux; `../spikes/theme-proof.md` holds the Windows evidence.
+
 ## Consequences accepted
 
 1. Several renderer processes, with their memory cost; **application-modality is our code** and must be

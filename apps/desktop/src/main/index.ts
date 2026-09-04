@@ -1,9 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, type HooksSummary, type ApprovalPayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
-import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, type HandOver } from '@rotaris/platform';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 
 /**
@@ -74,6 +74,18 @@ async function main(): Promise<void> {
   }
   log(`instance claimed (pid ${process.pid}, host ${machineId})`);
   app.on('will-quit', () => { void claim.close(); });
+
+  const preferenceRoot = resolvePreferenceRoot();
+  const preferences = new PreferenceStore(preferenceRoot);
+  const capturing = Boolean(process.env['ROTARIS_CAPTURE_PNG']);
+  const capturedTheme = capturing ? process.env['ROTARIS_CAPTURE_THEME'] : undefined;
+  if (capturedTheme) preferences.writeThemeSync(capturedTheme);
+  let currentTheme: Theme = resolveTheme(capturedTheme ?? preferences.read('appearance/theme'));
+  const themeBackground = () => srgbToHex(oklchToSrgb(parseOklch(currentTheme.tokens.color['--rt-bg']!)));
+  nativeTheme.themeSource = currentTheme.dark ? 'dark' : 'light';
+  log(`preference root ${preferenceRoot}; theme ${currentTheme.name} (${currentTheme.dark ? 'dark' : 'light'})`);
+  const captureScale = capturing ? process.env['ROTARIS_CAPTURE_SCALE'] : undefined;
+  if (captureScale) app.commandLine.appendSwitch('force-device-scale-factor', captureScale);
 
   await app.whenReady();
 
@@ -161,7 +173,7 @@ async function main(): Promise<void> {
     const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id));
     if (!parent) { await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined); return; }
     const dlg = new BrowserWindow({
-      parent, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: '#242424',
+      parent, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
       webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
@@ -225,7 +237,7 @@ async function main(): Promise<void> {
     if (r.summary.declaredCount === 0) return { ok: false, code: 'hooks.none', headline: 'This workspace declares no hooks' };
     const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !reviewPayloads.has(w.webContents.id));
     const dlg = new BrowserWindow({
-      ...(parent ? { parent, modal: true } : {}), width: 720, height: 520, minWidth: 620, minHeight: 440, show: false, title: "Review this workspace's hooks", backgroundColor: '#242424',
+      ...(parent ? { parent, modal: true } : {}), width: 720, height: 520, minWidth: 620, minHeight: 440, show: false, title: "Review this workspace's hooks", backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
       webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
@@ -302,7 +314,7 @@ async function main(): Promise<void> {
   let currentWorkspace = argvWorkspace ?? '(no workspace)';
 
   const win = new BrowserWindow({
-    width: 1280, height: 820, show: false, backgroundColor: '#242424', title: 'Rotaris',
+    width: 1280, height: 820, show: false, backgroundColor: themeBackground(), title: 'Rotaris',
     webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
   // The id is read once, up front: `webContents` on a destroyed window throws, and a throw from a
@@ -323,7 +335,6 @@ async function main(): Promise<void> {
    * dialogs answer from the environment and every message box is logged with its text and answered from
    * ROTARIS_CAPTURE_ANSWERS in order. A user-driven run never enters these branches.
    */
-  const capturing = Boolean(process.env['ROTARIS_CAPTURE_PNG']);
   const scriptedAnswers = (process.env['ROTARIS_CAPTURE_ANSWERS'] ?? '').split(',').filter((s) => s.length > 0).map(Number);
   const chooseSave = async (opts: Electron.SaveDialogOptions): Promise<string | null> => {
     const forced = capturing ? process.env['ROTARIS_CAPTURE_BACKUP_TO'] : undefined;
@@ -472,6 +483,33 @@ async function main(): Promise<void> {
       }
       case 'shell.hello':
         return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`) } };
+      case 'theme.get':
+        return { ok: true, value: { name: currentTheme.name } };
+      case 'theme.set': {
+        currentTheme = resolveTheme(req.name);
+        preferences.writeThemeSync(currentTheme.name);
+        nativeTheme.themeSource = currentTheme.dark ? 'dark' : 'light';
+        const background = themeBackground();
+        for (const window of BrowserWindow.getAllWindows()) {
+          if (window.isDestroyed()) continue;
+          window.setBackgroundColor(background);
+          window.webContents.send(CHANNEL.themeChanged, { v: CONTRACT_SCHEMA_VERSION, name: currentTheme.name });
+        }
+        log(`theme applied ${currentTheme.name} to every live window`);
+        return { ok: true, value: { name: currentTheme.name } };
+      }
+      case 'prefs.get':
+        return { ok: true, value: { value: preferences.read(req.key) } };
+      case 'prefs.set': {
+        if (req.key === 'ui/reduced_motion') {
+          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
+          await preferences.write(req.key, req.value);
+        } else {
+          if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
+          await preferences.write(req.key, req.value);
+        }
+        return { ok: true };
+      }
       case 'session.start': {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
         const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt }, millis(10_000));
@@ -563,6 +601,67 @@ async function main(): Promise<void> {
   const capture = process.env['ROTARIS_CAPTURE_PNG'];
   if (capture) {
     const { writeFileSync } = await import('node:fs');
+    const proofDir = process.env['ROTARIS_THEME_PROOF_DIR'];
+    if (proofDir) {
+      mkdirSync(proofDir, { recursive: true });
+      const rendererErrors: string[] = [];
+      win.webContents.on('console-message', (_event, level, message) => {
+        if (level >= 2) rendererErrors.push(message);
+      });
+      clocks.timers.after(millis(900), async () => {
+        const pause = (amount: number) => new Promise<void>((resolve) => clocks.timers.after(millis(amount), resolve));
+        const metadata = async () => win.webContents.executeJavaScript(`(() => {
+          const rect = (element) => { const r = element.getBoundingClientRect(); return { x:r.x, y:r.y, width:r.width, height:r.height }; };
+          const visible = (element) => { const r = element.getBoundingClientRect(); const s = getComputedStyle(element); const x=Math.max(0,Math.min(innerWidth-1,r.x+r.width/2)); const y=Math.max(0,Math.min(innerHeight-1,r.y+r.height/2)); const hit=document.elementFromPoint(x,y); return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight && s.visibility !== 'hidden' && s.display !== 'none' && (hit===element || element.contains(hit)); };
+          const texts = [...document.body.querySelectorAll('*')].filter((element) => visible(element) && element.children.length === 0 && (element.textContent || '').trim()).map((element) => { const s = getComputedStyle(element); return { text:(element.textContent || '').trim(), rect:rect(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(':disabled') || element.closest(':disabled') !== null }; });
+          const controls = [...document.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(visible).map((element) => ({ name:element.getAttribute('aria-label') || (element.textContent || '').trim() || element.getAttribute('name') || element.tagName, rect:rect(element), focused:element === document.activeElement }));
+          const icons = [...document.querySelectorAll('.nav-item i')].map((element) => ({ rect:rect(element), color:getComputedStyle(element).color }));
+          const labels = [...document.querySelectorAll('.nav-item span')].map((element) => ({ text:(element.textContent || '').trim(), rect:rect(element), scrollWidth:element.scrollWidth, clientWidth:element.clientWidth }));
+          return { dpr:devicePixelRatio, viewport:{width:innerWidth,height:innerHeight}, theme:document.documentElement.dataset.theme, view:document.querySelector('.app-shell')?.getAttribute('data-view'), rootBackground:getComputedStyle(document.documentElement).getPropertyValue('--rt-bg').trim(), texts, controls, icons, labels };
+        })()`);
+        const take = async (name: string) => {
+          const image = await win.webContents.capturePage();
+          writeFileSync(join(proofDir, `${name}.png`), image.toPNG());
+          writeFileSync(join(proofDir, `${name}.json`), `${JSON.stringify(await metadata(), null, 2)}\n`);
+        };
+        const keyView = async (view: number) => {
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(view), modifiers: ['control'] });
+          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
+          await pause(100);
+        };
+        const counterfactual = process.env['ROTARIS_THEME_COUNTERFACTUAL'];
+        if (counterfactual === 'text') await win.webContents.executeJavaScript(`document.documentElement.style.setProperty('--rt-text', 'oklch' + '(45% 0 0)')`);
+        if (counterfactual === 'focus') await win.webContents.executeJavaScript(`document.documentElement.style.setProperty('--rt-focus', 'oklch' + '(40% 0 0)')`);
+        for (let view = 1; view <= 7; view += 1) { await keyView(view); await take(`view-${view}`); }
+        await keyView(7);
+        const categories = await win.webContents.executeJavaScript(`[...document.querySelectorAll('.nav-list__item')].map((element) => (element.textContent || '').trim())`) as string[];
+        for (let index = 0; index < categories.length; index += 1) {
+          await win.webContents.executeJavaScript(`document.querySelectorAll('.nav-list__item')[${index}]?.click()`);
+          await pause(60);
+          await take(`settings-${String(index + 1).padStart(2, '0')}`);
+        }
+        const focusCount = await win.webContents.executeJavaScript(`[...document.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter((element) => { const r=element.getBoundingClientRect(); return r.width>0 && r.height>0; }).length`) as number;
+        await win.webContents.executeJavaScript(`document.activeElement?.blur()`);
+        for (let index = 0; index < focusCount; index += 1) {
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+          await pause(30);
+          await take(`focus-${String(index + 1).padStart(2, '0')}`);
+        }
+        await keyView(2);
+        await win.webContents.executeJavaScript(`(() => { const input=document.querySelector('.composer__input'); if(input){ const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(input,'theme proof draft'); input.dispatchEvent(new Event('input',{bubbles:true})); } })()`);
+        const beforeSwitch = await metadata();
+        const next = currentTheme.name === 'rotaris-dim' ? 'nocturne' : currentTheme.name === 'nocturne' ? 'high-contrast' : 'rotaris-dim';
+        await runCommand({ kind: 'theme.set', name: next });
+        await pause(120);
+        const afterSwitch = await metadata();
+        await take('theme-switch');
+        writeFileSync(join(proofDir, 'switch.json'), `${JSON.stringify({ before: beforeSwitch, after: afterSwitch, composer: await win.webContents.executeJavaScript(`document.querySelector('.composer__input')?.value ?? ''`) }, null, 2)}\n`);
+        writeFileSync(join(proofDir, 'console-errors.json'), `${JSON.stringify(rendererErrors, null, 2)}\n`);
+        log(`theme proof captured ${proofDir}`);
+        app.exit(rendererErrors.length === 0 ? 0 : 3);
+      });
+    } else {
     const prompt = process.env['ROTARIS_CAPTURE_PROMPT'];
     if (prompt) {
       // Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L focuses the
@@ -640,6 +739,7 @@ async function main(): Promise<void> {
       log(`captured ${capture}`);
       app.exit(0);
     });
+    }
   }
 
   app.on('window-all-closed', () => {

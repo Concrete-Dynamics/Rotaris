@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type { z } from 'zod';
 import {
   CHANNEL_SCHEMAS,
@@ -10,6 +11,13 @@ import {
   SEQUENCED_CHANNELS,
   SessionSnapshotSchema,
   TranscriptIncrementSchema,
+  THEMES,
+  assertThemeContrast,
+  contrastRatio,
+  parseOklch,
+  raiseLightness,
+  resolveTheme,
+  themeCustomProperties,
 } from './index.js';
 
 /** Walk a zod schema's object keys recursively. */
@@ -104,5 +112,50 @@ describe('contracts — tools vocabularies', () => {
     expect(t.presetRank('autonomous')).toBe(2);
     expect(t.presetRank(undefined)).toBe(1);
     expect(t.denialText('r', 'Because.', 'terminal')).toBe("Permission denied by rule 'r'. Because. The 'terminal' call was not executed. Choose a different approach or ask the user to adjust the permission policy.");
+  });
+});
+
+describe('contracts — theme data (REQ-SHELL-128..145)', () => {
+  const cssTokens = (file: string) => {
+    const tokens: Record<string, string> = {};
+    const css = readFileSync(file, 'utf8');
+    for (const match of css.matchAll(/(--rt-[\w-]+)\s*:\s*([^;]+);/g)) tokens[match[1]!] = match[2]!.trim();
+    return tokens;
+  };
+
+  it('transcribes every adopted rotaris-dim token value without drift', () => {
+    const adopted = Object.assign({}, ...[
+      'docs/design/system/tokens/colors.css',
+      'docs/design/system/tokens/spacing.css',
+      'docs/design/system/tokens/effects.css',
+      'docs/design/system/tokens/typography.css',
+    ].map(cssTokens));
+    const actual = themeCustomProperties(resolveTheme('rotaris-dim'));
+    for (const [name, value] of Object.entries(adopted)) expect(actual[name], name).toBe(value);
+  });
+
+  it('declares three ordered, distinct themes and resolves a stale name to the default', () => {
+    expect(THEMES.map((theme) => theme.name)).toEqual(['rotaris-dim', 'nocturne', 'high-contrast']);
+    expect(new Set(THEMES.map((theme) => theme.label)).size).toBe(3);
+    expect(THEMES.every((theme) => theme.description.length > 0 && theme.dark)).toBe(true);
+    expect(resolveTheme('removed-theme').name).toBe('rotaris-dim');
+  });
+
+  it('checks every palette against the static contrast pairs and preserves the adopted-palette finding', () => {
+    const adopted = resolveTheme('rotaris-dim').tokens.color;
+    expect(contrastRatio(adopted['--rt-border-strong']!, adopted['--rt-bg']!)).toBeLessThan(3);
+    expect(contrastRatio('oklch(97% 0.02 292)', adopted['--rt-accent-500']!)).toBeLessThan(4.5);
+    expect(contrastRatio(adopted['--rt-text-disabled']!, adopted['--rt-surface']!)).toBeLessThan(3);
+    for (const theme of THEMES) expect(() => assertThemeContrast(theme)).not.toThrow();
+  });
+
+  it('raises only OKLCH lightness and clears the requested floor', () => {
+    const base = parseOklch('oklch(35% 0.12 165)');
+    const raisedText = raiseLightness('oklch(35% 0.12 165)', 4.5, 'oklch(18% 0 0)');
+    const raised = parseOklch(raisedText);
+    expect(raised.l).toBeGreaterThan(base.l);
+    expect(raised.c).toBe(base.c);
+    expect(raised.h).toBe(base.h);
+    expect(contrastRatio(raisedText, 'oklch(18% 0 0)')).toBeGreaterThanOrEqual(4.5);
   });
 });

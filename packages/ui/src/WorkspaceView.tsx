@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { isBusy, PERMISSION_PRESETS, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
+import { markMotionStart } from './motion.js';
 
 /**
  * The Workspace view's conversation surface, at the point the mechanism has
@@ -99,7 +100,7 @@ function ToolRow({ row }: { row: TranscriptRow }) {
       >
         <span className="tool__chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span className="tool__name">{row.body}</span>
-        {outcome.text && <span className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>}
+        {outcome.text && <span ref={(element) => { if (element && outcome.state === 'running') markMotionStart(element); }} className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>}
       </button>
       {!open && expandable && <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>}
       {open && (
@@ -244,7 +245,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <header className="row__head">
               <span className="row__role">{rowRole(r)}</span>
               <time className="row__time mono" dateTime={r.at}>{r.ts || rowTime(r.at)}</time>
-              {!r.settled && <span className="row__streaming" aria-label="still being written">…</span>}
+              {!r.settled && <span ref={(element) => { if (element) markMotionStart(element); }} className="row__streaming" aria-label="still being written">…</span>}
             </header>
             <div className={`row__body${r.kind === 'diff' ? ' mono row__body--diff' : ''}`}>{r.body}</div>
           </article>

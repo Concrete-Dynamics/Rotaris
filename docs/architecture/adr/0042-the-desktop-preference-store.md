@@ -209,6 +209,20 @@ This is raised as an open question against the SR-1 mechanism rather than decide
 is not this ADR's to design and because "which processes the gate admits" is a decision with a security
 flavour that deserves its own hearing.
 
+## First execution — 2026-09-04, the theme preference
+
+*Recorded under GD-10.* `packages/platform/src/preferences.ts` builds the first closed registry entries:
+`appearance/theme`, `interface/settingsTab` and `ui/reduced_motion`, each with its type, default, owner and
+coercion. Main resolves the root once before its first read and records it. The implemented order is
+`ROTARIS_PREFERENCES_ROOT`, then `XDG_CONFIG_HOME/Rotaris/Rotaris`, then the platform per-user settings root;
+Windows resolves to `%LOCALAPPDATA%\Rotaris\Rotaris`.
+
+The theme write uses `replaceDocumentSync`, including the file flush and directory flush supplied by the
+atomic document primitive, before the command returns. Tests established that an unknown stored theme resolves
+to Rotaris Dim while leaving the file byte-identical, ordinary registered values round-trip, and the isolated
+proof root keeps the user's preference location untouched. The fifteen startup captures each exercised this
+same read path before first window creation.
+
 ## Consequences accepted
 
 1. A small piece of infrastructure we own and must test on all three platforms, **including the case

@@ -102,6 +102,25 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
   return ok({ attempts: attempt });
 }
 
+/** Synchronous replace for the one gesture whose durability is part of its completion: theme selection (ADR-0042). */
+export function replaceDocumentSync(target: string, content: string | Uint8Array, opts: Omit<ReplaceOptions, 'ladder' | 'timers'> = {}): Result<{ attempts: 1 }, Failure> {
+  if (opts.createParent) mkdirSync(dirname(target), { recursive: true });
+  const staged = stagePath(target);
+  try {
+    const fd = openSync(staged, 'w');
+    try {
+      if (typeof content === 'string') writeSync(fd, content); else writeSync(fd, content);
+      fsyncSync(fd);
+    } finally { closeSync(fd); }
+    renameSync(staged, target);
+    if (opts.mode !== undefined) chmodSync(target, opts.mode);
+    return ok({ attempts: 1 });
+  } catch (e) {
+    rmSync(staged, { force: true });
+    return err(failure('document.replace.sync', 'Could not replace the document synchronously', String(e), e));
+  }
+}
+
 export type ExclusiveCreate = { readonly minted: true } | { readonly minted: false; readonly existing: string };
 
 /** Create `target` exclusively with `content`; if it already exists, return its contents instead (D-29). */

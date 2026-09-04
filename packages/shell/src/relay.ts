@@ -25,6 +25,7 @@ export class UpdateRelay {
     [CHANNEL.sessionSnapshot]: 0,
     [CHANNEL.terminalFrames]: 0,
     [CHANNEL.noticeCurrent]: 0,
+    [CHANNEL.themeChanged]: 0,
     [CHANNEL.command]: 0,
   };
 

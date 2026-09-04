@@ -28,6 +28,7 @@ export const CHANNEL = {
   sessionSnapshot: 'session:snapshot',
   terminalFrames: 'terminal:frames',
   noticeCurrent: 'notice:current',
+  themeChanged: 'theme:changed',
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -152,11 +153,15 @@ export const NoticeCurrentSchema = z.object({
 });
 export type NoticeCurrent = z.infer<typeof NoticeCurrentSchema>;
 
+export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['rotaris-dim', 'nocturne', 'high-contrast']) });
+export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
+
 export const CHANNEL_SCHEMAS = {
   [CHANNEL.transcriptIncrement]: TranscriptIncrementSchema,
   [CHANNEL.sessionSnapshot]: SessionSnapshotSchema,
   [CHANNEL.terminalFrames]: TerminalFrameSchema,
   [CHANNEL.noticeCurrent]: NoticeCurrentSchema,
+  [CHANNEL.themeChanged]: ThemeChangedSchema,
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

@@ -7,3 +7,5 @@ export * from './ApprovalDialog.js';
 export * from './AgentTree.js';
 export * from './HooksSettings.js';
 export * from './HookReviewDialog.js';
+export * from './theme.js';
+export * from './motion.js';

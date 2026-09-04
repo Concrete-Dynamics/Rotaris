@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, STATUS_LABELS, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { AppShell, ApprovalDialog, HookReviewDialog, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
+import { applyTheme, AppShell, ApprovalDialog, HookReviewDialog, motionReduced, setStoredMotionPreference, SettingsView, useShellState, WorkspaceView } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -27,6 +27,14 @@ function requireBridge(): RendererBridge {
   return b;
 }
 const bridge = requireBridge();
+let runningTheme = resolveTheme(undefined);
+const themeSubscribers = new Set<(theme: Theme) => void>();
+bridge.onThemeChanged((payload) => {
+  const name = (payload as { name?: string }).name;
+  runningTheme = resolveTheme(name);
+  applyTheme(runningTheme, document.documentElement);
+  for (const subscriber of themeSubscribers) subscriber(runningTheme);
+});
 
 const replica: ReplicaStore = createReplicaStore({
   requestReconcile: (sessionId) => { void bridge.command({ kind: 'session.reconcile', sessionId }); },
@@ -94,7 +102,15 @@ async function workspaceAction(kind: 'workspace.backup' | 'workspace.restore'): 
   return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
 }
 
-function Settings({ workspace }: { workspace: string | null }) {
+interface AppearanceProps {
+  readonly theme: Theme;
+  readonly reducedMotion: boolean;
+  readonly settingsCategory: string;
+  readonly onTheme: (name: ThemeName) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  readonly onMotion: (value: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
+}
+
+function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, onMotion }: { workspace: string | null } & AppearanceProps) {
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
   // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
@@ -124,7 +140,22 @@ function Settings({ workspace }: { workspace: string | null }) {
     onClear: () => { void act({ kind: 'hooks.clearDecision' }); },
     onToggle: (agent: HookAgentId, hookId: string | null, on: boolean) => { void act({ kind: 'hooks.setToggle', agent, hookId, on }); },
   };
-  return <SettingsView session={session} workspace={workspace} onBackup={() => workspaceAction('workspace.backup')} onRestore={() => workspaceAction('workspace.restore')} hooks={hooks} playbooks={playbooks} />;
+  const initialCategory = settingsCategory === 'models' || settingsCategory === 'personas' || settingsCategory === 'runtime' || settingsCategory === 'interface' || settingsCategory === 'display' || settingsCategory === 'skills' || settingsCategory === 'instructions' || settingsCategory === 'hooks' || settingsCategory === 'mcp' || settingsCategory === 'plugins' || settingsCategory === 'tools' || settingsCategory === 'project' || settingsCategory === 'about' ? settingsCategory : 'models';
+  return <SettingsView
+    session={session}
+    workspace={workspace}
+    onBackup={() => workspaceAction('workspace.backup')}
+    onRestore={() => workspaceAction('workspace.restore')}
+    hooks={hooks}
+    playbooks={playbooks}
+    themes={THEMES}
+    activeTheme={theme.name}
+    reducedMotion={reducedMotion}
+    initialCategory={initialCategory}
+    onTheme={onTheme}
+    onReducedMotion={onMotion}
+    onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
+  />;
 }
 
 /** REQ-NOTIFY-223/224: a notice's action, resolved here to a command or a view. */
@@ -133,19 +164,38 @@ function recover(command: string): void {
   if (command === 'hooks.settings') { useShellState.getState().openSettings('hooks'); return; }
 }
 
-function App({ version, workspace, processes }: { version: string; workspace: string; processes: string[] }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory }: { version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string }) {
   const counters = useStore(replica, (s) => s.counters);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
+  const [theme, setTheme] = useState(initialTheme);
+  const [reducedMotion, setReducedMotion] = useState(() => initialReducedMotion ?? motionReduced());
+  useEffect(() => { themeSubscribers.add(setTheme); return () => { themeSubscribers.delete(setTheme); }; }, []);
+  const changeTheme = useCallback(async (name: ThemeName) => {
+    const r = await bridge.command({ kind: 'theme.set', name });
+    if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+    const next = resolveTheme(name);
+    runningTheme = next;
+    applyTheme(next, document.documentElement);
+    setTheme(next);
+    return { ok: true as const };
+  }, []);
+  const changeMotion = useCallback(async (value: boolean) => {
+    const r = await bridge.command({ kind: 'prefs.set', key: 'ui/reduced_motion', value });
+    if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+    setStoredMotionPreference(value);
+    setReducedMotion(value);
+    return { ok: true as const };
+  }, []);
   const status = useMemo(
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string.
       session ? `run ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'no session',
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
       `mode: ${session?.permissionMode ?? 'ask'}`, 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
-      'rotaris-dim', ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
+      theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session],
+    [processes, counters, session, theme],
   );
   useEffect(() => {
     // REQ-CHAT-002: Ctrl+L moves keyboard focus to the composer from anywhere in the window.
@@ -163,7 +213,7 @@ function App({ version, workspace, processes }: { version: string; workspace: st
       version={version}
       workspaceLabel={workspace}
       statusItems={status}
-      views={{ workspace: <Workspace />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} /> }}
+      views={{ workspace: <Workspace />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} /> }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
       onRecover={recover}
@@ -200,6 +250,16 @@ async function bootHookReview(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
+  const [themeReply, motionReply, categoryReply] = await Promise.all([
+    bridge.command({ kind: 'theme.get' }),
+    bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
+    bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
+  ]);
+  runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
+  applyTheme(runningTheme, document.documentElement);
+  const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
+  setStoredMotionPreference(motionSetting);
+  const settingsCategory = categoryReply.ok ? String((categoryReply.value as { value?: string }).value ?? 'models') : 'models';
   const role = new URLSearchParams(window.location.search).get('role');
   if (role === 'approval') { await bootApproval(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
@@ -207,7 +267,7 @@ async function boot(): Promise<void> {
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[] }) : { version: '?', workspace: '(no workspace)', processes: [] };
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} settingsCategory={settingsCategory} />
     </StrictMode>,
   );
 }

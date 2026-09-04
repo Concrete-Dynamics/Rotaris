@@ -2063,11 +2063,15 @@ reference, but **no screen can be built without it.**
 > three items below it stay open and stay the reference's. OQ-31 was removed from this list and ruled
 > without the reference; see its entry.
 
-**OQ-30 — Theme palettes and token values.** *(ADR-0050.)* `REQ-SHELL-129` fixes the default theme's shell
+**OQ-30 — Theme palettes and token values. CLOSED 2026-09-04 by the IC-2 implementation and rendered-pixel
+proof.** *(ADR-0050; `spikes/theme-proof.md`.)* `REQ-SHELL-129` fixes the default theme's shell
 metrics and token groups and `REQ-SHELL-133` fixes what each built-in theme's description must convey,
 **but the palettes themselves are not specified anywhere in `docs/spec/`**. They come from the design
 reference. ADR-0050's mechanism — themes as data, corrections computed, contrast asserted from rendered
-pixels — is independent of the values.
+pixels — is independent of the values. Nocturne now lowers every ground stop in the adopted hue system;
+High Contrast uses near-black grounds, near-white text and strengthened boundaries. Those authored values
+remain owner-replaceable through the same mechanism. All six acceptance items passed from built-app pixels in
+three themes at five scale factors, and the two named counterfactuals failed at their asserted item.
 
 **OQ-31 — Which Markdown dialect is rendered. CLOSED 2026-09-02 by owner ruling GD-1, and closed without
 the design reference.** *(ADR-0051.)* `REQ-CHAT-056` named five treatments and required links to be

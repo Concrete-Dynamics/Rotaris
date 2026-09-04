@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
+import { markMotionStart } from './motion.js';
 
 /**
  * REQ-MONITOR-036..047, REQ-MONITOR-304: the delegation tree — a depth-first list of rows with box-drawing
@@ -104,7 +105,7 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
             data-task-id={a.id}
           >
             <span className="agent-row__prefix mono" aria-hidden="true">{r.prefix}</span>
-            <span className={`agent-row__dot agent-row__dot--${a.presentationState}`} aria-hidden="true" />
+            <span ref={(element) => { if (element && a.presentationState === 'running') markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${a.presentationState}`} aria-hidden="true" />
             <span className="agent-row__main">
               <span className="agent-row__persona">{a.persona}</span>
               <span className="agent-row__task">{a.givenName}</span>

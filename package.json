@@ -11,12 +11,15 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
+    "lint": "node tools/check-theme-colours.mjs && eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "symbols": "node tools/symbol-artifact/generate.mjs",
     "dev": "pnpm --filter @rotaris/desktop dev",
     "build": "pnpm --filter @rotaris/desktop build",
+    "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",
+    "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
+    "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },

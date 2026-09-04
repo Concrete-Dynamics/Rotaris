@@ -246,6 +246,22 @@ undetermined). `<config>/intent-tools.yaml` and the two `playbooks/` directories
 `ROTARIS_INTENT_SCRIPT` (`<category>` | `garbage` | `timeout` | `reject` | `none`) drives the scripted client's classifier
 for verification only. The `normal` cell no longer stands in: the BUDGET slot clamps.
 
+**Themes and preferences.** Built-in themes are typed data in `packages/contracts/src/theme/`; the colour
+mathematics and static contrast assertions live beside the data because main needs the dark flag and window
+ground before first paint. UI projects the selected theme to `--rt-*` custom properties. The preference store
+is a typed closed registry in `packages/platform/src/preferences.ts`, rooted by
+`ROTARIS_PREFERENCES_ROOT`, then the standard configuration home, then the platform per-user settings location.
+The theme write is synchronous and flushed. `ROTARIS_CAPTURE_THEME`, `ROTARIS_CAPTURE_SCALE` and
+`ROTARIS_THEME_PROOF_DIR` are verification seams.
+
+**What `pnpm theme-proof` does.** It builds Electron and launches one isolated process for each of three themes
+at scale factors 1, 1.25, 1.5, 1.75 and 2. Each process captures all seven views, all thirteen Settings
+categories, keyboard focus positions and a live theme switch. The script samples painted PNG pixels, checks
+focus bands, rail-label fit, vector-icon scale, complete recolouring, preserved composer/view state and
+renderer errors, then writes its result table under `.theme-proof/`. Two counterfactual commands lower text or
+focus contrast and must exit non-zero. The first execution and its coverage boundary are
+`spikes/theme-proof.md`.
+
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |
@@ -256,5 +272,5 @@ for verification only. The `normal` cell no longer stands in: the BUDGET slot cl
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |
-| the two undesigned themes | `ui` | IC-2 |
+| ~~the two undesigned themes~~ **done 2026-09-04** — `pnpm theme-proof`; **IC-2 discharged** | `contracts` (theme data and colour math), `platform` (preferences), `main`, `ui`, `apps/desktop/scripts` | different-scale multi-monitor drag on owner hardware; macOS/Linux native surfaces stay with IC-3 |
 | macOS / Linux artifacts | `electron-builder.yml`, `platform/src/instance.ts` | IC-3 |

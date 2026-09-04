@@ -1,0 +1,56 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { guardedRead, replaceDocument, replaceDocumentSync } from './document.js';
+
+export const PREFERENCE_KEYS = {
+  'appearance/theme': { type: 'string', default: undefined, owner: 'REQ-SHELL-128', coerce: (value: unknown) => typeof value === 'string' ? value : undefined },
+  'interface/settingsTab': { type: 'string', default: 'models', owner: 'REQ-CONFIG-271', coerce: (value: unknown) => typeof value === 'string' ? value : 'models' },
+  'ui/reduced_motion': { type: 'boolean', default: undefined, owner: 'REQ-SHELL-135', coerce: (value: unknown) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : undefined },
+} as const;
+export type PreferenceKey = keyof typeof PREFERENCE_KEYS;
+export type PreferenceValue<K extends PreferenceKey> = ReturnType<(typeof PREFERENCE_KEYS)[K]['coerce']>;
+
+export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonly env: Readonly<Record<string, string | undefined>>; readonly home: string; }
+
+/** ADR-0042: benchmark override, configuration home, then the platform's machine-local settings location. */
+export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {
+  const overridden = e.env['ROTARIS_PREFERENCES_ROOT'];
+  if (overridden) return overridden;
+  const configHome = e.env['XDG_CONFIG_HOME'];
+  if (configHome) return join(configHome, 'Rotaris', 'Rotaris');
+  if (e.platform === 'win32') return join(e.env['LOCALAPPDATA'] ?? join(e.home, 'AppData', 'Local'), 'Rotaris', 'Rotaris');
+  if (e.platform === 'darwin') return join(e.home, 'Library', 'Application Support', 'Rotaris', 'Rotaris');
+  return join(e.home, '.config', 'Rotaris', 'Rotaris');
+}
+
+type DocumentShape = Partial<Record<PreferenceKey, unknown>>;
+const serialise = (document: DocumentShape): string => `${JSON.stringify(document, Object.keys(document).sort(), 2)}\n`;
+
+export class PreferenceStore {
+  readonly file: string;
+  constructor(readonly root: string) { this.file = join(root, 'preferences.json'); }
+
+  private document(): DocumentShape {
+    const read = guardedRead<DocumentShape>(this.file, (raw) => JSON.parse(raw) as DocumentShape);
+    return read.state === 'readable' && read.value && typeof read.value === 'object' ? read.value : {};
+  }
+
+  read<K extends PreferenceKey>(key: K): PreferenceValue<K> {
+    const entry = PREFERENCE_KEYS[key];
+    return entry.coerce(this.document()[key]) as PreferenceValue<K>;
+  }
+
+  async write<K extends PreferenceKey>(key: K, value: PreferenceValue<K>): Promise<void> {
+    const document = this.document();
+    if (value === undefined) delete document[key]; else document[key] = value;
+    const result = await replaceDocument(this.file, serialise(document), { createParent: true });
+    if (!result.ok) throw new Error(`${result.error.headline}: ${result.error.detail ?? result.error.code}`);
+  }
+
+  writeThemeSync(value: string): void {
+    const document = this.document();
+    document['appearance/theme'] = value;
+    const result = replaceDocumentSync(this.file, serialise(document), { createParent: true });
+    if (!result.ok) throw new Error(`${result.error.headline}: ${result.error.detail ?? result.error.code}`);
+  }
+}

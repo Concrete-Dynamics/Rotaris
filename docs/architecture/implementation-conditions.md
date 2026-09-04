@@ -67,6 +67,14 @@ D10, D11) are open items in their own right and are not discharged by this condi
 
 ## IC-2 — the two undesigned themes, and what a screen may not be drawn without
 
+> **DISCHARGED 2026-09-04.** `spikes/theme-proof.md` records the built token data, the live preference and
+> native-theme path, and fifteen rendered-pixel runs: all three themes at scale factors 1, 1.25, 1.5, 1.75
+> and 2. Every run passed contrast, native-surface mapping, inset focus indication, vector-icon scaling,
+> the 9 px “Requirements” label fit and theme completeness across a switch. Both counterfactuals exited
+> non-zero at their named item. One active display was attached, so the different-scale multi-monitor drag
+> remains the owner measurement; macOS and Linux remain IC-3. **The condition is met and this entry remains
+> as evidence of both its original false breadth and its narrow discharged remainder.**
+
 > **CORRECTED AND LARGELY DISCHARGED 2026-09-03.** This entry was written as *"no screen is built before
 > the approved visual design reference is available"*, on the belief that the reference did not exist.
 > **It does exist, it is in this repository, and it has since 2026-09-01** — `docs/design/`, imported as

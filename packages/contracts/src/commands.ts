@@ -20,6 +20,10 @@ export type CommandOutcome = z.infer<typeof CommandOutcomeSchema>;
 
 export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shell.hello') }),
+  z.object({ kind: z.literal('theme.get') }),
+  z.object({ kind: z.literal('theme.set'), name: z.string().min(1) }),
+  z.object({ kind: z.literal('prefs.get'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab']) }),
+  z.object({ kind: z.literal('prefs.set'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab']), value: z.union([z.boolean(), z.string()]) }),
   /** REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`. */
   z.object({ kind: z.literal('session.start'), prompt: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
@@ -58,5 +62,6 @@ export interface RendererBridge {
   readonly onSessionSnapshot: (fn: (p: unknown) => void) => () => void;
   readonly onTerminalFrame: (fn: (p: unknown) => void) => () => void;
   readonly onNotice: (fn: (p: unknown) => void) => () => void;
+  readonly onThemeChanged: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

@@ -70,7 +70,8 @@ fails with `EMFILE: too many open files` — reproducibly, alone on an idle host
 number of `package.json` files pnpm 11.9.0 opens concurrently on Windows). The build that passed ran with
 `NODE_OPTIONS=--require <shim>` where the shim gates `fs/promises` opens to 200 in flight (kept beside this
 record in the session's scratch, not in the repository). IC-6's `pnpm package` would refuse today for the same
-reason; a durable remedy (a gate in `scripts/package.mjs`, or a pnpm setting) is owed and is not this part's.
+reason; a durable remedy (a gate in `scripts/package.mjs`, or a pnpm setting) is owed and is not this part's. **Built the same
+day:** `scripts/fd-gate.cjs` under `NODE_OPTIONS` for the builder step; `pnpm package` passes again (ADR-0056's third execution).
 
 ## Not measured
 

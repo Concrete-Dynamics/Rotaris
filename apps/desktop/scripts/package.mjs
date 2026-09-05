@@ -66,7 +66,11 @@ try {
     writeFileSync(join(APP, config), variant);
     process.stdout.write(`[package] COUNTERFACTUAL keep-prebuild: packing from ${config} (no prebuild exclusions)\n`);
   }
-  step(`electron-builder --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', config]));
+  // The file-descriptor gate (scripts/fd-gate.cjs): electron-builder's `pnpm list --depth Infinity` opens every package.json
+  // at once and was refused with EMFILE on this tree (Part S's console spike, 2026-09-05). Every node process of THIS step
+  // inherits the preload; the packaged application's launch below never does.
+  const builderEnv = { ...process.env, NODE_OPTIONS: `${process.env['NODE_OPTIONS'] ? `${process.env['NODE_OPTIONS']} ` : ''}--require ${JSON.stringify(join(APP, 'scripts', 'fd-gate.cjs'))}` };
+  step(`electron-builder --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', config], { env: builderEnv }));
 } catch (e) {
   finish(false, String(e.message));
 }

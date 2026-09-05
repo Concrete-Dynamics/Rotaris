@@ -9,7 +9,7 @@ import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHo
 import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
-import { classifierSlotsOf, configureRun, modelRefOf, type ConfiguredRun } from './configuration.js';
+import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -64,7 +64,7 @@ function log(message: string, level: 'info' | 'warn' = 'info'): void {
 
 /**
  * Verification only: a scripted client. `ROTARIS_SCRIPT` names the steps, comma-separated, one per model
- * call — `glob`, `read`, `write`, `rm`, `git`, `push`, `edit` request a tool call; `wait:<ms>` holds the call that
+ * call — `glob`, `read`, `write`, `rm`, `git`, `push`, `edit` request a tool call, `fetch:<url>` a fetch of that URL; `wait:<ms>` holds the call that
  * long on the clock port and then answers (the Overview proof needs a run longer than one token-sample period);
  * anything else, or the end of the list, answers with a short streamed reply, one delta per 120 ms so the growth
  * tick is visible.
@@ -142,7 +142,8 @@ function scriptedClient(c: Clocks): ModelClient {
         yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
         return;
       }
-      const tool = TOOL_STEPS[step];
+      // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
+      const tool = step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step];
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });
         yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: tool.name, argsDelta: JSON.stringify(tool.args) });
@@ -250,6 +251,15 @@ const sessions = new Sessions({
     clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal,
     runtime: (workspaceRoot) => configuredFor(workspaceRoot)?.runtime ?? configureRunFallback(),
     personas: (workspaceRoot) => configuredFor(workspaceRoot)?.personas ?? null,
+    // ADR-0023 / REQ-SANDBOX-038: the saved files at each fetch call, never the live state; the read's cost logged.
+    egress: (workspaceRoot) => {
+      const read = egressReader(configDir, workspaceRoot, clocks);
+      return async () => {
+        const r = await read();
+        log(`fetch: egress policy read from the saved configuration in ${r.loadMs.toFixed(1)} ms${r.ok ? ` (default ${r.policy.defaultDisposition}, ${r.policy.allowed.length} allowed, ${r.policy.denied.length} denied, tool_call_timeout ${r.toolCallTimeoutS} s)` : ` — the load failed: ${r.reason}`}`, r.ok ? 'info' : 'warn');
+        return r;
+      };
+    },
   }),
   backgroundSessions: () => terminal?.runningBackground ?? 0,
   attended: () => presenters.attended,

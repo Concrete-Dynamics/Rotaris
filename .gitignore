@@ -17,3 +17,4 @@ release/
 packages/kernel/src/generated/
 .slice-proof/
 .overview-proof/
+.fetch-proof/

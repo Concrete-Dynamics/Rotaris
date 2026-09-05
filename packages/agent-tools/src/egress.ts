@@ -73,12 +73,43 @@ export function isLocal(host: string): boolean {
   return m !== null;
 }
 
+/**
+ * REQ-SANDBOX-026: a refusal names which policy input produced the verdict — the unknown host, a pattern on one
+ * of the two lists (`runtime.network_denied_hosts` / `runtime.network_allowed_hosts`), or the default disposition
+ * (`runtime.network_egress_policy`).
+ */
+export type ClassificationSource =
+  | { readonly kind: 'unknown-host' }
+  | { readonly kind: 'denied-list'; readonly pattern: string }
+  | { readonly kind: 'allowed-list'; readonly pattern: string }
+  | { readonly kind: 'default' };
+
+export interface Classification {
+  readonly disposition: Disposition;
+  readonly source: ClassificationSource;
+}
+
 /** Denied list, then allowed list, then the default; a pattern that cannot be applied is an error (egress_policy_error). */
+export function classifyExplained(policy: EgressPolicy, host: string): Classification {
+  if (host === '') return { disposition: 'deny', source: { kind: 'unknown-host' } };
+  for (const p of policy.denied) if (matchHostPattern(p, host)) return { disposition: 'deny', source: { kind: 'denied-list', pattern: p } };
+  for (const p of policy.allowed) if (matchHostPattern(p, host)) return { disposition: 'allow', source: { kind: 'allowed-list', pattern: p } };
+  return { disposition: policy.defaultDisposition, source: { kind: 'default' } };
+}
+
+/** The verdict alone — the same consultation order (REQ-SANDBOX-014). */
 export function classify(policy: EgressPolicy, host: string): Disposition {
-  if (host === '') return 'deny';
-  for (const p of policy.denied) if (matchHostPattern(p, host)) return 'deny';
-  for (const p of policy.allowed) if (matchHostPattern(p, host)) return 'allow';
-  return policy.defaultDisposition;
+  return classifyExplained(policy, host).disposition;
+}
+
+/** The setting a classification source names, for a refusal's detail (REQ-SANDBOX-026, REQ-TOOLS-092). */
+export function describeSource(source: ClassificationSource, disposition: Disposition): string {
+  switch (source.kind) {
+    case 'unknown-host': return 'the host could not be read from the URL, and an unknown host is denied (runtime.network_egress_policy is not consulted for it)';
+    case 'denied-list': return `it matches '${source.pattern}' on runtime.network_denied_hosts`;
+    case 'allowed-list': return `it matches '${source.pattern}' on runtime.network_allowed_hosts`;
+    case 'default': return `the egress policy (runtime.network_egress_policy) resolves that host to '${disposition}'`;
+  }
 }
 
 /** REQ-TOOLS-045 / REQ-SANDBOX-019: a hostless or unreadable URL counts as remote. */

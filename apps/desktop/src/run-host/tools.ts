@@ -3,8 +3,8 @@ import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  buildPolicy, directWorkBundle, effectiveMode, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PresenterPort, type ToolExecutor,
+  buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
+  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import type { RuntimeFromConfiguration } from './configuration.js';
@@ -66,6 +66,8 @@ export interface ToolPortDeps {
   readonly fileStates: Map<string, FileToolState>;
   /** ADR-0020: one manager for the run host; null when no shell is present (REQ-TOOLS-104) and the tool is removed. */
   readonly terminal: TerminalManager | null;
+  /** ADR-0023 / REQ-SANDBOX-038: the egress policy and `tool_call_timeout`, read from the workspace's SAVED configuration at each fetch call. */
+  readonly egress: (workspaceRoot: string) => () => Promise<PolicyRead>;
 }
 
 /** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
@@ -90,7 +92,7 @@ function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, wa
   };
 }
 
-/** The executors this build registers (decision 3 of the plan); the registry removes any other declared name (REQ-TOOLS-004). */
+/** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
 function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todo: TodoList): Map<string, ToolExecutor> {
   // REQ-CONFIG-468: the additional read-only roots reach the fence; the file-tool state is per workspace root and keeps the first fence it saw.
   const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots] };
@@ -100,9 +102,27 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
     readFileTool(state) as ToolExecutor, writeFileTool(state) as ToolExecutor, haetReadTool(state) as ToolExecutor,
     haetEditTool(state, 'haet_edit') as ToolExecutor, haetEditTool(state, 'haet') as ToolExecutor,
     grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, todoTool(todo) as ToolExecutor,
+    // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).
+    fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }) as ToolExecutor,
   ];
   if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
+}
+
+/**
+ * Which port is the ENTRY role's — the one the pre-flight's grant and the `single` override reach (REQ-ORCH-016/025).
+ * The falsified reason, kept beside its replacement (Part N's first execution, 2026-09-05): this read
+ * `ctx.parentId === undefined || ctx.parentId === 'root'`, written against the root conversation id as it was before
+ * Part B renamed it to `root:<iteration>` (run.ts, `6de7506`) — so from the day the configuration load wired this
+ * port (`6f2880d`) the direct-work grant by intent never reached the entry role; `fetch` was the first tool that
+ * could only arrive through the bundle, and the fetch proof's first launch found the orchestrator still
+ * coordinator-only under `explicit_trivial`. The entry is the port at depth 0 — the run asks for it with depth 0
+ * and every child with its parent's depth plus one (`ledger.ts`) — with the id spellings kept for a caller that
+ * carries no depth.
+ */
+export function isEntryPort(ctx: Pick<ToolPortContext, 'parentId' | 'depth'>): boolean {
+  if (ctx.depth !== undefined) return ctx.depth === 0;
+  return ctx.parentId === undefined || /^root(:\d+)?$/.test(ctx.parentId);
 }
 
 export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPort {
@@ -113,7 +133,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
-  const isEntry = ctx.parentId === undefined || ctx.parentId === 'root';
+  const isEntry = isEntryPort(ctx);
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
   const single = runtime.runOverride === 'single';
   // REQ-ORCH-016/018: the pre-flight's grant reaches the entry role only; the bundle is resolved by facet against the registry.

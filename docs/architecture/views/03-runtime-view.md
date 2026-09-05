@@ -80,6 +80,17 @@ settled with its outcome (and a `diff` row for an edit); the results go back as 
 follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
+The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`,
+`glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,
+and **`fetch`** (ADR-0023, Part N). `fetch` is the one executor that **reads configuration per call**: each call loads
+the workspace's **saved** files and the discovery snapshot (`egressReader`, no live state — REQ-SANDBOX-038/118,
+REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in the unit test), maps
+`runtime.network_*` to the egress policy and `runtime.tool_call_timeout` to the run-level deadline, classifies the
+named host and every redirect target before a connection is opened, and reports one of REQ-TOOLS-092's eight
+failure kinds; the `ask` disposition was resolved by the gate's `{mode}:fetch-remote-host` rule before execution.
+The entry role's port is the one at **depth 0** (`isEntryPort`): the pre-flight's grant and the `single` override
+reach that port and no other.
+
 ## 4. Children (ADR-0012)
 
 `delegate` is a tool call admitted through five checks in order (role known, depth, total, active, dependencies)
@@ -144,3 +155,6 @@ Main presents `run.result` once as the notice.
   runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
   tier, providers to lease and message limit come from that.
 - **Tier C** — everything else is read at the next load; nothing watches a file.
+- **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
+  files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
+  next fetch of a running session with no restart, an unsaved settings edit reaches nothing.

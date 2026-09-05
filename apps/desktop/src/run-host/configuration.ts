@@ -4,6 +4,7 @@ import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, type HeadlessPolicy, type ModelTier } from '@rotaris/contracts';
 import { loadConfiguration, overlayLiveState, renderFatal, type LiveState, type LoadedConfiguration, type ModelEntry } from '@rotaris/config';
+import type { PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, type ClassifierSlots, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
@@ -71,6 +72,32 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration): RuntimeFromC
     transientRetries: r.auto_retries_transient,
     modelTimeoutS: r.model_timeout,
     loopClassificationTimeoutS: r.loop_classification_timeout,
+  };
+}
+
+/** What one `fetch` call reads, with the cost of the read for the log. */
+export type EgressRead = PolicyRead & { readonly loadMs: number };
+
+/**
+ * REQ-SANDBOX-038 / REQ-SANDBOX-118 / REQ-TOOLS-089: the egress policy the `fetch` tool enforces is read from
+ * the owning run's CURRENT SAVED configuration at each call — the files and the discovery snapshot only, never
+ * the live state main holds for the settings surface (an unsaved edit reaches nothing). A saved edit to the host
+ * lists therefore takes effect on the next fetch with no restart, and two runs in one process each read their own
+ * workspace's lists. A fatal load refuses the call (fail closed, REQ-SANDBOX-032). The cost is a YAML parse of
+ * two files plus the snapshot per call; a fetch is network-bound, so that is acceptable and it is logged.
+ */
+export function egressReader(globalDir: string, workspaceRoot: string, clocks: Clocks): () => Promise<EgressRead> {
+  return async () => {
+    const started = clocks.monotonic.now();
+    const loaded = loadConfiguration({ globalDir, workspaceRoot, keepIgnored: false, now: () => clocks.monotonic.now() });
+    const loadMs = clocks.monotonic.now() - started;
+    if (!loaded.ok) return { ok: false, reason: renderFatal(loaded.error), loadMs };
+    const r = loaded.value.runtime;
+    return {
+      ok: true, loadMs,
+      policy: { denied: r.network_denied_hosts, allowed: r.network_allowed_hosts, defaultDisposition: r.network_egress_policy },
+      toolCallTimeoutS: r.tool_call_timeout,
+    };
   };
 }
 

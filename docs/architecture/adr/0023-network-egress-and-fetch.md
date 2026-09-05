@@ -156,3 +156,79 @@ and the test states it. **The `fetch` tool itself is not built**: its policy is 
 (ADR-0036), which does not exist yet; nothing here opens a connection.
 
 **Found: nothing.**
+
+## Second execution — 2026-09-05, the `fetch` tool and the egress it enforces (Part N)
+
+*Recorded under GD-10.*
+
+**Built and run:** `packages/agent-tools/src/tools/fetch.ts` — the three pieces of the decision over the classifier
+of the first execution. The **front door** (`validateFetchRequest`: `REQ-SANDBOX-020`'s six conditions, checked
+before the policy is read and before any connection; `timeout: 0` carried as no deadline and no timer armed). The
+**policy read at each call** (`deps.policy()`, a `PolicyRead`; a read that fails or throws refuses with
+`egress_policy_error`, fail closed; a stored pattern `compileHostPattern` rejects refuses the same way naming the
+host and embedding the error). The **timeout precedence** (`settleTimeout`: the call's `timeout`, else the run's
+`tool_call_timeout`, else 10.0 s, the level in force named in the detail and the value reported as
+`timeout_seconds`; the deadline is `Timers.after` plus an `AbortController`, never a bare timer). The
+**hand-driven redirect loop** (`redirect: 'manual'` per hop; the location resolved with `new URL(location, hopUrl)`,
+an unresolvable one being the unknown host; every hop classified before it is fetched — a `deny` refuses whatever
+preceded it, a permitted host is followed, an `allow` verdict joins the permitted set, a new host classifying `ask`
+is refused with `REQ-SANDBOX-028`'s three facts; hop 21 is `too_many_redirects`; a blank or absent location ends the
+chain with that response as the result). The **transport outcomes** (`timeout` naming the seconds and the level;
+`network_error` carrying the host and the platform's message with its cause; `http_error` with the exact detail of
+`REQ-TOOLS-092` and the body still rendered). The **shaping** (`shapeBody`: lines, window, cap — only the cap sets
+`truncated`) and the **rendering** (`renderFetch` under an exact-string test: the failure line, the
+`[fetch_diagnostic]` object with sorted keys and nulls omitted and `failure_kind` always present, `[fetch_output]`
+when a body arrived; the five header lines in order for a success). `classifyExplained` and `describeSource` were
+added to `egress.ts` so a refusal names the policy input (`REQ-SANDBOX-026`); `classify` now delegates to it.
+
+**Wired:** `run-host/configuration.ts` `egressReader(globalDir, workspaceRoot, clocks)` loads the saved files and
+the snapshot per call — `loadConfiguration` with `keepIgnored: false` and **no `overlayLiveState`**
+(`REQ-SANDBOX-038`, `REQ-SANDBOX-118`); `run-host/tools.ts` registers `fetchTool({ policy, timers })` on every
+port through the new `ToolPortDeps.egress`; `run-host/index.ts` logs each read's cost and gives the scripted client
+a `fetch:<url>` step. No built-in persona gained `fetch`: no requirement lists it for one (`REQ-ORCH-028` routes
+"the open web" to the librarian but names no tool; the MCP domain's table gives the librarian a `web_search`
+server, not this tool), so the entry role receives it through the direct-work bundle alone (`REQ-ORCH-016`) and a
+configured persona through its own `tools:`.
+
+**Measured (`pnpm fetch-proof`, seven launches behind the real run host, a `node:http` server on 127.0.0.1 recording
+every request path, `agents.yaml` rewritten between launches):** (1) autonomous, the shipped policy, `/ok` — the five
+header lines and the three body lines, `truncated` false; (2) `ask` mode, the same loopback URL — allowed through
+`ask:fetch-local-host`, **zero `approval.requested` events**; (3) `/redirect` (302 to `localhost`, a different host
+name) with no allow list — `egress_redirect_denied`, the server saw `/redirect` only; (4) the same with
+`network_allowed_hosts: [localhost]` saved — followed, `final_url` on `localhost`, the server saw `/redirect` then
+`/ok`; (5) `network_denied_hosts: ['127.0.0.1']` saved — `egress_denied`, **the server saw nothing**; (6) `/404` —
+`http_error`, `status_code` 404, the body under `[fetch_output]`; (7) `/slow` with `tool_call_timeout: 1` —
+`timeout`, `timeout_seconds` 1 "supplied by the owning run's runtime.tool_call_timeout". Scenarios 3→4 and 1→5 are
+`REQ-SANDBOX-038` executed: a saved edit took effect on the next fetch with nothing restarted. **The per-call
+policy read cost 1.7–2.5 ms** behind the run host (median 1.9 ms over the seven calls) and a median of 4.0 ms over
+twenty reads in the unit test (min 3.3, max 10.5) — two YAML files plus the snapshot; a fetch is network-bound, so
+per-call stands. The unit suite (`fetch.test.ts`, fifty cases) runs the loop against an injected `fetchImpl` that
+records every URL asked for, so "zero connection attempts" is an empty list, and one suite against a real
+`node:http` server with a `FakeClock`-driven deadline.
+
+**OQ-37 — no proxy, by construction.** The runtime's `fetch` honours no proxy environment variable; every
+connection goes to the host that was classified, which is the fail-closed direction for `REQ-SANDBOX-022`'s
+zero-connection promise. The module comment says so. A corporate user behind a mandatory proxy will see
+`network_error`; the question stays open for the owner. Consequence 1 (textual classification) stands and its
+settings-surface sentence is owed with `REQ-SANDBOX-113` — not this part.
+
+**Readings taken:** `error_class` for the three transport kinds, which no requirement fixes: `FetchTimeout`,
+`NetworkError`, `HttpError`. A three-line body ending in a newline has three lines (one trailing terminator is
+not a line; `\r\n` and `\n` both terminate). `final_url` on a refused hop is the URL of the hop that returned the
+redirect, with its status; on a refusal before any connection both are absent. The run's own abort mid-fetch is
+`network_error` ("cancelled by the run"), never `timeout`. A hop is classified before the permitted set is
+consulted (`REQ-SANDBOX-027`: a `deny` verdict refuses whatever preceded it), which is stricter than "permitted →
+follow" and identical in effect while the policy is read once per call.
+
+**Found (first execution, run-host side):** the direct-work grant of `REQ-ORCH-016` **never reached the entry
+role**. `createToolPort` recognised the entry port as the one whose `parentId` was `'root'`, written on 2026-09-05
+against a root id that Part B had already renamed to `root:<iteration>` on 2026-09-03; every proof since then ran
+either under `single` (where coordinator-only is lifted by a different clause and the bundle's extras — `fetch`
+among them — went unnoticed) or under an intent that grants nothing. `fetch` was the first tool that could arrive
+only through the bundle, and the proof's first launch found the orchestrator still coordinator-only under
+`explicit_trivial` with no `fetch` in its list. The entry is now the port at **depth 0** (`isEntryPort`, tested), the
+falsified reason kept beside it. Two further findings in the harness, not the product: the proof's HTTP server
+lived in the process that waited on Electron **synchronously**, so the first run timed out at 30 s against a server
+that could not answer — the launch is asynchronous now; and the symbol generator, on a checkout under
+`core.autocrlf=true` (this worktree), matched no identifier because `.` never matches `\r`, and wrote an **empty**
+artifact without a word — it splits on `\r?\n` now and refuses an empty result.

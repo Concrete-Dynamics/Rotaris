@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, entryTierOf } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf } from './configuration.js';
+import { nodeClocks } from '@rotaris/platform';
 import type { ModelEntry } from '@rotaris/config';
 
 /**
@@ -103,5 +104,48 @@ default_summary_model: keyed
     const entry = { provider: 'openai', model_id: 'x', api_key: null, api_key_env: 'K', auth_provider: null } as unknown as ModelEntry;
     expect(await credentialResolver(entry, { K: 'from-env' }, () => ({}))()).toBe('from-env');
     expect(await credentialResolver({ ...entry, api_key: 'inline' }, { K: 'from-env' })()).toBe('inline');
+  });
+});
+
+describe('the egress reader (ADR-0023, REQ-SANDBOX-038/118, REQ-TOOLS-089)', () => {
+  it('reads the saved files at each call — a saved edit is seen by the next read, no restart; the cost is measured', async () => {
+    mkdirSync(join(dir, 'config'), { recursive: true });
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'config', 'project_settings.yaml'), SNAPSHOT);
+    const file = join(dir, 'ws', '.rotaris', 'agents.yaml');
+    writeFileSync(file, 'runtime:\n  network_egress_policy: deny\n  network_allowed_hosts: [ "*.example.com", docs.example ]\n  tool_call_timeout: 7\n');
+    const read = egressReader(join(dir, 'config'), join(dir, 'ws'), nodeClocks());
+    const first = await read();
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.policy).toEqual({ denied: [], allowed: ['*.example.com', 'docs.example'], defaultDisposition: 'deny' });
+    expect(first.toolCallTimeoutS).toBe(7);
+    writeFileSync(file, 'runtime:\n  network_egress_policy: allow\n  network_denied_hosts: [ blocked.example ]\n');
+    const second = await read();
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.policy).toEqual({ denied: ['blocked.example'], allowed: [], defaultDisposition: 'allow' });
+    // REQ-CONFIG-115's default when the key is absent — the run level, never the executor's 10.0 s
+    expect(second.toolCallTimeoutS).toBe(30);
+    // the cost of one read — a YAML parse of two files plus the snapshot; stated for the record, bounded loosely
+    const samples: number[] = [];
+    for (let i = 0; i < 20; i += 1) samples.push((await read()).loadMs);
+    const median = [...samples].sort((a, b) => a - b)[10] ?? 0;
+    console.log(`egress policy read: median ${median.toFixed(2)} ms over ${samples.length} reads (min ${Math.min(...samples).toFixed(2)}, max ${Math.max(...samples).toFixed(2)})`);
+    expect(median).toBeLessThan(250);
+    // REQ-SANDBOX-032: a fatal file refuses the read, fail closed
+    writeFileSync(file, 'runtime: [\n');
+    const fatal = await read();
+    expect(fatal.ok).toBe(false);
+    if (fatal.ok) return;
+    expect(fatal.reason).toMatch(/agents\.yaml/);
+  });
+  it('the live state is not consulted: only what is saved reaches the policy', async () => {
+    mkdirSync(join(dir, 'config'), { recursive: true });
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    const read = egressReader(join(dir, 'config'), join(dir, 'ws'), nodeClocks());
+    const r = await read();
+    expect(r.ok && r.policy.defaultDisposition).toBe('ask');
+    expect(r.ok && r.toolCallTimeoutS).toBe(30);
   });
 });

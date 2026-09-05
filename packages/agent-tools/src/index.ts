@@ -19,5 +19,6 @@ export * from './tools/diff.js';
 export * from './tools/files.js';
 export * from './tools/search.js';
 export * from './tools/todo.js';
+export * from './tools/fetch.js';
 export * from './terminal/index.js';
 export * from './tools/delegation.js';

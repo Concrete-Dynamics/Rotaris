@@ -12,3 +12,4 @@ export * from './intent.js';
 export * from './theme/index.js';
 export * from './roles.js';
 export * from './config.js';
+export * from './providers.js';

@@ -147,6 +147,8 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.read'), workspaceRoot: z.string() }),
   z.object({ kind: z.literal('config.save'), workspaceRoot: z.string(), save: DesktopSaveSchema }),
   z.object({ kind: z.literal('config.setField'), workspaceRoot: z.string(), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
+  /** REQ-WORKSPACE-038 / REQ-PROVIDER-099: the minimal agents.yaml written only when none exists, then the load again. */
+  z.object({ kind: z.literal('config.bootstrap'), workspaceRoot: z.string() }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 

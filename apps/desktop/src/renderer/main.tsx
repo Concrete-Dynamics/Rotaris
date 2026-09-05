@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings, type ProvidersCardProps } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -209,6 +209,8 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
   const { config, guardDialog } = useConfiguration(workspace);
+  const providers = useProviders();
+  const providersCard = <ProvidersCard {...providers} />;
   // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
   const [summary, setSummary] = useState<HooksSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -252,7 +254,7 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       onTheme={onTheme}
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
-      config={config}
+      config={{ ...config, providersCard }}
     />
     {guardDialog}
   </>);
@@ -263,6 +265,7 @@ function recover(command: string): void {
   if (command === 'hooks.review') { void bridge.command({ kind: 'hooks.review' }); return; }
   if (command === 'hooks.settings') { useShellState.getState().openSettings('hooks'); return; }
   if (command === 'config.models') { useShellState.getState().openSettings('models'); return; }
+  if (command === 'providers.add') { void bridge.command({ kind: 'providers.open', mode: 'add' }); return; }
 }
 
 function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed }: { version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
@@ -386,6 +389,53 @@ async function bootApproval(): Promise<void> {
   root.render(<StrictMode><ApprovalDialog payload={payload} othersWaiting={othersWaiting} onAnswer={onAnswer} /></StrictMode>);
 }
 
+
+/** REQ-PROVIDER-116/117: the provider authentication window; it signs in through the command and closes itself. */
+async function bootProvider(): Promise<void> {
+  const r = await bridge.command({ kind: 'provider.payload' });
+  const root = createRoot(document.getElementById('root')!);
+  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
+  const payload = r.value as ProviderDialogPayload;
+  const onSubmit = async (req: { providerId: string; label: string; baseUrl: string; apiKey: string; replace: boolean; allowEmpty: boolean }): Promise<ProviderSignInResult | { outcome: 'error'; message: string }> => {
+    const c = await bridge.command({ kind: 'provider.signIn', providerId: req.providerId, label: req.label, baseUrl: req.baseUrl, apiKey: req.apiKey, replace: req.replace, allowEmpty: req.allowEmpty });
+    if (!c.ok) return { outcome: 'error', message: c.detail ?? c.headline };
+    return c.value as ProviderSignInResult;
+  };
+  root.render(<StrictMode><ProviderDialog payload={payload} onSubmit={onSubmit} onClose={() => window.close()} /></StrictMode>);
+}
+
+/** REQ-CONFIG-329 / REQ-PROVIDER-140/141: the provider list and its actions, answered by main. */
+function useProviders(): ProvidersCardProps {
+  const [rows, setRows] = useState<readonly ProviderRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const read = useCallback(async () => {
+    setLoading(true);
+    const r = await bridge.command({ kind: 'providers.list' });
+    setLoading(false);
+    if (r.ok) { setRows(r.value as ProviderRow[]); setError(null); } else setError(r.detail ?? r.headline);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void read(); }); }, [read]);
+  useEffect(() => bridge.onConfigChanged(() => { void read(); }), [read]);
+  const outcome = async (req: Parameters<typeof bridge.command>[0]): Promise<{ ok: boolean; message: string }> => {
+    const r = await bridge.command(req);
+    await read();
+    if (!r.ok) return { ok: false, message: r.detail ?? r.headline };
+    return r.value as { ok: boolean; message: string };
+  };
+  return {
+    rows, loading, error,
+    onAdd: () => { void bridge.command({ kind: 'providers.open', mode: 'add' }); },
+    onReauthenticate: (id) => { void bridge.command({ kind: 'providers.open', mode: 'reauthenticate', providerId: id }); },
+    onCheck: async (id) => { await bridge.command({ kind: 'providers.health', id }); await read(); },
+    onSave: (id, edit) => outcome({ kind: 'providers.save', id, apiKey: edit.apiKey, baseUrl: edit.baseUrl, validate: edit.validate }),
+    onValidate: (id) => outcome({ kind: 'providers.validate', id }),
+    onSignOut: (id) => outcome({ kind: 'providers.signOut', id }),
+    onDelete: (id) => outcome({ kind: 'providers.delete', id }),
+    onRefreshAll: () => outcome({ kind: 'providers.refresh', ids: 'all' }),
+  };
+}
+
 /** REQ-ORCH-086 / REQ-SESSION-109: the pause window; it resolves through the session command and closes itself. */
 async function bootPause(): Promise<void> {
   const r = await bridge.command({ kind: 'pause.payload' });
@@ -433,6 +483,7 @@ async function boot(): Promise<void> {
   const role = new URLSearchParams(window.location.search).get('role');
   if (role === 'approval') { await bootApproval(); return; }
   if (role === 'pause') { await bootPause(); return; }
+  if (role === 'provider') { await bootProvider(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };

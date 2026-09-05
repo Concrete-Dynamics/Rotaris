@@ -3,6 +3,7 @@ import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema } from './config.js';
 import { z } from 'zod';
 import { ControlRequestSchema } from './control.js';
 import { HOOK_AGENT_IDS } from './hooks.js';
+import { PROVIDER_DIALOG_MODES } from './providers.js';
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -65,6 +66,19 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.save'), save: DesktopSaveSchema }),
   z.object({ kind: z.literal('config.setField'), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('config.liveState'), state: LiveStateSchema }),
+  /** ADR-0030 / REQ-PROVIDER-140..143/147: the provider list and its actions, answered by main itself (the store lives there). No reply carries a credential. */
+  z.object({ kind: z.literal('providers.list') }),
+  z.object({ kind: z.literal('providers.health'), id: z.string().min(1) }),
+  /** REQ-PROVIDER-116/117/142: open the authentication window in a mode; the window reads its payload. */
+  z.object({ kind: z.literal('providers.open'), mode: z.enum(PROVIDER_DIALOG_MODES), providerId: z.string().optional() }),
+  z.object({ kind: z.literal('provider.payload') }),
+  /** The pasted key travels INWARD here and nowhere else; `openai-compatible` as providerId means a custom instance from label + URL. */
+  z.object({ kind: z.literal('provider.signIn'), providerId: z.string().min(1), label: z.string().optional(), baseUrl: z.string().optional(), apiKey: z.string(), replace: z.boolean().optional(), allowEmpty: z.boolean().optional() }),
+  z.object({ kind: z.literal('providers.save'), id: z.string().min(1), apiKey: z.string(), baseUrl: z.string().nullable(), validate: z.boolean() }),
+  z.object({ kind: z.literal('providers.validate'), id: z.string().min(1) }),
+  z.object({ kind: z.literal('providers.signOut'), id: z.string().min(1) }),
+  z.object({ kind: z.literal('providers.delete'), id: z.string().min(1) }),
+  z.object({ kind: z.literal('providers.refresh'), ids: z.union([z.literal('all'), z.array(z.string())]) }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

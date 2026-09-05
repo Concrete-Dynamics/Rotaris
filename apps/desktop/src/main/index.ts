@@ -2,10 +2,10 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type 
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { createProtector, CredentialStore, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE } from '@rotaris/config';
 
 /**
@@ -146,7 +146,9 @@ async function main(): Promise<void> {
     if (ack.kind === 'workspace.ack') {
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
-          if (r.kind === 'hooks.summary' && r.summary.status === 'review') raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review'));
+          if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review')); return; }
+          // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
+          if (!providers.list().some((row) => row.authenticated)) raiseNoticeKeyed('providers.none', 'info', NO_PROVIDER_HEADLINE, 'Runs cannot start until a model provider is authenticated. Add one from Settings → Models.', recoveryFor('providers.add'));
         }).catch(() => undefined);
       });
     }
@@ -174,7 +176,9 @@ async function main(): Promise<void> {
     return true;
   };
   /** REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's recovery entry. */
-  const recoveryFor = (action: string | undefined): Recovery => action === 'hooks.review' ? [{ label: 'Review hooks', command: 'hooks.review' }] : action === 'hooks.settings' ? [{ label: 'Open hook settings', command: 'hooks.settings' }] : action === 'config.models' ? [{ label: 'Open Models settings', command: 'config.models' }] : [];
+  const recoveryFor = (action: string | undefined): Recovery => action === 'hooks.review' ? [{ label: 'Review hooks', command: 'hooks.review' }] : action === 'hooks.settings' ? [{ label: 'Open hook settings', command: 'hooks.settings' }] : action === 'config.models' ? [{ label: 'Open Models settings', command: 'config.models' }] : action === 'providers.add' ? [{ label: 'Add a provider', command: 'providers.add' }] : [];
+  /** REQ-WORKSPACE-152 (3): the first-launch notice — persistent, informational, dismissible, gating nothing. */
+  const NO_PROVIDER_HEADLINE = 'No model provider is authenticated yet';
   /**
    * ADR-0019 / REQ-TOOLS-063: main owns the per-window DIALOG QUEUE and nothing else — it never decides.
    * One approval dialog open per window, oldest first by the payload's sequence, the next within 100 ms
@@ -212,6 +216,68 @@ async function main(): Promise<void> {
     } catch (cause) {
       log(`pause dialog could not be shown: ${String(cause)}`);
     }
+  };
+
+  // ADR-0030 / REQ-PROVIDER-116/117/142: the authentication window — one at a time, its payload read by its own command.
+  let providerWindow: BrowserWindow | null = null;
+  const providerPayloads = new Map<number, { mode: ProviderDialogPayload['mode']; providerId: string | null }>();
+  const healthCache = new Map<string, ProviderHealthPayload>();
+  const providerChoices = (): ProviderDialogPayload['choices'] => {
+    const custom = CATALOGUE.find((c) => c.id === 'openai-compatible')!;
+    const authenticated = new Set(providers.list().filter((r) => r.authenticated).map((r) => r.id));
+    const builtIns = CATALOGUE.filter((c) => c.id !== 'openai-compatible' && c.id !== 'concrete-cloud' && !authenticated.has(c.id));
+    return [
+      { id: custom.id, displayName: 'OpenAI-compatible endpoint (custom URL)', method: custom.signInMethod, methodLabel: METHOD_LABELS[custom.signInMethod], hint: destinationHint(custom), defaultBaseUrl: custom.baseUrl, custom: true, available: true, unavailabilityReason: null },
+      ...builtIns.map((c) => ({ id: c.id, displayName: c.displayName, method: c.signInMethod, methodLabel: METHOD_LABELS[c.signInMethod], hint: destinationHint(c), defaultBaseUrl: null, custom: false, available: c.available, unavailabilityReason: c.unavailabilityReason })),
+    ];
+  };
+  const providerRows = (): ProviderRow[] => providers.list().map((r) => ({
+    id: r.id, displayName: r.displayName, method: r.method, methodLabel: r.methodLabel, authenticated: r.authenticated, status: r.status, displayMask: r.maskedKey,
+    baseUrl: r.baseUrl, modelCount: r.modelCount, userDefined: r.userDefined, available: r.available, lastError: r.lastError, health: healthCache.get(r.id) ?? null,
+  }));
+  const presentProvider = async (mode: ProviderDialogPayload['mode'], providerId: string | null): Promise<void> => {
+    if (providerWindow && !providerWindow.isDestroyed()) { providerWindow.focus(); return; }
+    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !pausePayloads.has(w.webContents.id) && !providerPayloads.has(w.webContents.id));
+    if (!parent) { log('providers: no main window to present the dialog over'); return; }
+    const name = providerId ? providers.displayName(providerId) : null;
+    const dlg = new BrowserWindow({
+      parent, modal: true, width: 560, height: 560, minWidth: 500, minHeight: 420, show: false, title: mode === 'reauthenticate' ? `Re-authenticate ${name}` : mode === 'authenticate' ? `Authenticate ${name}` : 'Add provider', backgroundColor: themeBackground(),
+      resizable: true, minimizable: false, maximizable: false,
+      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    const wc = dlg.webContents.id;
+    providerWindow = dlg;
+    providerPayloads.set(wc, { mode, providerId });
+    dlg.setMenuBarVisibility(false);
+    dlg.on('closed', () => { providerPayloads.delete(wc); if (providerWindow === dlg) providerWindow = null; });
+    const query = { role: 'provider' };
+    try {
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+      dlg.show();
+      dlg.focus();
+      // ROTARIS_CAPTURE_PROVIDER_FILL="label>>url": the proof fills the two visible fields; the key is the owner's to paste (verification only).
+      const fill = process.env['ROTARIS_CAPTURE_PNG'] ? process.env['ROTARIS_CAPTURE_PROVIDER_FILL'] : undefined;
+      if (fill) {
+        const [label, url] = fill.split('>>');
+        clocks.timers.after(millis(600), () => {
+          void dlg.webContents.executeJavaScript(`(() => { const set = (id, v) => { const el = document.getElementById(id); if (!el) return false; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); return true; }; return [set('provider-label', ${JSON.stringify(label ?? '')}), set('provider-url', ${JSON.stringify(url ?? '')})]; })()`)
+            .then((r) => log(`capture: provider dialog filled ${JSON.stringify(r)}; waiting for the key to be pasted and Authenticate pressed`)).catch((e) => log(`capture: provider fill failed: ${String(e)}`));
+        });
+      }
+    } catch (cause) {
+      log(`provider dialog could not be shown: ${String(cause)}`);
+    }
+  };
+  /** After any change to the credential store or the snapshot: the workspace's starter file if absent, the load again, every window told. */
+  const afterProviderChange = async (): Promise<void> => {
+    if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return;
+    const svc = services.get(canonicalPath(currentWorkspace));
+    if (!svc) return;
+    const r = await svc.link.request({ kind: 'config.bootstrap', workspaceRoot: canonicalPath(currentWorkspace) }, millis(30_000)).catch(() => null);
+    if (r?.kind === 'config.snapshot') for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
+    // ADR-0037 Tier B: the run host's next load folds the snapshot itself; nothing to hand over.
+    if (currentNotice?.headline === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) publishNotice(null);
   };
   const queue: ApprovalPayload[] = [];
   let openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null = null;
@@ -508,6 +574,73 @@ async function main(): Promise<void> {
       case 'pause.present':
         void presentPause(req.payload);
         return { ok: true };
+      case 'providers.list':
+        return { ok: true, value: providerRows() };
+      case 'providers.health': {
+        healthCache.set(req.id, { state: 'checking', detail: '', available: true });
+        const h = await providers.health(req.id);
+        healthCache.set(req.id, h);
+        if (h.state === 'healthy') void afterProviderChange();
+        return { ok: true, value: h };
+      }
+      case 'providers.open':
+        void presentProvider(req.mode, req.providerId ?? null);
+        return { ok: true };
+      case 'provider.payload': {
+        const p = providerPayloads.get(senderId);
+        if (!p) return { ok: false, code: 'provider.none', headline: 'This window was not opened for a provider sign-in' };
+        const payload: ProviderDialogPayload = { mode: p.mode, providerId: p.providerId, displayName: p.providerId ? providers.displayName(p.providerId) : null, choices: providerChoices() };
+        return { ok: true, value: payload };
+      }
+      case 'provider.signIn': {
+        // The pasted key comes in here and goes to the store or nowhere; it is never logged (REQ-PROVIDER-131).
+        const outcome: ProviderSignInResult = req.providerId === 'openai-compatible'
+          ? await providers.addInstance({ label: req.label ?? '', baseUrl: req.baseUrl ?? '', apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}) })
+          : await providers.signInWithKey(req.providerId, req.apiKey, req.allowEmpty ?? false);
+        if (outcome.outcome === 'signed-in') {
+          healthCache.set(outcome.id, { state: 'healthy', detail: outcome.message, available: true });
+          log(`providers: ${outcome.message}`);
+          raiseNotice('info', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
+          await afterProviderChange();
+        } else if (outcome.outcome === 'failed') {
+          log(`providers: sign-in failed for ${req.providerId}: ${outcome.message}`);
+        }
+        return { ok: true, value: outcome };
+      }
+      case 'providers.save': {
+        let message = '';
+        if (req.baseUrl !== null) { const r = await providers.setBaseUrl(req.id, req.baseUrl); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
+        if (req.apiKey.trim() !== '') { const r = await providers.replaceKey(req.id, req.apiKey, req.validate); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
+        else if (req.baseUrl === null && !providers.status(req.id).startsWith('auth')) return { ok: true, value: { ok: false, message: `A key is required for ${providers.displayName(req.id)}.` } };
+        if (message === '') message = 'Nothing changed.';
+        else { healthCache.delete(req.id); await afterProviderChange(); }
+        return { ok: true, value: { ok: true, message: `Saved. ${message}` } };
+      }
+      case 'providers.validate': {
+        const r = await providers.validate(req.id);
+        if (r.ok) { healthCache.set(req.id, { state: 'healthy', detail: r.value, available: true }); await afterProviderChange(); }
+        else healthCache.delete(req.id);
+        return { ok: true, value: r.ok ? { ok: true, message: r.value } : { ok: false, message: r.error } };
+      }
+      case 'providers.signOut': {
+        const r = await providers.signOut(req.id);
+        healthCache.delete(req.id);
+        log(`providers: ${r.message}`);
+        await afterProviderChange();
+        return { ok: true, value: { ok: r.outcome === 'signed-out' || r.outcome === 'nothing', message: r.message } };
+      }
+      case 'providers.delete': {
+        const r = await providers.deleteInstance(req.id);
+        healthCache.delete(req.id);
+        if (r.ok) { log(`providers: ${r.value.message}`); await afterProviderChange(); }
+        return { ok: true, value: r.ok ? { ok: true, message: r.value.message } : { ok: false, message: r.error } };
+      }
+      case 'providers.refresh': {
+        const lines: string[] = [];
+        const summary = await providers.refresh(req.ids, (l) => { lines.push(l); log(`providers: ${l}`); });
+        await afterProviderChange();
+        return { ok: true, value: { ok: summary.complete, message: lines[lines.length - 1] ?? '' } };
+      }
       case 'session.continue': {
         const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action }, millis(10_000));
         if (r.kind !== 'session.continued') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The session could not be continued'); }
@@ -589,7 +722,8 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt }, millis(10_000));
         if (r.kind !== 'session.started') {
           // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
-          if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
+          // REQ-WORKSPACE-137: the two provider refusals carry an action leading to the Models settings.
+          if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? [{ label: 'Open Settings', command: 'config.models' }] : undefined); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
           return refusal(r, 'The session could not be started');
         }
         return { ok: true, value: { sessionId: r.sessionId } };

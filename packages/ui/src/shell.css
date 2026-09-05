@@ -283,3 +283,15 @@
 .pause__figures dt { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
 .pause__figures dd { margin: 0; }
 .steer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+
+/* Providers (REQ-CONFIG-329, REQ-PROVIDER-116/117/140/141): the card, its rows, the authentication window. */
+.providers-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3, 12px); }
+.providers-card__actions { display: flex; gap: var(--rt-space-2, 8px); }
+.providers-card__table td { font-size: var(--rt-text-sm, 13px); }
+.provider-settings__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--rt-space-3, 12px); margin-bottom: var(--rt-space-3, 12px); }
+.provider-settings__opt { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); }
+.provider-dialog { max-width: 640px; margin: 0 auto; }
+.provider-dialog__field { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); }
+.provider-dialog__field .input { width: 100%; }
+.provider-dialog__hint { margin: 0; font-size: var(--rt-text-sm, 13px); }
+.provider-dialog__confirm { margin: 0; }

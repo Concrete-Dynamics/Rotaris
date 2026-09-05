@@ -12,6 +12,7 @@ flowchart LR
     RA["approval window<br/>role = approval"]
     RP["pause window<br/>role = pause"]
     RH["hook-review window<br/>role = hook-review"]
+    RPR["provider window<br/>role = provider"]
   end
   P["preload<br/>window.rotaris = { command, on… }"]
   M["main<br/>windows · dialog queue · notices<br/>UpdateRelay · preferences · theme<br/>credential store · provider sign-in · discovery<br/>capture seams"]
@@ -30,6 +31,7 @@ flowchart LR
   RA --> P
   RP --> P
   RH --> P
+  RPR --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
   M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>theme:changed · config:changed" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
@@ -64,8 +66,12 @@ flowchart LR
 `session.start/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
 `pause.present/payload`, `approval.payload`, `notice.acknowledge`, `workspace.backup/restore`,
 `shell.switchView`, `hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle`,
-`playbooks.catalogue`, `config.read/save/setField/liveState`. Main relays a session or hook command to the run
-host, a workspace or config command to the workspace service, and answers preference and theme commands itself.
+`playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
+delete/refresh`, `provider.payload/signIn`. Main relays a session or hook command to the run host, a workspace or
+config command to the workspace service, and answers preference, theme and **provider** commands itself (the
+credential store lives in main). `provider.signIn` is the one command carrying a pasted key inward; no outcome
+carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
+`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed`.
 
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own
@@ -82,7 +88,7 @@ continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`,
 the only message in the product that carries a credential value, and it never crosses a renderer boundary.
 
 **Main ↔ workspace service.** Requests: `workspace.open/close/backup/restore.assess/restore.perform`,
-`config.read/save/setField`, `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002
+`config.read/save/setField/bootstrap`, `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002
 c.7) — `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two
 children never talk directly.
 

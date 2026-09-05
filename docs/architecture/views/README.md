@@ -24,5 +24,5 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Part K.2 — the snapshot as configuration layer 3, the credential
-lease from main to the run host, the two files on disk; all three views).
+Last reconciled with the code: **2026-09-05** (Part K.3 — the provider commands, the provider window, the
+`config.bootstrap` request; the process view).

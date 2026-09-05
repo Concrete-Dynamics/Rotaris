@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ModelSlotName } from '@rotaris/contracts';
 import { clampForDisplay, type PendingChange, type PendingSettings } from './config-state.js';
 
@@ -22,6 +22,8 @@ export interface ConfigSettingsProps {
   readonly onDiscard: () => void;
   /** REQ-CONFIG-441: the immediate per-field write into a scope. */
   readonly onSetField: (scope: 'workspace' | 'global', patch: Record<string, unknown>) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** REQ-CONFIG-329: the providers card, owned by the renderer root (main answers its commands). */
+  readonly providersCard?: ReactNode;
 }
 
 type Outcome = { ok: true } | { ok: false; reason: string };
@@ -108,7 +110,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
         </tbody>
       </table>
       <h2 className="settings__heading">Providers</h2>
-      <p className="text-secondary">Provider sign-in and the user-wide endpoint list are not built in this version; declare endpoints under <code className="mono">models:</code> in the configuration file.</p>
+      {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, performRestore } from '@rotaris/workspace';
-import { commitConfigFields, commitDesktopSave, readSnapshot } from '@rotaris/config';
+import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
 
 /**
@@ -135,6 +135,14 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const r = await commitConfigFields(dirs.config, req.workspaceRoot, req.scope, req.patch, clocks.timers);
       if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The setting could not be written', detail: `${r.refusal.file}: ${r.refusal.fault}` };
       return { kind: 'config.snapshot', snapshot: r.snapshot };
+    }
+    case 'config.bootstrap': {
+      // REQ-WORKSPACE-038 / REQ-WORKSPACE-135: an existing file is never overwritten; the outcome is logged, the load follows.
+      const files = scopeFiles(dirs.config, req.workspaceRoot);
+      const r = bootstrapConfigFile(files.workspace.agents);
+      if (!r.ok) return { kind: 'refused', code: `config.${r.error.code}`, headline: 'The starter configuration could not be written', detail: `${r.error.file}: ${r.error.fault}` };
+      log(`configuration bootstrap for ${req.workspaceRoot}: ${r.value}`);
+      return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now()) };
     }
     case 'shutdown': {
       closeOwn();

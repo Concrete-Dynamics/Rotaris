@@ -1,5 +1,7 @@
 # Rotaris-crw — system architecture
 
+> **The system as built, in three views:** [`views/`](views/README.md) — component, process, runtime. Consulted before a code change, maintained in the same commit as one (`CLAUDE.md`).
+
 - **Status:** **ACCEPTED. The Architecture Gate CLOSED on 2026-09-03** and **implementation is authorised**
   — bounded, for the mechanism, subject to IC-1 to IC-6 in [`implementation-conditions.md`](implementation-conditions.md).
   The verdict, the five decisions and the record of decision are in

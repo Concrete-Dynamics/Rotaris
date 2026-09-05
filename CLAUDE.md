@@ -71,6 +71,22 @@ downward only, and `eslint-plugin-boundaries` fails `pnpm lint` on a violation. 
 (`rotaris/no-bare-timers`). `pnpm check` runs the symbol generator, typecheck, lint and tests; all four
 must be green before a commit. `pnpm build` then `electron apps/desktop/out/main/index.js` runs the app.
 
+## The architecture views — consult before, maintain after
+
+`docs/architecture/views/` holds the system as built from three perspectives: the **component view**
+(packages and the allowed-edge matrix), the **process view** (the five processes, the message families,
+the files on disk) and the **runtime view** (a run from start to teardown, the controls that reach in, the
+store's tables, the configuration tiers). Two obligations bind every change to the code:
+
+- **Consult before modifying code.** Read the view that covers the area first — the component view for a
+  new dependency or package, the process view for anything that crosses a process boundary or adds a
+  message, command or channel, the runtime view for the run loop, the controls, the store or configuration.
+- **Maintain after modifying code.** A change that adds, removes or moves a package, an allowed edge, a
+  process, a message kind, a channel, a command, a store table, a run-loop step or a control operation
+  updates the affected view **in the same commit**, and updates the "last reconciled" date in
+  `docs/architecture/views/README.md`. A view that disagrees with the code is a defect of the change that
+  made it so, and a review may refuse the change on that ground alone.
+
 ## Traceability
 
 Implementation work cites the requirement IDs it satisfies. Commits that implement behavior

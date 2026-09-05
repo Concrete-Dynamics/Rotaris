@@ -27,6 +27,7 @@ flowchart TB
     engine["engine<br/>Sessions, SessionWriter, ProjectionOwner,<br/>Run, turn loop, todo, supervisor,<br/>children (ledger, scheduler, orchestration, personas),<br/>intent classifier, playbooks, event bus"]
     tools["agent-tools<br/>registry, policy, gate, approvals,<br/>egress, tools/*, terminal (node-pty)"]
     hooks["hooks<br/>matcher, runner, trust, policy,<br/>external import, HookEngine"]
+    providers["providers<br/>catalogue (six frozen records), credential store<br/>(protection adapter, adjacent lock), discovery,<br/>slot assignment, project_settings.yaml, ProviderService"]
     workspace["workspace<br/>backup, restore"]
     mcp["mcp<br/>(placeholder)"]
   end
@@ -40,7 +41,7 @@ flowchart TB
     kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, generated requirement symbols"]
   end
 
-  main --> shell & platform & contracts & kernel
+  main --> shell & providers & config & platform & contracts & kernel
   preload --> contracts
   renderer --> ui & uicore & contracts & kernel
   runhost --> engine & tools & hooks & model & mcp & config & store & platform & contracts & kernel
@@ -51,6 +52,7 @@ flowchart TB
   engine --> model & config & store & platform & contracts & kernel
   tools --> config & store & platform & contracts & kernel
   hooks --> config & platform & contracts & kernel
+  providers --> config & platform & contracts & kernel
   workspace --> config & store & platform & contracts & kernel
   mcp --> platform & kernel
   config --> platform & contracts & kernel
@@ -70,6 +72,7 @@ flowchart TB
 | `store` | kernel, platform |
 | `config` | kernel, contracts, platform |
 | `hooks` | kernel, contracts, platform, config |
+| `providers` | kernel, contracts, platform, config |
 | `engine` | kernel, contracts, store, platform, model, config |
 | `agent-tools` | kernel, contracts, store, platform, config |
 | `model` | kernel |
@@ -78,7 +81,7 @@ flowchart TB
 | `shell` | kernel, contracts, platform, release-naming |
 | `ui-core` | kernel, contracts |
 | `ui` | kernel, contracts, ui-core |
-| `app-main` | kernel, contracts, platform, shell, release-naming |
+| `app-main` | kernel, contracts, platform, shell, release-naming, providers, config |
 | `app-preload` | contracts |
 | `app-renderer` | kernel, contracts, ui-core, ui |
 | `app-run-host` | kernel, contracts, platform, store, engine, agent-tools, model, mcp, config, hooks |
@@ -93,6 +96,10 @@ Edges worth knowing the reason for:
 - **`config` takes no database handle** (ADR-0036's guard) and cannot import `store`.
 - **`main` cannot import `ui`/`ui-core`**: theme data the main process needs before first paint lives in
   `contracts/src/theme/`; the persona vocabulary the loader and the engine share lives in `contracts/src/roles.ts`.
+- **`providers` lives in main and only main** (ADR-0030): the credential store, sign-in and discovery run in the
+  main process; the run host is *leased* a resolved bearer per run over the utility-process channel and never
+  reads `tokens/`. `main` therefore imports `providers` and `config` (for the snapshot layer's types and the
+  bootstrap writer) but still no `store`.
 - **`ui` cannot import `config`**: the Settings screen reads `ConfigSnapshot` and emits a save, a per-field write
   or its live state (`contracts/src/config.ts`); the workspace service commits.
 
@@ -106,6 +113,7 @@ Edges worth knowing the reason for:
 | Intent classification, playbooks, pre-flight | `engine/src/intent/`, `engine/src/playbooks/`, `preflight.ts` | run-host |
 | Tools, policy, approvals, terminal | `agent-tools` | run-host (`run-host/tools.ts`) |
 | Lifecycle hooks | `hooks` (+ `config` hooks section) | run-host (`run-host/hooks.ts`) |
+| Provider catalogue, credentials, discovery, the snapshot, sign-in | `providers` | main |
 | Configuration: load, write, Tier B, projection | `config` | run-host (Tier B, `run-host/configuration.ts`), workspace-service (Tier A) |
 | Model port and clients | `model` | run-host |
 | Store schema and DAL | `store` | workspace-service (open/migrate), run-host (DAL) |

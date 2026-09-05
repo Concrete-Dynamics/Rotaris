@@ -20,7 +20,7 @@ const repo = resolve(__dirname, '..', '..');
 const designSystem = resolve(repo, 'docs', 'design', 'system');
 const designAssets = resolve(repo, 'docs', 'design', 'assets');
 
-const WORKSPACE_PACKAGES = ['@rotaris/kernel', '@rotaris/contracts', '@rotaris/platform', '@rotaris/config', '@rotaris/hooks', '@rotaris/store', '@rotaris/engine', '@rotaris/agent-tools', '@rotaris/model', '@rotaris/mcp', '@rotaris/workspace', '@rotaris/shell', '@rotaris/ui-core', '@rotaris/ui', '@rotaris/release-naming'];
+const WORKSPACE_PACKAGES = ['@rotaris/kernel', '@rotaris/contracts', '@rotaris/platform', '@rotaris/config', '@rotaris/hooks', '@rotaris/providers', '@rotaris/store', '@rotaris/engine', '@rotaris/agent-tools', '@rotaris/model', '@rotaris/mcp', '@rotaris/workspace', '@rotaris/shell', '@rotaris/ui-core', '@rotaris/ui', '@rotaris/release-naming'];
 
 // electron-vite's own default external list; it is REPLACED, not merged, once rollupOptions is given,
 // so it is restated here for both node-side sections. Bundling the `electron` npm shim into main or
@@ -33,6 +33,7 @@ const workspaceAliases = {
   '@rotaris/platform': resolve(repo, 'packages/platform/src/index.ts'),
   '@rotaris/config': resolve(repo, 'packages/config/src/index.ts'),
   '@rotaris/hooks': resolve(repo, 'packages/hooks/src/index.ts'),
+  '@rotaris/providers': resolve(repo, 'packages/providers/src/index.ts'),
   '@rotaris/store': resolve(repo, 'packages/store/src/index.ts'),
   '@rotaris/engine': resolve(repo, 'packages/engine/src/index.ts'),
   '@rotaris/agent-tools': resolve(repo, 'packages/agent-tools/src/index.ts'),

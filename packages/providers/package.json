@@ -1,0 +1,17 @@
+{
+  "name": "@rotaris/providers",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Model providers (ADR-0028, ADR-0029, ADR-0030, ADR-0032; domain 04): the frozen six-record catalogue and its integrity check, the credential store with its platform protection adapter and adjacent lock, generic HTTP discovery, deterministic slot assignment, the provider snapshot (`project_settings.yaml`) behind the secret screen, and the API-key sign-in flow. Lives in main; the run host is leased bearers.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rotaris/config": "workspace:*",
+    "@rotaris/contracts": "workspace:*",
+    "@rotaris/kernel": "workspace:*",
+    "@rotaris/platform": "workspace:*",
+    "yaml": "^2.9.0"
+  }
+}

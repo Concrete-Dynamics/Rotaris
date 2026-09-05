@@ -24,4 +24,5 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (after Parts I and J — configuration as files, the control channel).
+Last reconciled with the code: **2026-09-05** (Part K.1 — the `providers` package: catalogue, credential store,
+discovery, the snapshot, sign-in; the component view).

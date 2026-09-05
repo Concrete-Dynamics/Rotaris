@@ -93,6 +93,9 @@ importers:
       '@rotaris/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@rotaris/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@rotaris/release-naming':
         specifier: workspace:*
         version: link:../../tools/release-naming
@@ -239,6 +242,24 @@ importers:
       '@rotaris/kernel':
         specifier: workspace:*
         version: link:../kernel
+
+  packages/providers:
+    dependencies:
+      '@rotaris/config':
+        specifier: workspace:*
+        version: link:../config
+      '@rotaris/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@rotaris/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@rotaris/platform':
+        specifier: workspace:*
+        version: link:../platform
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
 
   packages/shell:
     dependencies:

@@ -22,6 +22,8 @@ const ELEMENTS = [
   // ADR-0036's loader (first slice) sits below every process-side package that reads configuration; hooks (ADR-0015) beside model.
   { type: 'config', pattern: 'packages/config/**' },
   { type: 'hooks', pattern: 'packages/hooks/**' },
+  // ADR-0028/0029/0030 (Part K): providers sit beside hooks over config; instantiated by main, which leases bearers to the run host.
+  { type: 'providers', pattern: 'packages/providers/**' },
   { type: 'store', pattern: 'packages/store/**' },
   { type: 'engine', pattern: 'packages/engine/**' },
   { type: 'agent-tools', pattern: 'packages/agent-tools/**' },
@@ -47,6 +49,7 @@ const ALLOW = {
   store: ['kernel', 'platform'],
   config: ['kernel', 'contracts', 'platform'],
   hooks: ['kernel', 'contracts', 'platform', 'config'],
+  providers: ['kernel', 'contracts', 'platform', 'config'],
   // engine → model: the run loop drives `AgentBackend` (ADR-0026); model sits over kernel only, so the arrow still points down.
   engine: ['kernel', 'contracts', 'store', 'platform', 'model', 'config'],
   'agent-tools': ['kernel', 'contracts', 'store', 'platform', 'config'],
@@ -57,7 +60,7 @@ const ALLOW = {
   'ui-core': ['kernel', 'contracts'],
   ui: ['kernel', 'contracts', 'ui-core'],
   'release-naming': [],
-  'app-main': ['kernel', 'contracts', 'platform', 'shell', 'release-naming'],
+  'app-main': ['kernel', 'contracts', 'platform', 'shell', 'release-naming', 'providers', 'config'],
   'app-preload': ['contracts'],
   'app-renderer': ['kernel', 'contracts', 'ui-core', 'ui'],
   'app-run-host': ['kernel', 'contracts', 'platform', 'store', 'engine', 'agent-tools', 'model', 'mcp', 'config', 'hooks'],
@@ -79,6 +82,7 @@ const ENGINE_CODE = [
   'packages/platform/src/**',
   'packages/config/src/**',
   'packages/hooks/src/**',
+  'packages/providers/src/**',
   'packages/model/src/**',
   'packages/mcp/src/**',
   'apps/desktop/src/run-host/**',

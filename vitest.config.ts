@@ -13,6 +13,7 @@ export default defineConfig({
       '@rotaris/platform': `${root}packages/platform/src/index.ts`,
       '@rotaris/config': `${root}packages/config/src/index.ts`,
       '@rotaris/hooks': `${root}packages/hooks/src/index.ts`,
+      '@rotaris/providers': `${root}packages/providers/src/index.ts`,
       '@rotaris/store': `${root}packages/store/src/index.ts`,
       '@rotaris/engine': `${root}packages/engine/src/index.ts`,
       '@rotaris/agent-tools': `${root}packages/agent-tools/src/index.ts`,

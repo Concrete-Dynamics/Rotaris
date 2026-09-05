@@ -101,7 +101,18 @@ function layerSchemes(text: string): string {
 }
 
 /** REQ-TOOLS-171 layer 4: the closed prefix list, at a token boundary, case-insensitive. */
-const PREFIXES = ['ghp_', 'ghs_', 'ghu_', 'gho_', 'sk-', 'sk_', 'iv1.', 'eyj'] as const;
+export const CREDENTIAL_VALUE_PREFIXES = ['ghp_', 'ghs_', 'ghu_', 'gho_', 'sk-', 'sk_', 'iv1.', 'eyj'] as const;
+const PREFIXES = CREDENTIAL_VALUE_PREFIXES;
+
+/**
+ * REQ-PROVIDER-086: whether a string value carries one of the prefixes at a token boundary, letter case
+ * ignored — `Bearer ghp_x` as surely as a bare `ghp_x`. The snapshot's secret screen refuses the write on
+ * this where the redaction pass would mask.
+ */
+export function hasCredentialPrefix(value: string): boolean {
+  const alts = PREFIXES.map((p) => p.replace(/[.]/g, '\\.')).join('|');
+  return new RegExp(String.raw`(^|[^A-Za-z0-9_.\-])(${alts})`, 'i').test(value);
+}
 
 function layerShapes(text: string): string {
   const alts = PREFIXES.map((p) => p.replace(/[.]/g, '\\.')).join('|');

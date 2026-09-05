@@ -27,6 +27,7 @@
     "@rotaris/contracts": "workspace:*",
     "@rotaris/engine": "workspace:*",
     "@rotaris/hooks": "workspace:*",
+    "@rotaris/providers": "workspace:*",
     "@rotaris/kernel": "workspace:*",
     "@rotaris/mcp": "workspace:*",
     "@rotaris/model": "workspace:*",

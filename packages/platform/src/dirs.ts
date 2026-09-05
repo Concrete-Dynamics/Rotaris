@@ -58,7 +58,9 @@ export function dataLayout(dirs: UserDirs) {
     workspaces: join(dirs.data, 'workspaces'),
     instanceRecord: join(dirs.data, 'instance.json'),
     machineId: join(dirs.data, 'machine-id'),
-    credentials: join(dirs.data, 'credentials'),
+    // REQ-PROVIDER-014 fixes `tokens/`; the name reserved here before the store was built was `credentials`,
+    // which no requirement names — corrected when ADR-0029 was first executed (Part K, 2026-09-05).
+    tokens: join(dirs.data, 'tokens'),
   } as const;
 }
 

@@ -63,7 +63,7 @@ function cleanEnvironment() {
 }
 const PROBES = [
   '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
-  '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]',
+  '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-checkpoint-row"]',
   '[data-testid="git-checkpoint-session"]', '[data-testid="git-divider"]', '[data-testid="git-toast"]', '[data-testid="strip-branch"]', '.notice__headline', '.app-shell',
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
 ];
@@ -227,8 +227,11 @@ const isolated = launch('isolated', workspace, local, preferences, {
   if (!/is isolated: the run works in/.test(isolated.log)) throw new Error('the run host did not log the effective root');
   const picker = first(p, '[data-testid="git-checkpoint-session"]');
   if (!picker || !new RegExp(`${session.session_id} · rotaris/session/${session.session_id}`).test(picker.text)) throw new Error(`the checkpoint picker reads "${picker?.text ?? 'absent'}"`);
-  if (text(p, '[data-testid="git-checkpoints-empty"]')[0] !== 'No checkpoints are recorded for this session. Rotaris records one after each iteration of a worktree-isolated run.') throw new Error(`the checkpoints card reads "${text(p, '[data-testid="git-checkpoints-empty"]')[0]}"`);
-  results.isolated = { sessionId: session.session_id, status: session.execution_status, binding, notesInWorktree: true, notesInBase: false, baseClean: true, rowText: bound.text, png: isolated.png };
+  // Since Part P an isolated run records a checkpoint per closing iteration (REQ-GIT-044's unset default): the card lists it.
+  // (Until then this line asserted the card's empty sentence; the checkpoint proof owns the card's rows in detail.)
+  const ckptRows = p['[data-testid="git-checkpoint-row"]'] ?? [];
+  if (ckptRows.length !== 1) throw new Error(`the checkpoints card lists ${ckptRows.length} row(s) for the isolated session, expected 1`);
+  results.isolated = { sessionId: session.session_id, status: session.execution_status, binding, checkpointRows: ckptRows.length, notesInWorktree: true, notesInBase: false, baseClean: true, rowText: bound.text, png: isolated.png };
 }
 
 // 4. Delete the manual worktree through the two-step confirmation: a file dropped in first so Git refuses without --force.

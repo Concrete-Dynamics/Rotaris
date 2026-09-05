@@ -527,7 +527,8 @@ preview-first dialog (the warning, the checkbox, the safety checkpoint holding t
 notice); a session with no rows, a ref deleted from outside, a live run's refusal, a stale session repaired on opening; a
 retention of two trimming rows and refs together; an isolated run whose checkpoints land in the shared repository and
 whose restore touches the worktree only; `enabled: false`. Figures — invocations and times per capture, preview and
-restore — land in `.checkpoint-proof/results.json`.
+restore — land in `.checkpoint-proof/results.json`. The Git proof's isolated launch now asserts one checkpoint row where it asserted the card's
+empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch.
 
 **What `pnpm resilience-proof` does.** It builds Electron and launches the app nine times with scripted fault steps: a 429
 with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (the 60 s local wait, cancelled from the

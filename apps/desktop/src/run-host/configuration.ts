@@ -5,7 +5,7 @@ import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, type HeadlessPolicy, type ModelTier } from '@rotaris/contracts';
 import { isPlainMap, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import type { PolicyRead } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -178,7 +178,7 @@ export function entryTierOf(cfg: LoadedConfiguration): ModelTier | null {
 }
 
 /** Decision 3 of the plan: `personas:` overlaid on the built-in table — stated fields win, the prompt is the file's when it supplies one. */
-export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, warn: (m: string) => void): PersonaResolver {
+export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, warn: (m: string) => void, mcpEvidence?: (role: string) => McpGrantEvidence): PersonaResolver {
   const stated = (role: string, field: string): boolean => {
     const personas = cfg.merged['personas'];
     const entry = personas && typeof personas === 'object' ? (personas as Record<string, unknown>)[role] : undefined;
@@ -209,6 +209,8 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
       ...(modelRef ? { modelRef, thinking: thinkingOf(entry ? cfg.models[entry.model] : null) } : {}),
       ...(fallbackRef && entry?.fallback_model ? { fallbackModel: fallbackRef, fallbackThinking: thinkingOf(cfg.models[entry.fallback_model]) } : {}),
+      // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
+      ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
     };
     return persona;
   };
@@ -328,6 +330,8 @@ export interface ConfigureDeps {
   readonly liveState: () => LiveState;
   /** ADR-0030: the bearers main leased for this workspace's current run, read per request. */
   readonly bearers: (workspaceRoot: string) => Readonly<Record<string, string>>;
+  /** ADR-0034 (Part S): the spawn-time MCP evidence per role, from the run host's memoised surface. */
+  readonly mcpEvidence?: ((cfg: LoadedConfiguration, workspaceRoot: string, role: string) => McpGrantEvidence) | undefined;
 }
 
 /**
@@ -339,7 +343,8 @@ export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedC
 
 export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps): Result<ConfiguredRun, ConfigureRefusal> {
   const loaded = loadConfiguration({ globalDir: deps.globalDir, workspaceRoot, now: () => deps.clocks.monotonic.now() });
-  if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}` });
+  // REQ-CONFIG-478 names the first problem; REQ-MCP-002 requires EVERY defect reported, so the rest follow it.
+  if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}${loaded.error.lines.length > 1 ? ` All problems: ${loaded.error.lines.join(' | ')}` : ''}` });
   const live = overlayLiveState(loaded.value, deps.liveState());
   if (!live.ok) return err({ reason: `The configuration could not be applied with the current settings: ${renderFatal(live.error)}`, cfg: loaded.value });
   const cfg = live.value;
@@ -351,7 +356,7 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
     warnings.push(...lines);
   }
   const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';
-  const personas = personaResolverFor(cfg, scripted, (m) => warnings.push(m));
+  const personas = personaResolverFor(cfg, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(cfg, workspaceRoot, role) : undefined);
   const entryRole = personas.resolve(cfg.defaultPersona);
   if (!entryRole) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
   const entryModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;

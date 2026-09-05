@@ -85,5 +85,6 @@ export function overlayLiveState(config: LoadedConfiguration, live: LiveState): 
   return resolveMerged(top, {
     workspaceRoot: config.workspaceRoot, hooks: config.hooks, files: config.files, raw: config.raw,
     delegationStrategy: live.delegationStrategy ?? config.delegationStrategy, loadMs: config.loadMs, authenticatedProviders: config.authenticatedProviders, discoveredSlots: config.discoveredSlots,
+    mcp: config.mcpInputs,
   });
 }

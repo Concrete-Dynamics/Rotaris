@@ -372,7 +372,18 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks): AgentRecord {
     dependencies: (() => { try { return JSON.parse(c.depends_on) as string[]; } catch { return []; } })(),
     activity: c.task.slice(0, 180), model: c.model_key, depth: c.depth, background: c.background === 1, category: c.category,
     spawnedAt: c.spawned_at, completedAt: c.completed_at, toolCalls: c.tool_calls, delegationTask: c.task, live: ps === 'running',
+    ...mcpEvidenceOf(c.granted_mcp),
   };
+}
+
+/** REQ-MCP-065 / REQ-MCP-114 (Part S): the row's recorded evidence as the record's two fields; an unreadable or pre-Part-S `{}` value reads as none. */
+function mcpEvidenceOf(json: string): Pick<AgentRecord, 'grantedMcp' | 'mcpServers'> {
+  try {
+    const v = JSON.parse(json) as { granted?: Record<string, string[]>; servers?: AgentRecord['mcpServers'] };
+    return { grantedMcp: v && typeof v.granted === 'object' && v.granted !== null ? v.granted : {}, mcpServers: Array.isArray(v?.servers) ? v.servers : [] };
+  } catch {
+    return { grantedMcp: {}, mcpServers: [] };
+  }
 }
 
 /** REQ-TOOLS-060: the mirror is a JSON array of payloads; an unreadable mirror reads as empty rather than failing the record. */

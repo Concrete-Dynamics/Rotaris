@@ -48,6 +48,13 @@ export interface ModeChange {
 export interface ToolPort {
   /** The ONE resolution's listing (REQ-TOOLS-010). */
   specs(): readonly ToolSpec[];
+  /**
+   * ADR-0034 (Part S): a port whose surface needs discovery before its listing is complete resolves this first; the turn
+   * awaits it before reading `specs()` or the prompt section, bounded by the port (REQ-MCP-053's 35 s at most).
+   */
+  ready?(): Promise<void>;
+  /** REQ-MCP-101 / REQ-TOOLS-010: the prompt's MCP section, rendered from the same resolution as `specs()`; appended to the system prompt. */
+  promptSection?(): string;
   dispatch(call: PortToolCall, signal: AbortSignal): Promise<PortToolResult>;
   /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval released, before the run stops. */
   cancelPending(): number;
@@ -115,7 +122,11 @@ function injectSteering(deps: TurnDeps, messages: ChatMessage[]): number {
 export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
   const messages: ChatMessage[] = [...history, { role: 'user', content: [{ kind: 'text', text: task }] }];
+  // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
+  if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];
+  const section = tools?.promptSection?.() ?? '';
+  const stepDeps: TurnDeps = section === '' ? deps : { ...deps, systemPrompt: `${deps.systemPrompt}\n\n${section}` };
   let toolCallCount = 0;
   let steps = 0;
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
@@ -139,8 +150,8 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       return { report: { status: 'partial', text: lastReport.text, usage }, messages, toolCallCount };
     }
     const report = deps.resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(deps, choice, messages, specs, signal, unresponsiveMs), signal)
-      : (await step(deps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null)).report;
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(stepDeps, choice, messages, specs, signal, unresponsiveMs), signal)
+      : (await step(stepDeps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null)).report;
     lastReport = report;
     usage = { input: usage.input + report.usage.input, output: usage.output + report.usage.output };
     if (report.status === 'failed') return { report: { ...report, usage }, messages, toolCallCount };

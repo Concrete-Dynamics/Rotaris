@@ -175,3 +175,101 @@ A requirement appears that makes probe results reusable, or that requires automa
 would contradict `REQ-MCP-054` and `REQ-MCP-069` as written; or all child-process spawning must be
 centralised for sandbox or audit reasons, which would make the central-service shape required and would
 need its latency concerns answered.
+
+## First execution — 2026-09-05, Part S (the three paths, the pipeline, the sink; ADR-0033 beside it)
+
+*Recorded under GD-10; the proof is `pnpm mcp-proof` (nine launches, `.mcp-proof/results.json`).*
+
+**Built and run.** The three connection paths over ADR-0033's one factory (`packages/mcp/src/`): `ToolDiscovery`
+(memoised per process on the nine-value identity of `identity.ts`, `invalidate()` on a load, the 30 s timeout and
+the 35 s outer watchdog on the Timers port — measured at 35,005 ms in the ninth launch, the application exiting
+1.4 s after the user's quit; a teardown error after the list is debug only); `HealthProbe` (own connection every
+call, 8 s budget, two probes contacted the fixture twice — the pid file counted two launches); `SessionConnections`
+(the keyed single-flight — two concurrent first demands, one promise, one process; three interleaved calls each
+answered; the shutdown latch; idempotent `closeAll()`; the connect-time list kept beside the current one). The
+pipeline (`packages/config/src/mcp/`): entry schema, discovery files, merge with the origin map, command
+resolution, availability, environment and secrets, persona resolution, the normalised description, the prompt
+section — every stage `{ value, diagnostics }`, every diagnostic a value with severity, key and scope, ONE sink
+(`DiagnosticSink` applying the scopes; `McpHost.deliver` in the run host fanning out to the log, the 8 s notice and
+the `mcp_config` issue). Grants stay `undefined` versus `[]` through the whole pipeline; every ordering goes
+through `compareCodePoints` (moved to `@rotaris/kernel` so `config` and `mcp` share it — the component view
+already allowed both edges), and `order.test.ts` refuses `localeCompare`/`Intl.Collator` in both places.
+
+**The placement reading — consequence 3 falsified and kept.** This decision's placement paragraph has the
+settings surface instantiate the discovery and probe paths "in its own process", and consequence 3 accepts that
+"two processes may hold different tool lists for one server, and that is correct behaviour rather than a bug".
+That was written against `REQ-MCP-047` as it read on 2026-08-31; the requirement now says the memory "is the
+whole application's: every window and every run observes the same tool list … and there is no second holder of
+a tool list anywhere". The reading taken: **every path lives in the run host** (`apps/desktop/src/run-host/mcp.ts`,
+`McpHost`), the one process that lives for the application's life and owns every session; the settings category
+asks it over `mcp.list` / `mcp.probe` / `mcp.setEnabled` / `mcp.secrets` (main relays). The library still has no
+Electron import and no process assumption — that half of the placement holds and is what made the choice free.
+Consequence 3 is falsified as written and is kept above beside this note; consequence 2 (a server running twice
+at once, once for a session and once transiently for a probe or a discovery) still holds and the proof's pid
+files show it (one discovery launch plus one session launch per server).
+
+**OQ-22's reading — overlay on the parent environment, flagged for the owner** (recorded under OQ-22):
+`resolveServerEnvironment` produces `REQ-MCP-090`'s map (full-value `${VAR}` expansion, unset → the key omitted,
+secrets last) and the run host hands the child `{ ...process.env, ...map }`. No scrubbing of the parent
+environment is applied; which names to scrub is the owner's.
+
+**Readings where the record was silent, recorded here (each in the code beside its rule):**
+
+- *Name collisions across servers.* `REQ-MCP-069` aggregates every server's tools into one callable surface and
+  `REQ-MCP-101` prints names per server, but nothing says what happens when two servers — or a server and a native
+  tool — report the same name (the proof's first run: three fixtures all reporting `echo`, five names refused as
+  "collides with a native tool"). The reading: a colliding name is offered under the client-side prefix `<server>_`
+  that `REQ-MCP-057` already anticipates (so grants and denials written against the reported name still match),
+  **only on collision**, in code-point order of the servers, so the printed name and the callable name stay one
+  (`REQ-MCP-062`). `persona.ts`, `reservedNames`. The recorded evidence (`granted_mcp`) is computed without the
+  native names (the persona resolver's surface at spawn), so a name a native tool shadows appears unprefixed there
+  and prefixed in the port; stated, not hidden.
+- *The mask.* `REQ-MCP-081` says the mask "carries no character of the value … and no indication of that value's
+  length"; `REQ-TOOLS-171`'s display mask (`ab****yz`) carries four characters and a length band. The rendering
+  of a stored secret uses `REQ-TOOLS-171`'s **marker** `***` (`REDACTION_MARK`), which is the one of the two the
+  MCP requirement describes. ADR-0007 groups `REQ-MCP-081` under the display mask; that grouping is contradicted by
+  the requirement's own text and the marker was chosen. For the owner to confirm.
+- *The `enabled: false` deviation (the owner's decision of 2026-09-05).* `REQ-CONFIG-181` and `REQ-MCP-010` make
+  `code_intelligence` the one default enabled by default; it ships `enabled: false` until ADR-0035 executes,
+  because the reserved token resolves to nothing launchable today and an enabled entry would put a permanent
+  discovery failure into every run. Recorded in `packages/config/src/mcp/defaults.ts` beside the entry; revert to
+  `true` with the manifest.
+- *When the memo is invalidated.* `REQ-MCP-047`: a reload interrogates afresh. Every run start loads the
+  configuration twice within milliseconds (`session.start` resolves it before the lease and `Sessions.start` again),
+  so `McpHost.newConfiguration` invalidates when the merged servers' fingerprint changed **or any memoised discovery
+  had failed** — the requirement's own purpose ("a server that failed before the reload but answers after it
+  produces no further warning") holds, and an identical reload keeps a healthy memo.
+- *The empty state of the category (`REQ-CONFIG-350`)* is present in `McpSettings.tsx` and unreachable with the
+  shipped defaults: three entries always exist and nothing removes them. Stated.
+- *Session end.* `REQ-MCP-066` closes at session-lock release and at exit. The engine releases session locks only
+  in `Sessions.closeAll()` (shutdown) today, so the session connections live until exit; a child ending leaves them
+  open as `REQ-MCP-068` requires. When a per-session release exists, `McpHost.closeSession` is the call.
+- *Discovery ahead of the first port.* A tool port is created synchronously; discovery is not. The run start kicks
+  discovery off for every carried, launchable server (`McpHost.prepare`), and the engine's turn awaits the port's
+  new optional `ready()` before it reads the listing and the prompt section (`ToolPort.ready`/`promptSection`,
+  `run/turn.ts` — the one engine change beyond the ledger line). One resolution (`surfaceFor`, memoised on the
+  versions of its inputs) feeds the executors, the model's listing, the prompt section and the spawn evidence.
+
+**Found in existing code (the tally's twenty-seventh).** *ADR-0033's transport on Windows:* `spawnChild` starts a
+command by bare name; `npx` and `uvx` on Windows are `npx.cmd`/`uvx.cmd`, which `spawn` cannot start by name and —
+since Node's CVE-2024-27980 hardening — refuses to start without a shell even by full path. The shipped `browser`
+default (`npx -y @playwright/mcp@0.0.80 --headless`) could therefore never start on Windows, the one platform the
+product builds for, and `REQ-MCP-113`'s "a stdio server launched by the desktop application SHALL start" was
+false for every package-runner entry; the probe reported "spawn npx ENOENT" (the settings launch's PNG, first
+run). The falsified reason — that one spawn helper with `windowsHide` was enough for every launch — is kept in
+`packages/platform/src/spawn.ts` beside `windowsLaunchOf`: a command whose PATH resolution ends in `.cmd`/`.bat`
+is launched through `cmd.exe /d /s /c "<quoted line>"` with the arguments verbatim, the way ADR-0015's hook
+children already reach the interpreter; `findExecutable` is the one PATH lookup every surface uses
+(`REQ-MCP-037`). Recorded in ADR-0033's note as well; the tally is the manager's.
+
+**What the proof measured** (`.mcp-proof/results.json`): discovery per fixture 389–424 ms; first call after
+connect 101 ms; one session process for three children (pid 15116, two launches: one discovery, one session); the
+narrowing withdrawn once and the prompt rendered once; the crash's one warning issue and two connections; the drop
+rules' five fates recorded on the child's row; the toggle's wording and the relaunch without it; the category's
+health texts, the `***` mask, the scope, the expected-keys hint; both YAML defects in one refusal and the same two
+dropped from the discovery file; the 35 s bound at 35,005 ms and the exit 1,437 ms after the quit.
+
+**Not built, said so:** the write side of secrets (`REQ-MCP-084/110/111`); ADR-0035 entirely (the token's launch,
+the manifest, `REQ-MCP-011/015/016(check)/034(binding, inert)/036/071/095/096/099/102/112/116`, the grant tiers);
+the palette entry (`REQ-MCP-108`'s `REQ-SHELL-048` half); `web_search` and `browser` exercised live; a real
+third-party server; `REQ-MCP-070` against the fixture named `lsp` only.

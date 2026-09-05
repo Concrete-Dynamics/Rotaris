@@ -29,7 +29,7 @@ flowchart TB
     hooks["hooks<br/>matcher, runner, trust, policy,<br/>external import, HookEngine"]
     providers["providers<br/>catalogue (six frozen records), credential store<br/>(protection adapter, adjacent lock), discovery,<br/>slot assignment, project_settings.yaml, ProviderService"]
     workspace["workspace<br/>backup, restore"]
-    mcp["mcp<br/>(placeholder)"]
+    mcp["mcp<br/>OwnedStdioTransport, client factory,<br/>ToolDiscovery, HealthProbe, SessionConnections,<br/>identity, code-point order"]
   end
 
   subgraph foundation["Foundation packages"]
@@ -121,3 +121,12 @@ Edges worth knowing the reason for:
 | Process links, the update relay | `shell` | main |
 | Preferences, theme data | `platform` (store), `contracts/theme` (data), `ui/theme.ts` (projection) | main, renderer |
 | Views and dialogs | `ui`, `ui-core` | renderer |
+
+### `mcp` (Part S, 2026-09-05)
+
+No longer a placeholder: ADR-0033's `OwnedStdioTransport` over `platform`'s one spawn helper, the client factory over
+`@modelcontextprotocol/client` 2.0.0 (pinned; the SDK's own transports for `http` and `sse`), and ADR-0034's three
+paths. **Edges unchanged** — `mcp → kernel, platform`. The code-point comparator both `mcp` and `config` order by
+lives in `kernel` (`order.ts`), so neither package needed a new edge. The configuration pipeline of ADR-0034 lives in
+`config` (`src/mcp/`, `sections/mcp-servers.ts`); the run host composes the two (`run-host/mcp.ts`, `McpHost`) and
+is the only process that instantiates either.

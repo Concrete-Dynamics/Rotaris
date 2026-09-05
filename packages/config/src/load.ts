@@ -1,4 +1,5 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { err, ok, type Result } from '@rotaris/kernel';
@@ -12,6 +13,8 @@ import { readModelsSection, type ModelEntry } from './sections/models.js';
 import { readPersonasSection, type PersonaEntry } from './sections/personas.js';
 import { readCompressorSection, type CompressorSection } from './sections/compressor.js';
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
+import { readMcpServersSection } from './sections/mcp-servers.js';
+import { readDiscoveryFiles, resolveMcpConfiguration, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
 import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit-breaker-section.js';
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
@@ -25,7 +28,8 @@ import { PROJECT_SETTINGS_FILE, readProjectSnapshot, snapshotLayer } from './pro
  * defaults copied first (REQ-CONFIG-032), runs the passes in REQ-CONFIG-035..037's order, and yields a
  * configuration that is already fully resolved. Layer 3 — the provider/model discovery snapshot
  * (REQ-CONFIG-034, `project_settings.yaml` in the global directory) — is folded since Part K; the
- * auto-discovered-server layer (REQ-CONFIG-033) still has no producer and its position stays empty.
+ * auto-discovered-server layer (REQ-CONFIG-033) is the two `mcp.json` files of REQ-MCP-017, read strictly read-only
+ * and folded between the defaults and the global scope (REQ-MCP-025) since Part S.
  */
 export const MODELS_FILE = 'models.yml' as const;
 export const AGENTS_FILE_NAME = 'agents.yaml' as const;
@@ -82,6 +86,21 @@ export interface LoadedConfiguration {
   readonly merged: PlainMap;
   /** ADR-0036 "Revisit if": the load's time on the caller's monotonic clock; null when none was supplied. */
   readonly loadMs: number | null;
+  /** ADR-0034 (Part S): the merged tool servers resolved at load — origins, commands, availability, environment, descriptions. */
+  readonly mcp: McpConfiguration;
+  /** What the MCP resolution was computed from, so ADR-0037's Tier B overlay resolves it again identically. */
+  readonly mcpInputs: McpResolveContext;
+}
+
+/** The inputs of the load-time MCP stages that are not in the merged document. */
+export interface McpResolveContext {
+  readonly discovered: DiscoveredServers;
+  readonly discoveryDiagnostics: readonly Diagnostic[];
+  readonly globalDir: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly platform: NodeJS.Platform;
+  readonly onPath?: ((executable: string) => boolean) | undefined;
+  readonly readFile?: ((path: string) => string | null) | undefined;
 }
 
 type ReadFile =
@@ -154,6 +173,14 @@ export interface LoadOptions {
   readonly now?: () => number;
   /** REQ-CONFIG-034: the snapshot's path; `<globalDir>/project_settings.yaml` by default, `null` folds no snapshot. */
   readonly snapshotPath?: string | null;
+  /** REQ-MCP-017/087: the process environment the discovery locations and `${VAR}` expansion read; `process.env` by default. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly platform?: NodeJS.Platform;
+  readonly home?: string;
+  /** REQ-MCP-037: the PATH lookup; injectable so a test fixes the answer. */
+  readonly onPath?: (executable: string) => boolean;
+  /** REQ-MCP-027: the read-only reader for the discovery files and secrets.yaml; the filesystem by default. */
+  readonly readFile?: (path: string) => string | null;
 }
 
 function readSlots(top: PlainMap, sink: ProblemSink): { slots: Record<ModelSlot, string | null>; thinking: Record<ModelSlot, ReasoningLevel | null> } {
@@ -194,6 +221,15 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
       if (folded.layer) layers.push({ source: snapshotPath, value: folded.layer });
     }
   }
+  // Layer 2 (REQ-CONFIG-033 / REQ-MCP-025): the discovered `mcp.json` servers, between the defaults and the global scope.
+  const env = opts.env ?? process.env;
+  const platform = opts.platform ?? process.platform;
+  const discovered = readDiscoveryFiles({ workspaceRoot: opts.workspaceRoot, platform, env, home: opts.home ?? homedir(), ...(opts.readFile ? { read: opts.readFile } : {}) });
+  const discoveredLayer: PlainMap = {};
+  // Only what the file STATED enters the layer (never the filled defaults), so a discovered entry overlays a same-named
+  // default field-wise (REQ-MCP-025) and a stated null never CLEARS a lower layer's field (REQ-CONFIG-053).
+  for (const [name, plain] of Object.entries(discovered.value.stated)) discoveredLayer[name] = Object.fromEntries(Object.entries(plain).filter(([, v]) => v !== null && v !== undefined));
+  if (Object.keys(discoveredLayer).length > 0) layers.push({ source: discovered.value.files[0]!, value: { mcp_servers: discoveredLayer } });
   const raw: Record<ConfigScope, { agents: PlainMap | null; models: PlainMap | null }> = { global: { agents: null, models: null }, workspace: { agents: null, models: null } };
   const problems: (Problem & { file: string; scope: ConfigScope })[] = [];
   let workspaceAgents: ParsedConfig | null = null;
@@ -226,6 +262,7 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
     mergeWarnings: [...snapshotWarnings, ...merged.warnings.map((w) => `${w.source}: ${w.message}`)], ...(opts.toolServers ? { toolServers: opts.toolServers } : {}),
     authenticatedProviders, discoveredSlots,
     loadMs: started === null || !opts.now ? null : opts.now() - started,
+    mcp: { discovered: discovered.value, discoveryDiagnostics: discovered.diagnostics, globalDir: opts.globalDir, env, platform, onPath: opts.onPath, readFile: opts.readFile },
   });
 }
 
@@ -242,6 +279,7 @@ export interface ResolveContext {
   readonly authenticatedProviders?: readonly string[];
   readonly discoveredSlots?: Readonly<Partial<Record<ModelSlot, string>>>;
   readonly loadMs: number | null;
+  readonly mcp: McpResolveContext;
 }
 
 /**
@@ -264,6 +302,8 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const compressor = readCompressorSection(top['compressor'], sink);
   const circuitBreaker = readCircuitBreakerSection(top['circuit_breaker'], sink);
   const checkpoints = readCheckpointsSection(top['checkpoints'], sink);
+  // REQ-MCP-002: every defect of a YAML-scope server entry is fatal and every one is reported (the discovered entries were validated before the merge).
+  const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
 
   const fatal = [...problems, ...sink.errors.map((p) => ({ ...p, file: files.workspace.agents, scope: 'workspace' as const }))];
   if (fatal.length > 0) {
@@ -275,7 +315,12 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const draft = { slots, slotThinking: thinking, models, personas, compressorModel: compressor.model, circuitBreakerModel: circuitBreaker.model };
   const resolution = resolveSlotsAndReasoning(draft);
   const hooks = ctx.hooks;
-  const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, ...(ctx.toolServers ? { toolServers: ctx.toolServers } : {}), authenticatedProviders: ctx.authenticatedProviders ?? [] });
+  // REQ-MCP-026: "yaml" when any YAML scope named the server; the raw documents say which did.
+  const yamlNamed = new Set<string>();
+  for (const scope of ['global', 'workspace'] as const) { const m = ctx.raw[scope].agents?.['mcp_servers']; if (isPlainMap(m)) for (const k of Object.keys(m)) yamlNamed.add(k); }
+  const mcp = resolveMcpConfiguration({ servers: mcpServers, yamlNamed, discovered: ctx.mcp.discovered, workspaceRoot: ctx.workspaceRoot, globalDir: ctx.mcp.globalDir, env: ctx.mcp.env, platform: ctx.mcp.platform, ...(ctx.mcp.onPath ? { onPath: ctx.mcp.onPath } : {}), ...(ctx.mcp.readFile ? { readFile: ctx.mcp.readFile } : {}) });
+  // REQ-MCP-103/105: the server set the referential stage validates against is the merged map (ADR-0016 consequence 3).
+  const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, toolServers: ctx.toolServers ?? Object.keys(mcp.servers), authenticatedProviders: ctx.authenticatedProviders ?? [] });
 
   const warnings = [
     ...(ctx.mergeWarnings ?? []),
@@ -307,5 +352,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     files,
     merged: top,
     loadMs: ctx.loadMs,
+    mcp: { ...mcp, diagnostics: [...ctx.mcp.discoveryDiagnostics, ...mcp.diagnostics] },
+    mcpInputs: ctx.mcp,
   });
 }

@@ -9,6 +9,7 @@ import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHo
 import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort, REFS_ASK_BOUND } from './checkpoints.js';
+import { McpHost } from './mcp.js';
 import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
 import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
@@ -95,7 +96,13 @@ function scriptedClient(c: Clocks): ModelClient {
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
       const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
-      calls[who] = (calls[who] ?? 0) + 1;
+      // Part S: every child instance follows the child script from its own first call (keyed by its TASK line), so a fan-out of
+      // three children each takes the same steps; a single child reads exactly as before.
+      const firstUser = req.messages.find((m) => m.role === 'user')?.content.find((p) => p.kind === 'text');
+      const taskName = who === 'child' && firstUser && firstUser.kind === 'text' ? /TASK: ([^\n]+)/.exec(firstUser.text)?.[1] ?? '' : '';
+      const counterKey = who === 'child' ? `child:${taskName}` : who;
+      calls[counterKey] = (calls[counterKey] ?? 0) + 1;
+      calls[who] = calls[counterKey]!;
       // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).
       log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);
       if (who === 'classifier') {
@@ -164,6 +171,20 @@ function scriptedClient(c: Clocks): ModelClient {
         yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
         return;
       }
+      // mcp:<server>.<tool> — the MCP proof's step: the callable name after `.` (a renamed tool by its replacement name); fixed arguments per tool.
+      const mcpStep = /^mcp:([^.]+)\.(.+)$/.exec(step);
+      if (mcpStep) {
+        const toolName = mcpStep[2]!;
+        if ((req.tools ?? []).some((t) => t.name === toolName)) {
+          const args = toolName === 'echo' ? { text: 'hello from the scripted agent' } : toolName === 'slow' ? { ms: 4_000 } : {};
+          yield ok<StreamPart>({ kind: 'text', delta: `Calling ${toolName} on ${mcpStep[1]}. ` });
+          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: toolName, argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+          yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+          return;
+        }
+        log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
+      }
       // fetch:<url> — everything after the first `fetch:` is the URL (the fetch proof's step).
       const tool = step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step];
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
@@ -227,12 +248,18 @@ let liveState: LiveState = {};
 const configured = new Map<string, ConfiguredRun>();
 // ADR-0030: the bearers main leased for each workspace's current run; a resolver reads this map per request.
 const leased = new Map<string, Record<string, string>>();
+// ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
+const mcp = new McpHost({
+  clocks, log: (m, level) => log(m, level ?? 'info'),
+  notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, headline: n.headline, detail: n.detail, ...(n.key === undefined ? {} : { key: n.key }), ttlMs: n.ttlMs } }),
+});
 const configure = (workspaceRoot: string, attended: boolean) => {
   const r = configureRun(workspaceRoot, attended, {
     clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks),
     onRequest: (i) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`), log: (m) => log(m), liveState: () => liveState, bearers: (root) => leased.get(root) ?? {},
+    mcpEvidence: (cfg, root, role) => mcp.evidenceFor(cfg, root, role),
   });
-  if (r.ok) configured.set(workspaceRoot, r.value);
+  if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
   return r;
 };
 /** Only a tool port built outside a run start reaches this; the run path always configures first. */
@@ -270,7 +297,7 @@ const sessions = new Sessions({
   // REQ-ORCH-085: the host told the run paused at the message limit.
   onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),
   tools: (ctx) => createToolPort(ctx, {
-    clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal,
+    clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: (root) => configuredFor(root),
     runtime: (workspaceRoot) => configuredFor(workspaceRoot)?.runtime ?? configureRunFallback(),
     personas: (workspaceRoot) => configuredFor(workspaceRoot)?.personas ?? null,
     // ADR-0023 / REQ-SANDBOX-038: the saved files at each fetch call, never the live state; the read's cost logged.
@@ -411,6 +438,8 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       } else {
         leased.set(s.root, {});
       }
+      // ADR-0034 (Part S): discovery for every carried server starts now, bounded (REQ-MCP-053); the first tool port awaits it.
+      void mcp.prepare(pre.value.cfg, s.root).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
       // REQ-GIT-022 (Part O): the binding was made by the workspace service and the id minted in main before this
       // request; the session row records the binding and the run works in the effective root (REQ-GIT-019).
       if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${req.sessionId ?? '(host-minted)'} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
@@ -522,10 +551,42 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (!page) return { kind: 'refused', code: 'session.not-live', headline: 'That session is not live' };
       return { kind: 'session.page', sessionId: req.sessionId, rows: page.rows, oldest: page.oldest };
     }
+    case 'mcp.list': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const run = configuredFor(s.root);
+      if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
+      return { kind: 'mcp.list', listing: mcp.list(run.cfg) };
+    }
+    case 'mcp.probe': {
+      // REQ-MCP-092: one server per request, so the category probes sequentially and every request stays under main's bound.
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const run = configuredFor(s.root);
+      if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
+      const names = req.name === undefined ? Object.keys(run.cfg.mcp.servers) : [req.name];
+      const results: { name: string; health: Awaited<ReturnType<McpHost['probeOne']>> }[] = [];
+      for (const name of names) { const health = await mcp.probeOne(run.cfg, name); log(`mcp: probe of '${name}' → ${health.state}${health.state === 'healthy' ? ` (${health.toolCount} tools)` : health.detail ? ` (${health.detail})` : ''} in ${(health.elapsedMs ?? 0).toFixed(0)} ms`); results.push({ name, health }); }
+      return { kind: 'mcp.probe', results };
+    }
+    case 'mcp.setEnabled':
+      mcp.setEnabled(req.name, req.enabled);
+      return { kind: 'ack' };
+    case 'mcp.secrets': {
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const run = configuredFor(s.root);
+      if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
+      return { kind: 'mcp.secrets', view: mcp.secrets(run.cfg, req.server ?? null) };
+    }
     case 'shutdown': {
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their terminal results.
       presenters.stop();
+      // REQ-MCP-053: an outstanding discovery never delays exit — its children are killed first, so a port waiting on it proceeds at once.
+      void mcp.discovery.closeAll();
       await sessions.closeAll();
+      // REQ-MCP-066: the session connections closed at exit, within the budget.
+      await mcp.closeAll();
       // REQ-TOOLS-111: every background session ended and every terminal resource closed before the host goes.
       await terminal?.dispose();
       for (const s of stores.values()) { try { s.db?.close(); } catch { /* */ } }

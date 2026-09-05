@@ -113,5 +113,9 @@ export const AgentRecordSchema = z.object({
   delegationTask: z.string(),
   /** REQ-MONITOR-046's "live": exactly when the presentation state is running. */
   live: z.boolean(),
+  /** REQ-MCP-065 / REQ-MCP-100: the granted MCP tools, server → callable names, from the row's recorded evidence. */
+  grantedMcp: z.record(z.string(), z.array(z.string())),
+  /** REQ-MCP-114: every server the agent carried, with its fate — connected, or dropped with the rule's reason. */
+  mcpServers: z.array(z.object({ name: z.string(), transport: z.string(), origin: z.string(), fate: z.enum(['connected', 'dropped']), reason: z.string().optional() })),
 });
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;

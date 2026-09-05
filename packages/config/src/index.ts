@@ -17,6 +17,8 @@ export * from './sections/models.js';
 export * from './sections/personas.js';
 export * from './sections/compressor.js';
 export * from './sections/checkpoints.js';
+export * from './sections/mcp-servers.js';
+export * from './mcp/index.js';
 export * from './writers.js';
 export * from './tiers.js';
 export * from './preferences.js';

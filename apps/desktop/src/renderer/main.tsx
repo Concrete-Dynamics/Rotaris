@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -336,6 +336,7 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
   const sessionId = useStore(replica, (s) => s.sessionId);
   const { config, guardDialog } = useConfiguration(workspace);
   const providers = useProviders();
+  const mcp = useMcp();
   const providersCard = <ProvidersCard {...providers} />;
   // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
   const [summary, setSummary] = useState<HooksSummary | null>(null);
@@ -381,6 +382,7 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
       config={{ ...config, providersCard }}
+      mcp={mcp}
     />
     {guardDialog}
   </>);
@@ -575,6 +577,50 @@ async function bootProvider(): Promise<void> {
 }
 
 /** REQ-CONFIG-329 / REQ-PROVIDER-140/141: the provider list and its actions, answered by main. */
+/** ADR-0034 (Part S): the MCP category's data and actions — every read answered by the run host through main; probes one server at a time (REQ-MCP-092). */
+function useMcp(): McpSettingsProps {
+  const [listing, setListing] = useState<McpListing | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<Record<string, McpHealth>>({});
+  const [probing, setProbing] = useState(false);
+  const [secrets, setSecrets] = useState<McpSecretsView | null>(null);
+  const [secretsServer, setSecretsServer] = useState<string | null>(null);
+  const read = useCallback(async () => {
+    setLoading(true);
+    const r = await bridge.command({ kind: 'mcp.list' });
+    setLoading(false);
+    if (r.ok) { setListing(r.value as McpListing); setError(null); } else setError(r.detail ?? r.headline);
+  }, []);
+  const readSecrets = useCallback(async (server: string | null) => {
+    const r = await bridge.command({ kind: 'mcp.secrets', ...(server === null ? {} : { server }) });
+    if (r.ok) setSecrets(r.value as McpSecretsView);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void read(); void readSecrets(secretsServer); }); }, [read, readSecrets, secretsServer]);
+  useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); }), [read, readSecrets, secretsServer]);
+  return {
+    listing, loading, error, health, probing, secrets,
+    onRefresh: () => { void read(); void readSecrets(secretsServer); },
+    onSecretsServer: (server) => { setSecretsServer(server); },
+    onProbeAll: async () => {
+      if (probing || !listing) return;
+      setProbing(true);
+      for (const row of listing.rows) {
+        setHealth((h) => ({ ...h, [row.name]: { state: 'checking' } }));
+        const r = await bridge.command({ kind: 'mcp.probe', name: row.name });
+        const result = r.ok ? (r.value as { name: string; health: McpHealth }[])[0]?.health ?? { state: 'unreachable', detail: 'no answer' } : { state: 'unreachable' as const, detail: r.detail ?? r.headline };
+        setHealth((h) => ({ ...h, [row.name]: result }));
+      }
+      setProbing(false);
+    },
+    onToggle: async (name, enabled) => {
+      const r = await bridge.command({ kind: 'mcp.setEnabled', name, enabled });
+      await read();
+      return r.ok ? { ok: true, message: enabled ? `${name} enabled for this session.` : `${name} disabled for this session.` } : { ok: false, message: r.detail ?? r.headline };
+    },
+  };
+}
+
 function useProviders(): ProvidersCardProps {
   const [rows, setRows] = useState<readonly ProviderRow[]>([]);
   const [loading, setLoading] = useState(false);

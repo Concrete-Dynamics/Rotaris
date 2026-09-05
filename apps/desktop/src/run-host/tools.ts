@@ -7,7 +7,8 @@ import {
   resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
-import type { RuntimeFromConfiguration } from './configuration.js';
+import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
+import type { McpHost } from './mcp.js';
 import { backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -68,6 +69,9 @@ export interface ToolPortDeps {
   readonly terminal: TerminalManager | null;
   /** ADR-0023 / REQ-SANDBOX-038: the egress policy and `tool_call_timeout`, read from the workspace's SAVED configuration at each fetch call. */
   readonly egress: (workspaceRoot: string) => () => Promise<PolicyRead>;
+  /** ADR-0034 (Part S): the run host's MCP holder and the run's configuration; null means no MCP surface (tests). */
+  readonly mcp?: McpHost | null | undefined;
+  readonly configured?: ((workspaceRoot: string) => ConfiguredRun | null) | undefined;
 }
 
 /** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
@@ -155,7 +159,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
-  const specs = [...callable.values()].map((e) => ({ name: e.name, description: e.description, parameters: z.toJSONSchema(e.schema) as Record<string, unknown> }));
+  const specOf = (e: ToolExecutor) => ({ name: e.name, description: e.description, parameters: (e.parameters ? { ...e.parameters } : z.toJSONSchema(e.schema)) as Record<string, unknown> });
+  const specs = [...callable.values()].map(specOf);
 
   let mode: PermissionPreset = ctx.requestedMode;
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
@@ -169,8 +174,46 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     hooks: ctx.hooks ?? null,
   });
 
+  // ADR-0034 (Part S): the persona's MCP surface — demanded on `ready()`, after the discovery the run start kicked off, and
+  // never at port creation (a server still starting must not block calls to connected ones, REQ-MCP-066/067). ONE
+  // resolution: the executors, the model's listing and the prompt section come from the same surface (REQ-TOOLS-010,
+  // REQ-MCP-062). ADR-0016's fail-closed reading for a tool outside the registry, first executed: no facet is declared,
+  // so a rule that WITHHOLDS on a facet sees all three declared — under the `restricted` preset (a read-only preset:
+  // its default decision is deny) and for a persona marked `read_only` the MCP tools are withheld from the surface
+  // altogether; under `ask` the gate's default decision asks; under `autonomous` it allows — nothing here special-cases
+  // the gate, which decides every dispatch as for any tool.
+  const run = deps.configured?.(ctx.workspaceRoot) ?? null;
+  const withhold = mode === 'restricted' || persona.readOnly;
+  let mcpSection = '';
+  let readiness: Promise<void> | null = null;
+  const ready = (): Promise<void> => {
+    if (readiness) return readiness;
+    readiness = (async () => {
+      if (!deps.mcp || !run) return;
+      const mcp = deps.mcp;
+      await mcp.prepare(run.cfg, ctx.workspaceRoot);
+      const session = { sessionId: ctx.sessionId, writer: ctx.writer };
+      const surface = mcp.surfaceFor(run.cfg, ctx.workspaceRoot, ctx.persona, session, new Set(callable.keys()));
+      if (withhold) {
+        if (surface.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
+        mcpSection = mcp.section({ ...surface, active: surface.active.map((s) => ({ ...s, tools: [] })) });
+        return;
+      }
+      const remove = (name: string) => { callable.delete(name); };
+      for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
+        if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
+        callable.set(e.name, e);
+        specs.push(specOf(e));
+      }
+      mcpSection = mcp.section(surface);
+    })();
+    return readiness;
+  };
+
   return {
     specs: () => specs,
+    ready,
+    promptSection: () => mcpSection,
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {
       const r = await gate.dispatch({ callId: call.callId, name: call.name, rawArgs: call.rawArgs, persona: call.persona, agentId: call.agentId, agentName: call.agentName }, signal);
       const status: Exclude<ToolStatus, 'running'> = r.status;

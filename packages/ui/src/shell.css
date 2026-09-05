@@ -420,3 +420,10 @@
 .git__ckpt-row { cursor: default; }
 .git__ckpt-row.is-selected td { background: var(--rt-accent-tint-10); }
 .git__ckpt-row[aria-selected='true'] td:first-child { color: var(--rt-accent-300); }
+
+/* MCP Servers category (REQ-MCP-091/092): the four-state indicator beside its text; colours through the theme's state tokens. */
+.mcp__dot { display: inline-block; width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; background: var(--rt-text-tertiary); margin-right: var(--rt-space-2, 8px); vertical-align: middle; }
+.mcp__dot[data-state="checking"] { background: var(--rt-run); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+.mcp__dot[data-state="healthy"] { background: var(--rt-ok); }
+.mcp__dot[data-state="unreachable"] { background: var(--rt-danger-300); }
+@media (prefers-reduced-motion: reduce) { .mcp__dot[data-state="checking"] { animation: none; } }

@@ -129,3 +129,16 @@ added to the table joins or stays out by its own declaration. At the run-host ro
 into the entry role's declared tools and drops `coordinator_only`; the removals for prerequisites still apply
 (`fetch`, `git_commit` and the artifact reads left the set as `executor_absent`/`artifact_store_absent` in the
 built app — the bundle is a grant, not a promise the executor exists). **Found: nothing** beyond that reading.
+
+**Fourth execution, 2026-09-05, a tool outside the registry (Part S, ADR-0034).** The MCP executors are built by the
+run host (`run-host/mcp.ts`, `McpHost.executorsFor`) with no facet declaration and dispatched through the ONE gate
+like any tool (`tool.start` before the fixture answers, the row settled by the gate's sink). The fail-closed reading
+per preset, first executed (`run-host/tools.ts`): a rule that **withholds** on a declared facet sees all three
+declared for an undeclared tool, so under the `restricted` preset (whose default decision is deny) and for a persona
+marked `read_only` the MCP tools are **withheld from the surface** — absent from the prompt section and the model's
+listing, the section rendering each active server bare; under `ask` the gate's default decision asks; under
+`autonomous` it allows. Nothing special-cases the gate: the policy's default decision does the work, and the mode
+at port creation decides the surface (a later `setMode` to `restricted` leaves the names listed and every call
+denied by the default). `coordinator_only` removes its closed five names and never an MCP tool. **Found: nothing**
+in the registry; consequence 3's coupling (the `tools:` validator fed the configured server set) is now real —
+`referentialMessages` takes the merged `mcp_servers` map and `REQ-MCP-103`'s exact form is the message.

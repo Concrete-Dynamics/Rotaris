@@ -1,6 +1,7 @@
 import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema } from './config.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
+import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema } from './mcp.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
@@ -100,6 +101,11 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
     kind: z.literal('checkpoint.recordRestore'), workspaceId: z.string(), sessionId: z.string().min(1), sequence: z.number().int(), restored: z.boolean(), safetySequence: z.number().int().nullable(),
     changedPaths: z.number().int().nonnegative(), blockedReason: z.string(), forced: z.boolean(), treeRoot: z.string(), dirtyPaths: z.array(z.string()), ref: z.string().nullable(), commit: z.string().nullable(),
   }),
+  /** ADR-0034 (Part S): the MCP category's reads and the session override; the run host answers from its pipeline and its override map. */
+  z.object({ kind: z.literal('mcp.list'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('mcp.probe'), workspaceId: z.string(), name: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
+  z.object({ kind: z.literal('mcp.secrets'), workspaceId: z.string(), server: z.string().optional() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -267,6 +273,9 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional(), needsForce: z.boolean().optional() }),
   z.object({ kind: z.literal('hooks.summary'), summary: HooksSummarySchema }),
   z.object({ kind: z.literal('playbooks.catalogue'), catalogue: PlaybookCatalogueSchema }),
+  z.object({ kind: z.literal('mcp.list'), listing: McpListingSchema }),
+  z.object({ kind: z.literal('mcp.probe'), results: z.array(z.object({ name: z.string(), health: McpHealthSchema })) }),
+  z.object({ kind: z.literal('mcp.secrets'), view: McpSecretsViewSchema }),
   /**
    * ADR-0030: the bearers leased to the run host for one run, with REQ-PROVIDER-067's priming report. This is the
    * one message in the product that carries a credential value; it travels main → utility process only and no
@@ -306,7 +315,7 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   /** ADR-0019's liveness poll, on the channel that carries registration. */
   z.object({ kind: z.literal('presenter.poll'), seq: z.number().int().nonnegative() }),
   /** ADR-0015 / REQ-HOOKS-054/086: the run's notices for the host's channel (ADR-0049 owns the one current notice in main). */
-  z.object({ kind: z.literal('notice.publish'), severity: z.enum(['info', 'warning', 'error']), headline: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional() }),
+  z.object({ kind: z.literal('notice.publish'), severity: z.enum(['info', 'warning', 'error']), headline: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), /** REQ-MCP-044: an auto-dismiss after this many milliseconds (main clears the slot if the notice is still current). */ ttlMs: z.number().int().positive().optional() }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

@@ -14,6 +14,7 @@ export * from './PauseDialog.js';
 export * from './settings/config-state.js';
 export * from './settings/ConfigSettings.js';
 export * from './settings/Providers.js';
+export * from './settings/McpSettings.js';
 export * from './ProviderDialog.js';
 export * from './OverviewView.js';
 export * from './GitView.js';

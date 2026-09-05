@@ -20,7 +20,19 @@ export interface Persona {
   /** REQ-CONFIG-110 / REQ-ORCH-144: the role's own `fallback_model`; absent means the run-level slot (REQ-CONFIG-065). */
   readonly fallbackModel?: ModelRef | undefined;
   readonly fallbackThinking?: ThinkingLevel | undefined;
+  /**
+   * REQ-MCP-065 / REQ-MCP-114 (Part S): the MCP grant evidence recorded on a child's row at spawn — the granted tools per
+   * server and every carried server's fate. Supplied by the run host's resolver from the same memoised resolution the
+   * tool port reads; absent for the built-in table, which carries no MCP surface.
+   */
+  readonly mcpEvidence?: (() => McpGrantEvidence) | undefined;
 }
+
+export interface McpGrantEvidence {
+  readonly granted: Readonly<Record<string, readonly string[]>>;
+  readonly servers: readonly { readonly name: string; readonly transport: string; readonly origin: string; readonly fate: 'connected' | 'dropped'; readonly reason?: string }[];
+}
+export const EMPTY_MCP_EVIDENCE: McpGrantEvidence = Object.freeze({ granted: {}, servers: [] });
 
 /** ADR-0036: the configured `personas:` overlaid on the built-in table, resolved per run by the root. */
 export interface PersonaResolver {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { isBusy, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
 import { ModelsSettings, PersonasSettings, RuntimeSettings, type ConfigSettingsProps } from './settings/ConfigSettings.js';
+import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 
@@ -51,9 +52,11 @@ export interface SettingsViewProps {
   readonly onCategory?: ((id: SettingsCategoryId) => void) | undefined;
   /** ADR-0037: destination 1 — the configuration the Models, Personas and Runtime categories edit. */
   readonly config?: ConfigSettingsProps | undefined;
+  /** ADR-0034 (Part S): the MCP Servers category, answered by the run host. */
+  readonly mcp?: McpSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -165,6 +168,8 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
           </div>
         ) : category === 'hooks' && hooks ? (
           <HooksSettings {...hooks} />
+        ) : category === 'mcp' && mcp ? (
+          <McpSettings {...mcp} />
         ) : category === 'models' && config ? (
           <ModelsSettings {...config} />
         ) : category === 'runtime' && config ? (

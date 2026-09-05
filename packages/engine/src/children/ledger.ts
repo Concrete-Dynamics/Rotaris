@@ -3,7 +3,7 @@ import { isTerminalChildState, type ChildState, type SettlingPath } from '@rotar
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import { canonicaliseName, mintTaskId, uniqueUnderParent } from './naming.js';
-import { knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
+import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 
 /**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
@@ -130,7 +130,9 @@ export class ChildLedger {
     const row: Omit<ChildInsert, 'session_id' | 'spawned_at'> = {
       task_id: taskId, canonical_name: canonical, given_name: input.taskName, persona: role.persona.name, state, parent_id: input.parentId, depth,
       iteration: this.deps.iteration, model_key: input.modelKey, category: input.category, background: input.background ? 1 : 0, task: input.task,
-      depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools), granted_mcp: '{}',
+      depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools),
+      // REQ-MCP-065 / REQ-MCP-114 (Part S): the grant evidence at spawn — `{ granted: {server: [tool…]}, servers: [{name, transport, origin, fate, reason?}] }` — from the persona's resolver; `{}` was written until then.
+      granted_mcp: JSON.stringify(role.persona.mcpEvidence?.() ?? EMPTY_MCP_EVIDENCE),
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

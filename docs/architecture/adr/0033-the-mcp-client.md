@@ -162,3 +162,49 @@ stdio transport covering window suppression and stream ownership, which would ma
 and reduce our surface; or the offered-versions list acquires a pre-2026 floor upstream, which would
 turn the escalation's option (c) into the only one available and make it a compatibility announcement
 rather than a choice.
+
+## First execution — 2026-09-05, Part S (the two spikes, the transport, the client factory)
+
+*Recorded under GD-10. The dependency pinned exactly: `@modelcontextprotocol/client` **2.0.0** (MIT), with
+`@modelcontextprotocol/core` 2.0.0 below it; declared in `packages/mcp/package.json` and, so that electron-vite
+externalises it and the installer carries it (ADR-0056's rule), in `apps/desktop/package.json`.*
+
+**Spike 3 — negotiation over our transport (`spikes/mcp-negotiation.md`; the test
+`packages/mcp/src/negotiation.test.ts` stays as the regression).** Four fixture eras × three modes, one launch counted
+per connection. **No sibling probe is spawned over `OwnedStdioTransport` under any mode**: the SDK spawns its
+disposable sibling only for its own `StdioClientTransport` (it looks for `_serverParams` behind a `_dispose`
+prototype member); every other transport "probes in place". `'auto'` reaches all four eras; a 2026 pin refuses
+every 2025-era server; `'legacy'` cannot reach a 2026-only server; a strict 2025 server that exits on the
+pre-`initialize` probe fails `'auto'` and is reached by one **sequential** retry under `'legacy'` (two launches,
+never two processes at once). **The decision's stated reason is falsified and kept:** the text above says
+negotiation "is pinned to an explicit mode … so no sibling probe process is spawned" — the process count of
+`REQ-MCP-067` is held by the transport's shape, not by a pin; the mode shipped is `'auto'` with the fallback
+(`packages/mcp/src/client.ts`, `DEFAULT_NEGOTIATION`). ESC-12: option (a) taken, the balance changed as recorded
+under the escalation. The offered list retains its pre-2026 entries (`SUPPORTED_PROTOCOL_VERSIONS`).
+
+**Spike 4 — console-window suppression on the packaged build (`spikes/mcp-console-suppression.md`;
+`apps/desktop/scripts/mcp-console-spike.mjs`).** **PASS.** The packaged `Rotaris.exe` (electron-builder's `--dir` output, rules 1a and 4 green) ran a scripted session whose persona carried `console` — `cmd.exe /c node <fixture>`, a console application through a console application — and `token` (the reserved `builtin:code-intelligence`). Sampled with PowerShell during the run, every process started after the launch (`cmd`, `node`, and the headless `conhost` that every `CREATE_NO_WINDOW` child gets) had `MainWindowHandle` 0 and a `tasklist` window title of `N/A` at every sample; the `echo` call succeeded in the store; the fixture was launched twice (discovery, session), both invisible. The reserved token's child fails **at spawn** — `spawn builtin:code-intelligence ENOENT` in 108 ms, `REQ-MCP-107` case 1 — not with a window, and discovery degrades to the empty list; that stands until ADR-0035. Beside the spike: `pnpm package` was refused twice by electron-builder's `pnpm ls` hitting `EMFILE` on this tree (reproducible in the main checkout too); the passing build ran with a descriptor-gating shim on `NODE_OPTIONS` — a toolchain finding for the map's pitfalls, not this part's to fix.
+
+**Built.** `OwnedStdioTransport` (`packages/mcp/src/transport.ts`): three piped streams, `windowsHide` through
+`platform`'s one spawn helper, the child's stderr to the log after `redact()` (a `ghp_` token in the fixture's
+stderr reached the log as `***` — the test), the SDK's `ReadBuffer`/`serializeMessage` for framing, `terminateTree`
+(terminate → 5 s grace on the Timers port → force-kill, `taskkill /T /F` on Windows) exported for ADR-0026's backend
+and `REQ-MCP-099`. The client factory (`client.ts`): our transport for `stdio`, the SDK's for `http` (streamable
+HTTP) and `sse`; every timeout passed explicitly (`connectTimeoutMs`; discovery 30 s + the 35 s outer watchdog;
+probes 8 s; hooks 15 s; calls 300 s or `request_timeout`, `resetTimeoutOnProgress: false` and `maxTotalTimeout`
+equal to the allowance — `REQ-MCP-003`'s dispatch-to-result measure). Consequence 4 held in the proof:
+`tool.start` was recorded before the fixture answered a deliberately slow call and the three interleaved calls of
+the unit test each received their own answer.
+
+**Found in existing code — the tally's twenty-seventh (recorded in the ADR-0034 note as well).** The transport's
+first launch of a package-runner entry on Windows failed with `spawn npx ENOENT`: `npx`/`uvx` are `.cmd` scripts
+that `spawn` cannot start by bare name, and Node refuses to start a `.cmd`/`.bat` without a shell since its
+CVE-2024-27980 hardening. The reason this decision rested on — one spawn helper with `windowsHide` serves every
+launch — is kept in `packages/platform/src/spawn.ts` beside `windowsLaunchOf`: a command whose PATH resolution
+ends in `.cmd`/`.bat` is launched through `cmd.exe /d /s /c "<quoted line>"` with the arguments verbatim, the way
+ADR-0015's hook children already reach the interpreter; `findExecutable` is the one PATH lookup (`REQ-MCP-037`).
+A test spawns a batch runner through the transport.
+
+**Not tested:** a real third-party server (the hand-written fixture only, in both eras); the two remote transports
+against a live endpoint; a probe **timeout** on `server/discover` (the SDK's stdio-shaped verdict falls back;
+not exercised).

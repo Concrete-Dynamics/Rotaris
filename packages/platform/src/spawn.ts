@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import { statSync } from 'node:fs';
+import { delimiter, isAbsolute, join } from 'node:path';
 
 /**
  * The one place a child process is started with the product's fixed flags:
@@ -27,6 +29,47 @@ export function spawnChild(spec: SpawnSpec): ChildProcess {
   if (spec.cwd !== undefined) opts.cwd = spec.cwd;
   if (spec.windowsVerbatimArguments !== undefined) opts.windowsVerbatimArguments = spec.windowsVerbatimArguments;
   return spawn(spec.command, [...spec.args], opts);
+}
+
+/**
+ * A PATH lookup over an environment (REQ-MCP-037's rule, one implementation for every surface): Windows honours PATHEXT;
+ * a command carrying a path separator is checked where it points. Returns the file found or null.
+ */
+export function findExecutable(command: string, env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform = process.platform): string | null {
+  if (command.trim() === '') return null;
+  const win = platform === 'win32';
+  const exts = win ? (env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => e !== '') : [''];
+  const candidates = (base: string): string[] => (win && !exts.some((e) => base.toLowerCase().endsWith(e.toLowerCase())) ? [base, ...exts.map((e) => base + e)] : [base]);
+  const isFile = (p: string): boolean => { try { return statSync(p).isFile(); } catch { return false; } };
+  if (isAbsolute(command) || command.includes('/') || command.includes('\\')) {
+    for (const c of candidates(command)) if (isFile(c)) return c;
+    return null;
+  }
+  const pathKey = win ? Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH' : 'PATH';
+  for (const dir of (env[pathKey] ?? '').split(delimiter)) {
+    if (dir === '') continue;
+    for (const c of candidates(join(dir, command))) if (isFile(c)) return c;
+  }
+  return null;
+}
+
+/**
+ * The Windows script-file wrap (Part S's first-execution finding, recorded in the ADR-0033 note): a package runner on
+ * Windows is `npx.cmd` / `uvx.cmd`, a batch script that `spawn` cannot start by bare name and — since Node's
+ * CVE-2024-27980 hardening — refuses to start without a shell even by its full path (EINVAL). A command whose PATH
+ * resolution ends in `.cmd` or `.bat` is therefore launched through `cmd.exe /d /s /c "<quoted line>"` with the
+ * arguments passed verbatim, the way ADR-0015's hook children already reach the interpreter. Any other command is
+ * returned unchanged. Pure: the caller spawns.
+ */
+export function windowsLaunchOf(command: string, args: readonly string[], env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform = process.platform): { command: string; args: string[]; windowsVerbatimArguments?: boolean } {
+  if (platform !== 'win32') return { command, args: [...args] };
+  const found = findExecutable(command, env, platform);
+  const target = found ?? command;
+  if (!/\.(cmd|bat)$/i.test(target)) return { command, args: [...args] };
+  const quote = (a: string): string => (/[\s"&|<>^()]/.test(a) || a === '' ? `"${a.replace(/"/g, '\\"')}"` : a);
+  const line = [target, ...args].map(quote).join(' ');
+  const comspec = env['ComSpec'] ?? env['COMSPEC'] ?? 'cmd.exe';
+  return { command: comspec, args: ['/d', '/s', '/c', `"${line}"`], windowsVerbatimArguments: true };
 }
 
 /** Copy the process environment with named variables deleted (ADR-0038: fourteen named variables for git). */

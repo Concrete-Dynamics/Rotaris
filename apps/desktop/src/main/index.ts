@@ -441,6 +441,8 @@ async function main(): Promise<void> {
     else if (e.kind === 'notice.publish') {
       const shown = e.key !== undefined ? raiseNoticeKeyed(e.key, e.severity, e.headline, e.detail, recoveryFor(e.action)) : (raiseNotice(e.severity, e.headline, e.detail, recoveryFor(e.action)), true);
       log(`notice from the run host: ${e.headline}${e.action ? ` [${e.action}]` : ''}${shown ? '' : ' (already shown this session)'}`);
+      // REQ-MCP-044 (Part S): an auto-dismiss on the ONE notice slot (ADR-0049's known limit — a later notice supersedes it sooner).
+      if (shown && e.ttlMs !== undefined) { const id = noticeSeq; clocks.timers.after(millis(e.ttlMs), () => { if (currentNotice?.id === id) publishNotice(null); }); }
     }
     else if (e.kind === 'run.paused') {
       // REQ-ORCH-085/086: the host is told; the dialog is a modal window over the main window.
@@ -850,6 +852,26 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'hooks.setToggle', agent: req.agent, hookId: req.hookId, on: req.on }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The hook policy could not be saved');
       }
+      // ADR-0034 (Part S): the MCP category is answered by the run host, the one holder of the pipeline, the probe and the session override.
+      case 'mcp.list': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.list', workspaceId: currentWorkspaceId }, millis(10_000));
+        return r.kind === 'mcp.list' ? { ok: true, value: r.listing } : refusal(r, 'The MCP servers could not be listed');
+      }
+      case 'mcp.probe': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.probe', workspaceId: currentWorkspaceId, ...(req.name === undefined ? {} : { name: req.name }) }, millis(req.name === undefined ? 120_000 : 12_000));
+        return r.kind === 'mcp.probe' ? { ok: true, value: r.results } : refusal(r, 'The MCP server could not be probed');
+      }
+      case 'mcp.setEnabled': {
+        const r = await runHost.request({ kind: 'mcp.setEnabled', name: req.name, enabled: req.enabled }, millis(10_000));
+        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session toggle could not be applied');
+      }
+      case 'mcp.secrets': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: currentWorkspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
+        return r.kind === 'mcp.secrets' ? { ok: true, value: r.view } : refusal(r, 'The stored secrets could not be read');
+      }
       case 'shell.hello': {
         const cb = currentWorkspaceId
           ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: currentWorkspaceId }, millis(5_000))
@@ -1247,7 +1269,8 @@ async function main(): Promise<void> {
     if (prompt) {
       // Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L focuses the
       // composer (REQ-CHAT-002), the text is typed, Enter submits (REQ-CHAT-001).
-      clocks.timers.after(millis(resumeWanted ? 2_600 : 800), () => {
+      // ROTARIS_CAPTURE_PROMPT_MS: when the prompt is typed (the MCP proof toggles a Settings control first; verification only).
+      clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_PROMPT_MS'] ?? (resumeWanted ? 2_600 : 800))), () => {
         const wc = win.webContents;
         wc.sendInputEvent({ type: 'keyDown', keyCode: '2', modifiers: ['control'] });
         wc.sendInputEvent({ type: 'keyUp', keyCode: '2', modifiers: ['control'] });

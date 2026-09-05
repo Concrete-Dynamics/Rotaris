@@ -12,6 +12,7 @@
     "package": "node scripts/package.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
     "@phosphor-icons/web": "2.1.1",
     "better-sqlite3": "^13.0.3",
     "node-pty": "1.1.0",

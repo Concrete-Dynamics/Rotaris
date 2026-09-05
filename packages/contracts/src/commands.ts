@@ -112,6 +112,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('providers.signOut'), id: z.string().min(1) }),
   z.object({ kind: z.literal('providers.delete'), id: z.string().min(1) }),
   z.object({ kind: z.literal('providers.refresh'), ids: z.union([z.literal('all'), z.array(z.string())]) }),
+  /** ADR-0034 (Part S) / REQ-MCP-091/092/094/109: the MCP settings category, relayed to the run host, which holds the pipeline, the probe and the session override. */
+  z.object({ kind: z.literal('mcp.list') }),
+  z.object({ kind: z.literal('mcp.probe'), name: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
+  z.object({ kind: z.literal('mcp.secrets'), server: z.string().optional() }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

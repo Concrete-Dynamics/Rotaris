@@ -40,6 +40,8 @@ export interface ToolExecutor<A = unknown> {
   execute(args: A, ctx: ToolContext): Promise<Observation>;
   /** REQ-TOOLS-105 etc.: how the call renders in a row header; defaults to the sorted argument keys. */
   label?(args: A): string;
+  /** ADR-0034 (Part S): a tool outside the registry hands the model the server's own input schema; absent means the zod schema's JSON form. */
+  readonly parameters?: Readonly<Record<string, unknown>> | undefined;
 }
 
 export function observation(text: string, extra: Omit<Observation, 'text' | 'isError'> & { isError?: boolean } = {}): Observation {

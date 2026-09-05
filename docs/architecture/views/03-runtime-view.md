@@ -141,6 +141,20 @@ on expiry with a role fallback untried, the child runs once more on it (`child_t
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
 
+**The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
+run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s
+watchdog on the clock port) and the turn awaits the port's `ready()` before reading `specs()` and the prompt section.
+`ready()` resolves ONE surface per persona (`surfaceFor`: the drop rules, grants `undefined` ≠ `[]`, denial, rename, the
+collision prefix) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
+reported name to the session's shared connection under the entry's allowance, 300 s by default), the model's listing and
+`## MCP servers` appended to the system prompt (REQ-MCP-101, byte-exact). Under `restricted` or `read_only` the MCP
+tools are withheld from the surface (ADR-0016's reading). The session's connections open on first demand under a keyed
+single-flight (one process per server per session, shared by every child), a per-call failure is that call's (no retry,
+no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`
+recomputes and only narrows (the executor deleted, the prompt untouched). **Their lifetime:** the connections of a
+session live until the session's lock is released, which today is the run host's shutdown (`McpHost.closeAll`, after
+`Sessions.closeAll`; the discovery children are killed first so no outstanding discovery delays the exit).
+
 ## 4. Children (ADR-0012)
 
 `delegate` is a tool call admitted through five checks in order (role known, depth, total, active, dependencies)
@@ -194,7 +208,7 @@ Main presents `run.result` once as the notice.
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
 | `timeline` | ordered named entries with actor and metadata — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session_marked_interrupted`), the ladder |
 | `permission_audit`, `tool_calls`, `issues` (+ `ring_state`) | the three rings (ADR-0024); audit and issues refuse UPDATE by trigger | the gate's sink through the writer |
-| `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012) | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport` |
+| `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012); **`granted_mcp`** (Part S, no migration — the existing JSON column) now holds `{ granted: {server: [callable…]}, servers: [{name, transport, origin, fate: connected \| dropped, reason?}] }` written at spawn from the persona's memoised surface, projected as `AgentRecord.grantedMcp` / `mcpServers` (REQ-MCP-065/114) | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport` |
 | `queued_prompts` | QUEUED → TRIGGERED → COMPLETED, per session | `queuePrompt`, `editQueuedPrompt`, `removeQueuedPrompt`, `triggerQueuedPrompts` |
 
 ## 8. Configuration's three tiers (ADR-0037) as they touch the run
@@ -207,6 +221,10 @@ Main presents `run.result` once as the notice.
   runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
   tier, providers to lease and message limit come from that.
 - **Tier C** — everything else is read at the next load; nothing watches a file.
+- **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
+  REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
+  overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the
+  overlaid document. The session enable-override is a third input to the persona surface, held in the run host only.
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
   next fetch of a running session with no restart, an unsaved settings edit reaches nothing.

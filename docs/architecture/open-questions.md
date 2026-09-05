@@ -346,7 +346,17 @@ month old.
 What a user observes — which of their servers work — differs under all three, and the choice is not
 cheaply reversible once user configurations exist.
 
-### ESC-13 — A benchmark invariant against screen-reader access *(conditional on OQ-28)*
+> **Measured 2026-09-05 (Part S; `spikes/mcp-negotiation.md`) — option (a) taken, and the balance changed in
+> one respect.** Over ADR-0033's own transport the SDK spawns **no** sibling probe under any mode (eleven of
+> twelve cells: one launch per connection), so `REQ-MCP-067`'s process count is held by the transport's
+> shape and **no pin is needed**. The shipped mode is `'auto'` (probe, fall back to `initialize`): it is the
+> only mode that reaches all four fixture eras. The two costs the escalation named were measured: a 2026 pin
+> refuses every 2025-era server (option (c)); `'legacy'` cannot reach a server that speaks only the new
+> negotiation (option (b)). The one case the SDK's sibling exists for — a 2025 server that **exits** on the
+> unknown pre-`initialize` probe — is handled by a single sequential retry under `'legacy'` (two launches,
+> never two processes at once). Option (a) stands: the 2.x line (`@modelcontextprotocol/client` 2.0.0,
+> pinned exactly) with the pre-2026 offered list retained. A real third-party server was not tested; the
+> fixture only. — A benchmark invariant against screen-reader access *(conditional on OQ-28)*
 
 **Where:** ADR-0045, through OQ-28. **Live only if OQ-28 resolves to the framework-neutral reading**;
 ADR-0045 names the conflict and raises OQ-28 as blocking, but does not itself carry an escalation
@@ -1112,6 +1122,19 @@ the parent environment. Servers launched through package runners plainly need a 
 `REQ-MCP-037` judges availability by a path lookup, so some inheritance is implied — but "some" is not a
 contract, and the official client library's own default is a curated safe subset, which would be a third
 behaviour.
+
+> **Reading taken on first execution, 2026-09-05 (Part S) — flagged for the owner, not resolved.** The child
+> inherits the run host's environment **with the resolved map of `REQ-MCP-090` overlaid** (overlay, not
+> replace): `REQ-MCP-087`'s "when the variable is unset, the key is omitted entirely" only makes sense as an
+> overlay (an omitted key falls back to whatever the parent holds, or nothing), package runners need `PATH`,
+> `HOME`/`APPDATA` and the `.cmd` wrap needs `ComSpec`, and the SDK's curated subset is a third behaviour the
+> requirement never names. What is inherited is the run host's environment as it starts — no scrubbing is
+> applied today (the ADR-0007/`REQ-GIT-031`-style name list is git's, not a general one; a general list would
+> need the owner to say which names). Code: `resolveServerEnvironment` produces the overlay
+> (`packages/config/src/mcp/environment.ts`), the run host hands the child `{ ...process.env, ...overlay }`
+> through `OwnedStdioTransport`. The owner decides whether the parent environment should be scrubbed of
+> named variables before the overlay and which; until then a secret in the run host's own environment reaches
+> every stdio server.
 
 **OQ-23 — What the reserved-token branch must do.** *(ADR-0035.)* `REQ-MCP-033` describes the branch only
 as answering the protocol on standard streams, while `REQ-MCP-036` derives a command line from the same
@@ -2287,15 +2310,19 @@ binding on one machine.
 2. **A Windows access-control mechanism** that can set an explicit list with inheritance disabled **and
    read it back**. *(ADR-0029.)* If none is acceptable, `REQ-PROVIDER-016` is unimplementable as written
    and this becomes an escalation.
-3. **Tool-server protocol version negotiation over our own transport.** *(ADR-0033, ESC-12.)* The
-   sibling-probe policy is documented for the SDK's **standard** stdio transport, which ADR-0033 replaces
-   with `OwnedStdioTransport`; establish what negotiation does over the custom transport before assuming
-   a pin is needed there at all, then confirm that pinning to a mode which spawns no sibling probe
-   process does not break servers speaking only the newer negotiation, against at least one modern and
-   one legacy server. If the answer is that `REQ-MCP-067` is satisfied without pinning, ESC-12's balance
-   changes.
-4. **Console-window suppression verified on a packaged build spawning a console application** — that no
-   window appears at any point. *(ADR-0033, `REQ-MCP-113`.)*
+3. ***Taken 2026-09-05 — `spikes/mcp-negotiation.md`.*** **Tool-server protocol version negotiation over
+   our own transport.** *(ADR-0033, ESC-12.)* The sibling-probe policy is documented for the SDK's
+   **standard** stdio transport, which ADR-0033 replaces with `OwnedStdioTransport`; establish what
+   negotiation does over the custom transport before assuming a pin is needed there at all, then confirm
+   that pinning to a mode which spawns no sibling probe process does not break servers speaking only the
+   newer negotiation, against at least one modern and one legacy server. If the answer is that
+   `REQ-MCP-067` is satisfied without pinning, ESC-12's balance changes. **Answered: no sibling is spawned
+   over our transport under any mode; `REQ-MCP-067` holds without a pin; `'auto'` reaches every era; a
+   strict legacy server that exits on the probe takes one sequential retry under `'legacy'`; ESC-12's
+   balance changed as the entry predicted and option (a) was taken.**
+4. ***Taken 2026-09-05 — `spikes/mcp-console-suppression.md`.*** **Console-window suppression verified on a
+   packaged build spawning a console application** — that no window appears at any point. *(ADR-0033,
+   `REQ-MCP-113`.)* **Answered:** on the packaged build, every process started after the launch (cmd, node, headless conhost) had window handle 0 and title N/A at every sample while the echo call succeeded; the reserved token's child fails at spawn (ENOENT), not with a window.
 5. **The packaged binary's reserved-token branch** producing clean protocol output on standard output,
    nothing else on standard output, no window, and the correct exit status. *(ADR-0035.)*
 6. **Responses-dialect model requests against a non-vendor base URL with custom headers.**

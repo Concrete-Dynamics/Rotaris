@@ -59,7 +59,7 @@ export interface ReferentialInput {
   readonly models: Readonly<Record<string, ModelEntry>>;
   readonly personas: Readonly<Record<string, PersonaEntry>>;
   readonly compressorModel: string;
-  /** Configured tool servers by name; none in this build. */
+  /** Configured tool servers by name — the merged `mcp_servers` map (REQ-MCP-105). */
   readonly toolServers?: readonly string[];
   readonly publicToolNames?: readonly string[];
   /** REQ-CONFIG-034: the snapshot providers marked authenticated; empty means the sign-in hint applies. */
@@ -93,8 +93,9 @@ export function referentialMessages(input: ReferentialInput): string[] {
     if (!modelKnown(persona.model)) messages.push(`persona ${role}: model '${persona.model}' names no configured model`);
     if (persona.summary_model !== null && !modelKnown(persona.summary_model)) messages.push(`persona ${role}: summary_model '${persona.summary_model}' names no configured model`);
     for (const target of persona.delegates_to) if (!Object.prototype.hasOwnProperty.call(input.personas, target)) messages.push(`persona ${role}: delegates_to '${target}' names no configured role`);
-    for (const server of persona.mcp_servers) if (!servers.has(server)) messages.push(`persona ${role}: mcp_servers '${server}' names no configured tool server`);
-    for (const server of Object.keys(persona.mcp_tools ?? {})) if (!persona.mcp_servers.includes(server)) messages.push(`persona ${role}: mcp_tools names '${server}', which the role does not list in mcp_servers; the grant confers nothing`);
+    // REQ-MCP-103 / REQ-MCP-104: the forms the requirements fix, naming persona and server.
+    for (const server of persona.mcp_servers) if (!servers.has(server)) messages.push(`Persona '${role}' references unknown MCP server '${server}'`);
+    for (const server of Object.keys(persona.mcp_tools ?? {})) if (!persona.mcp_servers.includes(server)) messages.push(`Persona '${role}' grants MCP tools for server '${server}', which it does not carry in mcp_servers; the grant confers nothing (REQ-MCP-104)`);
     const all = [...persona.tools, ...persona.custom_tools];
     const duplicates = [...new Set(all.filter((name, i) => all.indexOf(name) !== i))].sort();
     if (duplicates.length > 0) messages.push(`persona ${role}: tools named more than once across tools and custom_tools: ${duplicates.join(', ')}`);

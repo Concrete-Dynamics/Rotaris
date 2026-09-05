@@ -298,7 +298,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
       'persona a: tools named more than once across tools and custom_tools: read_file',
       expect.stringContaining("persona a: tool 'internal_only' is neither an accepted public tool name"),
       "default_persona 'ghost' names no existing role",
-      'medium_model is unset',
+      'medium_model is unset; authenticate a model provider in Settings → Models before a model can be chosen',
       "large_model 'zz' names no configured model",
       "compressor.model 'small_model' names no configured model (a tier alias that registered no substitution)".replace(' (a tier alias that registered no substitution)', ''),
       'delegation cycle: a → b → a',
@@ -331,5 +331,108 @@ describe('the rest of the load', () => {
     expect(c.raw.global.models).toBeNull();
     const bad = loadConfiguration(scopes(null, 'hooks:\n  - event: nope\n    command: x\n'));
     expect(!bad.ok && bad.error.path).toBe('hooks.entries.0.event');
+  });
+});
+
+describe('REQ-CONFIG-034 / REQ-PROVIDER-091 / REQ-CONFIG-204: the discovery snapshot as layer 3', () => {
+  const NOW = '2026-09-05T10:00:00.000Z';
+  const snapshot = (extra = '') => `version: 1
+providers:
+  openai-compatible--openrouter:
+    id: openai-compatible--openrouter
+    display_name: OpenRouter
+    family: openai-compatible
+    base_url: https://openrouter.ai/api/v1
+    authenticated: true
+    large_model: openai-compatible--openrouter/openai/gpt-4o
+    medium_model: openai-compatible--openrouter/openai/gpt-4o-mini
+    small_model: openai-compatible--openrouter/anthropic/claude-haiku-4.5
+    default_summary_model: openai-compatible--openrouter/openai/gpt-4o-mini
+    fallback_model: openai-compatible--openrouter/anthropic/claude-haiku-4.5
+    discovered_at: ${NOW}
+    models:
+      - id: openai-compatible--openrouter/anthropic/claude-haiku-4.5
+        display_name: Claude Haiku 4.5
+        capabilities: { accepts_image_input: true }
+        limits: { context_window: 200000, max_output_tokens: 32000 }
+        pricing: {}
+        discovered_at: ${NOW}
+      - id: openai-compatible--openrouter/openai/gpt-4o
+        capabilities: {}
+        limits: {}
+        pricing: { input_cost_per_token: 0.0000025, output_cost_per_token: 0.00001 }
+        discovered_at: ${NOW}
+      - id: openai-compatible--openrouter/openai/gpt-4o-mini
+        capabilities: {}
+        limits: {}
+        pricing: {}
+        discovered_at: ${NOW}
+  deepseek:
+    id: deepseek
+    display_name: DeepSeek
+    base_url: https://api.deepseek.com/v1
+    authenticated: false
+    small_model: deepseek/deepseek-chat
+    discovered_at: ${NOW}
+    models:
+      - id: deepseek/deepseek-chat
+        capabilities: {}
+        limits: {}
+        pricing: {}
+        discovered_at: ${NOW}
+${extra}`;
+
+  it('folds an authenticated provider\'s models as entries keyed by qualified id with auth_provider and base_url, and seeds the slots; an unauthenticated provider contributes nothing', () => {
+    const s = scopes(null, null);
+    writeFileSync(join(s.globalDir, 'project_settings.yaml'), snapshot());
+    const r = loadConfiguration(s);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const cfg = r.value;
+    expect(cfg.authenticatedProviders).toEqual(['openai-compatible--openrouter']);
+    const haiku = cfg.models['openai-compatible--openrouter/anthropic/claude-haiku-4.5']!;
+    expect(haiku).toMatchObject({ provider: 'openai-compatible', model_id: 'anthropic/claude-haiku-4.5', auth_provider: 'openai-compatible--openrouter', base_url: 'https://openrouter.ai/api/v1', max_input_tokens: 200000, max_output_tokens: 32000, api_key: null, api_key_env: null });
+    expect(cfg.models['openai-compatible--openrouter/openai/gpt-4o']).toMatchObject({ input_cost_per_token: 0.0000025, output_cost_per_token: 0.00001 });
+    expect(cfg.models['deepseek/deepseek-chat']).toBeUndefined();
+    expect(cfg.slots.small_model).toBe('openai-compatible--openrouter/anthropic/claude-haiku-4.5');
+    expect(cfg.slots.large_model).toBe('openai-compatible--openrouter/openai/gpt-4o');
+    // The shipped defaults still sit beneath (layer 1): their two entries remain configured models.
+    expect(cfg.models['gpt-4o']).toBeDefined();
+    expect(cfg.referential).toEqual([]);
+    expect(cfg.resolvedPersonaModelTiers['orchestrator']).toBe('large_model');
+  });
+  it('the YAML scopes outrank the snapshot (REQ-CONFIG-031): a workspace slot wins; a YAML entry of the same name overrides per field (REQ-CONFIG-043 is how REQ-PROVIDER-091 overrides)', () => {
+    const s = scopes(null, 'small_model: gpt-4o-mini\nmodels:\n  openai-compatible--openrouter/openai/gpt-4o:\n    provider: openai\n    model_id: gpt-4o-custom\n');
+    writeFileSync(join(s.globalDir, 'project_settings.yaml'), snapshot());
+    const r = loadConfiguration(s);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.slots.small_model).toBe('gpt-4o-mini');
+    // The named-entry class overlays per field: provider and model_id are the file's, auth_provider stays the snapshot's.
+    expect(r.value.models['openai-compatible--openrouter/openai/gpt-4o']).toMatchObject({ provider: 'openai', model_id: 'gpt-4o-custom', auth_provider: 'openai-compatible--openrouter' });
+  });
+  it('two authenticated providers: the lower id wins each slot it suggests (REQ-CONFIG-204)', () => {
+    const s = scopes(null, null);
+    writeFileSync(join(s.globalDir, 'project_settings.yaml'), snapshot().replace('authenticated: false\n    small_model: deepseek/deepseek-chat', 'authenticated: true\n    small_model: deepseek/deepseek-chat\n    large_model: deepseek/deepseek-chat'));
+    const r = loadConfiguration(s);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.authenticatedProviders).toEqual(['deepseek', 'openai-compatible--openrouter']);
+    expect(r.value.slots.small_model).toBe('deepseek/deepseek-chat');
+    expect(r.value.slots.large_model).toBe('deepseek/deepseek-chat');
+    expect(r.value.slots.medium_model).toBe('openai-compatible--openrouter/openai/gpt-4o-mini');
+    expect(r.value.models['deepseek/deepseek-chat']).toMatchObject({ provider: 'deepseek', model_id: 'deepseek-chat', auth_provider: 'deepseek', max_parallel: 3 });
+  });
+  it('an invalid snapshot is ignored with a warning; an auth_provider naming no authenticated provider is a referential message with the hint; no snapshot → the hint on every unset slot', () => {
+    const s = scopes(null, 'models:\n  mine:\n    provider: openai-compatible\n    model_id: x\n    auth_provider: openai-compatible--gone\n');
+    writeFileSync(join(s.globalDir, 'project_settings.yaml'), 'version: 9\n');
+    const r = loadConfiguration(s);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.warnings.some((w) => w.startsWith('Ignoring project settings snapshot: Invalid project snapshot at') && w.includes('unsupported project snapshot version'))).toBe(true);
+    expect(r.value.authenticatedProviders).toEqual([]);
+    expect(r.value.referential).toContain("models.mine: auth_provider 'openai-compatible--gone' names no authenticated provider; authenticate a model provider in Settings → Models before a model can be chosen");
+    const none = loadConfiguration({ ...scopes(null, null), snapshotPath: null });
+    expect(none.ok && none.value.authenticatedProviders).toEqual([]);
   });
 });

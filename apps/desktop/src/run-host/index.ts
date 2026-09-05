@@ -1,5 +1,5 @@
-import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, type ProcessMessage, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
-import { asSessionId, millis, ok, toIsoUtc, type Clocks, type WorkspaceId } from '@rotaris/kernel';
+import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
 import { CATALOGUE, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
@@ -40,8 +40,20 @@ const lease = new RefusalLease(clocks.monotonic);
 const stores = new Map<string, { file: string; root: string; db: StoreHandle | null; dal: StoreDal | null }>();
 const host = readOrMintMachineId(dataLayout(resolveUserDirs()).machineId);
 
-function send(m: ProcessMessage): void {
+function send(m: ProcessMessage | ServiceAskEnvelope): void {
   port.postMessage(m);
+}
+
+/** The child's side of ADR-0002 c.7: a bounded request back to main, correlated by `ask` (the credential lease, ADR-0030). */
+let nextAsk = 1;
+const pendingAsks = new Map<number, { resolve: (r: ProcessReply) => void; reject: (e: Error) => void; cancel: () => void }>();
+function ask(request: ServiceAsk, boundMs: Millis): Promise<ProcessReply> {
+  const n = nextAsk++;
+  return new Promise<ProcessReply>((resolve, reject) => {
+    const h = clocks.timers.after(boundMs, () => { pendingAsks.delete(n); reject(new Error(`main did not answer ${request.kind} within ${boundMs} ms`)); });
+    pendingAsks.set(n, { resolve, reject, cancel: () => h.cancel() });
+    send({ v: CONTRACT_SCHEMA_VERSION, ask: n, request });
+  });
 }
 function reply(id: number, r: ProcessReply): void {
   send({ v: CONTRACT_SCHEMA_VERSION, id, reply: r });
@@ -180,10 +192,12 @@ const rungMemory = new RungMemory();
 let liveState: LiveState = {};
 // The configuration resolved for each workspace's latest run start; every port of that run reads it.
 const configured = new Map<string, ConfiguredRun>();
+// ADR-0030: the bearers main leased for each workspace's current run; a resolver reads this map per request.
+const leased = new Map<string, Record<string, string>>();
 const configure = (workspaceRoot: string, attended: boolean) => {
   const r = configureRun(workspaceRoot, attended, {
     clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks),
-    onRequest: (i) => log(`model request ${i.method} ${i.url}`), log: (m) => log(m), liveState: () => liveState,
+    onRequest: (i) => log(`model request ${i.method} ${i.url}`), log: (m) => log(m), liveState: () => liveState, bearers: (root) => leased.get(root) ?? {},
   });
   if (r.ok) configured.set(workspaceRoot, r.value);
   return r;
@@ -252,13 +266,13 @@ const sessions = new Sessions({
       classifier,
     } : null;
   },
-  // REQ-ORCH-005: the pre-flight before the coordinator exists; the slots and the strategy from the run's configuration, the tier from the environment (ADR-0028's).
+  // REQ-ORCH-005: the pre-flight before the coordinator exists; the slots, the strategy and the tier from the run's configuration.
   preflight: (ctx) => {
     const run = configuredFor(ctx.workspaceRoot);
     if (!run) throw new Error('the run has no configuration');
     return runPreflight(ctx, {
       clocks, backend: run.model.backend, runModel: run.model.config.model, resolveCredential: run.model.config.resolveCredential, modelTimeoutMs: run.model.config.modelTimeoutMs,
-      globalDir: configDir, env: process.env, slots: classifierSlotsOf(run.cfg, run.scripted), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
+      globalDir: configDir, tier: run.tier, slots: classifierSlotsOf(run.cfg, run.scripted), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
     });
   },
 });
@@ -330,6 +344,28 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (lease.isRefusing(req.workspaceId as WorkspaceId)) return { kind: 'refused', code: 'workspace.refusing', headline: 'New runs are refused for this workspace while a restore is under way' };
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      // ADR-0030 / REQ-PROVIDER-066/067: resolve the configuration once to learn the providers it names, lease their
+      // bearers from main, and refuse before any session exists when the entry model's provider is not authenticated
+      // (REQ-WORKSPACE-137). `sessions.start` configures again; its resolvers read the leased map per request.
+      const pre = configure(s.root, presenters.attended);
+      if (!pre.ok) {
+        if (pre.error.code === 'no-model') return { kind: 'refused', code: 'session.no-model', headline: 'No model configured', detail: 'Choose a model in Settings before starting a run.' };
+        return { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: pre.error.reason };
+      }
+      if (pre.value.authProviders.length > 0) {
+        const answer = await ask({ kind: 'credentials.lease', providerIds: [...pre.value.authProviders] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+        const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+        leased.set(s.root, bearers);
+        if (answer?.kind === 'credentials.leased') {
+          const u = Object.entries(answer.report.unresolved);
+          log(`credentials: ${answer.report.authenticated.length} provider(s) authenticated${u.length > 0 ? `; unresolved: ${u.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
+        }
+        if (pre.value.entryAuthProvider !== null && !bearers[pre.value.entryAuthProvider]) {
+          return { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before starting a run.' };
+        }
+      } else {
+        leased.set(s.root, {});
+      }
       const r = sessions.start(s.dal, s.root, req.prompt);
       if (!r.ok) {
         // REQ-SESSION-082: a refusal before the run starts is reported at once, marked as such, with no session behind it.
@@ -419,6 +455,12 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
 }
 
 port.on('message', (e: { data: unknown }) => {
+  const answer = ServiceAnswerEnvelopeSchema.safeParse(e.data);
+  if (answer.success) {
+    const p = pendingAsks.get(answer.data.ask);
+    if (p) { pendingAsks.delete(answer.data.ask); p.cancel(); p.resolve(answer.data.reply); }
+    return;
+  }
   const env = ProcessRequestEnvelopeSchema.safeParse(e.data);
   if (!env.success) return;
   const req = RunHostRequestSchema.safeParse(env.data.request);

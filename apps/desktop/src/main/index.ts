@@ -1,10 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { millis } from '@rotaris/kernel';
+import { millis, toIsoUtc } from '@rotaris/kernel';
 import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
+import { createProtector, CredentialStore, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
+import { PROJECT_SETTINGS_FILE } from '@rotaris/config';
 
 /**
  * MAIN — the composition root for the Electron main process (ADR-0002 #1).
@@ -23,6 +25,10 @@ const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
 const machineId = readOrMintMachineId(layout.machineId);
+
+// ADR-0028: the catalogue's integrity is checked at process start as well as in the build's test (REQ-PROVIDER-003).
+const catalogue = validateCatalog();
+if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalogue.error.join('; ')}`);
 
 const log = (m: string) => console.log(`[main ${new Date().toISOString()}] ${m}`);
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
@@ -89,9 +95,23 @@ async function main(): Promise<void> {
 
   await app.whenReady();
 
+  // ADR-0029/0030: the credential store and the provider service live HERE, in main; the run host is leased bearers.
+  const lockDeps = { pid: process.pid, startedAt: toIsoUtc(clocks.wall.instant()), timers: clocks.timers, monotonic: clocks.monotonic };
+  const random = () => Math.random().toString(36).slice(2, 10);
+  const credentials = new CredentialStore({ dir: layout.tokens, protector: createProtector({ scratchDir: dirs.data }), lock: lockDeps, random, warn: (m) => log(`credentials: ${m}`), info: (m) => log(`credentials: ${m}`) });
+  const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`) });
+  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`) });
+
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [], { serviceName: 'rotaris-run-host' });
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
+  // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
+  runHost.onAsk(async (a) => {
+    if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
+    const { bearers, report } = providers.lease(a.providerIds);
+    log(`credentials leased: ${report.authenticated.join(', ') || 'none'}${Object.keys(report.unresolved).length > 0 ? `; unresolved ${Object.entries(report.unresolved).map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
+    return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
+  });
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
@@ -112,6 +132,7 @@ async function main(): Promise<void> {
           case 'runHost.closeStore': return runHost.request({ kind: 'workspace.closeStore', workspaceId: a.workspaceId }, millis(5_000));
           case 'runHost.release': return runHost.request({ kind: 'workspace.release', workspaceId: a.workspaceId }, millis(5_000));
           case 'runHost.reopen': return runHost.request({ kind: 'workspace.release', workspaceId: a.workspaceId }, millis(5_000));
+          default: return Promise.resolve({ kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from a workspace service` } as ProcessReply);
         }
       });
     }

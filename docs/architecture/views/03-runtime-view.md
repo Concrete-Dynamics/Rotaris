@@ -20,12 +20,17 @@ sequenceDiagram
 
   W->>M: command session.start {prompt}
   M->>RH: session.start {workspaceId, prompt}
-  RH->>CFG: configure(workspaceRoot): load both scopes' four files, overlay live state (Tier B), resolve
-  CFG-->>RH: RunSetup {model, runtime, personas, models} — or a fatal report / an unreachable entry model
-  alt refused before it starts (REQ-EVENTS-021, REQ-CONFIG-478)
+  RH->>CFG: configure(workspaceRoot): load the snapshot (layer 3) and both scopes' four files, overlay live state (Tier B), resolve
+  CFG-->>RH: RunSetup {model, runtime, personas, models, authProviders, tier} — or a fatal report / no entry model
+  alt refused before it starts (REQ-EVENTS-021, REQ-CONFIG-478, REQ-WORKSPACE-137 "No model configured")
     RH-->>M: refused {headline, detail}
     M-->>W: {ok:false} and a notice; nothing was recorded
   else
+    RH->>M: ask credentials.lease {providerIds} (ADR-0030; REQ-PROVIDER-066/067)
+    M-->>RH: credentials.leased {bearers, report} — the bearers read per request by the run's resolvers
+    alt the entry model's auth_provider is unresolved (REQ-WORKSPACE-137 "Provider authentication required")
+      RH-->>M: refused; nothing was recorded
+    end
     RH->>WR: SessionWriter.create — session row + lock row (INSERT OR IGNORE) in one transaction
     RH->>WR: appendRow('user', prompt) — row 0 and its transcript.row event
     RH->>RH: settleStaleChildren (REQ-ORCH-053), SupervisorRegistry, hooks resolved once (ADR-0015)
@@ -133,7 +138,9 @@ Main presents `run.result` once as the notice.
 
 - **Tier A** — Settings Save, the diagnostics toggle, the composer's permission-mode control: the workspace
   service writes through one of the four writers and loads again; main broadcasts `config:changed`.
-- **Tier B** — at every run start the run host loads the files and overlays the screen's live state
-  (`config.liveState`, handed over on every pending change), then runs the loader's own passes; the run's
-  `RunConfig`, runtime posture, persona resolver, model references and message limit come from that.
+- **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
+  (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
+  slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then
+  runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
+  tier, providers to lease and message limit come from that.
 - **Tier C** — everything else is read at the next load; nothing watches a file.

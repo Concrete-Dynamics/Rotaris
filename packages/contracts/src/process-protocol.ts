@@ -151,8 +151,10 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
 /**
- * Child → main: the workspace service's narrow requests back to main (ADR-0002 consequence 7), which
- * main forwards to the run host — the restore's steps 1, 3, 4a and 10 (ADR-0058). Correlated by `ask`.
+ * Child → main: a child's narrow requests back to main (ADR-0002 consequence 7), correlated by `ask`. The
+ * workspace service's five are forwarded to the run host — the restore's steps 1, 3, 4a and 10 (ADR-0058).
+ * The run host's one is answered by main itself: `credentials.lease` (ADR-0030) — the bearers for the
+ * sign-in providers a run's configuration names, resolved from the credential store main owns.
  */
 export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('runHost.refuseRuns'), workspaceId: z.string(), leaseMs: z.number().int().positive() }),
@@ -160,6 +162,7 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('runHost.closeStore'), workspaceId: z.string() }),
   z.object({ kind: z.literal('runHost.release'), workspaceId: z.string() }),
   z.object({ kind: z.literal('runHost.reopen'), workspaceId: z.string(), storeFile: z.string() }),
+  z.object({ kind: z.literal('credentials.lease'), providerIds: z.array(z.string()) }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -195,6 +198,12 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
   z.object({ kind: z.literal('hooks.summary'), summary: HooksSummarySchema }),
   z.object({ kind: z.literal('playbooks.catalogue'), catalogue: PlaybookCatalogueSchema }),
+  /**
+   * ADR-0030: the bearers leased to the run host for one run, with REQ-PROVIDER-067's priming report. This is the
+   * one message in the product that carries a credential value; it travels main → utility process only and no
+   * renderer schema (commands, channels) has a field for it (ADR-0030 c.2).
+   */
+  z.object({ kind: z.literal('credentials.leased'), bearers: z.record(z.string(), z.string()), report: z.object({ authenticated: z.array(z.string()), renewed: z.array(z.string()), unresolved: z.record(z.string(), z.string()) }) }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

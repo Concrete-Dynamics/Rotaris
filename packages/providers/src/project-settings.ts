@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
 import { err, failure, hasCredentialPrefix, isSecretLookingName, ok, type Failure, type Result, type Timers } from '@rotaris/kernel';
 import { NO_RETRY, replaceDocument, type RetryLadder } from '@rotaris/platform';
+import { readProjectSnapshot, type ProjectSnapshot, type ProviderRecord, type SnapshotModel } from '@rotaris/config';
 import type { DiscoveredModel } from './discovery.js';
 import type { SlotPicks } from './slots.js';
 import { withLock, type LockDeps } from './credentials/lock.js';
@@ -10,135 +10,14 @@ import { withLock, type LockDeps } from './credentials/lock.js';
  * REQ-PROVIDER-084..087 — the discovered-provider catalogue persisted as `project_settings.yaml` in the
  * per-user configuration directory: `version: 1`, a `providers` map, unknown keys rejected, keys emitted in
  * written order, non-ASCII literal, mode 0644, atomic writes under the adjacent lock, every write preceded
- * by the secret screen of 086. Reading takes no lock (ADR-0032). Naming: `snapshot.ts` in `config` is what
+ * by the secret screen of 086. The READER and the types are `config`'s (`project-settings.ts` there), because the
+ * loader folds this document as layer 3 and may not import this package. Naming: `snapshot.ts` in `config` is what
  * the Settings screen reads; this file is named after the document it owns.
  */
-export interface SnapshotModel {
-  readonly id: string;
-  readonly display_name?: string;
-  readonly capabilities: Readonly<Record<string, unknown>>;
-  readonly limits: Readonly<Record<string, number>>;
-  readonly pricing: Readonly<Record<string, unknown>>;
-  readonly discovered_at: string;
-}
-
-export interface ProviderRecord {
-  readonly id: string;
-  readonly display_name: string;
-  readonly family?: string;
-  readonly base_url?: string;
-  readonly authenticated: boolean;
-  readonly default_summary_model?: string;
-  readonly large_model?: string;
-  readonly medium_model?: string;
-  readonly small_model?: string;
-  readonly fallback_model?: string;
-  readonly discovered_at: string;
-  readonly models: readonly SnapshotModel[];
-}
-
-export interface ProjectSnapshot {
-  readonly version: 1;
-  readonly providers: Readonly<Record<string, ProviderRecord>>;
-}
-
-export const UNSUPPORTED_VERSION = 'unsupported project snapshot version';
-const PROVIDER_KEYS = new Set(['id', 'display_name', 'family', 'base_url', 'authenticated', 'default_summary_model', 'large_model', 'medium_model', 'small_model', 'fallback_model', 'discovered_at', 'models']);
-const MODEL_KEYS = new Set(['id', 'display_name', 'capabilities', 'limits', 'pricing', 'discovered_at']);
-const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+export { readProjectSnapshot, parseSnapshot, UNSUPPORTED_VERSION, PROJECT_SETTINGS_FILE, type ProjectSnapshot, type ProviderRecord, type SnapshotModel } from '@rotaris/config';
 
 function isMap(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
-}
-
-function readModel(v: unknown, where: string, warn: (m: string) => void): Result<SnapshotModel, string> {
-  if (!isMap(v)) return err(`${where}: a model record must be a mapping`);
-  for (const k of Object.keys(v)) if (!MODEL_KEYS.has(k)) return err(`${where}: unknown key '${k}'`);
-  if (typeof v['id'] !== 'string' || v['id'].length === 0) return err(`${where}: id must be a non-empty string`);
-  if (v['display_name'] !== undefined && typeof v['display_name'] !== 'string') return err(`${where}: display_name must be a string`);
-  if (typeof v['discovered_at'] !== 'string' || !ISO_UTC.test(v['discovered_at'])) return err(`${where}: discovered_at must be ISO-8601 with a UTC offset`);
-  const limits: Record<string, number> = {};
-  if (v['limits'] !== undefined) {
-    if (!isMap(v['limits'])) return err(`${where}: limits must be a mapping`);
-    for (const [k, n] of Object.entries(v['limits'])) {
-      if (typeof n !== 'number') { warn(`${where}: limits.${k} is not a number and is ignored`); continue; }
-      limits[k] = n;
-    }
-  }
-  const capabilities = isMap(v['capabilities']) ? v['capabilities'] : {};
-  const pricing = isMap(v['pricing']) ? v['pricing'] : {};
-  const out: SnapshotModel = { id: v['id'], capabilities, limits, pricing, discovered_at: v['discovered_at'], ...(typeof v['display_name'] === 'string' ? { display_name: v['display_name'] } : {}) };
-  return ok(out);
-}
-
-function readProvider(id: string, v: unknown, warn: (m: string) => void): Result<ProviderRecord, string> {
-  const where = `providers.${id}`;
-  if (!isMap(v)) return err(`${where}: a provider record must be a mapping`);
-  for (const k of Object.keys(v)) if (!PROVIDER_KEYS.has(k)) return err(`${where}: unknown key '${k}'`);
-  if (v['id'] !== id) return err(`${where}: id must equal the map key`);
-  if (typeof v['display_name'] !== 'string') return err(`${where}: display_name must be a string`);
-  if (typeof v['authenticated'] !== 'boolean') return err(`${where}: authenticated must be a boolean`);
-  if (typeof v['discovered_at'] !== 'string' || !ISO_UTC.test(v['discovered_at'])) return err(`${where}: discovered_at must be ISO-8601 with a UTC offset`);
-  for (const k of ['family', 'base_url', 'default_summary_model', 'large_model', 'medium_model', 'small_model', 'fallback_model']) {
-    if (v[k] !== undefined && v[k] !== null && typeof v[k] !== 'string') return err(`${where}: ${k} must be a string`);
-  }
-  if (!Array.isArray(v['models'])) return err(`${where}: models must be a list`);
-  const models: SnapshotModel[] = [];
-  const seen = new Set<string>();
-  for (let i = 0; i < v['models'].length; i++) {
-    const m = readModel(v['models'][i], `${where}.models[${i}]`, warn);
-    if (!m.ok) return m;
-    // REQ-PROVIDER-084: duplicates keep the first and warn.
-    if (seen.has(m.value.id)) { warn(`${where}: duplicate model id ${m.value.id}; the first occurrence is kept`); continue; }
-    seen.add(m.value.id);
-    models.push(m.value);
-  }
-  const rec: ProviderRecord = {
-    id, display_name: v['display_name'], authenticated: v['authenticated'], discovered_at: v['discovered_at'], models,
-    ...(typeof v['family'] === 'string' ? { family: v['family'] } : {}),
-    ...(typeof v['base_url'] === 'string' ? { base_url: v['base_url'] } : {}),
-    ...(typeof v['default_summary_model'] === 'string' ? { default_summary_model: v['default_summary_model'] } : {}),
-    ...(typeof v['large_model'] === 'string' ? { large_model: v['large_model'] } : {}),
-    ...(typeof v['medium_model'] === 'string' ? { medium_model: v['medium_model'] } : {}),
-    ...(typeof v['small_model'] === 'string' ? { small_model: v['small_model'] } : {}),
-    ...(typeof v['fallback_model'] === 'string' ? { fallback_model: v['fallback_model'] } : {}),
-  };
-  return ok(rec);
-}
-
-/** REQ-PROVIDER-084/085: strict; the failure text is "Invalid project snapshot at <path>: <detail>". */
-export function parseSnapshot(text: string, path: string, warn: (m: string) => void = () => {}): Result<ProjectSnapshot, string> {
-  const invalid = (detail: string) => err(`Invalid project snapshot at ${path}: ${detail}`);
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch (cause) {
-    return invalid(String((cause as Error).message ?? cause));
-  }
-  if (!isMap(doc)) return invalid('the document must be a mapping');
-  for (const k of Object.keys(doc)) if (k !== 'version' && k !== 'providers') return invalid(`unknown key '${k}'`);
-  if (doc['version'] !== 1) return invalid(UNSUPPORTED_VERSION);
-  const providers: Record<string, ProviderRecord> = {};
-  const raw = doc['providers'] ?? {};
-  if (!isMap(raw)) return invalid('providers must be a mapping');
-  for (const [id, v] of Object.entries(raw)) {
-    const r = readProvider(id, v, warn);
-    if (!r.ok) return invalid(r.error);
-    providers[id] = r.value;
-  }
-  return ok({ version: 1, providers });
-}
-
-/** Absent → null; no lock (ADR-0004 rule 1: open-read-close). */
-export function readProjectSnapshot(path: string, warn: (m: string) => void = () => {}): Result<ProjectSnapshot | null, string> {
-  if (!existsSync(path)) return ok(null);
-  let text: string;
-  try {
-    text = readFileSync(path, 'utf8');
-  } catch (cause) {
-    return err(`Invalid project snapshot at ${path}: ${String(cause)}`);
-  }
-  return parseSnapshot(text, path, warn);
 }
 
 /**

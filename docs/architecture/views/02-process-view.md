@@ -14,13 +14,16 @@ flowchart LR
     RH["hook-review window<br/>role = hook-review"]
   end
   P["preload<br/>window.rotaris = { command, on… }"]
-  M["main<br/>windows · dialog queue · notices<br/>UpdateRelay · preferences · theme<br/>capture seams"]
+  M["main<br/>windows · dialog queue · notices<br/>UpdateRelay · preferences · theme<br/>credential store · provider sign-in · discovery<br/>capture seams"]
   RHst["run host<br/>utilityProcess, one per instance<br/>Sessions · Runs · tools · hooks<br/>configuration per run start"]
   WS["workspace service<br/>utilityProcess, one per open workspace<br/>identifier · store open/migrate<br/>backup · restore · config Tier A"]
   DB[("workspace.db<br/>SQLite, WAL<br/>%LOCALAPPDATA%/rotaris/data/workspaces/&lt;id&gt;/")]
   FILES[["agents.yaml · models.yml<br/>global: %LOCALAPPDATA%/rotaris/config/<br/>workspace: &lt;ws&gt;/.rotaris/"]]
   PREFS[["preferences.json<br/>ROTARIS_PREFERENCES_ROOT →<br/>config home → per-user"]]
-  MODEL(("model endpoint<br/>base_url · api_key_env"))
+  TOKENS[["tokens/&lt;provider_id&gt;.json (+ .lock)<br/>%LOCALAPPDATA%/rotaris/data/<br/>protected: owner + SYSTEM only"]]
+  SNAP[["project_settings.yaml<br/>%LOCALAPPDATA%/rotaris/config/<br/>the discovery snapshot (layer 3)"]]
+  MODEL(("model endpoint<br/>base_url · leased bearer or api_key_env"))
+  DISC(("provider catalog endpoint<br/>&lt;base&gt;/models"))
   PTY(("shell (node-pty)"))
 
   R -- "ipcRenderer.invoke(command)" --> P
@@ -29,13 +32,18 @@ flowchart LR
   RH --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
   M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>theme:changed · config:changed" --> P
-  M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←" --> RHst
+  M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB
   WS --> DB
   RHst -- "loadConfiguration per run start" --> FILES
+  RHst -- "layer 3 of every load" --> SNAP
   WS -- "read · save · setField, then load again" --> FILES
+  WS --> SNAP
   M --> PREFS
+  M -- "save · delete under the adjacent lock" --> TOKENS
+  M -- "upsert · remove under the adjacent lock" --> SNAP
+  M -- "sign-in · validate · health" --> DISC
   RHst --> MODEL
   RHst --> PTY
 ```
@@ -44,8 +52,8 @@ flowchart LR
 
 | Process | Owns | Never does |
 |---|---|---|
-| **main** | window lifecycle and the close guard; the per-window approval **dialog queue** and the pause window; the single current notice; the `UpdateRelay` (sequence-preserving fan-out of the run host's publications to subscribed windows); theme and preferences (ADR-0042); the instance claim; forking and shutting down the two child kinds; the verification seams under `ROTARIS_CAPTURE_PNG` | decide a permission, run a tool, read the store, read `agents.yaml` |
-| **run host** | every session lock this instance holds; the writers, projection owners and runs; the tool gate per session; hooks per run; the configuration resolved per run start (Tier B) with the live state main handed over; the loop supervisor; the terminal manager | resolve a workspace identifier; migrate the store; write configuration files |
+| **main** | window lifecycle and the close guard; the per-window approval **dialog queue** and the pause window; the single current notice; the `UpdateRelay` (sequence-preserving fan-out of the run host's publications to subscribed windows); theme and preferences (ADR-0042); the instance claim; forking and shutting down the two child kinds; **the credential store, the provider catalogue, sign-in, discovery and the snapshot** (ADR-0029/0030, `packages/providers`); the verification seams under `ROTARIS_CAPTURE_PNG` | decide a permission, run a tool, read the store, read `agents.yaml`, hand a credential to a renderer |
+| **run host** | every session lock this instance holds; the writers, projection owners and runs; the tool gate per session; hooks per run; the configuration resolved per run start (Tier B) with the live state main handed over; the bearers main **leased** for the run; the loop supervisor; the terminal manager | resolve a workspace identifier; migrate the store; write configuration files; read `tokens/` |
 | **workspace service** | the workspace identifier; opening and migrating the store (the only process that migrates, W-02); backup and restore with its refusal lease on the run host; configuration Tier A (`config.read` / `config.save` / `config.setField`, each followed by the load again) | run anything; hold a session lock |
 | **renderer** (per window) | the replica (a mirror of one session's rows and record, ADR-0043), local shell state (view, guards), the Settings pending state; one role per route | touch a file, a store, a credential |
 | **preload** | the one frozen namespace: `command` plus one subscription per channel | anything else |
@@ -69,7 +77,9 @@ repaint or repopulate every live window.
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
 `config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown`, `hooks.*`, `playbooks.catalogue`,
 `shutdown`. Events back: `publish.increment`, `publish.snapshot`, `run.result`, `run.paused`,
-`approval.present/close`, `presenter.poll`, `notice.publish`, `log`, `ready`.
+`approval.present/close`, `presenter.poll`, `notice.publish`, `log`, `ready`. **The run host's one ask back to main**
+(ADR-0030, on the `ServiceAsk` envelope): `credentials.lease {providerIds}`, answered `credentials.leased {bearers, report}` —
+the only message in the product that carries a credential value, and it never crosses a renderer boundary.
 
 **Main ↔ workspace service.** Requests: `workspace.open/close/backup/restore.assess/restore.perform`,
 `config.read/save/setField`, `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002
@@ -98,4 +108,6 @@ licensed.
 | `<workspace>/.rotaris/agents.yaml`, `models.yml`; `%LOCALAPPDATA%/rotaris/config/agents.yaml`, `models.yml` | workspace service (the four writers, ADR-0036) | run host (per run start), workspace service |
 | `%LOCALAPPDATA%/rotaris/config/playbooks/`, `intent-tools.yaml`, `hooks-policy` | user (playbooks, mapping); run host (hook policy) | run host |
 | `<preferences root>/preferences.json` | main (ADR-0042; the theme write synchronous and flushed) | main |
+| `%LOCALAPPDATA%/rotaris/data/tokens/<provider_id>.json` (+ `<provider_id>.lock` while a write is in flight) | main (`CredentialStore`: staged `.tmp` protected before a byte is written, renamed; owner + SYSTEM only, read back; ADR-0029) | main only — the run host is leased the bearer |
+| `%LOCALAPPDATA%/rotaris/config/project_settings.yaml` (+ `.lock`) | main (`ProjectSettingsStore`: under the lock, behind the secret screen, mode 0644) | run host and workspace service (layer 3 of every `loadConfiguration`, no lock) |
 | the instance claim | main (ADR-0055) | main (a second launch hands over and exits) |

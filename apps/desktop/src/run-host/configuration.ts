@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
-import { resolvePreset, type HeadlessPolicy } from '@rotaris/contracts';
+import { resolvePreset, type HeadlessPolicy, type ModelTier } from '@rotaris/contracts';
 import { loadConfiguration, overlayLiveState, renderFatal, type LiveState, type LoadedConfiguration, type ModelEntry } from '@rotaris/config';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, type ClassifierSlots, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -11,12 +11,15 @@ import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelCli
  * ADR-0036 / ADR-0037 at the run-host root: one load per run start (Tier B — the files, then the live
  * state main holds, then the loader's own passes), turned into what the engine takes — the model setup,
  * the runtime posture, the persona resolver. Nothing here is read from the environment any more except
- * the two stopgaps the map names: `ROTARIS_MODEL_DIALECT=scripted` (verification only) and
- * `ROTARIS_MODEL_TIER` (ADR-0028's, in intent.ts).
+ * the one stopgap the map names: `ROTARIS_MODEL_DIALECT=scripted` (verification only).
  *
- * Credentials (decision 2 of the plan): the entry model's `api_key` or `api_key_env`, resolved per request.
- * Every model call of a run authenticates with the entry model's resolver; per-model keys for the other
- * slots wait on ADR-0029. Stated in codebase.md.
+ * Credentials: a model naming an `auth_provider` (REQ-CONFIG-083, REQ-PROVIDER-092) authenticates with the
+ * bearer main LEASED to this run for that provider (ADR-0030; `session.start` asks `credentials.lease` for the
+ * providers `authProvidersOf` names, REQ-PROVIDER-066); a model naming none uses its `api_key` or
+ * `api_key_env`, resolved per request. Every model call of a run still authenticates with the entry model's
+ * resolver; per-model resolution for the other slots is owed. The entry role's model TIER (REQ-ORCH-023) is
+ * the slot alias its model resolved through (`resolved_persona_model_tiers`), no longer an environment
+ * variable.
  */
 export const PROVIDER_BASE_URLS: Readonly<Record<string, string>> = Object.freeze({
   openai: 'https://api.openai.com/v1',
@@ -85,9 +88,23 @@ export function modelRefOf(cfg: LoadedConfiguration, name: string | null, script
   return { providerId: entry.provider, modelId: entry.model_id, dialect, baseUrl };
 }
 
-/** REQ-CONFIG-083: the entry model's credential, read per request; `api_key` outranks `api_key_env`. */
-export function credentialResolver(entry: ModelEntry | undefined, env: Readonly<Record<string, string | undefined>>): () => Promise<string> {
-  return async () => entry?.api_key ?? (entry?.api_key_env ? env[entry.api_key_env] ?? '' : '');
+/** REQ-CONFIG-083 / REQ-PROVIDER-092: an `auth_provider` reads the leased bearer; otherwise `api_key` outranks `api_key_env`. Read per request. */
+export function credentialResolver(entry: ModelEntry | undefined, env: Readonly<Record<string, string | undefined>>, bearers: () => Readonly<Record<string, string>> = () => ({})): () => Promise<string> {
+  return async () => {
+    if (entry?.auth_provider) return bearers()[entry.auth_provider] ?? '';
+    return entry?.api_key ?? (entry?.api_key_env ? env[entry.api_key_env] ?? '' : '');
+  };
+}
+
+/** REQ-PROVIDER-066: the sign-in providers behind every configured model, each once, sorted. */
+export function authProvidersOf(cfg: LoadedConfiguration): string[] {
+  return [...new Set(Object.values(cfg.models).map((m) => m.auth_provider).filter((p): p is string => typeof p === 'string' && p.length > 0))].sort();
+}
+
+/** REQ-ORCH-023 / ADR-0028: the entry role's tier is the slot its model resolved through; none → undetermined. */
+export function entryTierOf(cfg: LoadedConfiguration): ModelTier | null {
+  const alias = cfg.resolvedPersonaModelTiers[cfg.defaultPersona];
+  return alias === 'small_model' ? 'small' : alias === 'medium_model' ? 'medium' : alias === 'large_model' ? 'large' : null;
 }
 
 /** Decision 3 of the plan: `personas:` overlaid on the built-in table — stated fields win, the prompt is the file's when it supplies one. */
@@ -147,6 +164,11 @@ export interface ConfiguredRun extends RunSetup {
   readonly cfg: LoadedConfiguration;
   readonly runtime: RuntimeFromConfiguration;
   readonly scripted: boolean;
+  /** REQ-PROVIDER-066: the providers to lease before the run starts. */
+  readonly authProviders: readonly string[];
+  /** The entry model's sign-in provider, when it names one: an unleased one refuses the run (REQ-WORKSPACE-137). */
+  readonly entryAuthProvider: string | null;
+  readonly tier: ModelTier | null;
 }
 
 export interface ConfigureDeps {
@@ -159,6 +181,8 @@ export interface ConfigureDeps {
   readonly log: (m: string) => void;
   /** ADR-0037 Tier B: the settings store's current values, as main last told this process. */
   readonly liveState: () => LiveState;
+  /** ADR-0030: the bearers main leased for this workspace's current run, read per request. */
+  readonly bearers: (workspaceRoot: string) => Readonly<Record<string, string>>;
 }
 
 /**
@@ -166,7 +190,9 @@ export interface ConfigureDeps {
  * errors are warnings while a person is present and fatal otherwise (REQ-CONFIG-245/246); an entry model
  * with no reachable endpoint refuses (REQ-EVENTS-021, one result of status error).
  */
-export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps): Result<ConfiguredRun, { readonly reason: string; readonly cfg?: LoadedConfiguration }> {
+export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' };
+
+export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps): Result<ConfiguredRun, ConfigureRefusal> {
   const loaded = loadConfiguration({ globalDir: deps.globalDir, workspaceRoot, now: () => deps.clocks.monotonic.now() });
   if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}` });
   const live = overlayLiveState(loaded.value, deps.liveState());
@@ -188,7 +214,7 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
   const model = entryRole.persona.modelRef ?? modelRefOf(cfg, entryModelName, scripted);
   if (!model) {
     const why = entryModelName === null ? `role ${cfg.defaultPersona} names no model` : !entry ? `model '${entryModelName}' is not a configured model` : `model '${entryModelName}' (provider ${entry.provider}) has no base_url and this build knows no endpoint for that provider`;
-    return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why}.`, cfg });
+    return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why}.`, cfg, code: 'no-model' });
   }
   const runtime = runtimeFromConfiguration(cfg);
   const isScripted = model.providerId === SCRIPTED_PROVIDER;
@@ -207,11 +233,13 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
       iterationLimit: runtime.iterationLimit,
       transientRetries: runtime.transientRetries,
       consecutiveRetryLimit: runtime.consecutiveRetryLimit,
-      resolveCredential: isScripted ? async () => '' : credentialResolver(entry, deps.env),
+      resolveCredential: isScripted ? async () => '' : credentialResolver(entry, deps.env, () => deps.bearers(workspaceRoot)),
     },
   };
-  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}`);
+  const authProviders = authProvidersOf(cfg);
+  const tier = entryTierOf(cfg);
+  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}`);
   // REQ-MONITOR-142: a mid-run switch resolves a `models:` key the same way the entry model was.
   const models = (key: string) => { const ref = modelRefOf(cfg, key, scripted); return ref ? { model: ref, thinking: thinkingOf(cfg.models[key]) } : null; };
-  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted });
+  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier });
 }

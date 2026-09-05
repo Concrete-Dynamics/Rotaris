@@ -15,14 +15,16 @@ import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
 import { referentialMessages, renderProblems, type FatalLoadReport } from './validate.js';
+import { PROJECT_SETTINGS_FILE, readProjectSnapshot, snapshotLayer } from './project-settings.js';
 
 /**
  * ADR-0036 alternative B, the whole loader: `loadConfiguration(globalDir, workspaceRoot)` — the entry point
  * takes NO database handle (the ADR's guard, in the signature) — reads the two scopes' four files fresh
  * (REQ-CONFIG-014), folds them under the four merge classes in REQ-CONFIG-031's order with the built-in
  * defaults copied first (REQ-CONFIG-032), runs the passes in REQ-CONFIG-035..037's order, and yields a
- * configuration that is already fully resolved. The discovery-snapshot and auto-discovered-server layers
- * (REQ-CONFIG-033/034) have no producer in this build; their positions in the order are empty.
+ * configuration that is already fully resolved. Layer 3 — the provider/model discovery snapshot
+ * (REQ-CONFIG-034, `project_settings.yaml` in the global directory) — is folded since Part K; the
+ * auto-discovered-server layer (REQ-CONFIG-033) still has no producer and its position stays empty.
  */
 export const MODELS_FILE = 'models.yml' as const;
 export const AGENTS_FILE_NAME = 'agents.yaml' as const;
@@ -62,6 +64,8 @@ export interface LoadedConfiguration {
   readonly delegationStrategy: DelegationStrategy;
   /** REQ-CONFIG-071: computed, never serialised (REQ-CONFIG-072). */
   readonly resolvedPersonaModelTiers: Readonly<Record<string, TierAlias>>;
+  /** REQ-CONFIG-034: the snapshot providers marked authenticated whose models and slots were folded in. */
+  readonly authenticatedProviders: readonly string[];
   /** REQ-CONFIG-233's warn-and-continue conditions, rendered. */
   readonly warnings: readonly string[];
   /** REQ-CONFIG-229: the referential stage's messages; empty means valid. */
@@ -143,6 +147,8 @@ export interface LoadOptions {
   readonly keepIgnored?: boolean;
   /** ADR-0006: time comes from the caller's monotonic clock, never a global. */
   readonly now?: () => number;
+  /** REQ-CONFIG-034: the snapshot's path; `<globalDir>/project_settings.yaml` by default, `null` folds no snapshot. */
+  readonly snapshotPath?: string | null;
 }
 
 function readSlots(top: PlainMap, sink: ProblemSink): { slots: Record<ModelSlot, string | null>; thinking: Record<ModelSlot, ReasoningLevel | null> } {
@@ -168,6 +174,19 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
 
   const layers: Layer[] = [{ source: 'built-in defaults', value: builtInDefaults() }];
   const hookLayers: HooksLayer[] = [opts.hookDefaults ?? EMPTY_HOOKS_LAYER('default')];
+  const snapshotWarnings: string[] = [];
+  let authenticatedProviders: readonly string[] = [];
+  // Layer 3 (REQ-CONFIG-031): the discovery snapshot; an invalid one is ignored with a warning (REQ-PROVIDER-091).
+  const snapshotPath = opts.snapshotPath === undefined ? join(opts.globalDir, PROJECT_SETTINGS_FILE) : opts.snapshotPath;
+  if (snapshotPath !== null) {
+    const snap = readProjectSnapshot(snapshotPath, (w) => snapshotWarnings.push(`project settings snapshot: ${w}`));
+    if (!snap.ok) snapshotWarnings.push(`Ignoring project settings snapshot: ${snap.error}`);
+    else if (snap.value) {
+      const folded = snapshotLayer(snap.value);
+      authenticatedProviders = folded.authenticated;
+      if (folded.layer) layers.push({ source: snapshotPath, value: folded.layer });
+    }
+  }
   const raw: Record<ConfigScope, { agents: PlainMap | null; models: PlainMap | null }> = { global: { agents: null, models: null }, workspace: { agents: null, models: null } };
   const problems: (Problem & { file: string; scope: ConfigScope })[] = [];
   let workspaceAgents: ParsedConfig | null = null;
@@ -197,7 +216,8 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
   const hooks = mergeHooks(hookLayers);
   return resolveMerged(merged.value, {
     workspaceRoot: opts.workspaceRoot, hooks, files, raw, problems, delegationStrategy: readDelegationStrategy(workspaceAgents),
-    mergeWarnings: merged.warnings.map((w) => `${w.source}: ${w.message}`), ...(opts.toolServers ? { toolServers: opts.toolServers } : {}),
+    mergeWarnings: [...snapshotWarnings, ...merged.warnings.map((w) => `${w.source}: ${w.message}`)], ...(opts.toolServers ? { toolServers: opts.toolServers } : {}),
+    authenticatedProviders,
     loadMs: started === null || !opts.now ? null : opts.now() - started,
   });
 }
@@ -212,6 +232,7 @@ export interface ResolveContext {
   readonly delegationStrategy: DelegationStrategy;
   readonly mergeWarnings?: readonly string[];
   readonly toolServers?: readonly string[];
+  readonly authenticatedProviders?: readonly string[];
   readonly loadMs: number | null;
 }
 
@@ -245,7 +266,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const draft = { slots, slotThinking: thinking, models, personas, compressorModel: compressor.model, circuitBreakerModel: circuitBreaker.model };
   const resolution = resolveSlotsAndReasoning(draft);
   const hooks = ctx.hooks;
-  const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, ...(ctx.toolServers ? { toolServers: ctx.toolServers } : {}) });
+  const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, ...(ctx.toolServers ? { toolServers: ctx.toolServers } : {}), authenticatedProviders: ctx.authenticatedProviders ?? [] });
 
   const warnings = [
     ...(ctx.mergeWarnings ?? []),
@@ -268,6 +289,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     injectAgentsMd,
     delegationStrategy: ctx.delegationStrategy,
     resolvedPersonaModelTiers: resolution.resolvedPersonaModelTiers,
+    authenticatedProviders: ctx.authenticatedProviders ?? [],
     warnings,
     referential,
     raw: ctx.raw,

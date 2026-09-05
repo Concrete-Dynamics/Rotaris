@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { mergePlaybookOverrides, readIntentMapping, readPlaybookOverrides } from '@rotaris/config';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
-import { isAnswerOnly, isModelTier, type ModelTier } from '@rotaris/contracts';
+import { isAnswerOnly, type ModelTier } from '@rotaris/contracts';
 import { carryOver, classifyIntent, intentGrant, resolveIntentMapping, resolvePlaybooks, ROLE_VOCABULARY, type RungMemory, type ClassifierSlots, type Preflight, type PreflightContext } from '@rotaris/engine';
 import type { AgentBackend, ModelRef } from '@rotaris/model';
 import type { Clocks } from '@rotaris/kernel';
@@ -10,15 +10,12 @@ import type { Clocks } from '@rotaris/kernel';
  * The run-host root's pre-flight (REQ-ORCH-005): classify, grant, resolve the playbooks, clamp. The three
  * model slots come from the configuration resolved for the run (ADR-0036: `small_model`, `fallback_model`,
  * `default_summary_model`; none reachable → no request, the fallback intent with the stated reason).
- * `ROTARIS_MODEL_TIER` stays an environment stopgap until ADR-0028 (unset → undetermined → medium with
- * REQ-ORCH-023's header). Decision 5: the intent mapping may be overridden by `<config>/intent-tools.yaml`;
+ * The entry role's tier (REQ-ORCH-023) comes from the configuration since Part K — the slot alias its model
+ * resolved through; none → undetermined → medium with the header. `ROTARIS_MODEL_TIER` was the stopgap until
+ * then. Decision 5: the intent mapping may be overridden by `<config>/intent-tools.yaml`;
  * playbook overrides live in `<config>/playbooks/` and `<workspace>/.rotaris/playbooks/`. Every read is a
  * fresh read (REQ-CONFIG-014, REQ-ORCH-026's reload).
  */
-export const INTENT_ENV_KEYS = {
-  modelTier: 'ROTARIS_MODEL_TIER',
-} as const;
-
 export interface PreflightDeps {
   readonly clocks: Clocks;
   readonly backend: AgentBackend;
@@ -26,19 +23,11 @@ export interface PreflightDeps {
   readonly resolveCredential: () => Promise<string>;
   readonly modelTimeoutMs: number;
   readonly globalDir: string;
-  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly tier: ModelTier | null;
   readonly slots: ClassifierSlots;
   readonly runOverride: 'single' | 'swarm' | null;
   readonly memory: RungMemory;
   readonly log: (m: string) => void;
-}
-
-export function tierFromEnv(env: Readonly<Record<string, string | undefined>>, warn: (m: string) => void): ModelTier | null {
-  const raw = (env[INTENT_ENV_KEYS.modelTier] ?? '').trim().toLowerCase();
-  if (raw === '') return null;
-  if (isModelTier(raw)) return raw;
-  warn(`unrecognised model tier '${raw}'; the tier is undetermined (REQ-ORCH-023)`);
-  return null;
 }
 
 export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): Promise<Preflight> {
@@ -58,7 +47,7 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
   const g = readPlaybookOverrides(join(deps.globalDir, 'playbooks'));
   const w = readPlaybookOverrides(join(ctx.workspaceRoot, WORKSPACE_SCOPE_DIR, 'playbooks'));
   for (const m of [...g.warnings, ...w.warnings]) warn(m);
-  const tier = tierFromEnv(deps.env, warn);
+  const tier = deps.tier;
   const resolved = resolvePlaybooks({ intent: intent.category, tier, roles: [...ROLE_VOCABULARY], entryRole: 'orchestrator', overrides: mergePlaybookOverrides(g.overrides, w.overrides) });
   for (const m of resolved.warnings) warn(m);
   const resolvedPlaybooks: Record<string, NonNullable<Preflight['resolvedPlaybooks'][string]> | null> = {};

@@ -106,6 +106,13 @@ export class ProviderService {
     return discover({ providerId: id, displayName, modelsUrl: url, token, knownLimits: KNOWN_LIMITS, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) });
   }
 
+  /** The base URL a record carries: the instance's stored `api_base`, else the catalogue's default. */
+  private recordBase(id: string, cred: StoredCredential | null): string | null {
+    if (isInstanceId(id)) return cred?.extra['api_base'] ?? this.snapshotRecord(id)?.base_url ?? null;
+    const entry = lookupProvider(id);
+    return entry.ok ? entry.value.baseUrl : null;
+  }
+
   private async persistModels(id: string, displayName: string, family: string | null, baseUrl: string | null, models: readonly DiscoveredModel[]): Promise<Result<{ preserved: number }, Failure>> {
     const previous = this.snapshotRecord(id);
     const picks = assignSlots(models.map((m) => ({ qualifiedId: m.qualifiedId, id: m.id, available: true })));
@@ -129,7 +136,7 @@ export class ProviderService {
     if (key.value.length === 0) return { outcome: 'failed', message: 'API key is required.' };
     const exists = this.deps.credentials.exists(id) || this.snapshotRecord(id) !== null;
     if (exists && !req.replace) return { outcome: 'needs-confirmation', id, message: `Replace the existing provider instance '${req.label}'?` };
-    return this.completeApiKeySignIn(id, req.label.trim(), 'openai-compatible', base.value, key.value, { provider_family: 'openai-compatible', api_base: base.value }, req.allowEmpty ?? false, `Added ${req.label.trim()}; discovered {n} model(s).`);
+    return this.completeApiKeySignIn(id, req.label.trim(), 'openai-compatible', base.value, base.value, key.value, { provider_family: 'openai-compatible', api_base: base.value }, req.allowEmpty ?? false, `Added ${req.label.trim()}; discovered {n} model(s).`);
   }
 
   /** REQ-PROVIDER-050: a built-in API-key provider (deepseek); persist only after discovery with ≥1 model. */
@@ -146,11 +153,12 @@ export class ProviderService {
     const key = headerValidKey(apiKey);
     if (!key.ok) return { outcome: 'failed', message: key.error };
     if (key.value.length === 0) return { outcome: 'failed', message: 'API key is required.' };
-    return this.completeApiKeySignIn(id, entry.value.displayName, null, null, key.value, {}, allowEmpty, `Login complete for ${entry.value.displayName}; discovered {n} model(s).`);
+    // The record carries the catalogue's base URL so the configuration layer needs no catalogue of its own (REQ-PROVIDER-091).
+    return this.completeApiKeySignIn(id, entry.value.displayName, null, null, entry.value.baseUrl, key.value, {}, allowEmpty, `Login complete for ${entry.value.displayName}; discovered {n} model(s).`);
   }
 
-  private async completeApiKeySignIn(id: string, displayName: string, family: string | null, baseUrl: string | null, key: string, extra: Record<string, string>, allowEmpty: boolean, successTemplate: string): Promise<SignInOutcome> {
-    const found = await this.runDiscovery(id, key, baseUrl, displayName);
+  private async completeApiKeySignIn(id: string, displayName: string, family: string | null, discoveryBase: string | null, recordBase: string | null, key: string, extra: Record<string, string>, allowEmpty: boolean, successTemplate: string): Promise<SignInOutcome> {
+    const found = await this.runDiscovery(id, key, discoveryBase, displayName);
     if (!found.ok) {
       // REQ-PROVIDER-054: the key redacted in any error text.
       const message = found.error.message.split(key).join('[redacted]');
@@ -167,7 +175,7 @@ export class ProviderService {
       this.recordError(id, message);
       return { outcome: 'failed', message };
     }
-    const persisted = await this.persistModels(id, displayName, family, baseUrl, found.value);
+    const persisted = await this.persistModels(id, displayName, family, recordBase, found.value);
     if (!persisted.ok) {
       // REQ-PROVIDER-054: roll back the credential just saved.
       await this.deps.credentials.delete(id);
@@ -202,7 +210,7 @@ export class ProviderService {
     const saved = await this.deps.credentials.save(id, { access_token: key.value, refresh_token: '', expires_at: 0, account_id: null, extra });
     if (!saved.ok) return err(saved.error.headline);
     if (models) {
-      const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, isInstanceId(id) ? baseUrl : null, models);
+      const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, isInstanceId(id) ? baseUrl : this.recordBase(id, previous), models);
       if (!p.ok) return err(p.error.headline);
     }
     this.clearError(id);
@@ -243,7 +251,7 @@ export class ProviderService {
       if (found.error.kind === 'auth' && id !== 'codex') { await this.deps.credentials.delete(id); this.deps.log(`Discarded stored authentication for ${this.displayName(id)}.`); }
       return err(m);
     }
-    const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, isInstanceId(id) ? cred.extra['api_base'] ?? null : null, found.value);
+    const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, this.recordBase(id, cred), found.value);
     if (!p.ok) return err(p.error.headline);
     this.clearError(id);
     return ok(`Validated ${this.displayName(id)}; discovered ${found.value.length} model(s).${p.value.preserved > 0 ? ` ${p.value.preserved} previously known model(s) preserved.` : ''}`);
@@ -344,7 +352,7 @@ export class ProviderService {
       if (found.error.kind === 'auth') return { state: 'unauthenticated', detail: found.error.message, available: true };
       return { state: 'error', detail: found.error.message, available: true };
     }
-    const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, isInstanceId(id) ? cred.extra['api_base'] ?? null : null, found.value);
+    const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, this.recordBase(id, cred), found.value);
     if (!p.ok) return { state: 'error', detail: p.error.headline, available: true };
     return { state: 'healthy', detail: `Validated ${this.displayName(id)}; discovered ${found.value.length} model(s).`, available: true };
   }

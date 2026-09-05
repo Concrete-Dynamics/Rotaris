@@ -62,10 +62,15 @@ export interface ReferentialInput {
   /** Configured tool servers by name; none in this build. */
   readonly toolServers?: readonly string[];
   readonly publicToolNames?: readonly string[];
+  /** REQ-CONFIG-034: the snapshot providers marked authenticated; empty means the sign-in hint applies. */
+  readonly authenticatedProviders?: readonly string[];
 }
 
-/** REQ-CONFIG-230: no discovery snapshot exists in this build, so no provider is ever "present" and the hint always applies. */
-export const SIGN_IN_HINT = 'declare a models: entry in agents.yaml or models.yml (provider sign-in is not available in this build)';
+/**
+ * REQ-CONFIG-230 / REQ-WORKSPACE-133: appended to an unconfigured-model message whenever no authenticated provider
+ * snapshot exists; it names no command. (Until Part K no snapshot existed and the hint always applied.)
+ */
+export const SIGN_IN_HINT = 'authenticate a model provider in Settings → Models before a model can be chosen';
 
 /** REQ-CONFIG-231/232: the messages, in order; empty means valid. Never throws. */
 export function referentialMessages(input: ReferentialInput): string[] {
@@ -76,7 +81,13 @@ export function referentialMessages(input: ReferentialInput): string[] {
   const acceptedSet = new Set(accepted);
   const modelKnown = (name: string | null): boolean => name !== null && Object.prototype.hasOwnProperty.call(models, name);
 
-  if (Object.keys(models).length === 0) messages.push(`no models are configured; ${SIGN_IN_HINT}`);
+  const authenticated = new Set(input.authenticatedProviders ?? []);
+  const hint = authenticated.size === 0 ? `; ${SIGN_IN_HINT}` : '';
+  if (Object.keys(models).length === 0) messages.push(`no models are configured${hint}`);
+  // REQ-CONFIG-083 / REQ-PROVIDER-092: a model that names a sign-in provider must name one the snapshot marks authenticated.
+  for (const [name, entry] of Object.entries(models)) {
+    if (entry.auth_provider !== null && !authenticated.has(entry.auth_provider)) messages.push(`models.${name}: auth_provider '${entry.auth_provider}' names no authenticated provider${hint}`);
+  }
 
   for (const [role, persona] of Object.entries(input.personas)) {
     if (!modelKnown(persona.model)) messages.push(`persona ${role}: model '${persona.model}' names no configured model`);
@@ -92,11 +103,11 @@ export function referentialMessages(input: ReferentialInput): string[] {
 
   if (!Object.prototype.hasOwnProperty.call(input.personas, input.defaultPersona)) messages.push(`default_persona '${input.defaultPersona}' names no existing role`);
   const summary = input.slots.default_summary_model;
-  if (summary === null) messages.push('default_summary_model is unset');
+  if (summary === null) messages.push(`default_summary_model is unset${hint}`);
   else if (!modelKnown(summary)) messages.push(`default_summary_model '${summary}' names no configured model`);
   for (const tier of ['small_model', 'medium_model', 'large_model'] as const) {
     const v = input.slots[tier];
-    if (v === null) messages.push(`${tier} is unset`);
+    if (v === null) messages.push(`${tier} is unset${hint}`);
     else if (!modelKnown(v)) messages.push(`${tier} '${v}' names no configured model${isTierAlias(v) ? ' (a tier alias that registered no substitution)' : ''}`);
   }
   const fallback = input.slots.fallback_model;

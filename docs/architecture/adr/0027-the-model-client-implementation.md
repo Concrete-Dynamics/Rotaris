@@ -159,5 +159,6 @@ measured what it was pointed at. The system text now travels as `instructions` (
 blank line) and the structural test carries one and reads it back from the request body. The v7 migration note
 this record wrote for the usage field applies to the prompt shape as well.
 
-**Spike 6's live half** is recorded in `../spikes/responses-dialect.md` with the figures the slice proof measured
-against OpenRouter's endpoint, with the owner's own credential pasted into the product.
+**Spike 6's live half, taken the same day:** four of four against OpenRouter — both dialects stream, first
+delta in under a second, the provider's usage arrives, a bad key keeps status and body, an abort ends as
+`aborted` (`../spikes/responses-dialect.md`). **Consequence 2's fallback is withdrawn from the price list.**

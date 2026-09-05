@@ -5,10 +5,10 @@
 - **Question** (ADR-0027 consequence 2): does a `responses`-dialect request against a **non-vendor** base
   URL, with custom per-request headers and a credential resolved inside the request path, work through
   the SDK's vendor package? If not, the fallback is a hand-written responses dialect behind the same port.
-- **Status: taken in its structural half; the live half is OWED.** No model endpoint and no key exist on
-  the machine this was built on, and the record's boundary forbids using another product's credentials.
-  The live harness is written, gated on an endpoint the owner supplies, and the report says exactly what
-  it will measure.
+- **Status: TAKEN, both halves.** The structural half on 2026-09-03; the live half on 2026-09-05 against
+  OpenRouter through the slice proof, with the owner's own key pasted into the product (see the section at
+  the end). Until then no model endpoint and no key existed on the build machine and the boundary forbade
+  borrowing another product's.
 
 ## Method
 
@@ -71,3 +71,25 @@ Authentication header` with the header present, because the stored value was of 
 OpenRouter's public catalog had "validated" it (OQ-50). The abort case ended `http` rather than `aborted` for the
 same reason. Delta count, time to first delta, total time and usage are **still owed**: the owner re-runs
 `pnpm slice-proof` with an OpenRouter key and the figures land here.
+
+## Live half, taken — 2026-09-05, OpenRouter, `anthropic/claude-haiku-4.5`
+
+Run by `pnpm slice-proof` scenario 4 with the credential the owner stored in the product moments before,
+against `https://openrouter.ai/api/v1`:
+
+| Measurement | `responses` | `chat` |
+|---|---|---|
+| endpoint reached | `…/v1/responses` | `…/v1/chat/completions` |
+| text deltas for "Reply with the single word: pong" | 2 | 2 |
+| time to first delta | 931 ms | 811 ms |
+| total | 950 ms | 831 ms |
+| provider usage | input 15, output 5 | input 15, output 5 |
+| a bad key (`responses`) | `401`, status and body kept: `{"error":{"message":"Missing Authentication header","code":401}}` | — |
+| abort after three deltas (`responses`, "count slowly to 200") | `aborted` | — |
+
+Four of four assertions held. **What it settles:** a non-vendor endpoint serves the `responses` dialect through
+the vendor package's constructor with the same per-request credential and headers as `chat`; the v7 usage
+mapping delivers the figures REQ-MONITOR-081 needs from a real stream; ADR-0027's fallback (a hand-written
+responses dialect) is **not needed** and is no longer priced. **What it does not settle:** OpenRouter's
+`/responses` is one implementation; a second endpoint's shape is a second measurement. The first attempt (above)
+and the fifteenth defect are what the live half cost before it could run.

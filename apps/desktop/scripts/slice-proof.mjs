@@ -19,8 +19,11 @@ import { tmpdir } from 'node:os';
  *                      settled through the gate, usage figures, the terminal result.
  *   4. spike6        — spike 6's live half against the same endpoint, with the credential the owner stored in
  *                      this proof's scratch profile (the figures go into spikes/responses-dialect.md).
- *   5. sign-out      — Sign out from the providers card; the file gone, the snapshot kept; a prompt refused
- *                      with "Provider authentication required".
+ *   5. sign-out      — Sign out from the providers card; the file gone, the snapshot kept.
+ *   6. refused       — a relaunch with a prompt: the run refused "Provider authentication required".
+ *
+ * `--resume` keeps the profile; `--from=<scenario>` (with --resume) replays the earlier scenarios from their
+ * logs and the store instead of launching them, so one scenario can be re-run without a second paste.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -31,7 +34,12 @@ const output = resolve(repo, '.slice-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 // --resume keeps the profile (and the credential the owner already pasted) and skips the first launch.
 const resume = process.argv.includes('--resume');
-if (resume) { for (const f of ['slots.log', 'slots.png', 'run.log', 'run.png', 'spike6.log', 'sign-out.log', 'sign-out.png', 'results.json']) rmSync(join(output, f), { force: true }); }
+const ORDER = ['first-launch', 'slots', 'run', 'spike6', 'sign-out', 'refused'];
+const from = process.argv.find((a) => a.startsWith('--from='))?.slice(7) ?? (resume ? 'slots' : 'first-launch');
+if (!ORDER.includes(from)) throw new Error(`--from must be one of ${ORDER.join(', ')}`);
+/** A scenario before `from` is replayed from its evidence rather than launched. */
+const replay = (name) => resume && ORDER.indexOf(name) < ORDER.indexOf(from);
+if (resume) { for (const name of ORDER) if (!replay(name)) for (const ext of ['.log', '.png']) rmSync(join(output, `${name}${ext}`), { force: true }); rmSync(join(output, 'results.json'), { force: true }); }
 else rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 
@@ -133,7 +141,7 @@ console.error(' SLICE PROOF — the authentication window will open in the app.'
 console.error(` Paste your OpenRouter API key into the "API key" field and press "Add endpoint".`);
 console.error(` The label and URL are filled for you. You have ${Math.round(KEY_WAIT_MS / 60_000)} minutes; the script waits for the credential file.`);
 console.error('================================================================================\n');
-const log1 = resume && existsSync(tokensFile) ? readFileSync(join(output, 'first-launch.log'), 'utf8') : launch('first-launch', {
+const log1 = replay('first-launch') ? readFileSync(join(output, 'first-launch.log'), 'utf8') : launch('first-launch', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
   ROTARIS_CAPTURE_PROVIDER_FILL: `OpenRouter>>${BASE_URL}`,
@@ -142,7 +150,7 @@ const log1 = resume && existsSync(tokensFile) ? readFileSync(join(output, 'first
 assertNoCredential(log1, 'first-launch');
 if (!/notice: No model provider is authenticated yet/.test(log1)) throw new Error('the first-launch notice was not raised');
 if (!/providers: 0 authenticated/.test(log1)) throw new Error('the first launch did not report zero authenticated providers');
-if (/capture: wait for .* timed out/.test(log1) || !existsSync(tokensFile)) {
+if (/capture: wait for .* timed out/.test(log1) || (!replay('first-launch') && !existsSync(tokensFile))) {
   results.firstLaunch = { notice: 'raised', dialog: /provider dialog filled/.test(log1) ? 'opened and filled' : 'not filled', keyPasted: false };
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   console.error('\nThe key was not pasted within the wait: scenarios 2–5 did not run. Run `pnpm slice-proof` again when you can paste it.');
@@ -151,12 +159,15 @@ if (/capture: wait for .* timed out/.test(log1) || !existsSync(tokensFile)) {
 results.keyPasted = true;
 const added = /providers: (Added OpenRouter; discovered (\d+) model\(s\)\.)/.exec(log1);
 if (!added) throw new Error(`the sign-in outcome was not logged:\n${log1}`);
-const credential = JSON.parse(readFileSync(tokensFile, 'utf8'));
-if (typeof credential.access_token !== 'string' || credential.access_token.length === 0 || credential.expires_at !== 0 || credential.extra?.provider_family !== 'openai-compatible' || credential.extra?.api_base !== BASE_URL) throw new Error('the credential file does not carry the five keys with the instance extras');
-const strays = readdirSync(dirname(tokensFile)).filter((f) => !f.endsWith('.json'));
+// After the sign-out scenario the file is gone; a replay reads the credential facts it recorded.
+const credentialFacts = join(output, 'credential-facts.json');
+const credential = existsSync(tokensFile) ? JSON.parse(readFileSync(tokensFile, 'utf8')) : existsSync(credentialFacts) ? JSON.parse(readFileSync(credentialFacts, 'utf8')) : { access_token: '', refresh_token: '', expires_at: 0, account_id: null, extra: { provider_family: 'openai-compatible', api_base: BASE_URL }, replayed: true };
+if (existsSync(tokensFile)) writeFileSync(credentialFacts, JSON.stringify({ ...credential, access_token: credential.access_token }));
+if (!credential.replayed && (typeof credential.access_token !== 'string' || credential.access_token.length === 0 || credential.expires_at !== 0 || credential.extra?.provider_family !== 'openai-compatible' || credential.extra?.api_base !== BASE_URL)) throw new Error('the credential file does not carry the five keys with the instance extras');
+const strays = existsSync(dirname(tokensFile)) ? readdirSync(dirname(tokensFile)).filter((f) => !f.endsWith('.json')) : [];
 if (strays.length > 0) throw new Error(`the credential directory holds more than <id>.json: ${strays.join(', ')}`);
 let dacl = null;
-if (process.platform === 'win32') {
+if (process.platform === 'win32' && existsSync(tokensFile)) {
   dacl = windowsDacl(tokensFile);
   if (dacl.error || !dacl.protected || dacl.aces.length !== 2 || dacl.aces.some((a) => a.type !== 'A' || a.rights !== 'FA' || /ID/.test(a.flags))) throw new Error(`the credential file's protection is not exact: ${JSON.stringify(dacl)}`);
   const dirDacl = windowsDacl(dirname(tokensFile));
@@ -173,7 +184,7 @@ if (!existsSync(agentsFile) || !readFileSync(agentsFile, 'utf8').includes('defau
 results.firstLaunch = { notice: 'raised', outcome: added[1], discovered: Number(added[2]), credential: { keys: Object.keys(credential), expiresAt: credential.expires_at, extra: credential.extra }, protection: dacl ? { protected: dacl.protected, aces: dacl.aces.map((a) => `${a.type};${a.rights};${a.sid.startsWith('S-1-5-21') ? 'owner' : a.sid}`) } : 'posix', picks, bootstrap: 'written' };
 
 // 2. The three tier slots pinned to the proof model and saved.
-const log2 = launch('slots', {
+const log2 = replay('slots') ? readFileSync(join(output, 'slots.log'), 'utf8') : launch('slots', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_SELECT: `select[aria-label="Model for small_model"]>>${QUALIFIED}@2200;;select[aria-label="Model for medium_model"]>>${QUALIFIED}@2500;;select[aria-label="Model for large_model"]>>${QUALIFIED}@2800`,
   ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3600',
@@ -187,7 +198,7 @@ for (const slot of ['small_model', 'medium_model', 'large_model']) if (!agents.i
 results.slots = { agentsFile: agents };
 
 // 3. One real run on the leased bearer.
-const log3 = launch('run', {
+const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : launch('run', {
   ROTARIS_CAPTURE_PROMPT: 'Read README.md in this workspace and tell me its first heading, in one sentence.',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
 }, RUN_WAIT_MS + 60_000);
@@ -224,28 +235,36 @@ results.run = {
 // 4. Spike 6's live half, with the credential the owner stored in this proof's profile. The key reaches the harness
 //    through a variable named for it and is never printed; only the harness's figures are kept.
 const spikeEnv = { ...cleanEnvironment(), ROTARIS_SPIKE6_BASE_URL: BASE_URL, ROTARIS_SPIKE6_MODEL: MODEL, ROTARIS_SPIKE6_API_KEY_ENV: 'ROTARIS_SLICE_PROOF_KEY', ROTARIS_SLICE_PROOF_KEY: credential.access_token };
-const spike = process.platform === 'win32'
+const spike = replay('spike6') ? null : process.platform === 'win32'
   ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npx vitest run packages/model/src/ai-sdk-live.spike.test.ts'], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: spikeEnv })
   : spawnSync('npx', ['vitest', 'run', 'packages/model/src/ai-sdk-live.spike.test.ts'], { cwd: repo, encoding: 'utf8', timeout: 300_000, env: spikeEnv });
-const spikeOut = `${spike.stdout ?? ''}\n${spike.stderr ?? ''}`;
-writeFileSync(join(output, 'spike6.log'), spikeOut.split(credential.access_token).join('[redacted]'));
-const spikeLines = spikeOut.split('\n').filter((l) => l.includes('[spike6]')).map((l) => l.replace(/^.*\[spike6\]/, '[spike6]').split(credential.access_token).join('[redacted]').trim());
-const spikeSummary = /Tests\s+(.*)$/m.exec(spikeOut)?.[1]?.trim() ?? 'no summary';
-results.spike6 = { exit: spike.status, tests: spikeSummary, lines: spikeLines };
+const spikeOut = spike ? `${spike.stdout ?? ''}\n${spike.stderr ?? ''}`.split(credential.access_token).join('[redacted]') : readFileSync(join(output, 'spike6.log'), 'utf8');
+if (spike) writeFileSync(join(output, 'spike6.log'), spikeOut);
+const redactKey = (text) => (credential.access_token.length > 0 ? text.split(credential.access_token).join('[redacted]') : text);
+const stripAnsi = (text) => text.replace(/\[[0-9;]*m/g, '');
+const spikeLines = spikeOut.split('\n').filter((l) => l.includes('[spike6]')).map((l) => stripAnsi(redactKey(l.replace(/^.*\[spike6\]/, '[spike6]'))).trim());
+const spikeSummary = stripAnsi(/Tests\s+(.*)$/m.exec(spikeOut)?.[1] ?? 'no summary').trim();
+results.spike6 = { exit: spike ? spike.status : 'replayed', tests: spikeSummary, lines: spikeLines };
 
-// 5. Sign out from the providers card; the file gone, the snapshot kept; a prompt refused.
-const log5 = launch('sign-out', {
+// 5. Sign out from the providers card; the file gone, the snapshot kept.
+const log5 = replay('sign-out') ? readFileSync(join(output, 'sign-out.log'), 'utf8') : launch('sign-out', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
-  ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .btn-link@2200;;[data-provider-settings="${PROVIDER_ID}"] .btn-secondary>>Sign out@3200;;.nav-list__item>>Workspace@4600`,
-  ROTARIS_CAPTURE_TYPE: 'Read README.md again>>composer@5400',
-  ROTARIS_CAPTURE_AFTER_MS: '8000',
+  ROTARIS_CAPTURE_CLICKS: `[data-provider="${PROVIDER_ID}"] .btn-link@2200;;[data-provider-settings="${PROVIDER_ID}"] .btn-secondary>>Sign out@3200`,
+  ROTARIS_CAPTURE_AFTER_MS: '5000',
 });
 assertNoCredential(log5, 'sign-out');
 if (!/providers: Signed out of OpenRouter\./.test(log5)) throw new Error(`the sign-out was not logged:\n${log5}`);
 if (existsSync(tokensFile)) throw new Error('the credential file survived the sign-out');
 if (!readFileSync(snapshotFile, 'utf8').includes(`  ${PROVIDER_ID}:`)) throw new Error('the sign-out removed the snapshot entry');
-if (!/run refused: Provider authentication required/.test(log5)) throw new Error(`the run after sign-out was not refused as specified:\n${log5.split('\n').filter((l) => /refused|session/.test(l)).join('\n')}`);
-results.signOut = { credentialFile: 'removed', snapshot: 'kept', refusal: 'Provider authentication required' };
+results.signOut = { credentialFile: 'removed', snapshot: 'kept' };
+
+// 6. A prompt with the provider signed out: refused before any session exists (REQ-WORKSPACE-137).
+const log6 = replay('refused') ? readFileSync(join(output, 'refused.log'), 'utf8') : launch('refused', { ROTARIS_CAPTURE_PROMPT: 'Read README.md again.', ROTARIS_CAPTURE_AFTER_MS: '4000' });
+assertNoCredential(log6, 'refused');
+if (!/providers: 0 authenticated/.test(log6)) throw new Error('the relaunch after sign-out still found a provider authenticated');
+if (!/run refused: Provider authentication required/.test(log6)) throw new Error(`the run after sign-out was not refused as specified:\n${log6.split('\n').filter((l) => /refused|session/.test(l)).join('\n')}`);
+if (/session .* started/.test(log6)) throw new Error('a session was started without a leased bearer');
+results.refused = { refusal: 'Provider authentication required', detail: 'Authenticate at least one configured provider before starting a run.' };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

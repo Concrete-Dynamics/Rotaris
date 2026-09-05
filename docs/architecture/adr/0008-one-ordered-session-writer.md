@@ -482,3 +482,9 @@ status there, because `REQ-SESSION-093` is the requirement about what is persist
 takes `REQ-MONITOR-029`'s mapping. Tested in `run.test.ts`.
 
 **Found: nothing in this record's own mechanism.** What the first run found is ADR-0043's (below).
+
+**2026-09-05, the control channel's units.** `queuePrompt`, `editQueuedPrompt`, `removeQueuedPrompt`,
+`triggerQueuedPrompts` (the atomic move over every QUEUED row, one transaction), `pauseAtLimit` (durable: the
+status, the count, the limit, the timeline entry) and `resolvePause` (durable: the status the resolution writes
+clears the paused-at-limit condition in the same act, REQ-SESSION-110) — each one transaction with its timeline
+entry, through the one writer. **Found: nothing.**

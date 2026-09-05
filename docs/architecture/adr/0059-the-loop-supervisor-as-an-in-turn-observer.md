@@ -130,3 +130,8 @@ nine thresholds (REQ-CONFIG-136/137) reach the supervisor from the configuration
 classifier model is the section's `model` resolved through the slots; Settings → Runtime's "Circuit breaker"
 toggle writes the flag on Save (REQ-CONFIG-323) and the strip's "● CB armed" follows the loaded value.
 `ROTARIS_CIRCUIT_BREAKER=off` stays the host-level override. **Found: nothing.**
+
+**Third execution, 2026-09-05, the producers.** `noteUserInstruction()` now has its callers — an injected
+steer, a queued prompt's consumption and a todo edit each reset the consecutive counter (REQ-ORCH-105) — and
+`observeStuck()` its producer: an empty reply with no tool call is read as the runtime's "cannot make progress"
+report (REQ-ORCH-096). "Revisit if" clause one is met. **Found: nothing.**

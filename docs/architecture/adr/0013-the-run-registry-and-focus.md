@@ -185,3 +185,8 @@ map with no run; `Sessions.prompt` on it starts a run on the same writer and own
 the controls address the continued run as they addressed the first. `session.resume` is refused with
 "Finish or cancel the active run before switching sessions." while any run is active on the single-run host
 (`REQ-SHELL-126`), checked at both ends of the boundary. **Found: nothing.**
+
+**Fifth execution, 2026-09-05, with the control channel's operations.** Every operation is addressed by the
+session id the sending window resolved; the registry adds `continueSession` — a session command, since a paused
+session has no live run to control (REQ-MONITOR-011) — beside the four predicates it already supplied. A pause
+window resolves through that command and main closes it on success. **Found: nothing.**

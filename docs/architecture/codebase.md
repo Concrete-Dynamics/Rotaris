@@ -167,6 +167,15 @@ screen's live state on top. `ROTARIS_MODEL_DIALECT=scripted` selects the scripte
 unreachable entry model refuses the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478). The classifier,
 summariser and loop slots authenticate with the entry model's resolver until ADR-0029 (credentials) lands.
 
+16. **the control channel (2026-09-05):** REQ-MONITOR-004's twenty-two operations behind ADR-0010's channel 1 — the
+   skeleton's list was the runtime's, not the requirement's, and is replaced. Queued prompts are a session-owned
+   table consumed exactly once at every iteration boundary into a "Queued Prompts" phase; a steer is injected at
+   the agent's next step and a finishing agent takes another round; a pause is whole-run and graceful, the session
+   `paused` with its row and the composer's Continue running it on; the message limit pauses the run durably with
+   the count and the limit, the dialog in its own window offers continue, double and cancel, and a session found
+   paused at the limit raises it on attach; todo edits, the entry model and reasoning switch, the shutdown announce;
+   the quit path during a run measured. **Found:** the steer's peek drained the queue — the twelfth defect (ADR-0010).
+
 15. **configuration as files (2026-09-05):** `agents.yaml` and `models.yml` at both scopes are loaded once per run
    start with the screen's live state on top (ADR-0036, ADR-0037): the four merge classes, the typed `models:` /
    `personas:` / `runtime:` / `compressor:` / `circuit_breaker:` sections, tier aliases and reasoning synthesis, the
@@ -321,13 +330,30 @@ then Discard writes nothing; the composer's control writes `runtime.permission_m
 with `max_depth: many` refuses the run naming the file, the workspace scope and `runtime.max_depth`, and the corrected
 file runs to completion. Its evidence lands under `.config-proof/`; the load time is read from the app log.
 
+**The control channel.** `contracts/src/control.ts` (the twenty-two operations, the pause payload), store v6
+(`queued_prompts`, `sessions.message_limit`, `sessions.paused_at_count`), the writer's units, `engine/src/run/run.ts`
+(pause, the limit, the queue's consumption, steering, todo edits, the entry switch), `run/turn.ts` (the injection,
+the extra round, the stuck producer), `Sessions.control` and `Sessions.continueSession`; `run.paused` and
+`session.continue` cross the boundary; main opens the pause window (`?role=pause`) and relays the continuation;
+`ui/src/PauseDialog.tsx` and the composer's queue panel, Steer, Pause, Continue, the confirmations and the run
+header's selectors. Decisions taken here for the owner: a manual pause ends the run as `user_cancelled` (the closed
+set has no `paused`); the pause at the limit writes no terminal pair; operations with no mechanism answer false.
+`ROTARIS_CAPTURE_TYPE`, `ROTARIS_CAPTURE_PAUSE_ANSWER` and `ROTARIS_CAPTURE_QUIT_MS` are verification seams.
+
+**What `pnpm part-j-proof` does.** It builds Electron and launches the app six times against scratch stores: a
+message typed during a run is queued and consumed once as a completed task; a steer is submitted from the composer's
+card and injected; Pause then the composer's Continue run leave the pause row and two run starts; a `message_limit`
+of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
+is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
+records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.part-j-proof/`.
+
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half (an endpoint from the owner); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the pause-resolution dialogs (`REQ-ORCH-086`, `REQ-SESSION-109/110`), steering and todo corrections, the stuck report's producer (`REQ-ORCH-096`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021), OQ-39's sizing under load; the remaining 17 control ops; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the discovery layers and `mcp_servers`, secrets, providers and credentials (ADR-0028/0029, `ROTARIS_MODEL_TIER`), REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the discovery layers and `mcp_servers`, secrets, providers and credentials (ADR-0028/0029, `ROTARIS_MODEL_TIER`), REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |

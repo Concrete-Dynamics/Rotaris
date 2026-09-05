@@ -43,7 +43,10 @@ export class SummaryWriter {
     if (generation <= this.lastGeneration) return;
     this.lastGeneration = generation;
     this.chain = this.chain.then(async () => {
-      const row = read();
+      // Off the path means AFTER the path may have ended: a store closed behind a queued rebuild (the run over, the
+      // test's afterEach) is not a summary fault; the previous file stays in force and the chain never rejects.
+      let row: SessionRow | undefined;
+      try { row = read(); } catch (cause) { this.deps.warn(`summary.md was not rebuilt (generation ${generation}): ${String(cause instanceof Error ? cause.message : cause)}`); return; }
       if (!row) return;
       const r = await replaceDocument(this.deps.file, renderSummary(row), { ladder: SUMMARY_LADDER, timers: this.deps.timers, createParent: true });
       if (!r.ok) this.deps.warn(`summary.md could not be replaced and the previous one stays in force: ${r.error.headline}`);

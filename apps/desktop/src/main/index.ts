@@ -116,7 +116,18 @@ async function main(): Promise<void> {
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
   let currentWorkspaceId: string | undefined;
+  // The window paints BEFORE the workspace opens (REQ-STARTUP-156's first paint comes first), so a view's start-time
+  // read — the Overview's session list and repository read (REQ-GIT-102: "beginning after the window has first been
+  // drawn") — arrives while no workspace is open yet. Found on the Overview's first execution (ADR-0055 note): those
+  // reads wait, bounded, for the open in flight instead of being refused with "no workspace".
+  let workspaceReady: Promise<unknown> = Promise.resolve();
+  const awaitWorkspace = () => Promise.race([workspaceReady, new Promise<void>((r) => clocks.timers.after(millis(30_000), r))]);
   const openWorkspace = async (root: string): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
+    const opening = openWorkspaceInner(root);
+    workspaceReady = opening.catch(() => undefined);
+    return opening;
+  };
+  const openWorkspaceInner = async (root: string): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
     const key = canonicalPath(root);
     let svc = services.get(key);
     if (!svc) {
@@ -713,7 +724,10 @@ async function main(): Promise<void> {
       case 'prefs.get':
         return { ok: true, value: { value: preferences.read(req.key) } };
       case 'prefs.set': {
-        if (req.key === 'ui/reduced_motion') {
+        if (req.key === 'panels/overview') {
+          if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
+          await preferences.write(req.key, req.value);
+        } else if (req.key === 'ui/reduced_motion') {
           if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
           await preferences.write(req.key, req.value);
         } else {
@@ -734,6 +748,7 @@ async function main(): Promise<void> {
         return { ok: true, value: { sessionId: r.sessionId } };
       }
       case 'session.list': {
+        await awaitWorkspace();
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
         const r = await runHost.request({ kind: 'session.list', workspaceId: currentWorkspaceId }, millis(5_000));
         return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
@@ -756,6 +771,18 @@ async function main(): Promise<void> {
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
         const r = await svc.link.request({ kind: 'config.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(10_000));
         return r.kind === 'config.snapshot' ? { ok: true, value: r.snapshot } : refusal(r, 'The configuration could not be read');
+      }
+      case 'repository.read': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        // REQ-GIT-102: five reads at 15 s each is the bound; the request waits for all of them.
+        const r = await svc.link.request({ kind: 'repository.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(80_000));
+        if (r.kind !== 'repository.state') return refusal(r, 'The repository could not be read');
+        const st = r.state;
+        log(`repository ${canonicalPath(currentWorkspace)}: git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? '-'} base=${st.base ?? '-'} +${st.ahead}/-${st.behind} touched=${st.touched} uncommitted=${st.uncommitted}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''} in ${st.readMs} ms`);
+        return { ok: true, value: st };
       }
       case 'config.save':
       case 'config.setField': {
@@ -1063,7 +1090,21 @@ async function main(): Promise<void> {
     const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
     const wait = process.env['ROTARIS_CAPTURE_WAIT'];
     const waitBound = Number(process.env['ROTARIS_CAPTURE_WAIT_MS'] ?? 600_000);
+    // ROTARIS_CAPTURE_END_VIEW=<n>: open view n (Ctrl+n) once the wait is over and before the capture, so a proof
+    // can drive a run from the Workspace view and read the Overview afterwards. ROTARIS_CAPTURE_PROBE="selector;;…":
+    // each selector's text and data-* attributes logged as JSON before the capture — what a proof asserts against.
+    const endView = Number(process.env['ROTARIS_CAPTURE_END_VIEW'] ?? 0);
+    const probes = (process.env['ROTARIS_CAPTURE_PROBE'] ?? '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
     const finish = () => clocks.timers.after(millis(after), async () => {
+      if (endView > 0) {
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(endView), modifiers: ['control'] });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(endView), modifiers: ['control'] });
+        await new Promise((r) => clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_END_VIEW_MS'] ?? 2_500)), () => r(undefined)));
+      }
+      for (const selector of probes) {
+        const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
+        log(`capture: probe ${selector} → ${JSON.stringify(found)}`);
+      }
       const img = await win.webContents.capturePage();
       writeFileSync(capture, img.toPNG());
       log(`captured ${capture}`);

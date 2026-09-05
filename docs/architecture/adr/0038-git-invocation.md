@@ -134,3 +134,29 @@ likewise runs "before any Git call" at this boundary.
 A requirement appears that the product function with no Git installed, which `REQ-GIT-104` currently
 contradicts by specifying that state in detail; or `REQ-GIT-013` is relaxed so error text need not be
 Git's own — that single constraint is doing most of the work here.
+
+## First execution — 2026-09-05, the repository card's five reads (Part M)
+
+*Recorded under GD-10. The helper as decided; nothing in this record was falsified.*
+
+**Built and run** (`packages/workspace/src/git/invoke.ts`, `git/repository.ts`; the workspace service answers
+`repository.read`): the one helper — an argument vector in, `-C <workspace>` prepended so the working tree is named on
+every invocation, REQ-GIT-031's fourteen variables deleted from a copy of the environment and everything else passed
+through, `windowsHide` so no console window appears (REQ-GIT-102), stdout and stderr captured as bytes and decoded
+UTF-8 with replacement, the caller's timeout from the clock port (never `Date.now`, which the lint refused on the
+first draft), the raw texts and the exit status returned without interpretation; REQ-GIT-001's network set refused
+at the chokepoint before anything spawns; REQ-GIT-033's rendering computed from the same vector. Above it,
+REQ-MONITOR-168's reads in order — `--version` (REQ-GIT-103: whether Git exists is asked of Git), `rev-parse
+--is-inside-work-tree` (whether the folder is a repository, asked of Git), the branch, the upstream and the
+left-right count, `status --porcelain` — each bounded at 15 s, each failure an empty value and a name in `failed`.
+
+**Measured** (`pnpm overview-proof`, this machine, Git 2.41 for Windows): the five reads on a one-commit repository
+take **≈430 ms** together, at start and again after a run; with `PATH` emptied of Git the version read fails, every
+value is empty and **no dialog appears** — the window keeps painting. The unit test exercises the scrub, the
+refusal, the rendering, a missing executable, a non-repository and a fresh repository it creates (≈1.6 s for the
+five reads there, the first `git` start included).
+
+**What was not built, said so:** consequence 1's fixed-identity notice when Git is missing (the card shows its
+empty state; the notice is the Git view's), the three phrase matches of REQ-GIT-010/012, REQ-GIT-036's reference-name
+check, every operation that writes; and the timeout path has no test that reaches it (no Git read on this machine
+takes 15 s) — it is read, not measured.

@@ -15,3 +15,4 @@ export * from './settings/config-state.js';
 export * from './settings/ConfigSettings.js';
 export * from './settings/Providers.js';
 export * from './ProviderDialog.js';
+export * from './OverviewView.js';

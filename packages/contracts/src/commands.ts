@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ControlRequestSchema } from './control.js';
 import { HOOK_AGENT_IDS } from './hooks.js';
 import { PROVIDER_DIALOG_MODES } from './providers.js';
+import { PaneLayoutSchema } from './repository.js';
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -25,11 +26,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shell.hello') }),
   z.object({ kind: z.literal('theme.get') }),
   z.object({ kind: z.literal('theme.set'), name: z.string().min(1) }),
-  z.object({ kind: z.literal('prefs.get'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab']) }),
-  z.object({ kind: z.literal('prefs.set'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab']), value: z.union([z.boolean(), z.string()]) }),
+  z.object({ kind: z.literal('prefs.get'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab', 'panels/overview']) }),
+  /** REQ-SHELL-069: a pane layout is a versioned record under `panels/`, per user. */
+  z.object({ kind: z.literal('prefs.set'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab', 'panels/overview']), value: z.union([z.boolean(), z.string(), PaneLayoutSchema]) }),
   /** REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`. */
   z.object({ kind: z.literal('session.start'), prompt: z.string().min(1) }),
   z.object({ kind: z.literal('session.list') }),
+  /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */
+  z.object({ kind: z.literal('repository.read') }),
   z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),

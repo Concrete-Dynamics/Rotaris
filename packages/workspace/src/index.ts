@@ -24,5 +24,7 @@ export const GIT_ENV_DENYLIST = [
 
 /** REQ-GIT-001: the network subcommands the helper rejects at its one chokepoint. */
 export const GIT_NETWORK_SUBCOMMANDS = ['fetch', 'pull', 'push', 'clone', 'ls-remote', 'remote', 'submodule'] as const;
+export * from './git/invoke.js';
+export * from './git/repository.js';
 export * from './backup.js';
 export * from './restore.js';

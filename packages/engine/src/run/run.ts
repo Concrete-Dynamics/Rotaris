@@ -1,4 +1,4 @@
-import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId } from '@rotaris/kernel';
+import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
 import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
@@ -170,6 +170,9 @@ export class Run {
   private lastFailure: string | null = null;
   private todo: Todo;
   private aggregates: Aggregates;
+  /** REQ-MONITOR-166: the token history, sampled every 10 s while live and once at the end; 120 kept, persisted with the session. */
+  private tokenSamples: [string, number][];
+  private sampler: TimerHandle | null = null;
   private result: RunResult | null = null;
   private readonly dispatched = new Map<string, string>();
   private children: IterationChildren | null = null;
@@ -195,6 +198,7 @@ export class Run {
     this.todo = deps.resumeTodo ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit) : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
+    this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
     this.iterationsCompleted = stored?.iterations_completed ?? 0;
     this.initialIterations = this.iterationsCompleted;
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
@@ -283,6 +287,8 @@ export class Run {
         this.deps.warn(perm.reason);
       }
       this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0 });
+      // REQ-MONITOR-166: sampled by the run, not by a view — the cadence from the clock port, never a bare timer.
+      this.sampler = clocks.timers.every(TOKEN_SAMPLE_PERIOD, () => this.sampleTokens(true));
       await this.drain();
       // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
@@ -514,7 +520,9 @@ export class Run {
     const count = this.iterationsCompleted;
     this.pausedAtLimit = { count, limit };
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
-    writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), iterations_completed: count, todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()) });
+    this.sampler?.cancel();
+    this.sampleTokens(false);
+    writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: count, todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()) });
     owner.flushPending();
     try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the pause failed on ${this.sessionId}: ${String(cause)}`); }
     const usage = this.aggregates.usagePayload();
@@ -591,9 +599,17 @@ export class Run {
     return { ok: true, effective: change.effective };
   }
 
+  /** REQ-MONITOR-166: one sample of the cumulative total; the oldest of 120 discarded; a save publishes it. */
+  private sampleTokens(save: boolean): void {
+    if (this.ended) return;
+    this.tokenSamples.push([toIsoUtc(this.deps.clocks.wall.instant()), this.aggregates.totalTokens]);
+    if (this.tokenSamples.length > TOKEN_SAMPLE_CAP) this.tokenSamples.splice(0, this.tokenSamples.length - TOKEN_SAMPLE_CAP);
+    if (save) this.saveRunning({});
+  }
+
   private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }): void {
     const r = this.deps.writer.save('running', {
-      ...this.aggregates.patch(), iterations_completed: this.iterationsCompleted,
+      ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: this.iterationsCompleted,
       todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()),
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),
       ...(extra.permission_mode === undefined ? {} : { permission_mode: extra.permission_mode }),
@@ -637,13 +653,16 @@ export class Run {
     // (logging cleanup: the session log is not built — REQ-SESSION-142 lands with its own mechanism.)
     step('terminal-transaction', () => {
       // REQ-SESSION-093's row, REQ-SESSION-094's lock release, session.end then result (REQ-SESSION-095), the terminal save.
+      // REQ-MONITOR-166: once more at the terminal state, then the sampler goes.
+      this.sampler?.cancel();
+      this.sampleTokens(false);
       const systemRow = classified.result === 'interrupted' ? (this.pauseRequested ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
         : classified.result === 'failed' || classified.result === 'error' || status === 'failed' ? `Run failed: ${this.lastFailure ?? stopReason}`
           : summary.message;
       const r = writer.endRun({
         status, pid: this.deps.pid, host: this.deps.host, systemRow,
         patch: {
-          ...this.aggregates.patch(), stop_reason: stopReason, iterations_completed: this.iterationsCompleted,
+          ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), stop_reason: stopReason, iterations_completed: this.iterationsCompleted,
           summary_status: summary.status, summary_severity: summary.severity, summary_text: summary.message,
           todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()),
         },
@@ -666,6 +685,16 @@ export class Run {
     this.ended = true;
     return result;
   }
+}
+
+/** REQ-MONITOR-166: every 10 s while the session's status claims a live run; the most recent 120 samples kept. */
+export const TOKEN_SAMPLE_PERIOD = millis(10_000);
+export const TOKEN_SAMPLE_CAP = 120;
+export function parseTokenSamples(json: string): [string, number][] {
+  try {
+    const v = JSON.parse(json) as unknown;
+    return Array.isArray(v) ? v.filter((x): x is [string, number] => Array.isArray(x) && typeof x[0] === 'string' && typeof x[1] === 'number').slice(-TOKEN_SAMPLE_CAP) : [];
+  } catch { return []; }
 }
 
 /** REQ-ORCH-019/020: the playbook after the role's own instructions, once. */

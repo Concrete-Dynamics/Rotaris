@@ -50,6 +50,8 @@ export interface SessionRow {
   // v6 — REQ-ORCH-084/087: the message limit in force and the count reached while paused at it.
   readonly message_limit: number | null;
   readonly paused_at_count: number | null;
+  // v7 — REQ-MONITOR-166: the token history as the run sampled it, a JSON array of [at, total].
+  readonly token_samples: string;
 }
 /** The run-recorded columns a save may carry (REQ-SESSION-168: aggregates copied on every persist). */
 export interface SessionRunPatch {
@@ -70,6 +72,7 @@ export interface SessionRunPatch {
   readonly todo?: string | null;
   readonly progress?: string | null;
   readonly message_limit?: number | null;
+  readonly token_samples?: string;
 }
 /** REQ-CHAT-038: one queued prompt as stored. */
 export interface QueuedPromptRow {
@@ -144,6 +147,7 @@ export interface AuditRow {
   readonly rule_id: string;
   readonly source: string;
 }
+export interface ToolCallCountRow { readonly tool_name: string; readonly count: number; readonly agents: number }
 export interface ToolCallRow {
   readonly session_id: string;
   readonly ordinal: number;
@@ -256,7 +260,8 @@ export class StoreDal {
           summary_text = coalesce(@summary_text, summary_text),
           todo = coalesce(@todo, todo),
           progress = coalesce(@progress, progress),
-          message_limit = coalesce(@message_limit, message_limit)
+          message_limit = coalesce(@message_limit, message_limit),
+          token_samples = coalesce(@token_samples, token_samples)
         WHERE session_id = @session_id`),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
@@ -329,6 +334,8 @@ export class StoreDal {
       settleToolCall: db.prepare('UPDATE tool_calls SET status = ?, elapsed_ms = ?, is_error = ?, entry = ? WHERE session_id = ? AND ordinal = ? AND status = \'running\''),
       oldestToolCall: db.prepare('DELETE FROM tool_calls WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM tool_calls WHERE session_id = ?)'),
       toolCallsOf: db.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY ordinal'),
+      // REQ-MONITOR-167: per-tool totals across the agents of one session, most-called first.
+      toolCallCounts: db.prepare('SELECT tool_name, COUNT(*) AS count, COUNT(DISTINCT agent_name) AS agents FROM tool_calls WHERE session_id = ? GROUP BY tool_name ORDER BY count DESC, tool_name'),
       insertIssue: db.prepare(`INSERT INTO issues (session_id, ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata)
         VALUES (@session_id, @ordinal, @id, @recorded_at, @kind, @severity, @actor, @message, @evidence_ref, @metadata)`),
       oldestIssue: db.prepare('DELETE FROM issues WHERE session_id = ? AND ordinal = (SELECT min(ordinal) FROM issues WHERE session_id = ?)'),
@@ -436,6 +443,10 @@ export class StoreDal {
   toolCallsOf(id: SessionId): ToolCallRow[] {
     return this.stmts['toolCallsOf']!.all(id) as ToolCallRow[];
   }
+  /** REQ-MONITOR-167: `{ tool_name, count, agents }` per tool, most-called first (ties by name). */
+  toolCallCounts(id: SessionId): ToolCallCountRow[] {
+    return this.stmts['toolCallCounts']!.all(id) as ToolCallCountRow[];
+  }
   insertIssue(row: Omit<IssueRow, 'session_id'> & { readonly session_id: SessionId }): void {
     this.stmts['insertIssue']!.run(row);
   }
@@ -488,6 +499,7 @@ export class StoreDal {
       tool_calls: patch.tool_calls ?? null, compressions: patch.compressions ?? null,
       summary_status: patch.summary_status ?? null, summary_severity: patch.summary_severity ?? null, summary_text: patch.summary_text ?? null,
       todo: patch.todo ?? null, progress: patch.progress ?? null, message_limit: patch.message_limit ?? null,
+      token_samples: patch.token_samples ?? null,
     });
   }
   /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */

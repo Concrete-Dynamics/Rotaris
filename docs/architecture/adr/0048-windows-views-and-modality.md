@@ -150,3 +150,12 @@ Renderer memory becomes the constraint that breaks the benchmark's memory tripwi
 machine budget — the first thing to give would be keeping hidden persona windows alive, which trades
 "reopening is instantaneous" for footprint and would need a requirement change rather than an
 implementation change.
+
+**Third execution — 2026-09-05, the startup view drawn (Part M).** `overview` is the first primary view mounted by
+name beyond Workspace and Settings: the header (REQ-MONITOR-164), the resizable two-column body (165), the four metric
+cards, the sessions card as a run switcher (171), and the right column's four tiles in REQ-MONITOR-173's order — the
+credit tile and the limits card in their empty states (no hosted account, no usage figures exist in this build), the
+agent-tree card on the SAME `AgentTree` component the Workspace sidebar uses (REQ-MONITOR-038), the proposals card
+empty (no Library yet). "List sessions" opens the existing browser; "New session" follows nothing and opens the
+Workspace composer, refused with REQ-SHELL-125's sentence while a run is active — that requirement's dialog (worktree
+and sandbox choices) is owed with the Git view. **Found:** the start-time read (ADR-0055 note).

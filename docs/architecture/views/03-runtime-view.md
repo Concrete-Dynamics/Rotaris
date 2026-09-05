@@ -116,7 +116,7 @@ continuation payload built to REQ-SESSION-115's budgets).
 `teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): the stop reason classified to the
 terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / REQ-MONITOR-029) →
 `session_end` hooks → `run_end` timeline entry → pending publications flushed → **the terminal transaction**
-(the system row, the lock release, `session.end` then `result`, the terminal save with aggregates, todo and
+(the token history's last sample — the run samples the cumulative total every 10 s on the clock port while live, each a status save and so a whole-session update — then the system row, the lock release, `session.end` then `result`, the terminal save with aggregates, todo and
 progress — one durable transaction) → the bus drained → the hooks advisory → every per-session binding removed.
 Main presents `run.result` once as the notice.
 
@@ -124,7 +124,7 @@ Main presents `run.result` once as the notice.
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status, workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count), truncation facts | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause` |
+| `sessions` | the session record: status, workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause` |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192) | `appendRow`, `settleRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |

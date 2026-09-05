@@ -6,7 +6,7 @@ import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
 import { SessionWriter, toTranscriptRow, type Committed } from './session-writer.js';
 import { EventBus } from './run/event-bus.js';
-import { Run, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { parseTokenSamples, Run, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
@@ -171,6 +171,12 @@ export interface SessionListItem {
   readonly detail: string;
   readonly awaitingInput: boolean;
   readonly stale: boolean;
+  // REQ-MONITOR-171: what the Overview's sessions card shows per row.
+  readonly tokens: number;
+  readonly durationLabel: string;
+  readonly busy: boolean;
+  /** REQ-MONITOR-172: null when no requirement is attached, and then no tag at all. */
+  readonly requirementId: string | null;
 }
 
 export interface ResumeSuccess {
@@ -225,6 +231,15 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   ].join('\n');
 }
 
+/** REQ-MONITOR-171: the run's duration as `m:ss` / `h:mm:ss`; empty before any run. */
+export function durationLabel(startedAt: string | null, until: string): string {
+  if (!startedAt) return '';
+  const ms = Math.max(0, new Date(until).getTime() - new Date(startedAt).getTime());
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
 function relativeTime(updatedAt: string, now: number): string {
   const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
   if (elapsed < 60_000) return 'just now';
@@ -241,7 +256,12 @@ export interface StartRefusal {
   readonly result: { status: 'error'; session_id: string; stop_reason: ''; summary: string; error: string };
 }
 
-export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = []): SessionRecord {
+/** REQ-MONITOR-166: the cost label carries its own qualifier; no rate is configured in this build, so the price is unknown. */
+export function costLabelOf(cost: string): SessionRecord['costLabel'] {
+  return { text: cost === '0' || cost === '' ? 'price not established' : `${cost} (price not established)`, qualifier: 'unknown' };
+}
+
+export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = []): SessionRecord {
   return {
     id: r.session_id,
     executionStatus: r.execution_status,
@@ -256,6 +276,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     tokenUsage: { input: r.tokens_input, output: r.tokens_output },
     cost: r.cost,
     stopReason: r.stop_reason,
+    runStartedAt: r.run_started_at,
     iterationsCompleted: r.iterations_completed,
     summary: r.summary_status && r.summary_severity && r.summary_text ? { status: r.summary_status, severity: r.summary_severity, message: r.summary_text } : null,
     permissionMode: r.permission_mode,
@@ -265,6 +286,9 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     queuedPrompts: [...queued],
     messageLimit: r.message_limit,
     pausedAtCount: r.paused_at_count,
+    usageHistory: parseTokenSamples(r.token_samples),
+    costLabel: costLabelOf(r.cost),
+    toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
   };
 }
 
@@ -334,6 +358,10 @@ export class Sessions {
         detail: row.workspace_root,
         awaitingInput: parsePending(row.pending_approvals).length > 0,
         stale: isActiveStatus(row.execution_status) && !live,
+        tokens: row.tokens_input + row.tokens_output,
+        durationLabel: durationLabel(row.run_started_at, isActiveStatus(row.execution_status) && live ? new Date(now).toISOString() : row.updated_at),
+        busy: isActiveStatus(row.execution_status) && live,
+        requirementId: null,
       };
     });
   }
@@ -372,7 +400,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -416,7 +444,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;

@@ -64,8 +64,10 @@ function log(message: string, level: 'info' | 'warn' = 'info'): void {
 
 /**
  * Verification only: a scripted client. `ROTARIS_SCRIPT` names the steps, comma-separated, one per model
- * call — `glob`, `read`, `write`, `rm`, `git`, `push`, `edit` request a tool call; anything else, or the end of
- * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
+ * call — `glob`, `read`, `write`, `rm`, `git`, `push`, `edit` request a tool call; `wait:<ms>` holds the call that
+ * long on the clock port and then answers (the Overview proof needs a run longer than one token-sample period);
+ * anything else, or the end of the list, answers with a short streamed reply, one delta per 120 ms so the growth
+ * tick is visible.
  */
 function scriptedClient(c: Clocks): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
@@ -117,7 +119,15 @@ function scriptedClient(c: Clocks): ModelClient {
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }
-      const step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
+      let step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
+      const wait = /^wait:(\d+)$/.exec(step);
+      if (wait) {
+        // The wait is a prefix on this call, not a call of its own: the step after it answers in the same call.
+        await new Promise<void>((resolve) => { const t = c.timers.after(millis(Number(wait[1])), resolve); req.signal.addEventListener('abort', () => { t.cancel(); resolve(); }, { once: true }); });
+        if (req.signal.aborted) { yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
+        scripts[who]?.splice((calls[who] ?? 1) - 1, 1);
+        step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
+      }
       if (step === 'fail') {
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
         return;

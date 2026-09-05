@@ -352,6 +352,8 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     // REQ-EVENTS-117's axes (REQ-EVENTS-175: 100 ms): each is an index read, never a scan.
     expect(plan("SELECT * FROM events WHERE session_id = 's' AND kind = 'tool.start' ORDER BY ordinal")).toContain('events_by_kind');
     expect(plan("SELECT * FROM events WHERE session_id = 's' AND iteration = 3 ORDER BY ordinal")).toContain('events_by_iteration');
+    // REQ-MONITOR-167: the per-tool counts read one session's calls through the primary key, never a scan.
+    expect(plan("SELECT tool_name, COUNT(*) AS count, COUNT(DISTINCT agent_name) AS agents FROM tool_calls WHERE session_id = 's' GROUP BY tool_name")).toContain('sqlite_autoindex_tool_calls_1');
     expect(plan("SELECT * FROM events WHERE session_id = 's' AND at >= ? AND at <= ? ORDER BY ordinal", 'a', 'b')).toContain('events_by_at');
     // REQ-SESSION-192: the resident window is read through its partial index.
     expect(plan("SELECT * FROM transcript_rows WHERE session_id = 's' AND page IS NULL ORDER BY row_index")).toContain('transcript_resident');
@@ -449,9 +451,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v6; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v7; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(6);
+    expect(CURRENT_SCHEMA_VERSION).toBe(7);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });

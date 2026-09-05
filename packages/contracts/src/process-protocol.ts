@@ -6,6 +6,7 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
+import { RepositoryStateSchema } from './repository.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -87,6 +88,8 @@ export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
 export const SessionListItemSchema = z.object({
   sessionId: z.string(), label: z.string(), status: z.string(), branch: z.string(), relativeTime: z.string(), detail: z.string(),
   awaitingInput: z.boolean(), stale: z.boolean(),
+  /** REQ-MONITOR-171/172: the sessions card's token and duration labels, the busy flag, and a requirement id or none. */
+  tokens: z.number().int().nonnegative(), durationLabel: z.string(), busy: z.boolean(), requirementId: z.string().nullable(),
 });
 export type SessionListItemPayload = z.infer<typeof SessionListItemSchema>;
 
@@ -149,6 +152,8 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.setField'), workspaceRoot: z.string(), scope: z.enum(CONFIG_SCOPES).optional(), patch: z.record(z.string(), z.unknown()) }),
   /** REQ-WORKSPACE-038 / REQ-PROVIDER-099: the minimal agents.yaml written only when none exists, then the load again. */
   z.object({ kind: z.literal('config.bootstrap'), workspaceRoot: z.string() }),
+  /** ADR-0038 / REQ-MONITOR-168: the repository card's reads, made by the one helper the workspace service owns. */
+  z.object({ kind: z.literal('repository.read'), workspaceRoot: z.string() }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -197,6 +202,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.backedUp'), destination: z.string(), bytes: z.number().int(), sessions: z.number().int(), takenAtUtc: z.string() }),
   z.object({ kind: z.literal('workspace.restore.assessment'), assessment: RestoreAssessmentSchema }),
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),
+  z.object({ kind: z.literal('repository.state'), state: RepositoryStateSchema }),
   z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
   z.object({ kind: z.literal('hooks.summary'), summary: HooksSummarySchema }),
   z.object({ kind: z.literal('playbooks.catalogue'), catalogue: PlaybookCatalogueSchema }),

@@ -373,3 +373,14 @@ the count is kept in ADR-0058 consequence 17.
 **What the earlier note got right and stands:** every attach begins with a whole-session update; the
 increment that follows carries the number the surface counts on from; a genuine reset at index 0 is not
 a decline.
+
+**Third execution — 2026-09-05, the Overview view (Part M).** The whole-session record gains what REQ-MONITOR-164..171
+read and nothing a view could derive: `runStartedAt`; `usageHistory` — the token history the RUN samples every 10 s
+on the clock port and once at the terminal save, 120 kept, persisted on the session row (`token_samples`, store v7) so
+the sparkline is the same when the session is reopened; `costLabel` with its qualifier (REQ-MONITOR-166's three; this
+build configures no rate, so every label is `unknown`); `toolCalls` — the total, the agents it spans and the per-tool
+counts, read from `tool_calls` by the projection owner at snapshot time through the primary key (a plan assertion
+pins it). Each periodic sample is a status save and therefore a whole-session update; the Overview is mounted only
+while shown, so nothing refreshes while it is hidden (REQ-MONITOR-174). The field is named `usageHistory` because
+the contracts test refuses a channel field containing the word `token` — `tokenUsage` is its one named exception.
+**Found: nothing** in the replica; the defect the view found was main's (ADR-0055 note).

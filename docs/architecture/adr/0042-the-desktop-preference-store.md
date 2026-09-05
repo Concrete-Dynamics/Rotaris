@@ -250,3 +250,14 @@ same read path before first window creation.
 A requirement makes the store's physical form observable; `REQ-SHELL-006` currently says the opposite.
 Or the key set ceases to be closed. Or `REQ-CHAT-045`'s byte-exact prompt-history format is withdrawn,
 which is the only change that would make that one file a candidate for the workspace database.
+
+**Second execution — 2026-09-05, the first pane layout (Part M).** `panels/overview` joins the closed registry as
+REQ-SHELL-069 fixes it: a record with `version: 1`, the view's pane count (2) and one size per pane; anything else —
+another version, another count, a malformed size — reads as nothing stored and the declared defaults apply
+(340 px right, 260..560, the left column at least 320). Written through `prefs.set` from the view's divider (pointer
+drag, or Left/Right/Home/End on the focused separator), read at boot beside the theme and the motion preference.
+`pnpm overview-proof` writes a layout and reads it back on a relaunch. **Found — the eighteenth first-execution defect:** the
+store's serialiser handed `JSON.stringify` the sorted key list as its replacer, and a replacer ARRAY filters every level,
+not the top one — so the first nested value ever stored (this layout) was written as `{}` and read back as nothing
+stored. Every earlier preference was a string or a boolean and could not show it. The top-level order is now built
+before serialising; the falsified reading is kept beside the line.

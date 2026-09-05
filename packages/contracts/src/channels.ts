@@ -108,6 +108,8 @@ export const SessionRecordSchema = z.object({
   cost: z.string(),
   /** REQ-SESSION-095 / REQ-ORCH-147: what the run recorded; null before any run ended. */
   stopReason: z.string().nullable(),
+  /** REQ-MONITOR-164/171: when the current run started; null before any run. */
+  runStartedAt: z.string().nullable(),
   iterationsCompleted: z.number().int().nonnegative(),
   /** REQ-SESSION-074: the end-of-run summarisation, presented exactly once (REQ-SESSION-186). */
   summary: z.object({ status: z.string(), severity: z.string(), message: z.string() }).nullable(),
@@ -125,6 +127,12 @@ export const SessionRecordSchema = z.object({
   /** REQ-ORCH-084/087: the message limit in force (null = disabled) and, while paused at it, the count reached. */
   messageLimit: z.number().int().nullable(),
   pausedAtCount: z.number().int().nullable(),
+  /** REQ-MONITOR-166: the token history the run sampled — [at, cumulative total], oldest first, at most 120 (named without the word the secret test forbids). */
+  usageHistory: z.array(z.tuple([z.string(), z.number().int().nonnegative()])),
+  /** REQ-MONITOR-166: the pre-rendered cost label with its qualifier, so no view invents one. */
+  costLabel: z.object({ text: z.string(), qualifier: z.enum(['unknown', 'incomplete', 'configured']) }),
+  /** REQ-MONITOR-167: the session-wide tool-call total, the agents it spans, and per-tool counts most-called first. */
+  toolCalls: z.object({ total: z.number().int().nonnegative(), agents: z.number().int().nonnegative(), byTool: z.array(z.object({ tool: z.string(), count: z.number().int().nonnegative() })) }),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

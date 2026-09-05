@@ -24,5 +24,6 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Part L — credentials resolved per model at the run start's lease step
-and the summariser's slot, runtime view §2/§4; no view changed shape).
+Last reconciled with the code: **2026-09-05** (Part M — `repository.read`/`repository.state` between main and the workspace
+service and the `repository.read` command, process view; `token_samples` and the sampling step, runtime view; the
+`workspace` package's `git/` module changes no edge, component view unchanged).

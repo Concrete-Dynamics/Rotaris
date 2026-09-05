@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnv
 import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
-import { assessRestore, backupWorkspace, performRestore } from '@rotaris/workspace';
+import { assessRestore, backupWorkspace, performRestore, readRepository } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
 
@@ -143,6 +143,12 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       if (!r.ok) return { kind: 'refused', code: `config.${r.error.code}`, headline: 'The starter configuration could not be written', detail: `${r.error.file}: ${r.error.fault}` };
       log(`configuration bootstrap for ${req.workspaceRoot}: ${r.value}`);
       return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now()) };
+    }
+    case 'repository.read': {
+      // ADR-0038 / REQ-GIT-102: every read bounded, every failure an empty value; the state is logged, never a dialog.
+      const state = await readRepository(req.workspaceRoot, { clocks });
+      log(`repository ${req.workspaceRoot}: git=${state.gitAvailable} repo=${state.isRepository} branch=${state.branch ?? '-'} base=${state.base ?? '-'} +${state.ahead}/-${state.behind} touched=${state.touched} uncommitted=${state.uncommitted}${state.failed.length > 0 ? ` failed=${state.failed.join(',')}` : ''} in ${state.readMs} ms`);
+      return { kind: 'repository.state', state };
     }
     case 'shutdown': {
       closeOwn();

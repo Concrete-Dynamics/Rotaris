@@ -315,6 +315,15 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN paused_at_count INTEGER;
     `,
   },
+  {
+    to: 7,
+    // v7 lands with the Overview view (Part M): REQ-MONITOR-166's token history, sampled by the run every 10 s while
+    // live and once at the terminal save, the most recent 120 kept, persisted with the session so the sparkline is
+    // the same when the session is reopened. A JSON array of [at, total] pairs. NO new index: read with the row.
+    sql: `
+      ALTER TABLE sessions ADD COLUMN token_samples TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

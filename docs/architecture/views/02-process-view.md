@@ -62,7 +62,7 @@ flowchart LR
 
 ## Message families
 
-**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set`,
+**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
 `session.start/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
 `pause.present/payload`, `approval.payload`, `notice.acknowledge`, `workspace.backup/restore`,
 `shell.switchView`, `hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle`,
@@ -71,7 +71,10 @@ delete/refresh`, `provider.payload/signIn`. Main relays a session or hook comman
 config command to the workspace service, and answers preference, theme and **provider** commands itself (the
 credential store lives in main). `provider.signIn` is the one command carrying a pasted key inward; no outcome
 carries one back — the list shows the display mask. A sign-in that succeeds asks the workspace service
-`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed`.
+`config.bootstrap` (the starter `agents.yaml` if absent, then the load again) and broadcasts `config:changed`. **`repository.read`
+{workspaceRoot}` → `repository.state {gitAvailable, isRepository, branch, base, ahead, behind, touched, uncommitted, failed,
+readMs}`** is the workspace service's answer for the Overview's repository card — ADR-0038's helper lives there and
+nowhere else; every read bounded at 15 s, every failure an empty value (REQ-GIT-102).
 
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own

@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type PaneLayout, type RepositoryState, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings, type ProvidersCardProps } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings, type ProvidersCardProps } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -125,6 +125,62 @@ function Workspace({ models }: { models: readonly string[] }) {
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
     onSetReasoning={(level) => control('setReasoning', { level }, 'The run did not accept that reasoning level.')}
+  />;
+}
+
+/**
+ * REQ-SHELL-026: the startup view. Mounted only while shown, so nothing here runs while it is hidden
+ * (REQ-MONITOR-174); the session list and the repository are read on mount and again whenever the followed
+ * run reaches a terminal state; the configured caps come from the configuration snapshot (REQ-MONITOR-169).
+ */
+const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
+function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
+  const session = useStore(replica, (s) => s.session);
+  const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
+  const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [repository, setRepository] = useState<RepositoryState | null>(null);
+  const [caps, setCaps] = useState<{ depth: number; fanOut: number } | null>(null);
+  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
+  const hasWorkspace = workspace !== '(no workspace)';
+  const status = session?.executionStatus ?? null;
+  // Changes when a session is followed, and when the followed run stops being busy — the refresh triggers of REQ-MONITOR-174.
+  const refreshKey = session ? (isBusy(session.executionStatus) ? `${session.id}:busy` : `${session.id}:${status}`) : 'none';
+  const refresh = useCallback(async () => {
+    if (!hasWorkspace) { setRepository(UNREAD_REPOSITORY); return; }
+    setSessionsState('loading');
+    const [list, repo] = await Promise.all([bridge.command({ kind: 'session.list' }), bridge.command({ kind: 'repository.read' })]);
+    if (list.ok) { setSessions((list.value as { sessions: SessionListItemPayload[] }).sessions); setSessionsState('idle'); }
+    else { setSessionsState('error'); setSessionsError(list.detail ?? list.headline); }
+    setRepository(repo.ok ? (repo.value as RepositoryState) : UNREAD_REPOSITORY);
+  }, [hasWorkspace]);
+  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh, refreshKey]);
+  useEffect(() => {
+    if (!hasWorkspace) return;
+    const apply = (snapshot: ConfigSnapshot) => setCaps({ depth: snapshot.runtime.max_depth, fanOut: snapshot.runtime.max_active_children });
+    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) apply(r.value as ConfigSnapshot); }); });
+    return bridge.onConfigChanged((p) => apply((p as { snapshot: ConfigSnapshot }).snapshot));
+  }, [hasWorkspace]);
+  useEffect(() => {
+    if (!session || !isBusy(session.executionStatus)) return;
+    const t = setInterval(() => setNowIso(new Date().toISOString()), 1000);
+    return () => clearInterval(t);
+  }, [session]);
+  const newSession = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const current = replica.getState();
+    if (current.session && isBusy(current.session.executionStatus)) return { ok: false, reason: 'Finish or cancel the active run before starting a new session.' };
+    if (current.sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current.sessionId });
+    replica.getState().follow(null);
+    useShellState.getState().switchView('workspace');
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer__input')?.focus()));
+    return { ok: true };
+  }, []);
+  return <OverviewView
+    session={session} sessions={sessions} sessionsState={sessionsState} sessionsError={sessionsError} repository={repository} caps={caps}
+    layout={layout} onLayout={onLayout} nowIso={session && isBusy(session.executionStatus) ? nowIso : session?.updatedAt ?? null} reducedMotion={reducedMotion}
+    onListSessions={onListSessions} onNewSession={newSession}
+    onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
+    onGoTo={(view) => useShellState.getState().switchView(view)}
   />;
 }
 
@@ -272,7 +328,7 @@ function recover(command: string): void {
   if (command === 'providers.add') { void bridge.command({ kind: 'providers.open', mode: 'add' }); return; }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed }: { version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout }: { initialLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
@@ -283,6 +339,9 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   const [browserLoading, setBrowserLoading] = useState(false);
   const [browserError, setBrowserError] = useState<string | null>(null);
   const [models, setModels] = useState<readonly string[]>([]);
+  // REQ-SHELL-069: the Overview's pane split, per user, under panels/.
+  const [layout, setLayout] = useState<PaneLayout | undefined>(initialLayout);
+  const onLayout = useCallback((l: PaneLayout) => { setLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/overview', value: l }); }, []);
   useEffect(() => { themeSubscribers.add(setTheme); return () => { themeSubscribers.delete(setTheme); }; }, []);
   // REQ-MONITOR-144: the run header's model selector offers the configured models.
   useEffect(() => {
@@ -369,7 +428,7 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       version={version}
       workspaceLabel={workspace}
       statusItems={status}
-      views={{ workspace: <Workspace models={models} />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} /> }}
+      views={{ overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} />, workspace: <Workspace models={models} />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} /> }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
       onRecover={recover}
@@ -474,11 +533,13 @@ async function bootHookReview(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/overview' }),
   ]);
+  const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
   applyTheme(runningTheme, document.documentElement);
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
@@ -493,7 +554,7 @@ async function boot(): Promise<void> {
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} />
     </StrictMode>,
   );
 }

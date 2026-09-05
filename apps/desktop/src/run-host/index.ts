@@ -377,7 +377,10 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       } else {
         leased.set(s.root, {});
       }
-      const r = sessions.start(s.dal, s.root, req.prompt);
+      // REQ-GIT-022 (Part O): the binding was made by the workspace service and the id minted in main before this
+      // request; the session row records the binding and the run works in the effective root (REQ-GIT-019).
+      if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${req.sessionId ?? '(host-minted)'} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
+      const r = sessions.start(s.dal, s.root, req.prompt, { ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }), ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) });
       if (!r.ok) {
         // REQ-SESSION-082: a refusal before the run starts is reported at once, marked as such, with no session behind it.
         if ('failedBeforeStart' in r.error) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run was refused before it started', detail: r.error.reason };

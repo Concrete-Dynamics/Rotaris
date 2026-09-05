@@ -10,7 +10,7 @@ const snapshot: ConfigSnapshot = {
   ],
   models: ['gpt-4o', 'gpt-4o-mini'],
   roles: [{ role: 'tester', rawModel: null, modelOrigin: 'built-in', effectiveModel: 'gpt-4o-mini', inherited: true, builtInDefault: 'medium_model', rawThinking: null, thinkingOrigin: 'built-in', tier: 'medium_model', tools: ['read_file'] }],
-  runtime: { max_depth: 3, max_active_children: 6, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false },
+  runtime: { max_depth: 3, max_active_children: 6, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off' },
   rawRuntime: { workspace: { max_depth: 3 }, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, delegationStrategy: 'orchestrator', referential: [], warnings: [],
   files: { workspace: 'C:/ws/.rotaris/agents.yaml', global: 'C:/cfg/agents.yaml' },

@@ -52,6 +52,9 @@ export interface SessionRow {
   readonly paused_at_count: number | null;
   // v7 — REQ-MONITOR-166: the token history as the run sampled it, a JSON array of [at, total].
   readonly token_samples: string;
+  // v8 — REQ-GIT-015/017: the worktree binding as JSON, or NULL for "no worktree"; REQ-SHELL-125's sandbox mode.
+  readonly worktree: string | null;
+  readonly sandbox_mode: string;
 }
 /** The run-recorded columns a save may carry (REQ-SESSION-168: aggregates copied on every persist). */
 export interface SessionRunPatch {
@@ -235,9 +238,10 @@ export class StoreDal {
     this.stmts = {
       listSessions: db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC'),
       getSession: db.prepare('SELECT * FROM sessions WHERE session_id = ?'),
+      // v8: the binding and the sandbox mode are written with the row at creation (REQ-GIT-022: saved with the session record) and never moved.
       upsertSession: db.prepare(`
-        INSERT INTO sessions (session_id, execution_status, workspace_root, created_at, updated_at)
-        VALUES (@session_id, @execution_status, @workspace_root, @created_at, @updated_at)
+        INSERT INTO sessions (session_id, execution_status, workspace_root, created_at, updated_at, worktree, sandbox_mode)
+        VALUES (@session_id, @execution_status, @workspace_root, @created_at, @updated_at, @worktree, coalesce(@sandbox_mode, 'off'))
         ON CONFLICT(session_id) DO UPDATE SET execution_status = excluded.execution_status, updated_at = excluded.updated_at`),
       touchSession: db.prepare('UPDATE sessions SET execution_status = ?, updated_at = ? WHERE session_id = ?'),
       openHistory: db.prepare('UPDATE sessions SET history_open = 1 WHERE session_id = ?'),
@@ -479,8 +483,8 @@ export class StoreDal {
   getSession(id: SessionId): SessionRow | undefined {
     return this.stmts['getSession']!.get(id) as SessionRow | undefined;
   }
-  upsertSession(row: Pick<SessionRow, 'session_id' | 'execution_status' | 'workspace_root' | 'created_at' | 'updated_at'>): void {
-    this.stmts['upsertSession']!.run(row);
+  upsertSession(row: Pick<SessionRow, 'session_id' | 'execution_status' | 'workspace_root' | 'created_at' | 'updated_at'> & Partial<Pick<SessionRow, 'worktree' | 'sandbox_mode'>>): void {
+    this.stmts['upsertSession']!.run({ ...row, worktree: row.worktree ?? null, sandbox_mode: row.sandbox_mode ?? null });
   }
   touchSession(id: SessionId, status: string, updatedAt: string): void {
     this.stmts['touchSession']!.run(status, updatedAt, id);

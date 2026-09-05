@@ -26,5 +26,8 @@ export const GIT_ENV_DENYLIST = [
 export const GIT_NETWORK_SUBCOMMANDS = ['fetch', 'pull', 'push', 'clone', 'ls-remote', 'remote', 'submodule'] as const;
 export * from './git/invoke.js';
 export * from './git/repository.js';
+export * from './git/paths.js';
+export * from './git/view.js';
+export * from './git/worktrees.js';
 export * from './backup.js';
 export * from './restore.js';

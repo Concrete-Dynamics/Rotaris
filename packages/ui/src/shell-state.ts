@@ -20,6 +20,16 @@ export interface ShellState {
   /** REQ-CONFIG-286/287: the unsaved-settings guard; asked before a view switch away from Settings while dirty. */
   readonly navigationGuard: ((next: ViewId) => Promise<boolean>) | null;
   setNavigationGuard(guard: ((next: ViewId) => Promise<boolean>) | null): void;
+  /** REQ-SHELL-125: the accepted launch dialog's choices, held for the composer's NEXT submission and consumed by it. */
+  readonly launchOptions: LaunchChoices | null;
+  setLaunchOptions(options: LaunchChoices | null): void;
+  takeLaunchOptions(): LaunchChoices | null;
+}
+
+export interface LaunchChoices {
+  readonly isolation: { readonly branch: string } | null;
+  readonly attach: { readonly path: string; readonly branch: string } | null;
+  readonly sandboxMode: 'off' | 'workspace-write' | 'read-only';
 }
 
 export const useShellState = create<ShellState>((set, get) => ({
@@ -44,5 +54,14 @@ export const useShellState = create<ShellState>((set, get) => ({
   },
   takeSettingsCategory() {
     set({ settingsCategory: null });
+  },
+  launchOptions: null,
+  setLaunchOptions(options) {
+    set({ launchOptions: options });
+  },
+  takeLaunchOptions() {
+    const options = get().launchOptions;
+    if (options !== null) set({ launchOptions: null });
+    return options;
   },
 }));

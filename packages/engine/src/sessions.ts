@@ -1,5 +1,6 @@
 import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, resolvePreset, type ApprovalOption, type ControlRequest, type ControlResult, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ControlRequest, type ControlResult, type PermissionPreset, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { existsSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend } from '@rotaris/model';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
@@ -47,7 +48,10 @@ export interface ModelSetup {
 /** What the run-host root hands a session's tool port factory. */
 export interface ToolPortContext {
   readonly sessionId: SessionId;
+  /** The BASE workspace: the session record's anchor and where configuration is loaded from (REQ-GIT-019). */
   readonly workspaceRoot: string;
+  /** REQ-GIT-019/022: where the work happens — the worktree path for an isolated session; absent means the base. */
+  readonly effectiveRoot?: string | undefined;
   readonly writer: SessionWriter;
   readonly persona: string;
   readonly agentName: string;
@@ -177,6 +181,28 @@ export interface SessionListItem {
   readonly busy: boolean;
   /** REQ-MONITOR-172: null when no requirement is attached, and then no tag at all. */
   readonly requirementId: string | null;
+  /** REQ-GIT-018: the binding in full or null, and the checkpoint count (0 until ADR-0039 records one). */
+  readonly worktree: WorktreeBinding | null;
+  readonly checkpointCount: number;
+}
+
+/** REQ-GIT-017: a missing or unreadable binding loads as "no worktree" — an absence, nothing invented. */
+export function parseBinding(json: string | null): WorktreeBinding | null {
+  if (json === null) return null;
+  try { const r = WorktreeBindingSchema.safeParse(JSON.parse(json)); return r.success ? r.data : null; } catch { return null; }
+}
+
+/** REQ-GIT-019/022: the run's effective root is the worktree while the record stays anchored to the base. */
+function effectiveRootOf(row: SessionRow): { readonly root: string; readonly binding: WorktreeBinding | null } {
+  const binding = parseBinding(row.worktree);
+  return { root: binding?.worktree_path ?? row.workspace_root, binding };
+}
+
+/** A bound session whose tree is gone cannot be continued in it; the refusal states which path (REQ-GIT-157: after-acceptance, nothing changed). */
+function missingWorktree(row: SessionRow): { readonly code: string; readonly reason: string } | null {
+  const binding = parseBinding(row.worktree);
+  if (binding && !existsSync(binding.worktree_path)) return { code: 'worktree-missing', reason: `Session ${row.session_id} is bound to the worktree at ${binding.worktree_path}, which no longer exists. Recreate or re-attach the worktree before continuing this session.` };
+  return null;
 }
 
 export interface ResumeSuccess {
@@ -248,6 +274,13 @@ function relativeTime(updatedAt: string, now: number): string {
   return `${Math.floor(elapsed / 86_400_000)}d ago`;
 }
 
+/** REQ-GIT-022 / REQ-SHELL-125: what the host settled before asking for the session — the id, the binding, the sandbox mode. */
+export interface StartOptions {
+  readonly sessionId?: string | undefined;
+  readonly worktree?: WorktreeBinding | undefined;
+  readonly sandboxMode?: string | undefined;
+}
+
 /** REQ-SESSION-082 / REQ-EVENTS-021: a refusal before the run starts is one `result` of status error, marked as such. */
 export interface StartRefusal {
   readonly code: string;
@@ -289,6 +322,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     usageHistory: parseTokenSamples(r.token_samples),
     costLabel: costLabelOf(r.cost),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
+    worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
   };
 }
 
@@ -349,11 +383,15 @@ export class Sessions {
       const firstPrompt = dal.residentRows(asSessionId(row.session_id)).find((event) => event.kind === 'user' && event.body.trim() !== '');
       const lock = dal.getLock(asSessionId(row.session_id));
       const live = lock !== undefined && (lock.host !== this.deps.host || lock.pid <= 0 || (this.deps.isProcessAlive?.(lock.pid) ?? true));
+      // REQ-GIT-018/121: the branch is the binding's; `—` is the placeholder for a session with none (REQ-GIT-120's test).
+      const binding = parseBinding(row.worktree);
       return {
         sessionId: row.session_id,
         label: cut(firstPrompt?.body.trim() || row.session_id, 80),
         status: row.execution_status || 'idle',
-        branch: '—',
+        branch: binding?.branch ?? '—',
+        worktree: binding,
+        checkpointCount: 0,
         relativeTime: relativeTime(row.updated_at, now),
         detail: row.workspace_root,
         awaitingInput: parsePending(row.pending_approvals).length > 0,
@@ -379,6 +417,9 @@ export class Sessions {
     const existing = this.live.get(sessionId);
     if (existing && this.isRunActive(sessionId)) return err({ code: 'run-active', reason: `Session ${sessionId} is already active in this application.` });
     if (existing) return ok({ sessionId, settledChildren: 0 });
+    // REQ-GIT-019: a bound session continues in its tree, or refuses with the path stated when the tree is gone.
+    const gone = missingWorktree(row);
+    if (gone) return err(gone);
 
     const appender = this.deps.sessionLogAppender?.(dal, sessionId);
     const log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: this.deps.runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
@@ -410,13 +451,21 @@ export class Sessions {
     return ok({ sessionId, settledChildren: settled });
   }
 
-  /** REQ-CHAT-011 with no session: create it, record the prompt as row 0, start the run. */
-  start(dal: StoreDal, workspaceRoot: string, prompt: string): Result<SessionId, StartRefusal | { code: string; reason: string }> {
+  /**
+   * REQ-CHAT-011 with no session: create it, record the prompt as row 0, start the run.
+   * REQ-GIT-019/022 (Part O): an isolated or attached session arrives with its binding already made and its id minted
+   * by the host; the row records the binding and stays anchored to the base workspace (configuration is loaded from
+   * the base), while the run's EFFECTIVE root — the tool fence, the terminal's cwd, the hooks' cwd, the child payload's
+   * "workspace root" — is the worktree path. That is the reading of "re-rooted" taken here: the files live in the base
+   * `.rotaris/`, the work happens in the tree.
+   */
+  start(dal: StoreDal, workspaceRoot: string, prompt: string, opts: StartOptions = {}): Result<SessionId, StartRefusal | { code: string; reason: string }> {
     const attendedNow = this.deps.attended?.() ?? false;
     const setup = this.setupFor(workspaceRoot, attendedNow);
     if (!setup.ok) return err(setup.error);
     const { model, runtime } = setup.value;
-    const sessionId = asSessionId(this.deps.mintSessionId());
+    const sessionId = asSessionId(opts.sessionId ?? this.deps.mintSessionId());
+    const effectiveRoot = opts.worktree?.worktree_path ?? workspaceRoot;
     const permission = postureAtStart(runtime, attendedNow);
     // REQ-SESSION-142: the session's log, opened before anything else the run says; closed at run end.
     const appender = this.deps.sessionLogAppender?.(dal, sessionId);
@@ -434,6 +483,7 @@ export class Sessions {
       {
         workspaceRoot, pid: this.deps.pid, host: this.deps.host, task: prompt, persona: model.config.persona, maxIterations: model.config.iterationLimit,
         permissionMode: permission.effective, sandboxed: permission.sandboxed,
+        worktree: opts.worktree ? JSON.stringify(opts.worktree) : null, ...(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
       },
     );
     if (!created.ok) {
@@ -462,11 +512,11 @@ export class Sessions {
     // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, writer, warn, log: (m) => { log?.info(m); } }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { log?.info(m); } }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
     }
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
-    const baseCtx = { sessionId, workspaceRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
     live.tools = tools;
@@ -479,7 +529,7 @@ export class Sessions {
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
     const run = new Run({
-      sessionId, workspaceRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
+      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
@@ -516,6 +566,8 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const gone = missingWorktree(stored);
+    if (gone) return err(gone);
     const lock = s.dal.getLock(sessionId);
     if (!lock || lock.pid !== this.deps.pid || lock.host !== this.deps.host) {
       const reopened = this.resume(s.dal, stored.workspace_root, sessionId);
@@ -546,7 +598,10 @@ export class Sessions {
   private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
-    const workspaceRoot = s.dal.getSession(sessionId)!.workspace_root;
+    const storedRow = s.dal.getSession(sessionId)!;
+    const workspaceRoot = storedRow.workspace_root;
+    // REQ-GIT-019: a continuation of a bound session works in its tree (the caller already refused a missing one).
+    const effectiveRoot = effectiveRootOf(storedRow).root;
     const permission = postureAtStart(runtime, this.deps.attended?.() ?? false);
     // REQ-SESSION-142: one log per run — the one `resume` opened closes when the first continuation ends, so
     // every continuation opens its own rather than writing into a closed one.
@@ -559,10 +614,10 @@ export class Sessions {
     const runRef: { run?: Run } = {};
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); } }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); } }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
     }
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
-    const baseCtx = { sessionId, workspaceRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
@@ -573,7 +628,7 @@ export class Sessions {
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
     const run = new Run({
-      sessionId, workspaceRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
+      sessionId, workspaceRoot, effectiveRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
       ...(setupIn.models ? { models: setupIn.models } : {}),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
@@ -704,6 +759,8 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const gone = missingWorktree(stored);
+    if (gone) return err(gone);
     const atLimit = stored.execution_status === 'paused_message_limit';
     if (!atLimit && stored.execution_status !== 'paused') return err({ code: 'not-paused', reason: `Session ${sessionId} is not paused (${stored.execution_status}).` });
     let limit = stored.message_limit;

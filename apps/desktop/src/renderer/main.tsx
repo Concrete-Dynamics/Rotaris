@@ -1,9 +1,9 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type PaneLayout, type RepositoryState, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings, type ProvidersCardProps } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -45,12 +45,18 @@ bridge.onSessionSnapshot((p) => replica.getState().applySnapshot(p));
 bridge.onTranscriptIncrement((p) => replica.getState().applyIncrement(p));
 bridge.onNotice((p) => notices.getState().apply(p));
 
-/** REQ-CHAT-011: no session → start one; a loaded session with no run → record the prompt. */
+/**
+ * REQ-CHAT-011: no session → start one; a loaded session with no run → record the prompt.
+ * REQ-SHELL-125: the launch dialog's accepted choices, held in shell state, ride on the NEXT start and are consumed
+ * by it — a refused start keeps them for the retry the composer offers.
+ */
 async function submitPrompt(text: string): Promise<{ ok: true } | { ok: false; reason: string }> {
   const s = replica.getState();
   if (!s.sessionId) {
-    const r = await bridge.command({ kind: 'session.start', prompt: text });
+    const options = useShellState.getState().launchOptions;
+    const r = await bridge.command({ kind: 'session.start', prompt: text, ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+    useShellState.getState().takeLaunchOptions();
     const { sessionId } = r.value as { sessionId: string };
     replica.getState().follow(sessionId);
     // Every attach begins with a whole-session update (REQ-MONITOR-214); the transcript follows it.
@@ -134,7 +140,7 @@ function Workspace({ models }: { models: readonly string[] }) {
  * run reaches a terminal state; the configured caps come from the configuration snapshot (REQ-MONITOR-169).
  */
 const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
-function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
+function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }> }) {
   const session = useStore(replica, (s) => s.session);
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -166,21 +172,73 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     const t = setInterval(() => setNowIso(new Date().toISOString()), 1000);
     return () => clearInterval(t);
   }, [session]);
-  const newSession = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const current = replica.getState();
-    if (current.session && isBusy(current.session.executionStatus)) return { ok: false, reason: 'Finish or cancel the active run before starting a new session.' };
-    if (current.sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current.sessionId });
-    replica.getState().follow(null);
-    useShellState.getState().switchView('workspace');
-    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer__input')?.focus()));
-    return { ok: true };
-  }, []);
   return <OverviewView
     session={session} sessions={sessions} sessionsState={sessionsState} sessionsError={sessionsError} repository={repository} caps={caps}
     layout={layout} onLayout={onLayout} nowIso={session && isBusy(session.executionStatus) ? nowIso : session?.updatedAt ?? null} reducedMotion={reducedMotion}
-    onListSessions={onListSessions} onNewSession={newSession}
+    onListSessions={onListSessions} onNewSession={onNewSession}
     onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
     onGoTo={(view) => useShellState.getState().switchView(view)}
+  />;
+}
+
+/**
+ * REQ-GIT-082/102: the Git view's state, held above the view so the status strip reads it too. Rebuilds are coalesced
+ * with a 120 ms trailing debounce; a result naming a workspace no longer open is discarded; exactly one refresh runs
+ * at application start (after the window painted; main awaits the workspace open in flight).
+ */
+function useGitState(workspace: string) {
+  const [state, setState] = useState<GitViewState | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef(false);
+  const again = useRef(false);
+  const hasWorkspace = workspace !== '(no workspace)';
+  const read = useCallback(async function readOnce(): Promise<void> {
+    if (!hasWorkspace) return;
+    if (inFlight.current) { again.current = true; return; }
+    inFlight.current = true;
+    setRefreshing(true);
+    const r = await bridge.command({ kind: 'git.read' });
+    inFlight.current = false;
+    if (r.ok) {
+      const next = r.value as GitViewState;
+      // REQ-GIT-082: applied only when it still names the open workspace.
+      if (next.workspaceRoot.replace(/\\/g, '/').toLowerCase() === workspace.replace(/\\/g, '/').toLowerCase()) setState(next);
+    }
+    setRefreshing(false);
+    if (again.current) { again.current = false; void readOnce(); }
+  }, [hasWorkspace, workspace]);
+  const refresh = useCallback(() => {
+    if (pending.current) clearTimeout(pending.current);
+    pending.current = setTimeout(() => { pending.current = null; void read(); }, 120);
+  }, [read]);
+  useEffect(() => () => { if (pending.current) clearTimeout(pending.current); }, []);
+  // The one start-time refresh (REQ-GIT-102).
+  useEffect(() => { refresh(); }, [refresh]);
+  return { state, refreshing, refresh };
+}
+
+/** REQ-SHELL-023's Git view. Mounted only while shown, so a hidden view rebuilds nothing; shown, it reads (REQ-GIT-082). */
+function Git({ workspace, git, layout, onLayout }: { workspace: string; git: ReturnType<typeof useGitState>; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void }) {
+  const session = useStore(replica, (s) => s.session);
+  const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
+  const status = session?.executionStatus ?? null;
+  const refreshKey = session ? (isBusy(session.executionStatus) ? `${session.id}:busy` : `${session.id}:${status}`) : 'none';
+  const { refresh } = git;
+  const listSessions = useCallback(async () => {
+    if (workspace === '(no workspace)') return;
+    const r = await bridge.command({ kind: 'session.list' });
+    if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions);
+  }, [workspace]);
+  // On show, and on a session terminal (the refresh key changes when the followed run stops being busy).
+  useEffect(() => { refresh(); queueMicrotask(() => { void listSessions(); }); }, [refresh, listSessions, refreshKey]);
+  const after = async () => { refresh(); await listSessions(); };
+  return <GitView
+    workspaceRoot={workspace} state={git.state} refreshing={git.refreshing} sessions={sessions} layout={layout} onLayout={onLayout}
+    onRefresh={() => { void after(); }}
+    onCreateWorktree={async (branch, path) => { const r = await bridge.command({ kind: 'worktree.create', branch, path }); if (r.ok) void after(); return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline }; }}
+    onDeleteWorktree={async (path, force) => { const r = await bridge.command({ kind: 'worktree.remove', path, force }); if (r.ok) void after(); return r.ok ? { ok: true } : { ok: false, reason: r.headline, needsForce: r.code === 'worktree.needs-force' }; }}
+    probePath={async (path) => { const r = await bridge.command({ kind: 'worktree.probePath', path }); return r.ok ? (r.value as { exists: boolean; nonEmpty: boolean }) : null; }}
   />;
 }
 
@@ -328,7 +386,7 @@ function recover(command: string): void {
   if (command === 'providers.add') { void bridge.command({ kind: 'providers.open', mode: 'add' }); return; }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout }: { initialLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
@@ -342,6 +400,34 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   // REQ-SHELL-069: the Overview's pane split, per user, under panels/.
   const [layout, setLayout] = useState<PaneLayout | undefined>(initialLayout);
   const onLayout = useCallback((l: PaneLayout) => { setLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/overview', value: l }); }, []);
+  // REQ-GIT-076/153: the Git view's split, keyed `git` (REQ-SHELL-069), per user.
+  const [gitLayout, setGitLayout] = useState<PaneLayout | undefined>(initialGitLayout);
+  const onGitLayout = useCallback((l: PaneLayout) => { setGitLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/git', value: l }); }, []);
+  const git = useGitState(workspace);
+  /**
+   * REQ-SHELL-125 / REQ-SESSION-184: "New session" opens the launch dialog — refused with the sentence while a run is
+   * active on this single-run host; accepting holds the choices for the composer's next submission, releases the
+   * followed session, empties the composer and shows Workspace.
+   */
+  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runActive: boolean } | null>(null);
+  const openStartDialog = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const current = replica.getState();
+    if (current.session && isBusy(current.session.executionStatus)) return { ok: false, reason: 'Finish or cancel the active run before starting a new session.' };
+    const [id, config] = await Promise.all([bridge.command({ kind: 'session.newId' }), bridge.command({ kind: 'config.read' })]);
+    if (!id.ok) return { ok: false, reason: id.detail ?? id.headline };
+    const sandboxMode = config.ok ? (config.value as ConfigSnapshot).runtime.sandbox_mode : 'off';
+    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runActive: false });
+    return { ok: true };
+  }, []);
+  const acceptLaunch = useCallback(async (options: LaunchOptions) => {
+    setLaunch(null);
+    useShellState.getState().setLaunchOptions(options);
+    const current = replica.getState();
+    if (current.sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current.sessionId });
+    replica.getState().follow(null);
+    useShellState.getState().switchView('workspace');
+    requestAnimationFrame(() => requestAnimationFrame(() => { const input = document.querySelector<HTMLTextAreaElement>('.composer__input'); if (input) { input.value = ''; input.focus(); } }));
+  }, []);
   useEffect(() => { themeSubscribers.add(setTheme); return () => { themeSubscribers.delete(setTheme); }; }, []);
   // REQ-MONITOR-144: the run header's model selector offers the configured models.
   useEffect(() => {
@@ -401,16 +487,19 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer__input')?.focus()));
     return { ok: true };
   }, []);
-  const status = useMemo(
+  const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
+  const status = useMemo<readonly StatusItem[]>(
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string.
       session ? `run ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'no session',
+      // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
+      { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
       `mode: ${session?.permissionMode ?? 'ask'}`, 'workspace-scoped', 'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
       ...(circuitBreakerArmed ? ['● CB armed'] : []),
       theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session, theme, circuitBreakerArmed],
+    [processes, counters, session, theme, circuitBreakerArmed, branchItem],
   );
   useEffect(() => {
     // REQ-CHAT-002: Ctrl+L moves keyboard focus to the composer from anywhere in the window.
@@ -428,13 +517,23 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       version={version}
       workspaceLabel={workspace}
       statusItems={status}
-      views={{ overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} />, workspace: <Workspace models={models} />, settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} /> }}
+      views={{
+        overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
+        workspace: <Workspace models={models} />,
+        git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
+        settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} />,
+      }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
       onRecover={recover}
       onOpenSessions={() => { void loadSessions(); }}
     />
     {browserOpen && <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)} />}
+    {launch && (
+      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} confinementAvailable={false}
+        onChooseAttach={async () => { const r = await bridge.command({ kind: 'worktree.chooseAttach' }); if (!r.ok) return { ok: false, reason: r.detail ?? r.headline }; const v = r.value as { cancelled?: boolean; path?: string; branch?: string }; return v.cancelled || !v.path ? { ok: true, cancelled: true } : { ok: true, path: v.path, branch: v.branch ?? '' }; }}
+        onAccept={(options) => { void acceptLaunch(options); }} onCancel={() => setLaunch(null)} />
+    )}
   </>);
 }
 
@@ -533,13 +632,15 @@ async function bootHookReview(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/overview' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/git' }),
   ]);
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
+  const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
   applyTheme(runningTheme, document.documentElement);
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
@@ -554,7 +655,7 @@ async function boot(): Promise<void> {
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} />
     </StrictMode>,
   );
 }

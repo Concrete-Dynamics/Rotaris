@@ -328,3 +328,67 @@
 .ov-dot--fail { background: var(--rt-danger-300); }
 .ov-dot--idle { background: var(--rt-text-tertiary); }
 .ov-card--tree .agent-tree--empty { color: var(--rt-text-tertiary); font-size: var(--rt-text-xs, 12px); }
+
+/* ── Git view (REQ-GIT-075..090, 115..117; language: Card, Table/TableCard, EmptyState, Tag, the G8 divider) ── */
+.git { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); height: 100%; min-height: 0; padding: var(--rt-space-4, 16px) var(--rt-space-5, 20px); overflow: auto; position: relative; }
+.git__header { align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; }
+.git__title { margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 500; font-size: var(--rt-text-lg, 18px); }
+.git__branch { color: var(--rt-text); }
+.git__branch[data-repository='0'], .git__branch[data-detached='1'] { color: var(--rt-text-secondary); font-style: italic; }
+.git__sync { color: var(--rt-text-secondary); white-space: pre; }
+.git__spacer { flex: 1; }
+.git__body { display: grid; grid-template-columns: minmax(280px, 1fr) 8px 480px; gap: 0; align-items: start; min-height: 0; }
+.git__column { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); min-width: 280px; }
+.git__right { max-width: 900px; }
+.git__divider { width: 8px; align-self: stretch; cursor: col-resize; border-radius: var(--rt-radius-md); }
+.git__divider:hover, .git__divider:focus-visible { background: var(--rt-hover); }
+.git-card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: 0; }
+.git-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.git-card--table .git-card__head { padding: 9px 14px; border-bottom: 1px solid var(--rt-divider); }
+.git-card--table .git__empty { margin: var(--rt-space-3, 12px); }
+.git-card:not(.git-card--table) .git-card__head { padding: 0; }
+.git__table td { vertical-align: middle; }
+/* Figures never wrap; a long branch or session id may break anywhere; a narrow column scrolls rather than clips the delete button. */
+.git__table th, .git__table td.mono:not(.git__cell-branch):not(.git__cell-session), .git__table td.git__cell-actions { white-space: nowrap; }
+.git__cell-branch, .git__cell-session { overflow-wrap: anywhere; }
+.git-card--table { overflow-x: auto; }
+.git__row { cursor: default; }
+.git__row.is-selected td { background: var(--rt-accent-tint-10); }
+.git__row[aria-selected='true'] .git__branch-name { color: var(--rt-accent-300); }
+.git__cell-branch { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.git__merge-status { font-size: var(--rt-text-2xs, 10px); }
+/* REQ-GIT-079: at least 28×24 px, danger-styled. */
+.git__delete { min-width: 28px; min-height: 24px; padding: 2px 8px; font-size: var(--rt-text-xs, 12px); }
+/* REQ-GIT-108: a local commit is tinted — the accent tint carries it beside the hidden text. */
+.git__commit.is-local td { background: var(--rt-accent-tint-10); }
+.git__commit.is-local td:first-child { color: var(--rt-accent-300); }
+.git__subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+.git__policy { margin: 0; font-size: var(--rt-text-sm, 13px); color: var(--rt-text-secondary); }
+.git__checkpoint-actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; flex: 1 1 auto; min-width: 0; max-width: 100%; }
+/* REQ-GIT-086: the picker is at least 220 px wide; a long entry is clipped by the select, never the card. */
+.git__picker { flex: 1 1 220px; min-width: 220px; width: auto; max-width: 100%; }
+.git__toast { position: fixed; right: var(--rt-space-5, 20px); bottom: calc(var(--rt-status-bar-height) + var(--rt-space-4, 16px)); z-index: 5; }
+.confirm-dialog__body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.confirm-dialog__lines { margin: 0; padding-left: var(--rt-space-4, 16px); }
+.worktree-dialog { width: min(560px, 100%); }
+.worktree-dialog .field .input { width: 100%; }
+.worktree-dialog__message { margin: 0; font-size: var(--rt-text-xs, 12px); color: var(--rt-warn); }
+.worktree-dialog__message--ok { color: var(--rt-text-tertiary); }
+.worktree-dialog__failure { display: flex; flex-direction: column; gap: 4px; }
+.worktree-dialog__failure-title { font-size: var(--rt-text-sm, 13px); color: var(--rt-danger-300); }
+/* REQ-SHELL-125: at least 460 px wide. */
+.start-session { width: min(560px, 100%); min-width: 460px; }
+.start-session__group { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); margin: 0; padding: var(--rt-space-3, 12px); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
+.start-session__check { display: inline-flex; align-items: center; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); cursor: pointer; }
+.start-session__hint, .start-session__disclosure { margin: 0; font-size: var(--rt-text-xs, 12px); }
+.start-session__attach { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.start-session__attach-path { font-size: var(--rt-text-xs, 12px); overflow-wrap: anywhere; }
+.start-session__select { width: max-content; }
+/* REQ-SHELL-038: one fixed-height row — an item never wraps; a long one is clipped with an ellipsis and keeps its full text in
+ * the tooltip. The shell's single grid column must be allowed to shrink (minmax(0, 1fr)), or the strip's intrinsic width
+ * widens the whole window's content past the viewport (found on the Git proof's first execution). */
+.app-shell { grid-template-columns: minmax(0, 1fr); }
+.status-strip { min-width: 0; overflow: hidden; }
+.status-strip__item { white-space: nowrap; flex: 0 0 auto; }
+/* REQ-GIT-122/161: the strip's branch item carries its accessible name; a detached or absent state reads distinctly. */
+.status-strip__item[data-branch-state='detached'], .status-strip__item[data-branch-state='none'] { font-style: italic; }

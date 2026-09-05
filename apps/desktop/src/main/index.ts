@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest } from '@rotaris/contracts';
+import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
@@ -457,6 +458,9 @@ async function main(): Promise<void> {
   // The id is read once, up front: `webContents` on a destroyed window throws, and a throw from a
   // `closed` handler during exit is an uncaught exception, which wedges the process (ADR-0044 note).
   const wcId = win.webContents.id;
+  // Verification only: an occluded window stops painting, and a capture then returns a frame older than the DOM the
+  // probes read (found on the Git proof's first execution: the PNG showed the split before the drag the probes saw).
+  if (capturing) win.webContents.setBackgroundThrottling(false);
   relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
   // ADR-0019 c.1: registration is explicit and prompt — on creation, and revoked on close (the last one closing makes the application unattended).
   parentWindowIds.add(String(wcId));
@@ -485,6 +489,15 @@ async function main(): Promise<void> {
     const r = await dialog.showOpenDialog(win, opts);
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
   };
+  // ROTARIS_CAPTURE_DIRECTORY: the folder chooser's answer for the attach flow (REQ-GIT-158); verification only.
+  const chooseDirectory = async (opts: Electron.OpenDialogOptions): Promise<string | null> => {
+    const forced = capturing ? process.env['ROTARIS_CAPTURE_DIRECTORY'] : undefined;
+    if (forced) { log(`capture: folder chooser "${opts.title}" → ${forced}`); return forced; }
+    const r = await dialog.showOpenDialog(win, opts);
+    return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
+  };
+  // REQ-GIT-118: the id the launch dialog last showed; consumed by the next isolated or attached start.
+  let mintedSessionId: string | null = null;
   const askBox = async (opts: Electron.MessageBoxOptions): Promise<number> => {
     if (capturing && scriptedAnswers.length > 0) {
       const answer = scriptedAnswers.shift()!;
@@ -724,7 +737,7 @@ async function main(): Promise<void> {
       case 'prefs.get':
         return { ok: true, value: { value: preferences.read(req.key) } };
       case 'prefs.set': {
-        if (req.key === 'panels/overview') {
+        if (req.key === 'panels/overview' || req.key === 'panels/git') {
           if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
           await preferences.write(req.key, req.value);
         } else if (req.key === 'ui/reduced_motion') {
@@ -738,14 +751,112 @@ async function main(): Promise<void> {
       }
       case 'session.start': {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
-        const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt }, millis(10_000));
+        // REQ-GIT-021: the two conflicting choices, refused before anything is created (REQ-GIT-158 makes this unreachable from the dialog).
+        if (req.isolation && req.attach) return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' };
+        /**
+         * REQ-GIT-022/023 (Part O), the reading taken with a main-minted id: the binding is made BEFORE the run host is
+         * asked for the session, so a binding failure leaves no session, no lock and no log — "deleted" by construction
+         * rather than by a delete. The id the dialog showed (session.newId) is the id the session takes (REQ-GIT-007/118).
+         */
+        let binding: WorktreeBinding | undefined;
+        let sessionId: string | undefined;
+        const root = canonicalPath(currentWorkspace);
+        const svc = services.get(root);
+        if (req.isolation || req.attach) {
+          if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+          sessionId = mintedSessionId ?? randomUUID();
+          mintedSessionId = null;
+          const bindFailure = (r: ProcessReply): CommandOutcome => {
+            const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
+            const headline = `Error: could not create or attach the requested worktree: ${detail}`;
+            raiseNotice('error', headline);
+            log(`run refused before start: ${headline}`);
+            return { ok: false, code: 'session.worktree', headline, detail };
+          };
+          if (req.isolation) {
+            const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: req.isolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000));
+            if (made.kind !== 'worktree.created') return bindFailure(made);
+            binding = { worktree_path: made.path, branch: made.branch, base_branch: made.baseBranch, base_revision: made.baseRevision, created_by_session: true, merge_status: 'ready', integration_session_id: null };
+          } else if (req.attach) {
+            const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: req.attach.path }, millis(60_000));
+            if (checked.kind !== 'worktree.attachable') return bindFailure(checked);
+            binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
+          }
+        }
+        const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt, ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
         if (r.kind !== 'session.started') {
+          // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
+          if (binding?.created_by_session && svc) {
+            const path = binding.worktree_path;
+            void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
+          }
           // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
           // REQ-WORKSPACE-137: the two provider refusals carry an action leading to the Models settings.
           if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? [{ label: 'Open Settings', command: 'config.models' }] : undefined); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
           return refusal(r, 'The session could not be started');
         }
+        if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
         return { ok: true, value: { sessionId: r.sessionId } };
+      }
+      case 'session.newId': {
+        // REQ-GIT-118: the id the launch dialog shows; the next isolated or attached start takes it.
+        mintedSessionId = randomUUID();
+        return { ok: true, value: { sessionId: mintedSessionId } };
+      }
+      case 'git.read': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        // REQ-GIT-102: 15 s per read is the bound; a refresh of a repository with many worktrees is many reads.
+        const r = await svc.link.request({ kind: 'git.view', workspaceRoot: canonicalPath(currentWorkspace) }, millis(600_000));
+        if (r.kind !== 'git.state') return refusal(r, 'The repository could not be read');
+        const st = r.state;
+        log(`git view: ${st.reads} reads in ${st.readMs} ms (git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? (st.detached ? 'detached' : '-')} +${st.ahead}/-${st.behind} worktrees=${st.worktrees.length} history=${st.history.length}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''})`);
+        // REQ-GIT-104 / ADR-0038 c.1: a fixed identity, so refreshes replace rather than stack it; a non-repository raises nothing.
+        if (!st.gitAvailable && raiseNoticeKeyed('git.missing', 'info', 'Working without Git', 'Git is not installed or not on PATH, so this workspace has no history and no worktrees. Everything else works, and Rotaris makes its changes in place instead of in a worktree of its own.')) log('notice: Working without Git');
+        return { ok: true, value: st };
+      }
+      case 'worktree.create': {
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before creating a worktree' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        // REQ-GIT-110/115: the user's own path, not collision-safe — a typed name is created exactly or refused with Git's wording.
+        const r = await svc.link.request({ kind: 'worktree.create', workspaceRoot: canonicalPath(currentWorkspace), branch: req.branch, collisionSafe: false, target: { kind: 'path', path: req.path } }, millis(120_000));
+        if (r.kind !== 'worktree.created') { log(`worktree create refused: ${r.kind === 'refused' ? r.headline : r.kind}`); return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline, ...(r.detail === undefined ? {} : { detail: r.detail }) } : refusal(r, 'The worktree could not be created'); }
+        log(`worktree created by the user: ${r.branch} at ${r.path}`);
+        return { ok: true, value: { path: r.path, branch: r.branch } };
+      }
+      case 'worktree.remove': {
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a worktree' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        const r = await svc.link.request({ kind: 'worktree.remove', workspaceRoot: canonicalPath(currentWorkspace), path: req.path, force: req.force }, millis(120_000));
+        if (r.kind !== 'worktree.removed') {
+          // REQ-GIT-117: the one refusal force would cure is named by its code; everything else is Git's wording.
+          if (r.kind === 'refused') { log(`worktree remove refused${r.needsForce ? ' (needs force)' : ''}: ${r.headline}`); return { ok: false, code: r.needsForce ? 'worktree.needs-force' : r.code, headline: r.headline }; }
+          return refusal(r, 'The worktree could not be deleted');
+        }
+        log(`worktree deleted by the user: ${r.path}${req.force ? ' (forced)' : ''}`);
+        return { ok: true, value: { path: r.path } };
+      }
+      case 'worktree.chooseAttach': {
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before attaching a worktree' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        const chosen = await chooseDirectory({ title: 'Attach to an existing worktree', properties: ['openDirectory'] });
+        if (!chosen) return { ok: true, value: { cancelled: true } };
+        // REQ-GIT-158: validated exactly as REQ-GIT-011 validates an attach, before any session exists.
+        const r = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: canonicalPath(currentWorkspace), path: chosen }, millis(60_000));
+        if (r.kind !== 'worktree.attachable') return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline } : refusal(r, 'The worktree could not be checked');
+        return { ok: true, value: { path: r.path, branch: r.branch } };
+      }
+      case 'worktree.probePath': {
+        try {
+          if (!existsSync(req.path)) return { ok: true, value: { exists: false, nonEmpty: false } };
+          const st = statSync(req.path);
+          return { ok: true, value: { exists: true, nonEmpty: !st.isDirectory() || readdirSync(req.path).length > 0 } };
+        } catch { return { ok: true, value: { exists: true, nonEmpty: true } }; }
       }
       case 'session.list': {
         await awaitWorkspace();
@@ -895,6 +1006,8 @@ async function main(): Promise<void> {
   const capture = process.env['ROTARIS_CAPTURE_PNG'];
   if (capture) {
     const { writeFileSync } = await import('node:fs');
+    // Every proof: a renderer error is logged here, so a blank window is explained by its log and not by its PNG (Part O).
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: renderer console: ${message} (${sourceId}:${line})`); });
     const proofDir = process.env['ROTARIS_THEME_PROOF_DIR'];
     if (proofDir) {
       mkdirSync(proofDir, { recursive: true });
@@ -1061,6 +1174,15 @@ async function main(): Promise<void> {
         for (const ch of step.selector) wc.sendInputEvent({ type: 'char', keyCode: ch });
         if (step.arg !== 'no-enter') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' }); wc.sendInputEvent({ type: 'char', keyCode: 'Return' }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' }); }
         log(`capture: typed "${step.selector}"`);
+      });
+    }
+    // ROTARIS_CAPTURE_KEYS="keyCode@ms;;…": one real key press (down and up) into whatever holds focus — how the Git proof
+    // drags the divider with Left after clicking it (REQ-SHELL-069; verification only).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_KEYS'])) {
+      clocks.timers.after(millis(step.at), () => {
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector });
+        log(`capture: key ${step.selector}`);
       });
     }
     // ROTARIS_CAPTURE_QUIT_MS: a user-initiated close of the main window at that time — the quit path of REQ-MONITOR-131, not the capture's exit.

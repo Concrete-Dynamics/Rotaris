@@ -85,7 +85,10 @@ export interface PermissionPosture {
 
 export interface RunDeps {
   readonly sessionId: SessionId;
+  /** The base workspace — the record's anchor, named in the launch audit and the timeline (REQ-GIT-019). */
   readonly workspaceRoot: string;
+  /** REQ-GIT-019/022: the root the work happens in — the worktree of an isolated run; absent means the base. */
+  readonly effectiveRoot?: string | undefined;
   readonly task: string;
   readonly taskId: string;
   readonly taskLabel?: string | undefined;
@@ -404,7 +407,8 @@ export class Run {
     this.rootId = `root:${iteration}`;
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
-        sessionId: this.sessionId, workspaceRoot: this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
+        // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
+        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,

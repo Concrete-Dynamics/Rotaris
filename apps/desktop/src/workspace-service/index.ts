@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnv
 import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
-import { assessRestore, backupWorkspace, performRestore, readRepository } from '@rotaris/workspace';
+import { assessRestore, backupWorkspace, checkAttach, createWorktree, performRestore, readGitView, readRepository, removeWorktree, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
 
@@ -149,6 +149,40 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const state = await readRepository(req.workspaceRoot, { clocks });
       log(`repository ${req.workspaceRoot}: git=${state.gitAvailable} repo=${state.isRepository} branch=${state.branch ?? '-'} base=${state.base ?? '-'} +${state.ahead}/-${state.behind} touched=${state.touched} uncommitted=${state.uncommitted}${state.failed.length > 0 ? ` failed=${state.failed.join(',')}` : ''} in ${state.readMs} ms`);
       return { kind: 'repository.state', state };
+    }
+    case 'git.view': {
+      // ADR-0038 second execution / REQ-GIT-102/105: every read bounded, every failure an empty value; the count and time logged.
+      const state = await readGitView(req.workspaceRoot, { clocks });
+      log(`git view: ${state.reads} reads in ${state.readMs} ms (${req.workspaceRoot}: git=${state.gitAvailable} repo=${state.isRepository} branch=${state.branch ?? (state.detached ? 'detached' : '-')} upstream=${state.upstream ?? '-'} +${state.ahead}/-${state.behind} worktrees=${state.worktrees.length} history=${state.history.length} uncommitted=${state.uncommitted}${state.failed.length > 0 ? ` failed=${state.failed.join(',')}` : ''})`);
+      return { kind: 'git.state', state };
+    }
+    case 'worktree.create': {
+      // REQ-GIT-009: the name is checked first — a derived (session) name is normalised, a typed one only accepted as it is.
+      const derived = req.target.kind === 'session';
+      const checked = validateBranchName(req.branch, { derived });
+      if (!checked.ok) return { kind: 'refused', code: 'worktree.branch', headline: checked.error, detail: checked.detail };
+      let path: string;
+      if (req.target.kind === 'session') {
+        const p = sessionWorktreePath(req.workspaceRoot, req.target.subpath, req.target.sessionId);
+        if (!p.ok) return { kind: 'refused', code: 'worktree.storage', headline: p.error };
+        path = p.value;
+      } else path = req.target.path;
+      const r = await createWorktree({ root: req.workspaceRoot, branch: checked.name, path, collisionSafe: req.collisionSafe, route: derived ? 'session' : 'manual', ...(req.baseRevision === undefined ? {} : { baseRevision: req.baseRevision }) }, { clocks });
+      if (!r.ok) { log(`worktree create refused (${req.branch} → ${path}): ${r.error.split('\n')[0]}`, 'warn'); return { kind: 'refused', code: 'worktree.create', headline: r.error }; }
+      log(`worktree created: ${r.value.branch} at ${r.value.path} from ${r.value.baseBranch}@${r.value.baseRevision.slice(0, 8)}${r.value.branch !== checked.name ? ` (requested ${checked.name}; REQ-GIT-010 suffix)` : ''}`);
+      return { kind: 'worktree.created', path: r.value.path, branch: r.value.branch, baseBranch: r.value.baseBranch, baseRevision: r.value.baseRevision };
+    }
+    case 'worktree.remove': {
+      const r = await removeWorktree({ root: req.workspaceRoot, path: req.path, force: req.force }, { clocks });
+      if (!r.ok) { log(`worktree remove refused (${req.path}${req.force ? ', forced' : ''}): ${r.error.error}`, 'warn'); return { kind: 'refused', code: 'worktree.remove', headline: r.error.error, needsForce: r.error.needsForce }; }
+      log(`worktree removed: ${req.path}${req.force ? ' (forced)' : ''}`);
+      return { kind: 'worktree.removed', path: r.value.path };
+    }
+    case 'worktree.checkAttach': {
+      const r = await checkAttach({ root: req.workspaceRoot, path: req.path }, { clocks });
+      if (!r.ok) { log(`attach refused (${req.path}): ${r.error}`, 'warn'); return { kind: 'refused', code: 'worktree.attach', headline: r.error }; }
+      log(`attachable: ${req.path} on ${r.value.branch} (base ${r.value.baseBranch}@${r.value.baseRevision.slice(0, 8)})`);
+      return { kind: 'worktree.attachable', path: r.value.path, branch: r.value.branch, baseBranch: r.value.baseBranch, baseRevision: r.value.baseRevision };
     }
     case 'shutdown': {
       closeOwn();

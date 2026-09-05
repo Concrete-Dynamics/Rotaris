@@ -160,3 +160,42 @@ five reads there, the first `git` start included).
 empty state; the notice is the Git view's), the three phrase matches of REQ-GIT-010/012, REQ-GIT-036's reference-name
 check, every operation that writes; and the timeout path has no test that reaches it (no Git read on this machine
 takes 15 s) — it is read, not measured.
+
+## Second execution — 2026-09-05, the Git view's reads and the first writes (Part O)
+
+*Recorded under GD-10. The helper as decided; nothing in the decision was falsified.*
+
+**Built and run** (`packages/workspace/src/git/view.ts`, `git/worktrees.ts`, `git/paths.ts`; the workspace service answers
+`git.view`, `worktree.create`, `worktree.remove`, `worktree.checkAttach`): every read and every write through the one
+helper. **The reads** (REQ-GIT-105): the two gates, the branch, the upstream and its left-right count, the workspace's
+`status --porcelain -z` and `diff --numstat -z HEAD`, `worktree list --porcelain`, `rev-parse --git-common-dir`, `log -30`
+and the local set `rev-list <upstream>..HEAD` — then two per linked worktree (the count and the merge-base diff, both
+against the base tree's branch), each bounded at **15 s**, each failure its empty value and its name in `failed`. The
+base tree is the entry whose path is the common directory's parent, never a branch name (REQ-GIT-106); every path is
+counted under REQ-GIT-003's exclusion on the path as named; the local flag is the reachability set, never a position
+(REQ-GIT-108). **The writes** (REQ-GIT-005..013, 110, 111): `worktree add -b <branch> <path> <base>` after the two
+REQ-GIT-006 checks and the path check, collision-safe by REQ-GIT-010's exact three phrases with `-2`..`-50`,
+`worktree remove [--force]` with Git's own "contains modified or untracked files, use --force to delete it" recognised
+as the ONE refusal force would cure, and the attach check by common directory — each bounded at **30 s**, each failure
+REQ-GIT-013's ladder verbatim, REQ-GIT-012's two-line replacement the only rewording. Consequence 1's notice now
+exists: `git.missing`, "Working without Git", raised once per application session from main when a refresh answers
+`gitAvailable: false`; a non-repository raises nothing.
+
+**Measured** (`pnpm git-proof`, this machine, Git 2.41 for Windows): a refresh of a three-commit repository with one
+linked worktree is **11 reads in 710–876 ms**; the unit test's repository with a bare remote and a linked tree reads in
+≈1.5 s with the first Git start. A session worktree is created under `.rotaris/worktrees/<sid>` and the scripted run's
+`write_file` lands `NOTES.md` in it and not in the base, which stays clean (`.rotaris/` ignored). The two-step delete
+was executed against a real refusal: Git's phrase matched, the forced removal took the directory with it.
+
+**REQ-GIT-010/012's phrase matches, now executed:** the collision phrase was hit by a real `worktree add` on an existing
+branch (`a branch named '…' already exists`), the suffix `-2` taken; the long-path phrases are matched against a
+Git-shaped fixture only — no path on this machine exceeds the limit, so that branch is tested, not measured.
+**The 30 s timeout path** is now reached by the unit test with a 1 ms bound: the text is the fixed sentence with the
+rendered command. **Found:** nothing in the helper or the reads. Two things beside them, both in the verification
+seams and neither a mechanism of this record: an occluded Electron window stops painting, so a capture returned a frame
+older than the DOM the probes read (background throttling is now off while capturing); and a folder under the product's
+own checkout is inside a repository — the "plain folder" scenario had to live in the OS temp directory, which is
+REQ-GIT-103 behaving exactly as written. **Readings taken:** REQ-GIT-107's untracked paths count in `files` and in
+`uncommitted` with no line count read (a line count would mean reading the file); REQ-GIT-019/022's "re-rooted" is
+read as "the record and the configuration stay with the base, the work happens in the tree"; REQ-GIT-022/023's order
+with a main-minted id is "bind first, then ask for the session", so a failed bind has no session to delete.

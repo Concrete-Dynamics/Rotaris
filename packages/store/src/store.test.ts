@@ -451,9 +451,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v7; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v8; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(7);
+    expect(CURRENT_SCHEMA_VERSION).toBe(8);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -504,5 +504,23 @@ describe('store — the power-loss writer runs under the settings open.ts applie
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('store — v8: the worktree binding and the sandbox mode on the session row (REQ-GIT-015/017/022, REQ-SHELL-125)', () => {
+  it('a row written with a binding reads it back verbatim; a row written without one reads NULL and the default mode', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000098');
+    const r = openWorkspaceStore(root, id, ws);
+    const dal = new StoreDal(r.db);
+    const binding = JSON.stringify({ worktree_path: 'D:/ws/.rotaris/worktrees/s1', branch: 'rotaris/session/s1', base_branch: 'main', base_revision: 'abc', created_by_session: true, merge_status: 'ready', integration_session_id: null });
+    dal.upsertSession({ session_id: 's1', execution_status: 'idle', workspace_root: 'D:/ws', created_at: 't', updated_at: 't', worktree: binding, sandbox_mode: 'read-only' });
+    dal.upsertSession({ session_id: 's2', execution_status: 'idle', workspace_root: 'D:/ws', created_at: 't', updated_at: 't' });
+    expect(dal.getSession('s1' as never)).toMatchObject({ worktree: binding, sandbox_mode: 'read-only' });
+    // REQ-GIT-017: an absence is an absence — nothing invented for an older row.
+    expect(dal.getSession('s2' as never)).toMatchObject({ worktree: null, sandbox_mode: 'off' });
+    // A status touch never moves the binding (REQ-GIT-019: binding a worktree does not move the record, and nothing after creation rewrites it).
+    dal.upsertSession({ session_id: 's1', execution_status: 'running', workspace_root: 'D:/ws', created_at: 't', updated_at: 't2' });
+    expect(dal.getSession('s1' as never)).toMatchObject({ execution_status: 'running', worktree: binding, sandbox_mode: 'read-only' });
+    r.db.close();
   });
 });

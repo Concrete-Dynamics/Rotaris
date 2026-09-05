@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os';
  *                      key and presses "Add endpoint"; the credential file, its protection, the snapshot and
  *                      the starter agents.yaml asserted; the log holds no credential.
  *   2. slots         — the three tier slots set to anthropic/claude-haiku-4.5 and saved.
+ *   3b. intents      — three more real runs, one prompt per intent family: the classifier's answer is a category
+ *                      from the small slot, never the fallback (Part L; the first real run fell to it).
  *   3. run           — one real run: the leased bearer, a request to OpenRouter, an agent row, a tool call
  *                      settled through the gate, usage figures, the terminal result.
  *   4. spike6        — spike 6's live half against the same endpoint, with the credential the owner stored in
@@ -34,12 +36,17 @@ const output = resolve(repo, '.slice-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 // --resume keeps the profile (and the credential the owner already pasted) and skips the first launch.
 const resume = process.argv.includes('--resume');
-const ORDER = ['first-launch', 'slots', 'run', 'spike6', 'sign-out', 'refused'];
+const ORDER = ['first-launch', 'slots', 'run', 'intents', 'spike6', 'sign-out', 'refused'];
+const INTENTS = [
+  { prompt: 'What is the first heading of README.md?', expect: ['question'] },
+  { prompt: "Append the line 'hello' to the end of README.md.", expect: ['explicit_trivial', 'single_file_change'] },
+  { prompt: 'Add a --json flag to the CLI that prints the effective configuration as JSON, with a unit test for it.', expect: ['small_feature', 'moderate_feature', 'large_feature'] },
+];
 const from = process.argv.find((a) => a.startsWith('--from='))?.slice(7) ?? (resume ? 'slots' : 'first-launch');
 if (!ORDER.includes(from)) throw new Error(`--from must be one of ${ORDER.join(', ')}`);
 /** A scenario before `from` is replayed from its evidence rather than launched. */
 const replay = (name) => resume && ORDER.indexOf(name) < ORDER.indexOf(from);
-if (resume) { for (const name of ORDER) if (!replay(name)) for (const ext of ['.log', '.png']) rmSync(join(output, `${name}${ext}`), { force: true }); rmSync(join(output, 'results.json'), { force: true }); }
+if (resume) { for (const name of ORDER) if (!replay(name)) for (const file of name === 'intents' ? INTENTS.map((_, i) => `intents-${i + 1}`) : [name]) for (const ext of ['.log', '.png']) rmSync(join(output, `${file}${ext}`), { force: true }); rmSync(join(output, 'results.json'), { force: true }); }
 else rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 
@@ -231,6 +238,25 @@ results.run = {
   tokens: { input: session.tokens_input, output: session.tokens_output }, rowKinds: kinds, toolRows: toolRows.length,
   requests: [...new Set(requests)], lastUsage, intent, answer: agentRows.map((r) => r.body).join(' ').slice(0, 400),
 };
+
+// 3b. The intent classifier on the real small slot (REQ-ORCH-005..010; Part L). The slice's first real run fell to
+// the fallback because the model answered the request instead of labelling it; each of these runs must classify.
+results.intents = [];
+for (const [i, c] of INTENTS.entries()) {
+  const name = `intents-${i + 1}`;
+  const log = replay('intents') ? readFileSync(join(output, `${name}.log`), 'utf8') : launch(name, {
+    ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
+  }, RUN_WAIT_MS + 60_000);
+  assertNoCredential(log, name);
+  const line = log.split('\n').find((l) => /run host info: intent: /.test(l)) ?? '';
+  const m = /intent: ([a-z_]+)(?: \(([^)]*)\))?(?: via (json_schema|json_object|text))?/.exec(line);
+  if (!m) throw new Error(`${name}: no intent line in the log`);
+  const [, category, detail, rung] = m;
+  if (/fallback/.test(line)) throw new Error(`${name}: the classifier fell back: ${line.trim()}`);
+  if (!c.expect.includes(category)) throw new Error(`${name}: "${c.prompt}" classified as ${category}, expected one of ${c.expect.join(', ')}`);
+  const warned = log.split('\n').filter((l) => /intent classifier: .* (rejected|answered) the/.test(l)).map((l) => l.replace(/^.*intent classifier: /, '').trim());
+  results.intents.push({ prompt: c.prompt, category, confidence: detail ?? null, rung: rung ?? null, rungNotes: warned });
+}
 
 // 4. Spike 6's live half, with the credential the owner stored in this proof's profile. The key reaches the harness
 //    through a variable named for it and is never printed; only the harness's figures are kept.

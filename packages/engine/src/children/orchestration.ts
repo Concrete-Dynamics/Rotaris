@@ -37,7 +37,7 @@ export interface ChildrenDeps {
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
-  readonly resolveCredential: () => Promise<string>;
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   readonly maxStepsPerTurn: number;
   readonly budget: Budget;
   readonly modelCap: (modelKey: string) => number | null;
@@ -202,7 +202,7 @@ export class IterationChildren implements DelegationOps {
     const turn = (task: string, history: readonly ChatMessage[]) => runTurn({
       writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
       systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
-      resolveCredential: deps.resolveCredential, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
+      credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
       ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
       ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
       ...(deps.shouldPause ? { shouldPause: deps.shouldPause } : {}),

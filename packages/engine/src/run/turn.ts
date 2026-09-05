@@ -69,7 +69,8 @@ export interface TurnDeps {
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
-  readonly resolveCredential: () => Promise<string>;
+  /** ADR-0030: the credential of the model this turn calls. */
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   /** A final belt behind the loop supervisor. */
   readonly maxStepsPerTurn: number;
   readonly warn: (message: string) => void;
@@ -202,7 +203,7 @@ async function step(deps: TurnDeps, messages: readonly ChatMessage[], specs: rea
   };
   const report = await backend.runTurn({
     persona: deps.persona, systemPrompt: deps.systemPrompt, messages, tools: specs, model: deps.model, thinking: deps.thinking,
-    timeoutMs: deps.modelTimeoutMs, retries: deps.modelRetries, resolveCredential: deps.resolveCredential,
+    timeoutMs: deps.modelTimeoutMs, retries: deps.modelRetries, resolveCredential: deps.credentialFor(deps.model),
   }, sink, signal);
   if (index !== null) writer.settleRow(index, report.text || text);
   return report;

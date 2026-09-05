@@ -317,7 +317,7 @@ describe('engine — the session writer feeds the projection owner (ADR-0008, AD
   it('Sessions: start records the prompt as row 0 kind user and runs it; attach and pageOlder serve a surface (REQ-CHAT-011, REQ-CHAT-165)', async () => {
     const pub = recorder();
     let n = 0;
-    const model = { backend: new DefaultAgentBackend(new ScriptedModelClient([answer('done')])), config: { ...RUN_CONFIG_DEFAULTS, model: { providerId: 'p', modelId: 'm', dialect: 'chat' as const }, resolveCredential: async () => 'k' } };
+    const model = { backend: new DefaultAgentBackend(new ScriptedModelClient([answer('done')])), config: { ...RUN_CONFIG_DEFAULTS, model: { providerId: 'p', modelId: 'm', dialect: 'chat' as const }, credentialFor: () => async () => 'k' } };
     const sessions = new Sessions({ clocks: clock, publisher: pub, pid: 1, host: HOST, retentionCap: 20_000, warn: () => {}, mintSessionId: () => `sid-${++n}`, model, sessionFilesDir: () => join(dir, 'sessions', `sid-${n}`) });
     const started = sessions.start(dal, 'C:\\ws', 'build me a thing');
     expect(started.ok).toBe(true);

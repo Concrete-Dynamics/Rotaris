@@ -27,12 +27,12 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
   const makeSessions = (backend: AgentBackend, extras: { messageLimit?: number | null; onRunPaused?: (id: SessionId, info: { count: number; limit: number | null }) => void; notice?: (n: RunNotice) => void; models?: (key: string) => { model: typeof MODEL; thinking: 'unset' } | null } = {}) => new Sessions({
     clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 4242, host: HOST,
     retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-control',
-    model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, resolveCredential: async () => '' } },
+    model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } },
     sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid),
     runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', messageLimit: extras.messageLimit ?? null },
     ...(extras.onRunPaused ? { onRunPaused: extras.onRunPaused } : {}),
     ...(extras.notice ? { notice: extras.notice } : {}),
-    ...(extras.models ? { configure: (root, ctx) => { void root; void ctx; return { ok: true as const, value: { model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, resolveCredential: async () => '' } }, runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', messageLimit: extras.messageLimit ?? null }, models: extras.models! } }; } } : {}),
+    ...(extras.models ? { configure: (root, ctx) => { void root; void ctx; return { ok: true as const, value: { model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } }, runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', messageLimit: extras.messageLimit ?? null }, models: extras.models! } }; } } : {}),
   });
 
   it('queues a prompt during a run, consumes it exactly once at the iteration boundary as a "Queued Prompts" task, and refuses edits after the trigger (REQ-CHAT-035/037/038/040)', async () => {

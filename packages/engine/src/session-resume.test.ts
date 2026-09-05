@@ -27,7 +27,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
   const makeSessions = (pid: number, backend: AgentBackend, extras: { preflight?: (ctx: PreflightContext) => Promise<Preflight>; isProcessAlive?: (pid: number) => boolean } = {}) => new Sessions({
     clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid, host: HOST,
     retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-resume',
-    model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, resolveCredential: async () => '' } },
+    model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } },
     sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid),
     ...(extras.preflight ? { preflight: extras.preflight } : {}),
     ...(extras.isProcessAlive ? { isProcessAlive: extras.isProcessAlive } : {}),

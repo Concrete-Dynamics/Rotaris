@@ -219,7 +219,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       return original(req);
     };
     let n = 0;
-    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, resolveCredential: async () => 'k' };
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),

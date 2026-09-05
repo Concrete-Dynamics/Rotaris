@@ -49,7 +49,7 @@ describe('engine/run — the lifecycle hook points (ADR-0015, REQ-HOOKS-003/080/
     let n = 0;
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `H${++n}`,
-      model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, resolveCredential: async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+      model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       ...(port ? { tools: () => port } : {}), attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
       ...(hooks ? { hooks: () => hooks } : {}), notice: (nn) => notices.push(nn),

@@ -56,10 +56,11 @@ export interface RunConfig {
   readonly consecutiveRetryLimit: number;
   /** A final belt behind the loop supervisor (REQ-ORCH-099..107). */
   readonly maxStepsPerTurn: number;
-  readonly resolveCredential: () => Promise<string>;
+  /** ADR-0030: each call resolves the credential of the model it goes to (per-model leases, REQ-PROVIDER-066). */
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
 }
 
-export const RUN_CONFIG_DEFAULTS: Omit<RunConfig, 'model' | 'resolveCredential'> = {
+export const RUN_CONFIG_DEFAULTS: Omit<RunConfig, 'model' | 'credentialFor'> = {
   persona: 'orchestrator',
   systemPrompt: 'You are the orchestrator. Carry out the task you are given and answer plainly.',
   thinking: 'unset',
@@ -398,7 +399,7 @@ export class Run {
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
         sessionId: this.sessionId, workspaceRoot: this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
-        modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn,
+        modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
@@ -413,7 +414,7 @@ export class Run {
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
-      resolveCredential: config.resolveCredential, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
+      credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
     }, text, history, this.abort.signal);

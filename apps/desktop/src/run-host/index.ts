@@ -254,8 +254,8 @@ const sessions = new Sessions({
     if (!cb.enabled || process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off') return null;
     const timeoutMs = Math.round(run.runtime.loopClassificationTimeoutS * 1_000);
     const classifier = createLoopClassifier({
-      backend: run.model.backend, runModel: run.model.config.model, thinking: run.model.config.thinking, resolveCredential: run.model.config.resolveCredential,
-      memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted), modelTimeoutMs: timeoutMs,
+      backend: run.model.backend, runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
+      memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, leased.get(workspaceRoot), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
     });
     return classifier ? {
       config: {
@@ -271,8 +271,8 @@ const sessions = new Sessions({
     const run = configuredFor(ctx.workspaceRoot);
     if (!run) throw new Error('the run has no configuration');
     return runPreflight(ctx, {
-      clocks, backend: run.model.backend, runModel: run.model.config.model, resolveCredential: run.model.config.resolveCredential, modelTimeoutMs: run.model.config.modelTimeoutMs,
-      globalDir: configDir, tier: run.tier, slots: classifierSlotsOf(run.cfg, run.scripted), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
+      clocks, backend: run.model.backend, runModel: run.model.config.model, credentialFor: run.model.config.credentialFor, modelTimeoutMs: run.model.config.modelTimeoutMs,
+      globalDir: configDir, tier: run.tier, slots: classifierSlotsOf(run.cfg, run.scripted, leased.get(ctx.workspaceRoot), (m) => ctx.warn(m)), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
     });
   },
 });

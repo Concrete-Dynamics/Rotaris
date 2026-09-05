@@ -52,7 +52,7 @@ export interface SummariserDeps {
   readonly model: ModelRef;
   readonly thinking: ThinkingLevel;
   readonly timers: Timers;
-  readonly resolveCredential: () => Promise<string>;
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   readonly timeoutMs?: Millis;
 }
 
@@ -121,7 +121,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
     try {
       const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nTranscript:\n${transcript}`;
       const r = await s.backend.runTurn(
-        { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: s.model, thinking: s.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.resolveCredential },
+        { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: s.model, thinking: s.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.credentialFor(s.model) },
         { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },
         controller.signal,
       );

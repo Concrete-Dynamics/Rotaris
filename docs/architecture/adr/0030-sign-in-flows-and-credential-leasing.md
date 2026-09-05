@@ -161,3 +161,16 @@ API-key flow's "validated by discovery" stored a value of another vendor's shape
 (REQ-PROVIDER-133's guarantee rests on an endpoint property the requirement does not state — OQ-50). The flow
 now repeats the discovery without the key and, where that also succeeds, completes the sign-in saying the key
 could not be validated, with the provider's health left unchecked and the notice a warning.
+
+**Second execution — 2026-09-05, the lease resolved per model (Part L).** Until now every model call of a run
+authenticated with the entry model's resolver — the classifier's slot, the loop classifier's model, the summariser
+and a child persona's own model all sent the entry provider's bearer, so a `small_model` on a second signed-in
+provider was refused with a 401 the moment one existed. `RunConfig.credentialFor(model)` now returns the resolver of
+the `models:` entry the reference was produced from (keyed by what a `ModelRef` carries: provider, base URL, model
+id), each through the same per-request read of the leased map or the entry's own key; a reference no entry produced
+falls back to the entry model's with one warning. The summariser runs on `default_summary_model` (REQ-CONFIG-065)
+when it names one. A slot whose provider main could not lease is dropped with a warning before the ladder consults
+it (REQ-ORCH-009 then takes the next slot), so no call goes out that the lease report has already said will be
+refused. `session.start` already leased every provider the configuration names (REQ-PROVIDER-066), so nothing
+crosses the process boundary that did not before. **Found: nothing in the leasing** — the defect was in the run
+host's wiring of it, and `configuration.test.ts` now pins two providers each receiving their own bearer.

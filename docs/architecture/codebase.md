@@ -171,8 +171,11 @@ uses its `api_key` or `api_key_env`, read per request. `ROTARIS_MODEL_DIALECT=sc
 for every model (verification only) and is **the last environment stopgap**; a `models:` entry with provider
 `scripted` does the same per entry. A fatal file, no model at all ("No model configured") or an unauthenticated
 entry provider ("Provider authentication required", REQ-WORKSPACE-137) refuses the run before it starts
-(REQ-EVENTS-021, REQ-CONFIG-478). The classifier, summariser and loop slots still authenticate with the entry
-model's resolver; per-model resolution for the other slots is owed.
+(REQ-EVENTS-021, REQ-CONFIG-478). Since Part L every call resolves **the credential of the model it goes to**
+(`credentialFor`; ADR-0030 second execution): the classifier's slot, the loop classifier's model, the summariser on
+`default_summary_model` and a child persona's own model each carry their own bearer or key, and a slot whose provider
+was not leased is skipped with a warning. (Until then every call authenticated as the entry model — the reason kept
+in `configuration.ts`'s header.)
 
 17. **the vertical slice — a provider signed in through the product, a run on a real model (2026-09-05):** the
    `providers` package in main (ADR-0028/0029/0030/0032 first executed): the six-record catalogue checked at start,
@@ -192,6 +195,17 @@ model's resolver; per-model resolution for the other slots is owed.
    the ladder asks for, so the pre-flight fell to its fallback intent — REQ-ORCH-005's ladder against a real
    small model is owed a prompt that a real model answers as asked. A load with 431 discovered models takes
    117–175 ms (ADR-0036's figure was 4.5 ms with two).
+
+18. **the small-model path on a real provider (2026-09-05, Part L):** the classifier's frame rebuilt from what the
+   slice found — the request quoted between delimiters, the system prompt forbidding the model to act on it, an
+   instruction on every rung, the first balanced object taken from a prefaced answer, and a structured rung answered
+   without JSON remembered as unsupported so the ladder descends (the sixteenth defect; ADR-0026's third execution;
+   the same frame in the loop classifier). Credentials resolved **per model** (ADR-0030's second execution): the
+   classifier, the loop classifier, the summariser on `default_summary_model` (REQ-CONFIG-065) and every child
+   persona's model each authenticate as themselves; an unleased slot is skipped (REQ-ORCH-009). `pnpm slice-proof`
+   gains the `intents` scenario — three real runs, one prompt per intent family, each asserted to classify from the
+   small slot and never fall back, the answering rung recorded. **Measured:** awaiting the owner's re-run with a
+   pasted key (`.slice-proof/results.json` → `intents`).
 
 16. **the control channel (2026-09-05):** REQ-MONITOR-004's twenty-two operations behind ADR-0010's channel 1 — the
    skeleton's list was the runtime's, not the requirement's, and is replaced. Queued prompts are a session-owned
@@ -231,7 +245,9 @@ model's resolver; per-model resolution for the other slots is owed.
    bundle by facet; every role's instructions carry the playbook its row resolves to (role × intent-or-group-or-
    default × tier-or-any, overrides from `playbooks/` at two scopes, unknown names warned and ignored); the BUDGET
    slot clamps the child policy. Settings → Personas lists the catalogue. **Found: nothing** — the first part of
-   this record to run clean against the scripted client on its first execution.
+   this record to run clean against the scripted client on its first execution. **Then, on the first real call
+   (the slice, 2026-09-05): the sixteenth defect** — the small model answered the request instead of labelling it
+   and the ladder never descended (entry 18; ADR-0026's third execution).
 
 12. **lifecycle hooks (2026-09-03/04):** the set is resolved once at run start from the two `agents.yaml` scopes,
    gated on provenance (a workspace's list runs only under a stored approval keyed by its fingerprint; withheld
@@ -377,7 +393,8 @@ environment, never logged), then the credential file's five keys and exact prote
 picks, the bootstrapped `agents.yaml`, and a log free of the key are asserted; (2) the three tier slots set to
 `anthropic/claude-haiku-4.5` and saved; (3) one real run — the lease, the request to OpenRouter, a settled tool row,
 usage figures and the terminal result from the store; (4) spike 6's live harness against the same endpoint with the
-stored credential; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
+stored credential; (3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small
+slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
 the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
 key (`.slice-proof/results.json`), after two runs that each found a defect.
@@ -412,7 +429,7 @@ records `application_shutdown` with the terminal pair and no lock. Its evidence 
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | ~~spike 6's live half~~ **taken 2026-09-05** (OpenRouter, four of four; ADR-0027's fallback withdrawn); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the auto-discovered-server layer and `mcp_servers`, secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health, per-slot credential resolution; for the intent: the classifier prompt a real small model answers as JSON (the ladder fell to the fallback on its first real call), REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the auto-discovered-server layer and `mcp_servers`, secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health; for the intent (~~the classifier prompt a real small model answers as asked~~ **built 2026-09-05**, Part L): REQ-ORCH-012's prior-response route, plan mode (REQ-ORCH-152..154); ~~per-slot credential resolution~~ **built 2026-09-05** |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |

@@ -20,7 +20,7 @@ export interface PreflightDeps {
   readonly clocks: Clocks;
   readonly backend: AgentBackend;
   readonly runModel: ModelRef;
-  readonly resolveCredential: () => Promise<string>;
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   readonly modelTimeoutMs: number;
   readonly globalDir: string;
   readonly tier: ModelTier | null;
@@ -36,11 +36,11 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
   const freshIntent = await classifyIntent(
     { prompt: ctx.prompt, metadata: { entrypoint: 'desktop', workspace_hash: String(ctx.workspaceRoot.length) } },
     deps.slots,
-    { backend: deps.backend, timers: deps.clocks.timers, resolveCredential: deps.resolveCredential, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
+    { backend: deps.backend, timers: deps.clocks.timers, credentialFor: deps.credentialFor, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
     ctx.signal,
   );
   const intent = carryOver(freshIntent, ctx.previousIntent ?? null, ctx.hasUnfinishedWork ?? null);
-  deps.log(`intent: ${intent.category}${intent.fallback ? ` (fallback: ${intent.reason})` : intent.confidence === null ? '' : ` (${intent.confidence})`}`);
+  deps.log(`intent: ${intent.category}${intent.fallback ? ` (fallback: ${intent.reason})` : intent.confidence === null ? '' : ` (${intent.confidence})`}${intent.rung ? ` via ${intent.rung}` : ''}`);
   const mapping = resolveIntentMapping(readIntentMapping(join(deps.globalDir, 'intent-tools.yaml')));
   if (mapping.warning !== '') warn(mapping.warning);
   const grant = intentGrant(intent.category, deps.runOverride, mapping.mapping);

@@ -16,9 +16,12 @@ import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelCli
  * Credentials: a model naming an `auth_provider` (REQ-CONFIG-083, REQ-PROVIDER-092) authenticates with the
  * bearer main LEASED to this run for that provider (ADR-0030; `session.start` asks `credentials.lease` for the
  * providers `authProvidersOf` names, REQ-PROVIDER-066); a model naming none uses its `api_key` or
- * `api_key_env`, resolved per request. Every model call of a run still authenticates with the entry model's
- * resolver; per-model resolution for the other slots is owed. The entry role's model TIER (REQ-ORCH-023) is
- * the slot alias its model resolved through (`resolved_persona_model_tiers`), no longer an environment
+ * `api_key_env`, resolved per request. Since Part L every call resolves the credential OF THE MODEL IT GOES TO
+ * (`credentialFor`, keyed by what a `ModelRef` carries): the classifier's slot, the loop classifier's model, the
+ * summariser's `default_summary_model` (REQ-CONFIG-065) and a child persona's own model each carry their own
+ * bearer or key. (Until then every call of a run authenticated with the entry model's resolver — a second
+ * provider on `small_model` got the wrong bearer; ADR-0030's note.) The entry role's model TIER (REQ-ORCH-023)
+ * is the slot alias its model resolved through (`resolved_persona_model_tiers`), no longer an environment
  * variable.
  */
 export const PROVIDER_BASE_URLS: Readonly<Record<string, string>> = Object.freeze({
@@ -96,6 +99,34 @@ export function credentialResolver(entry: ModelEntry | undefined, env: Readonly<
   };
 }
 
+/** What a `ModelRef` carries, as the key a credential is looked up by: two entries alike in all three share one. */
+export function credentialKey(ref: ModelRef): string {
+  return `${ref.providerId}|${ref.baseUrl ?? ''}|${ref.modelId}`;
+}
+
+/**
+ * ADR-0030 per model: one resolver per `models:` entry, found by the reference a call carries; a reference no
+ * entry produced (a scripted stand-in, a mid-run switch to an unknown key) falls back to the entry model's
+ * resolver with a warning, so no call goes out with no credential at all.
+ */
+export function credentialFactory(cfg: LoadedConfiguration, scripted: boolean, env: Readonly<Record<string, string | undefined>>, bearers: () => Readonly<Record<string, string>>, entry: () => Promise<string>, warn: (m: string) => void): (model: ModelRef) => () => Promise<string> {
+  const byKey = new Map<string, () => Promise<string>>();
+  for (const [name, e] of Object.entries(cfg.models)) {
+    const ref = modelRefOf(cfg, name, scripted);
+    if (!ref) continue;
+    const key = credentialKey(ref);
+    if (!byKey.has(key)) byKey.set(key, ref.providerId === SCRIPTED_PROVIDER ? async () => '' : credentialResolver(e, env, bearers));
+  }
+  const warned = new Set<string>();
+  return (model) => {
+    const found = byKey.get(credentialKey(model));
+    if (found) return found;
+    if (model.providerId === SCRIPTED_PROVIDER) return async () => '';
+    if (!warned.has(credentialKey(model))) { warned.add(credentialKey(model)); warn(`credentials: no models: entry produced ${model.providerId}/${model.modelId}; the entry model's credential is used for it`); }
+    return entry;
+  };
+}
+
 /** REQ-PROVIDER-066: the sign-in providers behind every configured model, each once, sorted. */
 export function authProvidersOf(cfg: LoadedConfiguration): string[] {
   return [...new Set(Object.values(cfg.models).map((m) => m.auth_provider).filter((p): p is string => typeof p === 'string' && p.length > 0))].sort();
@@ -151,13 +182,34 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
   };
 }
 
-/** REQ-ORCH-005's slots from the configuration: the three the classifier ladder may use. */
-export function classifierSlotsOf(cfg: LoadedConfiguration, scripted: boolean): ClassifierSlots {
-  return {
-    small: modelRefOf(cfg, cfg.slots.small_model, scripted),
-    fallback: modelRefOf(cfg, cfg.slots.fallback_model, scripted),
-    summary: modelRefOf(cfg, cfg.slots.default_summary_model, scripted),
+/**
+ * REQ-ORCH-005's slots from the configuration: the three the classifier ladder may use. A slot whose model
+ * names an `auth_provider` main could not lease is dropped with a warning, so REQ-ORCH-009's order consults
+ * the next slot instead of sending a request that will be refused (`leased` is the map main answered; absent
+ * means no lease was asked, as in tests and the scripted dialect).
+ */
+export function classifierSlotsOf(cfg: LoadedConfiguration, scripted: boolean, leased?: Readonly<Record<string, string>>, warn: (m: string) => void = () => undefined): ClassifierSlots {
+  const slot = (name: string | null, label: string): ModelRef | null => {
+    const ref = modelRefOf(cfg, name, scripted);
+    if (!ref || !leased || name === null || scripted) return ref;
+    const provider = cfg.models[name]?.auth_provider;
+    if (provider && !leased[provider]) { warn(`${label} names ${name}, whose provider ${provider} is not authenticated; the slot is skipped for this run (REQ-ORCH-009)`); return null; }
+    return ref;
   };
+  return {
+    small: slot(cfg.slots.small_model, 'small_model'),
+    fallback: slot(cfg.slots.fallback_model, 'fallback_model'),
+    summary: slot(cfg.slots.default_summary_model, 'default_summary_model'),
+  };
+}
+
+/** REQ-CONFIG-065: the summariser's model, when `default_summary_model` names one this run can reach. */
+export function summariserOf(cfg: LoadedConfiguration, scripted: boolean): { model: ModelRef; thinking: ThinkingLevel } | null {
+  const name = cfg.slots.default_summary_model;
+  const ref = modelRefOf(cfg, name, scripted);
+  if (!ref || !name) return null;
+  const slot = cfg.slotThinking.default_summary_model;
+  return { model: ref, thinking: slot && slot !== 'auto' ? slot : thinkingOf(cfg.models[name]) };
 }
 
 export interface ConfiguredRun extends RunSetup {
@@ -220,8 +272,10 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
   const isScripted = model.providerId === SCRIPTED_PROVIDER;
   const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i) });
   const backend: AgentBackend = new DefaultAgentBackend(client);
+  const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, () => deps.bearers(workspaceRoot));
   const setup: ModelSetup = {
     backend,
+    summariser: summariserOf(cfg, scripted),
     config: {
       ...RUN_CONFIG_DEFAULTS,
       persona: cfg.defaultPersona,
@@ -233,12 +287,12 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
       iterationLimit: runtime.iterationLimit,
       transientRetries: runtime.transientRetries,
       consecutiveRetryLimit: runtime.consecutiveRetryLimit,
-      resolveCredential: isScripted ? async () => '' : credentialResolver(entry, deps.env, () => deps.bearers(workspaceRoot)),
+      credentialFor: credentialFactory(cfg, scripted, deps.env, () => deps.bearers(workspaceRoot), entryCredential, (m) => warnings.push(m)),
     },
   };
   const authProviders = authProvidersOf(cfg);
   const tier = entryTierOf(cfg);
-  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}`);
+  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; slots: small=${cfg.slots.small_model ?? '-'} fallback=${cfg.slots.fallback_model ?? '-'} summary=${cfg.slots.default_summary_model ?? '-'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}`);
   // REQ-MONITOR-142: a mid-run switch resolves a `models:` key the same way the entry model was.
   const models = (key: string) => { const ref = modelRefOf(cfg, key, scripted); return ref ? { model: ref, thinking: thinkingOf(cfg.models[key]) } : null; };
   return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier });

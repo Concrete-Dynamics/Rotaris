@@ -41,6 +41,8 @@ export const IntentResultSchema = z.object({
   reason: z.string(),
   fallback: z.boolean(),
   carried_over: z.boolean(),
+  /** The implementation's: which rung of REQ-ORCH-010's ladder answered; absent on a fallback or a carry-over. */
+  rung: z.enum(['json_schema', 'json_object', 'text']).optional(),
 });
 export type IntentResult = z.infer<typeof IntentResultSchema>;
 

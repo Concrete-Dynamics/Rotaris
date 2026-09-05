@@ -27,7 +27,7 @@ sequenceDiagram
     M-->>W: {ok:false} and a notice; nothing was recorded
   else
     RH->>M: ask credentials.lease {providerIds} (ADR-0030; REQ-PROVIDER-066/067)
-    M-->>RH: credentials.leased {bearers, report} — the bearers read per request by the run's resolvers
+    M-->>RH: credentials.leased {bearers, report} — read per request by the resolver OF THE MODEL each call goes to (credentialFor; Part L); an unleased slot is skipped
     alt the entry model's auth_provider is unresolved (REQ-WORKSPACE-137 "Provider authentication required")
       RH-->>M: refused; nothing was recorded
     end
@@ -86,7 +86,7 @@ the agent takes another round; an empty reply with no call is the runtime's stuc
 into the **ledger** (one row per child, every transition one transaction with its `child.transition` event);
 the **scheduler** is a pass to quiescence triggered by a state change, never a timer (cascade `blocked`, admit
 on `succeeded` + report stored, promote one held child per freed model slot, claim starts); a child runs its own
-turn loop under its persona's tools, model and supervisor; its **report** comes from a bounded summarising pass;
+turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model;
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal.
 
 ## 5. Controls reaching in (ADR-0010 #1, `Sessions.control`)

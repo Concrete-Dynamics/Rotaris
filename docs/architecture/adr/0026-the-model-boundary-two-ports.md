@@ -163,3 +163,33 @@ optional `output` — a strict JSON schema or JSON-object mode — and the AI SD
 provider's HTTP 400/422 naming `response_format`, `json_schema` or JSON mode as a rung rejection and steps
 down; anything else is a failure. Exercised against the scripted client only: the live half of spike 6 is
 still owed and the rejection heuristic has met no real provider. **Found: nothing** at the port.
+
+## Third execution — 2026-09-05, the structured-output ladder against a real provider (Part L)
+
+*Recorded under GD-10. The sixteenth first-execution defect (ADR-0058 c.17).*
+
+**What ran:** the slice's first real run (`pnpm slice-proof`, OpenRouter, `anthropic/claude-haiku-4.5`) sent the
+pre-flight classification on the strict rung and logged `intent: moderate_feature (fallback: the classifier's
+response could not be mapped to a category (I don't have the ability to directly read files from your wo…))`.
+**The model carried the request out instead of labelling it.** Three causes, each a reading no scripted client
+could falsify: the strict rung's user message carried no instruction at all (the schema was meant to be the
+instruction); the system prompt never said the request was data and not to be acted on; and the adapter's
+`Output.object` was accepted by the endpoint and ignored, so the answer was prose and the second execution's
+rejection heuristic — an HTTP 400/422 naming `response_format` — saw nothing. The earlier reading, **"a parse
+failure is a classification failure" (REQ-ORCH-007) held for every rung**, so the ladder never descended and the
+run took the fallback intent, the fallback playbook cell and no grant.
+
+**Corrected in place** (`packages/engine/src/intent/classifier.ts`, `apps/desktop/src/run-host/loop.ts`): the
+request and the untrusted prior response travel between delimiters as quotations; the system prompt forbids
+performing, answering or beginning the request; every rung carries an instruction (the strict rung's says only
+that the reply is the object); the parser takes the first balanced object out of a fenced or prefaced answer; and
+**a structured rung answered without JSON is that rung silently unsupported** — remembered per model for the session
+like REQ-ORCH-010's rejection and the next rung tried inside the same 8.0 s budget. The falsified reading is kept
+for what it still governs: the text rung's unparseable answer, an empty answer, and valid JSON naming no category
+are REQ-ORCH-007's fallback. The loop classifier takes the same frame and the same descent. The result carries
+which rung answered (`rung`, beside REQ-ORCH-011's five fields) and the run host logs it.
+
+**Measured on the owner's re-run:** see `codebase.md` entry 18 and `.slice-proof/results.json` (`intents`) — three
+prompts, each a category from the small slot, and the rung the endpoint answered on. **What it does not settle:**
+which rung *this* endpoint honours is one measurement; a second provider is a second one, and the memory is per
+session by REQ-ORCH-010, so the first call of every session still pays the descent.

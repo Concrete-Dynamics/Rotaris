@@ -84,7 +84,10 @@ const results = {};
 
 // 1. A message queued during the run is consumed at the iteration boundary as a "Queued Prompts" task, exactly once.
 const s1 = scenario('queue', []);
-launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+// The capture at 9 s sat on a knife-edge the Parts R and S merge found (2026-09-05): the launch reaches `session.start`
+// ~1.2 s in, the run needs ~8 s from there (the iteration boundary alone is ~4.2 s), and three runs landed 100 ms either
+// side. The assertion is consumption, not a budget; the capture now waits 13 s.
+launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_AFTER_MS: '13000' });
 {
   const db = open(s1);
   const session = db.prepare('SELECT session_id, execution_status, iterations_completed, todo FROM sessions').get();

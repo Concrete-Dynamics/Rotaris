@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { chipStates, countNoun, instancesOf, resolvedTools, rowsOf } from './agents.js';
+import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { TranscriptRows } from './TranscriptRows.js';
@@ -14,7 +14,7 @@ import { markMotionStart } from './motion.js';
  * the muted state; (b) the "Agent transcript" card (accessible name `{name} transcript`, min height 260 px, the
  * empty sentence) showing only that agent's rows through the ONE row renderer; (c) "Context" with the ring and
  * `{n} tool calls · {elapsed}`; (d) "Instance controls" read-only (REQ-MONITOR-059); (e) "Current activity";
- * (f) "Tools and artifacts" — native tools and the active ones, the MCP lines a slot for the merge; (g) "Steer agent"
+ * (f) "Tools and artifacts" — native tools and the active ones, one muted line per MCP server (REQ-MCP-100, wired at the merge); (g) "Steer agent"
  * with the placeholder, "Send steer" (empty or whitespace sends nothing; accepted clears; refused keeps the text,
  * REQ-MONITOR-070) and the danger "Cancel" for that instance. The terminal-preview parity of REQ-SHELL-075 (b) is
  * owed with ADR-0021: no terminal stream reaches any window yet.
@@ -124,7 +124,11 @@ export function PersonaWindow(props: PersonaWindowProps) {
               {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
               {chips.map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
             </div>
-            <div className="persona-window__mcp" data-slot="mcp" />
+            {shown.mcpServers.map((srv) => (
+              <div key={srv.name} className="text-secondary persona-window__mcp" data-mcp-server={srv.name} data-fate={srv.fate}>
+                {srv.name}: {srv.fate === 'connected' ? ((shown.grantedMcp[srv.name] ?? []).join(', ') || 'no tools granted') : mcpFateText(srv)}
+              </div>
+            ))}
             <div className="text-secondary">Active now: {shown.activeTools.length === 0 ? 'none' : shown.activeTools.join(', ')}. {ARTIFACTS_EMPTY}</div>
           </section>
           <section className="card persona-window__steer" aria-label="Steer agent">

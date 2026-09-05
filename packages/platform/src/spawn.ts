@@ -39,7 +39,12 @@ export function findExecutable(command: string, env: Readonly<Record<string, str
   if (command.trim() === '') return null;
   const win = platform === 'win32';
   const exts = win ? (env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => e !== '') : [''];
-  const candidates = (base: string): string[] => (win && !exts.some((e) => base.toLowerCase().endsWith(e.toLowerCase())) ? [base, ...exts.map((e) => base + e)] : [base]);
+  // The merge of Parts R and S (2026-09-05) read the MCP category's PNG: the shipped `browser` row still said `spawn npx
+  // ENOENT` after Part S's `.cmd` wrap, because Node's own `npx` directory holds an extensionless `npx` (a POSIX shell
+  // script) BESIDE `npx.cmd`, and this lookup returned the extensionless file first — which Windows cannot start, so the
+  // wrap never saw `.cmd`. The falsified form, kept: `[base, ...exts.map((e) => base + e)]`. Windows executes a name only
+  // under a PATHEXT extension, so on win32 a base without one is tried with the extensions ONLY.
+  const candidates = (base: string): string[] => (win && !exts.some((e) => base.toLowerCase().endsWith(e.toLowerCase())) ? exts.map((e) => base + e) : [base]);
   const isFile = (p: string): boolean => { try { return statSync(p).isFile(); } catch { return false; } };
   if (isAbsolute(command) || command.includes('/') || command.includes('\\')) {
     for (const c of candidates(command)) if (isFile(c)) return c;

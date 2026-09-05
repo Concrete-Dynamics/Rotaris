@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
-import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout } from './index.js';
+import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout } from './index.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-platform-')); });
@@ -209,5 +209,22 @@ describe('platform — desktop preferences (ADR-0042)', () => {
     expect(coercePaneLayout({ version: 1, panes: 3, sizes: [1, 2, 3] }, 2)).toBeUndefined();
     expect(coercePaneLayout({ version: 1, panes: 2, sizes: [1, 'x'] }, 2)).toBeUndefined();
     expect(coercePaneLayout(null, 2)).toBeUndefined();
+  });
+});
+
+describe('findExecutable on Windows (REQ-MCP-037; the merge of Parts R and S, 2026-09-05)', () => {
+  it('an extensionless file beside its .cmd twin is never the answer on win32 — PATHEXT decides', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-pathext-'));
+    try {
+      // Node's own directory holds `npx` (a POSIX shell script) beside `npx.cmd`; only the latter starts on Windows.
+      writeFileSync(join(dir, 'npx'), '#!/bin/sh');
+      writeFileSync(join(dir, 'npx.cmd'), '@echo off');
+      const env = { PATH: dir, PATHEXT: '.COM;.EXE;.BAT;.CMD' };
+      // PATHEXT's own spelling of the extension comes back (`.CMD`); the wrap compares without regard to case.
+      expect(findExecutable('npx', env, 'win32')?.toLowerCase()).toBe(join(dir, 'npx.cmd').toLowerCase());
+      expect(findExecutable('npx.cmd', env, 'win32')).toBe(join(dir, 'npx.cmd'));
+      expect(findExecutable('npx', env, 'linux')).toBe(join(dir, 'npx'));
+      expect(findExecutable('nothing-here', env, 'win32')).toBeNull();
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

@@ -68,6 +68,19 @@ export function chipStates(resolved: readonly string[], called: readonly string[
   const calledSet = new Set(called);
   return resolved.map((name) => ({ name, state: activeSet.has(name) ? 'active' : calledSet.has(name) ? 'used' : 'not used' }));
 }
+/**
+ * REQ-MCP-065 / REQ-MONITOR-060 (wired at the merge of Parts R and S): one chip per granted MCP tool of a server, the marks
+ * matched prefix-tolerantly — a call logged under `<server>_<name>` (the collision prefix of REQ-MCP-057) still marks the
+ * granted original name.
+ */
+export function mcpChipStates(server: string, granted: readonly string[], called: readonly string[], active: readonly string[]): { name: string; state: ChipState }[] {
+  const matches = (set: readonly string[], name: string): boolean => set.includes(name) || set.includes(`${server}_${name}`);
+  return granted.map((name) => ({ name, state: matches(active, name) ? 'active' : matches(called, name) ? 'used' : 'not used' }));
+}
+/** REQ-MCP-114: the fate of a carried server as one sentence of text (REQ-SHELL-149). */
+export function mcpFateText(s: { readonly fate: 'connected' | 'dropped'; readonly reason?: string | undefined }): string {
+  return s.fate === 'connected' ? 'connected' : `dropped${s.reason ? ` — ${s.reason}` : ''}`;
+}
 /** REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in. */
 export function resolvedTools(agent: Pick<AgentRecord, 'grantedTools'>, declared: readonly string[]): string[] {
   return agent.grantedTools.length > 0 ? [...agent.grantedTools] : [...declared];

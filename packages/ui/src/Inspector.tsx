@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, liveDescendants, metaLine, resolvedTools } from './agents.js';
+import { cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
@@ -14,8 +14,8 @@ import { markMotionStart } from './motion.js';
  * (066), withheld models listed with their reason (067); the scope note; the tool chips in the resolved set's own
  * order marked active/used/not used (060/061/062); artifact links (none — no artifact store yet); the cascade note
  * (064); Steer, Cancel and Pop out on the SHOWN agent with 063's enablement and 055's naming. Structure from
- * docs/spec; language from docs/design/system. The MCP heading per server (060's second half) is a slot the
- * merge fills (`data-slot="mcp"`).
+ * docs/spec; language from docs/design/system. The MCP heading per server (060's second half, REQ-MCP-065/114) was
+ * wired at the merge of Parts R and S from the record's `mcpServers` and `grantedMcp`.
  */
 export interface PersonaEntry {
   readonly role: string;
@@ -136,7 +136,15 @@ export function Inspector(props: InspectorProps) {
               {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
               {chips.map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
             </div>
-            <div className="inspector__mcp" data-slot="mcp" />
+            {shown.mcpServers.map((srv) => (
+              <div key={srv.name} className="inspector__mcp" role="group" aria-label={`MCP server ${srv.name}`} data-mcp-server={srv.name} data-fate={srv.fate}>
+                <span className="card-kicker">MCP server {srv.name} <span className="text-secondary">· {srv.transport} · {srv.origin} · {mcpFateText(srv)}</span></span>
+                <div className="chips">
+                  {(shown.grantedMcp[srv.name] ?? []).length === 0 && <span className="text-secondary">No tools granted.</span>}
+                  {mcpChipStates(srv.name, shown.grantedMcp[srv.name] ?? [], shown.calledTools, shown.activeTools).map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="inspector__artifacts text-secondary" data-testid="inspector-artifacts">{NO_ARTIFACTS}</div>
           <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>

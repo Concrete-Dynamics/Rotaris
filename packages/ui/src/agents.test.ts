@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { cascadeNote, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
+import { cascadeNote, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -125,5 +125,15 @@ describe('agents — the table order, the ring, the meta line, the nouns (REQ-MO
   it('a persona colour is a named token, stable for a name', () => {
     expect(personaColourToken('coding-agent')).toBe(personaColourToken('coding-agent'));
     expect(personaColourToken('coding-agent')).toMatch(/^--rt-/);
+  });
+});
+
+describe('the MCP chips per server (REQ-MCP-065/100/114, REQ-MONITOR-060; wired at the merge of Parts R and S)', () => {
+  it('marks a granted name used or active whether the call was logged under the reported name or the server prefix', () => {
+    expect(mcpChipStates('alpha', ['echo', 'slow', 'fail'], ['alpha_echo'], ['slow'])).toEqual([
+      { name: 'echo', state: 'used' }, { name: 'slow', state: 'active' }, { name: 'fail', state: 'not used' },
+    ]);
+    expect(mcpFateText({ fate: 'connected' })).toBe('connected');
+    expect(mcpFateText({ fate: 'dropped', reason: 'disabled' })).toBe('dropped — disabled');
   });
 });

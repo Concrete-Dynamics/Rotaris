@@ -196,7 +196,7 @@ equal to the allowance — `REQ-MCP-003`'s dispatch-to-result measure). Conseque
 `tool.start` was recorded before the fixture answered a deliberately slow call and the three interleaved calls of
 the unit test each received their own answer.
 
-**Found in existing code — the tally's twenty-seventh (recorded in the ADR-0034 note as well).** The transport's
+**Found in existing code — the tally's twenty-ninth (recorded in the ADR-0034 note as well; Part R's two, found the same day, are the twenty-seventh and twenty-eighth).** The transport's
 first launch of a package-runner entry on Windows failed with `spawn npx ENOENT`: `npx`/`uvx` are `.cmd` scripts
 that `spawn` cannot start by bare name, and Node refuses to start a `.cmd`/`.bat` without a shell since its
 CVE-2024-27980 hardening. The reason this decision rested on — one spawn helper with `windowsHide` serves every
@@ -208,3 +208,12 @@ A test spawns a batch runner through the transport.
 **Not tested:** a real third-party server (the hand-written fixture only, in both eras); the two remote transports
 against a live endpoint; a probe **timeout** on `server/discover` (the SDK's stdio-shaped verdict falls back;
 not exercised).
+
+**At the merge (the manager, 2026-09-05).** The MCP category's PNG from the merged tree still read `spawn npx ENOENT` on
+the shipped `browser` row — the failure the twenty-ninth's fix wrapped. Node's own directory holds an **extensionless**
+`npx` (a POSIX shell script) beside `npx.cmd`, and `findExecutable` returned the extensionless file first, so the wrap
+never saw `.cmd` and `spawn` was handed a file Windows cannot start. Windows executes a name only under a PATHEXT
+extension; on win32 a base without one is now tried with the extensions only (`packages/platform/src/spawn.ts`, the
+falsified candidate list kept beside it; a test with the twin files). A defect in the fix, not a new entry in the tally.
+The `browser` row now probes the real `npx` and reports `unreachable` within the 8 s budget when the package is not in the
+cache — the run-time answer, not a host failure (`REQ-MCP-113`).

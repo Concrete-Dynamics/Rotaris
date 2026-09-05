@@ -250,7 +250,7 @@ environment is applied; which names to scrub is the owner's.
   `run/turn.ts` — the one engine change beyond the ledger line). One resolution (`surfaceFor`, memoised on the
   versions of its inputs) feeds the executors, the model's listing, the prompt section and the spawn evidence.
 
-**Found in existing code (the tally's twenty-seventh).** *ADR-0033's transport on Windows:* `spawnChild` starts a
+**Found in existing code (the tally's twenty-ninth).** *ADR-0033's transport on Windows:* `spawnChild` starts a
 command by bare name; `npx` and `uvx` on Windows are `npx.cmd`/`uvx.cmd`, which `spawn` cannot start by name and —
 since Node's CVE-2024-27980 hardening — refuses to start without a shell even by full path. The shipped `browser`
 default (`npx -y @playwright/mcp@0.0.80 --headless`) could therefore never start on Windows, the one platform the

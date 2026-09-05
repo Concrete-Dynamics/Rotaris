@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type RunNotice } from './index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type RunNotice } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
 const MODEL = { providerId: 'test', modelId: 'test', dialect: 'chat' as const };
@@ -24,7 +24,7 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   const many = (n: number) => new DefaultAgentBackend(new ScriptedModelClient(Array.from({ length: n }, (_, i) => answer(`answer ${i + 1}`, { input: 5, output: 2 }))));
-  const makeSessions = (backend: AgentBackend, extras: { messageLimit?: number | null; onRunPaused?: (id: SessionId, info: { count: number; limit: number | null }) => void; notice?: (n: RunNotice) => void; models?: (key: string) => { model: typeof MODEL; thinking: 'unset' } | null } = {}) => new Sessions({
+  const makeSessions = (backend: AgentBackend, extras: { messageLimit?: number | null; onRunPaused?: (id: SessionId, info: { count: number; limit: number | null }) => void; notice?: (n: RunNotice) => void; models?: (key: string) => ModelLookup } = {}) => new Sessions({
     clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 4242, host: HOST,
     retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-control',
     model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } },
@@ -156,7 +156,7 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
   });
 
   it('todo edits, the entry reasoning switch and the shutdown announce; every unbacked operation answers false (REQ-MONITOR-004/142/131)', async () => {
-    const sessions = makeSessions(many(4), { models: (key) => (key === 'fast' ? { model: MODEL, thinking: 'unset' } : null) });
+    const sessions = makeSessions(many(4), { models: (key): ModelLookup => (key === 'fast' ? { ok: true, key, choice: { model: MODEL, thinking: 'unset' } } : { ok: false, reason: `'${key}' is not a configured model` }) });
     const started = sessions.start(dal, 'C:/ws', 'edit me');
     if (!started.ok) throw new Error(started.error.reason);
     const sid = started.value;

@@ -14,6 +14,8 @@ import { Scheduler } from './scheduler.js';
 import type { HookPort } from '../hooks-port.js';
 import { withPlaybook } from '../run/run.js';
 import type { LoopSupervisor } from '../run/supervisor.js';
+import type { TurnResilience } from '../run/ladder.js';
+import { providerIdentity, type ModelChoice } from '../run/resilience.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -59,6 +61,8 @@ export interface ChildrenDeps {
   /** REQ-MONITOR-133: the pending steering prompts per child conversation. */
   readonly steeringFor?: ((conversationId: string) => () => readonly SteeringPrompt[]) | undefined;
   readonly shouldPause?: (() => boolean) | undefined;
+  /** Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and waits. */
+  readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number) => TurnResilience } | undefined;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -192,21 +196,11 @@ export class IterationChildren implements DelegationOps {
     const moved = this.ledger.transition(row.task_id, 'running');
     if (!moved.ok) { deps.warn(moved.reason); return; }
     const persona = personaOf(deps, row.persona);
-    const controller = new AbortController();
-    const onRunAbort = () => controller.abort();
-    deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
-    let timedOut = false;
-    const timer = deps.clocks.timers.after(deps.childTimeoutMs ?? CHILD_TIMEOUT_MS, () => { timedOut = true; controller.abort(); });
+    const childTimeoutMs = deps.childTimeoutMs ?? CHILD_TIMEOUT_MS;
+    // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
+    const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth);
     const dispatched = new Map<string, string>();
-    const turn = (task: string, history: readonly ChatMessage[]) => runTurn({
-      writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
-      systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
-      credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
-      ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
-      ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
-      ...(deps.shouldPause ? { shouldPause: deps.shouldPause } : {}),
-    }, task, history, controller.signal);
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
     let prior = '';
     if (row.context_injected === 0) {
@@ -216,22 +210,58 @@ export class IterationChildren implements DelegationOps {
     }
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
-    try {
-      outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior), controller.signal);
-      // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
-      // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
-      const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';
-      const rePrompt = outcome.toolCallCount === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
-      if (!controller.signal.aborted && outcome.report.status !== 'failed' && rePrompt) {
-        const again = await turn('Carry out the task now, using your tools where the task needs them, then answer with what you did.', outcome.messages);
-        outcome = { ...again, toolCallCount: outcome.toolCallCount + again.toolCallCount };
+    let timedOut = false;
+    let childSignal: AbortSignal = deps.runSignal;
+    // REQ-ORCH-088: the child runs under the hard timeout; on expiry, once, it is retried on the role's fallback when one is untried.
+    for (;;) {
+      const controller = new AbortController();
+      childSignal = controller.signal;
+      const onRunAbort = () => controller.abort();
+      deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
+      timedOut = false;
+      const timer = deps.clocks.timers.after(childTimeoutMs, () => { timedOut = true; controller.abort(); });
+      const turn = (task: string, history: readonly ChatMessage[]) => runTurn({
+        writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
+        systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
+        credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
+        ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
+        ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
+        ...(deps.shouldPause ? { shouldPause: deps.shouldPause } : {}),
+        ...(resilience ? { resilience } : {}),
+      }, task, history, controller.signal);
+      try {
+        outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior), controller.signal);
+        // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
+        // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
+        const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';
+        const rePrompt = outcome.toolCallCount === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
+        if (!controller.signal.aborted && outcome.report.status !== 'failed' && rePrompt) {
+          const again = await turn('Carry out the task now, using your tools where the task needs them, then answer with what you did.', outcome.messages);
+          outcome = { ...again, toolCallCount: outcome.toolCallCount + again.toolCallCount };
+        }
+      } catch (cause) {
+        error = { type: 'child_exception', message: String(cause instanceof Error ? cause.message : cause) };
+        deps.writer.recordIssue({ kind: 'child_exception', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} raised: ${error.message}` });
+      } finally {
+        timer.cancel();
+        deps.runSignal.removeEventListener('abort', onRunAbort);
       }
-    } catch (cause) {
-      error = { type: 'child_exception', message: String(cause instanceof Error ? cause.message : cause) };
-      deps.writer.recordIssue({ kind: 'child_exception', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} raised: ${error.message}` });
-    } finally {
-      timer.cancel();
-      deps.runSignal.removeEventListener('abort', onRunAbort);
+      const fb = resilience?.cell.fallback ?? null;
+      if (timedOut && !deps.runSignal.aborted && resilience && fb !== null && !resilience.cell.fallbackAttempted) {
+        const cell = resilience.cell;
+        const from = cell.model;
+        cell.fallbackAttempted = true;
+        cell.model = fb;
+        const seconds = childTimeoutMs / 1000;
+        const message = `Child ${row.canonical_name} timed out after ${seconds}s on ${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}; retried once on the fallback model ${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId} (REQ-ORCH-088).`;
+        deps.writer.appendTimeline('child_timeout_fallback', 'rotaris', message, { task_id: row.task_id, from_provider: providerIdentity(resilience.catalogue, from.model), from_model: from.model.modelId, to_provider: providerIdentity(resilience.catalogue, cell.model.model), to_model: cell.model.model.modelId, timeout_seconds: seconds });
+        deps.writer.recordIssue({ kind: 'child_timeout_fallback', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, requested_model: `${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}`, fallback_model: `${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId}`, timeout_seconds: seconds } });
+        deps.warn(message);
+        outcome = null;
+        error = null;
+        continue;
+      }
+      break;
     }
     const cancelled = deps.runSignal.aborted;
     const toolCalls = outcome?.toolCallCount ?? 0;
@@ -252,7 +282,7 @@ export class IterationChildren implements DelegationOps {
 
     // REQ-MONITOR-018: summarizing until the report exists, then terminal; cancellation settles from anywhere.
     if (!cancelled) { const s = this.ledger.transition(row.task_id, 'summarizing'); if (!s.ok) deps.warn(s.reason); }
-    const report = await produceReport({ agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors }, cancelled ? null : deps.summariser, controller.signal);
+    const report = await produceReport({ agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors }, cancelled ? null : deps.summariser, childSignal);
     this.ledger.storeReport(row.task_id, report as unknown as Record<string, unknown>);
     const terminal = cancelled ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
     const t = cancelled ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);

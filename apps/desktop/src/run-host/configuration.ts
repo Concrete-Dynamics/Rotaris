@@ -3,9 +3,9 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, type HeadlessPolicy, type ModelTier } from '@rotaris/contracts';
-import { loadConfiguration, overlayLiveState, renderFatal, type LiveState, type LoadedConfiguration, type ModelEntry } from '@rotaris/config';
+import { isPlainMap, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import type { PolicyRead } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, type ClassifierSlots, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -43,7 +43,11 @@ export interface RuntimeFromConfiguration extends RuntimePosture {
   readonly iterationLimit: number;
   readonly consecutiveRetryLimit: number;
   readonly transientRetries: number;
+  /** REQ-ORCH-092: `auto_retries_validation`. */
+  readonly validationRetries: number;
   readonly modelTimeoutS: number;
+  /** REQ-CONFIG-114: `llm_response_timeout`, floored at 30 s here whatever the file says. */
+  readonly llmResponseTimeoutS: number;
   readonly loopClassificationTimeoutS: number;
 }
 
@@ -70,8 +74,12 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration): RuntimeFromC
     iterationLimit: r.max_iterations,
     consecutiveRetryLimit: r.task_consecutive_retry_limit,
     transientRetries: r.auto_retries_transient,
+    validationRetries: r.auto_retries_validation,
     modelTimeoutS: r.model_timeout,
+    llmResponseTimeoutS: Math.max(30, r.llm_response_timeout),
     loopClassificationTimeoutS: r.loop_classification_timeout,
+    // REQ-ORCH-088: `runtime.child_timeout` reaches the run (it was read by the loader and never handed over before Part Q).
+    childTimeoutMs: Math.round(r.child_timeout * 1000),
   };
 }
 
@@ -106,12 +114,16 @@ export function thinkingOf(entry: Pick<ModelEntry, 'thinking'> | null | undefine
   return t === null || t === undefined || t === 'auto' ? 'unset' : t;
 }
 
-/** A `models:` entry as the model port's reference; null when the entry is absent or has no reachable endpoint. */
+/**
+ * A `models:` entry as the model port's reference; null when the entry is absent or has no reachable endpoint. Under
+ * the scripted dialect the reference keeps the entry's own provider family (Part Q: two scripted providers must stay
+ * distinct for REQ-NOTIFY-082's candidate rule); the scripted client answers for every family regardless.
+ */
 export function modelRefOf(cfg: LoadedConfiguration, name: string | null, scripted: boolean): ModelRef | null {
   if (name === null) return null;
   const entry = cfg.models[name];
   if (!entry) return null;
-  if (scripted || entry.provider === SCRIPTED_PROVIDER) return { providerId: SCRIPTED_PROVIDER, modelId: entry.model_id, dialect: 'chat' };
+  if (scripted || entry.provider === SCRIPTED_PROVIDER) return { providerId: entry.provider === '' ? SCRIPTED_PROVIDER : entry.provider, modelId: entry.model_id, dialect: 'chat' };
   const baseUrl = entry.base_url ?? PROVIDER_BASE_URLS[entry.provider];
   if (!baseUrl) return null;
   const dialect = entry.api_mode === 'responses' && !entry.disable_responses_api ? 'responses' : 'chat';
@@ -185,6 +197,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
     }
     const tools = entry && entry.tools.length > 0 ? entry.tools : base?.tools ?? [];
     const modelRef = entry ? modelRefOf(cfg, entry.model, scripted) : null;
+    // REQ-CONFIG-110 / REQ-ORCH-144: the role's own fallback_model (already tier-substituted, REQ-CONFIG-073); a name no entry
+    // resolves is a referential warning the loader already raised, and the role then falls back through the run-level slot.
+    const fallbackRef = entry?.fallback_model ? modelRefOf(cfg, entry.fallback_model, scripted) : null;
     const persona: Persona = {
       name: role,
       tools,
@@ -193,6 +208,7 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       systemPrompt: prompt,
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
       ...(modelRef ? { modelRef, thinking: thinkingOf(entry ? cfg.models[entry.model] : null) } : {}),
+      ...(fallbackRef && entry?.fallback_model ? { fallbackModel: fallbackRef, fallbackThinking: thinkingOf(cfg.models[entry.fallback_model]) } : {}),
     };
     return persona;
   };
@@ -228,6 +244,56 @@ export function classifierSlotsOf(cfg: LoadedConfiguration, scripted: boolean, l
     fallback: slot(cfg.slots.fallback_model, 'fallback_model'),
     summary: slot(cfg.slots.default_summary_model, 'default_summary_model'),
   };
+}
+
+/** REQ-ORCH-145 / REQ-CONFIG-086: the entry's own timeout and retry count, when stated, as the choice carries them. */
+function settingsOf(entry: ModelEntry | undefined): Pick<ModelChoice, 'timeoutMs' | 'retries'> {
+  return {
+    ...(entry?.timeout === null || entry?.timeout === undefined ? {} : { timeoutMs: Math.round(entry.timeout * 1000) }),
+    ...(entry?.num_retries === null || entry?.num_retries === undefined ? {} : { retries: entry.num_retries }),
+  };
+}
+
+/** The keys the two scopes' files state under `models:` — everything else in `cfg.models` came from the discovery snapshot. */
+function configuredModelKeys(cfg: LoadedConfiguration): Set<string> {
+  const keys = new Set<string>();
+  for (const scope of ['global', 'workspace'] as const) {
+    for (const doc of [cfg.raw[scope].agents, cfg.raw[scope].models]) {
+      const models = doc?.['models'];
+      if (isPlainMap(models)) for (const k of Object.keys(models)) keys.add(k);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Part Q / REQ-NOTIFY-082: every `models:` entry as the same-tier rule sees it. The provider identity is the sign-in
+ * provider when the entry names one, else its family. A recorded role is a tier slot naming the model — the three
+ * configured slots for a configured model, each authenticated provider's own picks in the snapshot for a discovered
+ * one (the loader folds only the first provider's picks into the slots, so the per-provider roles are read from the
+ * snapshot itself). A discovered model whose provider was not leased is present but unusable.
+ */
+export function catalogueOf(cfg: LoadedConfiguration, scripted: boolean, leased: Readonly<Record<string, string>> | undefined, snapshot: ProjectSnapshot | null): CatalogueEntry[] {
+  const configured = configuredModelKeys(cfg);
+  const roles = new Map<string, Set<TierRole>>();
+  const add = (key: string, role: TierRole) => { const set = roles.get(key) ?? new Set<TierRole>(); set.add(role); roles.set(key, set); };
+  for (const tier of TIER_ROLES) { const v = cfg.slots[tier]; if (v && cfg.models[v]) add(v, tier); }
+  if (snapshot) {
+    for (const rec of Object.values(snapshot.providers)) {
+      if (!rec.authenticated) continue;
+      for (const tier of TIER_ROLES) { const v = rec[tier]; if (typeof v === 'string' && cfg.models[v]) add(v, tier); }
+    }
+  }
+  // Discovered = folded from the snapshot; everything else (the files' entries and the built-in defaults) is configured.
+  const discovered = new Set<string>(snapshot ? Object.values(snapshot.providers).flatMap((rec) => (rec.authenticated ? rec.models.map((m) => m.id) : [])) : []);
+  const out: CatalogueEntry[] = [];
+  for (const [key, e] of Object.entries(cfg.models)) {
+    const ref = modelRefOf(cfg, key, scripted);
+    if (!ref) continue;
+    const usable = scripted || !e.auth_provider || !leased || Boolean(leased[e.auth_provider]);
+    out.push({ key, provider: e.auth_provider ?? e.provider, model: ref, thinking: thinkingOf(e), roles: [...(roles.get(key) ?? [])], origin: discovered.has(key) && !configured.has(key) ? 'discovered' : 'configured', usable, ...settingsOf(e) });
+  }
+  return out;
 }
 
 /** REQ-CONFIG-065: the summariser's model, when `default_summary_model` names one this run can reach. */
@@ -296,7 +362,7 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
     return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why}.`, cfg, code: 'no-model' });
   }
   const runtime = runtimeFromConfiguration(cfg);
-  const isScripted = model.providerId === SCRIPTED_PROVIDER;
+  const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
   const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i) });
   const backend: AgentBackend = new DefaultAgentBackend(client);
   const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, () => deps.bearers(workspaceRoot));
@@ -313,14 +379,29 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
       modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,
       iterationLimit: runtime.iterationLimit,
       transientRetries: runtime.transientRetries,
+      validationRetries: runtime.validationRetries,
+      llmResponseTimeoutMs: Math.round(runtime.llmResponseTimeoutS * 1000),
       consecutiveRetryLimit: runtime.consecutiveRetryLimit,
       credentialFor: credentialFactory(cfg, scripted, deps.env, () => deps.bearers(workspaceRoot), entryCredential, (m) => warnings.push(m)),
     },
   };
   const authProviders = authProvidersOf(cfg);
   const tier = entryTierOf(cfg);
-  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; slots: small=${cfg.slots.small_model ?? '-'} fallback=${cfg.slots.fallback_model ?? '-'} summary=${cfg.slots.default_summary_model ?? '-'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}`);
-  // REQ-MONITOR-142: a mid-run switch resolves a `models:` key the same way the entry model was.
-  const models = (key: string) => { const ref = modelRefOf(cfg, key, scripted); return ref ? { model: ref, thinking: thinkingOf(cfg.models[key]) } : null; };
-  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier });
+  // Part Q: the catalogue the same-tier rule reads, with the snapshot's per-provider picks as the discovered roles.
+  const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
+  const catalogue = catalogueOf(cfg, scripted, deps.bearers(workspaceRoot), snapshotRead.ok ? snapshotRead.value : null);
+  const fallbackName = cfg.slots.fallback_model;
+  const fallbackRef = modelRefOf(cfg, fallbackName, scripted);
+  const fallbackModel: ModelChoice | null = fallbackRef && fallbackName ? { model: fallbackRef, thinking: thinkingOf(cfg.models[fallbackName]), ...settingsOf(cfg.models[fallbackName]) } : null;
+  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; slots: small=${cfg.slots.small_model ?? '-'} fallback=${cfg.slots.fallback_model ?? '-'} summary=${cfg.slots.default_summary_model ?? '-'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}; catalogue=${catalogue.map((c) => `${c.key}[${c.provider}:${c.roles.map((r) => r[0]).join('') || '-'}${c.usable ? '' : ',unleased'}]`).join(' ')}; llm_response_timeout=${runtime.llmResponseTimeoutS} s; child_timeout=${(runtime.childTimeoutMs ?? 0) / 1000} s`);
+  // REQ-MONITOR-142 / REQ-ORCH-091 (d): a mid-run switch resolves a `models:` key the same way the entry model was, or says why not.
+  const models = (key: string): ModelLookup => {
+    const e = cfg.models[key];
+    if (!e) return { ok: false, reason: `'${key}' is not a configured model` };
+    const ref = modelRefOf(cfg, key, scripted);
+    if (!ref) return { ok: false, reason: `model '${key}' (provider ${e.provider}) has no base_url and this build knows no endpoint for that provider` };
+    if (!isScripted && e.auth_provider && !deps.bearers(workspaceRoot)[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
+    return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
+  };
+  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier, resilience: { catalogue, fallbackModel } });
 }

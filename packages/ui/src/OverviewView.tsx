@@ -223,6 +223,7 @@ export function OverviewView(props: OverviewProps) {
                               <button type="button" className="btn btn-link ov-session__name" title={`${row.sessionId}${row.requirementId ? ` · ${row.requirementId}` : ''}`} onClick={() => props.onOpenSession(row.sessionId)}>{row.label}</button>
                               {row.requirementId && <span className="tag tag-outline">{row.requirementId}</span>}
                               {attached && <span className="tag tag-accent" data-testid="overview-focused">focused</span>}
+                              {row.status === 'waiting' && <span className="tag tag-outline tag-wait" data-testid="overview-waiting">waiting on a provider limit</span>}
                               <span className="ov-session__detail text-secondary">{row.detail}</span>
                               {!row.busy && <button type="button" className="btn btn-link" onClick={() => props.onContinueSession(row.sessionId)}>Continue run</button>}
                               <span className="ov-session__meta mono">{row.branch} · {formatTokens(row.tokens)} · {row.durationLabel || '—'}</span>

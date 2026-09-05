@@ -17,6 +17,9 @@ export interface Persona {
   /** REQ-CONFIG-098: the role's own model once configuration resolves it; absent means the run's model. */
   readonly modelRef?: ModelRef | undefined;
   readonly thinking?: ThinkingLevel | undefined;
+  /** REQ-CONFIG-110 / REQ-ORCH-144: the role's own `fallback_model`; absent means the run-level slot (REQ-CONFIG-065). */
+  readonly fallbackModel?: ModelRef | undefined;
+  readonly fallbackThinking?: ThinkingLevel | undefined;
 }
 
 /** ADR-0036: the configured `personas:` overlaid on the built-in table, resolved per run by the root. */

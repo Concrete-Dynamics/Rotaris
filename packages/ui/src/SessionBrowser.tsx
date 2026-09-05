@@ -64,7 +64,7 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
               {shown.map((session) => (
                 <tr key={session.sessionId} data-session-id={session.sessionId}>
                   <td><span className="session-browser__name">{session.label}</span><span className="session-browser__detail mono">{session.detail}</span></td>
-                  <td>{session.status}{session.stale && <span className="tag session-browser__stale">stale</span>}{session.awaitingInput && <span className="tag">awaiting input</span>}</td>
+                  <td>{session.status}{session.stale && <span className="tag session-browser__stale">stale</span>}{session.awaitingInput && <span className="tag">awaiting input</span>}{session.status === 'waiting' && <span className="tag tag-wait">waiting on a provider limit</span>}</td>
                   {/* REQ-GIT-122: the row's `<branch or —> · <state>` text. */}
                   <td className="mono" data-testid="session-row-branch">{`${session.branch} · ${session.status}`}</td>
                   <td>{session.relativeTime}</td>

@@ -19,7 +19,10 @@ import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
-import type { PersonaResolver } from '../children/personas.js';
+import type { Persona, PersonaResolver } from '../children/personas.js';
+import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
+import { pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { WaitRegistry, type WaitState } from './waits.js';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -52,6 +55,10 @@ export interface RunConfig {
   readonly timeLimitMs: number | null;
   /** REQ-ORCH-092: default 1. */
   readonly transientRetries: number;
+  /** REQ-ORCH-092: `auto_retries_validation`, default 0. */
+  readonly validationRetries: number;
+  /** REQ-CONFIG-114 / REQ-ORCH-090: `llm_response_timeout`, default 120 s, floored at 30 s by configuration. */
+  readonly llmResponseTimeoutMs: number;
   /** REQ-ORCH-077: default 3. */
   readonly consecutiveRetryLimit: number;
   /** A final belt behind the loop supervisor (REQ-ORCH-099..107). */
@@ -69,6 +76,8 @@ export const RUN_CONFIG_DEFAULTS: Omit<RunConfig, 'model' | 'credentialFor'> = {
   iterationLimit: 20,
   timeLimitMs: null,
   transientRetries: 1,
+  validationRetries: 0,
+  llmResponseTimeoutMs: 120_000,
   consecutiveRetryLimit: 3,
   maxStepsPerTurn: 100,
 };
@@ -131,8 +140,20 @@ export interface RunDeps {
   readonly messageLimit?: number | null | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
-  /** REQ-MONITOR-142: a `models:` key resolved for a mid-run switch of the entry model. */
-  readonly models?: ((key: string) => { model: ModelRef; thinking: ThinkingLevel } | null) | undefined;
+  /** REQ-MONITOR-142 / REQ-ORCH-091 (d): a `models:` key resolved for a mid-run switch, or why it cannot be applied. */
+  readonly models?: ((key: string) => ModelLookup) | undefined;
+  /** Part Q: the session-wide memory, the catalogue the candidate rule reads, the run-level fallback slot. Absent: fresh memory, no candidate, no fallback. */
+  readonly resilience?: RunResilience | undefined;
+}
+
+/** REQ-ORCH-091 (d): a change-model choice resolves to a model, or to the reason it cannot be applied (the user is told). */
+export type ModelLookup = { readonly ok: true; readonly key: string; readonly choice: ModelChoice } | { readonly ok: false; readonly reason: string };
+
+export interface RunResilience {
+  readonly memory: ResilienceMemory;
+  readonly catalogue: readonly CatalogueEntry[];
+  /** REQ-CONFIG-065/067: the run-level `fallback_model` slot — the fallback of a role that states none of its own. */
+  readonly fallbackModel: ModelChoice | null;
 }
 
 export interface SteeringSubmission {
@@ -193,10 +214,20 @@ export class Run {
   private readonly steering = new Map<string, { id: string; text: string }[]>();
   /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
   private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
+  /** Part Q: the waits parked on a provider limit (REQ-NOTIFY-263 reads `current()`), the memory, the catalogue. */
+  private readonly waits: WaitRegistry;
+  private readonly memory: ResilienceMemory;
+  private readonly catalogue: readonly CatalogueEntry[];
+  /** The root agent's ladder state for this run (one same-tier fallback, one role fallback — REQ-ORCH-091 b / REQ-ORCH-144). */
+  private rootCell: AgentResilienceCell | null = null;
+  private appliedEntryModel: ModelRef | null = null;
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
     this.hooks = deps.hooks ?? null;
+    this.memory = deps.resilience?.memory ?? new ResilienceMemory();
+    this.catalogue = deps.resilience?.catalogue ?? [];
+    this.waits = new WaitRegistry({ clocks: deps.clocks, onChange: () => this.publishWait() });
     const stored = deps.readSession();
     this.todo = deps.resumeTodo ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit) : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
@@ -225,6 +256,19 @@ export class Run {
   }
   get outcome(): RunResult | null {
     return this.result;
+  }
+  /** REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. */
+  get currentWait(): WaitState | null {
+    return this.waits.current();
+  }
+
+  /**
+   * The wait began, changed or ended: the session's status follows (`waiting` while parked — REQ-SESSION-073's
+   * own arm, presented as `running`, REQ-NOTIFY-049/263) and the save publishes the snapshot with the wait state.
+   */
+  private publishWait(): void {
+    if (this.ended) return;
+    this.saveRunning({}, this.waits.size > 0 ? 'waiting' : 'running');
   }
 
   /** The writer's commit hand-off: the wire lines are queued for the bus in commit order. */
@@ -387,17 +431,44 @@ export class Run {
     return escalate;
   }
 
-  /** REQ-ORCH-092: a transient failure is retried up to `transientRetries` times after min(2, n) s. */
+  /**
+   * REQ-ORCH-092 / REQ-ORCH-091: every retry — transient, validation, the limit ladder, the unresponsive fallback —
+   * happens at the model STEP inside the turn (`ladder.ts`), so a retried call never replays a tool call the turn
+   * already executed. (First execution of Part Q: the turn-level transient retry this method used to be would have
+   * re-run executed tool calls with fresh ids; the reason is kept in ADR-0027's note.)
+   */
   private async turnWithRetry(task: string): Promise<TurnReport> {
-    const { config, clocks } = this.deps;
-    let attempt = 0;
-    for (;;) {
-      const report = await this.turn(task);
-      if (report.status !== 'failed' || !report.error.transient || this.stop.requested || attempt >= config.transientRetries) return report;
-      attempt += 1;
-      this.deps.warn(`transient model failure on ${this.sessionId} (transient_llm_error): ${describe(report.error)}; retry ${attempt} after ${Math.min(2, attempt)} s`);
-      await new Promise<void>((resolve) => clocks.timers.after(millis(Math.min(2, attempt) * 1000), resolve));
+    return this.turn(task);
+  }
+
+  /** REQ-ORCH-088/090/144, REQ-CONFIG-065/067/110: the role's own `fallback_model`, else the run-level slot; never the agent's own model. */
+  private fallbackFor(persona: Persona | undefined, current: ModelChoice): ModelChoice | null {
+    const own = persona?.fallbackModel ? { model: persona.fallbackModel, thinking: persona.fallbackThinking ?? 'unset' as ThinkingLevel } : null;
+    const chosen = own ?? this.deps.resilience?.fallbackModel ?? null;
+    if (!chosen || sameRef(chosen.model, current.model)) return null;
+    return withSettings(this.catalogue, chosen);
+  }
+
+  /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
+  private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number): TurnResilience {
+    const { config } = this.deps;
+    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs };
+  }
+
+  /** The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory. */
+  private rootResilience(): TurnResilience {
+    const { config } = this.deps;
+    const entryModel = this.entryOverride.model ?? config.model;
+    if (this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel)) {
+      const base = withSettings(this.catalogue, { model: entryModel, thinking: this.entryOverride.thinking ?? config.thinking });
+      const current = this.memory.effective(base, this.catalogue);
+      const persona = this.deps.personas?.resolve(config.persona)?.persona;
+      const previous = this.rootCell;
+      this.rootCell = agentCell(current, this.fallbackFor(persona, current));
+      if (previous) { this.rootCell.fallbackAttempted = previous.fallbackAttempted; this.rootCell.sameTierAttempted = previous.sameTierAttempted; for (const p of previous.attempted) this.rootCell.attempted.add(p); }
+      this.appliedEntryModel = entryModel;
     }
+    return this.resilienceFor(this.rootCell, config.modelTimeoutMs);
   }
 
   /** One turn: the tool loop of `turn.ts`, every model step streamed into its own `agent` row; with children, the resume loop. */
@@ -410,6 +481,8 @@ export class Run {
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
         sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
+        // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
+        resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
@@ -427,6 +500,7 @@ export class Run {
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
+      resilience: this.rootResilience(),
     }, text, history, this.abort.signal);
     try {
       const outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
@@ -497,15 +571,46 @@ export class Run {
     return true;
   }
 
-  /** REQ-MONITOR-142: applies from the next iteration; a system row states the switch. */
+  /**
+   * REQ-MONITOR-142: applies from the next iteration; a system row states the switch. During a wait (REQ-ORCH-091 d,
+   * REQ-NOTIFY-089/263) it is the change-model resolution: the parked agent rebuilds and re-runs at once, and the
+   * override is persisted (`model_override` timeline entry) so later calls of the session never return to the
+   * exhausted pair. A choice that cannot be applied is never discarded silently: `model_override_rejected` is
+   * recorded, the wait continues on the model it had, and the header names the reason.
+   */
   setEntryModel(key: string): boolean {
-    if (this.ended || !this.deps.models) return false;
-    const resolved = this.deps.models(key);
-    if (!resolved) return false;
-    this.entryOverride = { ...this.entryOverride, model: resolved.model };
-    this.deps.writer.appendRow('system', `Entry model switched to ${key}; it applies from the next iteration.`, true);
-    this.deps.writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key });
+    if (this.ended) return false;
+    const { writer } = this.deps;
+    const waiting = this.waits.current();
+    const resolved: ModelLookup = this.deps.models ? this.deps.models(key) : { ok: false, reason: 'this run resolves no model keys' };
+    if (!resolved.ok) {
+      if (waiting) this.rejectOverride(waiting, key, resolved.reason);
+      return false;
+    }
+    if (waiting) {
+      const provider = providerIdentity(this.catalogue, resolved.choice.model);
+      if (pairKey(provider, resolved.choice.model.modelId) === pairKey(waiting.provider, waiting.model)) {
+        this.rejectOverride(waiting, key, `${key} is the model that is waiting (${waiting.provider}/${waiting.model}); choose a different one`);
+        return false;
+      }
+      const choice = withSettings(this.catalogue, resolved.choice);
+      for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
+      writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId });
+      writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
+      if (waiting.agent === this.deps.config.persona) this.entryOverride = { ...this.entryOverride, model: choice.model };
+      this.waits.resolveWithModel(key, choice);
+      return true;
+    }
+    this.entryOverride = { ...this.entryOverride, model: resolved.choice.model };
+    writer.appendRow('system', `Entry model switched to ${key}; it applies from the next iteration.`, true);
+    writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key });
     return true;
+  }
+  private rejectOverride(waiting: WaitState, key: string, reason: string): void {
+    const message = `The model was not changed: ${key} could not be applied (${reason}). The wait on ${waiting.provider}/${waiting.model} is still outstanding; choose again or cancel the run.`;
+    this.deps.writer.recordIssue({ kind: 'model_override_rejected', severity: 'warning', actor: 'user', message, metadata: { requested_model: key, reason, waiting_provider: waiting.provider, waiting_model: waiting.model } });
+    this.deps.warn(message);
+    this.waits.reject(message);
   }
   setEntryReasoning(level: ThinkingLevel): boolean {
     if (this.ended) return false;
@@ -611,8 +716,8 @@ export class Run {
     if (save) this.saveRunning({});
   }
 
-  private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }): void {
-    const r = this.deps.writer.save('running', {
+  private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
+    const r = this.deps.writer.save(status, {
       ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: this.iterationsCompleted,
       todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()),
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),
@@ -639,10 +744,12 @@ export class Run {
     // completed); every other outcome takes REQ-MONITOR-029's mapping.
     const status = classified.result === 'completed' ? summary.status : statusForResult(classified.result);
     const elapsed = this.startedAt === null ? null : (clocks.monotonic.now() - this.startedAt) / 1000;
+    // REQ-NOTIFY-093: a wait the user cancelled ends the run with the limit condition as its error, so main classifies it (REQ-NOTIFY-063).
+    const error = this.lastFailure ?? this.waits.cancelledReason;
     const result: RunResult = {
       status: classified.result, session_id: this.sessionId, stop_reason: stopReason, summary: summary.message,
       iterations_completed: this.iterationsCompleted, report: null, tokens: this.aggregates.usagePayload().tokens, cost: this.aggregates.usagePayload().cost,
-      error: this.lastFailure, execution_status: status, severity: summary.severity,
+      error, execution_status: status, severity: summary.severity,
     };
     this.result = result;
     const step = (name: string, fn: () => void) => { try { fn(); } catch (cause) { this.deps.warn(`teardown step ${name} failed on ${this.sessionId}: ${String(cause)}`); } };

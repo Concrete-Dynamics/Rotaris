@@ -86,7 +86,10 @@ export interface ModelError {
   readonly status?: number;
   /** The provider's message, cut to its first 500 characters (REQ-PROVIDER-071). */
   readonly providerMessage?: string;
+  /** The `retry-after` header as integer seconds, when it was one (Part Q: the engine reads the raw form too). */
   readonly retryAfterMs?: number;
+  /** The `retry-after` header verbatim — an HTTP date or a suffixed value the engine parses against its clock (REQ-NOTIFY-084). */
+  readonly retryAfter?: string;
   readonly transient: boolean;
 }
 
@@ -152,6 +155,8 @@ export interface TurnSink {
   delta(text: string): void;
   reasoning(text: string): void;
   usage(u: Usage): void;
+  /** REQ-ORCH-090: the FIRST part of any kind the provider streamed — the unresponsive-model timer disarms on it. */
+  started?(): void;
 }
 
 export type TurnReport =

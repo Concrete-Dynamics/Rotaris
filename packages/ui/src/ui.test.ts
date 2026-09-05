@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, composerPlaceholder } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
-import { resolveTheme } from '@rotaris/contracts';
+import { resolveTheme, isBusy, presentationStatus } from '@rotaris/contracts';
+
+describe('ui — the wait header (REQ-NOTIFY-263, REQ-NOTIFY-049)', () => {
+  const wait = { provider: 'openrouter', model: 'gpt-x', exhausted: false, resumeAt: '2026-09-05T10:00:42.000Z', attempt: 1, reason: 'Provider openrouter is rate limiting model gpt-x. Wait 42 s before retrying.', agent: 'orchestrator', rejection: null };
+  it('names the provider and the model, states the exhausted mark, and counts down against the surface clock', () => {
+    const at = Date.parse('2026-09-05T10:00:00.000Z');
+    expect(waitHeaderText(wait, at)).toEqual({ headline: 'Waiting on a provider limit: openrouter / gpt-x (orchestrator) — provider not marked exhausted, attempt 1.', timing: 'Resumes automatically in 0:42.', remainingS: 42 });
+    expect(waitHeaderText(wait, at + 41_000).timing).toBe('Resumes automatically in 0:01.');
+    expect(waitHeaderText(wait, at + 90_000)).toMatchObject({ timing: 'Resumes automatically in 0:00.', remainingS: 0 });
+    expect(waitHeaderText({ ...wait, exhausted: true, resumeAt: null, attempt: 3 }, at)).toEqual({ headline: 'Waiting on a provider limit: openrouter / gpt-x (orchestrator) — provider marked exhausted, attempt 3.', timing: 'Resumes only when you decide.', remainingS: null });
+    expect(formatRemaining(3_725)).toBe('1:02:05');
+    expect(formatRemaining(-3)).toBe('0:00');
+  });
+  it('a waiting session is busy and presents as running, so the composer stays locked (REQ-NOTIFY-050/051)', () => {
+    expect(presentationStatus('waiting')).toBe('running');
+    expect(isBusy('waiting')).toBe(true);
+    expect(composerPlaceholder(null, true)).toContain('Run active');
+  });
+});
 
 describe('ui — shell state (REQ-SHELL-025, REQ-SHELL-026)', () => {
   it('starts on Overview, switches to a known view, and treats an unknown identifier as a silent no-op', () => {

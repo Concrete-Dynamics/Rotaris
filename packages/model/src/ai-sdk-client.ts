@@ -99,19 +99,24 @@ function fromError(cause: unknown, aborted: boolean): ModelError {
   if (aborted) return modelError({ code: 'aborted', headline: 'the call was aborted', transient: false });
   if (APICallError.isInstance(cause)) {
     const body = typeof cause.responseBody === 'string' ? cause.responseBody.slice(0, 500) : undefined;
+    // Part Q (REQ-NOTIFY-084): the header travels in both forms — integer seconds parsed here, the raw value (an HTTP
+    // date, a suffixed value) for the engine, which reads its own clock; `rate-limit-reset` forms are not read here.
     const retryAfter = cause.responseHeaders?.['retry-after'];
     const retryAfterMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : undefined;
     const status = cause.statusCode;
     return modelError({
       code: status === undefined ? 'connection' : 'http', headline: cause.message.slice(0, 200),
-      ...(status === undefined ? {} : { status }), ...(body === undefined ? {} : { providerMessage: body }), ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+      ...(status === undefined ? {} : { status }), ...(body === undefined ? {} : { providerMessage: body }), ...(retryAfterMs === undefined ? {} : { retryAfterMs }), ...(retryAfter === undefined ? {} : { retryAfter }),
     });
   }
   const e = cause as { name?: string; message?: string; statusCode?: number };
-  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return modelError({ code: 'timeout', headline: e.message ?? 'the call timed out' });
-  if (typeof e?.statusCode === 'number') return modelError({ code: 'http', status: e.statusCode, headline: (e.message ?? 'provider error').slice(0, 200) });
-  if (e?.name === 'TypeError' && /fetch|network|ECONN|ENOTFOUND|EAI_AGAIN|TLS|certificate/i.test(e.message ?? '')) return modelError({ code: 'connection', headline: e.message ?? 'connection failed' });
-  return modelError({ code: 'unknown', headline: String(e?.message ?? cause).slice(0, 200), transient: false });
+  // The provider's message reaches the engine for every shape, so REQ-NOTIFY-091/094's text matching has something to read.
+  const providerMessage = typeof e?.message === 'string' && e.message !== '' ? e.message.slice(0, 500) : undefined;
+  const withMessage = providerMessage === undefined ? {} : { providerMessage };
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return modelError({ code: 'timeout', headline: e.message ?? 'the call timed out', ...withMessage });
+  if (typeof e?.statusCode === 'number') return modelError({ code: 'http', status: e.statusCode, headline: (e.message ?? 'provider error').slice(0, 200), ...withMessage });
+  if (e?.name === 'TypeError' && /fetch|network|ECONN|ENOTFOUND|EAI_AGAIN|TLS|certificate/i.test(e.message ?? '')) return modelError({ code: 'connection', headline: e.message ?? 'connection failed', ...withMessage });
+  return modelError({ code: 'unknown', headline: String(e?.message ?? cause).slice(0, 200), transient: false, ...withMessage });
 }
 
 export class AiSdkModelClient implements ModelClient {

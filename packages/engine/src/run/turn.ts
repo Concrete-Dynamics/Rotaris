@@ -1,9 +1,11 @@
-import { toIsoUtc, type Clocks } from '@rotaris/kernel';
+import { millis, toIsoUtc, type Clocks } from '@rotaris/kernel';
 import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
+import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.js';
+import type { ModelChoice } from './resilience.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -81,6 +83,8 @@ export interface TurnDeps {
   readonly steering?: (() => readonly SteeringPrompt[]) | undefined;
   /** REQ-MONITOR-123: a graceful pause — the turn stops before its next model step. */
   readonly shouldPause?: (() => boolean) | undefined;
+  /** Part Q: the ladder over every model step of this agent (REQ-ORCH-090/091/092); absent means the bare step. */
+  readonly resilience?: TurnResilience | undefined;
 }
 
 export interface SteeringPrompt {
@@ -134,7 +138,9 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       deps.warn(`the turn exceeded ${deps.maxStepsPerTurn} model steps and was ended as partial (the final step belt fired)`);
       return { report: { status: 'partial', text: lastReport.text, usage }, messages, toolCallCount };
     }
-    const report = await step(deps, messages, specs, signal);
+    const report = deps.resilience
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(deps, choice, messages, specs, signal, unresponsiveMs), signal)
+      : (await step(deps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null)).report;
     lastReport = report;
     usage = { input: usage.input + report.usage.input, output: usage.output + report.usage.output };
     if (report.status === 'failed') return { report: { ...report, usage }, messages, toolCallCount };
@@ -183,12 +189,24 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
   }
 }
 
-/** One model step streamed into one `agent` row: first delta appends it unsettled, growth ticks, the end settles it. */
-async function step(deps: TurnDeps, messages: readonly ChatMessage[], specs: readonly ToolSpec[], signal: AbortSignal): Promise<TurnReport> {
-  const { writer, owner, backend } = deps;
+/**
+ * One model step streamed into one `agent` row: first delta appends it unsettled, growth ticks, the end settles it.
+ * The choice carries the model, its reasoning level and REQ-ORCH-145's per-model timeout and retry count. With
+ * `unresponsiveMs` set, a timer on the clock port aborts the call when no event of any kind arrived within it
+ * (REQ-ORCH-090); the ladder then re-runs the step on the fallback. The timer disarms on the first event.
+ */
+async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly ChatMessage[], specs: readonly ToolSpec[], signal: AbortSignal, unresponsiveMs: number | null): Promise<StepOutcome> {
+  const { writer, owner, backend, clocks } = deps;
   let index: number | null = null;
   let text = '';
+  let seen = false;
+  let unresponsive = false;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  if (signal.aborted) controller.abort(); else signal.addEventListener('abort', onAbort, { once: true });
+  const timer = unresponsiveMs === null ? null : clocks.timers.after(millis(unresponsiveMs), () => { if (!seen) { unresponsive = true; controller.abort(); } });
   const sink = {
+    started: () => { seen = true; timer?.cancel(); },
     delta: (d: string) => {
       text += d;
       if (index === null) {
@@ -201,10 +219,16 @@ async function step(deps: TurnDeps, messages: readonly ChatMessage[], specs: rea
     reasoning: () => undefined,
     usage: () => undefined,
   };
-  const report = await backend.runTurn({
-    persona: deps.persona, systemPrompt: deps.systemPrompt, messages, tools: specs, model: deps.model, thinking: deps.thinking,
-    timeoutMs: deps.modelTimeoutMs, retries: deps.modelRetries, resolveCredential: deps.credentialFor(deps.model),
-  }, sink, signal);
+  let report: TurnReport;
+  try {
+    report = await backend.runTurn({
+      persona: deps.persona, systemPrompt: deps.systemPrompt, messages, tools: specs, model: choice.model, thinking: choice.thinking,
+      timeoutMs: choice.timeoutMs ?? deps.modelTimeoutMs, retries: choice.retries ?? deps.modelRetries, resolveCredential: deps.credentialFor(choice.model),
+    }, sink, controller.signal);
+  } finally {
+    timer?.cancel();
+    signal.removeEventListener('abort', onAbort);
+  }
   if (index !== null) writer.settleRow(index, report.text || text);
-  return report;
+  return { report, unresponsive: unresponsive && !signal.aborted };
 }

@@ -229,6 +229,18 @@
 /* ── The intent status (REQ-ORCH-014): text, replaced in place ── */
 .intent-status { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); background: var(--rt-bg); border-left: 2px solid var(--rt-border); }
 .intent-status[data-phase='classified'] { border-left-color: var(--rt-accent-300); }
+/* ── The wait header (REQ-NOTIFY-263): waiting, never failed, never idle — the wait tone, text for every state ── */
+.wait-header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--rt-space-2, 8px) var(--rt-space-3, 12px); margin: 0 0 var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: 3px solid var(--rt-wait); border-radius: var(--rt-radius-md, 6px); font-size: var(--rt-text-sm, 13px); }
+.wait-header__text { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); flex: 1 1 320px; min-width: 0; }
+.wait-header__headline { font-weight: var(--rt-weight-medium); color: var(--rt-text); }
+.wait-header__timing { color: var(--rt-wait); font-size: var(--rt-text-xs, 12px); }
+.wait-header__reason { font-size: var(--rt-text-xs, 12px); }
+.wait-header__rejection { color: var(--rt-danger-300); font-size: var(--rt-text-xs, 12px); }
+.wait-header__ack { font-size: var(--rt-text-xs, 12px); }
+.wait-header__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); }
+.wait-header[data-exhausted='1'] { border-left-color: var(--rt-warn); }
+.wait-header[data-exhausted='1'] .wait-header__timing { color: var(--rt-warn); }
+.tag-wait { border-color: var(--rt-wait); color: var(--rt-wait); }
 .playbooks__slot { margin: var(--rt-space-3, 12px) 0 0; }
 .playbooks__variant { display: grid; grid-template-columns: 140px 1fr; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) 0; border-bottom: 1px solid var(--rt-divider); font-size: var(--rt-text-sm, 13px); }
 

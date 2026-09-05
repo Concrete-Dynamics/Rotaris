@@ -191,7 +191,11 @@ describe('engine/run — the run loop end to end against a real store and a scri
     const result = await sessions.running(sid)!;
     expect(client.requests.length).toBe(2);
     expect(result.status).toBe('completed');
-    expect(warnings.some((w) => w.includes('transient_llm_error'))).toBe(true);
+    // Part Q: the issue is a recorded diagnostics row naming the attempt and the limit (REQ-NOTIFY-096), not only a warning line.
+    const issue = dal.issuesOf(sid).find((i) => i.kind === 'transient_llm_error');
+    expect(issue).toBeDefined();
+    expect(JSON.parse(issue!.metadata)).toMatchObject({ attempt: 1, limit: 1, delay_seconds: 1 });
+    expect(warnings.some((w) => w.includes('Transient model failure'))).toBe(true);
   });
 
   it('a failure outside the transient class ends the run agent_session_aborted → failed, with the error in the row and the result', async () => {

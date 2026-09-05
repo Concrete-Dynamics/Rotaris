@@ -93,6 +93,8 @@ function scriptedClient(c: Clocks): ModelClient {
       const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
       calls[who] = (calls[who] ?? 0) + 1;
+      // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).
+      log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);
       if (who === 'classifier') {
         // ROTARIS_INTENT_SCRIPT: <category> | garbage | timeout | reject (the two JSON rungs refused, then text) — verification only.
         const want = (process.env['ROTARIS_INTENT_SCRIPT'] ?? 'moderate_feature').trim();
@@ -130,6 +132,23 @@ function scriptedClient(c: Clocks): ModelClient {
       }
       if (step === 'fail') {
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
+        return;
+      }
+      // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`;
+      // `hang` streams nothing until the caller aborts (the unresponsive-model timer or the child timeout).
+      const fault = /^fail:(429|quota|503|401)(?::retry-after=(\d+))?$/.exec(step);
+      if (fault) {
+        const retry = fault[2] === undefined ? {} : { retryAfterMs: Number(fault[2]) * 1000, retryAfter: fault[2] };
+        const error = fault[1] === '429' ? { code: 'http' as const, status: 429, headline: 'scripted rate limit (HTTP 429)', providerMessage: 'Too Many Requests', transient: false, ...retry }
+          : fault[1] === 'quota' ? { code: 'http' as const, status: 429, headline: 'scripted quota exhaustion (HTTP 429)', providerMessage: '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota, please check your plan and billing details."}}', transient: false }
+            : fault[1] === '503' ? { code: 'http' as const, status: 503, headline: 'scripted service unavailable (HTTP 503)', providerMessage: 'Service Unavailable', transient: true }
+              : { code: 'http' as const, status: 401, headline: 'scripted authentication failure (HTTP 401)', providerMessage: 'Incorrect API key provided', transient: false };
+        yield { ok: false as const, error };
+        return;
+      }
+      if (step === 'hang') {
+        await new Promise<void>((resolve) => { if (req.signal.aborted) resolve(); else req.signal.addEventListener('abort', () => resolve(), { once: true }); });
+        yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } };
         return;
       }
       // delegate:<persona>:<name>[:after] — `after` depends on the last task id a tool result reported.

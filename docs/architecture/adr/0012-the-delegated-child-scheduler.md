@@ -263,3 +263,33 @@ before the first continuation iteration (`pnpm part-h-proof`; `REQ-ORCH-053`, `R
 supervisor is built and recorded as ADR-0059, which holds the tenth defect of the pattern. Still not built
 from the list above: the fallback model and rate-limit paths, ADR-0041's artifacts, the verifier prefix,
 `REQ-CHAT-068/069`, `REQ-ORCH-030`.
+
+**Fourth execution, 2026-09-05, the child's fallback routes (Part Q; REQ-ORCH-088/090/144, REQ-CONFIG-110/114).**
+The first-execution note above said "REQ-ORCH-088's 1,200 s on the monotonic clock" and nothing about the
+requirement's second clause; the timeout's expiry failed the child unconditionally. Now every child runs under
+one **resilience cell** (`run/ladder.ts`): its model choice, its role's fallback, and one "attempted" mark shared
+by the two routes REQ-ORCH-144 names. **The hard timeout** (`children/orchestration.ts`, `execute`): on expiry,
+when the role has a fallback not yet attempted for this child, the child is run once more on it — a fresh
+controller, a fresh timer, the same task payload — with the `child_timeout_fallback` timeline entry and warning
+issue; a second expiry, or no fallback, fails the child with the `timeout` issue and the report
+`Child timed out after <N>s`, as before. **The unresponsive model** (`run/turn.ts` `step`): while the fallback is
+untried and `llm_response_timeout` (floored at 30 s) is below the child timeout, a timer on the clock port aborts
+a call that produced no part of any kind — the backend now reports the first part through `TurnSink.started`,
+so a tool-call-only step counts as an event — and the step re-runs on the fallback (`unresponsive_model_fallback`);
+the child keeps running. **The role's fallback** is `personas.<role>.fallback_model` when stated (REQ-CONFIG-110),
+else the run-level `fallback_model` slot (REQ-CONFIG-065/067 name that slot as the retry "when a child's model
+fails to answer within the configured limits"), and never the child's own model — a slot that resolves to the
+same pair arms nothing. The same cell carries the rate-limit ladder for the child's own calls (ADR-0027's note).
+
+**Found — `runtime.child_timeout` never reached the run.** The loader read it since Part C and the engine took a
+`childTimeoutMs` dependency since the first execution, but no root passed one: every child ran under the
+engine's 1,200 s constant whatever the file said. Wired through `RuntimePosture.childTimeoutMs`; the proof's
+child timed out at the configured 8 s. (The manager numbers it.)
+
+**Measured** (`packages/engine/src/run/ladder.test.ts`, FakeClock; `pnpm resilience-proof`, launches 5 and 6): a
+child hung on `alpha` for 10 s (unit) / 8 s (app) was retried once on `beta` and succeeded, its first two calls
+`a1, f1`; without a fallback it failed with `Child timed out after 10s` / `8s`; the unresponsive timer fired at
+exactly 30 s and not at 29.999 s, and stayed unarmed when no fallback existed or the threshold was not below the
+bound. The re-prompt of REQ-ORCH-095 still follows a text-only implementer on the fallback (one more call, on
+the fallback still). Still not built from the list above: ADR-0041's artifacts, the verifier prefix,
+`REQ-CHAT-068/069`, `REQ-ORCH-030`; the stall watchdog's badge (REQ-ORCH-089) is not built either.

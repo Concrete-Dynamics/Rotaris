@@ -488,3 +488,26 @@ in the proof. (c) `editQueuedPrompt` is REQ-MONITOR-004's "edit a queued prompt"
 
 **Not exercised:** the terminal-stream operations (ADR-0021), structured questions, compression, verification
 skip, a steer to a child agent in the app (the unit path is tested), REQ-MONITOR-132's two-run quit warning.
+
+## Third execution — 2026-09-05, the provider-limit wait's three choices (Part Q)
+
+*Recorded under GD-10. A reading against the closed enumeration; found nothing against the channel itself.*
+
+**The reading.** REQ-NOTIFY-263 offers exactly three choices during a quota wait — keep waiting, change model, cancel the
+run — "as controls in that header and on no other surface". REQ-MONITOR-004's enumeration of twenty-two operations is closed
+and names none of the three by that wording. They are read onto the existing operations, and no operation is added:
+(a) **keep waiting is the absence of a decision** — REQ-MONITOR-192 says the wait "continues indefinitely until a person
+decides", so keeping waiting is not deciding; the header's control acknowledges ("Still waiting.") and sends nothing over
+channel 1; (b) **change model is `setModel`** — REQ-NOTIFY-263 says changing model "opens the model list of REQ-NOTIFY-074 and
+pins the chosen model for the session under REQ-NOTIFY-089", which is what `setModel` on a waiting run now does: the parked
+agent rebuilds and re-runs at once and the override is persisted (`model_override`); outside a wait `setModel` keeps
+REQ-MONITOR-142's next-iteration semantics; (c) **cancel the run is `cancel`**. The result shape is untouched: a `setModel` that
+cannot be applied answers `{ok: false}` as REQ-MONITOR-005 allows and the *reason* reaches the user through the record's
+`wait.rejection` on the snapshot channel (channel 2), not through a third populated string on channel 1 — REQ-ORCH-091 (d)'s
+"the user is told" is met on the surface that already carries the wait. The contracts test that pins twenty-two still pins it.
+
+**The wait state on the record, not in a column.** `SessionRecordSchema.wait` (provider, model, exhausted, resumeAt, attempt,
+reason, agent, rejection) is derived from the live run at every snapshot — ADR-0043's rule that adding a field to the record
+adds it to the payload — and the persisted status is REQ-SESSION-073's own `waiting`, presented as `running` (REQ-NOTIFY-049),
+so the sessions list and the browser show a waiting session from the status alone; no store migration was written (the plan's
+shared-file rule) and no new column exists for it.

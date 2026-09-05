@@ -7,7 +7,8 @@ import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
 import { SessionWriter, toTranscriptRow, type Committed } from './session-writer.js';
 import { EventBus } from './run/event-bus.js';
-import { parseTokenSamples, Run, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { parseTokenSamples, Run, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
@@ -87,6 +88,8 @@ export interface RuntimePosture {
   readonly drainTimeoutMs?: number;
   /** REQ-ORCH-084: `runtime.message_limit`; null = disabled. */
   readonly messageLimit?: number | null;
+  /** REQ-ORCH-088 / REQ-CONFIG-114: `runtime.child_timeout` in milliseconds; absent means the engine's 1,200 s. */
+  readonly childTimeoutMs?: number | undefined;
 }
 
 export interface SessionsDeps {
@@ -136,10 +139,12 @@ export interface RunSetup {
   readonly runtime: RuntimePosture;
   readonly retentionCap?: number | undefined;
   readonly personas?: PersonaResolver | undefined;
-  /** REQ-MONITOR-142: a `models:` key resolved for a mid-run switch. */
-  readonly models?: ((key: string) => { model: ModelRef; thinking: ThinkingLevel } | null) | undefined;
+  /** REQ-MONITOR-142 / REQ-ORCH-091 (d): a `models:` key resolved for a mid-run switch, or the reason it cannot be applied. */
+  readonly models?: ((key: string) => ModelLookup) | undefined;
   /** Warnings the load produced (REQ-CONFIG-233's warn-and-continue and the referential list while attended). */
   readonly warnings?: readonly string[] | undefined;
+  /** Part Q: the catalogue the same-tier rule reads (REQ-NOTIFY-082) and the run-level `fallback_model` slot (REQ-CONFIG-065). */
+  readonly resilience?: { readonly catalogue: readonly CatalogueEntry[]; readonly fallbackModel: ModelChoice | null } | undefined;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -164,6 +169,8 @@ interface Live {
   tools: ToolPort | null;
   log: SessionLog | null;
   commitTarget?: { owner?: ProjectionOwner; run?: Run } | undefined;
+  /** Part Q: the session-wide memory (REQ-ORCH-091 a/d) — fresh for a new session, rehydrated from the timeline for a loaded one. */
+  memory: ResilienceMemory | null;
 }
 
 export interface SessionListItem {
@@ -323,6 +330,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     costLabel: costLabelOf(r.cost),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
     worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
+    wait: null,
   };
 }
 
@@ -424,10 +432,13 @@ export class Sessions {
     const appender = this.deps.sessionLogAppender?.(dal, sessionId);
     const log = appender ? new SessionLog({ wall: this.deps.clocks.wall, level: this.deps.runtime?.sessionLogLevel ?? 'WARNING', append: appender }) : null;
     const warn = (m: string) => { log?.warn(m); this.deps.warn(m); };
-    const entry: { owner?: ProjectionOwner } = {};
+    const entry: { owner?: ProjectionOwner; run?: Run } = {};
     const opened = SessionWriter.open({
       dal, sessionId, wall: this.deps.clocks.wall, retentionCap: this.deps.retentionCap, warn,
-      onCommitted: (c) => entry.owner?.onCommitted(c),
+      // Found on Part Q's first execution: this hand-off reached the projection owner only, so a continuation run on a LOADED
+      // session never received its commits — nothing reached the bus, `run.result` never reached main and the terminal notice
+      // never appeared (every earlier resume proof read the store, not the notice). The run is fed as `start` feeds it.
+      onCommitted: (c) => { entry.owner?.onCommitted(c); entry.run?.onCommitted(c); },
     }, { pid: this.deps.pid, host: this.deps.host, isProcessAlive: this.deps.isProcessAlive ?? (() => true) });
     if (!opened.ok) {
       log?.close();
@@ -441,13 +452,14 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
     const settled = settleStaleChildren(dal, writer, sessionId, warn);
     if (settled > 0) warn(`${settled} child record(s) from a previous run were settled cancelled before continuation (REQ-ORCH-053)`);
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry });
+    // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null });
     return ok({ sessionId, settledChildren: settled });
   }
 
@@ -494,11 +506,11 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null) }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory() };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true);
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -532,6 +544,8 @@ export class Sessions {
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
+      resilience: { memory: live.memory!, catalogue: setup.value.resilience?.catalogue ?? [], fallbackModel: setup.value.resilience?.fallbackModel ?? null },
+      ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
       readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
@@ -627,10 +641,18 @@ export class Sessions {
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
+    // Part Q / REQ-SESSION-196: a loaded session's exhausted pairs and model override come back from its timeline, once.
+    if (s.memory === null) {
+      const resolve = (key: string): ModelChoice | null => { const r = setupIn.models?.(key); return r && r.ok ? r.choice : null; };
+      s.memory = ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), resolve, warn);
+      if (s.memory.exhausted.size > 0 || s.memory.overrideCount > 0) s.log?.info(`resilience memory rehydrated: ${s.memory.exhausted.size} exhausted pair(s), ${s.memory.overrideCount} override(s)`);
+    }
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
       ...(setupIn.models ? { models: setupIn.models } : {}),
+      resilience: { memory: s.memory, catalogue: setupIn.resilience?.catalogue ?? [], fallbackModel: setupIn.resilience?.fallbackModel ?? null },
+      ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,

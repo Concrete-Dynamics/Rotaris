@@ -60,7 +60,7 @@ flowchart TB
   Q --> S2{"stopCondition:<br/>allTasksComplete · iteration limit ·<br/>time limit · no pending tasks"}
   S2 -- reason --> T
   S2 -- keep going --> I["iterate(): selectNext task → in_progress<br/>iteration.start event"]
-  I --> TR["turnWithRetry(task) — transient failures retried"]
+  I --> TR["turnWithRetry(task) — every retry now happens at the model STEP (Part Q's ladder, §3)"]
   TR --> TURN["turn(): IterationChildren for this iteration,<br/>the root's tool port, runTurn(...)"]
   TURN --> OUT{"outcome"}
   OUT -- succeeded --> C["todo.complete"]
@@ -96,6 +96,34 @@ failure kinds; the `ask` disposition was resolved by the gate's `{mode}:fetch-re
 The entry role's port is the one at **depth 0** (`isEntryPort`): the pre-flight's grant and the `single` override
 reach that port and no other.
 
+**The ladder over every model step (Part Q — `run/ladder.ts`, `run/resilience.ts`, `run/waits.ts`; REQ-ORCH-088/090/091/092,
+REQ-NOTIFY-081..092/263).** It sits at the step, not the turn, so a retry re-issues the call over the conversation as it stands
+and never replays an executed tool call. Each agent (the root for the run, every child) has a **cell**: its current model
+choice (the session's override applied through `ResilienceMemory.effective`), its role's fallback (`personas.<role>.fallback_model`,
+else the run-level `fallback_model` slot, never its own model), and three once-only marks — the role fallback (shared by the
+unresponsive-model route and the hard child timeout, REQ-ORCH-144), the same-tier fallback, the wait attempt. On a failed step,
+`classifyFailure` decides in this order: **quota** (structured `insufficient_quota`, "exceeded your current quota", "check your plan
+and billing") → **rate limit** (429 or the three substrings) → **context window** (REQ-ORCH-093, left unbuilt: the step fails as
+before) → **validation** → **transient** (the port's fact, REQ-NOTIFY-094's phrases) → **fatal**. Transient and validation take
+their own budgets (`auto_retries_transient`, `auto_retries_validation`) after min(2, n) s, each attempt a `transient_llm_error` /
+`validation_llm_error` issue. A limit never touches those budgets: (a) a quota response marks `provider|model` exhausted — in
+memory and as the `model_exhausted` timeline entry; (b) at most one same-tier candidate per agent (`sameTierCandidates` over the
+run host's **catalogue**: same recorded role, a different provider identity — `auth_provider` else the family — configured first
+then discovered from the snapshot's per-provider picks, exhausted and attempted pairs out) → `model_fallback` timeline entry and
+warning issue, the step re-run; (c) else the **suspended wait**: the provider's retry-after (integer seconds, an HTTP date, a
+suffixed value, `try again in N <unit>`) else 60·2^(attempt−1) s capped at 300 s, indefinite for an exhausted provider; the
+`model_wait` issue and a system row; the session's status **`waiting`** (REQ-SESSION-073's own arm, presented as `running`) and
+the record's `wait` published with every snapshot. The wait resolves by the timer (clock port), by `cancel` (the run ends
+`user_cancelled` with the condition as its error → main's REQ-NOTIFY-063 notice), or by `setModel` (the pair overridden
+session-wide, the `model_override` timeline entry, the agent re-run at once; a key that cannot be applied → `model_override_rejected`
+and the header names why, the wait continues). **Unresponsive model:** while a role fallback is untried and `llm_response_timeout`
+(≥ 30 s) sits below the agent's bound (the child timeout; the model timeout for the root), a timer on the clock port aborts a call
+that produced no event of any kind and the step re-runs on the fallback (`unresponsive_model_fallback`). **Hard child timeout:**
+on expiry with a role fallback untried, the child runs once more on it (`child_timeout_fallback`); else it fails with
+`Child timed out after <N>s`. Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
+rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
+user's choice (REQ-SESSION-196).
+
 ## 4. Children (ADR-0012)
 
 `delegate` is a tool call admitted through five checks in order (role known, depth, total, active, dependencies)
@@ -114,7 +142,8 @@ the parent resumes with the report. Every exit from an iteration leaves every ch
 | `submitSteeringPrompt` | `run.steer(agentId, text)` | pending per conversation (`root` or a task id); the id is the string value |
 | `createQueuedPrompt` / `editQueuedPrompt` / `removeQueuedPrompt` | the writer's queue units | QUEUED rows; the snapshot republished; refused once TRIGGERED |
 | `editTodo` | `run.editTodo` | add / update / remove by id; a user instruction for the supervisor |
-| `setModel` / `setReasoning` | `run.setEntryModel` / `setEntryReasoning` | applied from the next iteration; a system row |
+| `setModel` / `setReasoning` | `run.setEntryModel` / `setEntryReasoning` | applied from the next iteration; a system row. **During a provider-limit wait** (Part Q) `setModel` is REQ-NOTIFY-263's *change model*: the parked agent rebuilds and re-runs at once, the override is persisted session-wide (`model_override`); a key that cannot be applied answers `false`, records `model_override_rejected` and the header names why — the wait continues |
+| *(keep waiting during a wait)* | — | REQ-NOTIFY-263's first choice is the absence of a decision: no operation exists for it, the header's control acknowledges and changes nothing; *cancel the run* is `cancel` (ADR-0010's note, REQ-MONITOR-004's enumeration stays at twenty-two) |
 | `setPermissionMode` | every live tool port's `setMode` | applies from the next tool call; audited |
 | `cancelAgent` | the ledger's transition | the reserved run id cancels the run |
 | `answerApproval` | the agent's pending approvals | routed by request id across live sessions |
@@ -140,12 +169,12 @@ Main presents `run.result` once as the notice.
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status, workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017) and **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`; the binding and the mode at `create` only |
+| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017) and **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`; the binding and the mode at `create` only |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192) | `appendRow`, `settleRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
-| `timeline` | ordered named entries with actor and metadata | `appendTimeline`, the queue/pause/steering units |
+| `timeline` | ordered named entries with actor and metadata — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, the ladder |
 | `permission_audit`, `tool_calls`, `issues` (+ `ring_state`) | the three rings (ADR-0024); audit and issues refuse UPDATE by trigger | the gate's sink through the writer |
 | `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012) | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport` |
 | `queued_prompts` | QUEUED → TRIGGERED → COMPLETED, per session | `queuePrompt`, `editQueuedPrompt`, `removeQueuedPrompt`, `triggerQueuedPrompts` |

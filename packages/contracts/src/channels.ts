@@ -135,6 +135,22 @@ export const SessionRecordSchema = z.object({
   toolCalls: z.object({ total: z.number().int().nonnegative(), agents: z.number().int().nonnegative(), byTool: z.array(z.object({ tool: z.string(), count: z.number().int().nonnegative() })) }),
   /** REQ-GIT-122/161: the session's worktree branch (from its binding, REQ-GIT-015) for the status strip; null without a binding. */
   worktreeBranch: z.string().nullable(),
+  /**
+   * REQ-NOTIFY-263 / REQ-ORCH-091: the wait an agent of the run is parked on — the provider and model whose limit was
+   * reached, whether the provider is marked exhausted (REQ-NOTIFY-088), the instant auto-resume fires (null = only when
+   * the user decides), the attempt, REQ-NOTIFY-092's wording, the agent, and the reason the last change-model choice
+   * was refused (REQ-ORCH-091 d). Null while no agent waits. Published with the snapshot when a wait begins, changes or ends.
+   */
+  wait: z.object({
+    provider: z.string(),
+    model: z.string(),
+    exhausted: z.boolean(),
+    resumeAt: z.string().nullable(),
+    attempt: z.number().int().nonnegative(),
+    reason: z.string(),
+    agent: z.string(),
+    rejection: z.string().nullable(),
+  }).nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

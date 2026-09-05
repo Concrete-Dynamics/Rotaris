@@ -155,6 +155,66 @@ export function intentStatusText(intent: SessionRecord['intent']): string | null
   ];
   return `Intent: ${intent.category}${extras.length > 0 ? ` (${extras.join('; ')})` : ''}`;
 }
+/** `m:ss` / `h:mm:ss` of a remaining span, never negative. */
+export function formatRemaining(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
+/**
+ * REQ-NOTIFY-263: the run header's wait text — the run is waiting on a provider limit; the provider and the model;
+ * whether the provider is marked exhausted (REQ-NOTIFY-088); the remaining time counted down against the surface's
+ * own clock, or that the run resumes only when the user decides. Every state is text as well as colour.
+ */
+export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: number): { headline: string; timing: string; remainingS: number | null } {
+  const headline = `Waiting on a provider limit: ${wait.provider} / ${wait.model} (${wait.agent}) — ${wait.exhausted ? 'provider marked exhausted' : 'provider not marked exhausted'}, attempt ${wait.attempt}.`;
+  if (wait.resumeAt === null) return { headline, timing: 'Resumes only when you decide.', remainingS: null };
+  const remainingS = Math.max(0, Math.ceil((Date.parse(wait.resumeAt) - nowMs) / 1000));
+  return { headline, timing: `Resumes automatically in ${formatRemaining(remainingS)}.`, remainingS };
+}
+
+/**
+ * The wait as the user sees it (REQ-NOTIFY-263, REQ-ORCH-091 d): the header and its exactly three choices, here and on no
+ * other surface — keep waiting (the absence of a decision: the control acknowledges and changes nothing), change model
+ * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run (`cancel`).
+ * The countdown ticks once a second on the surface's own clock, as the Overview's runtime label does.
+ */
+function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [choosing, setChoosing] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  // A new wait (or a refusal) remounts the header through its key at the render site, so the local choices start clean.
+  const text = waitHeaderText(wait, now);
+  return (
+    <div className="wait-header" role="status" aria-live="polite" data-exhausted={wait.exhausted ? '1' : '0'} data-remaining={text.remainingS === null ? '' : String(text.remainingS)} data-agent={wait.agent}>
+      <div className="wait-header__text">
+        <span className="wait-header__headline">{text.headline}</span>
+        <span className="wait-header__timing mono">{text.timing}</span>
+        {wait.reason && <span className="wait-header__reason text-secondary">{wait.reason}</span>}
+        {wait.rejection && <span className="wait-header__rejection" role="alert">{wait.rejection}</span>}
+        {acknowledged && !wait.rejection && <span className="wait-header__ack text-secondary">Still waiting.</span>}
+        {error && <span className="composer__error" role="alert">{error}</span>}
+      </div>
+      <div className="wait-header__actions" aria-label="Wait choices">
+        <button type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(true); setChoosing(false); }}>Keep waiting</button>
+        {onSetModel && models.length > 0 && (choosing ? (
+          <select className="input select" aria-label="Change model" defaultValue="" autoFocus onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }}>
+            <option value="">Choose a model…</option>
+            {models.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        ) : (
+          <button type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</button>
+        ))}
+        <button type="button" className="btn btn-danger btn-compact" onClick={onCancel}>Cancel the run</button>
+      </div>
+    </div>
+  );
+}
 export function rowTime(at: string): string {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return '';
@@ -364,6 +424,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {intentStatusText(session?.intent ?? null) && (
           <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase}>{intentStatusText(session?.intent ?? null)}</div>
+        )}
+        {session?.wait && runActive && (
+          <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onCancel={() => setConfirming('stop')} />
         )}
         {rows.length === 0 && (
           <div className="empty-state">

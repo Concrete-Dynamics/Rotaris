@@ -442,7 +442,15 @@ async function main(): Promise<void> {
     else if (e.kind === 'run.result') {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
       const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
-      raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
+      // REQ-NOTIFY-060/063/093 (Part Q): a run ended by a rate-limit or quota condition — the wait cancelled, or the ladder out of
+      // recoveries — is the third class: the provider limit was reached, the session is preserved, another model or a retry once
+      // the provider resets, the failure text as detail, the action opening model settings. (REQ-NOTIFY-062's hosted-credit
+      // branch is not built: no hosted provider exists.) The authentication and sandbox classes ahead of it are not built either.
+      if (e.result.error !== null && /rate.?limit|quota|429|too many requests/i.test(e.result.error)) {
+        raiseNotice('error', 'The provider limit was reached; the session is preserved', `${e.result.error}\n\nChoose another model, or retry once the provider resets.`, recoveryFor('config.models'));
+      } else {
+        raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
+      }
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
     }
@@ -877,6 +885,10 @@ async function main(): Promise<void> {
         return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
       }
       case 'config.read': {
+        // Part Q's first execution: the renderer asks for the configuration as it mounts, before the argv workspace has opened; without
+        // this wait the answer was `workspace.none`, the run header's model list stayed empty (REQ-MONITOR-144) and the wait header
+        // had no "Change model" to offer. `repository.read` already waited; this read did not.
+        await awaitWorkspace();
         if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its configuration' };
         const svc = services.get(canonicalPath(currentWorkspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
@@ -1183,6 +1195,23 @@ async function main(): Promise<void> {
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector });
         log(`capture: key ${step.selector}`);
+      });
+    }
+    // ROTARIS_CAPTURE_PNG_AT="path@ms;;…": a capture of the painted window at that time, beside the one at the end — the wait
+    // header read by eye while the run still waits (Part Q's proof; verification only).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PNG_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const image = await win.webContents.capturePage();
+        writeFileSync(step.selector, image.toPNG());
+        log(`capture: png-at ${step.at} → ${step.selector}`);
+      });
+    }
+    // ROTARIS_CAPTURE_PROBE_AT="selector@ms;;…": a probe taken mid-run at that time (the same JSON as the end probes), so a proof
+    // can read a state that is gone by the capture — the wait header's countdown (Part Q's proof; verification only).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PROBE_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
+        log(`capture: probe-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
       });
     }
     // ROTARIS_CAPTURE_QUIT_MS: a user-initiated close of the main window at that time — the quit path of REQ-MONITOR-131, not the capture's exit.

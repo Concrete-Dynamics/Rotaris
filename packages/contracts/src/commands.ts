@@ -5,6 +5,10 @@ import { ControlRequestSchema } from './control.js';
 import { HOOK_AGENT_IDS } from './hooks.js';
 import { PROVIDER_DIALOG_MODES } from './providers.js';
 import { PaneLayoutSchema } from './repository.js';
+import { SANDBOX_MODE_NAMES } from './config.js';
+
+/** REQ-SHELL-069: the pane-layout keys registered so far — the Overview's and the Git view's (REQ-GIT-153). */
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git'] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -26,14 +30,31 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('shell.hello') }),
   z.object({ kind: z.literal('theme.get') }),
   z.object({ kind: z.literal('theme.set'), name: z.string().min(1) }),
-  z.object({ kind: z.literal('prefs.get'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab', 'panels/overview']) }),
+  z.object({ kind: z.literal('prefs.get'), key: z.enum(PREFERENCE_COMMAND_KEYS) }),
   /** REQ-SHELL-069: a pane layout is a versioned record under `panels/`, per user. */
-  z.object({ kind: z.literal('prefs.set'), key: z.enum(['ui/reduced_motion', 'interface/settingsTab', 'panels/overview']), value: z.union([z.boolean(), z.string(), PaneLayoutSchema]) }),
-  /** REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`. */
-  z.object({ kind: z.literal('session.start'), prompt: z.string().min(1) }),
+  z.object({ kind: z.literal('prefs.set'), key: z.enum(PREFERENCE_COMMAND_KEYS), value: z.union([z.boolean(), z.string(), PaneLayoutSchema]) }),
+  /**
+   * REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`.
+   * REQ-SHELL-125 / REQ-GIT-021/118/158 (Part O): the launch dialog's choices ride along — isolation with its branch
+   * (the id it was derived from is the one main minted through `session.newId`), or an attach path already checked,
+   * never both (REQ-GIT-158 makes that refusal unreachable); and the sandbox mode.
+   */
+  z.object({ kind: z.literal('session.start'), prompt: z.string().min(1), isolation: z.object({ branch: z.string().min(1) }).optional(), attach: z.object({ path: z.string().min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }),
+  /** REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start. */
+  z.object({ kind: z.literal('session.newId') }),
   z.object({ kind: z.literal('session.list') }),
   /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */
   z.object({ kind: z.literal('repository.read') }),
+  /** REQ-GIT-105: the Git view's refresh, relayed to the workspace service; a missing Git raises REQ-GIT-104's notice in main. */
+  z.object({ kind: z.literal('git.read') }),
+  /** REQ-GIT-110/115: the user's own worktree at the user's own path — not under `.rotaris/`. */
+  z.object({ kind: z.literal('worktree.create'), branch: z.string().min(1), path: z.string().min(1) }),
+  /** REQ-GIT-111/117: `force` only after Git refused for uncommitted work and the second confirmation was accepted. */
+  z.object({ kind: z.literal('worktree.remove'), path: z.string().min(1), force: z.boolean() }),
+  /** REQ-GIT-158: main's folder chooser, then the service's REQ-GIT-011 check; the path and branch or the refusal come back. */
+  z.object({ kind: z.literal('worktree.chooseAttach') }),
+  /** REQ-GIT-116: whether a directory exists and is non-empty, for the dialog's live message (the renderer has no filesystem). */
+  z.object({ kind: z.literal('worktree.probePath'), path: z.string().min(1) }),
   z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),

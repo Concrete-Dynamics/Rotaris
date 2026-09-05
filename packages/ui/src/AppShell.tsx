@@ -25,10 +25,13 @@ export interface ShellNotice {
   readonly recovery?: readonly { readonly label: string; readonly command: string }[] | undefined;
 }
 
+/** REQ-SHELL-038: a strip item is text; one carrying an accessible name, a tooltip and a state (the branch, REQ-GIT-122/161) is a record. */
+export type StatusItem = string | { readonly text: string; readonly name: string; readonly title?: string | undefined; readonly state?: string | undefined; readonly testId?: string | undefined };
+
 export interface AppShellProps {
   readonly version: string;
   readonly workspaceLabel: string;
-  readonly statusItems: readonly string[];
+  readonly statusItems: readonly StatusItem[];
   readonly views?: Partial<Record<ViewId, ReactNode>>;
   readonly notice?: ShellNotice | null;
   readonly onAcknowledge?: ((id: number) => void) | undefined;
@@ -105,8 +108,9 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
         </main>
       </div>
       <footer className="status-strip" aria-label="Status">
-        {statusItems.map((s, i) => (
-          <span key={i} className="status-strip__item">{s}</span>
+        {statusItems.map((s, i) => (typeof s === 'string'
+          ? <span key={i} className="status-strip__item">{s}</span>
+          : <span key={i} className="status-strip__item" aria-label={s.name} title={s.title} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>
         ))}
       </footer>
     </div>

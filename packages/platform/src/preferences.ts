@@ -8,6 +8,8 @@ export const PREFERENCE_KEYS = {
   'ui/reduced_motion': { type: 'boolean', default: undefined, owner: 'REQ-SHELL-135', coerce: (value: unknown) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : undefined },
   /** REQ-SHELL-069: the Overview's two-pane split — version 1, pane count 2, the sizes; anything else reads as nothing stored. */
   'panels/overview': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
+  /** REQ-GIT-076/153: the Git view's two-column split, keyed `git` as REQ-SHELL-069 fixes; an unusable value restores the declared default. */
+  'panels/git': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
 } as const;
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
 export function coercePaneLayout(value: unknown, panes: number): PaneLayout | undefined {

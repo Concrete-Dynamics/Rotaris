@@ -17,10 +17,15 @@ sequenceDiagram
   participant CFG as config (loadConfiguration)
   participant WR as SessionWriter
   participant DB as workspace.db
+  participant WS as workspace service (Git)
 
-  W->>M: command session.start {prompt}
-  M->>RH: session.start {workspaceId, prompt}
-  RH->>CFG: configure(workspaceRoot): load the snapshot (layer 3) and both scopes' four files, overlay live state (Tier B), resolve
+  W->>M: command session.start {prompt, isolation? {branch}, attach? {path}, sandboxMode?} — the launch dialog's choices ride the composer's next submission (REQ-SHELL-125)
+  opt isolation or attach (Part O, REQ-GIT-022)
+    M->>WS: worktree.create {target: session {sessionId: the id session.newId minted}} — collision-safe, under <ws>/.rotaris/worktrees/<sid> — or worktree.checkAttach {path}
+    WS-->>M: worktree.created {path, branch, baseBranch, baseRevision} | worktree.attachable | refused → "Error: could not create or attach the requested worktree: <detail>"; NO session exists (REQ-GIT-023 by construction)
+  end
+  M->>RH: session.start {workspaceId, prompt, sessionId?, effectiveRoot?, worktree?, sandboxMode?}
+  RH->>CFG: configure(workspaceRoot): load the snapshot (layer 3) and both scopes' four files, overlay live state (Tier B), resolve — from the BASE workspace even for an isolated run (REQ-GIT-019)
   CFG-->>RH: RunSetup {model, runtime, personas, models, authProviders, tier} — or a fatal report / no entry model
   alt refused before it starts (REQ-EVENTS-021, REQ-CONFIG-478, REQ-WORKSPACE-137 "No model configured")
     RH-->>M: refused {headline, detail}
@@ -31,7 +36,7 @@ sequenceDiagram
     alt the entry model's auth_provider is unresolved (REQ-WORKSPACE-137 "Provider authentication required")
       RH-->>M: refused; nothing was recorded
     end
-    RH->>WR: SessionWriter.create — session row + lock row (INSERT OR IGNORE) in one transaction
+    RH->>WR: SessionWriter.create — session row (with the worktree binding as JSON and the sandbox mode, v8) + lock row (INSERT OR IGNORE) in one transaction; the run's EFFECTIVE root (the tool fence, the terminal's and the hooks' cwd, the child payload's root) is the worktree path, the record stays anchored to the base (REQ-GIT-019)
     RH->>WR: appendRow('user', prompt) — row 0 and its transcript.row event
     RH->>RH: settleStaleChildren (REQ-ORCH-053), SupervisorRegistry, hooks resolved once (ADR-0015)
     RH->>RH: new Run(...) then run.start()
@@ -131,11 +136,11 @@ terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / RE
 progress — one durable transaction) → the bus drained → the hooks advisory → every per-session binding removed.
 Main presents `run.result` once as the notice.
 
-## 7. The store the run writes (`packages/store/src/schema.ts`, v6)
+## 7. The store the run writes (`packages/store/src/schema.ts`, v8)
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status, workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause` |
+| `sessions` | the session record: status, workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017) and **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`; the binding and the mode at `create` only |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192) | `appendRow`, `settleRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |

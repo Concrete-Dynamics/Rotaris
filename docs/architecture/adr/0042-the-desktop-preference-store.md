@@ -261,3 +261,10 @@ store's serialiser handed `JSON.stringify` the sorted key list as its replacer, 
 not the top one — so the first nested value ever stored (this layout) was written as `{}` and read back as nothing
 stored. Every earlier preference was a string or a boolean and could not show it. The top-level order is now built
 before serialising; the falsified reading is kept beside the line.
+
+**Third execution — 2026-09-05, the Git view's split (Part O).** `panels/git` joins the registry under REQ-SHELL-069's
+key for the fifth view and REQ-GIT-153's rule that the domain mints no key of its own: the same record shape, pane
+count 2, declared default 480 px right with both columns at least 280 (REQ-GIT-076). Written from the view's G8
+divider, read at boot beside `panels/overview`. `pnpm git-proof` drags the divider by keyboard (three Left presses,
+16 px each) in its first launch, checks the file holds `[…, 528]`, and reads it back on the fifth. **Found: nothing** —
+the corrected serialiser round-trips the second nested record exactly as it did the first.

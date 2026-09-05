@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL } from './index.js';
+import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme } from '@rotaris/contracts';
 
 describe('ui — shell state (REQ-SHELL-025, REQ-SHELL-026)', () => {
@@ -41,8 +42,8 @@ describe('ui — theme projection and motion', () => {
 
 describe('ui — session browser (REQ-SHELL-126)', () => {
   const rows = [
-    { sessionId: 'S-1', label: 'Refactor parser', status: 'completed', branch: '—', relativeTime: '2 minutes ago', detail: 'C:/work/one', awaitingInput: false, stale: false, tokens: 1200, durationLabel: '0:42', busy: false, requirementId: null },
-    { sessionId: 'S-2', label: 'Review hooks', status: 'running', branch: 'feat/hooks', relativeTime: '1 hour ago', detail: 'C:/work/two', awaitingInput: true, stale: true, tokens: 0, durationLabel: '', busy: false, requirementId: null },
+    { sessionId: 'S-1', label: 'Refactor parser', status: 'completed', branch: '—', relativeTime: '2 minutes ago', detail: 'C:/work/one', awaitingInput: false, stale: false, tokens: 1200, durationLabel: '0:42', busy: false, requirementId: null, worktree: null, checkpointCount: 0 },
+    { sessionId: 'S-2', label: 'Review hooks', status: 'running', branch: 'feat/hooks', relativeTime: '1 hour ago', detail: 'C:/work/two', awaitingInput: true, stale: true, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0 },
   ];
 
   it('searches the complete presented row vocabulary', () => {
@@ -54,7 +55,7 @@ describe('ui — session browser (REQ-SHELL-126)', () => {
 });
 
 describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
-  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, ...over });
+  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, ...over });
   it('REQ-MONITOR-166: fewer than two samples is an empty sparkline, never a flat line; the path spans the samples', () => {
     expect(sparklinePath([], 160, 36)).toBeNull();
     expect(sparklinePath([['t', 5]], 160, 36)).toBeNull();
@@ -85,5 +86,65 @@ describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
     expect(clampRight(340, 1400)).toBe(340);
     expect(clampRight(560, 900)).toBe(572 - 8 >= 560 ? 560 : 900 - 320 - 8);
     expect(clampRight(400, 600)).toBe(272);
+  });
+});
+
+describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
+  const state = (over: Partial<GitViewState>): GitViewState => ({ workspaceRoot: 'D:/ws', gitAvailable: true, isRepository: true, branch: 'main', detached: false, upstream: 'origin/main', ahead: 1, behind: 0, uncommitted: 0, additions: 0, deletions: 0, files: 0, baseBranch: 'main', worktrees: [], history: [], failed: [], reads: 11, readMs: 400, ...over });
+  const wt = (over: Partial<GitWorktreeRow>): GitWorktreeRow => ({ path: 'D:/ws', branch: 'main', head: 'h', isBase: true, isActive: true, ahead: 0, behind: 0, additions: 0, deletions: 0, files: 0, ...over });
+  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, ...over });
+  const binding = (path: string, over: Partial<NonNullable<SessionListItemPayload['worktree']>> = {}) => ({ worktree_path: path, branch: 'rotaris/session/S', base_branch: 'main', base_revision: 'r', created_by_session: true, merge_status: 'ready' as const, integration_session_id: null, ...over });
+  it('REQ-GIT-075/081: the header texts — the branch, the literal for a non-repository, the sync label and its refreshing form', () => {
+    expect(headerBranch(null)).toBe('reading…');
+    expect(headerBranch(state({ isRepository: false }))).toBe(NOT_A_REPOSITORY);
+    expect(headerBranch(state({ branch: null, detached: true }))).toBe('detached HEAD');
+    expect(headerBranch(state({}))).toBe('main');
+    expect(syncLabel(state({}), false)).toBe('ahead 1  behind 0');
+    expect(syncLabel(state({ isRepository: false, gitAvailable: false }), false)).toBe('ahead —  behind —');
+    expect(syncLabel(state({}), true)).toBe(REFRESHING_LABEL);
+  });
+  it('REQ-GIT-077/112: the Files cell, and the empty value for a figure that could not be computed', () => {
+    expect(filesCell(wt({ additions: 3, deletions: 1, files: 2 }))).toBe('+3 -1 / 2');
+    expect(filesCell(wt({ additions: null, deletions: null, files: null }))).toBe('—');
+  });
+  it('REQ-GIT-109: bindings join by resolved path whatever the spelling; unassociated trees carry none', () => {
+    const join = joinBindings([row({ sessionId: 'A', status: 'completed', worktree: binding('D:\\ws\\.rotaris\\worktrees\\A\\') }), row({ sessionId: 'B', status: 'running', worktree: binding('d:/other') })]);
+    expect(join.get('d:/ws/.rotaris/worktrees/a')).toMatchObject({ sessionId: 'A', status: 'completed', mergeStatus: 'ready' });
+    expect(join.get('d:/ws')).toBeUndefined();
+  });
+  it('REQ-GIT-083: eligibility is completed + ready|merge_failed among the selected rows, in table order', () => {
+    const rows = [wt({ path: 'D:/ws' }), wt({ path: 'D:/ws/.rotaris/worktrees/A', isBase: false, isActive: false }), wt({ path: 'D:/ws/.rotaris/worktrees/B', isBase: false, isActive: false })];
+    const join = joinBindings([row({ sessionId: 'B', status: 'completed', worktree: binding('D:/ws/.rotaris/worktrees/B', { merge_status: 'merge_failed' }) }), row({ sessionId: 'A', status: 'running', worktree: binding('D:/ws/.rotaris/worktrees/A') })]);
+    expect(mergeEligible(rows, new Set(['D:/ws/.rotaris/worktrees/B', 'D:/ws/.rotaris/worktrees/A', 'D:/ws']), join).map((r) => r.path)).toEqual(['D:/ws/.rotaris/worktrees/B']);
+    expect(mergeEligible(rows, new Set(['D:/ws/.rotaris/worktrees/A']), join)).toEqual([]);
+  });
+  it('REQ-GIT-076: neither column drops below 280 px', () => {
+    expect(clampGitRight(100, 1400)).toBe(280);
+    expect(clampGitRight(480, 1400)).toBe(480);
+    expect(clampGitRight(600, 700)).toBe(700 - 280 - 8);
+  });
+  it('REQ-GIT-086/118: the picker entries and the default session branch', () => {
+    expect(pickerLabel(row({ sessionId: 'S', worktree: binding('p') }))).toBe('S · rotaris/session/S');
+    expect(pickerLabel(row({ sessionId: 'S' }))).toBe('S');
+    expect(defaultSessionBranch('abc')).toBe('rotaris/session/abc');
+  });
+  it('REQ-GIT-116: the five dialog messages, distinguishable, in order', () => {
+    expect(worktreeDialogMessage('', '', [], [], null)).toBe('Enter a branch name.');
+    expect(worktreeDialogMessage('a..b', 'D:/x', [], [], null)).toMatch(/not a usable Git branch name: it contains '\.\.'/);
+    expect(worktreeDialogMessage('main', 'D:/x', ['main'], [], null)).toBe('The branch main already has a worktree.');
+    expect(worktreeDialogMessage('feature/x', '   ', [], [], null)).toBe('Choose a directory for the worktree.');
+    expect(worktreeDialogMessage('feature/x', 'D:/x', [], ['d:\\x\\'], null)).toMatch(/already exists/);
+    expect(worktreeDialogMessage('feature/x', 'D:/x', [], [], { exists: true, nonEmpty: true })).toMatch(/already exists/);
+    expect(worktreeDialogMessage('feature/x', 'D:/x', [], [], { exists: true, nonEmpty: false })).toBeNull();
+    expect(worktreeDialogMessage('feature/x', 'D:/x', [], [], null)).toBeNull();
+  });
+  it('REQ-GIT-122/161: the strip item — the focused worktree branch first, ↑n when ahead, detached and not-a-repository distinct', () => {
+    expect(branchStripItem(state({}), 'rotaris/session/S')).toMatchObject({ text: 'rotaris/session/S', state: 'branch' });
+    expect(branchStripItem(state({ ahead: 2 }), null)).toMatchObject({ text: 'main ↑2', title: 'Branch this workspace is on: main, 2 commits ahead', state: 'branch' });
+    expect(branchStripItem(state({ ahead: 0 }), null)).toMatchObject({ text: 'main', title: 'Branch this workspace is on: main' });
+    expect(branchStripItem(state({ branch: null, detached: true }), null)).toMatchObject({ text: 'detached HEAD', state: 'detached' });
+    expect(branchStripItem(state({ isRepository: false }), null)).toMatchObject({ text: 'no git repository', state: 'none' });
+    expect(branchStripItem(state({ isRepository: false, gitAvailable: false }), null)).toMatchObject({ text: 'no git', state: 'none' });
+    expect(branchStripItem(null, null)).toMatchObject({ state: 'unknown' });
   });
 });

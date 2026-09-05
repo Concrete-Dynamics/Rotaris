@@ -201,6 +201,9 @@ export interface OpenSessionArgs {
   /** REQ-TOOLS-181 / REQ-TOOLS-071: the effective preset and the sandbox verdict. */
   readonly permissionMode?: string;
   readonly sandboxed?: boolean;
+  /** REQ-GIT-022: the binding (REQ-GIT-015) as JSON, saved WITH the session record; REQ-SHELL-125's chosen sandbox mode. */
+  readonly worktree?: string | null;
+  readonly sandboxMode?: string;
 }
 
 export interface OpenExistingSessionArgs {
@@ -280,7 +283,7 @@ export class SessionWriter {
     const now = toIsoUtc(wall.instant());
     try {
       const outcome = dal.transaction(() => {
-        dal.upsertSession({ session_id: sessionId, execution_status: 'idle', workspace_root: args.workspaceRoot, created_at: now, updated_at: now });
+        dal.upsertSession({ session_id: sessionId, execution_status: 'idle', workspace_root: args.workspaceRoot, created_at: now, updated_at: now, worktree: args.worktree ?? null, ...(args.sandboxMode ? { sandbox_mode: args.sandboxMode } : {}) });
         const lock = dal.claimLock(sessionId, args.pid, args.host, now);
         if (!lock.claimed) return lock;
         dal.openHistory(sessionId);

@@ -327,3 +327,13 @@ porcelain route; or a requirement appears that checkpoints work outside a Git re
 force alternative B and would be a product decision rather than an architectural one (ESC-4); or a
 requirement makes the recorded checkpoint list itself something a user or another tool reads, which
 would pull it back out of the database under SR-4's own principle.
+
+## Status note — 2026-09-05, the card's shell exists; the mechanism is owed (Part O)
+
+The Git view (`packages/ui/src/GitView.tsx`) carries the "Session checkpoints" card in its **empty states only**
+(REQ-GIT-086..090): the picker over the session list (`<id> · <branch>` or the bare id, disabled when empty), the
+five columns, no rows, the text by cause (no session; a selected session with none recorded), and "Restore
+checkpoint" disabled with REQ-GIT-089's reason. Every listing record already carries `checkpoint_count: 0`
+(REQ-GIT-018) and the run-host's `session.start` records the binding the capture will need. **Not built:** the
+private index, capture at iteration end, the ref namespace, the listing, the preview and the restore with its gates —
+this decision has not yet been executed and nothing here is a finding about it.

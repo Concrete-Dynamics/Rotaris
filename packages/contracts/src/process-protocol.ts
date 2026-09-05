@@ -6,7 +6,8 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
-import { RepositoryStateSchema } from './repository.js';
+import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
+import { SANDBOX_MODE_NAMES } from './config.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -51,8 +52,13 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.renewLease'), workspaceId: z.string(), leaseMs: z.number().int().positive() }),
   z.object({ kind: z.literal('workspace.closeStore'), workspaceId: z.string() }),
   z.object({ kind: z.literal('workspace.release'), workspaceId: z.string() }),
-  /** REQ-CHAT-011 / REQ-SESSION-089: create the session, take its lock, open its history, record row 0. */
-  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().min(1) }),
+  /**
+   * REQ-CHAT-011 / REQ-SESSION-089: create the session, take its lock, open its history, record row 0.
+   * REQ-GIT-022 (Part O): an isolated or attached session arrives with its id minted in main, the binding the
+   * workspace service already made, and the effective root the run works in; the session row stays anchored to
+   * the base workspace (REQ-GIT-019). `sandboxMode` is REQ-SHELL-125's choice, recorded on the row (ADR-0022: not honoured here).
+   */
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string().min(1), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
@@ -90,6 +96,8 @@ export const SessionListItemSchema = z.object({
   awaitingInput: z.boolean(), stale: z.boolean(),
   /** REQ-MONITOR-171/172: the sessions card's token and duration labels, the busy flag, and a requirement id or none. */
   tokens: z.number().int().nonnegative(), durationLabel: z.string(), busy: z.boolean(), requirementId: z.string().nullable(),
+  /** REQ-GIT-018: the binding in full or null, and the checkpoint count — read from the listing record and nothing else. */
+  worktree: WorktreeBindingSchema.nullable(), checkpointCount: z.number().int().nonnegative(),
 });
 export type SessionListItemPayload = z.infer<typeof SessionListItemSchema>;
 
@@ -154,6 +162,20 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.bootstrap'), workspaceRoot: z.string() }),
   /** ADR-0038 / REQ-MONITOR-168: the repository card's reads, made by the one helper the workspace service owns. */
   z.object({ kind: z.literal('repository.read'), workspaceRoot: z.string() }),
+  /** ADR-0038 second execution (Part O): the Git view's reads (REQ-GIT-105), every one bounded at 15 s (REQ-GIT-102). */
+  z.object({ kind: z.literal('git.view'), workspaceRoot: z.string() }),
+  /**
+   * REQ-GIT-005..012: create a linked worktree. A `session` target is placed under `<workspace>/.rotaris/<subpath>/<sessionId>`
+   * (REQ-GIT-005) and takes REQ-GIT-008's refusal; a `path` target is the user's own location (REQ-GIT-115) and takes REQ-GIT-110's.
+   */
+  z.object({
+    kind: z.literal('worktree.create'), workspaceRoot: z.string(), branch: z.string().min(1), collisionSafe: z.boolean(), baseRevision: z.string().optional(),
+    target: z.discriminatedUnion('kind', [z.object({ kind: z.literal('path'), path: z.string().min(1) }), z.object({ kind: z.literal('session'), sessionId: z.string().min(1), subpath: z.string().optional() })]),
+  }),
+  /** REQ-GIT-111: remove the registration and the directory; `force` only from the second confirmation of REQ-GIT-117. */
+  z.object({ kind: z.literal('worktree.remove'), workspaceRoot: z.string(), path: z.string().min(1), force: z.boolean() }),
+  /** REQ-GIT-011: an attach candidate validated before any session exists (REQ-GIT-158). */
+  z.object({ kind: z.literal('worktree.checkAttach'), workspaceRoot: z.string(), path: z.string().min(1) }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -203,7 +225,14 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.restore.assessment'), assessment: RestoreAssessmentSchema }),
   z.object({ kind: z.literal('workspace.restored'), report: RestoreReportSchema }),
   z.object({ kind: z.literal('repository.state'), state: RepositoryStateSchema }),
-  z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional() }),
+  z.object({ kind: z.literal('git.state'), state: GitViewStateSchema }),
+  /** REQ-GIT-008: the tree exists at the path on the (possibly suffixed, REQ-GIT-010) branch; the base facts feed the binding. */
+  z.object({ kind: z.literal('worktree.created'), path: z.string(), branch: z.string(), baseBranch: z.string(), baseRevision: z.string() }),
+  z.object({ kind: z.literal('worktree.removed'), path: z.string() }),
+  /** REQ-GIT-011: what an attach binding records — the attached tree's branch, the base checkout's branch and commit. */
+  z.object({ kind: z.literal('worktree.attachable'), path: z.string(), branch: z.string(), baseBranch: z.string(), baseRevision: z.string() }),
+  /** `needsForce` (REQ-GIT-111/117): Git refused a removal because the tree holds modified or untracked files. */
+  z.object({ kind: z.literal('refused'), code: z.string(), headline: z.string(), detail: z.string().optional(), needsForce: z.boolean().optional() }),
   z.object({ kind: z.literal('hooks.summary'), summary: HooksSummarySchema }),
   z.object({ kind: z.literal('playbooks.catalogue'), catalogue: PlaybookCatalogueSchema }),
   /**

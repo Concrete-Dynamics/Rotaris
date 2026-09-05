@@ -126,7 +126,9 @@ export function isEntryPort(ctx: Pick<ToolPortContext, 'parentId' | 'depth'>): b
 }
 
 export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPort {
-  const root = realPathOf(ctx.workspaceRoot);
+  // REQ-GIT-019/022: the fence, the policy's root and the terminal's cwd are the EFFECTIVE root (the worktree of an
+  // isolated run); the runtime and the personas are the BASE workspace's configuration.
+  const root = realPathOf(ctx.effectiveRoot ?? ctx.workspaceRoot);
   const runtime = deps.runtime(ctx.workspaceRoot);
   const todo = new TodoList();
   const executors = executorsFor(root, deps, runtime, todo);

@@ -14,3 +14,4 @@ export * from './roles.js';
 export * from './config.js';
 export * from './providers.js';
 export * from './repository.js';
+export * from './git.js';

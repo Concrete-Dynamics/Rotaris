@@ -16,3 +16,7 @@ export * from './settings/ConfigSettings.js';
 export * from './settings/Providers.js';
 export * from './ProviderDialog.js';
 export * from './OverviewView.js';
+export * from './GitView.js';
+export * from './ConfirmDialog.js';
+export * from './WorktreeDialog.js';
+export * from './StartSessionDialog.js';

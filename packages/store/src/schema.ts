@@ -324,6 +324,17 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN token_samples TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    to: 8,
+    // v8 lands with the Git view and worktrees (Part O): REQ-GIT-015's binding as one JSON value on the session row —
+    // NULL is "no worktree" (REQ-GIT-017: a row written before worktrees existed loads as an absence, nothing invented)
+    // — and REQ-SHELL-125's sandbox mode as chosen at launch (recorded, not honoured: ADR-0022). NO new index: both are
+    // read with the row; a listing still reads listing records only (REQ-GIT-018, REQ-SESSION-042).
+    sql: `
+      ALTER TABLE sessions ADD COLUMN worktree     TEXT;
+      ALTER TABLE sessions ADD COLUMN sandbox_mode TEXT NOT NULL DEFAULT 'off';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

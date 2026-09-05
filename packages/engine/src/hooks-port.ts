@@ -61,7 +61,10 @@ export interface HookPort {
 /** What the run-host root is handed to build a session's hook port. */
 export interface HookPortContext {
   readonly sessionId: string;
+  /** The base workspace: where the hook configuration is loaded from. */
   readonly workspaceRoot: string;
+  /** REQ-GIT-019: the worktree an isolated run works in — the hooks' working directory; absent means the base. */
+  readonly effectiveRoot?: string | undefined;
   readonly writer: SessionWriter;
   /** The user's warning channel. */
   readonly warn: (message: string) => void;

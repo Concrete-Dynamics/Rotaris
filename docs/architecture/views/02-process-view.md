@@ -62,8 +62,9 @@ flowchart LR
 
 ## Message families
 
-**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
-`session.start/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
+**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`, `panels/git`), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
+`session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
+`git.read`, `worktree.create/remove/chooseAttach/probePath` (Part O — see the Git paragraph below),
 `pause.present/payload`, `approval.payload`, `notice.acknowledge`, `workspace.backup/restore`,
 `shell.switchView`, `hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle`,
 `playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
@@ -75,6 +76,23 @@ carries one back — the list shows the display mask. A sign-in that succeeds as
 {workspaceRoot}` → `repository.state {gitAvailable, isRepository, branch, base, ahead, behind, touched, uncommitted, failed,
 readMs}`** is the workspace service's answer for the Overview's repository card — ADR-0038's helper lives there and
 nowhere else; every read bounded at 15 s, every failure an empty value (REQ-GIT-102).
+
+**The Git view and the worktrees (Part O; ADR-0038's second execution).** Renderer → main: `git.read` → the whole
+`GitViewState` (header, worktrees with the base tree by common directory, 30 history rows with the local flag; a
+`gitAvailable: false` answer raises the fixed-identity notice `git.missing` "Working without Git", REQ-GIT-104);
+`worktree.create {branch, path}` (the user's own path, REQ-GIT-115); `worktree.remove {path, force}` (a refusal Git
+would lift with `--force` comes back as code `worktree.needs-force`, REQ-GIT-117); `worktree.chooseAttach` (main's
+folder chooser, then the service's REQ-GIT-011 check); `worktree.probePath {path}` (answered by main from the
+filesystem, for the dialog's live message); `session.newId` (main mints `randomUUID` and holds it for the next
+isolated or attached start); and `session.start` gains `isolation {branch}` | `attach {path}` and `sandboxMode`. Main →
+workspace service: `git.view {workspaceRoot}` → `git.state`; `worktree.create {workspaceRoot, branch, collisionSafe,
+baseRevision?, target: path {path} | session {sessionId, subpath?}}` → `worktree.created {path, branch, baseBranch,
+baseRevision}` | `refused` (the Git failure text as the headline); `worktree.remove {workspaceRoot, path, force}` →
+`worktree.removed` | `refused {…, needsForce}`; `worktree.checkAttach {workspaceRoot, path}` → `worktree.attachable
+{path, branch, baseBranch, baseRevision}` | `refused`. Main → run host: `session.start` gains `sessionId`,
+`effectiveRoot`, `worktree` (REQ-GIT-015's binding) and `sandboxMode`; the binding is made BEFORE the run host is
+asked, so a binding failure leaves no session behind (REQ-GIT-023 by construction). `SessionListItem` gains `worktree`
+and `checkpointCount` (REQ-GIT-018); `SessionRecord` gains `worktreeBranch` for the status strip (REQ-GIT-122).
 
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own

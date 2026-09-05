@@ -18,6 +18,9 @@ export const REASONING_LEVEL_NAMES = ['auto', 'low', 'medium', 'high', 'max'] as
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
 export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single'] as const;
 export const RUN_START_MODE_NAMES = ['auto', 'plan'] as const;
+/** REQ-SANDBOX-048 / REQ-SHELL-125: the three values, in the order the launch dialog offers them. */
+export const SANDBOX_MODE_NAMES = ['off', 'workspace-write', 'read-only'] as const;
+export type SandboxModeName = (typeof SANDBOX_MODE_NAMES)[number];
 
 export const SlotViewSchema = z.object({
   slot: z.enum(MODEL_SLOT_NAMES),
@@ -48,6 +51,8 @@ export const RuntimeViewSchema = z.object({
   keep_going: z.boolean(),
   run_start_mode: z.enum(RUN_START_MODE_NAMES),
   memory_diagnostics_enabled: z.boolean(),
+  /** REQ-SHELL-125: the launch dialog preselects the effective configured value (REQ-TOOLS-114). Read here, not edited here. */
+  sandbox_mode: z.enum(SANDBOX_MODE_NAMES),
 });
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),

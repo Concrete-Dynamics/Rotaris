@@ -54,7 +54,7 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
         </header>
         <label className="session-browser__search">
           <span className="session-browser__label">Search sessions</span>
-          <input ref={search} className="input" type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input ref={search} className="input" type="search" placeholder="Filter by name, status, or branch…" value={query} onChange={(event) => setQuery(event.target.value)} />
         </label>
         {(error || localError) && <p className="session-browser__error" role="alert">{localError ?? error}</p>}
         <div className="session-browser__table-wrap">
@@ -65,7 +65,8 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
                 <tr key={session.sessionId} data-session-id={session.sessionId}>
                   <td><span className="session-browser__name">{session.label}</span><span className="session-browser__detail mono">{session.detail}</span></td>
                   <td>{session.status}{session.stale && <span className="tag session-browser__stale">stale</span>}{session.awaitingInput && <span className="tag">awaiting input</span>}</td>
-                  <td className="mono">{session.branch}</td>
+                  {/* REQ-GIT-122: the row's `<branch or —> · <state>` text. */}
+                  <td className="mono" data-testid="session-row-branch">{`${session.branch} · ${session.status}`}</td>
                   <td>{session.relativeTime}</td>
                   <td><button type="button" className="btn btn-secondary" disabled={opening !== null} onClick={() => { void open(session.sessionId); }}>{opening === session.sessionId ? 'Opening…' : 'Open'}</button></td>
                 </tr>

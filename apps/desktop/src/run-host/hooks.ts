@@ -55,7 +55,8 @@ export function createHookPort(ctx: HookPortContext, deps: HookRootDeps): HookPo
     log: ctx.log,
   };
   const engine = new HookEngine(permitted, withheld, {
-    sessionId: ctx.sessionId, workspace, cwd: ctx.workspaceRoot, env: deps.env, timers: deps.clocks.timers, monotonic: deps.clocks.monotonic, sinks,
+    // REQ-GIT-019: a hook runs where the work happens — the worktree of an isolated run; the set was loaded from the base.
+    sessionId: ctx.sessionId, workspace, cwd: ctx.effectiveRoot ?? ctx.workspaceRoot, env: deps.env, timers: deps.clocks.timers, monotonic: deps.clocks.monotonic, sinks,
   });
   return {
     auditSnapshot: () => permitted.filter((h) => h.enabled).map((h) => ({ hook_id: h.id, name: hookDisplayName(h), event: h.event, matcher: h.matcher, source: h.source, command: redact(h.command) })),

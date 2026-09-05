@@ -4,6 +4,7 @@ import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPro
 import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
+import { AgentActivity } from './children/activity.js';
 
 /**
  * ADR-0008 — one ordered session writer per session, owning the session's
@@ -269,6 +270,8 @@ export class SessionWriter {
   private failedReason: string | null = null;
   /** The status the row carries; a row append touches `updated_at` without changing it. */
   private status: string;
+  /** REQ-MONITOR-044/049/060 (Part R): per-agent called and active tools and the latest prompt reading, fed at the two chokepoints below. */
+  readonly activity = new AgentActivity();
 
   constructor(private readonly deps: SessionWriterDeps) {
     const { dal, sessionId } = deps;
@@ -279,6 +282,8 @@ export class SessionWriter {
     const s = dal.getSession(sessionId);
     this.dropped = s?.dropped_count ?? 0;
     this.status = s?.execution_status ?? 'idle';
+    // Seeded ONCE from the ring (bounded by its cap); never re-read at projection time (REQ-MONITOR-038).
+    this.activity.seed(dal.toolCallsOf(sessionId));
   }
 
   get currentStatus(): string {
@@ -634,6 +639,7 @@ export class SessionWriter {
     } catch (cause) {
       return this.fail(cause);
     }
+    this.activity.started(open.agent_name, open.call_id, open.tool_name);
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(ordinal);
@@ -664,6 +670,7 @@ export class SessionWriter {
     } catch (cause) {
       return this.fail(cause);
     }
+    if (settled) this.activity.settled(open.agent_name, open.call_id);
     if (settled && line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(settled);
@@ -750,6 +757,8 @@ export class SessionWriter {
     } catch (cause) {
       return this.fail(cause);
     }
+    // REQ-MONITOR-211: a settled agent carries no active tool chip; its called history stays (Part R).
+    if (completedAt !== null) this.activity.clearActive(current.canonical_name);
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(dal.getChild(sessionId, taskId)!);

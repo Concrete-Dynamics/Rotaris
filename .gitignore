@@ -21,3 +21,4 @@ packages/kernel/src/generated/
 .git-proof/
 .resilience-proof/
 .checkpoint-proof/
+.mission-proof/

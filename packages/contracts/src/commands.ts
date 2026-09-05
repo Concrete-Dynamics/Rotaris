@@ -8,7 +8,7 @@ import { PaneLayoutSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 
 /** REQ-SHELL-069: the pane-layout keys registered so far — the Overview's and the Git view's (REQ-GIT-153). */
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git'] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'interface/agentPopOut'] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -112,6 +112,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('providers.signOut'), id: z.string().min(1) }),
   z.object({ kind: z.literal('providers.delete'), id: z.string().min(1) }),
   z.object({ kind: z.literal('providers.refresh'), ids: z.union([z.literal('all'), z.array(z.string())]) }),
+  /**
+   * ADR-0048's window registry, first executed (Part R; REQ-SHELL-072/073/076/078, REQ-MONITOR-072/073): open or raise the
+   * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);
+   * `focusSteer` when the inspector's Steer opened it (REQ-MONITOR-137). An unknown agent id is a silent no-op.
+   */
+  z.object({ kind: z.literal('window.openPersona'), persona: z.string().min(1), agentId: z.string().min(1), focusSteer: z.boolean().optional() }),
+  /** The persona window asks main what it was opened for: its persona, the session the main window follows, the tab to select. */
+  z.object({ kind: z.literal('window.personaPayload') }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

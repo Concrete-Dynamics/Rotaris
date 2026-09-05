@@ -286,6 +286,21 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
 }
 
 /** REQ-CONFIG-286: Save, Discard, Cancel in that order with Save as the default. */
+/**
+ * REQ-SHELL-073 / REQ-MONITOR-072 (Part R): the Interface category's "Agent pop-out" preference — off, an agent click
+ * selects it in the inspector; on, it opens or raises the persona window. Written through the preference command at once
+ * (ADR-0042), outside Save and Discard, like the theme and the motion setting beside it.
+ */
+export function AgentPopOutToggle({ on, onChange }: { on: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <div className="settings__action" data-testid="agent-pop-out">
+      <span id="agent-pop-out-label">Agent pop-out</span>
+      <button type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby="agent-pop-out-label" aria-checked={on} aria-description={`Agent pop-out is ${on ? 'enabled' : 'disabled'}.`} data-testid="agent-pop-out-toggle" onClick={() => onChange(!on)} />
+      <span className="text-secondary settings__hint">On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</span>
+    </div>
+  );
+}
+
 export function UnsavedGuardDialog({ onSave, onDiscard, onCancel }: { onSave: () => void; onDiscard: () => void; onCancel: () => void }) {
   return (
     <div className="dialog-backdrop" role="presentation">

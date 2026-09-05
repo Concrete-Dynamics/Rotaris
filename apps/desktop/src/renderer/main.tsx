@@ -1,9 +1,10 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { createStore } from 'zustand/vanilla';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, RUN_AGENT_ID, STATUS_LABELS, THEMES, type AgentRecord, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem } from '@rotaris/ui';
+import { AgentPopOutToggle, applyChange, applyTheme, AppShell, branchStripItem, GitView, MissionView, OverviewView, PersonaWindow, rebasePending, runLevelAgent, ApprovalDialog, type PersonaEntry, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -41,7 +42,24 @@ const replica: ReplicaStore = createReplicaStore({
   onDiagnostic: (m) => console.warn(`[replica] ${m}`),
 });
 const notices: NoticeStore = createNoticeStore();
-bridge.onSessionSnapshot((p) => replica.getState().applySnapshot(p));
+/**
+ * Part R (REQ-MONITOR-038's 250 ms budget, REQ-SHELL-076): the last whole-session update's apply-to-paint time and the
+ * agent count it carried, read by the Mission view's data attributes and by main's persona-window paint measurement
+ * (`__rotarisPersonaPainted`, wall-clock so main can subtract its own show instant). Verification instruments; no surface
+ * behaves differently because of them.
+ */
+const refreshStats = createStore<{ ms: number; agents: number; seq: number } | null>(() => null);
+bridge.onSessionSnapshot((p) => {
+  const t0 = performance.now();
+  const outcome = replica.getState().applySnapshot(p);
+  if (outcome !== 'reset') return;
+  const agents = replica.getState().session?.agents.length ?? 0;
+  const seq = (p as { seq?: number }).seq ?? 0;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    refreshStats.setState({ ms: performance.now() - t0, agents, seq });
+    (window as unknown as { __rotarisPersonaPainted?: unknown }).__rotarisPersonaPainted = { at: Date.now(), seq, agents };
+  }));
+});
 bridge.onTranscriptIncrement((p) => replica.getState().applyIncrement(p));
 bridge.onNotice((p) => notices.getState().apply(p));
 
@@ -117,11 +135,63 @@ async function continueSession(action: PauseResolution = 'continue'): Promise<{ 
   return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
 }
 
-function Workspace({ models }: { models: readonly string[] }) {
+/** ADR-0037: the configuration snapshot as the screen reads it — once on mount, again on every `config:changed`. */
+function useConfigSnapshot(workspace: string): ConfigSnapshot | null {
+  const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
+  const hasWorkspace = workspace !== '(no workspace)';
+  useEffect(() => {
+    if (!hasWorkspace) return;
+    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) setSnapshot(r.value as ConfigSnapshot); }); });
+    return bridge.onConfigChanged((p) => setSnapshot((p as { snapshot: ConfigSnapshot }).snapshot));
+  }, [hasWorkspace]);
+  return snapshot;
+}
+/** REQ-MONITOR-050: one tab per configured persona, from the snapshot's roles (their declared tools stand in for an agent with no grant). */
+function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
+  return (snapshot?.roles ?? []).map((r) => ({ role: r.role, tools: r.tools, thinking: r.rawThinking, effectiveModel: r.effectiveModel }));
+}
+/**
+ * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the transcript's first agent row
+ * names when no child carries that name, else `orchestrator`; its model and reasoning from the snapshot's role view.
+ */
+function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], agents: readonly AgentRecord[]): { persona: string; model: string; reasoning: string; tools: readonly string[] } {
+  const childNames = new Set(agents.map((a) => a.name));
+  const first = rows.find((r) => r.kind === 'agent' && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
+  const persona = first?.persona ?? 'orchestrator';
+  const role = snapshot?.roles.find((r) => r.role === persona);
+  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.tools ?? [] };
+}
+/** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
+async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {
+  await bridge.command({ kind: 'window.openPersona', persona: agent.persona, agentId: agent.id, focusSteer });
+}
+/** REQ-MONITOR-107/110: the once-a-second tick of a VISIBLE surface, running only while the followed run is busy; nothing ticks when unmounted. */
+function useElapsedTick(session: { executionStatus: string; updatedAt: string } | null): string | null {
+  const busy = session !== null && isBusy(session.executionStatus);
+  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
+  // The instant is re-read when the run becomes busy — derived during render, not in an effect (React's own rule).
+  const [seenBusy, setSeenBusy] = useState(busy);
+  if (seenBusy !== busy) { setSeenBusy(busy); if (busy) setNowIso(new Date().toISOString()); }
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => setNowIso(new Date().toISOString()), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
+  return busy ? nowIso : session?.updatedAt ?? null;
+}
+
+function Workspace({ models, workspace, popOut }: { models: readonly string[]; workspace: string; popOut: boolean }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
+  const snapshot = useConfigSnapshot(workspace);
+  const personas = useMemo(() => personasOf(snapshot), [snapshot]);
+  const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
+  const nowIso = useElapsedTick(session);
   return <WorkspaceView
-    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={session?.updatedAt ?? null}
+    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
+    personas={personas} entry={entry} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60}
+    onSelectAgent={(id, source) => { if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
+    onOpenPersona={(agent, focusSteer) => { void openPersona(agent, focusSteer); }}
     models={models}
     onQueue={(text) => control('createQueuedPrompt', { text }, 'The run no longer accepts prompts.')}
     onEditQueued={(promptId, text) => control('editQueuedPrompt', { promptId, text }, 'Queued message was already picked up and cannot be edited.')}
@@ -131,6 +201,45 @@ function Workspace({ models }: { models: readonly string[] }) {
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
     onSetReasoning={(level) => control('setReasoning', { level }, 'The run did not accept that reasoning level.')}
+  />;
+}
+
+/**
+ * REQ-SHELL-023's Mission view (Part R; REQ-MONITOR-274..276). Mounted only while shown (REQ-MONITOR-039/275: a hidden
+ * surface refreshes nothing and runs no timer); the strategy and the depth are the settings' own values, written through
+ * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, cancel `cancelAgent`/`cancel`.
+ */
+function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
+  const session = useStore(replica, (s) => s.session);
+  const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
+  const selectedAgentId = useShellState((st) => st.selectedAgentId);
+  const selectAgent = useShellState((st) => st.selectAgent);
+  const snapshot = useConfigSnapshot(workspace);
+  const refresh = useStore(refreshStats, (st) => st);
+  const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
+  const runLevel = useMemo(() => runLevelAgent(session, entry), [session, entry]);
+  const nowIso = useElapsedTick(session);
+  const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
+  useEffect(() => { if (workspace !== '(no workspace)') queueMicrotask(() => { void bridge.command({ kind: 'session.list' }).then((r) => { if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions); }); }); }, [workspace, session?.id]);
+  const label = session ? sessions.find((x) => x.sessionId === session.id)?.label ?? null : null;
+  const setField = async (patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const r = await bridge.command({ kind: 'config.setField', patch });
+    return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+  };
+  const open = (agent: AgentRecord) => {
+    // REQ-MONITOR-072 / REQ-SHELL-073: the preference decides; the Workspace inspector shows the agent pinned otherwise.
+    if (popOut && agent.id !== RUN_AGENT_ID) { void openPersona(agent, false); return; }
+    selectAgent(agent.id);
+    useShellState.getState().switchView('workspace');
+  };
+  return <MissionView
+    session={session} sessionLabel={label} runLevel={runLevel} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
+    onSelect={(id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
+    strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
+    onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}
+    onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
+    onCancelAgent={cancelAgent} onCancelRun={() => stopRun(false)}
+    onOpen={open} onPopOut={(agent) => { void openPersona(agent, false); }}
   />;
 }
 
@@ -331,7 +440,7 @@ function useConfiguration(workspace: string | null) {
   return { config: { snapshot, pending, dirty, loading, error, serviceAvailable: workspace !== null, onChange, onSave, onDiscard, onSetField }, guardDialog };
 }
 
-function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, onMotion }: { workspace: string | null } & AppearanceProps) {
+function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, onMotion, popOut, onPopOut }: { workspace: string | null; popOut: boolean; onPopOut: (value: boolean) => void } & AppearanceProps) {
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
   const { config, guardDialog } = useConfiguration(workspace);
@@ -381,6 +490,7 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
       config={{ ...config, providersCard }}
+      interfaceExtras={<AgentPopOutToggle on={popOut} onChange={onPopOut} />}
     />
     {guardDialog}
   </>);
@@ -394,8 +504,11 @@ function recover(command: string): void {
   if (command === 'providers.add') { void bridge.command({ kind: 'providers.open', mode: 'add' }); return; }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
+  // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
+  const [popOut, setPopOut] = useState(initialPopOut);
+  const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
   const [theme, setTheme] = useState(initialTheme);
@@ -527,9 +640,10 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
-        workspace: <Workspace models={models} />,
+        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} />,
+        mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
-        settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} />,
+        settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,
       }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
@@ -639,14 +753,85 @@ async function bootHookReview(): Promise<void> {
   root.render(<StrictMode><HookReviewDialog workspace={workspace} entries={entries} onDecide={onDecide} /></StrictMode>);
 }
 
+/**
+ * ADR-0048 B / ADR-0043 (Part R): a persona window is a full renderer with its own replica of the same numbered
+ * publications. Visibility is the platform's own signal: on hide the window unsubscribes and cancels every timer (the
+ * zero-work rule); on show it subscribes again — the relay first, then the attach whose whole-session update is the
+ * first state painted — and re-reads its payload for the instance main asked it to select. Refreshes are coalesced at
+ * 120 ms (REQ-SHELL-076): the replica's changes reach React through one trailing timer per interval, none while hidden.
+ */
+function PersonaApp({ persona, initialSelect }: { persona: string; initialSelect: { agentId: string; focusSteer: boolean } | null }) {
+  const [state, setState] = useState(() => ({ session: replica.getState().session, rows: replica.getState().rows }));
+  const [selected, setSelected] = useState<string | null>(initialSelect?.agentId ?? null);
+  const [focusSteer, setFocusSteer] = useState(initialSelect?.focusSteer ? 1 : 0);
+  const [visible, setVisible] = useState(!document.hidden);
+  const snapshot = useConfigSnapshot('persona');
+  useEffect(() => {
+    // REQ-SHELL-076: one rebuild per 120 ms interval; a hidden window rebuilds nothing.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = replica.subscribe(() => {
+      if (document.hidden || timer !== null) return;
+      timer = setTimeout(() => { timer = null; if (!document.hidden) setState({ session: replica.getState().session, rows: replica.getState().rows }); }, 120);
+    });
+    return () => { unsubscribe(); if (timer !== null) clearTimeout(timer); };
+  }, []);
+  useEffect(() => {
+    const onVisibility = () => {
+      const sessionId = replica.getState().sessionId;
+      if (document.hidden) {
+        setVisible(false);
+        if (sessionId) void bridge.command({ kind: 'session.unsubscribe', sessionId });
+        return;
+      }
+      setVisible(true);
+      void bridge.command({ kind: 'window.personaPayload' }).then(async (r) => {
+        const payload = r.ok ? (r.value as { sessionId: string | null; select: { agentId: string; focusSteer: boolean } | null }) : null;
+        const next = payload?.sessionId ?? sessionId;
+        if (!next) return;
+        if (next !== replica.getState().sessionId) replica.getState().follow(next);
+        await bridge.command({ kind: 'session.subscribe', sessionId: next });
+        setState({ session: replica.getState().session, rows: replica.getState().rows });
+        if (payload?.select) { setSelected(payload.select.agentId); if (payload.select.focusSteer) setFocusSteer((n) => n + 1); }
+      });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    (window as unknown as { __rotarisPersonaSelect?: (id: string, focus: boolean) => boolean }).__rotarisPersonaSelect = (id, focus) => { setSelected(id); if (focus) setFocusSteer((n) => n + 1); return true; };
+    return () => { document.removeEventListener('visibilitychange', onVisibility); delete (window as unknown as { __rotarisPersonaSelect?: unknown }).__rotarisPersonaSelect; };
+  }, []);
+  const entry = useMemo(() => entryOf(snapshot, state.rows, state.session?.agents ?? []), [snapshot, state]);
+  const runLevel = useMemo(() => runLevelAgent(state.session, entry), [state.session, entry]);
+  const nowIso = useElapsedTick(visible ? state.session : null);
+  const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
+  return <PersonaWindow
+    persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
+    nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
+    onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
+    onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
+  />;
+}
+async function bootPersona(): Promise<void> {
+  const r = await bridge.command({ kind: 'window.personaPayload' });
+  const root = createRoot(document.getElementById('root')!);
+  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
+  const payload = r.value as { persona: string; sessionId: string | null; select: { agentId: string; focusSteer: boolean } | null };
+  document.title = `Rotaris · ${payload.persona}`;
+  if (payload.sessionId) {
+    replica.getState().follow(payload.sessionId);
+    await bridge.command({ kind: 'session.subscribe', sessionId: payload.sessionId });
+  }
+  root.render(<StrictMode><PersonaApp persona={payload.persona} initialSelect={payload.select} /></StrictMode>);
+}
+
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, popOutReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/overview' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/git' }),
+    bridge.command({ kind: 'prefs.get', key: 'interface/agentPopOut' }),
   ]);
+  const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
@@ -659,11 +844,12 @@ async function boot(): Promise<void> {
   if (role === 'pause') { await bootPause(); return; }
   if (role === 'provider') { await bootProvider(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
+  if (role === 'persona') { await bootPersona(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

@@ -142,6 +142,8 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(deps, choice, messages, specs, signal, unresponsiveMs), signal)
       : (await step(deps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null)).report;
     lastReport = report;
+    // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
+    writer.activity.usage(deps.agentName, report.usage.input);
     usage = { input: usage.input + report.usage.input, output: usage.output + report.usage.output };
     if (report.status === 'failed') return { report: { ...report, usage }, messages, toolCallCount };
     deps.supervisor?.observe({ kind: 'message', text: report.text });

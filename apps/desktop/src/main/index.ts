@@ -1,3 +1,4 @@
+import { PersonaWindows } from './windows.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
@@ -485,7 +486,58 @@ async function main(): Promise<void> {
     relay.detach(wcId);
     parentWindowIds.delete(String(wcId));
     void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+    // REQ-SHELL-078: the persona windows are owned by this main window and do not outlive it.
+    personaWindows.destroyAll('the main window closed');
   });
+  /** The session the main window follows — what a persona window is opened onto (REQ-SHELL-072; Part R). */
+  let followedSessionId: string | null = null;
+  /**
+   * ADR-0048's window registry, first executed (Part R): the persona windows — one per persona, hide on close, destroyed
+   * with the main window and on a new session. A persona window is a full renderer of the one bundle (`role=persona`),
+   * attached to the relay like the main window; it subscribes and unsubscribes itself as it is shown and hidden.
+   */
+  const personaWindows = new PersonaWindows({
+    create: (persona) => {
+      const dlg = new BrowserWindow({
+        width: 820, height: 620, minWidth: 560, minHeight: 420, show: false, title: `Rotaris · ${persona}`, backgroundColor: themeBackground(),
+        webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      });
+      dlg.setMenuBarVisibility(false);
+      // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
+      if (capturing) dlg.webContents.setBackgroundThrottling(false);
+      return dlg;
+    },
+    load: async (dlg, persona) => {
+      const query = { role: 'persona', persona };
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+    },
+    select: (dlg, agentId, focusSteer) => dlg.webContents.executeJavaScript(`typeof window.__rotarisPersonaSelect === 'function' ? window.__rotarisPersonaSelect(${JSON.stringify(agentId)}, ${focusSteer ? 'true' : 'false'}) : false`).then(() => undefined),
+    onCreated: (dlg, persona) => {
+      const id = dlg.webContents.id;
+      relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
+      if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: persona "${persona}" renderer console: ${message} (${sourceId}:${line})`); });
+    },
+    onDestroyed: (id) => { relay.detach(id); },
+    log,
+  });
+  /**
+   * Verification only: after a show, poll the window for the instant its renderer painted the first frame that carried a
+   * whole-session update (`__rotarisPersonaPainted`, set after the snapshot's paint), and log the time from the show request.
+   */
+  const measurePersonaPaint = (persona: string, dlg: BrowserWindow, shownAt: number): void => {
+    if (!capturing) return;
+    let done = false;
+    const poll = clocks.timers.every(millis(20), () => {
+      if (dlg.isDestroyed() || done) { poll.cancel(); return; }
+      void dlg.webContents.executeJavaScript('window.__rotarisPersonaPainted ?? null').then((v: unknown) => {
+        if (done) return;
+        const painted = v as { at: number; seq: number; agents: number } | null;
+        if (painted && painted.at >= shownAt - 1) { done = true; poll.cancel(); log(`capture: persona "${persona}" first paint after show: ${Math.round(painted.at - shownAt)} ms (seq ${painted.seq}, ${painted.agents} agents)`); }
+        else if (Date.now() - shownAt > 5_000) { done = true; poll.cancel(); log(`capture: persona "${persona}" first paint after show: not observed within 5 s`); }
+      }).catch(() => { poll.cancel(); });
+    });
+  };
 
   /**
    * Verification seams for an unattended run (only with ROTARIS_CAPTURE_PNG set): the save and open
@@ -880,6 +932,9 @@ async function main(): Promise<void> {
         } else if (req.key === 'ui/reduced_motion') {
           if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
           await preferences.write(req.key, req.value);
+        } else if (req.key === 'interface/agentPopOut') {
+          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Agent pop-out requires a boolean value' };
+          await preferences.write(req.key, req.value);
         } else {
           if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
           await preferences.write(req.key, req.value);
@@ -933,6 +988,8 @@ async function main(): Promise<void> {
           return refusal(r, 'The session could not be started');
         }
         if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
+        // REQ-SHELL-078: a new session starts — every persona window and its cache go.
+        personaWindows.destroyAll('a new session started');
         return { ok: true, value: { sessionId: r.sessionId } };
       }
       case 'session.newId': {
@@ -1022,6 +1079,8 @@ async function main(): Promise<void> {
           return refusal(r, 'The session could not be loaded');
         }
         raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
+        // REQ-SHELL-078 read for a loaded session too: the windows were opened onto the previous session's agents and would otherwise show them (Part R's reading, ADR-0048 note).
+        if (followedSessionId !== null && followedSessionId !== r.sessionId) personaWindows.destroyAll('a different session was loaded');
         return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
       }
       case 'config.read': {
@@ -1104,14 +1163,34 @@ async function main(): Promise<void> {
       }
       case 'session.subscribe': {
         // Subscribe the relay FIRST so the attach's snapshot and transcript reach this window.
-        relay.subscribe(wcId, req.sessionId);
+        // Part R found the twenty-seventh defect here: this subscribed `wcId` — the MAIN window — whatever window asked, so a
+        // second renderer on one session (ADR-0043's "several windows", REQ-SHELL-076) would have fed the main window twice and
+        // itself never; unseen because only the main window had ever subscribed. The sender is the subscriber (ADR-0043 note).
+        relay.subscribe(senderId, req.sessionId);
+        if (senderId === wcId) followedSessionId = req.sessionId;
         const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be followed');
       }
       case 'session.unsubscribe':
-        relay.unsubscribe(wcId, req.sessionId);
+        relay.unsubscribe(senderId, req.sessionId);
+        if (senderId === wcId && followedSessionId === req.sessionId) followedSessionId = null;
         void runHost.request({ kind: 'session.detach', sessionId: req.sessionId }, millis(5_000)).catch(() => undefined);
         return { ok: true };
+      case 'window.openPersona': {
+        // REQ-SHELL-072: an unknown agent — here, no followed session for it to belong to — is a silent no-op; the renderer
+        // sends the command only for an id its replica holds (the reading in ADR-0048's note).
+        if (followedSessionId === null) { log(`persona window for ${req.agentId} not opened: no session is followed`); return { ok: true, value: { opened: false } }; }
+        const shownAt = Date.now();
+        const wasVisible = personaWindows.entry(req.persona)?.win.isVisible() ?? false;
+        const entry = await personaWindows.open(req.persona, req.agentId, req.focusSteer ?? false);
+        if (!wasVisible) measurePersonaPaint(req.persona, entry.win, shownAt);
+        return { ok: true, value: { opened: true, reused: wasVisible } };
+      }
+      case 'window.personaPayload': {
+        const entry = personaWindows.bySender(senderId);
+        if (!entry) return { ok: false, code: 'window.unknown', headline: 'This window is not a persona window' };
+        return { ok: true, value: { persona: entry.persona, sessionId: followedSessionId, select: personaWindows.takeSelection(senderId) } };
+      }
       case 'session.reconcile': {
         const r = await runHost.request({ kind: 'session.reconcile', sessionId: req.sessionId }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be re-read');
@@ -1272,7 +1351,7 @@ async function main(): Promise<void> {
     // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, click the Project category.
     const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
     if (view > 0) {
-      clocks.timers.after(millis(600), async () => {
+      clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), async () => {
         const wc = win.webContents;
         wc.sendInputEvent({ type: 'keyDown', keyCode: String(view), modifiers: ['control'] });
         wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
@@ -1369,6 +1448,54 @@ async function main(): Promise<void> {
         } catch (cause) { log(`capture: shot ${step.selector} failed: ${String(cause)}`); }
       });
     }
+    // Part R's seams (verification only). ROTARIS_CAPTURE_WINDOWS_AT="ms;;ms": the registry's persona windows — title, size,
+    // visible, minimized — logged as JSON (REQ-SHELL-072/076/078). ROTARIS_CAPTURE_PERSONA_PNG_AT="path@ms" and
+    // ROTARIS_CAPTURE_PERSONA_PROBE_AT="selector@ms": a capture of, and a probe inside, the FIRST persona window.
+    // ROTARIS_CAPTURE_PERSONA_CLOSE_AT="ms": the user's close of that window (hides it). ROTARIS_CAPTURE_PERSONA_STEER="text@ms":
+    // the steer card's text set and "Send steer" clicked inside it (REQ-MONITOR-070).
+    // ROTARIS_CAPTURE_VIEWS="n@ms;;n@ms": Ctrl+n at each time — a sequence of views in one launch (the parity probes of REQ-MONITOR-038).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_VIEWS'])) {
+      clocks.timers.after(millis(step.at), () => {
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector, modifiers: ['control'] });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector, modifiers: ['control'] });
+        log(`capture: view ${step.selector} at ${step.at}`);
+      });
+    }
+    // ROTARIS_CAPTURE_RECONCILE_AT="ms;;ms": a whole read of the followed session at that time — one publication while a chosen
+    // view is visible, for REQ-MONITOR-038's refresh measurement on a stored record (verification only).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_RECONCILE_AT'])) {
+      clocks.timers.after(millis(step.at), () => { if (followedSessionId) { void runCommand({ kind: 'session.reconcile', sessionId: followedSessionId }); log(`capture: reconcile at ${step.at}`); } else log(`capture: reconcile at ${step.at}: no session followed`); });
+    }
+    for (const step of steps(process.env['ROTARIS_CAPTURE_WINDOWS_AT'])) {
+      clocks.timers.after(millis(step.at), () => { log(`capture: windows-at ${step.at} → ${JSON.stringify(personaWindows.list())}`); });
+    }
+    const firstPersona = () => personaWindows.list().map((w) => personaWindows.entry(w.persona)).find((e) => e !== undefined && !e.win.isDestroyed()) ?? null;
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_PNG_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const e = firstPersona();
+        if (!e) { log(`capture: persona-png-at ${step.at}: no persona window`); return; }
+        try { writeFileSync(step.selector, (await e.win.webContents.capturePage()).toPNG()); log(`capture: persona-png-at ${step.at} → ${step.selector} ("${e.persona}")`); } catch (cause) { log(`capture: persona-png-at failed: ${String(cause)}`); }
+      });
+    }
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const e = firstPersona();
+        if (!e) { log(`capture: persona-probe-at ${step.at} ${step.selector} → null`); return; }
+        const found = await e.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-') || a.name === 'title').map((a) => [a.name, a.value])) })))()`).catch((cause: unknown) => `error: ${String(cause)}`) as unknown;
+        log(`capture: persona-probe-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
+      });
+    }
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_CLOSE_AT'])) {
+      clocks.timers.after(millis(step.at), () => { const e = firstPersona(); if (e) { e.win.close(); log(`capture: persona-close-at ${step.at} ("${e.persona}") → visible=${e.win.isVisible()} destroyed=${e.win.isDestroyed()}`); } else log(`capture: persona-close-at ${step.at}: no persona window`); });
+    }
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_STEER'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const e = firstPersona();
+        if (!e) { log(`capture: persona-steer-at ${step.at}: no persona window`); return; }
+        const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector('[data-testid="persona-steer"]'); if (!el) return 'no box'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.selector)}); el.dispatchEvent(new Event('input', { bubbles: true })); const b = document.querySelector('[data-testid="persona-send"]'); if (!b) return 'no send'; b.click(); return 'sent'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
+        log(`capture: persona-steer-at ${step.at} → ${done}`);
+      });
+    }
     // ROTARIS_CAPTURE_QUIT_MS: a user-initiated close of the main window at that time — the quit path of REQ-MONITOR-131, not the capture's exit.
     const quitAt = Number(process.env['ROTARIS_CAPTURE_QUIT_MS'] ?? 0);
     if (quitAt > 0) clocks.timers.after(millis(quitAt), () => { log('capture: closing the main window (user-initiated)'); win.close(); });
@@ -1408,7 +1535,8 @@ async function main(): Promise<void> {
         await new Promise((r) => clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_END_VIEW_MS'] ?? 2_500)), () => r(undefined)));
       }
       for (const selector of probes) {
-        const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
+        // `value` rides along for a control (a select, an input), since its text is every option it offers (Part R's proof reads the strategy selector).
+        const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), ...('value' in el && (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? { value: String(el.value) } : {}), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
         log(`capture: probe ${selector} → ${JSON.stringify(found)}`);
       }
       const img = await win.webContents.capturePage();

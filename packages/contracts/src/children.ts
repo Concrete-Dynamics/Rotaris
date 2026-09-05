@@ -111,7 +111,36 @@ export const AgentRecordSchema = z.object({
   completedAt: z.string().nullable(),
   toolCalls: z.number().int().nonnegative(),
   delegationTask: z.string(),
+  /** REQ-MONITOR-048: the persona's configured thinking level, `medium` when none is configured (Part R). */
+  reasoning: z.string(),
+  /**
+   * REQ-MONITOR-049 (Part R): the agent's most recent recorded prompt-token reading — the input count of its latest
+   * model step — and the limit it is measured against: the model's own maximum where the run carries one, else the
+   * default context capacity of REQ-MONITOR-080. The percentage is derived by the surface (REQ-MONITOR-045), never stored.
+   */
+  contextUsed: z.number().int().nonnegative(),
+  contextLimit: z.number().int().nonnegative(),
+  /** REQ-MONITOR-049: the granted native tool set as recorded at spawn; empty when no grant was recorded (the surface lets the persona's declared tools stand in). */
+  grantedTools: z.array(z.string()),
+  /** REQ-MONITOR-044/060: the distinct tool names this agent has called, in first-call order (maintained incrementally, REQ-MONITOR-038). */
+  calledTools: z.array(z.string()),
+  /** REQ-MONITOR-044/060: the tool calls running now, by name. */
+  activeTools: z.array(z.string()),
+  /** REQ-MONITOR-044: the delegation session an agent runs in; this build runs every child in the run's own session, so it is null. */
+  delegationSessionId: z.string().nullable(),
+  /** REQ-MONITOR-044 / REQ-ORCH-046: the inherited-context entries as one text, empty when none. */
+  inheritedContext: z.string(),
   /** REQ-MONITOR-046's "live": exactly when the presentation state is running. */
   live: z.boolean(),
 });
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
+
+/** REQ-MONITOR-080: the default context capacity, the one figure every limit falls back to when the model's own is unknown. */
+export const DEFAULT_CONTEXT_CAPACITY = 265_000;
+/** REQ-MONITOR-009 / REQ-ORCH-133: the reserved id that names the run itself on the control channel (`cancelAgent`, `submitSteeringPrompt`). */
+export const RUN_AGENT_ID = 'run';
+/** REQ-MONITOR-045: the used fraction of the limit as a whole percent; 0 when the limit is zero or negative. */
+export function contextPercent(used: number, limit: number): number {
+  if (!(limit > 0)) return 0;
+  return Math.round((Math.max(0, used) / limit) * 100);
+}

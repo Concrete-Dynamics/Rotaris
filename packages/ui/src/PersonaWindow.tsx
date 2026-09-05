@@ -1,0 +1,143 @@
+import { useEffect, useRef, useState } from 'react';
+import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
+import { chipStates, countNoun, instancesOf, resolvedTools, rowsOf } from './agents.js';
+import { elapsedLabel } from './AgentTree.js';
+import { ContextRing } from './ContextRing.js';
+import { TranscriptRows } from './TranscriptRows.js';
+import { markMotionStart } from './motion.js';
+
+/**
+ * REQ-SHELL-074/075, REQ-MONITOR-068..071 (Part R): the persona pop-out window's content. The header with the persona
+ * name and the instance count with its noun agreeing (REQ-SHELL-044); one tab per instance live or finished, text the
+ * agent's name, tooltip `{state} · {activity}`; the "Artifacts by {persona} (all instances)" card with its empty
+ * sentence; per tab, in order: (a) the heading — the dot pulsing only while live, the name in the persona's colour,
+ * the muted state; (b) the "Agent transcript" card (accessible name `{name} transcript`, min height 260 px, the
+ * empty sentence) showing only that agent's rows through the ONE row renderer; (c) "Context" with the ring and
+ * `{n} tool calls · {elapsed}`; (d) "Instance controls" read-only (REQ-MONITOR-059); (e) "Current activity";
+ * (f) "Tools and artifacts" — native tools and the active ones, the MCP lines a slot for the merge; (g) "Steer agent"
+ * with the placeholder, "Send steer" (empty or whitespace sends nothing; accepted clears; refused keeps the text,
+ * REQ-MONITOR-070) and the danger "Cancel" for that instance. The terminal-preview parity of REQ-SHELL-075 (b) is
+ * owed with ADR-0021: no terminal stream reaches any window yet.
+ */
+export interface PersonaWindowProps {
+  readonly persona: string;
+  readonly session: SessionRecord | null;
+  readonly rows: readonly TranscriptRow[];
+  readonly runLevel: AgentRecord | null;
+  readonly declaredTools: readonly string[];
+  readonly selectedAgentId: string | null;
+  readonly onSelectTab: (id: string) => void;
+  readonly nowIso: string | null;
+  readonly compressionThresholdPercent: number;
+  readonly onSteer: (agentId: string, text: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  readonly onCancel: (agentId: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** A raise asked the steer card to take focus (REQ-MONITOR-137: the inspector's Steer opens this card). */
+  readonly focusSteer?: number | undefined;
+}
+
+export const TRANSCRIPT_EMPTY = 'No transcript activity for this agent yet.';
+export const ARTIFACTS_EMPTY = 'No artifacts published yet.';
+export const STEER_PLACEHOLDER = 'Add context or redirect this agent…';
+export const ACTIVITY_EMPTY = 'No activity text has been recorded for this agent.';
+
+/** REQ-SHELL-075 (a): the persona's assigned colour — one of six named tokens of the adopted language by a stable hash of the name (never a literal colour). */
+const PERSONA_TOKENS = ['--rt-accent-300', '--rt-axis-y-300', '--rt-axis-x-300', '--rt-ok', '--rt-warn', '--rt-run'] as const;
+export function personaColourToken(persona: string): string {
+  let h = 0;
+  for (const ch of persona) h = (h * 31 + ch.codePointAt(0)!) % PERSONA_TOKENS.length;
+  return PERSONA_TOKENS[h]!;
+}
+
+export function PersonaWindow(props: PersonaWindowProps) {
+  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer } = props;
+  const agents = session?.agents ?? [];
+  const instances = instancesOf(persona, agents, runLevel);
+  const shown = instances.find((a) => a.id === selectedAgentId) ?? instances[0] ?? null;
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const steerBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { if (focusSteer !== undefined && focusSteer > 0) steerBox.current?.focus(); }, [focusSteer]);
+  const send = async () => {
+    if (!shown) return;
+    // REQ-MONITOR-070: empty or whitespace-only issues no request and changes nothing.
+    if (text.trim() === '') return;
+    const r = await onSteer(shown.id, text);
+    if (r.ok) { setText(''); setError(null); } else setError(r.reason);
+  };
+  const own = shown ? rowsOf(rows, shown) : [];
+  const chips = shown ? chipStates(resolvedTools(shown, declaredTools), shown.calledTools, shown.activeTools) : [];
+  const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
+  return (
+    <div className="persona-window" data-persona={persona} data-shown={shown?.id ?? ''} data-instances={instances.length}>
+      <header className="persona-window__header page-header">
+        <h1 className="display persona-window__title" style={{ color: `var(${personaColourToken(persona)}, var(--rt-text))` }}>{persona}</h1>
+        <span className="page-header-sub mono" data-testid="persona-count">{countNoun(instances.length, 'instance')}</span>
+      </header>
+      <div className="tabs persona-window__tabs" role="tablist" aria-label={`${persona} instances`}>
+        {instances.map((a) => (
+          <button key={a.id} type="button" role="tab" className={`tab${shown?.id === a.id ? ' is-active' : ''}`} aria-selected={shown?.id === a.id} data-agent-id={a.id} title={`${a.presentationState} · ${a.activity || '—'}`} onClick={() => onSelectTab(a.id)}>{a.name}</button>
+        ))}
+        {instances.length === 0 && <span className="text-secondary">No instance of {persona} in the followed session.</span>}
+      </div>
+      <section className="card persona-window__artifacts" aria-label={`Artifacts by ${persona} (all instances)`}>
+        <div className="ov-card__head"><span className="card-kicker">Artifacts by {persona} (all instances)</span></div>
+        <div className="card-body text-secondary">{ARTIFACTS_EMPTY}</div>
+      </section>
+      {shown && (
+        <div className="persona-window__page" role="tabpanel" aria-label={shown.name}>
+          <div className="persona-window__heading">
+            <span ref={(element) => { if (element && shown.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${shown.presentationState}`} aria-hidden="true" />
+            <span className="persona-window__name" style={{ color: `var(${personaColourToken(persona)}, var(--rt-text))` }} data-testid="persona-agent-name">{shown.name}</span>
+            <span className="text-secondary mono" data-testid="persona-agent-state">{shown.presentationState}</span>
+          </div>
+          <section className="card persona-window__transcript" aria-label={`${shown.name} transcript`} data-testid="persona-transcript" data-rows={own.length}>
+            <div className="ov-card__head"><span className="card-kicker">Agent transcript</span><span className="card-meta">{countNoun(own.length, 'row')}</span></div>
+            <div className="transcript persona-window__rows" role="log" aria-live="polite">
+              {own.length === 0 ? <div className="empty-state"><span className="empty-state-title">{TRANSCRIPT_EMPTY}</span></div> : <TranscriptRows rows={own} />}
+            </div>
+            <div className="text-secondary persona-window__note">Terminal output previews are not streamed to this window yet (ADR-0021 owed).</div>
+          </section>
+          <section className="card persona-window__context" aria-label="Context">
+            <div className="ov-card__head"><span className="card-kicker">Context</span></div>
+            <div className="persona-window__context-body">
+              <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
+              <div>
+                <div className="mono" data-testid="persona-context-line">{countNoun(shown.toolCalls, 'tool call')} · {elapsed ?? '-'}</div>
+                <div className="text-secondary">{shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens; compression at {compressionThresholdPercent}%.</div>
+              </div>
+            </div>
+          </section>
+          <section className="card persona-window__controls" aria-label="Instance controls">
+            <div className="ov-card__head"><span className="card-kicker">Instance controls</span><span className="card-meta">read-only</span></div>
+            <dl className="persona-window__readings">
+              <dt>Model</dt><dd className="mono" data-testid="persona-model">{shown.model || '—'}</dd>
+              <dt>Reasoning</dt><dd className="mono" data-testid="persona-reasoning">{shown.reasoning}</dd>
+            </dl>
+          </section>
+          <section className="card persona-window__activity" aria-label="Current activity">
+            <div className="ov-card__head"><span className="card-kicker">Current activity</span></div>
+            <div className="card-body">{shown.activity ? <p className="persona-window__activity-text">{shown.activity}</p> : <span className="text-secondary">{ACTIVITY_EMPTY}</span>}</div>
+          </section>
+          <section className="card persona-window__tools" aria-label="Tools and artifacts">
+            <div className="ov-card__head"><span className="card-kicker">Tools and artifacts</span></div>
+            <div className="chips" data-testid="persona-chips">
+              {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
+              {chips.map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
+            </div>
+            <div className="persona-window__mcp" data-slot="mcp" />
+            <div className="text-secondary">Active now: {shown.activeTools.length === 0 ? 'none' : shown.activeTools.join(', ')}. {ARTIFACTS_EMPTY}</div>
+          </section>
+          <section className="card persona-window__steer" aria-label="Steer agent">
+            <div className="ov-card__head"><span className="card-kicker">Steer agent</span></div>
+            <textarea ref={steerBox} className="input persona-window__steer-box" aria-label="Steer text" placeholder={STEER_PLACEHOLDER} rows={3} value={text} onChange={(e) => setText(e.currentTarget.value)} data-testid="persona-steer" />
+            {error && <div className="composer__error" role="alert" data-testid="persona-steer-error">{error}</div>}
+            <div className="dialog-actions persona-window__steer-actions">
+              <button type="button" className="btn btn-primary" data-testid="persona-send" onClick={() => { void send(); }}>Send steer</button>
+              <button type="button" className="btn btn-danger" data-testid="persona-cancel" onClick={() => { void onCancel(shown.id).then((r) => setError(r.ok ? null : r.reason)); }}>Cancel</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}

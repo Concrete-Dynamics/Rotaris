@@ -24,7 +24,9 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Parts N and O — the `fetch` executor and its per-call policy read, the entry
+Last reconciled with the code: **2026-09-05** (Parts P and Q — the checkpoint asks, requests and commands, process view; the
+iteration-close capture, store v9, the ladder at the model step, the wait state and the two timeline memories, runtime
+view; no package or edge changed, component view unchanged. Before that Parts N and O — the `fetch` executor and its per-call policy read, the entry
 port at depth 0, runtime view; `git.view`/`worktree.*` between main and the workspace service, the `git.read`,
 `worktree.*`, `session.newId` commands and `session.start`'s isolation fields, process view; store v8 and the isolated
 session's effective root, runtime view; no package or edge changed, component view unchanged. Before that Part M —

@@ -10,7 +10,7 @@ import { unwrapSynthetic } from './slots.js';
  * from the resolved configuration with synthetic names unwrapped — and a role's preference record with
  * its origin, so a surface can show "inherited" and offer "back to default".
  */
-export type Origin = 'workspace' | 'global' | 'built-in';
+export type Origin = 'workspace' | 'global' | 'discovered' | 'built-in';
 
 export interface SlotPreference {
   readonly slot: ModelSlot;
@@ -21,10 +21,15 @@ export interface SlotPreference {
   readonly thinking: string | null;
 }
 
+/**
+ * A written null overrides nothing (REQ-CONFIG-041) and is read here as unstated, so the editor shows the value the
+ * lower layer supplies rather than an empty field — the starter file's twelve nulls (REQ-CONFIG-025) made every slot
+ * read as the workspace's with no value on the slice's first execution. A non-string, non-null value stays null.
+ */
 function rawSlot(raw: PlainMap | null, slot: string): string | null | undefined {
   if (!raw) return undefined;
   const v = raw[slot];
-  return v === undefined ? undefined : typeof v === 'string' ? v : null;
+  return v === undefined || v === null ? undefined : typeof v === 'string' ? v : null;
 }
 
 /** REQ-CONFIG-253: follow slot names through the raw file; a cycle yields no value. */
@@ -51,7 +56,9 @@ export function slotPreferences(config: LoadedConfiguration): readonly SlotPrefe
     if (fromWorkspace !== undefined) return { slot, value: fromWorkspace, origin: 'workspace', thinking: thinkingRaw };
     if (fromGlobal !== undefined) return { slot, value: fromGlobal, origin: 'global', thinking: thinkingRaw };
     const resolved = config.slots[slot];
-    return { slot, value: resolved === null ? null : unwrapSynthetic(resolved, config.models), origin: 'built-in', thinking: thinkingRaw };
+    // REQ-CONFIG-341: a value the snapshot layer supplied is `discovered`.
+    const origin: Origin = resolved !== null && config.discoveredSlots[slot] === resolved ? 'discovered' : 'built-in';
+    return { slot, value: resolved === null ? null : unwrapSynthetic(resolved, config.models), origin, thinking: thinkingRaw };
   });
 }
 

@@ -154,9 +154,9 @@ export function snapshotProviderFamily(providerId: string, family: string | unde
  */
 export const SNAPSHOT_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model'] as const satisfies readonly ModelSlot[];
 
-export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | null; authenticated: readonly string[] } {
+export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | null; authenticated: readonly string[]; slots: Readonly<Partial<Record<ModelSlot, string>>> } {
   const ids = Object.keys(snapshot.providers).filter((id) => snapshot.providers[id]!.authenticated).sort();
-  if (ids.length === 0) return { layer: null, authenticated: [] };
+  if (ids.length === 0) return { layer: null, authenticated: [], slots: {} };
   const models: PlainMap = {};
   const layer: PlainMap = {};
   for (const id of ids) {
@@ -180,7 +180,9 @@ export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | nu
     }
   }
   layer['models'] = models;
-  return { layer, authenticated: ids };
+  const slots: Partial<Record<ModelSlot, string>> = {};
+  for (const slot of SNAPSHOT_SLOTS) if (typeof layer[slot] === 'string') slots[slot] = layer[slot] as string;
+  return { layer, authenticated: ids, slots };
 }
 
 export { MODEL_SLOTS };

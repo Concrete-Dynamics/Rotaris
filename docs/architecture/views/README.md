@@ -24,5 +24,5 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Part K.3 — the provider commands, the provider window, the
-`config.bootstrap` request; the process view).
+Last reconciled with the code: **2026-09-05** (Part K.4 — the slice proof's seams; `discovered` as a configuration
+origin; no view changed shape).

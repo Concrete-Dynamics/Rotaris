@@ -60,3 +60,14 @@ The live half: a real responses endpoint's stream shape, latency, usage figures 
 it runs, ADR-0027's fallback (a hand-written responses dialect) stays priced and not taken, and a
 configured `responses` model in the application is untested against anything but the fake. The owner
 supplies an endpoint and runs the command in the harness's header; the figures go into this report.
+
+## Live half, first attempt — 2026-09-05, OpenRouter through the slice proof
+
+The harness ran against `https://openrouter.ai/api/v1` with the credential the owner had pasted into the product.
+**What it settled before any figure:** the adapter had never sent a real request — the pinned SDK refuses a system
+message inside `messages` (ADR-0027, the fifteenth defect), which the fake `fetch` never exercised because no
+structural request carried one. **What it then found:** both `responses` and `chat` were answered `401 Missing
+Authentication header` with the header present, because the stored value was of another vendor's shape and
+OpenRouter's public catalog had "validated" it (OQ-50). The abort case ended `http` rather than `aborted` for the
+same reason. Delta count, time to first delta, total time and usage are **still owed**: the owner re-runs
+`pnpm slice-proof` with an OpenRouter key and the figures land here.

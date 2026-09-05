@@ -127,7 +127,7 @@ export function parseDiscoveryPayload(body: string): Result<Record<string, unkno
 
 export async function discover(opts: DiscoverOptions): Promise<Result<DiscoveredModel[], DiscoveryError>> {
   const fetchImpl = opts.fetch ?? ((input, init) => fetch(input, init));
-  const headers: Record<string, string> = { Authorization: `Bearer ${opts.token}`, 'User-Agent': DISCOVERY_USER_AGENT, Accept: 'application/json', ...(opts.extraHeaders ?? {}) };
+  const headers: Record<string, string> = { ...(opts.token.length > 0 ? { Authorization: `Bearer ${opts.token}` } : {}), 'User-Agent': DISCOVERY_USER_AGENT, Accept: 'application/json', ...(opts.extraHeaders ?? {}) };
   let response: Response;
   try {
     response = await fetchImpl(opts.modelsUrl, { method: 'GET', headers, signal: AbortSignal.timeout(opts.timeoutMs ?? DISCOVERY_TIMEOUT_MS) });

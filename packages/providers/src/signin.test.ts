@@ -88,9 +88,9 @@ describe('the API-key sign-in for an OpenAI-compatible instance (ADR-0030; REQ-P
 describe('the rest of the provider service', () => {
   it('a built-in api-key provider signs in the same way (deepseek); the other methods are refused by name in this build', async () => {
     const seen: string[] = [];
-    const { svc } = service(fetchWith((u) => { seen.push(u); return new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }] }), { status: 200 }); }));
+    const { svc } = service(fetchWith((u, h) => { seen.push(u); return new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }] }), { status: h.get('authorization') ? 200 : 401 }); }));
     expect(await svc.signInWithKey('deepseek', KEY)).toMatchObject({ outcome: 'signed-in', message: 'Login complete for DeepSeek; discovered 1 model(s).' });
-    expect(seen).toEqual(['https://api.deepseek.com/models']);
+    expect(seen).toEqual(['https://api.deepseek.com/models', 'https://api.deepseek.com/models']);
     expect(await svc.signInWithKey('copilot', KEY)).toMatchObject({ outcome: 'failed' });
     expect((await svc.signInWithKey('copilot', KEY) as { message: string }).message).toContain('Code shown here, entered at the provider');
     expect(await svc.signInWithKey('claude-code', KEY)).toMatchObject({ outcome: 'failed' });

@@ -100,3 +100,18 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     expect(redactHeaders({ Authorization: 'Bearer x', 'x-api-key': 'k', accept: 'a' })).toEqual({ Authorization: '<redacted>', 'x-api-key': '<redacted>', accept: 'a' });
   });
 });
+
+describe('model — a system message reaches the provider (spike 6, live half: the SDK refuses one inside `messages`)', () => {
+  it('chat: the system text travels as instructions and lands in the request body; the stream still maps across', async () => {
+    const seen: string[] = [];
+    const fake: FetchLike = async (_input, init) => { seen.push(String(init?.body ?? '')); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
+    const client = new AiSdkModelClient({ baseUrl: 'https://acme.example/v1', fetch: fake });
+    const req = request('chat', { messages: [{ role: 'system', content: [{ kind: 'text', text: 'You are the orchestrator.' }] }, { role: 'user', content: [{ kind: 'text', text: 'hi' }] }] });
+    const { parts, error } = await collect(client.stream(req));
+    expect(error).toBeNull();
+    const body = JSON.parse(seen[0]!) as { messages: { role: string; content: string }[] };
+    expect(body.messages[0]).toMatchObject({ role: 'system', content: 'You are the orchestrator.' });
+    expect(body.messages[1]).toMatchObject({ role: 'user' });
+    expect(parts.some((p) => p.kind === 'text')).toBe(true);
+  });
+});

@@ -53,6 +53,16 @@ function parseArgs(text: string): unknown {
   }
 }
 
+/**
+ * The SDK's v7 prompt refuses a system message inside `messages` ("System messages are not allowed in the prompt or
+ * messages fields. Use the instructions option instead.") — found on the first real call (spike 6's live half, Part K):
+ * every system message goes to `instructions`, joined by a blank line, and the rest stay messages.
+ */
+function splitSystem(messages: readonly ChatMessage[]): { instructions: string | undefined; rest: readonly ChatMessage[] } {
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join(''));
+  return { instructions: system.length > 0 ? system.join('\n\n') : undefined, rest: messages.filter((m) => m.role !== 'system') };
+}
+
 function toModelMessages(messages: readonly ChatMessage[]): ModelMessage[] {
   return messages.map((m): ModelMessage => {
     if (m.role === 'system') return { role: 'system', content: m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') };
@@ -142,8 +152,9 @@ export class AiSdkModelClient implements ModelClient {
       const tools = toToolSet(req.tools);
       // REQ-ORCH-010: the structured-output rungs map to the SDK's `output`; a provider rejection surfaces as an error part.
       const output = req.output === undefined ? undefined : req.output.kind === 'json_schema' ? Output.object({ schema: jsonSchema(req.output.schema as Parameters<typeof jsonSchema>[0]) }) : Output.json();
+      const { instructions, rest } = splitSystem(req.messages);
       const result = streamText({
-        model, messages: toModelMessages(req.messages), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
+        model, messages: toModelMessages(rest), ...(instructions === undefined ? {} : { instructions }), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
         ...(req.thinking === 'unset' ? {} : { providerOptions: { openai: { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking } } }),
       });
       let usage: { input: number; output: number } | null = null;

@@ -203,3 +203,38 @@ The Windows access-control spike shows no acceptable mechanism, which would make
 unimplementable as written and would be an **escalation rather than a redesign**. Or `REQ-PROVIDER-016`
 is relaxed to drop the per-file protection and the read-back, which is the only change that would make
 alternative D assessable on its merits — and which would be a security decision for the product owner.
+
+## First execution — 2026-09-05, the credential store and its spike (Part K)
+
+*Recorded under GD-10. The thirteenth defect of ADR-0058 consequence 17's pattern, found by the spike this record
+required before the store was written.*
+
+**The spike** (`../spikes/credential-protection.md`, taken as the first act of building the store): alternative (2)
+of the decision — `icacls` with security-identifier literals, the owner's SID read once from `whoami /user /fo csv`
+— applies the required list and the SDDL read back through `icacls /save` is exact. **What the read-back caught:**
+`/inheritance:r /grant:r` — the apply step as this record described it — leaves a **foreign explicit** access-control
+entry in place, so a file that already carried one would have been reported protected with three trustees. The
+sequence is therefore `/reset` (one call; it takes no companion option), then `/inheritance:r /grant:r`, then `/save`
+and the parse. `/restore` with an exact SDDL is unavailable to the unelevated product (it needs the restore
+privilege). About 120 ms per file, spent only on a save. **The read-back is the part that satisfies
+REQ-PROVIDER-016, and the spike shows it is not a formality**: the first candidate passed every case in which the
+file started clean and failed the one in which it did not, and only the read-back distinguished them. No native
+binding is pinned; ADR-0054's updater and IC-6's load proof both argued against one.
+
+**Built and run** (`packages/providers/src/credentials/`): `<data>/tokens/<provider_id>.json` — the reserved name
+in `platform/dirs.ts` was `credentials`, which no requirement names, and is corrected beside its reason
+(REQ-PROVIDER-014); the five keys, two-space indentation, the tolerant load with a warning naming the id and never
+the contents (017); the staged `<id><random>.tmp` inside the directory, **protected before a byte is written**,
+`fsync`, rename, unlinked on every failure (018) — the spike confirmed the protection travels with the rename; the
+protection failure that writes nothing and names the store path (016); delete with its log line and the sorted
+enumeration (019); status computed from the credential and the clock and cached nowhere (010/011/059); the
+adjacent lock (152) as `<id>.lock` holding pid and start time, reclaimed only when the holder is provably gone by
+the liveness probe, 5 s bound, and the retryable message never asserting a second instance. The directory's
+post-condition is a test on the success and the failure path. Nineteen tests; the on-machine test plants a foreign
+entry before a save and reads the result back independently of the store.
+
+**Readings recorded.** (a) OQ-19: the contents rule of 018 is read as being about the operation's temp files; the
+lock file is adjacent per 152 and inside the directory, and enumeration filters `*.json`. (b) SR-1 makes the lock
+belt over braces, as the decision says; its bound was not observed. (c) A pid reused by an unrelated live process
+reads as a live holder — the safe direction. (d) Windows only is measured; POSIX is `chmod` then `stat` and waits on
+IC-3. (e) Consequence 5 holds: no credential value has a row type in the store's schema (v6).

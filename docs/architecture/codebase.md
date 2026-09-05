@@ -161,13 +161,33 @@ are exactly what electron-vite externalises for main and the run host — the wo
    forwarded on the bus with the 5 s bound. **No tool, no child, no hook, no intent classification, no
    verification**: one task, one agent, one turn per iteration.
 
-**Where the model comes from — the configuration files** (`apps/desktop/src/run-host/configuration.ts`,
-ADR-0036/0037, built 2026-09-05): the entry role's `models:` entry — its `base_url` or the provider's known endpoint
-(`openai`), `api_mode` → dialect, `api_key` or `api_key_env` read per request — loaded once per run start with the
-screen's live state on top. `ROTARIS_MODEL_DIALECT=scripted` selects the scripted client for every model
-(verification only); a `models:` entry with provider `scripted` does the same per entry. A fatal file or an
-unreachable entry model refuses the run before it starts (REQ-EVENTS-021, REQ-CONFIG-478). The classifier,
-summariser and loop slots authenticate with the entry model's resolver until ADR-0029 (credentials) lands.
+**Where the model comes from — the configuration files and the credential store** (`apps/desktop/src/run-host/
+configuration.ts`, ADR-0036/0037, built 2026-09-05; ADR-0028/0029/0030/0032, built 2026-09-05): the entry role's
+`models:` entry — its `base_url` or the provider's known endpoint (`openai`), `api_mode` → dialect — loaded once per
+run start from the snapshot (layer 3: every authenticated provider's discovered models, keyed by qualified id, with
+`auth_provider`) and the two scopes' files, with the screen's live state on top. A model naming an `auth_provider`
+authenticates with the bearer **main leases the run host** at run start (`credentials.lease`); a model naming none
+uses its `api_key` or `api_key_env`, read per request. `ROTARIS_MODEL_DIALECT=scripted` selects the scripted client
+for every model (verification only) and is **the last environment stopgap**; a `models:` entry with provider
+`scripted` does the same per entry. A fatal file, no model at all ("No model configured") or an unauthenticated
+entry provider ("Provider authentication required", REQ-WORKSPACE-137) refuses the run before it starts
+(REQ-EVENTS-021, REQ-CONFIG-478). The classifier, summariser and loop slots still authenticate with the entry
+model's resolver; per-model resolution for the other slots is owed.
+
+17. **the vertical slice — a provider signed in through the product, a run on a real model (2026-09-05):** the
+   `providers` package in main (ADR-0028/0029/0030/0032 first executed): the six-record catalogue checked at start,
+   the credential store under `<data>/tokens/` with its Windows protection applied and read back, generic discovery,
+   deterministic slot assignment, `project_settings.yaml` behind the secret screen, the API-key flow; the snapshot
+   folded as configuration layer 3; the bearers leased to the run host per run start; the providers card, the
+   authentication window, the first-launch notice, the two refusals. **Executed against OpenRouter by the owner's
+   own paste:** the sign-in discovered 431 models, protected the file, wrote the snapshot with picks and the starter
+   `agents.yaml`, and the slots saved; the first real run reached the endpoint. **Found — four:** the Windows grant
+   leaves a foreign entry (thirteenth, the spike); a reload from elsewhere kept stale pending Settings (fourteenth,
+   ADR-0037); the adapter put the system prompt where the pinned SDK refuses it, so no real call had ever left the
+   machine (fifteenth, ADR-0027); and a public catalog validates no key (OQ-50) — the value the owner first pasted
+   was of another vendor's shape and was stored as authenticated. **The run on a real model is not yet complete:**
+   the second wait for the correct key timed out; `pnpm slice-proof` is the owner's to re-run, and the slice's
+   remaining scenarios (the run, spike 6's live half, sign-out) report from that run.
 
 16. **the control channel (2026-09-05):** REQ-MONITOR-004's twenty-two operations behind ADR-0010's channel 1 — the
    skeleton's list was the runtime's, not the requirement's, and is replaced. Queued prompts are a session-owned
@@ -276,8 +296,9 @@ verification only. **The hooks read their two file scopes for real** (`<config>/
 `ROTARIS_CAPTURE_HOOK_REVIEW`, `ROTARIS_CAPTURE_REVIEW_PNG`, `ROTARIS_CAPTURE_SETTINGS` and
 `ROTARIS_CAPTURE_ACTION=hooks-review` drive the review dialog and the Hooks tab for verification only.
 **The classifier's model slots come from the configuration** (`small_model`, `fallback_model`, `default_summary_model`
-resolved to `models:` entries; ADR-0036) and **the tier is the one remaining environment stopgap** (`ROTARIS_MODEL_TIER`,
-ADR-0028's; unset → undetermined → medium with REQ-ORCH-023's header). `<config>/intent-tools.yaml` and the two
+resolved to `models:` entries; ADR-0036) and **so does the tier** since Part K: the slot alias the entry role's model
+resolved through (`resolved_persona_model_tiers`; none → undetermined → medium with REQ-ORCH-023's header).
+`ROTARIS_MODEL_TIER` was the stopgap until then and is gone. `<config>/intent-tools.yaml` and the two
 `playbooks/` directories are this build's file formats (decision 5 of the intent part). `ROTARIS_INTENT_SCRIPT`
 (`<category>` | `garbage` | `timeout` | `reject` | `none`) drives the scripted client's classifier for verification
 only. The `normal` cell no longer stands in: the BUDGET slot clamps.
@@ -322,8 +343,40 @@ classes; the overlay shared with the per-field writer through a mapping adapter)
 `snapshot.ts` (what the screen reads). The run host resolves a run's setup in `run-host/configuration.ts`; the
 workspace service commits Tier A; contracts carry `ConfigSnapshot`, `DesktopSave`, `LiveState` and the `config:changed`
 channel. Decisions taken here for the owner: the built-in roles' default tiers; `api_key_env` as the credential until
-ADR-0029; the composer's write also updating the pending state (REQ-CONFIG-423); the proof scripts writing a scratch
-`agents.yaml`. `ROTARIS_CAPTURE_CLICKS` and `ROTARIS_CAPTURE_SELECT` are verification seams.
+ADR-0029 (closed by Part K's lease); the composer's write also updating the pending state (REQ-CONFIG-423); the proof
+scripts writing a scratch `agents.yaml`. `ROTARIS_CAPTURE_CLICKS` and `ROTARIS_CAPTURE_SELECT` are verification seams.
+`project-settings.ts` is the snapshot's reader and its layer (REQ-CONFIG-034), kept in `config` because the loader
+folds it and may not import `providers`.
+
+**Providers.** `packages/providers/src/` — `catalogue.ts` (the six frozen records, `validateCatalog()` at build and at
+main's start), `credentials/` (`store.ts`, the protection adapter `protect.ts` with its read-back, the adjacent lock
+`lock.ts`), `discovery.ts` (the generic discoverer with REQ-PROVIDER-071's total mapping), `slots.ts` with
+`tiers.data.ts` (deterministic tier assignment), `limits.data.ts` (the known-limits table), `project-settings.ts` (the
+snapshot's writer, merge and secret screen), `signin.ts` (`ProviderService`: the API-key flow, replace-key,
+validate, sign-out, delete, refresh, health, the list, the lease). Instantiated by **main only** (ADR-0030); the run
+host asks `credentials.lease` per run start and is answered the bearers. Contracts carry `ProviderRow`,
+`ProviderDialogPayload` and the outcome shapes, none with a secret-looking field (a test); `provider.signIn` is the one
+command carrying a pasted key inward. Surfaces: the providers card under Settings → Models (`ui/src/settings/
+Providers.tsx`), the authentication window `?role=provider` (`ui/src/ProviderDialog.tsx`), the first-launch notice
+with "Add a provider", the two refusals with "Open Settings"; a sign-in asks the workspace service `config.bootstrap`
+for the starter `agents.yaml`. Decisions taken here for the owner: the OpenAI-compatible instance only (the other
+two sign-in methods, Copilot's and codex's discovery, the bridges, the usage and credit tiles owed); `/reset` before
+the grant on Windows; `<data>/tokens` replacing the reserved `credentials`; the lock inside the directory (OQ-19); the
+shipped capability metadata empty (OQ-18); REQ-PROVIDER-091's override read as the named-entry overlay; the zero-model
+recovery without "edit by hand" (no configuration editor). `ROTARIS_CAPTURE_PROVIDER_FILL`, `ROTARIS_CAPTURE_WAIT`
+and `ROTARIS_CAPTURE_WAIT_MS` are verification seams.
+
+**What `pnpm slice-proof` does.** It builds Electron and carries ONE scratch profile across five launches, because
+the credential the owner pastes in the first must be the one the third leases: (1) first launch — the notice, Settings
+→ Models → Add endpoint with the label and URL filled, the owner pastes the OpenRouter key (never read from the
+environment, never logged), then the credential file's five keys and exact protection, the snapshot's record and
+picks, the bootstrapped `agents.yaml`, and a log free of the key are asserted; (2) the three tier slots set to
+`anthropic/claude-haiku-4.5` and saved; (3) one real run — the lease, the request to OpenRouter, a settled tool row,
+usage figures and the terminal result from the store; (4) spike 6's live harness against the same endpoint with the
+stored credential; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
+the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.slice-proof/`. On
+2026-09-05 scenario 1 passed twice (once storing a wrong-shaped key, once the run refused with 401) and the third
+attempt's wait for the correct key timed out; scenarios 3–5 await the owner's re-run.
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other
@@ -354,8 +407,8 @@ records `application_shutdown` with the terminal pair and no lock. Its evidence 
 | When the build reaches | It lands in | And owes |
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
-| ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half (an endpoint from the owner); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the discovery layers and `mcp_servers`, secrets, providers and credentials (ADR-0028/0029, `ROTARIS_MODEL_TIER`), REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for the intent: the classifier against a real provider, REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
+| ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | spike 6's live half — the harness reached OpenRouter on 2026-09-05 and was refused with the key the owner had pasted (not an OpenRouter key); `pnpm slice-proof` runs it with the right one; ADR-0026's parameterised conformance suite once a second backend exists |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the auto-discovered-server layer and `mcp_servers`, secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health, per-slot credential resolution; for the intent: REQ-ORCH-012/013's route, plan mode (REQ-ORCH-152..154) |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |

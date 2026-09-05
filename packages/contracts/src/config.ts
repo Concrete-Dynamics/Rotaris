@@ -7,7 +7,8 @@ import { z } from 'zod';
  */
 export const CONFIG_SCOPES = ['workspace', 'global'] as const;
 export type ConfigScopeName = (typeof CONFIG_SCOPES)[number];
-export const CONFIG_ORIGINS = ['workspace', 'global', 'built-in'] as const;
+/** REQ-CONFIG-341: workspace > global > discovered (the snapshot layer) > built-in. */
+export const CONFIG_ORIGINS = ['workspace', 'global', 'discovered', 'built-in'] as const;
 
 export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlotName = (typeof MODEL_SLOT_NAMES)[number];

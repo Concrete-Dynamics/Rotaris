@@ -63,3 +63,18 @@ describe('the pending settings state (REQ-CONFIG-279..287, 335, 419, 425)', () =
     expect(pendingFrom({ ...snapshot, compressorThresholdPercentage: 99 }).compressorThresholdPercentage).toBe(99);
   });
 });
+
+describe('REQ-CONFIG-419/423: a reload from elsewhere keeps only what the user changed', () => {
+  it('rebases field by field: an untouched slot takes the file’s new value, a touched one stays, a touched runtime key stays', async () => {
+    const { rebasePending, pendingFrom, applyChange } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    const pending = applyChange(applyChange(saved, { kind: 'slot', slot: 'small_model', value: 'mine' }), { kind: 'runtime', key: 'max_depth', value: 9 });
+    const fresh = { ...saved, slots: { ...saved.slots, large_model: 'discovered/large', small_model: 'discovered/small' }, runtime: { ...saved.runtime, max_depth: 4, max_iterations: 77 } };
+    const rebased = rebasePending(saved, pending, fresh);
+    expect(rebased.slots.large_model).toBe('discovered/large');
+    expect(rebased.slots.small_model).toBe('mine');
+    expect(rebased.runtime.max_depth).toBe(9);
+    expect(rebased.runtime.max_iterations).toBe(77);
+    expect(rebasePending(saved, saved, fresh)).toEqual(fresh);
+  });
+});

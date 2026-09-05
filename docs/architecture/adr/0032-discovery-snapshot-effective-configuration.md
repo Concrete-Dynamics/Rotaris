@@ -168,3 +168,32 @@ OQ-21 changes the persisted price type, which changes the snapshot record; or th
 gains roles beyond the four `REQ-PROVIDER-077` names; or a requirement moves the snapshot into a
 workspace-scoped store, which `REQ-CONFIG-477`'s ground 4 says would split one total merge across two
 storage models and which must therefore be argued against that requirement rather than against this ADR.
+
+## First execution — 2026-09-05, discovery, slot assignment, the snapshot, the effective configuration (Part K)
+
+*Recorded under GD-10. Found nothing in the four functions; one reading on REQ-PROVIDER-091.*
+
+**Built and run:** `discover` (`packages/providers/src/discovery.ts`) — the only network step, with REQ-PROVIDER-071's
+**total** mapping (401/403 authentication, ≥ 500 with the reason phrase or `HTTP <status>`, 429 named as a rate
+limit, every other non-2xx a refusal for a reason other than authentication, the four format errors, a present
+and empty `data` list as zero models); `assignSlots` (`slots.ts`) — pure and total, the invariants and the
+code-point tie-break as tests, the lowest-id fallback of 082; `mergeProviderRecord` (`project-settings.ts`) —
+picks first, the rest by id, the preserved rows appended and counted (083), one shared timestamp;
+`snapshotLayer` (`packages/config/src/project-settings.ts`) — the effective configuration's layer 3, each
+authenticated provider's models as entries keyed by qualified id with `auth_provider` and the record's base URL,
+the limits carried into the budget fields, pricing only when both figures exist, the slot suggestions by ascending
+provider id with the first non-null winning (REQ-CONFIG-204). The secret screen of 086 runs before every write
+with REQ-TOOLS-172's key test, the two extra triggers and REQ-TOOLS-171's value prefixes (exported from the kernel
+for it), exempting exactly the two price keys and the limit keys. Reading takes no lock; the reader and the types
+live in `config` because the loader folds the layer and may not import `providers`.
+
+**Not built, said so:** provenance-carrying capability fields — no shipped metadata exists (OQ-18) and the generic
+discoverer reports only what the payload declares, so the three-source precedence of 149/150 has one source and
+nothing to arbitrate; `unavailable_models` (no strategy produces an availability code); the hosted suggestions
+endpoint (077, kept as an input so the function stays total).
+
+**Reading recorded — REQ-PROVIDER-091's "a YAML entry with a complete provider and model id overrides the snapshot
+entry of the same name":** the named-entry merge class (REQ-CONFIG-043) is how that override happens, and it
+overlays per field: the file's `provider` and `model_id` win, and a field the file does not state — `auth_provider`,
+`base_url` — stays the snapshot's. The test pins it. A reading that replaced the entry wholesale would contradict
+REQ-CONFIG-031's one total merge, so it was not taken.

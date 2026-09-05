@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { BRIDGE_KEY, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings, type ProvidersCardProps } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, UnsavedGuardDialog, useShellState, WorkspaceView, type PendingChange, type PendingSettings, type ProvidersCardProps } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -154,11 +154,15 @@ function useConfiguration(workspace: string | null) {
   const pendingRef = useRef<PendingSettings | null>(null);
   useEffect(() => { pendingRef.current = pending; }, [pending]);
   // REQ-CONFIG-419/425: a read repopulates from the file's values and marks the form clean; a change made elsewhere (the composer's write) lands in the pending state (decision 4 of the plan, REQ-CONFIG-423).
+  const savedRef = useRef<PendingSettings | null>(null);
+  useEffect(() => { savedRef.current = saved; }, [saved]);
   const adopt = useCallback((next: ConfigSnapshot, keepPending: boolean) => {
     setSnapshot(next);
     const fresh = pendingFrom(next);
+    const previous = savedRef.current;
     setSaved(fresh);
-    setPending((current) => (keepPending && current ? { ...current, runtime: { ...current.runtime, permission_mode: next.runtime.permission_mode } } : fresh));
+    // A reload from elsewhere keeps only the fields the user changed (REQ-CONFIG-419/423); every other field takes the file's new value.
+    setPending((current) => (keepPending && current && previous ? rebasePending(previous, current, fresh) : fresh));
   }, []);
   const read = useCallback(async () => {
     if (workspace === null) { setSnapshot(null); setSaved(null); setPending(null); return; }

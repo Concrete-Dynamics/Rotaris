@@ -197,7 +197,7 @@ const leased = new Map<string, Record<string, string>>();
 const configure = (workspaceRoot: string, attended: boolean) => {
   const r = configureRun(workspaceRoot, attended, {
     clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks),
-    onRequest: (i) => log(`model request ${i.method} ${i.url}`), log: (m) => log(m), liveState: () => liveState, bearers: (root) => leased.get(root) ?? {},
+    onRequest: (i) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`), log: (m) => log(m), liveState: () => liveState, bearers: (root) => leased.get(root) ?? {},
   });
   if (r.ok) configured.set(workspaceRoot, r.value);
   return r;
@@ -356,6 +356,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
         const answer = await ask({ kind: 'credentials.lease', providerIds: [...pre.value.authProviders] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
         const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
         leased.set(s.root, bearers);
+        log(`credentials: leased for ${Object.keys(bearers).join(', ') || 'no provider'} (workspace ${s.root})`);
         if (answer?.kind === 'credentials.leased') {
           const u = Object.entries(answer.report.unresolved);
           log(`credentials: ${answer.report.authenticated.length} provider(s) authenticated${u.length > 0 ? `; unresolved: ${u.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);

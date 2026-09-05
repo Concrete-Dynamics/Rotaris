@@ -436,3 +436,36 @@ ${extra}`;
     expect(none.ok && none.value.authenticatedProviders).toEqual([]);
   });
 });
+
+describe('REQ-CONFIG-341: the editor names the snapshot layer as `discovered` and reads a written null as unstated', () => {
+  it('a starter file of nulls leaves every slot at the discovered value with origin discovered', async () => {
+    const { slotPreferences } = await import('./preferences.js');
+    const { bootstrapConfigFile } = await import('./writers.js');
+    const s = scopes(null, null);
+    writeFileSync(join(s.globalDir, 'project_settings.yaml'), `version: 1
+providers:
+  p:
+    id: p
+    display_name: P
+    authenticated: true
+    base_url: https://x.example/v1
+    large_model: p/big
+    small_model: p/tiny
+    discovered_at: 2026-09-05T10:00:00.000Z
+    models:
+      - { id: p/big, capabilities: {}, limits: {}, pricing: {}, discovered_at: 2026-09-05T10:00:00.000Z }
+      - { id: p/tiny, capabilities: {}, limits: {}, pricing: {}, discovered_at: 2026-09-05T10:00:00.000Z }
+`);
+    const wsFile = join(s.workspaceRoot, '.rotaris', 'agents.yaml');
+    expect(bootstrapConfigFile(wsFile)).toEqual({ ok: true, value: 'written' });
+    expect(readFileSync(wsFile, 'utf8')).toContain('small_model: null');
+    const r = loadConfiguration(s);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const slots = Object.fromEntries(slotPreferences(r.value).map((p) => [p.slot, p]));
+    expect(slots['small_model']).toMatchObject({ value: 'p/tiny', origin: 'discovered' });
+    expect(slots['large_model']).toMatchObject({ value: 'p/big', origin: 'discovered' });
+    expect(slots['medium_model']).toMatchObject({ origin: 'built-in' });
+    expect(r.value.discoveredSlots).toEqual({ large_model: 'p/big', small_model: 'p/tiny' });
+  });
+});

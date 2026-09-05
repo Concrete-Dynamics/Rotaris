@@ -119,3 +119,33 @@ The registries are keyed by the **declared attribute**, not by the provider id, 
 
 The catalogue stops being build data — for instance if OQ-6 is answered by making availability or a
 quick-start URL server-driven, which would break `REQ-PROVIDER-006` and change this decision's premise.
+
+## First execution — 2026-09-05, the catalogue and one registry entry of each kind (Part K)
+
+*Recorded under GD-10. Found nothing in the catalogue; one finding on the build data.*
+
+**Built and run** (`packages/providers/src/catalogue.ts`, `limits.data.ts`, `tiers.data.ts`): the six frozen records
+with the fixed order, display names, endpoints and the hosted entry's "coming soon"; `validateCatalog()` run in the
+build's test **and** at main's process start (a violating build throws before a window exists); discovery and base
+URLs typed as explicit `null` so `claude-code` answers nothing and a path that needs one fails before any
+connection; `destinationHost`, the sign-in-method mapping with REQ-PROVIDER-009's family rule, the three labels of
+REQ-PROVIDER-148, the instance id and base-URL normalisation of 051/053, the destination hints of 117. The
+registries hold what the slice needs and nothing more, and the absence is the honest encoding this record asked
+for: **one authenticator (`api-key`)**, serving `deepseek` and every `openai-compatible--<slug>` instance; **one
+discoverer** (the generic HTTP one of REQ-PROVIDER-069/071/072); no usage reader, no bridge writer. A sign-in to a
+provider whose method is not registered ends in REQ-PROVIDER-012's single failure outcome naming the method's label.
+The three data modules ship with shape tests: the known-limits table (REQ-PROVIDER-079, with its `deepseek/` row),
+the tier preference fragments (REQ-PROVIDER-081), and — **empty** — the shipped model-capability metadata of OQ-18,
+so every discovered model exposes no reasoning levels (REQ-PROVIDER-137's "unknown models expose no levels") and
+the slots grid offers the five levels for a configured model as it did before. A proposed record, now executed in
+its structural part; the device-code and PKCE authenticators, Copilot's and codex's discovery strategies, the usage
+readers and the bridge writers are owed.
+
+**Found, in the build data rather than the mechanism:** the first tier-preference lists put `sonnet` before `gpt-4o`
+for the large tier, which is a choice and not a defect, but the test written against them assumed the reverse and
+was corrected — the lists are not normative and the test now asserts the invariants (no `mini`/`nano` as large,
+the three picks distinct, the lowest qualified id on a tie, determinism under a shuffled catalogue) and the picks
+only where the data forces them.
+
+**Consequence 3 / OQ-6 stands unresolved and did not block:** the catalogue's attribute set is the one
+REQ-PROVIDER-002 declares; `service_name`, the quick-start URL and the quota property are not on it.

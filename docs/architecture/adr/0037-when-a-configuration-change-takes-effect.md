@@ -237,3 +237,22 @@ is still reported. Consequence 4's sixth write occasion executed in the proof: t
 where the tools part had disabled it, because the write is its own effect (REQ-CONFIG-328).
 
 **Found: nothing in this record.**
+
+## Second execution — 2026-09-05, a reload the user did not cause (Part K)
+
+*The fourteenth defect of ADR-0058 consequence 17's pattern, in the reading this record took for REQ-CONFIG-423.*
+
+The first execution's reading — "the composer's per-field write also updates the pending Settings state" — was
+implemented as *keep the pending state on any reload from elsewhere and take only the composer's key from the
+file*. The slice's first sign-in reloaded the configuration from a source that was neither Save nor the composer
+(the snapshot's new slot picks, ADR-0030 → `config.bootstrap` → `config:changed`), and the Models grid went on
+showing the shipped defaults over the discovered ones, dirty against a file it had never seen. The rule the
+reading needs is REQ-CONFIG-419's: repopulate every field the user has NOT changed and keep every field they have
+— field by field against the previous saved values (`rebasePending`, `ui/src/settings/config-state.ts`, tested).
+The composer's case is the special case of that rule, not the rule. Kept beside the reading, not repaired quietly.
+
+**A second reading, on REQ-CONFIG-041 and the starter file:** REQ-CONFIG-025's starter `agents.yaml` states the
+twelve slot keys as explicit nulls, and the editor read a written null as "the workspace states this slot" with no
+value. A written null overrides nothing, so the editor now reads it as unstated and shows the value the lower layer
+supplies with that layer's origin — `discovered` for the snapshot's (REQ-CONFIG-341's vocabulary, added to the
+contract's origins; ADR-0036's loader now records which slots the snapshot supplied).

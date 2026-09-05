@@ -21,6 +21,7 @@
     "part-h-proof": "node apps/desktop/scripts/part-h-proof.mjs",
     "config-proof": "node apps/desktop/scripts/config-proof.mjs",
     "part-j-proof": "node apps/desktop/scripts/part-j-proof.mjs",
+    "slice-proof": "node apps/desktop/scripts/slice-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

@@ -130,3 +130,34 @@ records a last error; this one must not (OQ-20).
 A conclusion is reached that runs must be able to start with the window closed or main unavailable, in
 which case credential leasing needs a different owner; or the product gains a second application
 instance model in which two mains contend for the keep-fresh role (OQ-3).
+
+## First execution — 2026-09-05, the API-key flow and the lease (Part K)
+
+*Recorded under GD-10. Found nothing in the leasing; the run host gained an ask path it did not have.*
+
+**Built and run** (`packages/providers/src/signin.ts`, `apps/desktop/src/main/index.ts`, `run-host/index.ts`): the
+credential store, the provider service and every provider command live in **main**; the renderer receives rows,
+statuses, the display mask and outcomes, and a contracts test walks every shape that reaches a renderer and refuses
+a field named like a credential (consequence 2 — `maskedKey` failed it and is `displayMask`). The **API-key
+authenticator** for instances and `deepseek`: header validation (062), discovery, the credential persisted only
+after discovery succeeded (133), the snapshot upserted with the rollback of 054, the confirmation of 052 and the
+zero-model choice of 097 asked in place; replace-key (108), validate, sign-out (102/060), delete (055), refresh
+(147), the health reduction to REQ-NOTIFY-200's states (118), the list (140). **The lease:** `session.start` in the
+run host resolves the configuration once to learn the providers it names (REQ-PROVIDER-066), asks main
+`credentials.lease` on the same envelope the workspace service already used for its asks, main answers the bearers
+with REQ-PROVIDER-067's priming report, the run's resolvers read them per request, and an unresolved entry
+provider refuses the run before a session exists with REQ-WORKSPACE-137's second refusal. **Nothing here has an
+expiry yet** — API keys carry `0` — so the keep-fresh scope has nothing to renew and the renewal-and-re-lease path
+of the decision is written for a credential that does not exist in this build; stated rather than simulated.
+
+**What was not built, said so:** the loopback listener, browser opening, device-code and PKCE flows, the 30-second
+non-interactive attempt and its no-diagnostic branch (OQ-20), the account-id derivation of consequence 4, the
+bridge artifacts. **Readings recorded:** the pasted key travels inward on one command (`provider.signIn`) and
+nowhere else; a leased bearer exists in the run host's memory for the run (consequence 1) and is redacted by the
+adapter's one decorated fetch before any log; a second `session.start` for the same workspace re-leases.
+
+**Found on the second sign-in of the slice (2026-09-05):** the catalog OpenRouter serves is public, so the
+API-key flow's "validated by discovery" stored a value of another vendor's shape as authenticated
+(REQ-PROVIDER-133's guarantee rests on an endpoint property the requirement does not state — OQ-50). The flow
+now repeats the discovery without the key and, where that also succeeds, completes the sign-in saying the key
+could not be validated, with the provider's health left unchecked and the notice a warning.

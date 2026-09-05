@@ -148,7 +148,9 @@ async function main(): Promise<void> {
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review')); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
-          if (!providers.list().some((row) => row.authenticated)) raiseNoticeKeyed('providers.none', 'info', NO_PROVIDER_HEADLINE, 'Runs cannot start until a model provider is authenticated. Add one from Settings → Models.', recoveryFor('providers.add'));
+          const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
+          log(`providers: ${authenticated.length} authenticated${authenticated.length > 0 ? ` (${authenticated.join(', ')})` : ''}`);
+          if (authenticated.length === 0 && raiseNoticeKeyed('providers.none', 'info', NO_PROVIDER_HEADLINE, 'Runs cannot start until a model provider is authenticated. Add one from Settings → Models.', recoveryFor('providers.add'))) log(`notice: ${NO_PROVIDER_HEADLINE}`);
         }).catch(() => undefined);
       });
     }
@@ -161,6 +163,8 @@ async function main(): Promise<void> {
   const relay = new UpdateRelay();
   // ADR-0049 / REQ-SHELL-114: ONE current persistent notice, owned here; acknowledge is compare-and-clear.
   let noticeSeq = 0;
+  // Verification only: the capture may wait for the first terminal result (ROTARIS_CAPTURE_WAIT=result).
+  let resultSeen = false;
   let currentNotice: NoticeCurrent['current'] = null;
   const publishNotice = (n: NoticeCurrent['current']) => { currentNotice = n; relay.broadcast(CHANNEL.noticeCurrent, { v: CONTRACT_SCHEMA_VERSION, current: n } satisfies NoticeCurrent); };
   const publishedNoticeKeys = new Set<string>();
@@ -427,6 +431,7 @@ async function main(): Promise<void> {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
       const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
       raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
+      resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
     }
     else if (e.kind === 'log') log(`run host ${e.level}: ${e.message}`);
@@ -598,9 +603,9 @@ async function main(): Promise<void> {
           ? await providers.addInstance({ label: req.label ?? '', baseUrl: req.baseUrl ?? '', apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}) })
           : await providers.signInWithKey(req.providerId, req.apiKey, req.allowEmpty ?? false);
         if (outcome.outcome === 'signed-in') {
-          healthCache.set(outcome.id, { state: 'healthy', detail: outcome.message, available: true });
-          log(`providers: ${outcome.message}`);
-          raiseNotice('info', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
+          // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
+          healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
+          raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
           await afterProviderChange();
         } else if (outcome.outcome === 'failed') {
           log(`providers: sign-in failed for ${req.providerId}: ${outcome.message}`);
@@ -1053,13 +1058,26 @@ async function main(): Promise<void> {
       });
     }
     // ROTARIS_CAPTURE_AFTER_MS lets a verification run wait for the run loop to finish before the capture.
+    // ROTARIS_CAPTURE_WAIT=file:<path>|result, bounded by ROTARIS_CAPTURE_WAIT_MS: the AFTER timer starts only once the
+    // file exists or the first terminal result was presented — how the slice proof waits for a pasted key and for a real run.
     const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
-    clocks.timers.after(millis(after), async () => {
+    const wait = process.env['ROTARIS_CAPTURE_WAIT'];
+    const waitBound = Number(process.env['ROTARIS_CAPTURE_WAIT_MS'] ?? 600_000);
+    const finish = () => clocks.timers.after(millis(after), async () => {
       const img = await win.webContents.capturePage();
       writeFileSync(capture, img.toPNG());
       log(`captured ${capture}`);
       app.exit(0);
     });
+    if (wait) {
+      const { existsSync: exists } = await import('node:fs');
+      const satisfied = () => (wait === 'result' ? resultSeen : wait.startsWith('file:') ? exists(wait.slice(5)) : true);
+      const started = clocks.monotonic.now();
+      const poll = clocks.timers.every(millis(500), () => {
+        if (satisfied()) { poll.cancel(); log(`capture: wait for ${wait} satisfied after ${Math.round(clocks.monotonic.now() - started)} ms`); finish(); }
+        else if (clocks.monotonic.now() - started > waitBound) { poll.cancel(); log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(); }
+      });
+    } else finish();
     }
   }
 

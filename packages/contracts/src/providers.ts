@@ -76,7 +76,7 @@ export type ProviderDialogPayload = z.infer<typeof ProviderDialogPayloadSchema>;
 
 /** The sign-in flow's one outcome (REQ-PROVIDER-012/142), plus the two in-flow choices the desktop asks. */
 export const ProviderSignInResultSchema = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('signed-in'), id: z.string(), displayName: z.string(), discovered: z.number().int().nonnegative(), message: z.string() }),
+  z.object({ outcome: z.literal('signed-in'), id: z.string(), displayName: z.string(), discovered: z.number().int().nonnegative(), message: z.string(), keyValidated: z.boolean() }),
   z.object({ outcome: z.literal('needs-confirmation'), id: z.string(), message: z.string() }),
   z.object({ outcome: z.literal('no-models'), id: z.string(), message: z.string() }),
   z.object({ outcome: z.literal('cancelled') }),

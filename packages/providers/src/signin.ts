@@ -26,7 +26,7 @@ export interface SignInDeps {
 }
 
 export type SignInOutcome =
-  | { readonly outcome: 'signed-in'; readonly id: string; readonly displayName: string; readonly discovered: number; readonly message: string }
+  | { readonly outcome: 'signed-in'; readonly id: string; readonly displayName: string; readonly discovered: number; readonly message: string; readonly keyValidated: boolean }
   | { readonly outcome: 'needs-confirmation'; readonly id: string; readonly message: string }
   | { readonly outcome: 'no-models'; readonly id: string; readonly message: string }
   | { readonly outcome: 'cancelled' }
@@ -99,12 +99,30 @@ export class ProviderService {
     return m;
   }
 
-  private async runDiscovery(id: string, token: string, baseUrl: string | null, displayName: string = this.displayName(id)): Promise<Result<DiscoveredModel[], DiscoveryError>> {
+  private discoveryUrl(id: string, baseUrl: string | null): string | null {
     const entry = lookupProvider(id);
-    const url = baseUrl !== null ? modelsEndpoint(baseUrl) : entry.ok ? entry.value.discoveryUrl : null;
+    return baseUrl !== null ? modelsEndpoint(baseUrl) : entry.ok ? entry.value.discoveryUrl : null;
+  }
+
+  private async runDiscovery(id: string, token: string, baseUrl: string | null, displayName: string = this.displayName(id)): Promise<Result<DiscoveredModel[], DiscoveryError>> {
+    const url = this.discoveryUrl(id, baseUrl);
     if (url === null) return err({ kind: 'refused', status: null, message: `${displayName} declares no catalog endpoint.` });
     return discover({ providerId: id, displayName, modelsUrl: url, token, knownLimits: KNOWN_LIMITS, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) });
   }
+
+  /**
+   * REQ-PROVIDER-133 relies on discovery refusing a bad key; a catalog that answers WITHOUT a key (OpenRouter's does)
+   * proves nothing about the key. Found on the slice's first execution: a key of another vendor's shape was stored as
+   * validated. The flow completes — the catalog is real — but says so, and the health detail carries it.
+   */
+  private async catalogIsPublic(id: string, baseUrl: string | null, displayName: string): Promise<boolean> {
+    const url = this.discoveryUrl(id, baseUrl);
+    if (url === null) return false;
+    const anonymous = await discover({ providerId: id, displayName, modelsUrl: url, token: '', knownLimits: KNOWN_LIMITS, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) });
+    return anonymous.ok;
+  }
+
+  static readonly PUBLIC_CATALOG_NOTE = 'This endpoint answers its model catalog without a key, so the key could not be validated against it; the first run will tell.';
 
   /** The base URL a record carries: the instance's stored `api_base`, else the catalogue's default. */
   private recordBase(id: string, cred: StoredCredential | null): string | null {
@@ -184,9 +202,10 @@ export class ProviderService {
       return { outcome: 'failed', message };
     }
     this.clearError(id);
-    const message = successTemplate.replace('{n}', String(found.value.length));
+    const publicCatalog = await this.catalogIsPublic(id, discoveryBase, displayName);
+    const message = `${successTemplate.replace('{n}', String(found.value.length))}${publicCatalog ? ` ${ProviderService.PUBLIC_CATALOG_NOTE}` : ''}`;
     this.deps.log(message);
-    return { outcome: 'signed-in', id, displayName, discovered: found.value.length, message };
+    return { outcome: 'signed-in', id, displayName, discovered: found.value.length, message, keyValidated: !publicCatalog };
   }
 
   /** REQ-PROVIDER-108/141: replace the key; validated by discovery unless the user opted out. */

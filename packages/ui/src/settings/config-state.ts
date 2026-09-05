@@ -55,6 +55,29 @@ function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/**
+ * REQ-CONFIG-419/423: a reload caused elsewhere (a sign-in's snapshot, the composer's write) repopulates every field the
+ * user has NOT changed and keeps every field they have — field by field against the previous saved values, so a stale
+ * pending copy never masks the file's new values. The slice's first execution found the whole pending state kept.
+ */
+export function rebasePending(previousSaved: PendingSettings, pending: PendingSettings, fresh: PendingSettings): PendingSettings {
+  const slots = {} as Record<ModelSlotName, string | null>;
+  const thinking = {} as Record<ModelSlotName, string | null>;
+  for (const slot of SLOT_KEYS) {
+    slots[slot] = pending.slots[slot] !== previousSaved.slots[slot] ? pending.slots[slot] : fresh.slots[slot];
+    thinking[slot] = pending.slotThinking[slot] !== previousSaved.slotThinking[slot] ? pending.slotThinking[slot] : fresh.slotThinking[slot];
+  }
+  const runtime = { ...fresh.runtime };
+  for (const key of Object.keys(runtime) as (keyof PendingSettings['runtime'])[]) if (pending.runtime[key] !== previousSaved.runtime[key]) (runtime as Record<string, unknown>)[key] = pending.runtime[key];
+  return {
+    slots, slotThinking: thinking, runtime,
+    circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
+    compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
+    delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
+    roles: pending.roles,
+  };
+}
+
 /** REQ-CONFIG-280/335: dirty is a difference from the last saved values, never a setter call. */
 export function isDirty(saved: PendingSettings, pending: PendingSettings): boolean {
   return !sameValue(saved, pending);

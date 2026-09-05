@@ -177,7 +177,7 @@ export interface ConfigureDeps {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** The scripted client, verification only (`ROTARIS_MODEL_DIALECT=scripted`). */
   readonly scriptedClient: () => ModelClient;
-  readonly onRequest: (info: { url: string; method: string }) => void;
+  readonly onRequest: (info: { url: string; method: string; headers: Record<string, string> }) => void;
   readonly log: (m: string) => void;
   /** ADR-0037 Tier B: the settings store's current values, as main last told this process. */
   readonly liveState: () => LiveState;

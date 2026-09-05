@@ -1403,14 +1403,14 @@ calls the external runtime performs itself.** This decides whether that provider
 agent. If the answer is "they do not", it is a **user-visible narrowing of the permission guarantee** and
 must be escalated rather than absorbed.
 
-**OQ-18 — What "shipped model-capability metadata" is.** *(ADR-0028.)* `REQ-PROVIDER-137` and
+**OQ-18 — What "shipped model-capability metadata" is.** *(ADR-0028.)* *Part K (2026-09-05) ships the module EMPTY with a shape test: every discovered model exposes no reasoning levels until the owner decides the table's source and update policy; the slots grid keeps offering the five levels for a configured model.* `REQ-PROVIDER-137` and
 `REQ-PROVIDER-149` both draw on metadata the product ships that knows, per model, whether a
 reasoning-effort parameter is supported, which levels are disclaimed, and whether images are accepted.
 Nothing states where it comes from, how it is keyed, or how it is updated. Treating it as build data
 alongside the known-limits table is the obvious reading, but it is a **third table of third-party model
 facts** and its update policy should be decided deliberately.
 
-**OQ-19 — The credential directory's contents rule versus the adjacent lock file.** *(ADR-0029.)*
+**OQ-19 — The credential directory's contents rule versus the adjacent lock file.** *(ADR-0029.)* *Part K (2026-09-05) takes the record's reading: `<id>.lock` sits beside `<id>.json` inside the directory, enumeration filters `*.json`, and the lock is reclaimed only when its holder is provably gone; the amendment stays available.*
 `REQ-PROVIDER-018` says that once any credential operation has finished the directory holds nothing but
 the per-provider files; `REQ-PROVIDER-152` requires an **adjacent** lock file for every read-modify-write.
 The record reads the first as being about the operation's temp files. If it is meant literally and
@@ -2047,6 +2047,17 @@ a new one. But it is user-observable behaviour invented on a specification silen
 class this register exists to keep visible, and a requirement would supersede it at no cost.
 
 ---
+
+**OQ-50 — Validation by discovery proves nothing against a public catalog.** *(ADR-0030; raised by the slice's
+first execution, 2026-09-05.)* `REQ-PROVIDER-133` holds that a key-based provider's credential is persisted only
+after successful discovery, "so a bad key is never stored silently", and `REQ-PROVIDER-052/054/108` make discovery
+the validation. OpenRouter's `/models` answers **without** any key, so a value of another vendor's shape was
+discovered against, stored as authenticated, and refused at the first model call. The requirement's guarantee
+rests on a property of the endpoint it does not state. The build now repeats the catalog request without the key
+after a successful discovery and, where that also succeeds, completes the sign-in but says the key could not be
+validated and leaves the provider's health unchecked. What the specification should decide: whether an
+OpenAI-compatible instance's validation may issue a minimal paid request (the only authenticated call every such
+endpoint has), whether a public catalog is a warning or a refusal, and where the statement lives.
 
 ## Design-reference dependencies
 

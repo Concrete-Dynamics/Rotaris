@@ -47,7 +47,7 @@ kernel     pure: Result, ids, time, the clock ports, generated requirement symbo
 | `@rotaris/engine` | run host | **children/**: the ledger over the writer's one transition function, admission, the scheduler run to quiescence, the one wait, the child's execution and report, the parent's resume loop, the sweeps, the built-in persona table;  `SessionWriter` (one transaction per unit of work, residency release, trim, sticky failure, the launch audit, the timeline, the terminal transaction), the one serialiser and the 23-type catalogue, `ProjectionOwner` (resident rows, the counter, growth tick, attach/reconcile), `Sessions` (the registry, the control channel, the run-active predicate), `run/` (`Run`, `StopRequest`, the stop conditions and every total mapping, the todo, the aggregates, `EventBus`, `SummaryWriter`), `RefusalLease`, `HookPort` (the engine's view of ADR-0015; `hooks-port.ts`), **intent/** (the classifier ladder, the gate), **playbooks/** (the catalogue, the matrix, the render, the clamp), `Preflight` | ADR-0008, ADR-0009, ADR-0010, ADR-0013, ADR-0014, ADR-0043 |
 | `@rotaris/model` | run host | the two ports (`ModelClient`, `AgentBackend`), `DefaultAgentBackend`, `ScriptedModelClient` (tests), `AiSdkModelClient` (pinned SDK, one decorated `fetch`); engine → model is a downward edge in the matrix | ADR-0026, ADR-0027 |
 | `@rotaris/agent-tools` | run host | the registry (facets, classes, the four-stage fold), the scanner, the egress classifier and **the `fetch` executor** (the front door, the per-call policy read, the redirect loop, the rendering — Part N), the policy (build once, evaluate pure, the atomic swap, session approvals), the approvals registry + presenter capability with the liveness lapse, the ONE gate (`REQ-TOOLS-175`'s order, both hook slots empty), the file/hash-anchored/search/todo executors, the terminal (PTY + marker protocol, background sessions, classification); the engine's `ToolPort` is filled at the run-host root, never by an import | ADR-0016–0020, ADR-0023 (classifier), ADR-0024 |
-| `@rotaris/mcp` | run host | the transport shape today; the MCP client next | ADR-0033–0035 |
+| `@rotaris/mcp` | run host | the MCP client (Part S): the owned stdio transport, the SDK's protocol layer and remote transports, the three connection paths, the nine-value identity, the code-point order; the bundled runtime's launch owed | ADR-0033–0035 |
 | `@rotaris/workspace` | workspace service | the backup and the two-phase restore around the store's mechanism (assessment, the identifier cases, ESC-26's establishment after the store is whole); **`git/`** — ADR-0038's one invocation helper (the env scrub, the network refusal, the rendering, the bounded spawn), the repository reads behind the Overview's card, the Git view's reads (`view.ts`), the worktree writes (`worktrees.ts`) and REQ-GIT-003's exclusion (`paths.ts`); checkpoints, traceability, delivery next | REQ-SESSION-201, ADR-0058, ESC-26, ADR-0038, ADR-0036–0041 |
 | `@rotaris/shell` | main | `UpdateRelay` (fan-out, order across both channels, message counters), `ProcessLink` (bounded request/reply, and the child's narrow requests back to main) | ADR-0044, ADR-0013, ADR-0002 c.7, c.11 |
 | `@rotaris/ui-core` | renderer | the replica store with the step-0 sequence check, the decline, paging older rows, rows kept across a snapshot; the notice store; **no React** | ADR-0043, ADR-0046, ADR-0049, ADR-0057, REQ-SESSION-161 |
@@ -130,6 +130,13 @@ rebuild of both bindings is ~3 minutes on every run, by design. Windows only (IC
 are exactly what electron-vite externalises for main and the run host — the workspace packages are
 `devDependencies`, bundled through aliases; the renderer dedupes `react`, `react-dom` and `zustand`
 (`spikes/native-load-proof.md` §4).
+
+**Refused by the toolchain, 2026-09-05 (found by Part S's console spike; owed):** electron-builder's node-module
+collector runs `pnpm ls --json --long --depth=Infinity --prod` in `apps/desktop`, and on this tree that command fails with
+`EMFILE: too many open files` — reproducibly, on an idle host, in the main checkout too — so `pnpm package` refuses before
+it builds. The spike's build ran with a descriptor-gating shim on `NODE_OPTIONS`, not committed. IC-6's `pnpm package`
+would refuse today for the same reason; a durable gate in `scripts/package.mjs` or a pnpm setting is owed
+(`spikes/mcp-console-suppression.md`).
 
 ## What the walking skeleton does, and nothing more
 
@@ -299,6 +306,63 @@ in `configuration.ts`'s header.)
    main's `config.read` raced the workspace open, so the run header's model list had been empty since Part J
    (twenty-second; ADR-0027); and a resumed session's writer fed the projection owner only, so a continuation's events
    never reached the bus and `run.result` never reached main (twenty-third; ADR-0027).
+
+24. **the agent surfaces (2026-09-05, Part R; built in parallel with 25, each in its own worktree):** the Mission view —
+   REQ-SHELL-023's third, the last primary view without a body and the one with no design at all — over the ONE
+   `AgentTree` component (REQ-MONITOR-038: the Workspace sidebar, the Overview card and Mission show one agent set from
+   one replica; a 23-agent record republished with Mission visible repainted in ≈12–18 ms against the 250 ms budget), the
+   run row above the tree for the whole-run pause (REQ-MONITOR-274/276: a pause with a child selected is refused
+   client-side with its sentence, the control never sent), the destructive cancel naming the agent with its cascade
+   count, the strategy selector and depth control writing `rotaris.delegation_strategy` and `runtime.max_depth` through
+   `config.setField`, the per-row-memoised activity table (REQ-MONITOR-116/275/281); the per-agent inspector in the
+   Workspace view (REQ-MONITOR-050..067: persona tabs, following the latest author with a visible tag, pinning, the ring
+   with the threshold, the run-level-only model and reasoning controls with their notes, chips marked active/used/not
+   used in a stable order, a drawer below 1180 px); the persona pop-out windows through **ADR-0048's window registry,
+   first executed** (`main/windows.ts`: one window per persona, `Rotaris · {persona}`, 820×620, reused with the tab
+   selected, hidden on close, destroyed with the main window, on a new session and on a different session loaded, the
+   raise a request; a full renderer of the one bundle under `role=persona`, subscribing for itself on `visibilitychange`,
+   its refreshes coalesced at 120 ms; first paint 292–307 ms on creation, 468–644 ms after a hide/show); the
+   `interface/agentPopOut` preference with its toggle; `AgentRecord` grown by eight of REQ-MONITOR-044's fields
+   (reasoning, the prompt reading and the limit, granted, called and active tools, the delegation session, the inherited
+   context) maintained incrementally by the writer's `AgentActivity`, never recomputed over the transcript. `pnpm
+   mission-proof` drives ten launches for eight items. **Found — two defects in existing code:** main's
+   `session.subscribe` bound every window's subscription to the MAIN window's sink, so a second renderer on one session
+   would have fed the main window twice and itself never (twenty-seventh; ADR-0043); and the projection owner published
+   the whole-session record on a save only, so from Part B on every agent surface saw a child's state up to 10 s late and
+   never a tool as active — now a commit carrying a child or tool event publishes it, coalesced to one read per 80 ms
+   tick (twenty-eighth; ADR-0043; the uncoalesced form cost 50 ms per tool call and missed the Part J proof's budget).
+
+25. **the MCP client and its configuration pipeline — ADR-0033 and ADR-0034's first execution (2026-09-05, Part S):**
+   **the two owed spikes taken first** (`spikes/mcp-negotiation.md`: over `OwnedStdioTransport` the SDK spawns NO
+   sibling probe under any mode — REQ-MCP-067's process count is held by the transport's shape, not by a pin, the
+   decision's reason falsified and kept; `'auto'` reaches all four fixture eras, the mode shipped; ESC-12 option (a)
+   taken. `spikes/mcp-console-suppression.md`: the packaged `Rotaris.exe` spawning `cmd.exe /c node <fixture>` showed
+   no window at any sample — every post-launch process at handle 0 and `tasklist` title `N/A` — and the reserved token's
+   child fails at spawn, `ENOENT`, not with a window); `@modelcontextprotocol/client` **2.0.0** pinned; the owned stdio
+   transport (three piped streams, `windowsHide`, stderr through `redact()`, terminate → 5 s → force-kill of the tree);
+   the three paths — discovery memoised on the nine-value identity with the 35 s outer watchdog (measured 35,008 ms, the
+   application exiting 1.5 s after the quit), the probe that never caches, the session connections under a keyed
+   single-flight with the shutdown latch (one process per server per session — the pid files count one discovery
+   launch and one session launch); the pure pipeline in `config/src/mcp/` (entry schema, the two discovery files read
+   byte-identically, the merge with the origin map, command resolution with the reserved token first, one availability
+   rule on the platform's one PATH lookup, environment and secrets read, the five grant cases with `undefined` ≠ `[]`,
+   the normalised description, the byte-exact prompt section) returning `{ value, diagnostics }` at every stage with
+   ONE sink fanning out to the 8 s notice and the `mcp_config` issue; MCP tools as executors outside the registry
+   through the ONE gate (fail-closed per ADR-0016: withheld under `restricted`/`read_only`, asked under `ask`); the
+   per-child evidence in `children.granted_mcp`; the session override held in the run host; the Settings category
+   (`McpSettings.tsx`: every configured row with its four-state health as text, origin, the switch and its wording, the
+   secrets read side masked). **Placement read against the record:** every path lives in the **run host**, the one
+   holder REQ-MCP-047 now asks for — ADR-0034 consequence 3 falsified and kept. OQ-22 read as overlay on the parent
+   environment, flagged for the owner. **Shipped `enabled: false` on `code_intelligence`** by the owner's decision until
+   ADR-0035 executes, recorded beside REQ-CONFIG-181. `pnpm mcp-proof` drives nine launches (discovery ≈300–350 ms per
+   fixture, connect 105 ms). **Found — one defect in existing code:** the platform's one spawn helper could not start
+   a package runner on Windows — `npx`/`uvx` are `.cmd` scripts `spawn` cannot start by name — so the shipped `browser`
+   default and REQ-MCP-113's "SHALL start" were false for every such entry (twenty-ninth; ADR-0033/0034; a `.cmd`/`.bat`
+   resolution now launches through `cmd.exe /d /s /c`). **The merge found the fix incomplete twice**, neither counted:
+   the lookup returned Node's extensionless `npx` before `npx.cmd` (PATHEXT decides on win32 now), and the child was
+   spawned with the server's map ALONE and never the parent environment — the note had claimed the overlay; `parentEnv`
+   is threaded from the run host to the transport and never into the identity. The proof's `browser` stand-in is a
+   `.cmd` runner over the fixture, healthy through the wrap in the built application.
 
 16. **the control channel (2026-09-05):** REQ-MONITOR-004's twenty-two operations behind ADR-0010's channel 1 — the
    skeleton's list was the runtime's, not the requirement's, and is replaced. Queued prompts are a session-owned
@@ -537,6 +601,25 @@ header with REQ-NOTIFY-063's notice); a quota with a same-tier candidate (the tr
 and without a role fallback; a hung child under a small `child_timeout` with and without a fallback; a 503 (one
 transient retry) and a 401 (no retry). Evidence under `.resilience-proof/`.
 
+**What `pnpm mission-proof` does.** It builds Electron and launches the app ten times for eight items: the Mission view
+painted with the run row, the tree and the table, elapsed advancing between two probes; the three trees' parity and a
+23-agent republish timed against the 250 ms budget; a pause refused with a child selected and honoured with the run
+selected; a cancel naming the agent and its cascade; open-agent under both preferences — the inspector pinned, then one
+persona window per persona reused, hidden on close, shown again, destroyed on a new session; the inspector following the
+latest author, pinning, steering, the chips' order across a state change; the strategy and depth controls written to
+`agents.yaml` and read back in Settings; every surface showing a planted running child settled. Figures — the refresh
+time, the persona window's first paint — land in `.mission-proof/results.json`.
+
+**What `pnpm mcp-proof` does.** It builds Electron and launches the app nine times against hand-written fixture servers
+(`scripts/fixtures/mcp-fixture-server.mjs`, four protocol eras, pid files per launch): discovery and the byte-exact prompt
+section with the inert grant reported once and the discovery file hashed unchanged; a call end to end with `tool.start`
+before the answer and a `request_timeout` exhausted; one process per server for two concurrent children and the next
+child; a mid-run narrowing refused; a server crashing after connect, warned once, re-established by the next call; the
+drop rules per persona and a session toggle gone after a relaunch; the Settings category probing every row twice with the
+`.cmd` stand-in for `browser` healthy through the wrap; two fatal YAML defects reported together and the same defects
+dropped from a discovery file; a server that never answers `initialize` bounded at 35 s with the exit 1.5 s after the
+quit. Evidence under `.mcp-proof/`.
+
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other
 line as written, the global file untouched); Settings → Models chooses a slot and its strength and saves; a toggle
@@ -559,7 +642,11 @@ message typed during a run is queued and consumed once as a completed task; a st
 card and injected; Pause then the composer's Continue run leave the pause row and two run starts; a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
-records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.part-j-proof/`.
+records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.part-j-proof/`. The queue
+launch's capture sat on a knife-edge the Parts R and S merge found (2026-09-05): the launch reaches `session.start` about
+1.2 s in and the run needs about 8 s from there — a silent 4.2 s gap at the iteration boundary of a scripted run,
+identical on both branches and on main, not diagnosed — so three runs landed 100 ms either side of the 9 s capture; it
+waits 13 s now, the assertion being consumption, not a budget.
 
 ## Where the next work lands
 
@@ -567,9 +654,11 @@ records `application_shutdown` with the terminal pair and no lock. Its evidence 
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | ~~spike 6's live half~~ **taken 2026-09-05** (OpenRouter, four of four; ADR-0027's fallback withdrawn); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | ~~the fallback-model and rate-limit paths~~ **built 2026-09-05** (Part Q), `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), ~~`fetch` (ADR-0023 over ADR-0036)~~ **built 2026-09-05** (Part N; `pnpm fetch-proof`; owes the egress settings surface REQ-SANDBOX-113..118 and OQ-37), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: ~~worktree working directories~~ **built 2026-09-05** (Part O), `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the auto-discovered-server layer and `mcp_servers`, secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health; for the intent (~~the classifier prompt a real small model answers as asked~~ **built 2026-09-05**, Part L): REQ-ORCH-012's prior-response route, plan mode (REQ-ORCH-152..154); ~~per-slot credential resolution~~ **built 2026-09-05** |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | ~~the fallback-model and rate-limit paths~~ **built 2026-09-05** (Part Q), `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), ~~`fetch` (ADR-0023 over ADR-0036)~~ **built 2026-09-05** (Part N; `pnpm fetch-proof`; owes the egress settings surface REQ-SANDBOX-113..118 and OQ-37), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), ~~the inspector and persona windows~~ **built 2026-09-05** (Part R), REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: ~~worktree working directories~~ **built 2026-09-05** (Part O), `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): ~~the auto-discovered-server layer and `mcp_servers`~~ **built 2026-09-05** (Part S), secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health; for the intent (~~the classifier prompt a real small model answers as asked~~ **built 2026-09-05**, Part L): REQ-ORCH-012's prior-response route, plan mode (REQ-ORCH-152..154); ~~per-slot credential resolution~~ **built 2026-09-05** |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
-| ~~the Overview view~~ **done 2026-09-05** (Part M; `pnpm overview-proof`; ADR-0038 first executed) | `ui`, `engine` (the sampler), `store` (v7), `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `platform` | the Mission view the tree card links to; ~~REQ-SHELL-125's start-session dialog (worktree and sandbox choices)~~ **built 2026-09-05** (Part O); ~~the Git view — its notice when Git is missing (ADR-0038 c.1), worktrees, the history table~~ **built 2026-09-05** (Part O), checkpoints; the credit tile and the limits card once Part K's usage tiles exist; the proposals card once the Library exists; a cost label with a configured rate (REQ-MONITOR-166's other two qualifiers); a requirement tag on a session (REQ-MONITOR-172) once traceability exists |
+| ~~the agent surfaces~~ **done 2026-09-05** (Part R; `pnpm mission-proof`; ADR-0048 first executed, ADR-0043 fourth; built in parallel with Part S) | `ui` (`MissionView`, `AgentTable`, `Inspector`, `PersonaWindow`, `agents.ts`), `contracts` (`children.ts`, `commands.ts`), `engine` (`children/activity.ts`, the projection), `main` (`windows.ts`), `renderer` (the `persona` role), `platform` (the preference) | application-modality across windows (ADR-0048's registry disabling input routing — no application-modal surface exists); the persona window's terminal-preview parity (REQ-SHELL-075 b, ADR-0021); artifact links; the compression count (REQ-MONITOR-281 — the record has none); REQ-MONITOR-067's withheld models (no provider reports one); the run-level agent's own prompt reading and tool history (no channel field); a declined raise induced; the Overview card's tree on the shared selection; the Mission table's width at 1264 px (its last column clips) |
+| ~~the MCP client and its configuration pipeline~~ **done 2026-09-05** (Part S; `pnpm mcp-proof`; ADR-0033 and ADR-0034 first executed, ADR-0016 fourth; spikes 3 and 4 taken; built in parallel with Part R) | `mcp`, `config` (`mcp/`, the section), `agent-tools` (executors outside the registry), `run-host` (`mcp.ts`), `main`, `contracts` (`mcp.ts`), `ui` (`settings/McpSettings.tsx`), `platform` (`findExecutable`, `windowsLaunchOf`), `kernel` (`order.ts`) | **ADR-0035 entirely** — the reserved token's launch, the binding manifest, REQ-MCP-011/015/034/036/071/095/096/099/102/112/116 and the `code_intelligence` grant tiers (and the revert of its `enabled: false`); the secrets write surface (REQ-MCP-084/110/111); the palette entry (REQ-MCP-108); a real third-party server and the two remote transports against a live endpoint; `web_search` and `browser` live; a per-session `closeSession` once the engine releases a lock per session; the environment scrub before the overlay (OQ-22, the owner's); `pnpm package`'s `EMFILE` refusal |
+| ~~the Overview view~~ **done 2026-09-05** (Part M; `pnpm overview-proof`; ADR-0038 first executed) | `ui`, `engine` (the sampler), `store` (v7), `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `platform` | ~~the Mission view the tree card links to~~ **built 2026-09-05** (Part R); ~~REQ-SHELL-125's start-session dialog (worktree and sandbox choices)~~ **built 2026-09-05** (Part O); ~~the Git view — its notice when Git is missing (ADR-0038 c.1), worktrees, the history table~~ **built 2026-09-05** (Part O), checkpoints; the credit tile and the limits card once Part K's usage tiles exist; the proposals card once the Library exists; a cost label with a configured rate (REQ-MONITOR-166's other two qualifiers); a requirement tag on a session (REQ-MONITOR-172) once traceability exists |
 | ~~checkpoints~~ **done 2026-09-05** (Part P; `pnpm checkpoint-proof`; ADR-0039 first executed; built in parallel with Part Q) | `workspace` (`git/checkpoints.ts`), `store` (v9), `engine` (the port, the writer's two units), `contracts`, `workspace-service`, `main`, `run-host`, `ui`, `config` (the `checkpoints` section) | REQ-GIT-069's ref cleanup when a session is deleted (the browser's delete does not exist); `manual` checkpoints (no surface asks); REQ-HOOKS-082 with checkpoints; the two events in REQ-SESSION-199's export; improvement checkpoints (`REQ-LIBRARY-*`); a non-UTF-8 path and a submodule, read not measured |
 | ~~the model resilience paths~~ **done 2026-09-05** (Part Q; `pnpm resilience-proof`; ADR-0027 third, ADR-0012 fourth, ADR-0010 third execution) | `engine` (`run/resilience.ts`, `ladder.ts`, `waits.ts`), `model`, `contracts` (`wait`), `run-host`, `main`, `ui` | REQ-ORCH-093's context-window condensation; REQ-ORCH-089's stall watchdog and its badge; a real provider's 429 (a slice-proof scenario for the owner); REQ-NOTIFY-062's hosted-credit branch; REQ-ORCH-146's native loop; rate-limit-reset headers |
 | ~~the Git view and the worktrees~~ **done 2026-09-05** (Part O; `pnpm git-proof`; ADR-0038 second executed; built in parallel with Part N) | `ui`, `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `store` (v8), `engine` (the effective root), `platform` | ~~checkpoints (ADR-0039)~~ **built 2026-09-05** (Part P); integration and "Merge selected" (REQ-GIT-083, 125..135); REQ-GIT-084's focus requests; the set-up-Git-here offer (REQ-GIT-113/114, in the Requirements area); requirement-execution worktrees; `git_commit` (REQ-GIT-144); `worktree_storage_subpath` read from configuration (REQ-GIT-073 / REQ-CONFIG-068); REQ-SANDBOX-119's probe-driven checkbox; a notice queue so the Git notice and the first-launch notice coexist (ADR-0049) |

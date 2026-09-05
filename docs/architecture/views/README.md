@@ -24,7 +24,10 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Parts P and Q — the checkpoint asks, requests and commands, process view; the
+Last reconciled with the code: **2026-09-05** (Parts R and S — the persona window as a renderer instance, the window registry in
+main, the `window.*` and `mcp.*` commands, the run host's `mcp.*` requests and its MCP child processes, process view; the record's
+eight new fields and two MCP fields, the owner's coalesced publication, the session connections' lifetime, runtime view; `mcp`
+no longer a placeholder, `kernel` gaining the code-point order, no edge changed, component view. Before that Parts P and Q — the checkpoint asks, requests and commands, process view; the
 iteration-close capture, store v9, the ladder at the model step, the wait state and the two timeline memories, runtime
 view; no package or edge changed, component view unchanged. Before that Parts N and O — the `fetch` executor and its per-call policy read, the entry
 port at depth 0, runtime view; `git.view`/`worktree.*` between main and the workspace service, the `git.read`,

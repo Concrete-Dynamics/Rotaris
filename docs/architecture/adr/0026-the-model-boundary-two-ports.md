@@ -189,7 +189,12 @@ for what it still governs: the text rung's unparseable answer, an empty answer, 
 are REQ-ORCH-007's fallback. The loop classifier takes the same frame and the same descent. The result carries
 which rung answered (`rung`, beside REQ-ORCH-011's five fields) and the run host logs it.
 
-**Measured on the owner's re-run:** see `codebase.md` entry 18 and `.slice-proof/results.json` (`intents`) — three
-prompts, each a category from the small slot, and the rung the endpoint answered on. **What it does not settle:**
+**Measured on the owner's re-run (2026-09-05, three real Haiku calls through OpenRouter):** the first attempt fell
+again — two of three answers were valid JSON under a key of the model's own, `{"classification": "explicit_trivial"}`,
+and the parser accepted only `intent` or `category`. Second correction, same day: the category is taken from the named
+keys first and then from any string value that names one; the key is the model's. Then `question`, `explicit_trivial`
+and `small_feature`, every one on the **`json_schema` rung with no confidence and no reason** — the endpoint accepts
+the schema and does not enforce it, the model answers in roughly its shape. The `intents` scenario's figures are in
+`.slice-proof/results.json`. **What it does not settle:**
 which rung *this* endpoint honours is one measurement; a second provider is a second one, and the memory is per
 session by REQ-ORCH-010, so the first call of every session still pays the descent.

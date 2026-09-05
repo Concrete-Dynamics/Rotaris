@@ -115,6 +115,10 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(firstJsonObject('no object here')).toBeNull();
     expect(firstJsonObject('{"unclosed":')).toBeNull();
     expect(parseClassification('The answer is {"intent":"exploration","confidence":0.4,"reason":"looks around"} — done.', 'json_object')).toEqual({ category: 'exploration', confidence: 0.4, reason: 'looks around' });
+    // the intents scenario (2026-09-05): the model's own key for the category, and a value under any key
+    expect(parseClassification('```json { "classification": "explicit_trivial" } ```', 'json_schema')).toEqual({ category: 'explicit_trivial', confidence: null, reason: '' });
+    expect(parseClassification('{"result":"Question","why":"asks"}', 'json_object')).toEqual({ category: 'question', confidence: null, reason: '' });
+    expect(parseClassification('{"classification":"nope"}', 'json_schema')).toBeNull();
   });
   it('REQ-ORCH-008: 8.0 s on the clock ends the classification as a fallback', async () => {
     const { b } = backend(() => 'hold');

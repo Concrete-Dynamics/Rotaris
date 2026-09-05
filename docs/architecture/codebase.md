@@ -204,8 +204,11 @@ in `configuration.ts`'s header.)
    classifier, the loop classifier, the summariser on `default_summary_model` (REQ-CONFIG-065) and every child
    persona's model each authenticate as themselves; an unleased slot is skipped (REQ-ORCH-009). `pnpm slice-proof`
    gains the `intents` scenario — three real runs, one prompt per intent family, each asserted to classify from the
-   small slot and never fall back, the answering rung recorded. **Measured:** awaiting the owner's re-run with a
-   pasted key (`.slice-proof/results.json` → `intents`).
+   small slot and never fall back, the answering rung recorded. **Measured on the owner's re-run:** the first attempt
+   fell again — the model put the category under its own key (`classification`) and the parser knew two names; now
+   any string value naming a category counts. Then `question`, `explicit_trivial`, `small_feature`, all on the
+   `json_schema` rung, none with a confidence (the endpoint accepts the schema and does not enforce it). The proof's
+   scratch workspace now runs autonomous after the starter file is asserted, so no one sits at the approval dialog.
 
 19. **the Overview view (2026-09-05, Part M):** REQ-SHELL-026's startup view drawn — the header with the session
    label, status and runtime; the resizable two-column body whose split persists under `panels/overview`

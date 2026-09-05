@@ -172,8 +172,10 @@ export function readClassification(text: string, rung: Rung): ReadOutcome {
     } catch {
       return { kind: 'no-json' };
     }
-    const raw = typeof o['intent'] === 'string' ? o['intent'] : typeof o['category'] === 'string' ? o['category'] : '';
-    const category = raw.trim().toLowerCase();
+    // The key is the model's, not ours: OpenRouter/Haiku answered the strict rung's schema with `classification`
+    // (2026-09-05, the intents scenario). The named keys first, then any string value that is a category.
+    const candidates = [o['intent'], o['category'], o['classification'], o['label'], ...Object.values(o)].filter((v): v is string => typeof v === 'string');
+    const category = candidates.map((v) => v.trim().toLowerCase()).find((v) => isIntentCategory(v)) ?? '';
     if (!isIntentCategory(category)) return { kind: 'unmapped' };
     const c = o['confidence'];
     const confidence = typeof c === 'number' && c >= 0 && c <= 1 ? c : null;

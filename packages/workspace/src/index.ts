@@ -15,11 +15,21 @@
  */
 export const WORKSPACE_PACKAGE = '@rotaris/workspace' as const;
 
-/** ADR-0038: the environment variables git must not inherit from the product. Fixed here, deleted by the helper. */
+/**
+ * ADR-0038: the environment variables git must not inherit from the product. Fixed here, deleted by the helper.
+ *
+ * REQ-GIT-031 names fourteen: `GIT_INDEX_FILE`, `GIT_DIR`, `GIT_WORK_TREE`, `GIT_OBJECT_DIRECTORY`,
+ * `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_CONFIG`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and the six identity and
+ * date variables. Found on ADR-0039's first execution: the list held fourteen names but NOT those fourteen — the six
+ * identity variables were absent (an inherited `GIT_AUTHOR_NAME` would have reached `commit-tree` had the checkpoint
+ * layer not set its own, REQ-GIT-032) and six the requirement does not name were present. The six are now here; the
+ * extra six stay, since each can also redirect an invocation and REQ-GIT-031 says "every other … that could".
+ */
 export const GIT_ENV_DENYLIST = [
   'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES',
-  'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES', 'GIT_DISCOVERY_ACROSS_FILESYSTEM', 'GIT_COMMON_DIR',
-  'GIT_CONFIG', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_NOSYSTEM', 'GIT_EXTERNAL_DIFF',
+  'GIT_CONFIG', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM',
+  'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_DATE',
+  'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES', 'GIT_DISCOVERY_ACROSS_FILESYSTEM', 'GIT_COMMON_DIR', 'GIT_CONFIG_NOSYSTEM', 'GIT_EXTERNAL_DIFF',
 ] as const;
 
 /** REQ-GIT-001: the network subcommands the helper rejects at its one chokepoint. */
@@ -29,5 +39,6 @@ export * from './git/repository.js';
 export * from './git/paths.js';
 export * from './git/view.js';
 export * from './git/worktrees.js';
+export * from './git/checkpoints.js';
 export * from './backup.js';
 export * from './restore.js';

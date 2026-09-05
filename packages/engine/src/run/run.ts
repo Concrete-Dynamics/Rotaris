@@ -15,6 +15,7 @@ import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
+import type { CheckpointPort } from '../checkpoint-port.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -114,6 +115,8 @@ export interface RunDeps {
   readonly hooks?: HookPort | null | undefined;
   /** The host's notice channel (REQ-HOOKS-054/086/087). */
   readonly notice?: ((n: RunNotice) => void) | undefined;
+  /** ADR-0039 / REQ-GIT-024/051: the session's checkpoint port; null or absent means no capture at any iteration close. */
+  readonly checkpoints?: CheckpointPort | null | undefined;
   /** REQ-ORCH-005: classify, grant, resolve the playbooks — before the coordinator exists. Absent: the fallback intent, no playbook. */
   readonly preflight?: ((signal: AbortSignal) => Promise<Preflight>) | undefined;
   readonly pid: number;
@@ -376,6 +379,19 @@ export class Run {
       escalate = true;
     }
     writer.recordEvent('iteration.end', { task: task.text, outcome, summary }, iteration);
+    // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
+    // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
+    // the agent left it, and a hook that later carries the checkpoint (REQ-HOOKS-082 with checkpoints, owed) can only
+    // do so if the capture precedes it. Awaited, so it finishes before the next iteration and before teardown.
+    if (this.deps.checkpoints?.enabled) {
+      try {
+        const r = await this.deps.checkpoints.capture({ iteration, childName: this.creditedChild() });
+        if (r.outcome === 'failed') this.deps.warn(`checkpoint after iteration ${iteration} was not recorded: ${r.detail}`);
+      } catch (cause) {
+        // REQ-GIT-045: never raises, never aborts the run — the port promises that; this is the belt behind it.
+        this.deps.warn(`the checkpoint port raised after iteration ${iteration}: ${String(cause)}`);
+      }
+    }
     // REQ-HOOKS-075/077/080/082: iteration_end for N finishes before N+1 begins; the iteration's own state beside the dispatched outcome.
     if (this.hooks) {
       const iterationState = outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' || outcome === 'abandoned' ? 'failed' : 'succeeded';
@@ -572,6 +588,12 @@ export class Run {
     this.deps.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${row.canonical_name} (${taskId}).`, { task_id: taskId });
     ch.scheduler.settled(r.row);
     return true;
+  }
+
+  /** REQ-GIT-051: the one child that succeeded in the closing iteration; '' when none or more than one (no joining format, no winner). */
+  private creditedChild(): string {
+    const succeeded = (this.children?.children() ?? []).filter((c) => c.state === 'succeeded');
+    return succeeded.length === 1 ? succeeded[0]!.canonical_name : '';
   }
 
   /** For the projection: this iteration's children. */

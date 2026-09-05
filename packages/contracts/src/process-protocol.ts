@@ -8,6 +8,7 @@ import { ControlRequestSchema, ControlResultSchema } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
+import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -87,6 +88,18 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
   z.object({ kind: z.literal('playbooks.catalogue') }),
   z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
+  /**
+   * ADR-0039 (Part P): the rows live in the run host. `checkpoint.list` reads them with no Git (REQ-GIT-050), stamps
+   * REQ-GIT-093's liveness verdict and runs REQ-GIT-094's stale-session repair; `checkpoint.recordSafety` writes the
+   * pre-restore row through the writer's one transaction (REQ-GIT-058 gate 5); `checkpoint.recordRestore` writes the
+   * attempt's outcome (REQ-GIT-062/068/155).
+   */
+  z.object({ kind: z.literal('checkpoint.list'), workspaceId: z.string(), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoint.recordSafety'), workspaceId: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), ref: z.string(), commit: z.string(), files: z.array(z.string()) }),
+  z.object({
+    kind: z.literal('checkpoint.recordRestore'), workspaceId: z.string(), sessionId: z.string().min(1), sequence: z.number().int(), restored: z.boolean(), safetySequence: z.number().int().nullable(),
+    changedPaths: z.number().int().nonnegative(), blockedReason: z.string(), forced: z.boolean(), treeRoot: z.string(), dirtyPaths: z.array(z.string()), ref: z.string().nullable(), commit: z.string().nullable(),
+  }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -176,6 +189,17 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('worktree.remove'), workspaceRoot: z.string(), path: z.string().min(1), force: z.boolean() }),
   /** REQ-GIT-011: an attach candidate validated before any session exists (REQ-GIT-158). */
   z.object({ kind: z.literal('worktree.checkAttach'), workspaceRoot: z.string(), path: z.string().min(1) }),
+  /**
+   * ADR-0039 (Part P): the Git side of checkpoints, in the one process that spawns Git (ADR-0038 c.4). `treeRoot` is
+   * the session's own tree (REQ-GIT-053); `workspaceRoot` names the service. A capture (REQ-GIT-034) creates the ref
+   * or reports nothing to record; the refs listing feeds REQ-GIT-046's numbering; the preview and the restore are
+   * REQ-GIT-052's two steps; the prune deletes named refs by compare-and-swap (REQ-GIT-041).
+   */
+  z.object({ kind: z.literal('checkpoint.capture'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), iteration: z.number().int().nonnegative(), childName: z.string(), checkpointKind: z.enum(CHECKPOINT_KINDS), includeUntracked: z.boolean(), message: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoint.refs'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoint.preview'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), commit: z.string(), candidates: z.array(z.object({ sequence: z.number().int(), commit: z.string() })), includeUntracked: z.boolean() }),
+  z.object({ kind: z.literal('checkpoint.restore'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), commit: z.string(), entries: z.array(PreviewEntrySchema) }),
+  z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -192,6 +216,14 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('runHost.release'), workspaceId: z.string() }),
   z.object({ kind: z.literal('runHost.reopen'), workspaceId: z.string(), storeFile: z.string() }),
   z.object({ kind: z.literal('credentials.lease'), providerIds: z.array(z.string()) }),
+  /**
+   * ADR-0039 / ADR-0002 c.4 (Part P): the run host reaches Git ONLY through the workspace service, and the two never
+   * talk directly — so the run loop's capture at iteration close, the refs it numbers from (REQ-GIT-046) and the
+   * retention prune (REQ-GIT-049) are asks main relays to the service of that workspace and answers back.
+   */
+  z.object({ kind: z.literal('checkpoint.capture'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), iteration: z.number().int().nonnegative(), childName: z.string(), checkpointKind: z.enum(CHECKPOINT_KINDS), includeUntracked: z.boolean(), message: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoint.refs'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -241,6 +273,15 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
    * renderer schema (commands, channels) has a field for it (ADR-0030 c.2).
    */
   z.object({ kind: z.literal('credentials.leased'), bearers: z.record(z.string(), z.string()), report: z.object({ authenticated: z.array(z.string()), renewed: z.array(z.string()), unresolved: z.record(z.string(), z.string()) }) }),
+  /** ADR-0039 (Part P): the workspace service's five answers and the run host's three. `invocations` and `elapsedMs` are what the proof measures. */
+  z.object({ kind: z.literal('checkpoint.captured'), outcome: z.enum(['recorded', 'nothing-to-record', 'unavailable', 'failed']), ref: z.string().optional(), commit: z.string().optional(), files: z.array(z.string()).optional(), detail: z.string().optional(), invocations: z.number().int().nonnegative(), elapsedMs: z.number().nonnegative() }),
+  z.object({ kind: z.literal('checkpoint.refs'), ok: z.boolean(), entries: z.array(z.object({ sequence: z.number().int(), commit: z.string(), ref: z.string() })), detail: z.string().optional() }),
+  z.object({ kind: z.literal('checkpoint.previewed'), treeState: z.enum(['ok', 'unmanaged', 'ref-gone', 'inspect-failed']), entries: z.array(PreviewEntrySchema), dirty: z.array(z.string()), blockedReason: z.string(), text: z.string(), invocations: z.number().int().nonnegative(), elapsedMs: z.number().nonnegative() }),
+  z.object({ kind: z.literal('checkpoint.restored'), ok: z.boolean(), touched: z.array(z.string()), detail: z.string().optional(), invocations: z.number().int().nonnegative(), elapsedMs: z.number().nonnegative() }),
+  z.object({ kind: z.literal('checkpoint.pruned'), deleted: z.number().int().nonnegative(), failed: z.array(z.object({ ref: z.string(), detail: z.string() })) }),
+  z.object({ kind: z.literal('checkpoint.list'), listing: CheckpointListSchema }),
+  /** The safety row is recorded (its trimmed refs for the prune), or the reason it could not be persisted. */
+  z.object({ kind: z.literal('checkpoint.recorded'), sequence: z.number().int(), trimmed: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

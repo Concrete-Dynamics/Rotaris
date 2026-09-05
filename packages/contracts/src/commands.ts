@@ -55,6 +55,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('worktree.chooseAttach') }),
   /** REQ-GIT-116: whether a directory exists and is non-empty, for the dialog's live message (the renderer has no filesystem). */
   z.object({ kind: z.literal('worktree.probePath'), path: z.string().min(1) }),
+  /**
+   * ADR-0039 (Part P): the checkpoints card and its restore flow. The listing reads rows only (REQ-GIT-050); the preview
+   * and the restore are main's orchestration over the run host (rows, liveness) and the workspace service (Git);
+   * one desktop checkpoint operation is in flight at a time (REQ-GIT-091) — a second is declined with code `checkpoint.busy`.
+   */
+  z.object({ kind: z.literal('checkpoints.list'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('checkpoints.preview'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('checkpoints.restore'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), force: z.boolean() }),
   z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),

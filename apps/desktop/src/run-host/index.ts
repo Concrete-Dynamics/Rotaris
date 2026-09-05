@@ -8,7 +8,8 @@ import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
-import { RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
+import { createCheckpointPort, REFS_ASK_BOUND } from './checkpoints.js';
+import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
 import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
@@ -79,6 +80,8 @@ function scriptedClient(c: Clocks): ModelClient {
   const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
     glob: { name: 'glob', args: { pattern: '**/*.md' } },
     read: { name: 'read_file', args: { path: 'README.md' } },
+    // Part P: the checkpoint proof edits NOTES.md in a later launch, and the edit tool wants the file read in this process first.
+    readnotes: { name: 'read_file', args: { path: 'NOTES.md' } },
     write: { name: 'write_file', args: { operation: 'create', path: 'NOTES.md', content: '# Notes\n\nWritten by the scripted agent through the gate.\n' } },
     edit: { name: 'write_file', args: { operation: 'edit', path: 'NOTES.md', old_string: 'scripted agent', new_string: 'scripted agent (edited)' } },
     rm: { name: 'terminal', args: { command: 'rm -rf build' } },
@@ -266,6 +269,8 @@ const sessions = new Sessions({
   sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
   // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
   hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
+  // ADR-0039: the capture at iteration close — Git through main to the workspace service, the row through the writer.
+  checkpoints: (ctx) => createCheckpointPort(ctx, { clocks, ask, section: configuredFor(ctx.workspaceRoot)?.cfg.checkpoints ?? CHECKPOINTS_DEFAULTS, log: (m) => log(m) }),
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
   supervisor: (workspaceRoot) => {
     const run = configuredFor(workspaceRoot);
@@ -442,6 +447,40 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     case 'runs.active':
       // ADR-0013: the registry's predicate. Sessions are not keyed by workspace yet; the count is instance-wide.
       return { kind: 'runs.count', workspaceId: req.workspaceId, count: sessions.activeRunCount() };
+    case 'checkpoint.list': {
+      // REQ-GIT-050: rows only, no Git; REQ-GIT-092/093's verdict stamped on; REQ-GIT-094's repair on this open.
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const r = sessions.checkpointListing(s.dal, s.root, asSessionId(req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: `checkpoint.${r.error.code}`, headline: r.error.reason };
+      if (r.value.repaired) log(`session ${req.sessionId} was still marked '${r.value.repaired.previous}', but ${r.value.repaired.reason}; marked interrupted (REQ-GIT-094)`, 'warn');
+      return { kind: 'checkpoint.list', listing: { ...r.value, includeUntracked: configuredFor(s.root)?.cfg.checkpoints.include_untracked ?? CHECKPOINTS_DEFAULTS.include_untracked } };
+    }
+    case 'checkpoint.recordSafety': {
+      // REQ-GIT-058 gate 5: the pre-restore row through the one transaction; rows first, then the trimmed refs, then the event.
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const keep = Math.max(1, configuredFor(s.root)?.cfg.checkpoints.max_per_session ?? CHECKPOINTS_DEFAULTS.max_per_session);
+      const listing = sessions.checkpointListing(s.dal, s.root, asSessionId(req.sessionId));
+      if (!listing.ok) return { kind: 'refused', code: `checkpoint.${listing.error.code}`, headline: listing.error.reason };
+      const r = sessions.recordSafetyCheckpoint(s.dal, asSessionId(req.sessionId), { sequence: req.sequence, ref: req.ref, commit: req.commit, iteration: 0, childName: '', files: req.files, kind: 'pre_restore' }, keep);
+      if (!r.ok) return { kind: 'refused', code: `checkpoint.${r.error.code}`, headline: r.error.reason };
+      if (r.value.trimmed.length > 0) {
+        const pruned = await ask({ kind: 'checkpoint.prune', workspaceRoot: s.root, treeRoot: listing.value.treeRoot, sessionId: req.sessionId, refs: [...r.value.trimmed] }, REFS_ASK_BOUND).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
+        log(`checkpoints: the safety checkpoint trimmed ${r.value.trimmed.length} row(s) to ${keep}; ${pruned.kind === 'checkpoint.pruned' ? `${pruned.deleted} ref(s) deleted` : `their refs could not be deleted (${pruned.kind === 'refused' ? pruned.headline : pruned.kind})`}`);
+      }
+      r.value.publish();
+      log(`checkpoints: safety checkpoint ${req.sequence} recorded for session ${req.sessionId} (${req.files.length} file(s))`);
+      return { kind: 'checkpoint.recorded', sequence: req.sequence, trimmed: [...r.value.trimmed] };
+    }
+    case 'checkpoint.recordRestore': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const r = sessions.recordRestore(s.dal, asSessionId(req.sessionId), { sequence: req.sequence, restored: req.restored, safetySequence: req.safetySequence, changedPaths: req.changedPaths, blockedReason: req.blockedReason, forced: req.forced, treeRoot: req.treeRoot, dirtyPaths: req.dirtyPaths, ref: req.ref, commit: req.commit });
+      if (!r.ok) return { kind: 'refused', code: `checkpoint.${r.error.code}`, headline: r.error.reason };
+      log(`checkpoints: restore of checkpoint ${req.sequence} on session ${req.sessionId} recorded as ${req.restored ? `restored (${req.changedPaths} file(s), safety ${req.safetySequence ?? 'none'})` : `refused: ${req.blockedReason}`}`);
+      return { kind: 'ack' };
+    }
     case 'presenter.register':
       presenters.register(req.windowId);
       return { kind: 'ack' };

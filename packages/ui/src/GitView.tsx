@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import type { GitViewState, GitWorktreeRow, PaneLayout, SessionListItemPayload } from '@rotaris/contracts';
+import type { CheckpointListPayload, CheckpointPreviewPayload, CheckpointRestoreOutcomePayload, GitViewState, GitWorktreeRow, PaneLayout, SessionListItemPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { WorktreeDialog } from './WorktreeDialog.js';
+import { CheckpointProgressDialog, checkpointsEmptyText, RESTORE_CANCELLED, RestoreConfirmDialog, restoreDisabledReason, TREE_UNCHANGED, type ListingState } from './CheckpointDialogs.js';
 
 /**
  * REQ-SHELL-023's fifth view. Structure from the specification — REQ-GIT-075 (the header row), 076 (two resizable
  * columns of at least 280 px under the `git` layout key, the four cards), 077/079/085 (the worktrees table and its
  * per-row delete), 078/108 (the history table with the local tint), 080/081/083 (the three buttons' states and
- * tooltips), 086..090 (the checkpoints card, in its empty states: ADR-0039's mechanism is owed), 109 (bindings joined
- * by resolved path), 115..117 (the two dialogs), 152 (the visual properties named here are the only ones fixed).
- * Language from docs/design/system: Card, Table/TableCard, EmptyState, Button, Tag, the G8 divider; tokens by name.
+ * tooltips), 086..090 (the checkpoints card — ADR-0039's first execution, Part P: rows from the listing, single-row
+ * selection, the reading state on every request, the picker's rebuild rules), 091..100 (the restore flow: preview
+ * first, the three refusals, the confirmation, the progress, the notices), 109 (bindings joined by resolved path),
+ * 115..117 (the two dialogs), 152 (the visual properties named here are the only ones fixed).
+ * Language from docs/design/system: Card, Table/TableCard, EmptyState, Button, Tag, Dialog, the G8 divider; tokens by name.
  */
 export const GIT_PANE_MIN = 280;
 export const GIT_RIGHT_DEFAULT = 480;
@@ -24,6 +27,16 @@ export const CHECKPOINTS_EMPTY = 'No checkpoints are recorded for this session. 
 export const RESTORE_NO_SESSION = 'Select a session to restore one of its checkpoints.';
 export const RESTORE_NO_ROW = 'Select a checkpoint in the list to restore it.';
 export const COMMIT_POLICY = 'Agents may create local commits only through the git_commit tool — no push, pull, rebase or amend. Reviewing and pushing remain your job; nothing here contacts a remote.';
+/** REQ-GIT-095: the one retry, 150 ms later, against whichever session is selected then. */
+export const CHECKPOINT_LISTING_RETRY_MS = 150;
+
+export type CommandFailure = { readonly ok: false; readonly code: string; readonly reason: string };
+/** ADR-0039's three desktop commands as the view sees them; every refusal is a value (REQ-GIT-052). */
+export interface CheckpointOps {
+  readonly list: (sessionId: string) => Promise<{ ok: true; listing: CheckpointListPayload } | CommandFailure>;
+  readonly preview: (sessionId: string, sequence: number) => Promise<{ ok: true; preview: CheckpointPreviewPayload } | CommandFailure>;
+  readonly restore: (sessionId: string, sequence: number, force: boolean) => Promise<{ ok: true; outcome: CheckpointRestoreOutcomePayload } | CommandFailure>;
+}
 
 export interface GitViewProps {
   readonly workspaceRoot: string;
@@ -38,6 +51,12 @@ export interface GitViewProps {
   readonly onCreateWorktree: (branch: string, path: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onDeleteWorktree: (path: string, force: boolean) => Promise<{ ok: true } | { ok: false; reason: string; needsForce: boolean }>;
   readonly probePath?: ((path: string) => Promise<{ exists: boolean; nonEmpty: boolean } | null>) | undefined;
+  /** ADR-0039: absent means the card stays in its empty states (the listing is never requested). */
+  readonly checkpoints?: CheckpointOps | undefined;
+  /** REQ-GIT-100: after a successful restore the Git state and the session list are refreshed. */
+  readonly onRestored?: (() => void) | undefined;
+  /** The focused session, the picker's second fallback (REQ-GIT-088). */
+  readonly focusedSessionId?: string | null | undefined;
 }
 
 /** The empty value of REQ-GIT-112 renders as an em dash; REQ-GIT-077 fixes the shape of the Files cell. */
@@ -83,6 +102,12 @@ export function clampGitRight(right: number, containerWidth: number, dividerWidt
 }
 /** REQ-GIT-086: the picker's entries. */
 export const pickerLabel = (s: SessionListItemPayload): string => (s.worktree ? `${s.sessionId} · ${s.worktree.branch}` : s.sessionId);
+/** REQ-GIT-088: the previous choice when it still exists, else the focused session, else the first entry, else none. */
+export function effectivePicked(entries: readonly SessionListItemPayload[], picked: string | null, focused: string | null | undefined): string | null {
+  if (picked !== null && entries.some((s) => s.sessionId === picked)) return picked;
+  if (focused && entries.some((s) => s.sessionId === focused)) return focused;
+  return entries[0]?.sessionId ?? null;
+}
 
 /**
  * REQ-GIT-122/161: the status strip's branch item — the focused session's worktree branch when set, else the
@@ -108,6 +133,14 @@ type Dialog =
   | { kind: 'failure', title: string, text: string }
   | null;
 
+/** REQ-GIT-096..100: the restore flow's one state at a time. */
+type Flow =
+  | { kind: 'inspecting'; sessionId: string; sequence: number }
+  | { kind: 'confirm'; preview: CheckpointPreviewPayload }
+  | { kind: 'restoring'; sessionId: string; sequence: number }
+  | { kind: 'message'; title: string; text: string }
+  | null;
+
 function Card({ kicker, children, className = '', actions, testId }: { kicker: string; children: React.ReactNode; className?: string; actions?: React.ReactNode; testId?: string }) {
   return (
     <section className={`card git-card ${className}`} aria-label={kicker} data-testid={testId}>
@@ -118,7 +151,7 @@ function Card({ kicker, children, className = '', actions, testId }: { kicker: s
 }
 
 export function GitView(props: GitViewProps) {
-  const { workspaceRoot, state, refreshing, sessions, layout, onLayout } = props;
+  const { workspaceRoot, state, refreshing, sessions, layout, onLayout, checkpoints, onRestored, focusedSessionId } = props;
   const join = useMemo(() => joinBindings(sessions), [sessions]);
   // A stable empty list: a fresh `[]` per render would make the selection reconciliation below loop (React's "too many re-renders", found on first execution).
   const rows = useMemo(() => state?.worktrees ?? NO_ROWS, [state]);
@@ -185,8 +218,88 @@ export function GitView(props: GitViewProps) {
     setDialog({ kind: 'failure', title: 'Could not delete worktree', text: r.reason });
   };
 
+  // ── The checkpoints card (REQ-GIT-086..090) ──
   const pickerEntries = sessions;
-  const effectivePick = pickedSession !== null && pickerEntries.some((s) => s.sessionId === pickedSession) ? pickedSession : (pickerEntries[0]?.sessionId ?? null);
+  const effectivePick = effectivePicked(pickerEntries, pickedSession, focusedSessionId);
+  const pickRef = useRef<string | null>(effectivePick);
+  useEffect(() => { pickRef.current = effectivePick; }, [effectivePick]);
+  const [listing, setListing] = useState<ListingState>({ state: 'none' });
+  const [selectedSeq, setSelectedSeq] = useState<number | null>(null);
+  const [flow, setFlow] = useState<Flow>(null);
+  const [listingTick, setListingTick] = useState(0);
+  const pendingPreview = useRef<{ sessionId: string; sequence: number } | null>(null);
+  // A change of effective selection drops the row selection (the derive-during-render pattern, as the worktree rows above).
+  const [seenPick, setSeenPick] = useState(effectivePick);
+  if (seenPick !== effectivePick) { setSeenPick(effectivePick); setSelectedSeq(null); }
+  const requestRef = useRef<(sessionId: string, retried: boolean) => Promise<void>>(async () => undefined);
+  const requestListing = async (sessionId: string, retried: boolean): Promise<void> => {
+    if (!checkpoints) return;
+    // REQ-GIT-095: the reading state on every request, then exactly one settle; a result for another session is stale.
+    setListing({ state: 'reading', sessionId });
+    const r = await checkpoints.list(sessionId);
+    if (pickRef.current !== sessionId) return;
+    if (!r.ok && r.code === 'checkpoint.busy' && !retried) {
+      // The single retry, 150 ms later, against whichever session is selected at that moment.
+      setTimeout(() => { const now = pickRef.current; if (now) void requestRef.current(now, true); }, CHECKPOINT_LISTING_RETRY_MS);
+      return;
+    }
+    if (!r.ok) {
+      if (r.code === 'checkpoint.store') { setListing({ state: 'empty', sessionId, reason: null }); setDialog({ kind: 'failure', title: "Could not read this session's checkpoints", text: r.reason }); return; }
+      setListing({ state: 'unavailable', sessionId, reason: r.reason });
+      return;
+    }
+    setListing({ state: 'ready', sessionId, listing: r.listing });
+  };
+  useEffect(() => { requestRef.current = requestListing; });
+  // REQ-GIT-088: a change of effective selection requests that session's listing; no session clears the rows.
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (pickRef.current === null) { setListing({ state: 'none' }); return; }
+      void requestRef.current(pickRef.current, false);
+    });
+  }, [effectivePick, listingTick]);
+  const listedRows = listing.state === 'ready' && listing.sessionId === effectivePick ? listing.listing.rows : [];
+  const emptyText = checkpointsEmptyText(listing, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY);
+  const restoreReason = restoreDisabledReason(listing, selectedSeq !== null && listedRows.some((r) => r.sequence === selectedSeq) ? selectedSeq : null, RESTORE_NO_SESSION, RESTORE_NO_ROW);
+  const refreshListing = () => setListingTick((t) => t + 1);
+
+  // ── The restore flow (REQ-GIT-096..100) ──
+  const startRestore = async () => {
+    if (!checkpoints || effectivePick === null || selectedSeq === null || restoreReason !== null || flow !== null) return;
+    const sessionId = effectivePick;
+    const sequence = selectedSeq;
+    pendingPreview.current = { sessionId, sequence };
+    setFlow({ kind: 'inspecting', sessionId, sequence });
+    const r = await checkpoints.preview(sessionId, sequence);
+    // REQ-GIT-096: a preview arriving for a session/sequence no longer pending is ignored.
+    if (pendingPreview.current?.sessionId !== sessionId || pendingPreview.current.sequence !== sequence) return;
+    pendingPreview.current = null;
+    if (!r.ok) {
+      if (r.code === 'checkpoint.busy') { setFlow(null); setToast(r.reason); return; }
+      if (r.code === 'checkpoint.unrecorded') { setFlow({ kind: 'message', title: `Checkpoint ${sequence} cannot be restored`, text: `Checkpoint ${sequence} is no longer recorded for this session.` }); refreshListing(); return; }
+      setFlow({ kind: 'message', title: `Checkpoint ${sequence} cannot be restored`, text: r.reason });
+      return;
+    }
+    if (!r.preview.restorable) { setFlow({ kind: 'message', title: `Checkpoint ${sequence} cannot be restored`, text: r.preview.blockedReason }); return; }
+    setFlow({ kind: 'confirm', preview: r.preview });
+  };
+  const confirmRestore = async (preview: CheckpointPreviewPayload) => {
+    if (!checkpoints) return;
+    const { sessionId, sequence } = preview;
+    setFlow({ kind: 'restoring', sessionId, sequence });
+    const r = await checkpoints.restore(sessionId, sequence, preview.dirty.length > 0);
+    if (!r.ok) {
+      setFlow(r.code === 'checkpoint.busy' ? null : { kind: 'message', title: `Checkpoint ${sequence} was not restored`, text: r.reason });
+      if (r.code === 'checkpoint.busy') setToast(r.reason);
+      return;
+    }
+    if (!r.outcome.restored) { setFlow({ kind: 'message', title: `Checkpoint ${sequence} was not restored`, text: r.outcome.blockedReason || TREE_UNCHANGED }); refreshListing(); return; }
+    // REQ-GIT-100: the persistent notice is main's; here the Git state and the listing refresh.
+    setFlow(null);
+    refreshListing();
+    onRestored?.();
+  };
+  const cancelRestore = () => { setFlow(null); setToast(RESTORE_CANCELLED); };
 
   return (
     <div className="git" data-testid="git">
@@ -242,14 +355,27 @@ export function GitView(props: GitViewProps) {
               <select className="input select git__picker" aria-label="Checkpoint session" data-testid="git-checkpoint-session" disabled={pickerEntries.length === 0} value={effectivePick ?? ''} onChange={(e) => setPickedSession(e.currentTarget.value)}>
                 {pickerEntries.map((s) => <option key={s.sessionId} value={s.sessionId}>{pickerLabel(s)}</option>)}
               </select>
-              <button type="button" className="btn btn-secondary" disabled title={effectivePick === null ? RESTORE_NO_SESSION : RESTORE_NO_ROW} data-testid="git-restore">Restore checkpoint</button>
+              <button type="button" className="btn btn-secondary" disabled={restoreReason !== null || flow !== null} title={restoreReason ?? undefined} data-testid="git-restore" data-reason={restoreReason ?? ''} onClick={() => { void startRestore(); }}>Restore checkpoint</button>
             </div>
           )}>
-            <table className="table git__table" aria-label="Checkpoints" aria-description="Rows are ordered oldest first.">
+            <table className="table git__table" aria-label="Checkpoints" aria-description="Rows are ordered oldest first." data-testid="git-checkpoint-table" data-state={listing.state}>
               <thead><tr><th>Checkpoint</th><th>Created</th><th>Iteration</th><th>Files changed</th><th>Kind</th></tr></thead>
-              <tbody />
+              <tbody>
+                {listedRows.map((c) => {
+                  const isSelected = selectedSeq === c.sequence;
+                  return (
+                    <tr key={c.sequence} className={isSelected ? 'git__ckpt-row is-selected' : 'git__ckpt-row'} data-testid="git-checkpoint-row" data-sequence={c.sequence} data-kind={c.kind} aria-selected={isSelected} onClick={() => setSelectedSeq(c.sequence)}>
+                      <td className="mono">{c.sequence}</td>
+                      <td className="mono">{c.createdLabel}</td>
+                      <td className="mono">{c.iteration}</td>
+                      <td className="mono">{c.files}</td>
+                      <td>{c.kind}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
-            <div className="empty-state git__empty" data-testid="git-checkpoints-empty"><span className="empty-state-hint">{effectivePick === null ? CHECKPOINTS_NO_SESSION : CHECKPOINTS_EMPTY}</span></div>
+            {emptyText !== null && <div className="empty-state git__empty" data-testid="git-checkpoints-empty" aria-live="polite"><span className="empty-state-hint">{emptyText}</span></div>}
           </Card>
         </div>
         <div className="git__divider" role="separator" aria-orientation="vertical" aria-label="Resize the commit history column" aria-valuemin={GIT_PANE_MIN} aria-valuemax={GIT_RIGHT_MAX} aria-valuenow={right} tabIndex={0}
@@ -293,6 +419,12 @@ export function GitView(props: GitViewProps) {
       )}
       {dialog?.kind === 'failure' && (
         <ConfirmDialog title={dialog.title} body={dialog.text} confirmLabel="Close" cancelLabel="Dismiss" testId="git-failure" onConfirm={() => setDialog(null)} onCancel={() => setDialog(null)} />
+      )}
+      {flow?.kind === 'inspecting' && <CheckpointProgressDialog text={`Inspecting checkpoint ${flow.sequence}…`} />}
+      {flow?.kind === 'restoring' && <CheckpointProgressDialog text={`Restoring checkpoint ${flow.sequence}…`} />}
+      {flow?.kind === 'confirm' && <RestoreConfirmDialog preview={flow.preview} onConfirm={() => { void confirmRestore(flow.preview); }} onCancel={cancelRestore} />}
+      {flow?.kind === 'message' && (
+        <ConfirmDialog title={flow.title} body={flow.text} confirmLabel="Close" cancelLabel="Dismiss" testId="checkpoint-message" onConfirm={() => setFlow(null)} onCancel={() => setFlow(null)} />
       )}
     </div>
   );

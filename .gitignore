@@ -19,3 +19,4 @@ packages/kernel/src/generated/
 .overview-proof/
 .fetch-proof/
 .git-proof/
+.checkpoint-proof/

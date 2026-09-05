@@ -335,6 +335,29 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN sandbox_mode TEXT NOT NULL DEFAULT 'off';
     `,
   },
+  {
+    to: 9,
+    // v9 lands with checkpoints (Part P, ADR-0039 "The checkpoint index is a table"): one row per checkpoint keyed by
+    // session and sequence with REQ-GIT-016's field set unchanged — `files` as one serialised value (consequence 7),
+    // `kind` its own column because listing and retention read it — and REQ-SESSION-195 / REQ-GIT-155's
+    // `last_restored_sequence` on the session row, absent by default. `checkpoint_count` is derived, never stored twice.
+    // NO new index: the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts, spike 8's rule).
+    sql: `
+      CREATE TABLE checkpoints (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        sequence   INTEGER NOT NULL,
+        ref        TEXT NOT NULL,
+        commit_id  TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        iteration  INTEGER NOT NULL DEFAULT 0,
+        child_name TEXT NOT NULL DEFAULT '',
+        files      TEXT NOT NULL DEFAULT '[]',
+        kind       TEXT NOT NULL DEFAULT 'iteration',
+        PRIMARY KEY (session_id, sequence)
+      );
+      ALTER TABLE sessions ADD COLUMN last_restored_sequence INTEGER;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

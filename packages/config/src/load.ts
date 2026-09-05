@@ -11,6 +11,7 @@ import { readRuntimeSection, type RuntimeSection } from './sections/runtime.js';
 import { readModelsSection, type ModelEntry } from './sections/models.js';
 import { readPersonasSection, type PersonaEntry } from './sections/personas.js';
 import { readCompressorSection, type CompressorSection } from './sections/compressor.js';
+import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
 import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit-breaker-section.js';
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
@@ -57,6 +58,8 @@ export interface LoadedConfiguration {
   readonly runtime: RuntimeSection;
   readonly compressor: CompressorSection;
   readonly circuitBreaker: CircuitBreakerSection;
+  /** REQ-GIT-070..072 (Part P): the three checkpoint keys, `max_per_session` rejected at load below 1 (REQ-GIT-071). */
+  readonly checkpoints: CheckpointsSection;
   readonly hooks: HooksResolved;
   readonly worktreeStorageSubpath: string;
   readonly injectAgentsMd: boolean;
@@ -260,6 +263,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const runtime = readRuntimeSection(top['runtime'], sink);
   const compressor = readCompressorSection(top['compressor'], sink);
   const circuitBreaker = readCircuitBreakerSection(top['circuit_breaker'], sink);
+  const checkpoints = readCheckpointsSection(top['checkpoints'], sink);
 
   const fatal = [...problems, ...sink.errors.map((p) => ({ ...p, file: files.workspace.agents, scope: 'workspace' as const }))];
   if (fatal.length > 0) {
@@ -289,6 +293,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     runtime,
     compressor: { ...compressor, model: draft.compressorModel },
     circuitBreaker: { ...circuitBreaker, model: draft.circuitBreakerModel },
+    checkpoints,
     hooks,
     worktreeStorageSubpath: worktree,
     injectAgentsMd,

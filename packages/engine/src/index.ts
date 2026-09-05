@@ -23,6 +23,7 @@ export * from './children/report.js';
 export * from './children/delegation.js';
 export * from './children/orchestration.js';
 export * from './hooks-port.js';
+export * from './checkpoint-port.js';
 export * from './intent/index.js';
 export * from './playbooks/index.js';
 export * from './preflight.js';

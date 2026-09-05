@@ -392,3 +392,19 @@
 .status-strip__item { white-space: nowrap; flex: 0 0 auto; }
 /* REQ-GIT-122/161: the strip's branch item carries its accessible name; a detached or absent state reads distinctly. */
 .status-strip__item[data-branch-state='detached'], .status-strip__item[data-branch-state='none'] { font-style: italic; }
+/* ADR-0039's dialogs (REQ-GIT-096..099): the progress dialog with no cancel; the confirmation at least 560×400 px. */
+.checkpoint-dialog--progress { width: min(480px, 100%); }
+.checkpoint-dialog__bar { position: relative; overflow: hidden; height: var(--rt-space-1, 4px); border-radius: var(--rt-radius-sm); background: var(--rt-accent-tint-10); }
+.checkpoint-dialog__bar-fill { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--rt-accent-500); animation: checkpoint-indeterminate 1.2s var(--rt-ease) infinite; }
+@keyframes checkpoint-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .checkpoint-dialog__bar-fill { animation: none; width: 100%; } }
+.checkpoint-dialog--confirm { width: min(720px, 100%); min-width: 560px; min-height: 400px; display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
+.checkpoint-dialog__summary { white-space: pre-wrap; overflow-wrap: anywhere; }
+.checkpoint-dialog__preview { width: 100%; resize: vertical; white-space: pre; overflow: auto; font-size: var(--rt-text-sm, 13px); line-height: 1.5; }
+.checkpoint-dialog__warning { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border: 1px solid var(--rt-warn); border-radius: var(--rt-radius-md); }
+.checkpoint-dialog__warning-text { margin: 0; color: var(--rt-warn); overflow-wrap: anywhere; }
+.checkpoint-dialog__check { display: flex; align-items: center; gap: var(--rt-space-2, 8px); cursor: pointer; }
+.checkpoint-dialog__reason { margin: 0; font-size: var(--rt-text-xs, 12px); text-align: right; }
+.git__ckpt-row { cursor: default; }
+.git__ckpt-row.is-selected td { background: var(--rt-accent-tint-10); }
+.git__ckpt-row[aria-selected='true'] td:first-child { color: var(--rt-accent-300); }

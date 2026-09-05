@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { CHANNEL, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeCurrent, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
+import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeCurrent, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
@@ -107,7 +107,13 @@ async function main(): Promise<void> {
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [], { serviceName: 'rotaris-run-host' });
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
+  // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
+    if (a.kind === 'checkpoint.capture' || a.kind === 'checkpoint.refs' || a.kind === 'checkpoint.prune') {
+      const svc = services.get(canonicalPath(a.workspaceRoot));
+      if (!svc) return { kind: 'refused', code: 'workspace.none', headline: `no workspace service is running for ${a.workspaceRoot}` };
+      return svc.link.request(a, millis(a.kind === 'checkpoint.capture' ? 320_000 : 60_000));
+    }
     if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
     const { bearers, report } = providers.lease(a.providerIds);
     log(`credentials leased: ${report.authenticated.join(', ') || 'none'}${Object.keys(report.unresolved).length > 0 ? `; unresolved ${Object.entries(report.unresolved).map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
@@ -136,6 +142,8 @@ async function main(): Promise<void> {
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
       child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); });
+      // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads).
+      svc.link.onEvent((e) => { if (e.kind === 'log') log(`workspace service ${e.level}: ${e.message}`); });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
       svc.link.onAsk((a) => {
         switch (a.kind) {
@@ -587,6 +595,127 @@ async function main(): Promise<void> {
     return { ok: false, code: rep.refusal ? `restore.${rep.refusal.why}` : 'restore.failed', headline: 'The restore was not performed', detail: why };
   };
 
+  /**
+   * ADR-0039's desktop flow (REQ-GIT-091..100), conducted here: the rows and the liveness verdict from the run host, the
+   * Git from the workspace service, the outcome recorded through the run host. ONE desktop checkpoint operation is in
+   * flight at a time (REQ-GIT-091) — a second is declined with code `checkpoint.busy` and the renderer shows the toast
+   * or retries a listing once after 150 ms (REQ-GIT-095). Every refusal is a returned value (REQ-GIT-052).
+   */
+  let checkpointOp: Promise<unknown> | null = null;
+  const checkpointGate = (fn: () => Promise<CommandOutcome>): Promise<CommandOutcome> => {
+    if (checkpointOp) return Promise.resolve({ ok: false, code: 'checkpoint.busy', headline: CHECKPOINT_BUSY_TOAST });
+    const p = fn().finally(() => { if (checkpointOp === p) checkpointOp = null; });
+    checkpointOp = p;
+    return p;
+  };
+  const checkpointContext = async (): Promise<{ workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } } | CommandOutcome> => {
+    await awaitWorkspace();
+    if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
+    const root = canonicalPath(currentWorkspace);
+    const svc = services.get(root);
+    if (!svc) return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
+    return { workspaceId: currentWorkspaceId, root, svc };
+  };
+  const readListing = async (workspaceId: string, sessionId: string): Promise<CheckpointListPayload | CommandOutcome> => {
+    const r = await runHost.request({ kind: 'checkpoint.list', workspaceId, sessionId }, millis(15_000));
+    if (r.kind !== 'checkpoint.list') {
+      if (r.kind === 'refused' && r.code === 'checkpoint.no-session') return { ok: false, code: r.code, headline: r.headline };
+      // REQ-GIT-095: a store that cannot be read is an empty listing behind the error dialog.
+      return { ok: false, code: 'checkpoint.store', headline: "Could not read this session's checkpoints", detail: r.kind === 'refused' ? `${CHECKPOINTS_STORE_UNREADABLE} (${r.headline})` : CHECKPOINTS_STORE_UNREADABLE };
+    }
+    // REQ-GIT-094: the repair is announced as a warning notice.
+    if (r.listing.repaired) {
+      raiseNotice('warning', 'Session marked interrupted', `This session was still marked '${r.listing.repaired.previous}', but ${r.listing.repaired.reason}. Rotaris marked it interrupted, so its checkpoints can be restored again.`);
+      log(`notice: Session marked interrupted (${sessionId}: was '${r.listing.repaired.previous}', ${r.listing.repaired.reason})`);
+    }
+    return r.listing;
+  };
+  const isOutcome = (x: unknown): x is CommandOutcome => typeof x === 'object' && x !== null && 'ok' in x;
+  /** REQ-GIT-092: stamped on every listing and checked before every preview and restore; a broken check never enables a restore. */
+  const livenessRefusal = (l: CheckpointListPayload): string | null => (l.liveness === 'live' ? LIVE_RUN_REFUSAL : l.liveness === 'unknown' ? LIVENESS_UNKNOWN_REFUSAL : null);
+  /** REQ-GIT-056: the 10 most recent recorded plus the last restored when outside them, newest first. */
+  const driftCandidates = (l: CheckpointListPayload): { sequence: number; commit: string }[] => {
+    const newest = [...l.rows].sort((a, b) => b.sequence - a.sequence).slice(0, 10);
+    const last = l.lastRestoredSequence === null ? undefined : l.rows.find((r) => r.sequence === l.lastRestoredSequence);
+    if (last && !newest.some((r) => r.sequence === last.sequence)) newest.push(last);
+    return newest.map((r) => ({ sequence: r.sequence, commit: r.commit }));
+  };
+  const previewOf = async (ctx: { workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } }, l: CheckpointListPayload, sequence: number) => {
+    const row = l.rows.find((r) => r.sequence === sequence);
+    if (!row) return null;
+    const started = clocks.monotonic.now();
+    const r = await ctx.svc.link.request({ kind: 'checkpoint.preview', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId: l.sessionId, sequence, commit: row.commit, candidates: driftCandidates(l), includeUntracked: l.includeUntracked }, millis(320_000));
+    if (r.kind !== 'checkpoint.previewed') return { row, treeState: 'inspect-failed' as const, entries: [], dirty: [], blockedReason: `Git could not inspect checkpoint ${sequence}: ${r.kind === 'refused' ? r.headline : `unexpected answer ${r.kind}`}`, text: `Git could not inspect checkpoint ${sequence}: ${r.kind === 'refused' ? r.headline : `unexpected answer ${r.kind}`}`, invocations: 0, elapsedMs: 0 };
+    log(`checkpoint preview ${l.sessionId}/${sequence}: ${r.treeState}, ${r.entries.length} entr${r.entries.length === 1 ? 'y' : 'ies'}, ${r.dirty.length} dirty; ${r.invocations} git invocations, ${r.elapsedMs} ms in the service, ${Math.round(clocks.monotonic.now() - started)} ms end to end`);
+    return { row, ...r };
+  };
+  const checkpointPreview = async (sessionId: string, sequence: number): Promise<CommandOutcome> => {
+    const ctx = await checkpointContext();
+    if (isOutcome(ctx)) return ctx;
+    const l = await readListing(ctx.workspaceId, sessionId);
+    if (isOutcome(l)) return l;
+    if (l.unavailable) return { ok: false, code: 'checkpoint.unavailable', headline: l.unavailable };
+    const live = livenessRefusal(l);
+    if (live) return { ok: false, code: 'checkpoint.live', headline: live };
+    const p = await previewOf(ctx, l, sequence);
+    if (p === null) return { ok: false, code: 'checkpoint.unrecorded', headline: `Checkpoint ${sequence} is no longer recorded for this session.` };
+    const value: CheckpointPreviewPayload = { sessionId, sequence, treeRoot: l.treeRoot, entries: p.entries, dirty: p.dirty, blockedReason: p.blockedReason, text: p.text, summary: restoreSummary(sequence, p.entries.length, l.treeRoot), restorable: p.treeState === 'ok' };
+    return { ok: true, value };
+  };
+  const checkpointRestore = async (sessionId: string, sequence: number, force: boolean): Promise<CommandOutcome> => {
+    const ctx = await checkpointContext();
+    if (isOutcome(ctx)) return ctx;
+    const l = await readListing(ctx.workspaceId, sessionId);
+    if (isOutcome(l)) return l;
+    const outcome = (o: Omit<CheckpointRestoreOutcomePayload, 'sequence'>): CommandOutcome => ({ ok: true, value: { sequence, ...o } satisfies CheckpointRestoreOutcomePayload });
+    if (l.unavailable) return outcome({ restored: false, safetySequence: null, changedPaths: 0, blockedReason: l.unavailable });
+    const live = livenessRefusal(l);
+    if (live) return outcome({ restored: false, safetySequence: null, changedPaths: 0, blockedReason: live });
+    const started = clocks.monotonic.now();
+    const row = l.rows.find((r) => r.sequence === sequence) ?? null;
+    // REQ-GIT-058/062: every refusal at a gate is recorded on the session; the record never raises here.
+    const record = async (o: { restored: boolean; safetySequence: number | null; changedPaths: number; blockedReason: string; dirtyPaths: readonly string[] }) => {
+      const r = await runHost.request({ kind: 'checkpoint.recordRestore', workspaceId: ctx.workspaceId, sessionId, sequence, restored: o.restored, safetySequence: o.safetySequence, changedPaths: o.changedPaths, blockedReason: o.blockedReason, forced: force, treeRoot: l.treeRoot, dirtyPaths: [...o.dirtyPaths], ref: row?.ref ?? null, commit: row?.commit ?? null }, millis(15_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
+      if (r.kind !== 'ack') log(`checkpoint restore ${sessionId}/${sequence}: the outcome could not be recorded (${r.kind === 'refused' ? r.headline : r.kind})`);
+    };
+    const refuse = async (blockedReason: string, safetySequence: number | null = null, dirtyPaths: readonly string[] = []) => {
+      await record({ restored: false, safetySequence, changedPaths: 0, blockedReason, dirtyPaths });
+      log(`checkpoint restore ${sessionId}/${sequence} refused: ${blockedReason}`);
+      return outcome({ restored: false, safetySequence, changedPaths: 0, blockedReason });
+    };
+    // Gate 1.
+    if (!row) return refuse(`No checkpoint ${sequence} is recorded for session ${sessionId}.`);
+    // Gates 2 and 3 — the preview again, fresh (the tree may have moved since the dialog was shown).
+    const p = await previewOf(ctx, l, sequence);
+    if (p === null) return refuse(`No checkpoint ${sequence} is recorded for session ${sessionId}.`);
+    if (p.treeState !== 'ok') return refuse(p.blockedReason);
+    // Gate 4 — force bypasses this gate only.
+    if (p.dirty.length > 0 && !force) return refuse(p.blockedReason, null, p.dirty);
+    // Gate 5 — the safety checkpoint, untracked always included, numbered from both sources (REQ-GIT-059); it MUST succeed.
+    let safetySequence: number | null = null;
+    const refs = await ctx.svc.link.request({ kind: 'checkpoint.refs', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId }, millis(60_000)).catch(() => null);
+    const fromRefs = refs?.kind === 'checkpoint.refs' && refs.ok ? refs.entries.reduce((m, e) => Math.max(m, e.sequence), 0) : 0;
+    const safety = Math.max(fromRefs, ...l.rows.map((r) => r.sequence), 0) + 1;
+    const captured = await ctx.svc.link.request({ kind: 'checkpoint.capture', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId, sequence: safety, iteration: 0, childName: '', checkpointKind: 'pre_restore', includeUntracked: true, message: `rotaris pre-restore checkpoint ${safety} for session ${sessionId} (before restoring checkpoint ${sequence})` }, millis(320_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
+    if (captured.kind !== 'checkpoint.captured') return refuse(`Could not record a safety checkpoint before the restore: ${captured.kind === 'refused' ? captured.headline : `unexpected answer ${captured.kind}`}`, null, p.dirty);
+    if (captured.outcome === 'failed' || captured.outcome === 'unavailable') return refuse(`Could not record a safety checkpoint before the restore: ${captured.detail ?? 'Git declined'}`, null, p.dirty);
+    if (captured.outcome === 'recorded') {
+      const persisted = await runHost.request({ kind: 'checkpoint.recordSafety', workspaceId: ctx.workspaceId, sessionId, sequence: safety, ref: captured.ref ?? '', commit: captured.commit ?? '', files: captured.files ?? [] }, millis(60_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
+      if (persisted.kind !== 'checkpoint.recorded') return refuse(`Could not persist the safety checkpoint on the session: ${persisted.kind === 'refused' ? persisted.headline : `unexpected answer ${persisted.kind}`}`, null, p.dirty);
+      safetySequence = safety;
+      log(`checkpoint restore ${sessionId}/${sequence}: safety checkpoint ${safety} recorded over ${captured.files?.length ?? 0} file(s) (${captured.invocations} git invocations, ${captured.elapsedMs} ms)`);
+    } else log(`checkpoint restore ${sessionId}/${sequence}: no safety checkpoint needed — the tree already matches the last commit`);
+    // Gate 6 — the restore itself; a failure still reports the safety checkpoint, the sole surviving copy of the tree.
+    const restored = await ctx.svc.link.request({ kind: 'checkpoint.restore', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId, sequence, commit: row.commit, entries: p.entries }, millis(320_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
+    if (restored.kind !== 'checkpoint.restored') return refuse(`Git could not restore checkpoint ${sequence}: ${restored.kind === 'refused' ? restored.headline : `unexpected answer ${restored.kind}`}`, safetySequence, p.dirty);
+    if (!restored.ok) return refuse(`Git could not restore checkpoint ${sequence}: ${restored.detail ?? 'Git declined'}`, safetySequence, p.dirty);
+    // Gate 7 — success: the record (last_restored_sequence, the timeline entry, the event) and the persistent notice (REQ-GIT-100).
+    await record({ restored: true, safetySequence, changedPaths: restored.touched.length, blockedReason: '', dirtyPaths: p.dirty });
+    raiseNotice('info', `Restored checkpoint ${sequence}`, restoredNoticeBody(restored.touched.length, safetySequence));
+    log(`checkpoint restore ${sessionId}/${sequence}: restored ${restored.touched.length} file(s) in ${l.treeRoot}, safety ${safetySequence ?? 'none'}${force ? ', forced' : ''}; ${restored.invocations} git invocations, ${restored.elapsedMs} ms in the service, ${Math.round(clocks.monotonic.now() - started)} ms end to end`);
+    return outcome({ restored: true, safetySequence, changedPaths: restored.touched.length, blockedReason: '' });
+  };
+
   const runCommand = async (raw: unknown, senderId = wcId): Promise<CommandOutcome> => {
     const parsed = CommandRequestSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
@@ -851,6 +980,17 @@ async function main(): Promise<void> {
         if (r.kind !== 'worktree.attachable') return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline } : refusal(r, 'The worktree could not be checked');
         return { ok: true, value: { path: r.path, branch: r.branch } };
       }
+      case 'checkpoints.list':
+        return checkpointGate(async () => {
+          const ctx = await checkpointContext();
+          if (isOutcome(ctx)) return ctx;
+          const l = await readListing(ctx.workspaceId, req.sessionId);
+          return isOutcome(l) ? l : { ok: true, value: l };
+        });
+      case 'checkpoints.preview':
+        return checkpointGate(() => checkpointPreview(req.sessionId, req.sequence));
+      case 'checkpoints.restore':
+        return checkpointGate(() => checkpointRestore(req.sessionId, req.sequence, req.force));
       case 'worktree.probePath': {
         try {
           if (!existsSync(req.path)) return { ok: true, value: { exists: false, nonEmpty: false } };
@@ -1185,6 +1325,21 @@ async function main(): Promise<void> {
         log(`capture: key ${step.selector}`);
       });
     }
+    // ROTARIS_CAPTURE_SHOT="path@ms;;…": a PNG of the main window at that time, so a proof can keep a dialog mid-flow (the
+    // checkpoint proof's confirmation dialog, REQ-GIT-097); the final capture still happens at the end.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_SHOT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        try {
+          // The same probes as the final capture, logged under a `shot-probe` prefix, so what the dialog showed is asserted, not eyeballed.
+          for (const selector of (process.env['ROTARIS_CAPTURE_PROBE'] ?? '').split(';;').map((s) => s.trim()).filter((s) => s !== '')) {
+            const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 600), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-') || a.name === 'disabled' || a.name === 'title').map((a) => [a.name, a.value])) })))()`) as unknown;
+            log(`capture: shot-probe ${selector} → ${JSON.stringify(found)}`);
+          }
+          writeFileSync(step.selector, (await win.webContents.capturePage()).toPNG());
+          log(`captured shot ${step.selector}`);
+        } catch (cause) { log(`capture: shot ${step.selector} failed: ${String(cause)}`); }
+      });
+    }
     // ROTARIS_CAPTURE_QUIT_MS: a user-initiated close of the main window at that time — the quit path of REQ-MONITOR-131, not the capture's exit.
     const quitAt = Number(process.env['ROTARIS_CAPTURE_QUIT_MS'] ?? 0);
     if (quitAt > 0) clocks.timers.after(millis(quitAt), () => { log('capture: closing the main window (user-initiated)'); win.close(); });
@@ -1246,7 +1401,14 @@ async function main(): Promise<void> {
 
   app.on('window-all-closed', () => {
     // ADR-0014: quit is main-driven, run-host-executed. The skeleton asks and waits, bounded.
-    void runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)).catch(() => undefined).then(() => app.quit());
+    void (async () => {
+      // REQ-GIT-101: a desktop checkpoint operation in flight finishes first — bounded only by REQ-GIT-033's limits.
+      if (checkpointOp) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.catch(() => undefined); }
+      await runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)).catch(() => undefined);
+      // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
+      await Promise.all([...services.values()].map((s) => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)).catch(() => undefined)));
+      app.quit();
+    })();
   });
 }
 

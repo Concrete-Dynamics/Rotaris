@@ -171,8 +171,12 @@ export async function readGitView(workspaceRoot: string, deps: GitViewDeps): Pro
 
   // One tree's own uncommitted work: the numstat of its working tree plus its untracked paths (REQ-GIT-107, REQ-GIT-014).
   const uncommittedOf = async (label: string, cwd: string): Promise<{ additions: number; deletions: number; paths: Set<string>; changed: number } | null> => {
-    const status = await read(`${label}:status`, ['status', '--porcelain', '--untracked-files=all', '--no-renames', '-z'], cwd);
-    const numstat = await read(`${label}:numstat`, ['diff', '--numstat', '--no-renames', '-z', 'HEAD'], cwd);
+    // Found on ADR-0039's first execution (REQ-GIT-004/030: the index file is never refreshed or rewritten): after a
+    // checkpoint restore had written a file, this refresh's `diff … HEAD` porcelain refreshed the repository's index and
+    // WROTE it — the reason had been that a read is a read. `diff-index` compares the same trees and writes nothing, and
+    // `status` is told to take no optional lock; the figures are unchanged (a stat-dirty, content-identical path is not listed).
+    const status = await read(`${label}:status`, ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=all', '--no-renames', '-z'], cwd);
+    const numstat = await read(`${label}:numstat`, ['diff-index', '--numstat', '--no-renames', '-z', 'HEAD'], cwd);
     if (status === null && numstat === null) return null;
     const s = parseStatusPaths(status ?? '');
     const n = parseNumstat(numstat ?? '');

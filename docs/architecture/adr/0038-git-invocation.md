@@ -199,3 +199,22 @@ REQ-GIT-103 behaving exactly as written. **Readings taken:** REQ-GIT-107's untra
 `uncommitted` with no line count read (a line count would mean reading the file); REQ-GIT-019/022's "re-rooted" is
 read as "the record and the configuration stay with the base, the work happens in the tree"; REQ-GIT-022/023's order
 with a main-minted id is "bind first, then ask for the session", so a failed bind has no session to delete.
+
+## Third execution — 2026-09-05, the checkpoint layer (Part P; ADR-0039's first)
+
+*Recorded under GD-10. The helper as decided, with two seams it needed and two defects it held.* Every checkpoint invocation
+goes through it under REQ-GIT-033's two limits (30 s ref-only, 300 s tree content), each carrying `-c gc.auto=0`
+(ADR-0039 §3). **Seams added:** `stdin` (the NUL-separated path list `update-index --stdin` consumes) and `setEnv`, applied
+AFTER REQ-GIT-031's scrub so the private `GIT_INDEX_FILE` and REQ-GIT-032's fixed identity are set once the inherited
+ones are gone — the "neutralise, then set our own" of ADR-0039 §1, now two lines in one place. **Found:** (1) the network
+chokepoint took the first non-dash argument as the subcommand, so a global option's value stood in for it and `-c gc.auto=0
+push` would have passed — `subcommandIndex` now skips Git's value-taking global options, and REQ-GIT-033's rendering starts
+at the subcommand; (2) the denylist's fourteen names were not REQ-GIT-031's fourteen — the six identity variables were
+missing and six others present; the six are added and the others kept; (3) the Git view's own refresh, run after a
+checkpoint restore (REQ-GIT-100), rewrote the repository's index file — `diff … HEAD` refreshes the index and writes it
+once a restored file's stat is stale, which REQ-GIT-004/030 forbid of the flow as a whole; the numstat is now
+`diff-index --numstat HEAD` (the same trees, nothing written) and every `status` read takes `--no-optional-locks`; the
+figures of REQ-GIT-105/107 are unchanged. The **300 s limit** is reached by the checkpoint
+unit test with a 1 ms bound: the text is `Git timed out after 1s: ls-files -z` — the limit rendered in whole seconds
+(rounded up) with the rendered command and without the global option. Measured through this layer: a capture is 12
+invocations in ≈1.2 s on this machine, roughly 100 ms per Git start; a preview is 12 in ≈1.0 s, the restore's two in ≈0.24 s.

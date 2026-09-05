@@ -56,7 +56,8 @@ export async function readRepository(workspaceRoot: string, deps: RepositoryRead
     if (m) { behind = Number(m[1]); ahead = Number(m[2]); }
     else if (counts !== null) failed.push('ahead-behind');
   }
-  const status = await read('status', ['status', '--porcelain', '--untracked-files=all']);
+  // `--no-optional-locks`: a read must not refresh or rewrite the index (REQ-GIT-004/030; found on ADR-0039's first execution, see view.ts).
+  const status = await read('status', ['--no-optional-locks', 'status', '--porcelain', '--untracked-files=all']);
   const counted = status === null ? { touched: 0, uncommitted: 0 } : countStatus(status);
   return { gitAvailable: true, isRepository: true, branch, base, ahead, behind, ...counted, failed, readMs: elapsed() };
 }

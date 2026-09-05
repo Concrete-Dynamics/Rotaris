@@ -26,6 +26,7 @@
     "fetch-proof": "node apps/desktop/scripts/fetch-proof.mjs",
     "git-proof": "node apps/desktop/scripts/git-proof.mjs",
     "resilience-proof": "node apps/desktop/scripts/resilience-proof.mjs",
+    "checkpoint-proof": "node apps/desktop/scripts/checkpoint-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

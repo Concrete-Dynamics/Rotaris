@@ -20,3 +20,4 @@ packages/kernel/src/generated/
 .fetch-proof/
 .git-proof/
 .resilience-proof/
+.checkpoint-proof/

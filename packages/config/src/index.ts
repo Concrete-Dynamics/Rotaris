@@ -16,6 +16,7 @@ export * from './sections/runtime.js';
 export * from './sections/models.js';
 export * from './sections/personas.js';
 export * from './sections/compressor.js';
+export * from './sections/checkpoints.js';
 export * from './writers.js';
 export * from './tiers.js';
 export * from './preferences.js';

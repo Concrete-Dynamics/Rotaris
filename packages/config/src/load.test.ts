@@ -10,6 +10,7 @@ import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase } from './
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
+import { checkpointsEnabledFor } from './sections/checkpoints.js';
 import type { ProblemSink } from './sections/field.js';
 
 const dirs: string[] = [];
@@ -467,5 +468,27 @@ providers:
     expect(slots['large_model']).toMatchObject({ value: 'p/big', origin: 'discovered' });
     expect(slots['medium_model']).toMatchObject({ origin: 'built-in' });
     expect(r.value.discoveredSlots).toEqual({ large_model: 'p/big', small_model: 'p/tiny' });
+  });
+});
+
+describe('REQ-GIT-070/071/072 the checkpoints section (Part P)', () => {
+  it('defaults: enabled unset, 50 per session, untracked included; a bare key loads as unset; explicit false at workspace level is preserved', () => {
+    expect(loaded(null, null).checkpoints).toEqual({ enabled: null, max_per_session: 50, include_untracked: true });
+    expect(loaded(null, 'checkpoints:\n').checkpoints.enabled).toBeNull();
+    expect(loaded('checkpoints:\n  enabled: true\n', 'checkpoints:\n  enabled: false\n  max_per_session: 3\n').checkpoints).toEqual({ enabled: false, max_per_session: 3, include_untracked: true });
+    expect(checkpointsEnabledFor({ enabled: null }, true)).toBe(true);
+    expect(checkpointsEnabledFor({ enabled: null }, false)).toBe(false);
+    expect(checkpointsEnabledFor({ enabled: false }, true)).toBe(false);
+    expect(checkpointsEnabledFor({ enabled: true }, false)).toBe(true);
+  });
+  it('REQ-GIT-071: a max_per_session below 1 or not an integer fails the load as a whole, naming the key, the value and the constraint', () => {
+    for (const bad of ['0', '-2', '1.5', '"ten"']) {
+      const r = loadConfiguration(scopes(null, `checkpoints:\n  max_per_session: ${bad}\n`));
+      expect(r.ok).toBe(false);
+      if (r.ok) continue;
+      expect(r.error.path).toBe('checkpoints.max_per_session');
+      expect(renderFatal(r.error)).toMatch(/must be (at least 1|an integer)/);
+    }
+    expect(loaded(null, 'checkpoints:\n  max_per_session: 1\n').checkpoints.max_per_session).toBe(1);
   });
 });

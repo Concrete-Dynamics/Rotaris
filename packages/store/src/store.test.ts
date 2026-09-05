@@ -451,9 +451,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v8; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v9; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(8);
+    expect(CURRENT_SCHEMA_VERSION).toBe(9);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -521,6 +521,44 @@ describe('store — v8: the worktree binding and the sandbox mode on the session
     // A status touch never moves the binding (REQ-GIT-019: binding a worktree does not move the record, and nothing after creation rewrites it).
     dal.upsertSession({ session_id: 's1', execution_status: 'running', workspace_root: 'D:/ws', created_at: 't', updated_at: 't2' });
     expect(dal.getSession('s1' as never)).toMatchObject({ execution_status: 'running', worktree: binding, sandbox_mode: 'read-only' });
+    r.db.close();
+  });
+});
+
+describe('store — v9: the checkpoint table and the last-restored sequence (ADR-0039, REQ-GIT-016/018/037/046/049/155)', () => {
+  it('rows key by (session, sequence); the listing is oldest first under the primary key; a duplicate sequence is refused; the trim keeps the newest by rank', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000099');
+    const r = openWorkspaceStore(root, id, ws);
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-ckpt');
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'D:/ws', created_at: 't', updated_at: 't' });
+    expect(dal.getSession(sid)!.last_restored_sequence).toBeNull();
+    expect(dal.checkpointCount(sid)).toBe(0);
+    expect(dal.maxCheckpointSequence(sid)).toBeNull();
+    for (const n of [10, 1, 3, 2]) dal.insertCheckpoint({ session_id: sid, sequence: n, ref: `refs/rotaris/checkpoints/${sid}/${n}`, commit_id: `c${n}`, created_at: 't', iteration: n, child_name: '', files: '["a.txt"]', kind: 'iteration' });
+    // Numeric order, not text order: 10 sorts after 3 (REQ-GIT-037 / ADR-0039 "Ordering is a query").
+    expect(dal.listCheckpoints(sid).map((c) => c.sequence)).toEqual([1, 2, 3, 10]);
+    expect(dal.checkpointCount(sid)).toBe(4);
+    expect(dal.maxCheckpointSequence(sid)).toBe(10);
+    expect(() => dal.insertCheckpoint({ session_id: sid, sequence: 3, ref: 'x', commit_id: 'y', created_at: 't', iteration: 0, child_name: '', files: '[]', kind: 'manual' })).toThrow(/UNIQUE|PRIMARY/);
+    // The trim by rank (sequences are not contiguous): keep 2 → 3 and 10 stay, 1 and 2 come back for their refs.
+    const trimmed = dal.transaction(() => dal.trimCheckpoints(sid, 2));
+    expect(trimmed.map((c) => [c.sequence, c.commit_id])).toEqual([[1, 'c1'], [2, 'c2']]);
+    expect(dal.listCheckpoints(sid).map((c) => c.sequence)).toEqual([3, 10]);
+    expect(dal.transaction(() => dal.trimCheckpoints(sid, 2))).toEqual([]);
+    dal.setLastRestored(sid, 3, 't2');
+    expect(dal.getSession(sid)).toMatchObject({ last_restored_sequence: 3, updated_at: 't2' });
+    // Another session's rows are untouched by every statement (REQ-ORCH-151's predicate).
+    const other = asSessionId('S-other');
+    dal.upsertSession({ session_id: other, execution_status: 'idle', workspace_root: 'D:/ws', created_at: 't', updated_at: 't' });
+    dal.insertCheckpoint({ session_id: other, sequence: 1, ref: 'r', commit_id: 'c', created_at: 't', iteration: 1, child_name: '', files: '[]', kind: 'iteration' });
+    dal.transaction(() => dal.trimCheckpoints(sid, 0));
+    expect(dal.checkpointCount(other)).toBe(1);
+    expect(dal.checkpointCount(sid)).toBe(0);
+    // The listing's plan: the primary key, never a scan and never a sort (spike 8's rule for a declared index — here the autoindex).
+    const plan = r.db.prepare('EXPLAIN QUERY PLAN SELECT * FROM checkpoints WHERE session_id = ? ORDER BY sequence').all(sid) as { detail: string }[];
+    expect(plan.map((p) => p.detail).join(' | ')).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex_checkpoints_1/);
+    expect(plan.map((p) => p.detail).join(' | ')).not.toMatch(/TEMP B-TREE/);
     r.db.close();
   });
 });

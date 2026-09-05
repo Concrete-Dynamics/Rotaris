@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
@@ -157,6 +157,31 @@ export interface IssueInput {
   readonly message: string;
   readonly evidence_ref?: string;
   readonly metadata?: Record<string, unknown>;
+}
+
+/** ADR-0039 / REQ-GIT-016: what a capture hands the writer; `files` is stored as one serialised value. */
+export interface CheckpointRecordInput {
+  readonly sequence: number;
+  readonly ref: string;
+  readonly commit: string;
+  readonly iteration: number;
+  readonly childName: string;
+  readonly files: readonly string[];
+  /** REQ-GIT-067's closed vocabulary. */
+  readonly kind: 'iteration' | 'pre_restore' | 'manual';
+}
+/** REQ-GIT-062 / REQ-GIT-068: what one restore attempt — success or refusal — records. */
+export interface RestoreRecordInput {
+  readonly sequence: number;
+  readonly restored: boolean;
+  readonly safetySequence: number | null;
+  readonly changedPaths: number;
+  readonly blockedReason: string;
+  readonly forced: boolean;
+  readonly treeRoot: string;
+  readonly dirtyPaths: readonly string[];
+  readonly ref: string | null;
+  readonly commit: string | null;
 }
 
 const DECISION_FIELDS: ReadonlySet<string> = new Set(['id', 'timestamp', 'session_id', 'agent_id', 'persona', 'tool_name', 'decision', 'rule_id', 'source', 'summary', 'reason', 'request_id']);
@@ -899,6 +924,87 @@ export class SessionWriter {
     this.generation = generation;
     this.deps.onCommitted({ kind: 'save' });
     return ok(generation);
+  }
+
+  /**
+   * ADR-0039 "Persist before publish", REQ-GIT-048/049: ONE transaction — the checkpoint row, the trim to `keep`
+   * (REQ-GIT-049's retention over the rows), the `checkpoint_created` timeline entry with its fixed actor, message
+   * and metadata, and the `checkpoint.created` event (REQ-GIT-067's five fields, no others). The trimmed rows come
+   * back so the caller deletes their refs AFTER the commit (ADR-0039's trim ordering: rows first, then refs — a
+   * crash between leaves a ref with no record, which REQ-GIT-049 tolerates; the other order leaves the state it
+   * forbids). The event is recorded in the transaction but handed to the bus only when the caller calls `publish()`
+   * — after those ref deletions — which is REQ-GIT-048's third precondition ("the refs of the trimmed entries
+   * deleted alongside their records") taken literally: the event becomes observable to no consumer before it.
+   */
+  recordCheckpoint(input: CheckpointRecordInput, keep: number): Result<{ readonly trimmed: readonly CheckpointRow[]; readonly publish: () => void }, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('checkpoint.created', at, { sequence: input.sequence, ref: input.ref, kind: input.kind, iteration: input.iteration, changed_paths: input.files.length });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event checkpoint.created could not be serialised and was not recorded: ${line.error.reason}`);
+    let trimmed: readonly CheckpointRow[] = [];
+    try {
+      dal.transaction(() => {
+        dal.insertCheckpoint({ session_id: sessionId, sequence: input.sequence, ref: input.ref, commit_id: input.commit, created_at: at, iteration: input.iteration, child_name: input.childName, files: JSON.stringify(input.files), kind: input.kind });
+        trimmed = dal.trimCheckpoints(sessionId, keep);
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${input.files.length} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }));
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'checkpoint.created', at, EVENT_SCHEMA_VERSION, input.iteration, line.value);
+        dal.touchSession(sessionId, this.status, at);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    const ordinal = line.ok ? this.nextOrdinal++ : null;
+    let published = false;
+    const publish = () => {
+      if (published) return;
+      published = true;
+      if (ordinal !== null && line.ok) this.deps.onCommitted({ kind: 'event', ordinal, events: [{ ordinal, event: ev, line: line.value }] });
+      else this.deps.onCommitted({ kind: 'save' });
+    };
+    this.trimIfOverflowed(at);
+    return ok({ trimmed, publish });
+  }
+
+  /**
+   * REQ-GIT-062 / REQ-GIT-068 / REQ-GIT-155: one restore attempt as ONE transaction — on success the session's
+   * `last_restored_sequence` and the `checkpoint_restored` timeline entry; on a refusal the `checkpoint_restore`
+   * warning issue (with its `issue` timeline entry, as every issue has); either way exactly one `checkpoint.restored`
+   * event with its five fields. A refusal never touches `last_restored_sequence`.
+   */
+  recordRestore(input: RestoreRecordInput): Result<{ readonly issueId: string | null }, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('checkpoint.restored', at, { sequence: input.sequence, restored: input.restored, safety_sequence: input.safetySequence, changed_paths: input.restored ? input.changedPaths : 0, blocked_reason: input.restored ? '' : input.blockedReason });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event checkpoint.restored could not be serialised and was not recorded: ${line.error.reason}`);
+    let issueRef: string | null = null;
+    try {
+      dal.transaction(() => {
+        if (input.restored) {
+          dal.setLastRestored(sessionId, input.sequence, at);
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${input.changedPaths} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }));
+        } else {
+          const id = issueId();
+          const message = `Restore of checkpoint ${input.sequence} did not run: ${input.blockedReason}`;
+          dal.ringInsert('issues', sessionId, (o) => {
+            dal.insertIssue({ session_id: sessionId, ordinal: o, id, recorded_at: at, kind: 'checkpoint_restore', severity: 'warning', actor: 'checkpoints', message, evidence_ref: '', metadata: JSON.stringify({ dirty_paths: [...input.dirtyPaths], safety_sequence: input.safetySequence, tree_root: input.treeRoot }) });
+          });
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'issue', 'checkpoints', message, JSON.stringify({ issue_id: id, kind: 'checkpoint_restore', severity: 'warning', evidence_ref: '' }));
+          issueRef = id;
+        }
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'checkpoint.restored', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.touchSession(sessionId, this.status, at);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    else this.deps.onCommitted({ kind: 'save' });
+    this.trimIfOverflowed(at);
+    return ok({ issueId: issueRef });
   }
 
   private nextTimelineOrdinal(): number {

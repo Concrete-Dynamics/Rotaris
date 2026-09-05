@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnv
 import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
-import { assessRestore, backupWorkspace, checkAttach, createWorktree, performRestore, readGitView, readRepository, removeWorktree, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
+import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
 
@@ -69,6 +69,12 @@ function expectAck(r: ProcessReply): void {
 
 function closeOwn(): void {
   if (open) { try { open.db.close(); } catch { /* */ } forgetSpelling(open.dir); open = null; }
+}
+/** REQ-GIT-101: every in-flight checkpoint Git operation, so a shutdown waits for it rather than killing Git mid-call. */
+const inFlight = new Set<Promise<unknown>>();
+function tracked<T>(p: Promise<T>): Promise<T> {
+  inFlight.add(p);
+  return p.finally(() => { inFlight.delete(p); });
 }
 function openOwn(workspaceRoot: string): ProcessReply {
   const ident = establishWorkspaceId(workspaceRoot);
@@ -184,7 +190,37 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       log(`attachable: ${req.path} on ${r.value.branch} (base ${r.value.baseBranch}@${r.value.baseRevision.slice(0, 8)})`);
       return { kind: 'worktree.attachable', path: r.value.path, branch: r.value.branch, baseBranch: r.value.baseBranch, baseRevision: r.value.baseRevision };
     }
+    case 'checkpoint.capture': {
+      // ADR-0039 / REQ-GIT-034: the ref is created here; the row is the run host's, after this answer (capture = ref then row).
+      const r = await tracked(captureCheckpoint(req.treeRoot, { sessionId: req.sessionId, sequence: req.sequence, includeUntracked: req.includeUntracked, message: req.message }, { clocks }));
+      log(`checkpoint capture ${req.sessionId}/${req.sequence} (${req.checkpointKind}, iteration ${req.iteration}): ${r.outcome}${r.outcome === 'recorded' ? ` ${r.commit.slice(0, 8)} over ${r.files.length} file(s)` : r.outcome === 'nothing-to-record' ? '' : ` — ${r.detail}`}; ${r.invocations} git invocations in ${r.elapsedMs} ms`, r.outcome === 'failed' ? 'warn' : 'info');
+      if (r.outcome === 'recorded') return { kind: 'checkpoint.captured', outcome: 'recorded', ref: r.ref, commit: r.commit, files: [...r.files], invocations: r.invocations, elapsedMs: r.elapsedMs };
+      if (r.outcome === 'nothing-to-record') return { kind: 'checkpoint.captured', outcome: 'nothing-to-record', invocations: r.invocations, elapsedMs: r.elapsedMs };
+      return { kind: 'checkpoint.captured', outcome: r.outcome, detail: r.detail, invocations: r.invocations, elapsedMs: r.elapsedMs };
+    }
+    case 'checkpoint.refs': {
+      const r = await tracked(listRefs(req.treeRoot, req.sessionId, { clocks }));
+      return r.ok ? { kind: 'checkpoint.refs', ok: true, entries: [...r.entries] } : { kind: 'checkpoint.refs', ok: false, entries: [], detail: r.detail };
+    }
+    case 'checkpoint.preview': {
+      const r = await tracked(previewCheckpoint(req.treeRoot, { sessionId: req.sessionId, sequence: req.sequence, commit: req.commit, includeUntracked: req.includeUntracked, candidates: req.candidates }, { clocks }));
+      log(`checkpoint preview ${req.sessionId}/${req.sequence}: ${r.treeState}, ${r.entries.length} entr${r.entries.length === 1 ? 'y' : 'ies'}, ${r.dirty.length} dirty; ${r.invocations} git invocations in ${r.elapsedMs} ms`);
+      return { kind: 'checkpoint.previewed', treeState: r.treeState, entries: [...r.entries], dirty: [...r.dirty], blockedReason: r.blockedReason, text: r.text, invocations: r.invocations, elapsedMs: r.elapsedMs };
+    }
+    case 'checkpoint.restore': {
+      const r = await tracked(restoreCheckpoint(req.treeRoot, { sessionId: req.sessionId, sequence: req.sequence, commit: req.commit, entries: req.entries }, { clocks }));
+      log(`checkpoint restore ${req.sessionId}/${req.sequence}: ${r.ok ? `${r.touched.length} path(s) touched` : `failed — ${r.detail}`}; ${r.invocations} git invocations in ${r.elapsedMs} ms`, r.ok ? 'info' : 'warn');
+      return r.ok ? { kind: 'checkpoint.restored', ok: true, touched: [...r.touched], invocations: r.invocations, elapsedMs: r.elapsedMs } : { kind: 'checkpoint.restored', ok: false, touched: [], detail: r.detail, invocations: r.invocations, elapsedMs: r.elapsedMs };
+    }
+    case 'checkpoint.prune': {
+      // REQ-GIT-041/049: compare-and-swap on the recorded commit; a failure is reported, never raised.
+      const r = await tracked(deleteRefs(req.treeRoot, req.sessionId, req.refs, { clocks }));
+      if (r.failed.length > 0) log(`checkpoint prune ${req.sessionId}: ${r.deleted} deleted, ${r.failed.length} left: ${r.failed.map((f) => `${f.ref}: ${f.detail}`).join('; ')}`, 'warn');
+      return { kind: 'checkpoint.pruned', deleted: r.deleted, failed: r.failed };
+    }
     case 'shutdown': {
+      // REQ-GIT-101: an in-flight checkpoint Git operation finishes first; the wait is bounded by REQ-GIT-033's limits alone.
+      if (inFlight.size > 0) { log(`shutdown: waiting for ${inFlight.size} in-flight checkpoint operation(s)`); await Promise.allSettled([...inFlight]); }
       closeOwn();
       clocks.timers.after(millis(0), () => process.exit(0));
       return { kind: 'ack' };

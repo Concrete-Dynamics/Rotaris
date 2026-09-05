@@ -55,6 +55,20 @@ export interface SessionRow {
   // v8 — REQ-GIT-015/017: the worktree binding as JSON, or NULL for "no worktree"; REQ-SHELL-125's sandbox mode.
   readonly worktree: string | null;
   readonly sandbox_mode: string;
+  // v9 — REQ-SESSION-195 / REQ-GIT-155: the checkpoint most recently restored into the session's tree; NULL = never.
+  readonly last_restored_sequence: number | null;
+}
+/** v9 — REQ-GIT-016's record: one row per checkpoint, `files` the JSON list of changed paths, `kind` REQ-GIT-067's vocabulary. */
+export interface CheckpointRow {
+  readonly session_id: string;
+  readonly sequence: number;
+  readonly ref: string;
+  readonly commit_id: string;
+  readonly created_at: string;
+  readonly iteration: number;
+  readonly child_name: string;
+  readonly files: string;
+  readonly kind: string;
 }
 /** The run-recorded columns a save may carry (REQ-SESSION-168: aggregates copied on every persist). */
 export interface SessionRunPatch {
@@ -362,6 +376,18 @@ export class StoreDal {
       enqueueSlot: db.prepare('INSERT INTO model_slot_queue (session_id, model_key, position, task_id) VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM model_slot_queue WHERE session_id = ? AND model_key = ?), ?)'),
       slotQueueOf: db.prepare('SELECT task_id FROM model_slot_queue WHERE session_id = ? AND model_key = ? ORDER BY position'),
       dequeueSlot: db.prepare('DELETE FROM model_slot_queue WHERE session_id = ? AND model_key = ? AND task_id = ?'),
+
+      // ADR-0039 (v9): the checkpoint table. A plain INSERT — REQ-GIT-046's "no two records carry the same sequence" is the
+      // primary key, not a check a caller could skip; the listing is an ORDER BY under that key (REQ-SESSION-019, REQ-GIT-037).
+      insertCheckpoint: db.prepare(`INSERT INTO checkpoints (session_id, sequence, ref, commit_id, created_at, iteration, child_name, files, kind)
+        VALUES (@session_id, @sequence, @ref, @commit_id, @created_at, @iteration, @child_name, @files, @kind)`),
+      checkpointsOf: db.prepare('SELECT * FROM checkpoints WHERE session_id = ? ORDER BY sequence'),
+      countCheckpoints: db.prepare('SELECT count(*) AS c FROM checkpoints WHERE session_id = ?'),
+      maxCheckpointSequence: db.prepare('SELECT max(sequence) AS m FROM checkpoints WHERE session_id = ?'),
+      // REQ-GIT-049: the rows outside the newest `keep`, read then deleted in the caller's transaction (their refs go after the commit).
+      checkpointsBeyond: db.prepare('SELECT * FROM checkpoints WHERE session_id = ? ORDER BY sequence DESC LIMIT -1 OFFSET ?'),
+      deleteCheckpoint: db.prepare('DELETE FROM checkpoints WHERE session_id = ? AND sequence = ?'),
+      setLastRestored: db.prepare('UPDATE sessions SET last_restored_sequence = ?, updated_at = ? WHERE session_id = ?'),
     };
   }
 
@@ -646,6 +672,32 @@ export class StoreDal {
   eventSummary(id: SessionId): { count: number; first: string | null; last: string | null } {
     const r = this.stmts['eventSummary']!.get(id) as { c: number; first: string | null; last: string | null };
     return { count: r.c, first: r.first, last: r.last };
+  }
+
+  // ADR-0039: the checkpoint rows. Every statement names session_id (REQ-ORCH-151's isolation as a predicate).
+  insertCheckpoint(row: Omit<CheckpointRow, 'session_id'> & { readonly session_id: SessionId }): void {
+    this.stmts['insertCheckpoint']!.run(row);
+  }
+  /** REQ-GIT-050 / REQ-SESSION-019: oldest first, by the primary key; no Git is consulted. */
+  listCheckpoints(id: SessionId): CheckpointRow[] {
+    return this.stmts['checkpointsOf']!.all(id) as CheckpointRow[];
+  }
+  /** REQ-GIT-018: derived from the rows, never stored twice (ADR-0039). */
+  checkpointCount(id: SessionId): number {
+    return (this.stmts['countCheckpoints']!.get(id) as { c: number }).c;
+  }
+  maxCheckpointSequence(id: SessionId): number | null {
+    return (this.stmts['maxCheckpointSequence']!.get(id) as { m: number | null }).m;
+  }
+  /** REQ-GIT-049: keep the `keep` most recent by sequence; the trimmed rows come back so the caller deletes their refs AFTER the commit. */
+  trimCheckpoints(id: SessionId, keep: number): CheckpointRow[] {
+    const victims = (this.stmts['checkpointsBeyond']!.all(id, Math.max(0, keep)) as CheckpointRow[]).reverse();
+    for (const v of victims) this.stmts['deleteCheckpoint']!.run(id, v.sequence);
+    return victims;
+  }
+  /** REQ-GIT-155: written only in the transaction that reports a restore successful. */
+  setLastRestored(id: SessionId, sequence: number, updatedAt: string): void {
+    this.stmts['setLastRestored']!.run(sequence, updatedAt, id);
   }
 
   totals(): { sessions: number; rows: number } {

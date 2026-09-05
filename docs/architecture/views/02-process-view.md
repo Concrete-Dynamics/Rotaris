@@ -55,8 +55,8 @@ flowchart LR
 | Process | Owns | Never does |
 |---|---|---|
 | **main** | window lifecycle and the close guard; the per-window approval **dialog queue** and the pause window; the single current notice; the `UpdateRelay` (sequence-preserving fan-out of the run host's publications to subscribed windows); theme and preferences (ADR-0042); the instance claim; forking and shutting down the two child kinds; **the credential store, the provider catalogue, sign-in, discovery and the snapshot** (ADR-0029/0030, `packages/providers`); the verification seams under `ROTARIS_CAPTURE_PNG` | decide a permission, run a tool, read the store, read `agents.yaml`, hand a credential to a renderer |
-| **run host** | every session lock this instance holds; the writers, projection owners and runs; the tool gate per session; hooks per run; the configuration resolved per run start (Tier B) with the live state main handed over; the bearers main **leased** for the run; the loop supervisor; the terminal manager | resolve a workspace identifier; migrate the store; write configuration files; read `tokens/` |
-| **workspace service** | the workspace identifier; opening and migrating the store (the only process that migrates, W-02); backup and restore with its refusal lease on the run host; configuration Tier A (`config.read` / `config.save` / `config.setField`, each followed by the load again) | run anything; hold a session lock |
+| **run host** | every session lock this instance holds; the writers, projection owners and runs; the tool gate per session; hooks per run; the checkpoint port per run (the capture at iteration close, the rows and the retention trim — ADR-0039); the configuration resolved per run start (Tier B) with the live state main handed over; the bearers main **leased** for the run; the loop supervisor; the terminal manager | resolve a workspace identifier; migrate the store; write configuration files; read `tokens/`; spawn Git (it asks main, which asks the service) |
+| **workspace service** | the workspace identifier; opening and migrating the store (the only process that migrates, W-02); backup and restore with its refusal lease on the run host; configuration Tier A (`config.read` / `config.save` / `config.setField`, each followed by the load again); **every Git invocation** (ADR-0038): the repository and Git-view reads, the worktree writes, and the checkpoint capture, preview, restore and prune through a private index (ADR-0039) | run anything; hold a session lock; write a checkpoint row |
 | **renderer** (per window) | the replica (a mirror of one session's rows and record, ADR-0043), local shell state (view, guards), the Settings pending state; one role per route | touch a file, a store, a credential |
 | **preload** | the one frozen namespace: `command` plus one subscription per channel | anything else |
 
@@ -94,6 +94,28 @@ baseRevision}` | `refused` (the Git failure text as the headline); `worktree.rem
 asked, so a binding failure leaves no session behind (REQ-GIT-023 by construction). `SessionListItem` gains `worktree`
 and `checkpointCount` (REQ-GIT-018); `SessionRecord` gains `worktreeBranch` for the status strip (REQ-GIT-122).
 
+**Checkpoints (Part P; ADR-0039's first execution).** Renderer → main: `checkpoints.list {sessionId}` (rows only, REQ-GIT-050),
+`checkpoints.preview {sessionId, sequence}` and `checkpoints.restore {sessionId, sequence, force}`; main holds ONE desktop
+checkpoint operation in flight (REQ-GIT-091) and declines a second with code `checkpoint.busy`, which the view shows as the
+toast or, for a listing, retries once after 150 ms against the then-selected session (REQ-GIT-095). Main → run host:
+`checkpoint.list {workspaceId, sessionId}` → `checkpoint.list {listing}` (the rows with pre-formatted local-time labels,
+`lastRestoredSequence`, REQ-GIT-093's `liveness` verdict, the tree root of REQ-GIT-053, an `unavailable` reason when the
+binding's tree is gone, `repaired` when REQ-GIT-094's stale-session repair ran, `includeUntracked`);
+`checkpoint.recordSafety {…}` → `checkpoint.recorded {sequence, trimmed}` (the pre-restore row through the writer's one
+transaction, its trimmed refs pruned by the run host's own ask, then the event published); `checkpoint.recordRestore {…}` →
+`ack` (REQ-GIT-062/068/155). Main → workspace service, where every Git call lives (ADR-0038 c.4): `checkpoint.capture
+{workspaceRoot, treeRoot, sessionId, sequence, iteration, childName, checkpointKind, includeUntracked, message}` →
+`checkpoint.captured {outcome: recorded | nothing-to-record | unavailable | failed, ref?, commit?, files?, detail?,
+invocations, elapsedMs}`; `checkpoint.refs {treeRoot, sessionId}` → `checkpoint.refs {ok, entries}`; `checkpoint.preview
+{…, commit, candidates, includeUntracked}` → `checkpoint.previewed {treeState, entries, dirty, blockedReason, text,
+invocations, elapsedMs}`; `checkpoint.restore {…, commit, entries}` → `checkpoint.restored {ok, touched, detail?, …}`;
+`checkpoint.prune {treeRoot, sessionId, refs}` → `checkpoint.pruned {deleted, failed}`. **The run host's three checkpoint
+asks back to main** (`ServiceAsk`, beside `credentials.lease`): `checkpoint.capture`, `checkpoint.refs`, `checkpoint.prune`
+— main relays each to the workspace service of `workspaceRoot` and answers the run host with the service's reply; the two
+children still never talk directly (ADR-0002 c.4). The service tracks its in-flight checkpoint operations and its `shutdown`
+waits for them (REQ-GIT-101); main sends every service `shutdown` after the run host's and awaits it, bounded by REQ-GIT-033's
+limits, before it quits.
+
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own
 per-stream sequence; `notice:current` is the single notice or null; `theme:changed` and `config:changed`
@@ -103,15 +125,17 @@ repaint or repopulate every live window.
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
 `config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown`, `hooks.*`, `playbooks.catalogue`,
-`shutdown`. Events back: `publish.increment`, `publish.snapshot`, `run.result`, `run.paused`,
-`approval.present/close`, `presenter.poll`, `notice.publish`, `log`, `ready`. **The run host's one ask back to main**
-(ADR-0030, on the `ServiceAsk` envelope): `credentials.lease {providerIds}`, answered `credentials.leased {bearers, report}` —
-the only message in the product that carries a credential value, and it never crosses a renderer boundary.
+`checkpoint.list/recordSafety/recordRestore` (Part P), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
+`run.result`, `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish`, `log`, `ready`. **The run host's
+asks back to main** (on the `ServiceAsk` envelope): `credentials.lease {providerIds}` (ADR-0030), answered
+`credentials.leased {bearers, report}` — the only message in the product that carries a credential value, and it never
+crosses a renderer boundary — and the three checkpoint asks of the paragraph above, relayed to the workspace service.
 
 **Main ↔ workspace service.** Requests: `workspace.open/close/backup/restore.assess/restore.perform`,
-`config.read/save/setField/bootstrap`, `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002
-c.7) — `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two
-children never talk directly.
+`config.read/save/setField/bootstrap`, `repository.read`, `git.view`, `worktree.*`, `checkpoint.capture/refs/preview/
+restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002 c.7) —
+`runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never
+talk directly.
 
 ## The control channel (ADR-0010 #1) across the boundaries
 
@@ -131,6 +155,7 @@ licensed.
 | Path | Written by | Read by |
 |---|---|---|
 | `%LOCALAPPDATA%/rotaris/data/workspaces/<id>/workspace.db` (+ `sessions/<sid>/summary.md`, `session.log`) | workspace service (migrate), run host (everything else) | run host, workspace service (backup/restore) |
+| `<tree>/.rotaris/checkpoints/index-<sid>-<pid>-<t>-<n>` — the private Git index of one checkpoint operation (ADR-0039 §1), removed when it ends; `refs/rotaris/checkpoints/<sid>/<n>` in the user's repository | workspace service | workspace service (Git) |
 | `<workspace>/.rotaris/workspace-id` | workspace service | workspace service |
 | `<workspace>/.rotaris/agents.yaml`, `models.yml`; `%LOCALAPPDATA%/rotaris/config/agents.yaml`, `models.yml` | workspace service (the four writers, ADR-0036) | run host (per run start), workspace service |
 | `%LOCALAPPDATA%/rotaris/config/playbooks/`, `intent-tools.yaml`, `hooks-policy` | user (playbooks, mapping); run host (hook policy) | run host |

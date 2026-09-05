@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRecord, SessionListItemPayload } from '@rotaris/contracts';
+import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, composerPlaceholder } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus } from '@rotaris/contracts';
 
@@ -164,5 +164,34 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
     expect(branchStripItem(state({ isRepository: false }), null)).toMatchObject({ text: 'no git repository', state: 'none' });
     expect(branchStripItem(state({ isRepository: false, gitAvailable: false }), null)).toMatchObject({ text: 'no git', state: 'none' });
     expect(branchStripItem(null, null)).toMatchObject({ state: 'unknown' });
+  });
+});
+
+describe('ui — the checkpoints card (ADR-0039, REQ-GIT-087/088/089)', () => {
+  const rowOf = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, ...over });
+  const listing = (rows: CheckpointListPayload['rows'], unavailable: string | null = null): CheckpointListPayload => ({ sessionId: 'S', rows, lastRestoredSequence: null, liveness: 'not-live', treeRoot: 'D:/ws', unavailable, repaired: null, includeUntracked: true });
+  const ckpt = (sequence: number): CheckpointListPayload['rows'][number] => ({ sequence, ref: `refs/rotaris/checkpoints/S/${sequence}`, commit: 'c', createdAt: 't', createdLabel: '2026-09-05 10:00:00', iteration: sequence, childName: '', files: 1, kind: 'iteration' });
+  it('REQ-GIT-088: the picker keeps the previous choice, else the focused session, else the first entry', () => {
+    const entries = [rowOf({ sessionId: 'A' }), rowOf({ sessionId: 'B' }), rowOf({ sessionId: 'C' })];
+    expect(effectivePicked(entries, 'B', 'C')).toBe('B');
+    expect(effectivePicked(entries, 'Z', 'C')).toBe('C');
+    expect(effectivePicked(entries, null, null)).toBe('A');
+    expect(effectivePicked([], 'A', 'A')).toBeNull();
+  });
+  it('REQ-GIT-087: the empty text by cause — none, reading, unavailable, empty; rows show no text', () => {
+    expect(checkpointsEmptyText({ state: 'none' }, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY)).toBe(CHECKPOINTS_NO_SESSION);
+    expect(checkpointsEmptyText({ state: 'reading', sessionId: 'S' }, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY)).toBe("Reading this session's checkpoints…");
+    expect(checkpointsEmptyText({ state: 'unavailable', sessionId: 'S', reason: 'Checkpoints are unavailable without a workspace.' }, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY)).toBe('Checkpoints are unavailable without a workspace.');
+    expect(checkpointsEmptyText({ state: 'ready', sessionId: 'S', listing: listing([]) }, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY)).toBe(CHECKPOINTS_EMPTY);
+    expect(checkpointsEmptyText({ state: 'ready', sessionId: 'S', listing: listing([ckpt(1)]) }, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY)).toBeNull();
+    expect(checkpointsEmptyText({ state: 'ready', sessionId: 'S', listing: listing([ckpt(1)], 'This session has no Git working tree Rotaris can roll back, so its checkpoints cannot be restored.') }, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY)).toMatch(/no Git working tree/);
+  });
+  it('REQ-GIT-089: the four disabled reasons in order, and enabled with a row selected', () => {
+    expect(restoreDisabledReason({ state: 'none' }, null, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe(RESTORE_NO_SESSION);
+    expect(restoreDisabledReason({ state: 'reading', sessionId: 'S' }, 1, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe("Rotaris is still reading this session's checkpoints.");
+    expect(restoreDisabledReason({ state: 'unavailable', sessionId: 'S', reason: 'why' }, 1, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe('why');
+    expect(restoreDisabledReason({ state: 'unavailable', sessionId: 'S', reason: '' }, 1, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe("This session's checkpoints cannot be restored.");
+    expect(restoreDisabledReason({ state: 'ready', sessionId: 'S', listing: listing([ckpt(1)]) }, null, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBe(RESTORE_NO_ROW);
+    expect(restoreDisabledReason({ state: 'ready', sessionId: 'S', listing: listing([ckpt(1)]) }, 1, RESTORE_NO_SESSION, RESTORE_NO_ROW)).toBeNull();
   });
 });

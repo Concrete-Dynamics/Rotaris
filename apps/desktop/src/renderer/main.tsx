@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem } from '@rotaris/ui';
 import './design.css';
@@ -233,8 +233,16 @@ function Git({ workspace, git, layout, onLayout }: { workspace: string; git: Ret
   // On show, and on a session terminal (the refresh key changes when the followed run stops being busy).
   useEffect(() => { refresh(); queueMicrotask(() => { void listSessions(); }); }, [refresh, listSessions, refreshKey]);
   const after = async () => { refresh(); await listSessions(); };
+  // ADR-0039 (Part P): the three checkpoint commands; a refusal is a value the view renders (REQ-GIT-052), `checkpoint.busy` its toast or retry.
+  const failure = (r: { ok: false; code: string; headline: string; detail?: string | undefined }) => ({ ok: false as const, code: r.code, reason: r.detail ?? r.headline });
+  const checkpointOps = useMemo(() => ({
+    list: async (sessionId: string) => { const r = await bridge.command({ kind: 'checkpoints.list', sessionId }); return r.ok ? { ok: true as const, listing: r.value as CheckpointListPayload } : failure(r); },
+    preview: async (sessionId: string, sequence: number) => { const r = await bridge.command({ kind: 'checkpoints.preview', sessionId, sequence }); return r.ok ? { ok: true as const, preview: r.value as CheckpointPreviewPayload } : failure(r); },
+    restore: async (sessionId: string, sequence: number, force: boolean) => { const r = await bridge.command({ kind: 'checkpoints.restore', sessionId, sequence, force }); return r.ok ? { ok: true as const, outcome: r.value as CheckpointRestoreOutcomePayload } : failure(r); },
+  }), []);
   return <GitView
     workspaceRoot={workspace} state={git.state} refreshing={git.refreshing} sessions={sessions} layout={layout} onLayout={onLayout}
+    checkpoints={checkpointOps} onRestored={() => { void after(); }} focusedSessionId={session?.id ?? null}
     onRefresh={() => { void after(); }}
     onCreateWorktree={async (branch, path) => { const r = await bridge.command({ kind: 'worktree.create', branch, path }); if (r.ok) void after(); return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline }; }}
     onDeleteWorktree={async (path, force) => { const r = await bridge.command({ kind: 'worktree.remove', path, force }); if (r.ok) void after(); return r.ok ? { ok: true } : { ok: false, reason: r.headline, needsForce: r.code === 'worktree.needs-force' }; }}

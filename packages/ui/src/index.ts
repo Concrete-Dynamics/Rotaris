@@ -20,3 +20,4 @@ export * from './GitView.js';
 export * from './ConfirmDialog.js';
 export * from './WorktreeDialog.js';
 export * from './StartSessionDialog.js';
+export * from './CheckpointDialogs.js';

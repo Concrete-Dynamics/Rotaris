@@ -1,11 +1,12 @@
 import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type ControlRequest, type ControlResult, type PermissionPreset, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type PermissionPreset, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync } from 'node:fs';
-import { RELEASE_PAGE_SIZE, type SessionRow, type StoreDal } from '@rotaris/store';
+import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend } from '@rotaris/model';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
-import { SessionWriter, toTranscriptRow, type Committed } from './session-writer.js';
+import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
+import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
@@ -121,6 +122,8 @@ export interface SessionsDeps {
   readonly hooks?: (ctx: HookPortContext) => HookPort | null;
   /** The host's notice channel. */
   readonly notice?: (n: RunNotice) => void;
+  /** ADR-0039: the session's checkpoint port, built by the root at run start; absent or null means no capture (REQ-GIT-044). */
+  readonly checkpoints?: (ctx: CheckpointPortContext) => CheckpointPort | null;
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
   readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
   /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
@@ -188,9 +191,17 @@ export interface SessionListItem {
   readonly busy: boolean;
   /** REQ-MONITOR-172: null when no requirement is attached, and then no tag at all. */
   readonly requirementId: string | null;
-  /** REQ-GIT-018: the binding in full or null, and the checkpoint count (0 until ADR-0039 records one). */
+  /** REQ-GIT-018: the binding in full or null, and the checkpoint count — a count over the session's rows, no Git (ADR-0039). */
   readonly worktree: WorktreeBinding | null;
   readonly checkpointCount: number;
+}
+
+/** REQ-GIT-016 as the card sees it: the label pre-formatted here in local time (REQ-GIT-090), the file COUNT, the kind. */
+export function toCheckpointPayload(c: CheckpointRow): CheckpointListPayload['rows'][number] {
+  let files = 0;
+  try { const v = JSON.parse(c.files) as unknown; files = Array.isArray(v) ? v.length : 0; } catch { files = 0; }
+  const kind: CheckpointKind = c.kind === 'pre_restore' || c.kind === 'manual' ? c.kind : 'iteration';
+  return { sequence: c.sequence, ref: c.ref, commit: c.commit_id, createdAt: c.created_at, createdLabel: localCheckpointLabel(c.created_at), iteration: c.iteration, childName: c.child_name, files, kind };
 }
 
 /** REQ-GIT-017: a missing or unreadable binding loads as "no worktree" — an absence, nothing invented. */
@@ -399,7 +410,7 @@ export class Sessions {
         status: row.execution_status || 'idle',
         branch: binding?.branch ?? '—',
         worktree: binding,
-        checkpointCount: 0,
+        checkpointCount: dal.checkpointCount(asSessionId(row.session_id)),
         relativeTime: relativeTime(row.updated_at, now),
         detail: row.workspace_root,
         awaitingInput: parsePending(row.pending_approvals).length > 0,
@@ -438,6 +449,7 @@ export class Sessions {
       // Found on Part Q's first execution: this hand-off reached the projection owner only, so a continuation run on a LOADED
       // session never received its commits — nothing reached the bus, `run.result` never reached main and the terminal notice
       // never appeared (every earlier resume proof read the store, not the notice). The run is fed as `start` feeds it.
+      // (Part P's first execution found the same fault independently, by the same route: a continuation that never reported.)
       onCommitted: (c) => { entry.owner?.onCommitted(c); entry.run?.onCommitted(c); },
     }, { pid: this.deps.pid, host: this.deps.host, isProcessAlive: this.deps.isProcessAlive ?? (() => true) });
     if (!opened.ok) {
@@ -526,6 +538,7 @@ export class Sessions {
     if (this.deps.hooks) {
       try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { log?.info(m); } }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
     }
+    const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: opts.worktree !== undefined, dal, writer, warn, log: (m) => { log?.info(m); } });
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
@@ -548,7 +561,7 @@ export class Sessions {
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
-      readSession: () => dal.getSession(sessionId), warn, hooks, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
+      readSession: () => dal.getSession(sessionId), warn, hooks, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
@@ -630,6 +643,8 @@ export class Sessions {
     if (this.deps.hooks) {
       try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); } }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
     }
+    // REQ-GIT-051: numbering continues across a resume — the port reads the rows and the refs at each capture.
+    const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: effectiveRootOf(storedRow).binding !== null, dal: s.dal, writer: s.writer, warn, log: (m) => { s.log?.info(m); } });
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
@@ -656,7 +671,7 @@ export class Sessions {
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
-      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}),
+      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
@@ -817,6 +832,100 @@ export class Sessions {
     const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit);
     return ok({ resumed: true, messageLimit: limit });
+  }
+
+  /** ADR-0039: the port is built by the root; a root that raises leaves the run with no checkpoints and one warning (REQ-GIT-045: never aborts). */
+  private checkpointPortFor(ctx: CheckpointPortContext): CheckpointPort | null {
+    if (!this.deps.checkpoints) return null;
+    try { return this.deps.checkpoints(ctx); } catch (cause) { ctx.warn(`Could not set up checkpoints for this run; continuing without them. (${String(cause)})`); return null; }
+  }
+
+  /**
+   * REQ-GIT-093: live exactly when a run for the session is under way here, or its persisted status is active AND the
+   * process its lock names is alive, or liveness cannot be established. A persisted active status on its own is not
+   * live. The probe asks one question — does a process bearing the pid exist — and every residual resolves to live;
+   * the one reading taken: a lock this process itself holds with no run behind it (a resumed session) is not live,
+   * because the process that would race a restore is this one and it is running nothing for the session.
+   */
+  liveness(dal: StoreDal, sessionId: SessionId): SessionLiveness {
+    const s = this.live.get(sessionId);
+    if (s?.run && !s.run.isEnded) return 'live';
+    const row = dal.getSession(sessionId);
+    if (!row) return 'unknown';
+    if (!isActiveStatus(row.execution_status)) return 'not-live';
+    const lock = dal.getLock(sessionId);
+    if (!lock) return 'not-live';
+    if (lock.host !== this.deps.host) return 'live';
+    if (lock.pid === this.deps.pid) return 'not-live';
+    if (!Number.isInteger(lock.pid) || lock.pid <= 0) return 'live';
+    if (!this.deps.isProcessAlive) return 'unknown';
+    try { return this.deps.isProcessAlive(lock.pid) ? 'live' : 'not-live'; } catch { return 'unknown'; }
+  }
+
+  /**
+   * REQ-GIT-050/092/094/095: one session's checkpoints from the rows alone (no Git), the liveness verdict stamped on,
+   * the tree root of REQ-GIT-053, and REQ-GIT-094's repair — a persisted-busy session whose process is dead (a lock
+   * naming this host with a dead pid, no lock at all, or this process's own lock with no run behind it) is set
+   * `interrupted` with its lock released and a timeline entry filed, so its checkpoints can be restored again.
+   */
+  checkpointListing(dal: StoreDal, workspaceRoot: string, sessionId: SessionId): Result<CheckpointListPayload, { readonly code: string; readonly reason: string }> {
+    const row = dal.getSession(sessionId);
+    if (!row || row.workspace_root !== workspaceRoot) return err({ code: 'no-session', reason: `The session store holds no session under ${sessionId}, so nothing can be previewed or restored for it.` });
+    const { root, binding } = effectiveRootOf(row);
+    let repaired: CheckpointListPayload['repaired'] = null;
+    if (isActiveStatus(row.execution_status) && this.liveness(dal, sessionId) === 'not-live') {
+      const lock = dal.getLock(sessionId);
+      const reason = !lock ? 'no process holds its lock' : lock.pid === this.deps.pid ? 'this application holds its lock but runs nothing for it' : `its process (pid ${lock.pid}) is no longer running`;
+      const previous = row.execution_status;
+      const r = this.withWriter(dal, sessionId, (writer) => {
+        const saved = writer.save('interrupted');
+        if (!saved.ok) throw new Error('reason' in saved.error ? saved.error.reason : saved.error.code);
+        writer.appendTimeline('session_marked_interrupted', 'rotaris', `Session was still marked '${previous}', but ${reason}. Rotaris marked it interrupted.`, { previous_status: previous, reason });
+      });
+      if (r.ok) { repaired = { previous, reason }; this.live.get(sessionId)?.owner.reconcile(); }
+      else this.deps.warn(`session ${sessionId} could not be marked interrupted: ${r.error.reason}`);
+    }
+    const rows = dal.listCheckpoints(sessionId).map(toCheckpointPayload);
+    const unavailable = binding !== null && !existsSync(binding.worktree_path) ? CHECKPOINTS_NO_TREE : null;
+    return ok({ sessionId, rows, lastRestoredSequence: dal.getSession(sessionId)?.last_restored_sequence ?? null, liveness: repaired ? 'not-live' : this.liveness(dal, sessionId), treeRoot: root, unavailable, repaired, includeUntracked: true });
+  }
+
+  /** REQ-GIT-058 gate 5 / REQ-GIT-059: the safety row through the one transaction; the trimmed rows' refs come back for the prune. */
+  recordSafetyCheckpoint(dal: StoreDal, sessionId: SessionId, input: CheckpointRecordInput, keep: number): Result<{ readonly trimmed: readonly { ref: string; commit: string }[]; readonly publish: () => void }, { readonly code: string; readonly reason: string }> {
+    return this.withWriter(dal, sessionId, (writer) => {
+      const r = writer.recordCheckpoint(input, keep);
+      if (!r.ok) throw new Error('reason' in r.error ? r.error.reason : r.error.code);
+      return { trimmed: r.value.trimmed.map((t) => ({ ref: t.ref, commit: t.commit_id })), publish: r.value.publish };
+    });
+  }
+
+  /** REQ-GIT-062/068/155: the attempt's outcome through the one transaction; a live projection is republished. */
+  recordRestore(dal: StoreDal, sessionId: SessionId, input: RestoreRecordInput): Result<void, { readonly code: string; readonly reason: string }> {
+    const r = this.withWriter(dal, sessionId, (writer) => {
+      const w = writer.recordRestore(input);
+      if (!w.ok) throw new Error('reason' in w.error ? w.error.reason : w.error.code);
+    });
+    if (r.ok) this.live.get(sessionId)?.owner.reconcile();
+    return r;
+  }
+
+  /**
+   * A write against a session's record from outside a run: the live session's writer when this registry holds one,
+   * else a writer opened for the call (taking the lock with ADR-0005's one reap) and released after it. Anything
+   * `fn` throws is the refusal's reason.
+   */
+  private withWriter<T>(dal: StoreDal, sessionId: SessionId, fn: (writer: SessionWriter) => T): Result<T, { readonly code: string; readonly reason: string }> {
+    const live = this.live.get(sessionId);
+    if (live) {
+      try { return ok(fn(live.writer)); } catch (cause) { return err({ code: 'write', reason: String(cause instanceof Error ? cause.message : cause) }); }
+    }
+    const opened = SessionWriter.open({ dal, sessionId, wall: this.deps.clocks.wall, retentionCap: this.deps.retentionCap, warn: this.deps.warn, onCommitted: () => undefined }, { pid: this.deps.pid, host: this.deps.host, isProcessAlive: this.deps.isProcessAlive ?? (() => true) });
+    if (!opened.ok) {
+      if (opened.error.code === 'no-session') return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+      if (opened.error.code === 'store') return err({ code: 'store', reason: opened.error.reason });
+      return err({ code: 'lock-held', reason: `Session ${sessionId} is held by pid ${opened.error.holder.pid} on ${opened.error.holder.host}.` });
+    }
+    try { return ok(fn(opened.value)); } catch (cause) { return err({ code: 'write', reason: String(cause instanceof Error ? cause.message : cause) }); } finally { opened.value.release(this.deps.pid, this.deps.host); }
   }
 
   /** ADR-0019: a lapse or a teardown releases every waiting approval in every live session (REQ-TOOLS-054's bulk cancel). */

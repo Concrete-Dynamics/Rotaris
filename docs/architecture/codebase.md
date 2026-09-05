@@ -46,9 +46,9 @@ kernel     pure: Result, ids, time, the clock ports, generated requirement symbo
 | `@rotaris/store` | run host, workspace service | open (WAL read back, write probe, one canonical spelling), schema v2 + migrations, the DAL (rows with residency, events with the derived envelope and three declared indexes, the truncation record), identifier + resolution, backup, the corrected restore | ADR-0058, ADR-0005, ADR-0009 |
 | `@rotaris/engine` | run host | **children/**: the ledger over the writer's one transition function, admission, the scheduler run to quiescence, the one wait, the child's execution and report, the parent's resume loop, the sweeps, the built-in persona table;  `SessionWriter` (one transaction per unit of work, residency release, trim, sticky failure, the launch audit, the timeline, the terminal transaction), the one serialiser and the 23-type catalogue, `ProjectionOwner` (resident rows, the counter, growth tick, attach/reconcile), `Sessions` (the registry, the control channel, the run-active predicate), `run/` (`Run`, `StopRequest`, the stop conditions and every total mapping, the todo, the aggregates, `EventBus`, `SummaryWriter`), `RefusalLease`, `HookPort` (the engine's view of ADR-0015; `hooks-port.ts`), **intent/** (the classifier ladder, the gate), **playbooks/** (the catalogue, the matrix, the render, the clamp), `Preflight` | ADR-0008, ADR-0009, ADR-0010, ADR-0013, ADR-0014, ADR-0043 |
 | `@rotaris/model` | run host | the two ports (`ModelClient`, `AgentBackend`), `DefaultAgentBackend`, `ScriptedModelClient` (tests), `AiSdkModelClient` (pinned SDK, one decorated `fetch`); engine → model is a downward edge in the matrix | ADR-0026, ADR-0027 |
-| `@rotaris/agent-tools` | run host | the registry (facets, classes, the four-stage fold), the scanner, the egress classifier, the policy (build once, evaluate pure, the atomic swap, session approvals), the approvals registry + presenter capability with the liveness lapse, the ONE gate (`REQ-TOOLS-175`'s order, both hook slots empty), the file/hash-anchored/search/todo executors, the terminal (PTY + marker protocol, background sessions, classification); the engine's `ToolPort` is filled at the run-host root, never by an import | ADR-0016–0020, ADR-0023 (classifier), ADR-0024 |
+| `@rotaris/agent-tools` | run host | the registry (facets, classes, the four-stage fold), the scanner, the egress classifier and **the `fetch` executor** (the front door, the per-call policy read, the redirect loop, the rendering — Part N), the policy (build once, evaluate pure, the atomic swap, session approvals), the approvals registry + presenter capability with the liveness lapse, the ONE gate (`REQ-TOOLS-175`'s order, both hook slots empty), the file/hash-anchored/search/todo executors, the terminal (PTY + marker protocol, background sessions, classification); the engine's `ToolPort` is filled at the run-host root, never by an import | ADR-0016–0020, ADR-0023 (classifier), ADR-0024 |
 | `@rotaris/mcp` | run host | the transport shape today; the MCP client next | ADR-0033–0035 |
-| `@rotaris/workspace` | workspace service | the backup and the two-phase restore around the store's mechanism (assessment, the identifier cases, ESC-26's establishment after the store is whole); **`git/`** — ADR-0038's one invocation helper (the env scrub, the network refusal, the rendering, the bounded spawn) and the repository reads behind the Overview's card; checkpoints, traceability, delivery next | REQ-SESSION-201, ADR-0058, ESC-26, ADR-0038, ADR-0036–0041 |
+| `@rotaris/workspace` | workspace service | the backup and the two-phase restore around the store's mechanism (assessment, the identifier cases, ESC-26's establishment after the store is whole); **`git/`** — ADR-0038's one invocation helper (the env scrub, the network refusal, the rendering, the bounded spawn), the repository reads behind the Overview's card, the Git view's reads (`view.ts`), the worktree writes (`worktrees.ts`) and REQ-GIT-003's exclusion (`paths.ts`); checkpoints, traceability, delivery next | REQ-SESSION-201, ADR-0058, ESC-26, ADR-0038, ADR-0036–0041 |
 | `@rotaris/shell` | main | `UpdateRelay` (fan-out, order across both channels, message counters), `ProcessLink` (bounded request/reply, and the child's narrow requests back to main) | ADR-0044, ADR-0013, ADR-0002 c.7, c.11 |
 | `@rotaris/ui-core` | renderer | the replica store with the step-0 sequence check, the decline, paging older rows, rows kept across a snapshot; the notice store; **no React** | ADR-0043, ADR-0046, ADR-0049, ADR-0057, REQ-SESSION-161 |
 | `@rotaris/ui` | renderer | `AppShell` (with the one persistent notice), `NavRail`, `WorkspaceView` (user/agent/system rows, the growing row, the composer, the stop control), `SettingsView` (the thirteen categories; Project hosts backup and restore), local shell state, the design system wired in | ADR-0048, ADR-0049, REQ-SHELL-024–028, -049, -114, -153, REQ-CHAT-001–005, -011, REQ-SESSION-186, -201, REQ-CONFIG-268/269 |
@@ -224,6 +224,46 @@ in `configuration.ts`'s header.)
    value as `{}` — a replacer array filters every level (ADR-0042 note). `pnpm overview-proof` passed on the first
    complete run.
 
+20. **the `fetch` tool and the egress it enforces (2026-09-05, Part N; built in parallel with 21, each in its own
+   worktree):** ADR-0023's second execution — the validation front door (REQ-SANDBOX-020), the egress policy **read from
+   the saved files at every call** (`egressReader`; no live state, REQ-SANDBOX-038/118, 1.7–1.8 ms (median 1.7) per read), the
+   timeout precedence with the level named (REQ-SANDBOX-021), the hand-driven redirect loop that classifies the named
+   host and every hop before a connection is opened (REQ-SANDBOX-022..031), the eight failure kinds of REQ-TOOLS-092,
+   the shaping and the rendering under exact-string tests; a refusal names the policy input that produced it
+   (`classifyExplained`, REQ-SANDBOX-026); no proxy by construction (OQ-37 stays open). `pnpm fetch-proof` runs seven
+   scenarios behind the real run host against a recording loopback server: allowed, allowed under `ask` with no
+   dialog, a redirect refused then followed once allow-listed, a denied host that **sees nothing**, a 404, a
+   run-level timeout — the saved edits between launches are REQ-SANDBOX-038 executed. **Found — the nineteenth
+   defect:** the direct-work grant of REQ-ORCH-016 had never reached the entry role — the port recognised the entry
+   by `parentId === 'root'` after Part B had renamed the root to `root:<iteration>`; masked because every proof ran
+   under `single` or an intent granting nothing, and `fetch` was the first tool reachable only through the bundle
+   (`isEntryPort`: the port at depth 0; the reason kept beside it). Two harness findings beside it: the symbol
+   generator wrote an empty artifact on a CRLF checkout without a word (it refuses now), and the proof's server
+   lived in a process blocked on Electron.
+
+21. **the Git view and the worktrees (2026-09-05, Part O):** ADR-0038's second execution — the reads of REQ-GIT-105
+   through the one helper (the two gates, the branch and upstream, `status`/`diff` under REQ-GIT-003's exclusion
+   applied by us, `worktree list --porcelain` with the base tree by common directory (REQ-GIT-106), thirty `log`
+   rows with the local flag as the reachability set (REQ-GIT-108), two reads per linked tree; **11 reads in 658–694 ms with one linked tree, 13 in 757–811 ms with two** on this
+   machine) and the first writes (`worktree add -b` collision-safe on REQ-GIT-010's exact three phrases, `worktree
+   remove [--force]` with Git's own refusal recognised as the one force cures, the attach check; REQ-GIT-013's ladder
+   verbatim, REQ-GIT-012's two lines the only rewording, 30 s per invocation). The view: REQ-GIT-075's header, the
+   two columns under `panels/git`, the worktrees table with multi-row selection and the per-row delete, the history
+   table, the checkpoints card **in its empty states only** (ADR-0039 not executed — a status note says so), the
+   policy card, Merge selected disabled (integration owed); the worktree dialog with `validateBranchName` shared
+   through contracts; the two-step delete; REQ-SHELL-125's **start-session dialog** — isolation with the generated
+   branch, attach through the folder chooser, the sandbox selector with REQ-SANDBOX-130's disclosure — whose choices
+   the composer's next submission carries; the isolated session: main mints the id, the service binds **before** the
+   run host is asked (a failed bind has no session to delete), the binding on the session row (store v8), the run's
+   effective root the worktree while the record and the configuration stay with the base; REQ-GIT-104's
+   fixed-identity notice; the strip's branch item. `pnpm git-proof` drives seven launches: painted, a worktree
+   created through the dialog, an isolated run whose `write_file` lands in the worktree and not the base, the forced
+   delete against a real refusal, the split restored, `PATH` without Git, a plain folder. **Found:** nothing in the
+   helper or the reads; three findings in the new screen and the seams, fixed in place (a fresh array per render
+   looped React; an occluded window stops painting so the capture lagged the DOM — throttling off while capturing;
+   a "plain folder" under the checkout is inside a repository, REQ-GIT-103 as written). ADR-0049's single notice slot
+   let the first-launch notice replace the Git one a second later — recorded, owed a queue.
+
 16. **the control channel (2026-09-05):** REQ-MONITOR-004's twenty-two operations behind ADR-0010's channel 1 — the
    skeleton's list was the runtime's, not the requirement's, and is replaced. Queued prompts are a session-owned
    table consumed exactly once at every iteration boundary into a "Queued Prompts" phase; a steer is injected at
@@ -296,8 +336,8 @@ in `configuration.ts`'s header.)
    `REQ-TOOLS-013`'s text and never an abort — then the tool runs and the turn steps again until no call is
    requested. Tool rows, the diff row, the trailer rows, the mode selector and the strip flags paint it.
    `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`, `glob`, `todo`, `terminal` exist;
-   `fetch`, `git_commit`, `artifact_*`, `ask_questions` and the delegation tools are removed by the registry
-   with a reason code until their ADRs land. **Found:** ADR-0020's marker detection read the PTY's echo of
+   `git_commit`, `artifact_*`, `ask_questions` and the delegation tools are removed by the registry
+   with a reason code until their ADRs land (`fetch` landed 2026-09-05, entry 20). **Found:** ADR-0020's marker detection read the PTY's echo of
    the wrapper before the shell's frame (the seventh first-execution defect); main's dialog `closed` handler
    walked into the destroyed-window pitfall and the native error box it raised wedged main.
 
@@ -310,7 +350,7 @@ in `configuration.ts`'s header.)
    The previous store is displaced and kept. **Found:** ADR-0058's case (b) has no route in the product,
    because opening a workspace mints its identifier before a restore can be asked for.
 
-Every view body but Overview, Workspace and Settings reads "Not drawn yet"; Settings draws Models, Personas, Runtime, Interface, Hooks and Project.
+Every view body but Overview, Workspace, Git and Settings reads "Not drawn yet"; Settings draws Models, Personas, Runtime, Interface, Hooks and Project.
 
 **The runtime keys come from `runtime:`** (ADR-0036, 2026-09-05; `runtimeFromConfiguration` in
 `run-host/configuration.ts`): `permission_mode`, `approval_timeout_seconds`, `headless_approval_policy`,
@@ -427,6 +467,23 @@ caption against the ledger and the configured caps, the branch, the session row 
 marker; (3) a relaunch — the samples identical and a pane split written to the preference store restored. Evidence
 under `.overview-proof/`. On 2026-09-05 it passed once the start-time read was corrected (entry 19).
 
+**What `pnpm fetch-proof` does.** It builds Electron, starts a `node:http` server on 127.0.0.1 that records every
+request path, and launches the app seven times against a scratch workspace whose `agents.yaml` it rewrites between
+launches, each run scripted `fetch:<url>,answer`: `/ok` under `autonomous`; the same under `ask` with zero approval
+requests; `/redirect` (302 to `localhost`, a different host name) refused, then followed once `localhost` is
+allow-listed; `127.0.0.1` denied so the server sees nothing; `/404` as `http_error` with the body; `/slow` under a
+one-second `tool_call_timeout`. The tool row's observation is read from `tool_calls`; the per-call policy read's cost
+from the run host's log. Evidence under `.fetch-proof/`.
+
+**What `pnpm git-proof` does.** It builds Electron, makes a scratch repository with a local bare remote (one commit
+ahead, so a local-tinted row and `ahead 1` exist) and a `.gitignore` holding `.rotaris/`, and launches the app seven
+times: the Git view painted (header, the one worktree row with its markers, three history rows, the checkpoints
+card's sentence, the strip, the divider moved by keyboard and written to `panels/git`); a worktree created through
+the dialog beside the workspace; an isolated session started through the launch dialog whose scripted `write_file`
+lands in `.rotaris/worktrees/<sid>` and not in the base; the manual worktree deleted through the two-step confirm
+against Git's real refusal; a relaunch restoring the split; `PATH` without Git (the empty header, the notice, no
+dialog); a plain folder in the OS temp directory (no notice). Evidence under `.git-proof/`.
+
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other
 line as written, the global file untouched); Settings → Models chooses a slot and its strength and saves; a toggle
@@ -457,9 +514,10 @@ records `application_shutdown` with the terminal pair and no lock. Its evidence 
 |---|---|---|
 | ~~the session writer + projection owner + one transcript row end to end~~ **done 2026-09-03**; spikes 8 and 18 taken | `engine`, `store` (DAL), `shell` (relay), `ui-core` | — |
 | ~~the run loop consuming the prompt: iteration, the model port, `session.end`/`result`, status transitions~~ **done 2026-09-03**; spike 6 taken in its structural half | `engine`, `model`, `contracts`, `ui-core`, `ui` | ~~spike 6's live half~~ **taken 2026-09-05** (OpenRouter, four of four; ADR-0027's fallback withdrawn); ADR-0026's parameterised conformance suite once a second backend exists |
-| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), `fetch` (ADR-0023 over ADR-0036), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: worktree working directories, `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the auto-discovered-server layer and `mcp_servers`, secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health; for the intent (~~the classifier prompt a real small model answers as asked~~ **built 2026-09-05**, Part L): REQ-ORCH-012's prior-response route, plan mode (REQ-ORCH-152..154); ~~per-slot credential resolution~~ **built 2026-09-05** |
+| ~~tools and the permission gate~~ **done 2026-09-03**, then ~~children and the scheduler~~ **done 2026-09-03**, ~~hooks~~ **done 2026-09-04**, ~~intent classification~~ **done 2026-09-04**, ~~the loop supervisor and `continue`~~ **done 2026-09-05** (ADR-0059; `pnpm part-h-proof`), ~~the control channel~~ **done 2026-09-05** (ADR-0010; `pnpm part-j-proof`) — the row is exhausted | `agent-tools`, `engine`, `config`, `hooks`, `ui` | the fallback-model and rate-limit paths, `REQ-ORCH-030`, the session browser's repair, delete, export and store actions (`REQ-SESSION-182`), the delegation-context header and scope toggle (`REQ-CHAT-068/069`); the export of the four records (`REQ-SESSION-199`), ~~`fetch` (ADR-0023 over ADR-0036)~~ **built 2026-09-05** (Part N; `pnpm fetch-proof`; owes the egress settings surface REQ-SANDBOX-113..118 and OQ-37), the terminal's live streaming (ADR-0021) and its four control operations, OQ-39's sizing under load; for the control channel (~~the operations~~ **built 2026-09-05**; `pnpm part-j-proof`): structured questions, compression, the verification skip, the transcript clear, the stall-evaluation injection leg (REQ-MONITOR-135), the inspector and persona windows, REQ-MONITOR-132's quit warning, a todo-edit surface; for hooks: ~~worktree working directories~~ **built 2026-09-05** (Part O), `verifier_finished`, REQ-HOOKS-082 with checkpoints, a notice queue (ADR-0049); for configuration (~~ADR-0036~~ **built 2026-09-05**; `pnpm config-proof`): the auto-discovered-server layer and `mcp_servers`, secrets, REQ-CONFIG-183's strict `requirements:` block, the security policy card, the Display/Skills/MCP/Plugins/Tools categories, the write path's timing; for providers (~~ADR-0028/0029/0030/0032~~ **built 2026-09-05**, the OpenAI-compatible instance; `pnpm slice-proof`): the device-code and PKCE authenticators with the loopback listener, Copilot's and codex's discovery and bridges, the usage and credit tiles, keep-fresh renewal, the configuration editor of REQ-PROVIDER-097, the model picker's live per-provider loading (145), the runtime `/model` override (146), `unavailable_models`, the shipped capability metadata (OQ-18), `warning` health; for the intent (~~the classifier prompt a real small model answers as asked~~ **built 2026-09-05**, Part L): REQ-ORCH-012's prior-response route, plan mode (REQ-ORCH-152..154); ~~per-slot credential resolution~~ **built 2026-09-05** |
 | ~~the restore behind a real run host~~ **done 2026-09-03** | `workspace`, `workspace-service`, `main`, `contracts`, `shell`, `ui` | IC-5 discharged; IC-4 half 1 discharged, **half 2 awaits the owner's rename and reboot** (`spikes/machine-identifier-rename.md`); the kill-in-the-gap case; ADR-0005's reap-and-repair for a stale session a backup carried |
-| ~~the Overview view~~ **done 2026-09-05** (Part M; `pnpm overview-proof`; ADR-0038 first executed) | `ui`, `engine` (the sampler), `store` (v7), `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `platform` | the Mission view the tree card links to; REQ-SHELL-125's start-session dialog (worktree and sandbox choices); the Git view — its notice when Git is missing (ADR-0038 c.1), worktrees, the history table, checkpoints; the credit tile and the limits card once Part K's usage tiles exist; the proposals card once the Library exists; a cost label with a configured rate (REQ-MONITOR-166's other two qualifiers); a requirement tag on a session (REQ-MONITOR-172) once traceability exists |
+| ~~the Overview view~~ **done 2026-09-05** (Part M; `pnpm overview-proof`; ADR-0038 first executed) | `ui`, `engine` (the sampler), `store` (v7), `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `platform` | the Mission view the tree card links to; ~~REQ-SHELL-125's start-session dialog (worktree and sandbox choices)~~ **built 2026-09-05** (Part O); ~~the Git view — its notice when Git is missing (ADR-0038 c.1), worktrees, the history table~~ **built 2026-09-05** (Part O), checkpoints; the credit tile and the limits card once Part K's usage tiles exist; the proposals card once the Library exists; a cost label with a configured rate (REQ-MONITOR-166's other two qualifiers); a requirement tag on a session (REQ-MONITOR-172) once traceability exists |
+| ~~the Git view and the worktrees~~ **done 2026-09-05** (Part O; `pnpm git-proof`; ADR-0038 second executed; built in parallel with Part N) | `ui`, `workspace` (`git/`), `workspace-service`, `main`, `contracts`, `store` (v8), `engine` (the effective root), `platform` | checkpoints (ADR-0039: the private index, capture at iteration end, listing, preview, restore); integration and "Merge selected" (REQ-GIT-083, 125..135); REQ-GIT-084's focus requests; the set-up-Git-here offer (REQ-GIT-113/114, in the Requirements area); requirement-execution worktrees; `git_commit` (REQ-GIT-144); `worktree_storage_subpath` read from configuration (REQ-GIT-073 / REQ-CONFIG-068); REQ-SANDBOX-119's probe-driven checkbox; a notice queue so the Git notice and the first-launch notice coexist (ADR-0049) |
 | ~~the build's load proof~~ **done 2026-09-04** — `pnpm package` (`apps/desktop/scripts/`), **IC-6 discharged**; the first packaged window was blank (the ninth defect) | `apps/desktop/electron-builder.yml`, `scripts/build-hooks.cjs`, `scripts/native-load-probe.cjs`, `scripts/package.mjs` | the portable's stub (ADR-0054), signing, the release gate, an icon; IC-3 item 3 |
 | ~~a terminal save's durability~~ **harness built 2026-09-04** (`packages/store/spike/`, `power-loss.spike.test.ts`) | `store` (the settings are the store's; the writer's raise-and-lower is `dal.ts`'s) | **the power-loss test's fault half — the owner's power cut or kernel crash** (`spikes/power-loss.md` §4) |
 | ~~the two undesigned themes~~ **done 2026-09-04** — `pnpm theme-proof`; **IC-2 discharged** | `contracts` (theme data and colour math), `platform` (preferences), `main`, `ui`, `apps/desktop/scripts` | different-scale multi-monitor drag on owner hardware; macOS/Linux native surfaces stay with IC-3 |

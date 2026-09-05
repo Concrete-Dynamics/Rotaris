@@ -24,6 +24,8 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Part M — `repository.read`/`repository.state` between main and the workspace
-service and the `repository.read` command, process view; `token_samples` and the sampling step, runtime view; the
-`workspace` package's `git/` module changes no edge, component view unchanged).
+Last reconciled with the code: **2026-09-05** (Parts N and O — the `fetch` executor and its per-call policy read, the entry
+port at depth 0, runtime view; `git.view`/`worktree.*` between main and the workspace service, the `git.read`,
+`worktree.*`, `session.newId` commands and `session.start`'s isolation fields, process view; store v8 and the isolated
+session's effective root, runtime view; no package or edge changed, component view unchanged. Before that Part M —
+`repository.read`/`repository.state` and `token_samples`).

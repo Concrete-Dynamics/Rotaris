@@ -24,6 +24,9 @@ export interface ShellState {
   readonly launchOptions: LaunchChoices | null;
   setLaunchOptions(options: LaunchChoices | null): void;
   takeLaunchOptions(): LaunchChoices | null;
+  /** REQ-MONITOR-042 (Part R): ONE selected agent for every surface — the Workspace sidebar tree, the Overview card, Mission, the inspector; `run` names the run-level selection (REQ-MONITOR-274), null nothing. */
+  readonly selectedAgentId: string | null;
+  selectAgent(id: string | null): void;
 }
 
 export interface LaunchChoices {
@@ -63,5 +66,9 @@ export const useShellState = create<ShellState>((set, get) => ({
     const options = get().launchOptions;
     if (options !== null) set({ launchOptions: null });
     return options;
+  },
+  selectedAgentId: null,
+  selectAgent(id) {
+    if (get().selectedAgentId !== id) set({ selectedAgentId: id });
   },
 }));

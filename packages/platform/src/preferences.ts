@@ -10,6 +10,8 @@ export const PREFERENCE_KEYS = {
   'panels/overview': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
   /** REQ-GIT-076/153: the Git view's two-column split, keyed `git` as REQ-SHELL-069 fixes; an unusable value restores the declared default. */
   'panels/git': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
+  /** REQ-SHELL-073 / REQ-MONITOR-072: "agent pop-out" — an ordinary agent click opens the persona window; default off; persists across windows and restarts. */
+  'interface/agentPopOut': { type: 'boolean', default: false, owner: 'REQ-SHELL-073', coerce: (value: unknown) => value === true || value === 'true' },
 } as const;
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
 export function coercePaneLayout(value: unknown, panes: number): PaneLayout | undefined {

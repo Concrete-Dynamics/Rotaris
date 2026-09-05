@@ -1,0 +1,164 @@
+import { useMemo, useState } from 'react';
+import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, liveDescendants, metaLine, resolvedTools } from './agents.js';
+import { elapsedLabel } from './AgentTree.js';
+import { ContextRing } from './ContextRing.js';
+import { markMotionStart } from './motion.js';
+
+/**
+ * REQ-MONITOR-050..067 (Part R): the per-agent inspector. One tab per configured persona (050); the selected
+ * agent's persona tab and instance (050); with nothing selected, the agent that wrote last, as a visible tag says
+ * (053/054); the empty state (056); the dot, the name, the meta line, the ring with the threshold marked and its
+ * caption (052/065); the model and reasoning controls writable for the run-level agent while a run executes with the
+ * next-iteration note, otherwise disabled with the per-persona note (057/058), the current model always named
+ * (066), withheld models listed with their reason (067); the scope note; the tool chips in the resolved set's own
+ * order marked active/used/not used (060/061/062); artifact links (none — no artifact store yet); the cascade note
+ * (064); Steer, Cancel and Pop out on the SHOWN agent with 063's enablement and 055's naming. Structure from
+ * docs/spec; language from docs/design/system. The MCP heading per server (060's second half) is a slot the
+ * merge fills (`data-slot="mcp"`).
+ */
+export interface PersonaEntry {
+  readonly role: string;
+  readonly tools: readonly string[];
+  readonly thinking: string | null;
+  readonly effectiveModel: string;
+}
+export interface InspectorProps {
+  readonly session: SessionRecord | null;
+  readonly rows: readonly TranscriptRow[];
+  readonly personas: readonly PersonaEntry[];
+  readonly runLevel: AgentRecord | null;
+  readonly selectedAgentId: string | null;
+  readonly onSelect: (id: string | null) => void;
+  readonly models: readonly string[];
+  /** REQ-MONITOR-067: models the provider withholds, with its reason; empty in this build (no provider reports one). */
+  readonly withheldModels?: readonly { readonly model: string; readonly reason: string }[] | undefined;
+  readonly compressionThresholdPercent: number;
+  readonly runActive: boolean;
+  readonly nowIso: string | null;
+  readonly onSteer: (agent: AgentRecord) => void;
+  readonly onCancel: (agent: AgentRecord, cascade: number) => void;
+  readonly onPopOut: (agent: AgentRecord) => void;
+  readonly onSetModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly onSetReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-MONITOR-051: rendered as an overlay drawer below 1180 px; the caller says whether it is open there. */
+  readonly drawer?: boolean | undefined;
+  readonly onCloseDrawer?: (() => void) | undefined;
+}
+
+export const FOLLOWING_TAG = 'Following — tracking whichever agent wrote last';
+export const PINNED_TAG = 'Pinned by selection';
+export const PER_PERSONA_NOTE = 'Model and reasoning are set per persona and edited in persona settings.';
+export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration.';
+export const NO_ARTIFACTS = 'No artifacts yet — this build has no artifact store.';
+
+export function Inspector(props: InspectorProps) {
+  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer } = props;
+  const agents = useMemo(() => session?.agents ?? [], [session]);
+  const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
+  const followed = useMemo(() => (selected ? null : followedAgent(rows, agents, runLevel)), [selected, rows, agents, runLevel]);
+  const shown = selected ?? followed;
+  const pinned = selected !== null;
+  // REQ-MONITOR-050: the tab follows the shown agent's persona (derived during render when the shown agent changes); a tab chosen by hand stays until an agent is chosen.
+  const [tab, setTab] = useState<string | null>(null);
+  const [seenShown, setSeenShown] = useState<string | null>(shown?.id ?? null);
+  if ((shown?.id ?? null) !== seenShown) { setSeenShown(shown?.id ?? null); if (shown) setTab(shown.persona); }
+  const activeTab = tab ?? shown?.persona ?? personas[0]?.role ?? null;
+  const [error, setError] = useState<string | null>(null);
+  const persona = personas.find((p) => p.role === (shown?.persona ?? activeTab)) ?? null;
+  const enablement = inspectorEnablement(shown?.presentationState ?? null);
+  const isRunLevel = shown !== null && shown.id === RUN_AGENT_ID;
+  const writable = isRunLevel && runActive && shown?.live === true;
+  const cascade = shown ? liveDescendants(agents, shown.id).length : 0;
+  const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
+  const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
+  const currentModel = shown?.model ?? '';
+  const modelOptions = useMemo(() => {
+    // REQ-MONITOR-066: the current model is always an option, even when the catalogue no longer lists it.
+    const list = [...models];
+    if (currentModel !== '' && !list.includes(currentModel)) list.unshift(currentModel);
+    return list;
+  }, [models, currentModel]);
+  const instances = activeTab ? instancesOf(activeTab, agents, runLevel) : [];
+  return (
+    <aside className={`inspector${drawer ? ' inspector--drawer' : ''}`} aria-label="Agent inspector" data-shown={shown?.id ?? ''} data-mode={shown ? (pinned ? 'pinned' : 'following') : 'empty'}>
+      <div className="inspector__head">
+        <span className="card-kicker">Inspector</span>
+        <span className={`tag ${pinned ? 'tag-accent' : 'tag-neutral'} inspector__tag`} data-testid="inspector-tag">{shown ? (pinned ? PINNED_TAG : FOLLOWING_TAG) : 'No agent'}</span>
+        {pinned && <button type="button" className="btn btn-ghost btn-compact" onClick={() => onSelect(null)} title="Drop the selection; the panel returns to tracking whichever agent wrote last.">Unpin</button>}
+        {onCloseDrawer && <button type="button" className="btn btn-ghost btn-compact" aria-label="Close the inspector" onClick={onCloseDrawer}>×</button>}
+      </div>
+      <div className="tabs inspector__tabs" role="tablist" aria-label="Personas">
+        {personas.map((p) => (
+          <button key={p.role} type="button" role="tab" className={`tab${activeTab === p.role ? ' is-active' : ''}`} aria-selected={activeTab === p.role} data-persona={p.role} onClick={() => setTab(p.role)}>{p.role}</button>
+        ))}
+      </div>
+      {activeTab && (
+        <div className="inspector__instances" aria-label={`${activeTab} instances`}>
+          {instances.length === 0 ? <span className="text-secondary">No instance of {activeTab} in this run.</span> : instances.map((a) => (
+            <button key={a.id} type="button" className={`btn btn-ghost btn-compact inspector__instance${shown?.id === a.id ? ' is-active' : ''}`} data-agent-id={a.id} aria-pressed={shown?.id === a.id} onClick={() => onSelect(a.id)}>{a.name}</button>
+          ))}
+        </div>
+      )}
+      {shown ? (
+        <div className="inspector__body">
+          <div className="inspector__title">
+            <span ref={(element) => { if (element && shown.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${shown.presentationState}`} aria-hidden="true" />
+            <span className="inspector__name" data-testid="inspector-name">{shown.name}</span>
+          </div>
+          <div className="inspector__meta mono" data-testid="inspector-meta">{metaLine(shown, elapsed)}</div>
+          <div className="inspector__ring">
+            <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
+            <div className="inspector__ring-caption text-secondary">
+              <div>This agent's own context window: {shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens.</div>
+              <div>Compression at {compressionThresholdPercent}% of the limit. Not a session-wide figure.</div>
+              {isRunLevel && <div className="inspector__note">The record does not carry the run-level agent's prompt reading in this build.</div>}
+            </div>
+          </div>
+          <div className="inspector__controls">
+            <label className="field-label" htmlFor="inspector-model">Model</label>
+            <select id="inspector-model" className="input select" aria-label="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model" onChange={(e) => { const v = e.currentTarget.value; if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }}>
+              {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+              {withheldModels.map((w) => <option key={`withheld:${w.model}`} value={w.model} disabled>{w.model} — withheld: {w.reason}</option>)}
+            </select>
+            <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
+            <select id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>
+              {['low', 'medium', 'high'].map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <span id="inspector-controls-note" className="text-secondary inspector__note" data-testid="inspector-controls-note">{writable ? NEXT_ITERATION_NOTE : PER_PERSONA_NOTE}</span>
+          </div>
+          <div className="inspector__scope text-secondary" data-testid="inspector-scope">
+            {isRunLevel ? 'Scope: the run itself — the entry role at depth 0.' : `Scope: depth ${shown.depth}${shown.background ? ', background' : ''}${shown.category ? `, ${shown.category}` : ''} — reports to ${agents.find((a) => a.id === shown.parentId)?.name ?? 'the run'}.`}
+          </div>
+          <div className="inspector__tools" aria-label="Tools">
+            <span className="card-kicker">Tools</span>
+            <div className="chips" data-testid="inspector-chips">
+              {chips.length === 0 && <span className="text-secondary">No tools resolved.</span>}
+              {chips.map((c) => <span key={c.name} className={`tag chip chip--${c.state.replace(' ', '-')}`} data-tool={c.name} data-state={c.state}>{c.name} <span className="chip__state">{c.state}</span></span>)}
+            </div>
+            <div className="inspector__mcp" data-slot="mcp" />
+          </div>
+          <div className="inspector__artifacts text-secondary" data-testid="inspector-artifacts">{NO_ARTIFACTS}</div>
+          <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>
+          {error && <div className="composer__error" role="alert">{error}</div>}
+          <div className="inspector__actions">
+            <button type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</button>
+            <button type="button" className="btn btn-danger btn-compact" disabled={!enablement.cancel || !runActive} title={enablement.cancel && runActive ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued.'} onClick={() => onCancel(shown, cascade)}>Cancel</button>
+            <button type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</button>
+          </div>
+        </div>
+      ) : (
+        <div className="inspector__body inspector__body--empty" data-testid="inspector-empty">
+          <div className="inspector__title"><span className="agent-row__dot agent-row__dot--idle" aria-hidden="true" /><span className="inspector__name">—</span></div>
+          <div className="text-secondary">No agent is selected, and no transcript row names one.</div>
+          <div className="inspector__ring"><ContextRing used={0} limit={1} thresholdPercent={compressionThresholdPercent} label="No agent's context window" /></div>
+          <div className="inspector__actions">
+            <button type="button" className="btn btn-secondary btn-compact" disabled>Steer</button>
+            <button type="button" className="btn btn-danger btn-compact" disabled>Cancel</button>
+            <button type="button" className="btn btn-secondary btn-compact" disabled>Pop out</button>
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}

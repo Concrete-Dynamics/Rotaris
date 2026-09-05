@@ -22,3 +22,4 @@ packages/kernel/src/generated/
 .resilience-proof/
 .checkpoint-proof/
 .mcp-proof/
+.mission-proof/

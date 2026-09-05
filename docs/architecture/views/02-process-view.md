@@ -13,6 +13,7 @@ flowchart LR
     RP["pause window<br/>role = pause"]
     RH["hook-review window<br/>role = hook-review"]
     RPR["provider window<br/>role = provider"]
+    RPE["persona windows<br/>role = persona, one per persona<br/>own replica; hide on close"]
   end
   P["preload<br/>window.rotaris = { command, on… }"]
   M["main<br/>windows · dialog queue · notices<br/>UpdateRelay · preferences · theme<br/>credential store · provider sign-in · discovery<br/>capture seams"]
@@ -32,6 +33,7 @@ flowchart LR
   RP --> P
   RH --> P
   RPR --> P
+  RPE --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
   M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>theme:changed · config:changed" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
@@ -54,7 +56,7 @@ flowchart LR
 
 | Process | Owns | Never does |
 |---|---|---|
-| **main** | window lifecycle and the close guard; the per-window approval **dialog queue** and the pause window; the single current notice; the `UpdateRelay` (sequence-preserving fan-out of the run host's publications to subscribed windows); theme and preferences (ADR-0042); the instance claim; forking and shutting down the two child kinds; **the credential store, the provider catalogue, sign-in, discovery and the snapshot** (ADR-0029/0030, `packages/providers`); the verification seams under `ROTARIS_CAPTURE_PNG` | decide a permission, run a tool, read the store, read `agents.yaml`, hand a credential to a renderer |
+| **main** | window lifecycle and the close guard; **the persona-window registry** (ADR-0048, Part R: one window per persona, hidden on close, destroyed with the main window and on a new session; `main/windows.ts`); the per-window approval **dialog queue** and the pause window; the single current notice; the `UpdateRelay` (sequence-preserving fan-out of the run host's publications to subscribed windows); theme and preferences (ADR-0042); the instance claim; forking and shutting down the two child kinds; **the credential store, the provider catalogue, sign-in, discovery and the snapshot** (ADR-0029/0030, `packages/providers`); the verification seams under `ROTARIS_CAPTURE_PNG` | decide a permission, run a tool, read the store, read `agents.yaml`, hand a credential to a renderer |
 | **run host** | every session lock this instance holds; the writers, projection owners and runs; the tool gate per session; hooks per run; the checkpoint port per run (the capture at iteration close, the rows and the retention trim — ADR-0039); the configuration resolved per run start (Tier B) with the live state main handed over; the bearers main **leased** for the run; the loop supervisor; the terminal manager; **the MCP holder** (Part S): the discovery memo, the probe path, the per-session connection registries and their stdio children, the session enable-override, the one diagnostic sink | resolve a workspace identifier; migrate the store; write configuration files; read `tokens/`; spawn Git (it asks main, which asks the service) |
 | **workspace service** | the workspace identifier; opening and migrating the store (the only process that migrates, W-02); backup and restore with its refusal lease on the run host; configuration Tier A (`config.read` / `config.save` / `config.setField`, each followed by the load again); **every Git invocation** (ADR-0038): the repository and Git-view reads, the worktree writes, and the checkpoint capture, preview, restore and prune through a private index (ADR-0039) | run anything; hold a session lock; write a checkpoint row |
 | **renderer** (per window) | the replica (a mirror of one session's rows and record, ADR-0043), local shell state (view, guards), the Settings pending state; one role per route | touch a file, a store, a credential |
@@ -62,7 +64,7 @@ flowchart LR
 
 ## Message families
 
-**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`, `panels/git`), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
+**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`, `panels/git`, `interface/agentPopOut` — REQ-SHELL-073's "agent pop-out", Part R), `window.openPersona {persona, agentId, focusSteer?}` / `window.personaPayload` (Part R: open or raise the persona window; the window reads its persona, the followed session and the instance to select — answered by main from the registry; a raise is a request, REQ-SHELL-161), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
 `session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
 `git.read`, `worktree.create/remove/chooseAttach/probePath` (Part O — see the Git paragraph below),
 `pause.present/payload`, `approval.payload`, `notice.acknowledge`, `workspace.backup/restore`,
@@ -149,6 +151,8 @@ crosses a renderer boundary — and the three checkpoint asks of the paragraph a
 restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`ServiceAskSchema`, ADR-0002 c.7) —
 `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never
 talk directly.
+
+**Every window subscribes for itself (Part R).** `session.subscribe` / `session.unsubscribe` bind the relay subscription to the **sender's** webContents id — the persona window's when it asks — not the main window's (the twenty-seventh defect, ADR-0043's note); the run host's `session.attach` then re-delivers the whole-session update and the resident rows to every subscriber of the session. A persona window subscribes on show and unsubscribes on hide (ADR-0048's zero-work rule).
 
 ## The control channel (ADR-0010 #1) across the boundaries
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { isBusy, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
 import { ModelsSettings, PersonasSettings, RuntimeSettings, type ConfigSettingsProps } from './settings/ConfigSettings.js';
@@ -54,9 +54,11 @@ export interface SettingsViewProps {
   readonly config?: ConfigSettingsProps | undefined;
   /** ADR-0034 (Part S): the MCP Servers category, answered by the run host. */
   readonly mcp?: McpSettingsProps | undefined;
+  /** Part R: the Interface category's further preference controls (the agent pop-out toggle), supplied by the renderer root. */
+  readonly interfaceExtras?: ReactNode;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, interfaceExtras }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -136,6 +138,7 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
               <button type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
               <span className="text-secondary settings__hint">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</span>
             </div>
+            {interfaceExtras}
             <div className="settings__action">
               <button type="button" className="btn btn-secondary" onClick={() => setMessage('Panel sizes already use their declared defaults; no divider is registered yet.')}>Reset panel sizes</button>
               <span className="text-secondary settings__hint">Restores every resizable pane to its default size and takes effect immediately.</span>

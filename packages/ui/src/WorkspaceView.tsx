@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { isBusy, PERMISSION_PRESETS, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
-import { markMotionStart } from './motion.js';
+import { liveDescendants, runLevelAgent } from './agents.js';
+import { Inspector, type PersonaEntry } from './Inspector.js';
+import { useShellState } from './shell-state.js';
+import { TranscriptRows, rowRole, rowTime, toolOutcome } from './TranscriptRows.js';
+
+// The row helpers moved to TranscriptRows.tsx in Part R (one renderer for every transcript surface); re-exported so nothing that named them here breaks.
+export { rowRole, rowTime, toolOutcome };
 
 /**
  * The Workspace view's conversation surface, at the point the mechanism has
@@ -40,6 +46,27 @@ export interface WorkspaceViewProps {
   readonly onSetModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onSetReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly models?: readonly string[] | undefined;
+  /** Part R — the inspector (REQ-MONITOR-050..067): the configured personas, the entry role's facts for the run-level agent, the compression threshold. */
+  readonly personas?: readonly PersonaEntry[] | undefined;
+  readonly entry?: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] } | undefined;
+  readonly compressionThresholdPercent?: number | undefined;
+  /** REQ-SHELL-073 / REQ-MONITOR-072: a tree click selects (the shared selection) and, with the preference on, the caller opens the window; `key` moves select only. */
+  readonly onSelectAgent?: ((id: string | null, source?: 'click' | 'key') => void) | undefined;
+  /** REQ-SHELL-072/073, REQ-MONITOR-137: open or raise the persona window; `focusSteer` when the inspector's Steer asked for it. */
+  readonly onOpenPersona?: ((agent: AgentRecord, focusSteer: boolean) => void) | undefined;
+}
+
+/** REQ-MONITOR-051: below 1180 px the inspector and the agents panel are overlay drawers, one open at a time. */
+function useNarrow(): boolean {
+  const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 1179px)') : null;
+  const [narrow, setNarrow] = useState(query?.matches ?? false);
+  useEffect(() => {
+    if (!query) return;
+    const on = () => setNarrow(query.matches);
+    query.addEventListener('change', on);
+    return () => query.removeEventListener('change', on);
+  }, [query]);
+  return narrow;
 }
 
 /** REQ-CHAT-036/037: the queued messages panel, above the composer, hidden while the queue is empty. */
@@ -138,13 +165,6 @@ export function composerAction(session: SessionRecord | null, runActive: boolean
 export function stopLabel(stopPending: boolean): 'Stop run' | 'Force stop' {
   return stopPending ? 'Force stop' : 'Stop run';
 }
-/** REQ-CHAT-011/047: displayed role `you`; an agent row shows its persona; a system row is the product's; a tool row its agent. */
-export function rowRole(row: Pick<TranscriptRow, 'kind' | 'persona' | 'name'>): string {
-  if (row.kind === 'user') return 'you';
-  if (row.kind === 'system') return 'rotaris';
-  if (row.kind === 'diff') return 'edit';
-  return row.persona ?? row.name ?? row.kind;
-}
 /** REQ-ORCH-014: the transient status, then the classified one in its place — the category identifier exact, never colour alone. */
 export function intentStatusText(intent: SessionRecord['intent']): string | null {
   if (!intent) return null;
@@ -215,58 +235,6 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
     </div>
   );
 }
-export function rowTime(at: string): string {
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return '';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-/** REQ-CHAT-060: `ok · 3.2s`, `failed`, `blocked · 0.0s`, a pulsing `◉ running…`; a value outside the four reads as failed. */
-export function toolOutcome(row: Pick<TranscriptRow, 'toolStatus' | 'durationMs' | 'settled'>): { text: string; state: 'running' | 'ok' | 'failed' | 'blocked' | 'none' } {
-  const s = row.toolStatus;
-  if (s === undefined || s === '') return { text: '', state: 'none' };
-  const secs = `${((row.durationMs ?? 0) / 1000).toFixed(1)}s`;
-  if (s === 'running') return row.settled ? { text: '', state: 'none' } : { text: '◉ running…', state: 'running' };
-  if (s === 'ok') return { text: `ok · ${secs}`, state: 'ok' };
-  if (s === 'blocked') return { text: `blocked · ${secs}`, state: 'blocked' };
-  return { text: 'failed', state: 'failed' };
-}
-
-function ToolRow({ row }: { row: TranscriptRow }) {
-  const [open, setOpen] = useState(false);
-  const outcome = toolOutcome(row);
-  const expandable = (row.input !== undefined && row.input !== '') || (row.output !== undefined && row.output !== '');
-  const description = outcome.state === 'blocked' ? `Blocked: ${row.blockedReason ?? row.output ?? 'the call was not executed'}` : undefined;
-  return (
-    <article className={`row row--tool tool tool--${outcome.state}${row.settled ? '' : ' row--streaming'}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey}>
-      <header className="row__head">
-        <span className="row__role">{rowRole(row)}</span>
-        <time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time>
-      </header>
-      <button
-        type="button"
-        className={`tool__header mono${expandable ? '' : ' tool__header--static'}`}
-        onClick={() => { if (expandable) setOpen((o) => !o); }}
-        aria-expanded={expandable ? open : undefined}
-        aria-description={description}
-        disabled={!expandable}
-      >
-        <span className="tool__chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
-        <span className="tool__name">{row.body}</span>
-        {outcome.text && <span ref={(element) => { if (element && outcome.state === 'running') markMotionStart(element); }} className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>}
-      </button>
-      {!open && expandable && <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>}
-      {open && (
-        <div className="tool__card">
-          {row.input !== undefined && row.input !== '' && (<><div className="tool__caption">INPUT</div><pre className="tool__pre mono">{row.input}</pre></>)}
-          {row.output !== undefined && row.output !== '' && (<><div className="tool__caption">OUTPUT</div><pre className="tool__pre mono">{row.output}</pre></>)}
-          {outcome.state === 'blocked' && row.blockedReason && <div className="tool__blocked">{row.blockedReason}</div>}
-        </div>
-      )}
-    </article>
-  );
-}
-
 /** REQ-CHAT-051: one trailer row per pending approval, after every recorded row. */
 function ApprovalTrailerRow({ p }: { p: ApprovalPayload }) {
   return (
@@ -319,7 +287,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [] }: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona }: WorkspaceViewProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -385,13 +353,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     const r = await onContinue();
     if (!r.ok) setError(r.reason); else setError(null);
   };
-  const descendantsOf = (id: string): string[] => {
-    const all = session?.agents ?? [];
-    const out: string[] = [];
-    const walk = (parent: string) => { for (const a of all) if (a.parentId === parent && !['done', 'failed', 'cancelled'].includes(a.presentationState)) { out.push(a.name); walk(a.id); } };
-    walk(id);
-    return out;
-  };
+  // REQ-MONITOR-064: the live descendants, by the one rule every agent surface applies.
+  const descendantsOf = (id: string): string[] => liveDescendants(session?.agents ?? [], id).map((a) => a.name);
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // REQ-CHAT-001: Enter submits, Shift+Enter inserts a newline.
@@ -399,16 +362,42 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   };
 
   const mode = (session?.permissionMode ?? null) as PermissionPreset | null;
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  // REQ-MONITOR-042 (Part R): the selection is the shell's, shared by every surface; `run` is the run-level selection.
+  const selectedAgent = useShellState((st) => st.selectedAgentId);
+  const selectAgentShared = useShellState((st) => st.selectAgent);
+  const select = (id: string | null, source?: 'click' | 'key') => { selectAgentShared(id); onSelectAgent?.(id, source); };
   const agents = session?.agents ?? [];
-  const selected = agents.find((a) => a.id === selectedAgent) ?? null;
+  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
+  const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
+  // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
+  const narrow = useNarrow();
+  const [drawer, setDrawer] = useState<'agents' | 'inspector' | null>(null);
+  const [seenSelection, setSeenSelection] = useState(selectedAgent);
+  if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (narrow && selectedAgent !== null) setDrawer('inspector'); }
+  const inspectorCancel = (agent: AgentRecord) => {
+    if (agent.id === RUN_AGENT_ID) { setConfirming('stop'); return; }
+    setConfirming({ agent: { id: agent.id, name: agent.name }, descendants: descendantsOf(agent.id) });
+  };
+  const inspector = (
+    <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models}
+      compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} nowIso={nowIso}
+      onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
+      onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
+      drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
+  );
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit');
   const switchable = session !== null && (session.executionStatus === 'running' || session.executionStatus === 'waiting');
   const queued = session?.queuedPrompts ?? [];
   return (
-    <div className={`workspace${agents.length > 0 ? ' workspace--with-agents' : ''}`}>
-      {agents.length > 0 && (
-        <aside className="agents" aria-label="Delegation">
+    <div className={`workspace${agents.length > 0 ? ' workspace--with-agents' : ''}${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
+      {narrow && (
+        <div className="workspace__drawer-bar" aria-label="Panels">
+          {agents.length > 0 && <button type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</button>}
+          <button type="button" className={`btn btn-ghost btn-compact${drawer === 'inspector' ? ' is-active' : ''}`} aria-pressed={drawer === 'inspector'} onClick={() => setDrawer(drawer === 'inspector' ? null : 'inspector')}>Inspector</button>
+        </div>
+      )}
+      {agents.length > 0 && (!narrow || drawer === 'agents') && (
+        <aside className={`agents${narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
           <div className="agents__header">
             <span className="agents__title">Agents</span>
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
@@ -418,7 +407,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               <button type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name }, descendants: descendantsOf(selected.id) })}>Cancel {selected.name}</button>
             )}
           </div>
-          <AgentTree agents={agents} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} />
+          <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
         </aside>
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
@@ -433,19 +422,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <span className="empty-state-title">{session ? 'No rows yet' : 'Describe the outcome you want…'}</span>
           </div>
         )}
-        {rows.map((r) => (r.kind === 'tool' ? <ToolRow key={r.index} row={r} /> : (
-          <article key={r.index} className={`row row--${r.kind}${r.settled ? '' : ' row--streaming'}`} data-index={r.index} data-settled={r.settled}>
-            <header className="row__head">
-              <span className="row__role">{rowRole(r)}</span>
-              <time className="row__time mono" dateTime={r.at}>{r.ts || rowTime(r.at)}</time>
-              {!r.settled && <span ref={(element) => { if (element) markMotionStart(element); }} className="row__streaming" aria-label="still being written">…</span>}
-            </header>
-            <div className={`row__body${r.kind === 'diff' ? ' mono row__body--diff' : ''}`}>{r.body}</div>
-          </article>
-        )))}
+        <TranscriptRows rows={rows} />
         {pending.map((p) => <ApprovalTrailerRow key={p.request_id} p={p} />)}
         <div ref={tail} />
       </div>
+      {(!narrow || drawer === 'inspector') && inspector}
       <QueuePanel prompts={queued} onEdit={onEditQueued} onRemove={onRemoveQueued} onError={setError} />
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         {error && <div className="composer__error" role="alert">{error}</div>}

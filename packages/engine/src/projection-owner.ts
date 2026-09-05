@@ -41,10 +41,17 @@ export interface ProjectionOwnerDeps {
 
 export const GROWTH_TICK: Millis = millis(50);
 
+/** The event kinds after which the whole-session record differs from the one last published (the agents, their tools). */
+const RECORD_CHANGING_EVENTS: ReadonlySet<string> = new Set(['child.spawn', 'child.transition', 'tool.start', 'tool.finish']);
+/** Well inside REQ-MONITOR-038's 250 ms visibility budget, and one read for a burst of tool events. */
+const RECORD_TICK = millis(80);
+
 export class ProjectionOwner {
   private readonly rows = new Map<number, TranscriptRow>();
   private lowestHeld = Number.POSITIVE_INFINITY;
   private pendingGrowth: { handle: TimerHandle; fromIndex: number } | null = null;
+  /** A record publication owed to a child or tool event, coalesced (REQ-SHELL-076's spirit; one read per interval, not one per event). */
+  private pendingRecord: TimerHandle | null = null;
   readonly counters = { increments: 0, snapshots: 0, growthTicks: 0 };
 
   constructor(private readonly deps: ProjectionOwnerDeps) {
@@ -74,7 +81,13 @@ export class ProjectionOwner {
       this.publishIncrement(c.row.index, [c.row]);
       return;
     }
-    if (c.kind === 'save') this.publishSnapshot();
+    if (c.kind === 'save') { this.publishSnapshot(); return; }
+    // Part R found the twenty-eighth defect here: the record was published on a SAVE only, because when this owner was built
+    // (2026-09-03) the run's status saves were the only thing that changed it. From Part B on the ledger changes it too —
+    // a child spawned, claimed or settled, a tool started or finished — with no save, so every agent surface showed a
+    // child's state up to one sampling period (10 s) late, and never saw a tool as active. A commit that changed the
+    // record publishes it (ADR-0043's note); the rows are untouched by it (REQ-MONITOR-216).
+    if (c.kind === 'event' && (c.events ?? []).some((e) => RECORD_CHANGING_EVENTS.has(e.event.event))) this.scheduleRecord();
   }
 
   /** Intra-row growth: in memory only, coalesced (REQ-MONITOR-219/220). */
@@ -135,7 +148,14 @@ export class ProjectionOwner {
     this.deps.publisher.increment({ v: CONTRACT_SCHEMA_VERSION, sessionId: this.deps.sessionId, seq, earliestChanged, rows: [...rows], diffs: [], personas: [] });
   }
 
+  /** One record publication per RECORD_TICK for a burst of child and tool events; a save in between publishes at once and clears it. */
+  private scheduleRecord(): void {
+    if (this.pendingRecord) return;
+    this.pendingRecord = this.deps.timers.after(RECORD_TICK, () => { this.pendingRecord = null; this.publishSnapshot(); });
+  }
+
   private publishSnapshot(): void {
+    if (this.pendingRecord) { this.pendingRecord.cancel(); this.pendingRecord = null; }
     const session = this.deps.readSession();
     const seq = this.deps.seq.stamp(this.deps.sessionId);
     this.counters.snapshots += 1;

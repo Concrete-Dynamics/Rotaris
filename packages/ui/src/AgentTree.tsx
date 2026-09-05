@@ -53,7 +53,8 @@ export function elapsedLabel(a: AgentRecord, nowIso: string | null): string {
 export interface AgentTreeProps {
   readonly agents: readonly AgentRecord[];
   readonly selected: string | null;
-  readonly onSelect: (id: string | null) => void;
+  /** `source` says whether a pointer click or a key move selected the row: REQ-SHELL-073's pop-out-on-click follows a click only. */
+  readonly onSelect: (id: string | null, source?: 'click' | 'key') => void;
   readonly nowIso?: string | null | undefined;
 }
 
@@ -61,7 +62,7 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const rows = treeRows(agents, collapsed);
   const index = rows.findIndex((r) => r.agent.id === selected);
-  const move = (to: number) => { const r = rows[to]; if (r) onSelect(r.agent.id); };
+  const move = (to: number) => { const r = rows[to]; if (r) onSelect(r.agent.id, 'key'); };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (rows.length === 0) return;
     const i = index < 0 ? 0 : index;
@@ -101,8 +102,9 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
             aria-level={r.depth + 1}
             className={`agent-row agent-row--${a.presentationState}${isSelected ? ' is-selected' : ''}${a.live ? ' is-live' : ''}`}
             title={a.delegationTask || a.activity || a.name}
-            onClick={() => onSelect(a.id)}
+            onClick={() => onSelect(a.id, 'click')}
             data-task-id={a.id}
+            data-state={a.presentationState}
           >
             <span className="agent-row__prefix mono" aria-hidden="true">{r.prefix}</span>
             <span ref={(element) => { if (element && a.presentationState === 'running') markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${a.presentationState}`} aria-hidden="true" />

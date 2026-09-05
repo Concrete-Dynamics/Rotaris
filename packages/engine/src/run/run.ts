@@ -264,6 +264,12 @@ export class Run {
   get currentWait(): WaitState | null {
     return this.waits.current();
   }
+  /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
+  reasoningFor(persona: string): string | null {
+    const resolved = this.deps.personas?.resolve(persona) ?? null;
+    const level = resolved?.persona.thinking ?? null;
+    return level === null || level === 'unset' ? null : level;
+  }
 
   /**
    * The wait began, changed or ended: the session's status follows (`waiting` while parked — REQ-SESSION-073's

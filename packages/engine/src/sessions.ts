@@ -15,7 +15,7 @@ import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, type Budget } from './children/ledger.js';
-import { presentationChildState, type AgentRecord, type ChildState } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
@@ -25,6 +25,7 @@ import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentS
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import type { TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
+import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 
@@ -118,6 +119,8 @@ export interface SessionsDeps {
   readonly sessionLogAppender?: (dal: StoreDal, sessionId: SessionId) => (line: string) => void;
   /** REQ-TOOLS-184: background terminal sessions in the running state, for the strip. */
   readonly backgroundSessions?: () => number;
+  /** REQ-MONITOR-049 (Part R): a model's own maximum input tokens by key; absent or null falls back to REQ-MONITOR-080's default. Unfilled in this build — the run host's setup does not carry `max_input_tokens` (recorded in the Part R handoff). */
+  readonly contextLimitFor?: ((modelKey: string) => number | null) | undefined;
   /** ADR-0015: the session's hook port, built by the root at run start (REQ-HOOKS-131); absent means no hooks. */
   readonly hooks?: (ctx: HookPortContext) => HookPort | null;
   /** The host's notice channel. */
@@ -362,16 +365,52 @@ export function intentStatusOf(r: SessionRow, auditPayload: string | null): Inte
   return r.execution_status === 'starting' ? { phase: 'classifying' } : null;
 }
 
-/** REQ-MONITOR-044/046/047: a child row as a surface sees it. */
-export function toAgentRecord(c: ChildRow, clocks: Clocks): AgentRecord {
+/**
+ * REQ-MONITOR-044/046/047/048/049: a child row as a surface sees it. Part R: the called and active tools and the latest
+ * prompt reading come from the writer's incremental tracker (never from the transcript, REQ-MONITOR-038); the reasoning
+ * level from the run's persona resolution, `medium` when none; the limit from `contextLimitFor` when the caller can
+ * name the model's own maximum, else REQ-MONITOR-080's default. The tool-call count is the larger of the row's
+ * settled figure (written once at the child's end) and the tracker's live count, so a running child counts up.
+ */
+export interface AgentFacts {
+  readonly activity?: AgentActivity | undefined;
+  readonly reasoningFor?: ((persona: string) => string | null) | undefined;
+  readonly contextLimitFor?: ((modelKey: string) => number | null) | undefined;
+  /**
+   * REQ-MONITOR-211/213 (Part R's reading, ADR-0043 note): the session's execution status and its last update. A
+   * non-terminal child of a session whose status neither claims a live run nor is `idle` is PRESENTED settled to the
+   * run's own outcome — its activity replaced, its active chips cleared — by this one projection, so no surface applies
+   * a settling rule of its own; the ledger's own settling (REQ-ORCH-053) writes the row at the next run start.
+   */
+  readonly session?: { readonly executionStatus: string; readonly updatedAt: string } | undefined;
+}
+export const ENDED_WITH_RUN = 'Ended with the run.';
+const parseList = (json: string): string[] => { try { const v: unknown = JSON.parse(json); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; } catch { return []; } };
+export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {}): AgentRecord {
   const state = c.state as ChildState;
   const ps = presentationChildState(state);
   void clocks;
+  const activity = facts.activity;
+  const status = facts.session?.executionStatus ?? null;
+  const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state);
+  const shownState: ChildState = reconcile ? reconciledState(status) : state;
+  const shownPs = reconcile ? presentationChildState(shownState) : ps;
+  const terminal = c.completed_at !== null || reconcile;
   return {
-    id: c.task_id, name: c.canonical_name, givenName: c.given_name, persona: c.persona, state, presentationState: ps, parentId: c.parent_id,
-    dependencies: (() => { try { return JSON.parse(c.depends_on) as string[]; } catch { return []; } })(),
-    activity: c.task.slice(0, 180), model: c.model_key, depth: c.depth, background: c.background === 1, category: c.category,
-    spawnedAt: c.spawned_at, completedAt: c.completed_at, toolCalls: c.tool_calls, delegationTask: c.task, live: ps === 'running',
+    id: c.task_id, name: c.canonical_name, givenName: c.given_name, persona: c.persona, state: shownState, presentationState: shownPs, parentId: c.parent_id,
+    dependencies: parseList(c.depends_on),
+    activity: reconcile ? ENDED_WITH_RUN : c.task.slice(0, 180), model: c.model_key, depth: c.depth, background: c.background === 1, category: c.category,
+    spawnedAt: c.spawned_at, completedAt: c.completed_at ?? (reconcile ? facts.session?.updatedAt ?? null : null), toolCalls: Math.max(c.tool_calls, activity?.callCount(c.canonical_name) ?? 0), delegationTask: c.task,
+    reasoning: facts.reasoningFor?.(c.persona) ?? 'medium',
+    contextUsed: activity?.contextUsed(c.canonical_name) ?? 0,
+    contextLimit: facts.contextLimitFor?.(c.model_key) ?? DEFAULT_CONTEXT_CAPACITY,
+    grantedTools: parseList(c.granted_tools),
+    calledTools: activity?.calledTools(c.canonical_name) ?? [],
+    // REQ-MONITOR-211/213: a settled agent presents no active tool, whatever a crash left in the ring.
+    activeTools: terminal ? [] : activity?.activeTools(c.canonical_name) ?? [],
+    delegationSessionId: null,
+    inheritedContext: parseList(c.inherited_context).join(String.fromCharCode(10)),
+    live: shownPs === 'running',
     ...mcpEvidenceOf(c.granted_mcp),
   };
 }
@@ -475,7 +514,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -529,7 +568,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks)), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;

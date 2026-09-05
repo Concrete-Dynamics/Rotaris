@@ -210,8 +210,15 @@ files show it (one discovery launch plus one session launch per server).
 
 **OQ-22's reading — overlay on the parent environment, flagged for the owner** (recorded under OQ-22):
 `resolveServerEnvironment` produces `REQ-MCP-090`'s map (full-value `${VAR}` expansion, unset → the key omitted,
-secrets last) and the run host hands the child `{ ...process.env, ...map }`. No scrubbing of the parent
-environment is applied; which names to scrub is the owner's.
+secrets last) and the child inherits the run host's environment with that map overlaid. No scrubbing of the parent
+environment is applied; which names to scrub is the owner's. **Falsified at the merge and kept (the manager,
+2026-09-05):** this paragraph first read "the run host hands the child `{ ...process.env, ...map }`" — the code handed
+the child the map ALONE (`transportFor` spawned with the description's `env`), so the shipped `browser` entry's `npx`
+had no PATH and the settings PNG still read `spawn npx ENOENT` after the twenty-ninth's wrap; the unit test had masked
+it by passing a full environment as the description's map. The overlay now lives at the transport (`parentEnv` on
+`OwnedStdioSpec`, threaded through `openClient` and the three paths from `McpHostDeps.parentEnv`, the run host's own
+environment), and never enters the nine-value identity, which is the configured map's. The test's description map is
+empty now.
 
 **Readings where the record was silent, recorded here (each in the code beside its rule):**
 

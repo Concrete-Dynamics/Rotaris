@@ -8,7 +8,7 @@ import type { McpLog, ProbeOutcome, ServerDescription } from './types.js';
  * server whose discovery failed (REQ-MCP-054). Probing n times contacts the server n times.
  */
 export class HealthProbe {
-  constructor(private readonly deps: { readonly clocks: Clocks; readonly log: McpLog; readonly budgetMs?: Millis }) {}
+  constructor(private readonly deps: { readonly clocks: Clocks; readonly log: McpLog; readonly budgetMs?: Millis; readonly parentEnv?: Readonly<Record<string, string>> }) {}
 
   probe(name: string, description: ServerDescription): Promise<ProbeOutcome> {
     const { clocks, log } = this.deps;
@@ -26,7 +26,7 @@ export class HealthProbe {
       });
       void (async () => {
         try {
-          opened = await openClient({ description, label: `probe:${name}`, timers: clocks.timers, monotonic: clocks.monotonic, log, connectTimeoutMs: budget, signal: abort.signal });
+          opened = await openClient({ parentEnv: this.deps.parentEnv, description, label: `probe:${name}`, timers: clocks.timers, monotonic: clocks.monotonic, log, connectTimeoutMs: budget, signal: abort.signal });
           const remaining = millis(Math.max(500, budget - (clocks.monotonic.now() - started)));
           const tools = await listTools(opened.client, remaining, abort.signal);
           finish({ state: 'healthy', toolCount: tools.length, elapsedMs: clocks.monotonic.now() - started });

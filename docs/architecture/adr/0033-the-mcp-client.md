@@ -214,6 +214,8 @@ the shipped `browser` row — the failure the twenty-ninth's fix wrapped. Node's
 `npx` (a POSIX shell script) beside `npx.cmd`, and `findExecutable` returned the extensionless file first, so the wrap
 never saw `.cmd` and `spawn` was handed a file Windows cannot start. Windows executes a name only under a PATHEXT
 extension; on win32 a base without one is now tried with the extensions only (`packages/platform/src/spawn.ts`, the
-falsified candidate list kept beside it; a test with the twin files). A defect in the fix, not a new entry in the tally.
-The `browser` row now probes the real `npx` and reports `unreachable` within the 8 s budget when the package is not in the
-cache — the run-time answer, not a host failure (`REQ-MCP-113`).
+falsified candidate list kept beside it; a test with the twin files). The row still read `ENOENT` on the next build: the
+child was spawned with the description's map alone and never the parent environment, so the lookup had no PATH at all —
+recorded under the ADR-0034 note's OQ-22 paragraph, which had claimed the overlay. Both a defect in the fix, not a new
+entry in the tally. With both corrected the `browser` row probes the real `npx.cmd` and reports what the runtime answers
+within the 8 s budget — the server's own outcome, not a host failure (`REQ-MCP-113`).

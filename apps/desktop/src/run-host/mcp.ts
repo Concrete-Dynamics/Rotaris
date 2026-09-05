@@ -30,6 +30,8 @@ export interface McpHostDeps {
   readonly log: (message: string, level?: 'info' | 'warn') => void;
   /** REQ-MCP-044 channel 1: the warning notice, 8 s auto-dismiss. */
   readonly notice: (n: { severity: 'warning'; headline: string; detail: string; key?: string; ttlMs: number }) => void;
+  /** OQ-22's reading: the run host's own environment, which every stdio child inherits under its server's map. */
+  readonly parentEnv: Readonly<Record<string, string>>;
 }
 
 export interface McpSessionContext {
@@ -55,8 +57,8 @@ export class McpHost {
 
   constructor(private readonly deps: McpHostDeps) {
     this.mcpLog = { info: (m) => deps.log(m), warn: (m) => deps.log(m, 'warn'), debug: (m) => deps.log(m) };
-    this.discovery = new ToolDiscovery({ clocks: deps.clocks, log: this.mcpLog });
-    this.probe = new HealthProbe({ clocks: deps.clocks, log: this.mcpLog });
+    this.discovery = new ToolDiscovery({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv });
+    this.probe = new HealthProbe({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv });
   }
 
   // ---- the sink -------------------------------------------------------------------------------------------------
@@ -192,7 +194,7 @@ export class McpHost {
     let s = this.sessions.get(sessionId);
     if (!s) {
       s = new SessionConnections({
-        clocks: this.deps.clocks, log: this.mcpLog, workspaceRoot,
+        clocks: this.deps.clocks, log: this.mcpLog, workspaceRoot, parentEnv: this.deps.parentEnv,
         // REQ-MCP-069: once per server per session, through both channels.
         unreachable: (server, detail) => { this.deliver({ severity: 'warning', scope: 'session', key: `mcp.unreachable.${server}`, channels: 'user', message: `MCP server '${server}' became unreachable: ${redact(detail)}; the call failed and later calls will try again (REQ-MCP-069)`, server }, ctx); },
         codeIntelligenceMemoryTool: null,

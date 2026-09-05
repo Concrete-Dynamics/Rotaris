@@ -62,6 +62,12 @@ writeFileSync(join(workspace, 'README.md'), '# MCP proof workspace\n');
 writeFileSync(join(workspace, '.env'), 'GAMMA_FROM_FILE=filed\n');
 const y = (v) => JSON.stringify(v);
 const node = process.execPath;
+// The merge of Parts R and S (2026-09-05): the shipped `browser` default is `npx -y <pkg>` — a `.cmd` runner on Windows and a
+// package download on first use. The proof overrides it with a `.cmd` runner over the fixture, so the wrap of REQ-MCP-113 is
+// exercised through the built application (the settings probe reaches the fixture through cmd.exe) and no proof touches the
+// network. The entry keeps the default's `enabled: false`; the field-wise merge of REQ-MCP-025 replaces its command and args.
+const runnerCmd = join(output, 'runner.cmd');
+writeFileSync(runnerCmd, `@echo off\r\n"${node}" %*\r\n`);
 
 /** The global file: two stdio servers over the fixture, the persona grants; rewritten per launch with the fixture flags. */
 function globalYaml({ alphaFlags = [], betaFlags = [], alphaTimeout = null, personas = {} } = {}) {
@@ -76,6 +82,7 @@ function globalYaml({ alphaFlags = [], betaFlags = [], alphaTimeout = null, pers
     `  beta: { command: ${y(node)}, args: ${y(betaArgs)}, disabled_tools: [fail], tool_name_map: { extra: renamed_extra } }`,
     '  off: { command: node, args: [nothing.js], enabled: false }',
     '  ghost: { command: no-such-command-xyz }',
+    `  browser: { command: ${y(runnerCmd)}, args: ${y([fixture, '--pid-file', join(pids, 'browser.pids')])} }`,
     'personas:',
     '  orchestrator: { mcp_servers: [alpha, beta, gamma], mcp_tools: { beta: [echo, nothing, extra] } }',
     ...Object.entries(personas).map(([role, v]) => `  ${role}: ${v}`),
@@ -99,7 +106,7 @@ function oneDatabase() {
   if (found.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${found.length}`);
   return found[0];
 }
-function resetPids() { for (const f of ['alpha', 'beta', 'gamma']) writeFileSync(join(pids, `${f}.pids`), ''); }
+function resetPids() { for (const f of ['alpha', 'beta', 'gamma', 'browser']) writeFileSync(join(pids, `${f}.pids`), ''); }
 const pidLines = (name) => readFileSync(join(pids, `${name}.pids`), 'utf8').split('\n').filter((l) => l.trim() !== '');
 const sha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
@@ -298,6 +305,8 @@ const results = {};
   const rows = JSON.parse((lines(r.log, /capture: probe tr\[data-mcp-server\] →/)[0] ?? '').split(' → ')[1] ?? '[]');
   const health = Object.fromEntries(rows.map((x) => [x.data['data-mcp-server'], x.data['data-health']]));
   if (health.alpha !== 'healthy' || health.beta !== 'healthy' || health.gamma !== 'healthy') throw new Error(`the fixtures should be healthy: ${JSON.stringify(health)}`);
+  // REQ-MCP-113 through the built application: the `.cmd` runner standing in for `browser` is reached through cmd.exe and answers.
+  if (health.browser !== 'healthy') throw new Error(`the .cmd runner standing in for browser should probe healthy through the wrap: ${JSON.stringify(health)}`);
   if (health.ghost !== 'unreachable' || health.off !== 'unreachable') throw new Error(`the unavailable and the not-installed servers should be unreachable: ${JSON.stringify(health)}`);
   const texts = JSON.parse((lines(r.log, /capture: probe tr\[data-mcp-server\] \[data-health-text\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => x.text);
   if (!texts.some((t) => /Healthy · 5 tools/.test(t))) throw new Error(`no healthy row shows its tool count: ${JSON.stringify(texts)}`);

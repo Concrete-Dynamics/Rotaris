@@ -250,7 +250,7 @@ const configured = new Map<string, ConfiguredRun>();
 const leased = new Map<string, Record<string, string>>();
 // ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
 const mcp = new McpHost({
-  clocks, log: (m, level) => log(m, level ?? 'info'),
+  clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, headline: n.headline, detail: n.detail, ...(n.key === undefined ? {} : { key: n.key }), ttlMs: n.ttlMs } }),
 });
 const configure = (workspaceRoot: string, attended: boolean) => {

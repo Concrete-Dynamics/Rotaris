@@ -35,6 +35,8 @@ export interface Connected {
 }
 
 export interface SessionDeps {
+  /** OQ-22's reading: what a stdio child inherits under the server's map; the run host supplies its environment. */
+  readonly parentEnv?: Readonly<Record<string, string>>;
   readonly clocks: Clocks;
   readonly log: McpLog;
   readonly workspaceRoot: string;
@@ -131,7 +133,7 @@ export class SessionConnections {
     const budget = this.deps.connectBudgetMs ?? CONNECT_AND_LIST_TIMEOUT_MS;
     const started = clocks.monotonic.now();
     this.launches.set(name, (this.launches.get(name) ?? 0) + 1);
-    const opened = await openClient({ description, label: name, timers: clocks.timers, monotonic: clocks.monotonic, log, connectTimeoutMs: budget });
+    const opened = await openClient({ parentEnv: this.deps.parentEnv, description, label: name, timers: clocks.timers, monotonic: clocks.monotonic, log, connectTimeoutMs: budget });
     let current: readonly ToolInfo[];
     try {
       current = await listTools(opened.client, millis(Math.max(1_000, budget - (clocks.monotonic.now() - started))));

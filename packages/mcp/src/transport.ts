@@ -22,8 +22,15 @@ export interface OwnedStdioSpec {
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd: string;
-  /** The environment the pipeline resolved (OQ-22's reading: the scrubbed parent environment with REQ-MCP-090's map overlaid). */
+  /** REQ-MCP-043's `env`: the map the pipeline resolved (REQ-MCP-090) — the server's own entries, nothing of the parent's. */
   readonly env: Readonly<Record<string, string>>;
+  /**
+   * OQ-22's reading: the child inherits the parent process's environment with `env` overlaid. The parent's is the
+   * caller's to supply (the library assumes no process); it never enters the nine-value identity (REQ-MCP-047).
+   * The merge of Parts R and S (2026-09-05) found it absent: the child was spawned with the map ALONE, so `npx` had no
+   * PATH and the `.cmd` wrap's lookup found nothing — the `browser` default still failed with `spawn npx ENOENT`.
+   */
+  readonly parentEnv?: Readonly<Record<string, string>>;
   readonly timers: Timers;
   readonly log: McpLog;
   /** A name for the log lines. */
@@ -93,8 +100,9 @@ export class OwnedStdioTransport implements Transport {
       let child: ChildProcess;
       try {
         // REQ-MCP-113 on Windows: a `.cmd`/`.bat` runner (npx, uvx) is reached through cmd.exe with the line passed verbatim.
-        const launch = windowsLaunchOf(this.spec.command, this.spec.args, this.spec.env);
-        child = spawnChild({ command: launch.command, args: launch.args, cwd: this.spec.cwd, env: this.spec.env, stdio: ['pipe', 'pipe', 'pipe'], ...(launch.windowsVerbatimArguments === undefined ? {} : { windowsVerbatimArguments: launch.windowsVerbatimArguments }) });
+        const env = { ...(this.spec.parentEnv ?? {}), ...this.spec.env };
+        const launch = windowsLaunchOf(this.spec.command, this.spec.args, env);
+        child = spawnChild({ command: launch.command, args: launch.args, cwd: this.spec.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], ...(launch.windowsVerbatimArguments === undefined ? {} : { windowsVerbatimArguments: launch.windowsVerbatimArguments }) });
       } catch (cause) {
         reject(cause instanceof Error ? cause : new Error(String(cause)));
         return;

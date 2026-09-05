@@ -28,6 +28,8 @@ export interface OpenOptions {
   readonly connectTimeoutMs: Millis;
   readonly negotiation?: VersionNegotiationOptions;
   readonly signal?: AbortSignal;
+  /** The parent environment a stdio child inherits under the server's map (OQ-22's reading); omitted = the map alone. */
+  readonly parentEnv?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface OpenedClient {
@@ -43,9 +45,9 @@ export interface OpenedClient {
   readonly onClosed: (fn: () => void) => void;
 }
 
-export function transportFor(description: ServerDescription, spec: { label: string; timers: Timers; log: McpLog }): Transport {
+export function transportFor(description: ServerDescription, spec: { label: string; timers: Timers; log: McpLog; parentEnv?: Readonly<Record<string, string>> | undefined }): Transport {
   if (description.transport === 'stdio') {
-    return new OwnedStdioTransport({ command: description.command, args: description.args, cwd: description.cwd, env: description.env, timers: spec.timers, log: spec.log, label: spec.label });
+    return new OwnedStdioTransport({ command: description.command, args: description.args, cwd: description.cwd, env: description.env, ...(spec.parentEnv === undefined ? {} : { parentEnv: spec.parentEnv }), timers: spec.timers, log: spec.log, label: spec.label });
   }
   const url = new URL(description.url);
   const requestInit = description.headers ? { headers: { ...description.headers } } : undefined;
@@ -79,7 +81,7 @@ export async function openClient(opts: OpenOptions): Promise<OpenedClient> {
 }
 
 async function openOnce(opts: OpenOptions, negotiation: VersionNegotiationOptions): Promise<OpenedClient> {
-  const transport = transportFor(opts.description, { label: opts.label, timers: opts.timers, log: opts.log });
+  const transport = transportFor(opts.description, { label: opts.label, timers: opts.timers, log: opts.log, parentEnv: opts.parentEnv });
   const client = new Client(CLIENT_INFO, {
     versionNegotiation: negotiation,
     supportedProtocolVersions: [...SUPPORTED_PROTOCOL_VERSIONS],

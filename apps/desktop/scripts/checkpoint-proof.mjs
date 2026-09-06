@@ -131,7 +131,9 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: ['ignore',
 const commit = (message) => git(workspace, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message);
 git(workspace, 'init', '-q', '-b', 'main');
 git(workspace, 'config', 'core.autocrlf', 'false');
-writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n');
+// Both directories the load's amendment keeps ignored (REQ-CONFIG-013 / REQ-MCP-089; the runtime's marker since Parts T and U),
+// so the amendment is a no-op on this scratch repository and the tree stays clean.
+writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n.serena/\n');
 writeFileSync(join(workspace, 'README.md'), '# Checkpoint proof workspace\n');
 git(workspace, 'add', 'README.md', '.gitignore');
 commit('first');

@@ -312,9 +312,9 @@ describe('the rest of the load', () => {
     const s = scopes(null, null);
     writeFileSync(join(s.workspaceRoot, '.gitignore'), 'node_modules');
     loadConfiguration(s);
-    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n');
+    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n.serena/\n');
     loadConfiguration(s);
-    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n');
+    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n.serena/\n');
     const fresh = scopes(null, null);
     expect(loadConfiguration({ ...fresh, keepIgnored: false }).ok).toBe(true);
   });

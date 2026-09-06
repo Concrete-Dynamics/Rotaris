@@ -67,6 +67,9 @@ function scenario(name, agentsYaml, opts = {}) {
     'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
     ...(opts.fallback ? [`fallback_model: ${opts.fallback}`] : []),
     'runtime:', '  permission_mode: autonomous', ...agentsYaml,
+    // Since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run start
+    // about 4.5 s (ADR-0035's note, finding 6); this proof measures another mechanism, so the entry is off here.
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
     ...(opts.personas ?? []),
     ...(opts.delegation ? [] : ['rotaris:', '  delegation_strategy: single']), '',
   ].join('\n'));

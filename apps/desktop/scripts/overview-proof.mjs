@@ -109,7 +109,9 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
 // A repository with one commit and one untracked file, so the repository card has something to read (ADR-0038).
 const git = (...args) => execFileSync('git', args, { cwd: workspace, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'proof', GIT_AUTHOR_EMAIL: 'proof@rotaris.local', GIT_COMMITTER_NAME: 'proof', GIT_COMMITTER_EMAIL: 'proof@rotaris.local' } });
 git('init', '-q', '-b', 'main');
-writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n');
+// Both directories the load's amendment keeps ignored (REQ-CONFIG-013 / REQ-MCP-089; the runtime's marker since Parts T and U),
+// so the amendment is a no-op on this scratch repository and the tree stays clean.
+writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n.serena/\n');
 git('add', 'README.md', '.gitignore');
 git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
 writeFileSync(join(workspace, 'NOTES.md'), 'untracked\n');

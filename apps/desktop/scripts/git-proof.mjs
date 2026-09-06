@@ -120,7 +120,9 @@ const gitEnv = { ...process.env, GIT_AUTHOR_NAME: 'proof', GIT_AUTHOR_EMAIL: 'pr
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: gitEnv }).toString().trim();
 const commit = (message) => git(workspace, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message);
 git(workspace, 'init', '-q', '-b', 'main');
-writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n');
+// Both directories the load's amendment keeps ignored (REQ-CONFIG-013 / REQ-MCP-089; the runtime's marker since Parts T and U),
+// so the amendment is a no-op on this scratch repository and the tree stays clean.
+writeFileSync(join(workspace, '.gitignore'), '.rotaris/\n.serena/\n');
 writeFileSync(join(workspace, 'README.md'), '# Git proof workspace\n');
 git(workspace, 'add', 'README.md', '.gitignore');
 commit('first');

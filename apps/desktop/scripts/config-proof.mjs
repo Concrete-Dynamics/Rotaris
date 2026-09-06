@@ -151,7 +151,10 @@ const refused = log5.split('\n').find((line) => /refused before it started/i.tes
 if (!refused.includes(s5.workspaceFile) || !refused.includes('workspace scope') || !refused.includes('runtime.max_depth')) throw new Error(`the refusal did not name file, scope and path:\n${log5}`);
 if (/session .* started/.test(log5)) throw new Error('a run started on a fatal configuration');
 writeFileSync(s5.workspaceFile, WORKSPACE);
-const log5b = launch('fatal-corrected', s5, { ROTARIS_CAPTURE_PROMPT: 'run on the corrected file', ROTARIS_CAPTURE_AFTER_MS: '6000' });
+// 12 s, not 6: since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run
+// start about 4.5 s (ADR-0035's note, finding 6). This proof's YAML seeds are compared byte for byte, so the entry stays
+// on here and the window carries the cost instead.
+const log5b = launch('fatal-corrected', s5, { ROTARIS_CAPTURE_PROMPT: 'run on the corrected file', ROTARIS_CAPTURE_AFTER_MS: '12000' });
 if (!/ended completed/.test(log5b)) throw new Error(`the corrected file did not run to completion:\n${log5b}`);
 results.fatal = { refusal: refused.trim(), correctedRun: 'completed' };
 

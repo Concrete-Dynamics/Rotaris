@@ -59,6 +59,9 @@ function scenario(name, agentsYaml) {
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
     'runtime:', '  permission_mode: autonomous', ...agentsYaml,
+    // Since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run start
+    // about 4.5 s (ADR-0035's note, finding 6); this proof measures the control channel, so the entry is off here.
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
     'rotaris:', '  delegation_strategy: single', '',
   ].join('\n'));
   return { root, workspace, local };

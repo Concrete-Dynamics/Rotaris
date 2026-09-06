@@ -75,6 +75,9 @@ function scenario(name, extraYaml = []) {
     '# scratch configuration written by the proof script',
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+    // Since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run start
+    // about 4.5 s (ADR-0035's note, finding 6); this proof measures another mechanism, so the entry is off here.
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
     'runtime:', '  permission_mode: autonomous', '  max_depth: 3', '  max_active_children: 4', ...extraYaml, '',
   ].join('\n'));
   return { root, workspace, local, preferences: join(root, 'preferences') };

@@ -15,6 +15,7 @@ import { readCompressorSection, type CompressorSection } from './sections/compre
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
 import { readMcpServersSection } from './sections/mcp-servers.js';
 import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
+import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
 import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit-breaker-section.js';
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
@@ -136,16 +137,26 @@ function readConfigFile(path: string): ReadFile {
   return { state: 'read', parsed: parsed.value, plain: isPlainMap(plain) ? plain : null };
 }
 
-/** REQ-CONFIG-013: best-effort, idempotent, atomic enough for its purpose; every failure swallowed. */
+/**
+ * REQ-CONFIG-013 / REQ-MCP-089: best-effort, idempotent, atomic enough for its purpose; every failure swallowed.
+ * Two directories, not one, since the merge of Parts T and U (2026-09-06): the bundled code-intelligence runtime
+ * creates its per-project marker directory in the workspace root whenever it starts with a project (ADR-0035's
+ * note, finding 5), and with the entry enabled by default every first run left an untracked directory in the
+ * user's repository — the Git proof's isolated launch found the base tree dirty. The reading taken, flagged for the
+ * owner: the marker's directory is ignored by the same amendment as the product's own scope directory; the name
+ * comes from the generated manifest (REQ-MCP-116), never a literal.
+ */
 export function keepScopeDirIgnored(workspaceRoot: string): void {
   try {
     const file = join(workspaceRoot, '.gitignore');
     let existing = '';
     try { existing = readFileSync(file, 'utf8'); } catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') return; }
-    const ignored = existing.split(/\r?\n/).some((line) => line.trim().replace(/\/$/, '') === WORKSPACE_SCOPE_DIR);
-    if (ignored) return;
-    if (existing === '') writeFileSync(file, `${WORKSPACE_SCOPE_DIR}/\n`, 'utf8');
-    else appendFileSync(file, `${existing.endsWith('\n') ? '' : '\n'}${WORKSPACE_SCOPE_DIR}/\n`, 'utf8');
+    const lines = existing.split(/\r?\n/).map((line) => line.trim().replace(/\/$/, ''));
+    const missing = [WORKSPACE_SCOPE_DIR, CODE_INTELLIGENCE_MARKER_SEGMENTS[0]!].filter((dir) => !lines.includes(dir));
+    if (missing.length === 0) return;
+    const block = missing.map((dir) => `${dir}/\n`).join('');
+    if (existing === '') writeFileSync(file, block, 'utf8');
+    else appendFileSync(file, `${existing.endsWith('\n') ? '' : '\n'}${block}`, 'utf8');
   } catch { /* REQ-CONFIG-013: never fails the load */ }
 }
 

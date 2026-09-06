@@ -94,7 +94,7 @@ writeFileSync(join(workspace, 'README.md'), '# Fetch proof workspace\n');
 
 /** REQ-SANDBOX-038: the workspace file is REWRITTEN between launches; the next fetch reads it — no restart of anything but the proof's own launch. */
 function saveConfiguration(runtime) {
-  const lines = ['# scratch configuration written by the fetch proof', 'models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', 'runtime:'];
+  const lines = ['# scratch configuration written by the fetch proof', 'models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', 'mcp_servers:', '  code_intelligence: { enabled: false }', 'runtime:']; // the code_intelligence entry off: its discovery costs every run start about 4.5 s since Part T (ADR-0035's note, finding 6)
   for (const [key, value] of Object.entries(runtime)) lines.push(`  ${key}: ${Array.isArray(value) ? `[${value.map((v) => JSON.stringify(v)).join(', ')}]` : String(value)}`);
   lines.push('');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), lines.join('\n'));

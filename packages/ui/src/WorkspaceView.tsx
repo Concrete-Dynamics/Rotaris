@@ -372,6 +372,17 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<'agents' | 'inspector' | null>(null);
+  // REQ-SHELL-049/050 (Part W): Ctrl+Return is the window-wide fallback submit — the registration says whether the send control is enabled.
+  const registerComposer = useShellState((st) => st.registerComposer);
+  const registerOverlay = useShellState((st) => st.registerOverlay);
+  useEffect(() => { registerComposer({ submit: () => { void submit(); }, enabled: !busy }); });
+  useEffect(() => () => registerComposer(null), [registerComposer]);
+  // REQ-SHELL-055 (2): window-level Escape on this view closes both compact overlay drawers; nothing to close is nothing done.
+  const drawerOpen = drawer !== null;
+  useEffect(() => {
+    registerOverlay('drawers', narrow ? () => { if (!drawerOpen) return false; setDrawer(null); return true; } : null);
+    return () => registerOverlay('drawers', null);
+  }, [registerOverlay, narrow, drawerOpen]);
   const [seenSelection, setSeenSelection] = useState(selectedAgent);
   if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (narrow && selectedAgent !== null) setDrawer('inspector'); }
   const inspectorCancel = (agent: AgentRecord) => {

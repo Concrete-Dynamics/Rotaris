@@ -27,7 +27,33 @@ export interface ShellState {
   /** REQ-MONITOR-042 (Part R): ONE selected agent for every surface — the Workspace sidebar tree, the Overview card, Mission, the inspector; `run` names the run-level selection (REQ-MONITOR-274), null nothing. */
   readonly selectedAgentId: string | null;
   selectAgent(id: string | null): void;
+  /** REQ-SHELL-051 / REQ-SHELL-054 (Part W): the two application-modal dialogs; at most one is open, the other closes first. */
+  readonly paletteOpen: boolean;
+  readonly helpOpen: boolean;
+  openPalette(): void;
+  closePalette(): void;
+  openKeyboardHelp(): void;
+  closeKeyboardHelp(): void;
+  /** REQ-SHELL-049's Ctrl+Return: the composer registers its submit and whether its send control is enabled; null while unmounted. */
+  readonly composer: ComposerRegistration | null;
+  registerComposer(registration: ComposerRegistration | null): void;
+  /**
+   * REQ-SHELL-055's window-level Escape on the Workspace view, in its fixed order: the slash suggestion popup
+   * (REQ-CHAT-002/026), then the transcript search panel, then both compact overlay drawers. Each surface registers a
+   * closer that returns whether it closed anything; an unregistered slot is a surface that is not built, and is skipped.
+   */
+  readonly overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>;
+  registerOverlay(kind: OverlayKind, close: OverlayCloser | null): void;
 }
+
+export interface ComposerRegistration {
+  readonly submit: () => void;
+  readonly enabled: boolean;
+}
+export type OverlayKind = 'slashPopup' | 'searchPanel' | 'drawers';
+export type OverlayCloser = () => boolean;
+/** REQ-SHELL-055's order of resolution, fixed. */
+export const OVERLAY_ORDER: readonly OverlayKind[] = ['slashPopup', 'searchPanel', 'drawers'];
 
 export interface LaunchChoices {
   readonly isolation: { readonly branch: string } | null;
@@ -70,5 +96,27 @@ export const useShellState = create<ShellState>((set, get) => ({
   selectedAgentId: null,
   selectAgent(id) {
     if (get().selectedAgentId !== id) set({ selectedAgentId: id });
+  },
+  paletteOpen: false,
+  helpOpen: false,
+  openPalette() {
+    set({ paletteOpen: true, helpOpen: false });
+  },
+  closePalette() {
+    if (get().paletteOpen) set({ paletteOpen: false });
+  },
+  openKeyboardHelp() {
+    set({ helpOpen: true, paletteOpen: false });
+  },
+  closeKeyboardHelp() {
+    if (get().helpOpen) set({ helpOpen: false });
+  },
+  composer: null,
+  registerComposer(registration) {
+    set({ composer: registration });
+  },
+  overlays: { slashPopup: null, searchPanel: null, drawers: null },
+  registerOverlay(kind, close) {
+    set({ overlays: { ...get().overlays, [kind]: close } });
   },
 }));

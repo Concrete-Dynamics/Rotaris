@@ -3,10 +3,11 @@
 import './sentinel.js';
 import { PersonaWindows } from './windows.js';
 import { createNoticeStore } from './notices.js';
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
@@ -560,6 +561,11 @@ async function main(): Promise<void> {
     onDestroyed: (id) => { relay.detach(id); },
     log,
   });
+  // ADR-0048 (Part W): a modal surface cannot outlive the renderer that opened it — a navigation, a reload or a crash of the
+  // main window's renderer restores input to every persona window (the close destroys them, REQ-SHELL-078).
+  const releaseModality = (why: string) => { if (personaWindows.isFamilyModal()) { const n = personaWindows.setFamilyModal(false); log(`application modality released: ${why} (${n} persona window(s) enabled; ADR-0048)`); } };
+  win.webContents.on('did-start-navigation', (details) => { if (details.isMainFrame) releaseModality('the main window navigated'); });
+  win.webContents.on('render-process-gone', (_event, details) => releaseModality(`the main window's renderer is gone (${details.reason})`));
   /**
    * Verification only: after a show, poll the window for the instant its renderer painted the first frame that carried a
    * whole-session update (`__rotarisPersonaPainted`, set after the snapshot's paint), and log the time from the show request.
@@ -1326,6 +1332,14 @@ async function main(): Promise<void> {
         if (!entry) return { ok: false, code: 'window.unknown', headline: 'This window is not a persona window' };
         return { ok: true, value: { persona: entry.persona, sessionId: followedSessionId, select: personaWindows.takeSelection(senderId) } };
       }
+      case 'window.modality': {
+        // ADR-0048's application modality, second execution (Part W): the main window's palette or keyboard help is open or
+        // closed; every persona window of the family stops taking input, or takes it again. Only the main window may say so.
+        if (senderId !== wcId) return { ok: false, code: 'window.notMain', headline: 'Only the main window registers an application-modal surface' };
+        const n = personaWindows.setFamilyModal(req.active);
+        log(`application modality ${req.active ? 'on' : 'off'}: ${n} persona window(s) ${req.active ? 'disabled' : 'enabled'} (ADR-0048)`);
+        return { ok: true, value: { windows: n } };
+      }
       case 'session.reconcile': {
         const r = await runHost.request({ kind: 'session.reconcile', sessionId: req.sessionId }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be re-read');
@@ -1552,6 +1566,35 @@ async function main(): Promise<void> {
         log(`capture: key ${step.selector}`);
       });
     }
+    // Part W's seams (verification only). ROTARIS_CAPTURE_CHORDS="Ctrl+K@ms;;F1@ms;;Escape@ms": one real chord (down and up,
+    // with its modifiers) into the main window — how the palette proof presses Ctrl+K, Ctrl+,, Ctrl+Return, F1 and Escape.
+    const chordEvent = (chord: string): { keyCode: string; modifiers: ('control' | 'shift' | 'alt')[] } => {
+      const parts = chord.endsWith('++') ? [...chord.slice(0, -2).split('+'), '+'] : chord.split('+');
+      const modifiers: ('control' | 'shift' | 'alt')[] = [];
+      let keyCode = '';
+      for (const p of parts) { if (p === 'Ctrl') modifiers.push('control'); else if (p === 'Shift') modifiers.push('shift'); else if (p === 'Alt') modifiers.push('alt'); else keyCode = p; }
+      return { keyCode, modifiers };
+    };
+    for (const step of steps(process.env['ROTARIS_CAPTURE_CHORDS'])) {
+      clocks.timers.after(millis(step.at), () => {
+        const { keyCode, modifiers } = chordEvent(step.selector);
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+        log(`capture: chord ${step.selector} at ${step.at}`);
+      });
+    }
+    // ROTARIS_CAPTURE_TYPE_AT="text@ms;;…": real characters into whatever holds focus (a chord alone moves no caret and
+    // inserts nothing — the renderer needs the `char` event), so the proof fills the palette's filter field as a user does.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE_AT'])) {
+      clocks.timers.after(millis(step.at), () => {
+        for (const ch of step.selector) {
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: ch });
+          win.webContents.sendInputEvent({ type: 'char', keyCode: ch });
+          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: ch });
+        }
+        log(`capture: type-at ${step.at} ${JSON.stringify(step.selector)}`);
+      });
+    }
     // ROTARIS_CAPTURE_INSPECT_AT="selector@ms;;…": every match's bounding rectangle, every attribute and its text, plus the
     // viewport and the focused element — the palette's 560×420 measured, its names read, focus return checked (REQ-SHELL-051/052).
     const inspectScript = (selector: string) => `(() => { const d = (el) => ({ tag: el.tagName.toLowerCase(), id: el.id || null, className: typeof el.className === 'string' ? el.className : null, label: el.getAttribute('aria-label'), testId: el.getAttribute('data-testid') }); return { viewport: { width: innerWidth, height: innerHeight }, active: document.activeElement ? d(document.activeElement) : null, matches: [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => { const r = el.getBoundingClientRect(); return { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, attrs: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])), text: (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 600) }; }) }; })()`;
@@ -1583,6 +1626,70 @@ async function main(): Promise<void> {
           ...(parsed['action'] === undefined ? {} : { action: parsed['action'] as { label: string; action: NoticeAction } }),
           ...(parsed['acknowledge'] === undefined ? {} : { acknowledge: parsed['acknowledge'] as { kind: 'info' | 'ok' | 'warn' | 'fail'; body?: string } }),
         }).then((r) => log(`capture: notices at ${step.at} report #${r.id} shown=${r.shown} → current ${notices.current()?.id ?? 'null'}`));
+      });
+    }
+    // ROTARIS_CAPTURE_TEXT_AT="needle@ms": whether the document's rendered text contains the needle — a keyword must be matched
+    // and never displayed (REQ-SHELL-053).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_TEXT_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const found = await win.webContents.executeJavaScript(`document.body.innerText.includes(${JSON.stringify(step.selector)})`).catch(() => 'error') as unknown;
+        log(`capture: text-at ${step.at} ${JSON.stringify(step.selector)} → ${String(found)}`);
+      });
+    }
+    // ROTARIS_CAPTURE_ORDER_AT="arm@ms;;read@ms": a mutation log over the document — the instant the palette left the DOM and
+    // the instant the shell's view changed, in the order they happened (REQ-SHELL-052: close first, then run).
+    for (const step of steps(process.env['ROTARIS_CAPTURE_ORDER_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        if (step.selector === 'arm') {
+          const armed = await win.webContents.executeJavaScript(`(() => { const log = []; const t0 = performance.now(); window.__rotarisOrder = log; const shell = document.querySelector('.app-shell'); const view0 = shell?.getAttribute('data-view'); const mo = new MutationObserver((records) => { for (const r of records) { if (r.type === 'childList') for (const n of r.removedNodes) if (n.nodeType === 1 && (n.matches('[data-testid="command-palette"]') || n.querySelector('[data-testid="command-palette"]'))) log.push({ event: 'palette-removed', at: performance.now() - t0 }); if (r.type === 'attributes' && r.target === shell && r.attributeName === 'data-view') log.push({ event: 'view-changed', from: r.oldValue, to: shell.getAttribute('data-view'), at: performance.now() - t0 }); } }); mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeOldValue: true, attributeFilter: ['data-view'] }); return { armed: true, view: view0, palette: document.querySelector('[data-testid="command-palette"]') !== null }; })()`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
+          log(`capture: order-at ${step.at} arm → ${JSON.stringify(armed)}`);
+        } else {
+          const read = await win.webContents.executeJavaScript(`({ events: window.__rotarisOrder ?? null, view: document.querySelector('.app-shell')?.getAttribute('data-view'), palette: document.querySelector('[data-testid="command-palette"]') !== null })`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
+          log(`capture: order-at ${step.at} read → ${JSON.stringify(read)}`);
+        }
+      });
+    }
+    // ROTARIS_CAPTURE_RESIZE="WxH@ms": the main window resized to that content size — the 1000×680 minimum of REQ-SHELL-022.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_RESIZE'])) {
+      clocks.timers.after(millis(step.at), () => {
+        const [w, h] = step.selector.split('x').map(Number);
+        if (w && h) { win.setContentSize(w, h); log(`capture: resize at ${step.at} → content ${win.getContentSize().join('×')}`); }
+      });
+    }
+    // ROTARIS_CAPTURE_OS_INPUT="click:<selector>@ms;;type:<text>@ms;;where@ms" with ROTARIS_CAPTURE_OS_INPUT_SCRIPT=<ps1>: input
+    // delivered by the OPERATING SYSTEM to the first persona window — the cursor moved over the element and a real button
+    // click, real keystrokes to whatever window the host holds as foreground (only ever one of ours; the script checks) — so
+    // ADR-0048's application modality is observed as the host enforces it. Injected events bypass `setEnabled(false)`
+    // (they enter the renderer below the host's input block), which is why this seam exists (ADR-0048's Part W note).
+    const osScript = process.env['ROTARIS_CAPTURE_OS_INPUT_SCRIPT'];
+    const handleOf = (w: BrowserWindow): string => { const b = w.getNativeWindowHandle(); return b.length >= 8 ? b.readBigUInt64LE(0).toString() : String(b.readUInt32LE(0)); };
+    const runOs = (args: string[]): Promise<string> => new Promise((resolve) => {
+      if (!osScript) { resolve('no script'); return; }
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', osScript, ...args], { timeout: 20_000, windowsHide: true }, (error, stdout, stderr) => resolve(error ? `error: ${error.message} ${stderr}` : String(stdout).trim()));
+    });
+    for (const step of steps(process.env['ROTARIS_CAPTURE_OS_INPUT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const e = firstPersona();
+        if (!e) { log(`capture: os-input ${step.at} ${step.selector}: no persona window`); return; }
+        const own = [handleOf(win), handleOf(e.win)];
+        const colon = step.selector.indexOf(':');
+        const op = colon === -1 ? step.selector : step.selector.slice(0, colon);
+        const arg = colon === -1 ? '' : step.selector.slice(colon + 1);
+        if (op === 'click') {
+          const local = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(arg)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`).catch(() => null) as { x: number; y: number } | null;
+          if (!local) { log(`capture: os-input ${step.at} click ${arg}: no such element in the persona window`); return; }
+          const content = e.win.getContentBounds();
+          const point = screen.dipToScreenPoint({ x: Math.round(content.x + local.x), y: Math.round(content.y + local.y) });
+          e.win.moveTop();
+          const out = await runOs(['click', String(point.x), String(point.y), own[0]!, own[1]!]);
+          log(`capture: os-input ${step.at} click ${arg} at screen ${point.x},${point.y} (persona hwnd ${own[1]}, enabled=${e.win.isEnabled()}) → ${out}`);
+        } else if (op === 'type') {
+          const out = await runOs(['type', arg, own[0]!, own[1]!]);
+          log(`capture: os-input ${step.at} type ${JSON.stringify(arg)} (persona hwnd ${own[1]}, enabled=${e.win.isEnabled()}) → ${out}`);
+        } else {
+          const out = await runOs(['where', '0', '0', own[0]!, own[1]!]);
+          log(`capture: os-input ${step.at} where (main hwnd ${own[0]}, persona hwnd ${own[1]}, enabled=${e.win.isEnabled()}) → ${out}`);
+        }
       });
     }
     // ROTARIS_CAPTURE_PNG_AT="path@ms;;…": a capture of the painted window at that time, beside the one at the end — the wait

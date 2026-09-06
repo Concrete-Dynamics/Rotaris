@@ -1282,6 +1282,54 @@ why it exists, so a later tidying pass does not delete it as verbose.
   stated the closing experiment and declined to invent a result. `REQ-GIT-128` records that the spike has
   reported, so a reader does not wait for an answer that has already come back empty.
 
+## The code-intelligence round — 2026-09-06, the first amendment after the gates
+
+Both gates were closed (specification 2026-08-31, architecture 2026-09-03) when ADR-0035 — the bundled
+code-intelligence runtime — was executed for the first time on 2026-09-06 and measured, with outbound
+network blocked, that the runtime it bundles obtains its language servers at the first use of a language.
+`REQ-STARTUP-159` permitted nothing fetched after installation beyond the machine tools and the package
+caches. The execution raised **IC-7** rather than repairing the requirement or the bundle quietly; the owner
+ruled **ESC-32** the same day. This round applies that one ruling. It was produced from the approved
+record and the runtime's public documentation and its published package alone; nothing here derives from
+the reference.
+
+### The ruling, and where it landed
+
+| Ruling | Landed in | Note |
+|---|---|---|
+| **ESC-32** — the language servers are tools provisioned after installation | `REQ-STARTUP-159` amended in place; `REQ-STARTUP-058` gains a second, distinct list; `REQ-STARTUP-142`'s section gains the sub-list; `REQ-STARTUP-064`'s reason qualified in place; `REQ-MCP-116`'s manifest carries the declaration; **`REQ-MCP-118` minted** — the disclosure on the MCP category | The declaration is checked **against the runtime** at build time, the way `REQ-MCP-095` checks the browser package's pin, so the disclosure cannot say a version the runtime will not fetch |
+
+### What was checked before the amendment was written
+
+- **That the amendment narrows nothing a user relies on.** `REQ-STARTUP-159`'s first-run guarantees — the
+  window paints, the version is true, every data asset resolves from what was installed — are untouched;
+  what widens is the closed list of things fetched *after* installation, by one member, under the same
+  conditions the other two already carry (only where the machine does not supply them; degradation of
+  individual capabilities, never of the first run).
+- **That the declaration has a single home.** `REQ-MCP-116` already made the binding manifest the one
+  place the runtime's identifiers are written; the servers join it there, and `REQ-MCP-118` reads them
+  from it and restates nothing. `REQ-STARTUP-058`'s list is the declaration's specification-side home and
+  says the versions must equal the runtime's own defaults, so the two cannot disagree without the build
+  failing.
+- **That the falsified reason is kept.** `REQ-STARTUP-064` exempted the reserved token from warm-up
+  "because what it resolves to ships inside the artifact". The outcome is right and the reason was half
+  right; the half that was wrong is quoted beside its qualification, not deleted (GD-10).
+
+### Narrowings and withdrawals
+
+None. One identifier minted, five amended in place, every amended sentence quoting what it previously read.
+
+### What this round did not settle
+
+- **The notices generator** (`REQ-STARTUP-141/142/143`) is not built, so the section the amendment adds to
+  `THIRD-PARTY-LICENSES.txt` exists in the specification only. IC-7's discharge is half shown until it
+  exists, and the condition stays on the release.
+- **The setup manifest as a shipped file** (`REQ-STARTUP-058`, schema version 1) is the onboarding domain's
+  and is not built either. The declaration lives in the generated binding manifest and feeds that file when
+  it exists.
+- **Which languages the release names** is a release decision. Two are declared because two were measured;
+  the disclosure says the rest are obtained the same way.
+
 ## Standing constraints on what comes next
 
 Implementation agents will receive the approved specifications, approved architecture decisions,

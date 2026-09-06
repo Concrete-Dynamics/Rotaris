@@ -83,6 +83,18 @@ how any other implementation achieves it.
     `REQ-CONFIG-478`'s withdrawn-key obligations, which were **relocated** to `REQ-CONFIG-183` rather
     than withdrawn — are each recorded *in place* with the reason, and each was checked against its
     owner before deletion.
+  - The **code-intelligence round** (2026-09-06) is the first amendment after both gates closed. It
+    applied ESC-32 — the owner's adoption of implementation condition IC-7 in its second form, raised by
+    ADR-0035's first execution, which measured that the bundled code-intelligence runtime obtains its
+    language servers at the first use of a language. It **withdrew no identifier and minted one** —
+    `REQ-MCP-118`, the language-server disclosure on the MCP category — so live behavior grew by 1.
+    `REQ-STARTUP-159`, `REQ-STARTUP-058`, `REQ-STARTUP-142` and `REQ-MCP-116` were amended in place to
+    treat those servers as tools provisioned after installation, declared with name, version, source and
+    licence, the way Git and ripgrep already are; `REQ-STARTUP-064`'s reason for exempting the reserved
+    token from warm-up was qualified in place rather than replaced, the falsified half kept beside its
+    qualification. Every amended sentence quotes what it previously read. The ruling and its alternatives
+    are in `../architecture/owner-decisions.md`; where each change landed is in
+    `../clean-room/provenance.md`.
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
 

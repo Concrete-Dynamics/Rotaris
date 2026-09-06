@@ -1107,3 +1107,46 @@ the fix being removed. Recorded as a discipline in [`README.md`](README.md) sect
 *The alternatives were: case by case, or no policy on the ground that code becomes the record once code
 exists.* This is what caught four of four. It costs a paragraph per mechanism, and its value arrives at the
 moment the record stops being read — which is the moment implementation begins.
+
+## Rulings after the gate — 2026-09-06
+
+### ESC-32 — IC-7: the code-intelligence language servers are tools provisioned after installation
+
+**Ruled: option 2 — amend the requirement.** Raised by Part T, ADR-0035's first execution (2026-09-06), as
+implementation condition **IC-7**: the bundled runtime is self-contained — it answers `tools/list` and the
+protocol with nothing else installed — but the language servers its symbol-level tools need are obtained by
+the runtime itself at the first use of a language, into the per-user data directory (TypeScript through
+`npm install typescript@5.9.3` and `typescript-language-server@5.1.3`; Python through `uvx --from
+pyright==1.1.403`; every other language by its own download), which `REQ-STARTUP-159` as written did not
+permit. The owner chose, from the three ways IC-7 offered to discharge itself, the second: read
+`REQ-STARTUP-159`'s "the only things fetched after installation" to include those servers as **tools
+provisioned after installation**, the way Git and ripgrep already are — declared in the setup manifest with
+name, version, source and licence (`REQ-STARTUP-058`), listed in `THIRD-PARTY-LICENSES.txt`'s "Tools
+provisioned after installation" section (`REQ-STARTUP-142`), and surfaced to the user before the first
+fetch (`REQ-MCP-118`, minted for it).
+
+**Why this one.** It is the treatment the product already gives Git and ripgrep, so it adds no second
+regime; it costs no artifact size and no second interpreter to pin and licence; every language the runtime
+supports keeps its symbol tools rather than the two a bundle would carry; and the user reads what will be
+fetched, from where and to where, on the surface that holds the setup action, before a run can trigger it.
+
+*The alternatives were:* **option 1**, bundle the servers for the languages the release claims — a Node
+runtime and two npm packages beside the Python tree, an estimated 60–100 MB more, a second interpreter to
+pin and licence under `REQ-STARTUP-142`, and only TypeScript and Python served offline; **option 3**, ship
+without symbol-level tools for any language whose server is absent (today: all of them), the pattern-search
+and memory tools still offered and the category saying so. The first buys offline symbol tools for two
+languages at a size and licensing cost the owner did not want; the third ships the runtime's headline
+capability switched off.
+
+**Consequences to carry.**
+
+- IC-7 stays on the release until **both** halves of its option-2 discharge are shown. The amendment, the
+  manifest's declaration checked against the runtime, and the disclosure with its proof are the first half.
+  The second — the notices generator listing the servers under `REQ-STARTUP-142` — waits on that generator,
+  which is not built (`REQ-STARTUP-141/142/143`; ADR-0054). The entry in `implementation-conditions.md`
+  says so; no condition is downgraded by the person doing the work.
+- `REQ-STARTUP-064`'s reason for exempting the reserved token from cache warm-up — "what it resolves to
+  ships inside the artifact" — was true of the runtime and false of its servers. The outcome (no warm-up
+  step) stands; the reason is qualified in place and kept beside its qualification, under GD-10.
+- Languages beyond TypeScript and Python are not declared, by the amendment's own terms: the disclosure says
+  a further language's server is obtained the same way. Declaring more is a release decision, not a defect.

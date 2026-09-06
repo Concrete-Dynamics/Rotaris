@@ -4,6 +4,7 @@ export * from './events.js';
 export * from './session-writer.js';
 export * from './projection-owner.js';
 export * from './sessions.js';
+export * from './export.js';
 export * from './run/stop-request.js';
 export * from './run/stop-conditions.js';
 export * from './run/todo.js';

@@ -118,6 +118,25 @@ children still never talk directly (ADR-0002 c.4). The service tracks its in-fli
 waits for them (REQ-GIT-101); main sends every service `shutdown` after the run host's and awaits it, bounded by REQ-GIT-033's
 limits, before it quits.
 
+**The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
+stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,
+reason}], skipped[], nothingStale}}`; `session.delete {sessionId}` → `{existed, refsDeleted, refsLeft, filesRemoved,
+unreadable, elapsedMs}` (a live session refused with its sentence); `session.export {sessionId}` (REQ-SESSION-199's
+four records) and `session.exportTrajectory {sessionIds}` (one document, or REQ-EVENTS-144's wrapper in selection
+order) — main opens the save dialog first and nothing is written until a path is chosen; `session.openLog {sessionId}`
+and `session.revealFiles {sessionId}` (REQ-SESSION-191, answered from main with `shell.openPath` /
+`shell.showItemInFolder`, a missing file reported). Main → run host: `session.repair {workspaceId, sessionId?}` →
+`session.repaired {report}`; `session.delete {workspaceId, sessionId}` → `session.deleted {…}`; `session.export
+{workspaceId, sessionId, destination}` and `session.exportTrajectory {workspaceId, sessionIds, destination}` →
+`session.exported {destination, bytes, documents, warnings, elapsedMs}` (the run host writes the file from its one open
+connection through ADR-0004's replace under REQ-TRACE-061's ladder); `session.files {workspaceId, sessionId}` →
+`session.files {directory, log, summary, artifacts}` (null for a file never written). **The run host's fourth checkpoint
+ask** back to main: `checkpoint.deleteNamespace {workspaceRoot, treeRoot, sessionId}`, relayed to the workspace service
+as the request of the same name → `checkpoint.namespaceDeleted {deleted, detail?}` (REQ-GIT-069, best-effort).
+`SessionListItem` gains `unreadable` (REQ-SESSION-041: the parse detail, or null). Verification seam:
+`ROTARIS_CAPTURE_SAVE_PATH` answers the export save dialogs with `;;`-separated paths consumed in order (the backup's
+`ROTARIS_CAPTURE_BACKUP_TO` is unchanged).
+
 **MCP (Part S; ADR-0033/0034's first execution).** Renderer → main: `mcp.list` (every configured server: name, type, the
 masked line, origin, enabled, overridden, available, unresolved placeholders, expected env keys), `mcp.probe {name?}` (one
 server per request so the category probes sequentially under main's bound), `mcp.setEnabled {name, enabled}` (the session
@@ -171,7 +190,8 @@ licensed.
 
 | Path | Written by | Read by |
 |---|---|---|
-| `%LOCALAPPDATA%/rotaris/data/workspaces/<id>/workspace.db` (+ `sessions/<sid>/summary.md`, `session.log`) | workspace service (migrate), run host (everything else) | run host, workspace service (backup/restore) |
+| `%LOCALAPPDATA%/rotaris/data/workspaces/<id>/workspace.db` (+ `sessions/<sid>/summary.md`, `session.log`; the directory removed whole by the session's delete, Part U) | workspace service (migrate), run host (everything else) | run host, workspace service (backup/restore) |
+| an export the user chose through the save dialog — REQ-SESSION-199's four-record document, REQ-SESSION-153's trajectory or REQ-EVENTS-144's batch (Part U) | run host (ADR-0004's replace, REQ-TRACE-061's ladder, parents created) | nothing in the product — a stock parser elsewhere |
 | `<tree>/.rotaris/checkpoints/index-<sid>-<pid>-<t>-<n>` — the private Git index of one checkpoint operation (ADR-0039 §1), removed when it ends; `refs/rotaris/checkpoints/<sid>/<n>` in the user's repository | workspace service | workspace service (Git) |
 | `<workspace>/.rotaris/workspace-id` | workspace service | workspace service |
 | `<workspace>/.rotaris/agents.yaml`, `models.yml`; `%LOCALAPPDATA%/rotaris/config/agents.yaml`, `models.yml` | workspace service (the four writers, ADR-0036) | run host (per run start), workspace service |

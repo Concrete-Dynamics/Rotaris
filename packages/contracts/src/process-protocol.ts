@@ -106,6 +106,18 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), workspaceId: z.string(), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), workspaceId: z.string(), server: z.string().optional() }),
+  /**
+   * Part U — the session browser's actions, answered by the run host because the rows and the lock are its (ADR-0005,
+   * ADR-0058). `session.repair` without an id repairs every stale session; `session.delete` runs REQ-SESSION-166's order
+   * (state → refs through the `checkpoint.deleteNamespace` ask → one transaction → files); the two exports READ in one
+   * transaction and write the chosen destination through ADR-0004's primitive; `session.files` answers where the
+   * per-session files of REQ-SESSION-002 are and which exist (REQ-SESSION-191).
+   */
+  z.object({ kind: z.literal('session.repair'), workspaceId: z.string(), sessionId: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('session.delete'), workspaceId: z.string(), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('session.export'), workspaceId: z.string(), sessionId: z.string().min(1), destination: z.string().min(1) }),
+  z.object({ kind: z.literal('session.exportTrajectory'), workspaceId: z.string(), sessionIds: z.array(z.string().min(1)).min(1), destination: z.string().min(1) }),
+  z.object({ kind: z.literal('session.files'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -117,6 +129,8 @@ export const SessionListItemSchema = z.object({
   tokens: z.number().int().nonnegative(), durationLabel: z.string(), busy: z.boolean(), requirementId: z.string().nullable(),
   /** REQ-GIT-018: the binding in full or null, and the checkpoint count — read from the listing record and nothing else. */
   worktree: WorktreeBindingSchema.nullable(), checkpointCount: z.number().int().nonnegative(),
+  /** Part U / REQ-SESSION-041: the parse detail when the session's stored state cannot be decoded (Open refused, Delete offered); null when readable. */
+  unreadable: z.string().nullable(),
 });
 export type SessionListItemPayload = z.infer<typeof SessionListItemSchema>;
 
@@ -160,6 +174,20 @@ export const RestoreReportSchema = z.object({
   identifierEstablished: z.boolean(),
 });
 export type RestoreReportPayload = z.infer<typeof RestoreReportSchema>;
+
+/** Part U / REQ-SESSION-059/060/182: one repaired session as the browser reports it, and the whole report. */
+export const RepairedSessionSchema = z.object({ sessionId: z.string(), from: z.string(), to: z.literal('interrupted'), reason: z.string() });
+export const RepairReportSchema = z.object({
+  repaired: z.array(RepairedSessionSchema),
+  /** A session asked for that was not stale, with why — live, terminal, unreadable, missing (REQ-SESSION-041/060: never an error). */
+  skipped: z.array(z.object({ sessionId: z.string(), reason: z.string() })),
+  /** REQ-SESSION-182: "nothing was stale" is said, never an empty answer. */
+  nothingStale: z.boolean(),
+});
+export type RepairReportPayload = z.infer<typeof RepairReportSchema>;
+/** Part U / REQ-SESSION-002/191: the per-session files that exist; null names one never written. */
+export const SessionFilesSchema = z.object({ directory: z.string(), log: z.string().nullable(), summary: z.string().nullable(), artifacts: z.string().nullable() });
+export type SessionFilesPayload = z.infer<typeof SessionFilesSchema>;
 
 export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hello') }),
@@ -206,6 +234,8 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.preview'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), commit: z.string(), candidates: z.array(z.object({ sequence: z.number().int(), commit: z.string() })), includeUntracked: z.boolean() }),
   z.object({ kind: z.literal('checkpoint.restore'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), commit: z.string(), entries: z.array(PreviewEntrySchema) }),
   z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
+  /** Part U / REQ-GIT-069: every ref under `refs/rotaris/checkpoints/<sid>/` in the tree, best-effort; a missing tree is a detail, never a failure. */
+  z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -230,6 +260,8 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.capture'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), iteration: z.number().int().nonnegative(), childName: z.string(), checkpointKind: z.enum(CHECKPOINT_KINDS), includeUntracked: z.boolean(), message: z.string().min(1) }),
   z.object({ kind: z.literal('checkpoint.refs'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
+  /** Part U / REQ-SESSION-166 step 2: the delete's ref cleanup, relayed like the other three (ADR-0002 c.4). */
+  z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -291,6 +323,21 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.list'), listing: CheckpointListSchema }),
   /** The safety row is recorded (its trimmed refs for the prune), or the reason it could not be persisted. */
   z.object({ kind: z.literal('checkpoint.recorded'), sequence: z.number().int(), trimmed: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
+  /** Part U: the workspace service's namespace deletion and the run host's four answers. */
+  z.object({ kind: z.literal('checkpoint.namespaceDeleted'), deleted: z.number().int().nonnegative(), detail: z.string().optional() }),
+  z.object({ kind: z.literal('session.repaired'), report: RepairReportSchema }),
+  z.object({
+    kind: z.literal('session.deleted'), sessionId: z.string(),
+    /** False for a missing session — the no-op success of REQ-SESSION-166. */
+    existed: z.boolean(),
+    /** REQ-GIT-069: how many refs went, and the leftover location when any could not (logged as a warning, never a failure). */
+    refsDeleted: z.number().int().nonnegative(), refsLeft: z.string().nullable(),
+    /** REQ-SESSION-002: whether the per-session directory was removed (false when there was none, or when the removal failed and was ignored). */
+    filesRemoved: z.boolean(), unreadable: z.boolean(),
+    elapsedMs: z.number().nonnegative(),
+  }),
+  z.object({ kind: z.literal('session.exported'), destination: z.string(), bytes: z.number().int().nonnegative(), documents: z.number().int().positive(), warnings: z.array(z.string()), elapsedMs: z.number().nonnegative() }),
+  z.object({ kind: z.literal('session.files'), files: SessionFilesSchema }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

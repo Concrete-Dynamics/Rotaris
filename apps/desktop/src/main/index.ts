@@ -1,5 +1,5 @@
 import { PersonaWindows } from './windows.js';
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -110,7 +110,8 @@ async function main(): Promise<void> {
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
   // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
-    if (a.kind === 'checkpoint.capture' || a.kind === 'checkpoint.refs' || a.kind === 'checkpoint.prune') {
+    // Part U: `checkpoint.deleteNamespace` is the delete's ref cleanup (REQ-SESSION-166 step 2), relayed like the other three.
+    if (a.kind === 'checkpoint.capture' || a.kind === 'checkpoint.refs' || a.kind === 'checkpoint.prune' || a.kind === 'checkpoint.deleteNamespace') {
       const svc = services.get(canonicalPath(a.workspaceRoot));
       if (!svc) return { kind: 'refused', code: 'workspace.none', headline: `no workspace service is running for ${a.workspaceRoot}` };
       return svc.link.request(a, millis(a.kind === 'checkpoint.capture' ? 320_000 : 60_000));
@@ -549,6 +550,16 @@ async function main(): Promise<void> {
   const scriptedAnswers = (process.env['ROTARIS_CAPTURE_ANSWERS'] ?? '').split(',').filter((s) => s.length > 0).map(Number);
   const chooseSave = async (opts: Electron.SaveDialogOptions): Promise<string | null> => {
     const forced = capturing ? process.env['ROTARIS_CAPTURE_BACKUP_TO'] : undefined;
+    if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
+    const r = await dialog.showSaveDialog(win, opts);
+    return r.canceled || !r.filePath ? null : r.filePath;
+  };
+  // Part U: ROTARIS_CAPTURE_SAVE_PATH answers the EXPORT save dialogs (REQ-SESSION-189/199) in a scripted launch — a
+  // separate seam from the backup's, so a proof can exercise both in one launch; verification only.
+  // The seam takes `;;`-separated paths, consumed in order, so one launch can take several exports.
+  const scriptedSavePaths = (capturing ? process.env['ROTARIS_CAPTURE_SAVE_PATH'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
+  const chooseExportPath = async (opts: Electron.SaveDialogOptions): Promise<string | null> => {
+    const forced = scriptedSavePaths.shift();
     if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
     const r = await dialog.showSaveDialog(win, opts);
     return r.canceled || !r.filePath ? null : r.filePath;
@@ -1090,6 +1101,61 @@ async function main(): Promise<void> {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
         const r = await runHost.request({ kind: 'session.list', workspaceId: currentWorkspaceId }, millis(5_000));
         return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
+      }
+      // ---- Part U: the session browser's actions (REQ-SESSION-182). Main supplies the dialogs and the platform's file manager; the run host does the work. ----
+      case 'session.repair': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before repairing its sessions' };
+        const r = await runHost.request({ kind: 'session.repair', workspaceId: currentWorkspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(30_000));
+        if (r.kind !== 'session.repaired') return refusal(r, 'The repair could not be carried out');
+        for (const x of r.report.repaired) log(`session ${x.sessionId} repaired: '${x.from}' → interrupted (${x.reason})`);
+        if (r.report.nothingStale) log(`session repair: nothing was stale`);
+        return { ok: true, value: { report: r.report } };
+      }
+      case 'session.delete': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a session' };
+        const r = await runHost.request({ kind: 'session.delete', workspaceId: currentWorkspaceId, sessionId: req.sessionId }, millis(120_000));
+        if (r.kind !== 'session.deleted') { if (r.kind === 'refused') raiseNotice('error', 'The session was not deleted', r.headline); return refusal(r, 'The session was not deleted'); }
+        if (r.refsLeft !== null) log(`session ${req.sessionId}: checkpoint refs remain under ${r.refsLeft} (REQ-GIT-069, best-effort)`);
+        if (followedSessionId === req.sessionId) { followedSessionId = null; personaWindows.destroyAll('the followed session was deleted'); }
+        if (r.existed) raiseNotice('info', `Deleted session ${req.sessionId}.`, `${r.refsDeleted} checkpoint ref${r.refsDeleted === 1 ? '' : 's'} removed${r.refsLeft === null ? '' : `; some refs remain under ${r.refsLeft}`}.`);
+        return { ok: true, value: { sessionId: r.sessionId, existed: r.existed, refsDeleted: r.refsDeleted, refsLeft: r.refsLeft, filesRemoved: r.filesRemoved, unreadable: r.unreadable, elapsedMs: r.elapsedMs } };
+      }
+      case 'session.export':
+      case 'session.exportTrajectory': {
+        // REQ-SESSION-189/199: a file the user chooses; nothing is written until then; not a channel.
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before exporting a session' };
+        const ids = req.kind === 'session.export' ? [req.sessionId] : req.sessionIds;
+        const stamp = new Date(clocks.wall.instant()).toISOString().replace(/[:.]/g, '-');
+        const destination = await chooseExportPath(req.kind === 'session.export'
+          ? { title: 'Export the session records', defaultPath: `rotaris-session-${req.sessionId}-records-${stamp}.json`, filters: [{ name: 'JSON document', extensions: ['json'] }] }
+          : { title: ids.length === 1 ? 'Export the trajectory' : `Export ${ids.length} trajectories`, defaultPath: ids.length === 1 ? `rotaris-trajectory-${ids[0]}-${stamp}.json` : `rotaris-trajectories-${ids.length}-${stamp}.json`, filters: [{ name: 'JSON document', extensions: ['json'] }] });
+        if (!destination) return { ok: true, value: { cancelled: true } };
+        const r = await runHost.request(req.kind === 'session.export'
+          ? { kind: 'session.export', workspaceId: currentWorkspaceId, sessionId: req.sessionId, destination }
+          : { kind: 'session.exportTrajectory', workspaceId: currentWorkspaceId, sessionIds: [...req.sessionIds], destination }, millis(120_000));
+        if (r.kind !== 'session.exported') { if (r.kind === 'refused') raiseNotice('error', 'The export could not be written', [r.headline, r.detail].filter(Boolean).join(': ')); return refusal(r, 'The export could not be written'); }
+        raiseNotice(r.warnings.length > 0 ? 'warning' : 'info', `Wrote ${r.documents} ${req.kind === 'session.export' ? 'records document' : `trajectory document${r.documents === 1 ? '' : 's'}`} to ${r.destination}.`, r.warnings.length > 0 ? r.warnings.join(' ') : undefined);
+        return { ok: true, value: { destination: r.destination, bytes: r.bytes, documents: r.documents, warnings: r.warnings, elapsedMs: r.elapsedMs } };
+      }
+      case 'session.openLog':
+      case 'session.revealFiles': {
+        // REQ-SESSION-191: the log opened for reading, the files revealed in the platform's file manager; a missing file is reported, never faked.
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'session.files', workspaceId: currentWorkspaceId, sessionId: req.sessionId }, millis(10_000));
+        if (r.kind !== 'session.files') return refusal(r, 'The session files could not be located');
+        if (req.kind === 'session.openLog') {
+          if (r.files.log === null) return { ok: false, code: 'session.no-log', headline: 'No log is kept for this session', detail: `Nothing was logged at or above the configured level, so no log file exists in ${r.files.directory}.` };
+          const failed = await shell.openPath(r.files.log);
+          return failed === '' ? { ok: true, value: { path: r.files.log } } : { ok: false, code: 'session.open-failed', headline: 'The log could not be opened', detail: failed };
+        }
+        const anyFile = r.files.summary ?? r.files.log ?? r.files.artifacts;
+        if (anyFile === null) return { ok: false, code: 'session.no-files', headline: 'This session has no files yet', detail: `No log, summary or artifact body has been written for it, so there is nothing to reveal in ${r.files.directory}.` };
+        shell.showItemInFolder(anyFile);
+        return { ok: true, value: { directory: r.files.directory, log: r.files.log, summary: r.files.summary, artifacts: r.files.artifacts } };
       }
       case 'session.resume': {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };

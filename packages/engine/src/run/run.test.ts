@@ -78,7 +78,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
     // REQ-SESSION-095: session.end and result mirror one computation.
     expect(payload(sid, 'session.end')).toMatchObject({ status: 'completed', stop_reason: 'tasks_complete', iterations_completed: 1 });
     expect((payload(sid, 'result') as unknown as { result: { status: string } }).result.status).toBe('completed');
-    expect(payload(sid, 'session.start')).toMatchObject({ task: 'what is the answer?', persona: 'orchestrator', sandboxed: false, max_iterations: 20 });
+    expect(payload(sid, 'session.start')).toMatchObject({ task: 'what is the answer?', persona: 'orchestrator', sandbox: { enabled: false, backend: '' }, max_iterations: 20 });
     expect(payload(sid, 'iteration.start')).toMatchObject({ iteration: 1 });
     expect(dal.eventsOfKind(sid, 'iteration.end')[0]!.iteration).toBe(1);
     // The status transitions were each published as snapshots: starting, running, …, completed.

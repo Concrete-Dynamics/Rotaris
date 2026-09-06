@@ -2,9 +2,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CommandOutcome, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
+import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -597,6 +597,21 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     setBrowserSessions(rows);
     return rows;
   }, []);
+  /** Part U: the browser's actions. Each is a command answered with a value or a reason; the list is read again afterwards. */
+  const refreshSessions = useCallback(async (): Promise<void> => {
+    const result = await bridge.command({ kind: 'session.list' });
+    if (result.ok) setBrowserSessions((result.value as { sessions: SessionListItemPayload[] }).sessions);
+  }, []);
+  const outcomeOf = <T,>(r: CommandOutcome): { ok: true; value?: T } | { ok: false; reason: string } => (r.ok ? { ok: true, value: r.value as T } : { ok: false, reason: r.detail ?? r.headline });
+  const deleteSession = useCallback(async (sessionId: string) => {
+    const r = await bridge.command({ kind: 'session.delete', sessionId });
+    if (r.ok && replica.getState().sessionId === sessionId) {
+      // The window followed the session that is now gone: stop following it rather than render a record that no longer exists.
+      await bridge.command({ kind: 'session.unsubscribe', sessionId });
+      replica.getState().follow(null);
+    }
+    return outcomeOf<DeleteOutcome>(r);
+  }, []);
   const openSession = useCallback(async (sessionId: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const result = await bridge.command({ kind: 'session.resume', sessionId });
     if (!result.ok) return { ok: false, reason: result.detail ?? result.headline };
@@ -652,7 +667,19 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       onRecover={recover}
       onOpenSessions={() => { void loadSessions(); }}
     />
-    {browserOpen && <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)} />}
+    {browserOpen && (
+      <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
+        onRefresh={refreshSessions}
+        onRepair={async (sessionId) => outcomeOf<{ report: RepairReportPayload }>(await bridge.command({ kind: 'session.repair', ...(sessionId === null ? {} : { sessionId }) }))}
+        onDelete={deleteSession}
+        onExportRecords={async (sessionId) => outcomeOf<ExportOutcome>(await bridge.command({ kind: 'session.export', sessionId }))}
+        onExportTrajectory={async (sessionIds) => outcomeOf<ExportOutcome>(await bridge.command({ kind: 'session.exportTrajectory', sessionIds: [...sessionIds] }))}
+        onOpenLog={async (sessionId) => outcomeOf(await bridge.command({ kind: 'session.openLog', sessionId }))}
+        onRevealFiles={async (sessionId) => outcomeOf(await bridge.command({ kind: 'session.revealFiles', sessionId }))}
+        onBackup={() => workspaceAction('workspace.backup')}
+        onRestore={() => workspaceAction('workspace.restore')}
+      />
+    )}
     {launch && (
       <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} confinementAvailable={false}
         onChooseAttach={async () => { const r = await bridge.command({ kind: 'worktree.chooseAttach' }); if (!r.ok) return { ok: false, reason: r.detail ?? r.headline }; const v = r.value as { cancelled?: boolean; path?: string; branch?: string }; return v.cancelled || !v.path ? { ok: true, cancelled: true } : { ok: true, path: v.path, branch: v.branch ?? '' }; }}

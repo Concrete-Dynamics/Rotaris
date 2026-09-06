@@ -1,6 +1,6 @@
 import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type PermissionPreset, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend } from '@rotaris/model';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
@@ -197,7 +197,32 @@ export interface SessionListItem {
   /** REQ-GIT-018: the binding in full or null, and the checkpoint count — a count over the session's rows, no Git (ADR-0039). */
   readonly worktree: WorktreeBinding | null;
   readonly checkpointCount: number;
+  /** Part U / REQ-SESSION-041: the parse detail of a session whose stored state cannot be decoded; null when it can. */
+  readonly unreadable: string | null;
 }
+
+/** Part U / REQ-SESSION-059/060: one repair as the browser reports it. */
+export interface RepairedSession {
+  readonly sessionId: string;
+  readonly from: string;
+  readonly to: 'interrupted';
+  readonly reason: string;
+}
+export interface RepairReport {
+  readonly repaired: RepairedSession[];
+  readonly skipped: { sessionId: string; reason: string }[];
+  readonly nothingStale: boolean;
+}
+
+/** Part U / REQ-SESSION-166: what the run host learns before it asks for the refs. */
+export type DeletePreparation =
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'live'; readonly reason: string }
+  | { readonly kind: 'ready'; readonly treeRoot: string; readonly unreadable: string | null; readonly checkpoints: number };
+
+/** REQ-GIT-092's two sentences, for the delete (the same liveness the restore uses; REQ-GIT-151 keeps them distinct). */
+export const DELETE_LIVE_REFUSAL = "This session is still running. Deleting it would destroy the run's own record, so wait for it to finish or stop it first.";
+export const DELETE_LIVENESS_UNKNOWN_REFUSAL = 'Rotaris could not confirm whether this session is still running, and will not delete a session that may be live. Try again in a moment.';
 
 /** REQ-GIT-016 as the card sees it: the label pre-formatted here in local time (REQ-GIT-090), the file COUNT, the kind. */
 export function toCheckpointPayload(c: CheckpointRow): CheckpointListPayload['rows'][number] {
@@ -244,6 +269,17 @@ function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, Re
   } catch (cause) {
     return err({ code: 'state-unreadable', reason: `session ${row.session_id} has unreadable stored state: ${String(cause instanceof Error ? cause.message : cause)}` });
   }
+}
+
+/** REQ-SESSION-041: the parse detail when the stored state (the todo document, the progress record) cannot be decoded; read from the listing row itself. */
+export function stateUnreadable(row: SessionRow): string | null {
+  const todo = parseTodoDocument(row);
+  if (!todo.ok) return todo.error.reason;
+  if (row.progress !== null) {
+    try { JSON.parse(row.progress); }
+    catch (cause) { return `session ${row.session_id} has unreadable stored state: ${String(cause instanceof Error ? cause.message : cause)}`; }
+  }
+  return null;
 }
 
 function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | null {
@@ -450,8 +486,13 @@ export class Sessions {
     const now = Number(this.deps.clocks.wall.instant());
     return dal.listSessions().filter((row) => row.workspace_root === workspaceRoot).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map((row) => {
       const firstPrompt = dal.residentRows(asSessionId(row.session_id)).find((event) => event.kind === 'user' && event.body.trim() !== '');
-      const lock = dal.getLock(asSessionId(row.session_id));
-      const live = lock !== undefined && (lock.host !== this.deps.host || lock.pid <= 0 || (this.deps.isProcessAlive?.(lock.pid) ?? true));
+      // Found on Part U's first execution (ADR-0005 note, defect 40): this listing carried its OWN liveness predicate —
+      // `lock present && (foreign host || pid <= 0 || probe alive)` — beside `liveness()` below, and the two disagreed on
+      // one case: a lock this process holds with no run behind it (a loaded, idle session). The listing called it live
+      // (its own pid probes alive), `liveness()` and the checkpoint listing's repair called it not live and repaired it;
+      // REQ-SESSION-171 forbids two verdicts for one pid at one moment and ADR-0005 names a second implementation a
+      // defect. The one predicate is used; `unknown` (no probe) resolves toward running (REQ-SESSION-172).
+      const live = this.liveness(dal, asSessionId(row.session_id)) !== 'not-live';
       // REQ-GIT-018/121: the branch is the binding's; `—` is the placeholder for a session with none (REQ-GIT-120's test).
       const binding = parseBinding(row.worktree);
       return {
@@ -469,6 +510,7 @@ export class Sessions {
         durationLabel: durationLabel(row.run_started_at, isActiveStatus(row.execution_status) && live ? new Date(now).toISOString() : row.updated_at),
         busy: isActiveStatus(row.execution_status) && live,
         requirementId: null,
+        unreadable: stateUnreadable(row),
       };
     });
   }
@@ -556,7 +598,7 @@ export class Sessions {
       },
       {
         workspaceRoot, pid: this.deps.pid, host: this.deps.host, task: prompt, persona: model.config.persona, maxIterations: model.config.iterationLimit,
-        permissionMode: permission.effective, sandboxed: permission.sandboxed,
+        permissionMode: permission.effective, sandboxed: permission.sandboxed, sandboxBackend: permission.sandboxBackend,
         worktree: opts.worktree ? JSON.stringify(opts.worktree) : null, ...(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
       },
     );
@@ -922,22 +964,114 @@ export class Sessions {
     const row = dal.getSession(sessionId);
     if (!row || row.workspace_root !== workspaceRoot) return err({ code: 'no-session', reason: `The session store holds no session under ${sessionId}, so nothing can be previewed or restored for it.` });
     const { root, binding } = effectiveRootOf(row);
-    let repaired: CheckpointListPayload['repaired'] = null;
-    if (isActiveStatus(row.execution_status) && this.liveness(dal, sessionId) === 'not-live') {
-      const lock = dal.getLock(sessionId);
-      const reason = !lock ? 'no process holds its lock' : lock.pid === this.deps.pid ? 'this application holds its lock but runs nothing for it' : `its process (pid ${lock.pid}) is no longer running`;
-      const previous = row.execution_status;
-      const r = this.withWriter(dal, sessionId, (writer) => {
-        const saved = writer.save('interrupted');
-        if (!saved.ok) throw new Error('reason' in saved.error ? saved.error.reason : saved.error.code);
-        writer.appendTimeline('session_marked_interrupted', 'rotaris', `Session was still marked '${previous}', but ${reason}. Rotaris marked it interrupted.`, { previous_status: previous, reason });
-      });
-      if (r.ok) { repaired = { previous, reason }; this.live.get(sessionId)?.owner.reconcile(); }
-      else this.deps.warn(`session ${sessionId} could not be marked interrupted: ${r.error.reason}`);
-    }
+    // Part U: the repair is the one unit REQ-SESSION-060 fixes, shared with the browser's explicit Repair.
+    const r = this.repairOne(dal, sessionId);
+    const repaired: CheckpointListPayload['repaired'] = r.repaired ? { previous: r.repaired.from, reason: r.repaired.reason } : null;
     const rows = dal.listCheckpoints(sessionId).map(toCheckpointPayload);
     const unavailable = binding !== null && !existsSync(binding.worktree_path) ? CHECKPOINTS_NO_TREE : null;
     return ok({ sessionId, rows, lastRestoredSequence: dal.getSession(sessionId)?.last_restored_sequence ?? null, liveness: repaired ? 'not-live' : this.liveness(dal, sessionId), treeRoot: root, unavailable, repaired, includeUntracked: true });
+  }
+
+  /**
+   * REQ-SESSION-060's explicit repair as ONE unit (Part U), shared by the browser's Repair and REQ-GIT-094's open-time
+   * repair in `checkpointListing`: re-check liveness through the one predicate; read the state (unreadable state is
+   * "nothing to do", REQ-SESSION-041); require an active status; write `interrupted` durably first (a terminal save
+   * takes the stronger setting); then the diagnostics timeline entry; then release the orphaned lock. The entry is
+   * written BEFORE the release rather than after it — the reading recorded on ADR-0005: the lock is the capability
+   * that authorises writing the session's rows, so the entry must be written while it is held; what REQ-SESSION-060's
+   * ordering forbids is the release preceding the status, and that holds. The reason names which of REQ-SESSION-059's
+   * two conditions applied (no lock at all; this machine's lock with a dead pid — naming it), plus the one this
+   * process produces itself (its own lock with no run behind it). Never raises; a failed save leaves everything as it was.
+   */
+  private repairOne(dal: StoreDal, sessionId: SessionId): { repaired: RepairedSession | null; skipped: string | null } {
+    const row = dal.getSession(sessionId);
+    if (!row) return { repaired: null, skipped: 'no session exists under that id' };
+    if (!isActiveStatus(row.execution_status)) return { repaired: null, skipped: `its status is '${row.execution_status || 'idle'}', which asserts no run in progress` };
+    const verdict = this.liveness(dal, sessionId);
+    if (verdict === 'live') return { repaired: null, skipped: 'a process still holds its lock (or a run for it is under way here)' };
+    if (verdict === 'unknown') return { repaired: null, skipped: 'its liveness could not be established, and an uncertain session is treated as running' };
+    const unreadable = stateUnreadable(row);
+    if (unreadable !== null) return { repaired: null, skipped: `its stored state cannot be read (${unreadable}); nothing to do` };
+    const lock = dal.getLock(sessionId);
+    const reason = !lock ? 'no process holds a lock for it' : lock.pid === this.deps.pid ? 'this application holds its lock but runs nothing for it' : `the lock names this machine and its process (pid ${lock.pid}) is gone`;
+    const previous = row.execution_status;
+    const r = this.withWriter(dal, sessionId, (writer) => {
+      const saved = writer.save('interrupted');
+      if (!saved.ok) throw new Error('reason' in saved.error ? saved.error.reason : saved.error.code);
+      writer.appendTimeline('session_marked_interrupted', 'rotaris', `Session was still marked '${previous}', but ${reason}. Rotaris marked it interrupted.`, { previous_status: previous, reason });
+    });
+    if (!r.ok) { this.deps.warn(`session ${sessionId} could not be marked interrupted: ${r.error.reason}`); return { repaired: null, skipped: `the correction could not be made durable (${r.error.reason}); nothing was changed` }; }
+    this.live.get(sessionId)?.owner.reconcile();
+    return { repaired: { sessionId, from: previous, to: 'interrupted', reason }, skipped: null };
+  }
+
+  /** REQ-SESSION-060/182 (Part U): one session, or every stale session of the workspace; "nothing was stale" is an answer, never an empty one. */
+  repair(dal: StoreDal, workspaceRoot: string, target: { readonly sessionId: string } | { readonly all: true }): RepairReport {
+    const report: RepairReport = { repaired: [], skipped: [], nothingStale: false };
+    if ('sessionId' in target) {
+      const row = dal.getSession(asSessionId(target.sessionId));
+      if (!row || row.workspace_root !== workspaceRoot) report.skipped.push({ sessionId: target.sessionId, reason: 'no session exists under that id in this workspace' });
+      else {
+        const r = this.repairOne(dal, asSessionId(target.sessionId));
+        if (r.repaired) report.repaired.push(r.repaired); else report.skipped.push({ sessionId: target.sessionId, reason: r.skipped ?? 'nothing to do' });
+      }
+    } else {
+      // REQ-SESSION-058: detection reads the listing record (internal sessions included) and the lock, nothing else.
+      for (const row of dal.listSessions()) {
+        if (row.workspace_root !== workspaceRoot || !isActiveStatus(row.execution_status)) continue;
+        const sid = asSessionId(row.session_id);
+        if (this.liveness(dal, sid) !== 'not-live') continue;
+        const r = this.repairOne(dal, sid);
+        if (r.repaired) report.repaired.push(r.repaired); else report.skipped.push({ sessionId: row.session_id, reason: r.skipped ?? 'nothing to do' });
+      }
+    }
+    return { ...report, nothingStale: report.repaired.length === 0 };
+  }
+
+  /**
+   * REQ-SESSION-166 step 1 (Part U): the state is loaded to find the tree the refs live in — the worktree binding's
+   * path, else the workspace root — and the liveness refusal is decided BEFORE any ref is touched. A live session (a
+   * run here, or a live lock) and one whose liveness cannot be established are refused with distinct sentences; an
+   * unreadable session still deletes (REQ-SESSION-041); a missing one is the caller's no-op.
+   */
+  prepareDelete(dal: StoreDal, workspaceRoot: string, sessionId: SessionId): DeletePreparation {
+    const row = dal.getSession(sessionId);
+    if (!row || row.workspace_root !== workspaceRoot) return { kind: 'missing' };
+    if (this.isRunActive(sessionId)) return { kind: 'live', reason: DELETE_LIVE_REFUSAL };
+    const verdict = this.liveness(dal, sessionId);
+    if (verdict === 'live') return { kind: 'live', reason: DELETE_LIVE_REFUSAL };
+    if (verdict === 'unknown') return { kind: 'live', reason: DELETE_LIVENESS_UNKNOWN_REFUSAL };
+    return { kind: 'ready', treeRoot: effectiveRootOf(row).root, unreadable: stateUnreadable(row), checkpoints: dal.checkpointCount(sessionId) };
+  }
+
+  /**
+   * REQ-SESSION-166 step 3: ONE durable transaction removes the session row and, through the schema's cascades on a
+   * connection that enforces them (store `open.ts`), every row keyed by it — then the per-session files of
+   * REQ-SESSION-002, errors ignored, so no listed session is left without a record and no files without a session. A
+   * session loaded here but idle (its writer and projection held in this registry) is evicted first; its lock row goes
+   * with the cascade. The improvement library is not touched — it does not exist in this build (REQ-SESSION-007).
+   */
+  completeDelete(dal: StoreDal, sessionId: SessionId): { existed: boolean; filesRemoved: boolean; filesDetail: string | null } {
+    const loaded = this.live.get(sessionId);
+    if (loaded) {
+      loaded.owner.flushPending();
+      loaded.log?.close();
+      this.seq.forget(sessionId);
+      this.live.delete(sessionId);
+    }
+    const existed = dal.durableTransaction(() => dal.deleteSession(sessionId));
+    const dir = this.deps.sessionFilesDir(dal, sessionId);
+    let filesRemoved = false; let filesDetail: string | null = null;
+    if (existsSync(dir)) {
+      try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); filesRemoved = !existsSync(dir); if (!filesRemoved) filesDetail = `${dir} could not be removed`; }
+      catch (cause) { filesDetail = `${dir} could not be removed: ${String(cause instanceof Error ? cause.message : cause)}`; }
+    }
+    return { existed, filesRemoved, filesDetail };
+  }
+
+  /** REQ-SESSION-002/191: where a session's files live — the caller decides which exist. */
+  filesDir(dal: StoreDal, sessionId: SessionId): string {
+    return this.deps.sessionFilesDir(dal, sessionId);
   }
 
   /** REQ-GIT-058 gate 5 / REQ-GIT-059: the safety row through the one transaction; the trimmed rows' refs come back for the prune. */

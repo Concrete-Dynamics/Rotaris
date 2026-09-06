@@ -125,6 +125,20 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('window.openPersona'), persona: z.string().min(1), agentId: z.string().min(1), focusSteer: z.boolean().optional() }),
   /** The persona window asks main what it was opened for: its persona, the session the main window follows, the tab to select. */
   z.object({ kind: z.literal('window.personaPayload') }),
+  /**
+   * Part U — the session browser's actions (REQ-SESSION-182). `session.repair` with no id is "repair every stale session"
+   * (REQ-SESSION-060); `session.delete` is behind the browser's permanent-deletion confirmation (REQ-SESSION-166);
+   * `session.export` is the four records of REQ-SESSION-199 and `session.exportTrajectory` the trajectory document, or the
+   * batch wrapper for several ids in selection order (REQ-SESSION-189, REQ-EVENTS-144) — main supplies the save dialog and
+   * nothing is written until a destination is chosen; `session.openLog` and `session.revealFiles` are REQ-SESSION-191's
+   * other two actions over the per-session files that exist (REQ-SESSION-002). None of these is a channel.
+   */
+  z.object({ kind: z.literal('session.repair'), sessionId: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('session.delete'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('session.export'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('session.exportTrajectory'), sessionIds: z.array(z.string().min(1)).min(1) }),
+  z.object({ kind: z.literal('session.openLog'), sessionId: z.string().min(1) }),
+  z.object({ kind: z.literal('session.revealFiles'), sessionId: z.string().min(1) }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

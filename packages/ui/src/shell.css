@@ -261,6 +261,25 @@
 .session-browser__error { margin: 0; color: var(--rt-danger-300); font-size: var(--rt-text-xs); }
 .session-browser__empty, .session-browser__loading { padding: var(--rt-space-5); text-align: center; color: var(--rt-text-tertiary); }
 .session-browser__loading { margin: 0; }
+/* Part U (REQ-SESSION-182/191/041/200): the browser's actions — tokens by name, every state as text. */
+.session-browser__toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--rt-space-4); flex-wrap: wrap; }
+.session-browser__toolbar .session-browser__search { flex: 1 1 240px; }
+.session-browser__actions { display: flex; flex-wrap: wrap; gap: var(--rt-space-2); }
+.session-browser__disclosure { padding: var(--rt-space-3) var(--rt-space-4); font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }
+.session-browser__disclosure p { margin: 0 0 var(--rt-space-2); }
+.session-browser__disclosure p:last-child { margin-bottom: 0; }
+.session-browser__disclosure-title { margin: 0 0 var(--rt-space-2); font-size: var(--rt-text-base); color: var(--rt-text); }
+.session-browser__report { margin: 0; padding-left: var(--rt-space-4); font-size: var(--rt-text-sm); color: var(--rt-text); }
+.session-browser__select { width: 1%; }
+.session-browser__unreadable-tag { color: var(--rt-danger-300); border-color: var(--rt-danger-300); }
+.session-browser__unreadable { display: block; margin-top: var(--rt-space-1); font-size: var(--rt-text-2xs); color: var(--rt-danger-300); overflow-wrap: anywhere; }
+.session-browser__row-cell { width: 1%; white-space: nowrap; }
+.session-browser__row-actions { display: flex; gap: var(--rt-space-2); justify-content: flex-end; align-items: center; }
+.session-browser__table td[data-testid="session-row-branch"] { white-space: nowrap; }
+.session-browser__menu-anchor { position: relative; display: inline-block; }
+.session-browser__menu { position: absolute; right: 0; top: calc(100% + var(--rt-space-1)); z-index: 2; display: flex; flex-direction: column; align-items: stretch; min-width: 180px; padding: var(--rt-space-1); background: var(--rt-surface); }
+.session-browser__menu-item { justify-content: flex-start; text-align: left; white-space: nowrap; }
+.session-browser__menu-item--danger { color: var(--rt-danger-300); }
 .visually-hidden { position: absolute; width: var(--rt-hairline-width); height: var(--rt-hairline-width); padding: 0; margin: calc(-1 * var(--rt-hairline-width)); overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* Settings — destination 1 (REQ-CONFIG-270, 280, 329, 338, 471). */

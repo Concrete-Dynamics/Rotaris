@@ -207,6 +207,29 @@ terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / RE
 progress — one durable transaction) → the bus drained → the hooks advisory → every per-session binding removed.
 Main presents `run.result` once as the notice.
 
+## 6a. The session browser's actions reaching a record no run holds (Part U)
+
+Three actions of REQ-SESSION-182 reach a session's record from OUTSIDE a run, all in the run host, none a control operation
+of §5 and none a channel: each is a request answered once.
+
+- **Repair** (REQ-SESSION-060): `Sessions.repairOne` — liveness through the one predicate (`liveness()`, which the listing
+  now consumes too; REQ-SESSION-171) → the state read (unreadable = nothing to do) → an active status required → the
+  writer's `save('interrupted')` at the stronger durability setting → the `session_marked_interrupted` timeline entry →
+  the lock released last (ADR-0005's note: the entry is written under the lock). `repair(all)` walks the listing rows of
+  the workspace; `checkpointListing`'s REQ-GIT-094 repair is the same unit. A loaded, idle session repairs through its
+  own live writer and its projection republishes.
+- **Delete** (REQ-SESSION-166, REQ-GIT-069) in this order: (1) `prepareDelete` loads the row, refuses a live or
+  unknowable session with its sentence, finds the tree (the binding's worktree, else the workspace root), notes an
+  unreadable state; (2) the refs, best-effort — `checkpoint.deleteNamespace` through main to the service, skipped with a
+  warning when the tree is gone; (3) `completeDelete` — a loaded idle session evicted from the registry, then ONE durable
+  transaction `DELETE FROM sessions` cascading to the thirteen dependent tables, then `sessions/<sid>/` removed, errors
+  ignored; (4) the browser reads the list again; a followed session that was deleted is unfollowed and its persona
+  windows destroyed.
+- **Export** (REQ-SESSION-199, REQ-SESSION-189): `readRecords` / `readTrajectory` run in a deferred READ transaction
+  (`StoreDal.readTransaction`) so a ring's entries and its header figures come from one state; nothing is written to the
+  record, no run pauses, a live session exports what it holds at that instant; the file is written afterwards, outside
+  the transaction, through `replaceDocument` with REQ-TRACE-061's ladder.
+
 ## 7. The store the run writes (`packages/store/src/schema.ts`, v9)
 
 | Table | Holds | Written by |

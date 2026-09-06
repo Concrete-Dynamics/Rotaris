@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, ServiceAnswerEnv
 import { millis, toIsoUtc, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
-import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
+import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
 
@@ -217,6 +217,13 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const r = await tracked(deleteRefs(req.treeRoot, req.sessionId, req.refs, { clocks }));
       if (r.failed.length > 0) log(`checkpoint prune ${req.sessionId}: ${r.deleted} deleted, ${r.failed.length} left: ${r.failed.map((f) => `${f.ref}: ${f.detail}`).join('; ')}`, 'warn');
       return { kind: 'checkpoint.pruned', deleted: r.deleted, failed: r.failed };
+    }
+    case 'checkpoint.deleteNamespace': {
+      // Part U / REQ-GIT-069: every ref of the session in that tree, best-effort — the listing's failure (a moved or vanished
+      // repository, no Git) is the detail, never a raise; the run host logs the leftover and deletes the record regardless.
+      const r = await tracked(deleteNamespace(req.treeRoot, req.sessionId, { clocks }));
+      log(`checkpoint namespace ${req.sessionId} in ${req.treeRoot}: ${r.deleted} ref(s) deleted${r.detail === undefined ? '' : ` — ${r.detail}`}`, r.detail === undefined ? 'info' : 'warn');
+      return r.detail === undefined ? { kind: 'checkpoint.namespaceDeleted', deleted: r.deleted } : { kind: 'checkpoint.namespaceDeleted', deleted: r.deleted, detail: r.detail };
     }
     case 'shutdown': {
       // REQ-GIT-101: an in-flight checkpoint Git operation finishes first; the wait is bounded by REQ-GIT-033's limits alone.

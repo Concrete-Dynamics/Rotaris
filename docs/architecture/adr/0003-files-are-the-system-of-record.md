@@ -295,3 +295,25 @@ taken (`REQ-SESSION-201`), and a user-configurable store location is **refused**
 ground that no surveyed product offers one and that the variables which come closest are a documented
 hazard for silently relocating stores into synchronised folders — which would hand the user ESC-15's
 total outage. The table stays at three kinds of "where".
+
+## First execution — 2026-09-06, consequence 3's three actions (Part U)
+
+*Recorded under GD-10.*
+
+**Built:** `REQ-SESSION-191`'s three actions from the session browser (`REQ-SESSION-182`). *Open the log* opens
+`sessions/<sid>/session.log` with the platform's reader (`shell.openPath`); *reveal files* opens the file manager on the
+session's directory (`shell.showItemInFolder`); *export records* is `REQ-SESSION-199`'s file (ADR-0024's note of the
+same date). Each answers a refusal that says what is missing rather than appearing to succeed: "No log is kept for this
+session" when nothing was logged at or above the configured level (the log file is created on the first line at
+WARNING or above, `REQ-SESSION-142`), "This session has no files yet" when neither the log nor the summary nor an
+artifact body exists.
+
+**Which of `REQ-SESSION-002`'s three kinds exist today.** The summary (`summary.md`, written by the run's save through
+ADR-0004) and the log (`session.log`, the appender in `run-host/tools.ts`) are written; **artifact, attachment and
+image bodies are not** — no mechanism produces them (the library domain is unbuilt), so `artifacts/` never exists and
+the reveal action names it absent. The delete (`REQ-SESSION-166`) removes the directory whole, whatever it holds, after
+the record's transaction; the export writes nothing under it.
+
+**Not built, said so:** the palette entries of `REQ-SHELL-048` (no palette exists; the browser's row menu is the one
+surface), the artifact bodies, and the improvement library's exclusion from the delete (`REQ-SESSION-007` — there is no
+library to exclude).

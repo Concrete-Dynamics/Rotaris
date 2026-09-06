@@ -57,6 +57,19 @@ export function openStore(file: string, opts: OpenOptions = {}): StoreHandle {
   }
   db.pragma('synchronous = NORMAL');
   db.pragma(`busy_timeout = ${opts.busyTimeoutMs ?? 5000}`);
+  // Part U's first execution (ADR-0058 note): `foreign_keys` is a PER-CONNECTION setting, and the product set it only
+  // in `migrateStore` — the workspace service's connection, never the run host's, which is the connection every
+  // session write and REQ-SESSION-166's delete go through. The reasoning "the schema declares the cascade, so a delete
+  // cascades" was therefore incomplete: it held only because the bundled binding compiles SQLite with foreign keys ON
+  // by default (measured: a raw open reads 1), a reliance nothing in the record stated. It is stated here — enabled on
+  // every writable open and READ BACK like WAL — so a rebuilt binding with the engine's own default (OFF) is refused at
+  // open rather than left to orphan thirteen tables on the first delete.
+  db.pragma('foreign_keys = ON');
+  const fk = db.pragma('foreign_keys', { simple: true });
+  if (fk !== 1) {
+    db.close();
+    throw new StoreOpenError('open-failed', `foreign-key enforcement could not be enabled: readback=${String(fk)}`);
+  }
   try {
     db.exec('BEGIN IMMEDIATE');
     try {

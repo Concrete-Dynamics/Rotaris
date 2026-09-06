@@ -10,6 +10,7 @@ import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort, REFS_ASK_BOUND } from './checkpoints.js';
 import { McpHost } from './mcp.js';
+import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
 import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
@@ -348,6 +349,8 @@ const sessions = new Sessions({
   },
 });
 presenters.start();
+// Part U: the browser's actions over this registry, the clock ports and the ask channel.
+const sessionActions = { sessions, clocks, ask, log: (m: string, level?: 'info' | 'warn') => log(m, level ?? 'info') };
 
 async function handle(req: RunHostRequest): Promise<ProcessReply> {
   switch (req.kind) {
@@ -466,6 +469,32 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'session.control':
       return { kind: 'control.result', result: sessions.control(req.request) };
+    // Part U — the session browser's actions (REQ-SESSION-182); `session-actions.ts` holds the mechanism.
+    case 'session.repair': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return repairSessions(sessionActions, s.dal, s.root, req.sessionId);
+    }
+    case 'session.delete': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return deleteSession(sessionActions, s.dal, s.root, req.sessionId);
+    }
+    case 'session.export': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return exportRecords(sessionActions, s.dal, s.root, req.sessionId, req.destination);
+    }
+    case 'session.exportTrajectory': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return exportTrajectories(sessionActions, s.dal, s.root, req.sessionIds, req.destination);
+    }
+    case 'session.files': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      return sessionFiles(sessionActions, s.dal, s.root, req.sessionId);
+    }
     case 'hooks.summary': {
       const s = stores.get(req.workspaceId);
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };

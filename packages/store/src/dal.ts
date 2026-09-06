@@ -388,6 +388,12 @@ export class StoreDal {
       checkpointsBeyond: db.prepare('SELECT * FROM checkpoints WHERE session_id = ? ORDER BY sequence DESC LIMIT -1 OFFSET ?'),
       deleteCheckpoint: db.prepare('DELETE FROM checkpoints WHERE session_id = ? AND sequence = ?'),
       setLastRestored: db.prepare('UPDATE sessions SET last_restored_sequence = ?, updated_at = ? WHERE session_id = ?'),
+      // Part U (REQ-SESSION-166): the one delete statement. Every child table declares ON DELETE CASCADE and the open
+      // enables enforcement (open.ts, defect 40), so the row's removal takes its thirteen dependants in the same statement;
+      // `store.test.ts` plants a row in every table and asserts each is gone.
+      deleteSession: db.prepare('DELETE FROM sessions WHERE session_id = ?'),
+      // Part U (REQ-SESSION-153/189): the whole history in stored order — the trajectory's events, read in one transaction.
+      eventsOf: db.prepare('SELECT * FROM events WHERE session_id = ? ORDER BY ordinal'),
     };
   }
 
@@ -503,6 +509,19 @@ export class StoreDal {
     }
   }
 
+  /**
+   * Part U (ADR-0024 c.5, REQ-SESSION-199): a READ transaction — `BEGIN` deferred — so an export's entries and its ring
+   * headers come from one consistent state; a displacement landing between two reads cannot make a healthy record
+   * fail its own completeness arithmetic. No write may run inside it.
+   */
+  readTransaction<T>(fn: () => T): T {
+    return this.db.transaction(fn).deferred();
+  }
+
+  /** REQ-SESSION-166: true when a row was removed (and, through the cascade, everything keyed by it); false for a missing session. */
+  deleteSession(id: SessionId): boolean {
+    return this.stmts['deleteSession']!.run(id).changes === 1;
+  }
   listSessions(): SessionRow[] {
     return this.stmts['listSessions']!.all() as SessionRow[];
   }
@@ -665,6 +684,10 @@ export class StoreDal {
   }
   eventsFrom(id: SessionId, fromOrdinal: number, limit: number): EventRow[] {
     return this.stmts['eventsFrom']!.all(id, fromOrdinal, limit) as EventRow[];
+  }
+  /** Part U: every stored event, ordinal order — the trajectory export's read (REQ-SESSION-153). */
+  eventsOf(id: SessionId): EventRow[] {
+    return this.stmts['eventsOf']!.all(id) as EventRow[];
   }
   eventsOfKind(id: SessionId, kind: string): EventRow[] {
     return this.stmts['eventsOfKind']!.all(id, kind) as EventRow[];

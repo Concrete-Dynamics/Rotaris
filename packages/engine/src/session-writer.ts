@@ -227,6 +227,8 @@ export interface OpenSessionArgs {
   /** REQ-TOOLS-181 / REQ-TOOLS-071: the effective preset and the sandbox verdict. */
   readonly permissionMode?: string;
   readonly sandboxed?: boolean;
+  /** REQ-SESSION-193: the sandbox verdict's backend, carried in `session.start`'s `sandbox` object. */
+  readonly sandboxBackend?: string;
   /** REQ-GIT-022: the binding (REQ-GIT-015) as JSON, saved WITH the session record; REQ-SHELL-125's chosen sandbox mode. */
   readonly worktree?: string | null;
   readonly sandboxMode?: string;
@@ -326,9 +328,14 @@ export class SessionWriter {
     const w = new SessionWriter(deps);
     // REQ-SESSION-089 / REQ-SESSION-090: published immediately after the record is opened, carrying enough
     // to describe the run without opening the record. Its own transaction (no paired durable record).
+    // Found on Part U's first execution (ADR-0024 note, defect 41): this payload carried `workspace` and a boolean `sandboxed`,
+    // where REQ-SESSION-193 fixes the `session.start` inventory as `session_id` (the envelope's), `task`, `workspace_root`,
+    // `persona`, `permission_mode`, `sandbox {enabled, backend}` and `max_iterations` — exhaustive, "a reader may rely on no
+    // other key being present". The trajectory export (REQ-SESSION-153) reads the workspace from this payload and found the
+    // key it was promised absent. Corrected to the fixed inventory; the exporter still reads the old key from stored histories.
     w.recordEvent('session.start', {
-      task: args.task ?? '', workspace: args.workspaceRoot, persona: args.persona ?? 'orchestrator',
-      permission_mode: args.permissionMode ?? 'ask', sandboxed: args.sandboxed ?? false, max_iterations: args.maxIterations ?? null,
+      task: args.task ?? '', workspace_root: args.workspaceRoot, persona: args.persona ?? 'orchestrator',
+      permission_mode: args.permissionMode ?? 'ask', sandbox: { enabled: args.sandboxed ?? false, backend: args.sandboxBackend ?? '' }, max_iterations: args.maxIterations ?? null,
     });
     return ok(w);
   }

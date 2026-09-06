@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import Database from 'better-sqlite3';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -560,5 +561,78 @@ describe('store — v9: the checkpoint table and the last-restored sequence (ADR
     expect(plan.map((p) => p.detail).join(' | ')).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex_checkpoints_1/);
     expect(plan.map((p) => p.detail).join(' | ')).not.toMatch(/TEMP B-TREE/);
     r.db.close();
+  });
+});
+
+describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', () => {
+  it('every writable open enforces foreign keys on ITS connection, read back', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000078');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    r.db.close();
+    forgetSpelling(r.dir);
+    // The run host's path: openStore on a resolved file, never migrateStore (which was the only place the pragma lived).
+    const db = openStore(storeFile(root, id), { mustExist: true });
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+    db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('deleting the session row removes a planted row from EVERY table keyed by session_id, and nothing of another session', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000079');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const plant = (raw: string) => {
+      const sid = asSessionId(raw);
+      dal.upsertSession({ session_id: raw, execution_status: 'completed', workspace_root: 'C:/ws', created_at: '2026-09-05T00:00:00.000Z', updated_at: '2026-09-05T00:00:01.000Z' });
+      dal.claimLock(sid, 4242, M, '2026-09-05T00:00:00.000Z');
+      dal.appendRow(sid, 0, 'user', true, 'hello');
+      dal.insertEvent(sid, 1, 'session.start', '2026-09-05T00:00:00.000Z', 1, null, '{"event":"session.start"}');
+      dal.insertLaunchAudit(sid, '2026-09-05T00:00:00.000Z', '{}');
+      dal.insertTimeline(sid, 1, '2026-09-05T00:00:00.000Z', 'run_start', 'rotaris', 'started', '{}');
+      dal.ringInsert('permission_audit', sid, (ordinal) => dal.insertAudit({ session_id: sid, ordinal, recorded_at: 't', kind: 'decision', entry: '{}', agent_id: 'a', persona: 'p', tool_name: 'x', decision: 'allow', rule_id: 'r', source: 'policy' }));
+      dal.ringInsert('tool_calls', sid, (ordinal) => dal.insertToolCall({ session_id: sid, ordinal, call_id: 'c', agent_name: 'a', tool_name: 'x', status: 'running', started_at: 't', elapsed_ms: null, is_error: 0, entry: '{}' }));
+      dal.ringInsert('issues', sid, (ordinal) => dal.insertIssue({ session_id: sid, ordinal, id: 'abcdefabcdef', recorded_at: 't', kind: 'k', severity: 'warning', actor: 'a', message: 'm', evidence_ref: '', metadata: '{}' }));
+      dal.insertChild({ session_id: sid, task_id: 'bg_00000001', canonical_name: 'c', given_name: 'c', persona: 'p', state: 'queued', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+      dal.enqueueSlot(sid, 'm', 'bg_00000001');
+      dal.insertQueuedPrompt(sid, 'q1', 'later', 't');
+      dal.insertCheckpoint({ session_id: sid, sequence: 1, ref: 'refs/rotaris/checkpoints/x/1', commit_id: 'c', created_at: 't', iteration: 1, child_name: '', files: '[]', kind: 'iteration' });
+      return sid;
+    };
+    const gone = plant('S-gone');
+    const kept = plant('S-kept');
+    const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all() as { name: string }[]).map((t) => t.name).sort();
+    // Every table that carries a session_id is a dependant of the session row: thirteen today plus `sessions` itself.
+    expect(tables).toEqual(['checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
+    const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
+    for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
+    // The delete runs on the RUN HOST's kind of connection — openStore on the resolved file, no migrateStore — which is
+    // connection that never ran migrateStore's pragma. The binding's compile-time default (ON) is measured first: the reliance the product had unstated.
+    r.db.close();
+    forgetSpelling(r.dir);
+    const raw = new Database(storeFile(root, id));
+    expect(raw.pragma('foreign_keys', { simple: true }), "the bundled binding's compile-time default").toBe(1);
+    raw.close();
+    const host = openStore(storeFile(root, id), { mustExist: true });
+    const hostDal = new StoreDal(host);
+    expect(hostDal.transaction(() => hostDal.deleteSession(gone))).toBe(true);
+    const after = (table: string, sid: string) => (host.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
+    for (const t of tables) expect(after(t, gone), `${t} after delete`).toBe(0);
+    for (const t of tables) expect(after(t, kept), `${t} of the other session`).toBeGreaterThan(0);
+    // A missing session is a no-op (REQ-SESSION-166), never an error.
+    expect(hostDal.deleteSession(gone)).toBe(false);
+    host.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('a read transaction refuses a write inside it only by discipline — it is deferred, so a reader never blocks a writer', () => {
+    const id = mintWorkspaceId('0000000000000000000000000000007a');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    dal.upsertSession({ session_id: 'S', execution_status: 'completed', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    for (let i = 1; i <= 3; i++) dal.insertEvent(asSessionId('S'), i, 'usage.update', `2026-09-05T00:00:0${i}.000Z`, 1, null, `{"n":${i}}`);
+    const seen = dal.readTransaction(() => dal.eventsOf(asSessionId('S')).map((e) => e.ordinal));
+    expect(seen).toEqual([1, 2, 3]);
+    r.db.close();
+    forgetSpelling(r.dir);
   });
 });

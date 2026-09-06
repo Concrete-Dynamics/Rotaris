@@ -60,8 +60,8 @@ describe('ui — theme projection and motion', () => {
 
 describe('ui — session browser (REQ-SHELL-126)', () => {
   const rows = [
-    { sessionId: 'S-1', label: 'Refactor parser', status: 'completed', branch: '—', relativeTime: '2 minutes ago', detail: 'C:/work/one', awaitingInput: false, stale: false, tokens: 1200, durationLabel: '0:42', busy: false, requirementId: null, worktree: null, checkpointCount: 0 },
-    { sessionId: 'S-2', label: 'Review hooks', status: 'running', branch: 'feat/hooks', relativeTime: '1 hour ago', detail: 'C:/work/two', awaitingInput: true, stale: true, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0 },
+    { sessionId: 'S-1', label: 'Refactor parser', status: 'completed', branch: '—', relativeTime: '2 minutes ago', detail: 'C:/work/one', awaitingInput: false, stale: false, tokens: 1200, durationLabel: '0:42', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null },
+    { sessionId: 'S-2', label: 'Review hooks', status: 'running', branch: 'feat/hooks', relativeTime: '1 hour ago', detail: 'C:/work/two', awaitingInput: true, stale: true, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null },
   ];
 
   it('searches the complete presented row vocabulary', () => {
@@ -73,7 +73,7 @@ describe('ui — session browser (REQ-SHELL-126)', () => {
 });
 
 describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
-  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, ...over });
+  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over });
   it('REQ-MONITOR-166: fewer than two samples is an empty sparkline, never a flat line; the path spans the samples', () => {
     expect(sparklinePath([], 160, 36)).toBeNull();
     expect(sparklinePath([['t', 5]], 160, 36)).toBeNull();
@@ -110,7 +110,7 @@ describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
 describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
   const state = (over: Partial<GitViewState>): GitViewState => ({ workspaceRoot: 'D:/ws', gitAvailable: true, isRepository: true, branch: 'main', detached: false, upstream: 'origin/main', ahead: 1, behind: 0, uncommitted: 0, additions: 0, deletions: 0, files: 0, baseBranch: 'main', worktrees: [], history: [], failed: [], reads: 11, readMs: 400, ...over });
   const wt = (over: Partial<GitWorktreeRow>): GitWorktreeRow => ({ path: 'D:/ws', branch: 'main', head: 'h', isBase: true, isActive: true, ahead: 0, behind: 0, additions: 0, deletions: 0, files: 0, ...over });
-  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, ...over });
+  const row = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over });
   const binding = (path: string, over: Partial<NonNullable<SessionListItemPayload['worktree']>> = {}) => ({ worktree_path: path, branch: 'rotaris/session/S', base_branch: 'main', base_revision: 'r', created_by_session: true, merge_status: 'ready' as const, integration_session_id: null, ...over });
   it('REQ-GIT-075/081: the header texts — the branch, the literal for a non-repository, the sync label and its refreshing form', () => {
     expect(headerBranch(null)).toBe('reading…');
@@ -168,7 +168,7 @@ describe('ui — the Git view (REQ-GIT-075..090, 109, 116, 122, 161)', () => {
 });
 
 describe('ui — the checkpoints card (ADR-0039, REQ-GIT-087/088/089)', () => {
-  const rowOf = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, ...over });
+  const rowOf = (over: Partial<SessionListItemPayload>): SessionListItemPayload => ({ sessionId: 'S', label: 'l', status: 'idle', branch: '—', relativeTime: 'now', detail: 'd', awaitingInput: false, stale: false, tokens: 0, durationLabel: '', busy: false, requirementId: null, worktree: null, checkpointCount: 0, unreadable: null, ...over });
   const listing = (rows: CheckpointListPayload['rows'], unavailable: string | null = null): CheckpointListPayload => ({ sessionId: 'S', rows, lastRestoredSequence: null, liveness: 'not-live', treeRoot: 'D:/ws', unavailable, repaired: null, includeUntracked: true });
   const ckpt = (sequence: number): CheckpointListPayload['rows'][number] => ({ sequence, ref: `refs/rotaris/checkpoints/S/${sequence}`, commit: 'c', createdAt: 't', createdLabel: '2026-09-05 10:00:00', iteration: sequence, childName: '', files: 1, kind: 'iteration' });
   it('REQ-GIT-088: the picker keeps the previous choice, else the focused session, else the first entry', () => {

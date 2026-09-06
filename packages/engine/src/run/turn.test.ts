@@ -96,8 +96,8 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     expect(third.tools?.map((t) => t.name)).toEqual(['glob', 'write_file']);
     expect(dal.getSession(sid)).toMatchObject({ iterations_completed: 1, tool_calls: 2, permission_mode: 'ask', sandboxed: 0 });
     expect(events(sid).filter((k) => k === 'iteration.start')).toHaveLength(1);
-    const start = JSON.parse(dal.eventsOfKind(sid, 'session.start')[0]!.payload) as { permission_mode: string; sandboxed: boolean };
-    expect(start).toMatchObject({ permission_mode: 'ask', sandboxed: false });
+    const start = JSON.parse(dal.eventsOfKind(sid, 'session.start')[0]!.payload) as { permission_mode: string; sandbox: { enabled: boolean; backend: string } };
+    expect(start).toMatchObject({ permission_mode: 'ask', sandbox: { enabled: false, backend: '' } });
   });
 
   it('a blocked call: the row reads blocked with its reason, the refusal text goes back to the model, and the run continues', async () => {

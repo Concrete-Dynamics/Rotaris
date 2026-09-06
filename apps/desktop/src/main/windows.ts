@@ -15,8 +15,14 @@ import type { BrowserWindow } from 'electron';
  * was) and is not hidden, which is what the requirement guarantees regardless of the answer.
  *
  * Application-modality across windows (ADR-0048's registry disabling input routing in every other window of the
- * family) is NOT built here: no application-modal surface exists yet (no palette, no keyboard help), so there is
- * nothing to route away from. The registry holds the family so that mechanism has a place to land.
+ * family) was NOT built in Part R — no application-modal surface existed then — and IS built here since Part W, when
+ * the command palette and the keyboard help (REQ-SHELL-051/054) became the first such surfaces: `setFamilyModal(true)`
+ * disables input in every persona window of this main window (`BrowserWindow.setEnabled(false)` — the platform's
+ * window-level input block; on Windows `EnableWindow(FALSE)`, so a click or a key aimed at the window is dropped by the
+ * host before the renderer sees it) and `setFamilyModal(false)` restores it; a persona window created while the modal
+ * is up is created disabled; the main window's navigation, reload, crash or close restores every window (the caller's
+ * duty, `main/index.ts`). The palette proof observed the block with operating-system input, not injected events,
+ * because injected events (`webContents.sendInputEvent`) bypass the host's block — ADR-0048's note records it.
  */
 export interface PersonaWindowDeps {
   readonly create: (persona: string) => BrowserWindow;
@@ -41,6 +47,7 @@ export interface PersonaWindowEntry {
 export class PersonaWindows {
   private readonly byPersona = new Map<string, PersonaWindowEntry>();
   private destroyingAll = false;
+  private modal = false;
 
   constructor(private readonly deps: PersonaWindowDeps) {}
 
@@ -49,8 +56,23 @@ export class PersonaWindows {
     for (const e of this.byPersona.values()) if (e.wcId === wcId) return e;
     return undefined;
   }
-  list(): { persona: string; title: string; visible: boolean; minimized: boolean; width: number; height: number; wcId: number }[] {
-    return [...this.byPersona.values()].filter((e) => !e.win.isDestroyed()).map((e) => { const [width, height] = e.win.getSize(); return { persona: e.persona, title: e.win.getTitle(), visible: e.win.isVisible(), minimized: e.win.isMinimized(), width: width ?? 0, height: height ?? 0, wcId: e.wcId }; });
+  list(): { persona: string; title: string; visible: boolean; minimized: boolean; enabled: boolean; width: number; height: number; wcId: number }[] {
+    return [...this.byPersona.values()].filter((e) => !e.win.isDestroyed()).map((e) => { const [width, height] = e.win.getSize(); return { persona: e.persona, title: e.win.getTitle(), visible: e.win.isVisible(), minimized: e.win.isMinimized(), enabled: e.win.isEnabled(), width: width ?? 0, height: height ?? 0, wcId: e.wcId }; });
+  }
+
+  /**
+   * ADR-0048's application modality (Part W): while a main window's application-modal surface is open, every persona
+   * window of the family takes no input; after, every one takes input again. Idempotent — a second `true` or a second
+   * `false` changes nothing — so an open and a close always pair whatever the renderer's render order did.
+   */
+  setFamilyModal(active: boolean): number {
+    this.modal = active;
+    let n = 0;
+    for (const e of this.byPersona.values()) if (!e.win.isDestroyed()) { e.win.setEnabled(!active); n += 1; }
+    return n;
+  }
+  isFamilyModal(): boolean {
+    return this.modal;
   }
   count(): number {
     return [...this.byPersona.values()].filter((e) => !e.win.isDestroyed()).length;
@@ -83,6 +105,8 @@ export class PersonaWindows {
         this.deps.onDestroyed(wcId, persona);
       });
       this.deps.onCreated(win, persona);
+      // A persona window created while the main window's modal surface is up is created without input (ADR-0048).
+      if (this.modal) win.setEnabled(false);
       await this.deps.load(win, persona);
       this.deps.log(`persona window "${persona}" created (${win.getTitle()}, ${win.getSize().join('×')}) for ${agentId}`);
     } else {

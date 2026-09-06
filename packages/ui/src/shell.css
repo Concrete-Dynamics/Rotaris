@@ -399,6 +399,25 @@
 /* REQ-GIT-086: the picker is at least 220 px wide; a long entry is clipped by the select, never the card. */
 .git__picker { flex: 1 1 220px; min-width: 220px; width: auto; max-width: 100%; }
 .git__toast { position: fixed; right: var(--rt-space-5, 20px); bottom: calc(var(--rt-status-bar-height) + var(--rt-space-4, 16px)); z-index: 5; }
+/*
+ * Part W — the command palette (REQ-SHELL-051..053) over the design system's `.cmdk-*`, and the keyboard help
+ * (REQ-SHELL-054) over `.dialog`. The palette's 560×420 is the specification's own figure (REQ-SHELL-051), fixed rather
+ * than the design's `min(560px, 100%)`/`70vh`, and it fits the 1000×680 minimum of REQ-SHELL-022 under the design's
+ * `9vh` top inset. The list is flat (one vocabulary, REQ-SHELL-048); the heading is the spec's "Commands".
+ */
+.cmdk.cmdk--palette { width: 560px; height: 420px; max-height: none; }
+.cmdk-title { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); letter-spacing: var(--rt-tracking-label); text-transform: uppercase; white-space: nowrap; }
+.cmdk-heading { margin: 0; }
+.cmdk-list { list-style: none; margin: 0; flex: 1 1 auto; min-height: 0; }
+.cmdk-item-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-item-hint.kbd-seq { margin-left: auto; }
+.cmdk-empty { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); font-size: var(--rt-text-sm); }
+.keyboard-help { width: min(520px, 100%); }
+.keyboard-help__rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content max-content 1fr; column-gap: var(--rt-space-3, 12px); row-gap: var(--rt-space-2, 8px); align-items: center; }
+.keyboard-help__row { display: contents; }
+.keyboard-help__dash { color: var(--rt-text-tertiary); }
+.keyboard-help__label { color: var(--rt-text); }
+.keyboard-help__escape { margin: var(--rt-space-3, 12px) 0 0; font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }
 .confirm-dialog__body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .confirm-dialog__lines { margin: 0; padding-left: var(--rt-space-4, 16px); }
 .worktree-dialog { width: min(560px, 100%); }

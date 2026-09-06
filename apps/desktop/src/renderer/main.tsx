@@ -639,19 +639,14 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     ],
     [processes, counters, session, theme, circuitBreakerArmed, branchItem],
   );
-  useEffect(() => {
-    // REQ-CHAT-002: Ctrl+L moves keyboard focus to the composer from anywhere in the window.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'l') {
-        e.preventDefault();
-        (document.querySelector<HTMLTextAreaElement>('.composer__input'))?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
+  // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette
+  // and the keyboard help register with main's window registry through `window.modality`, and main disables input in the
+  // persona windows for the duration.
+  const onModality = useCallback((active: boolean) => { void bridge.command({ kind: 'window.modality', active }); }, []);
   return (<>
     <AppShell
+      onModality={onModality}
       version={version}
       workspaceLabel={workspace}
       statusItems={status}

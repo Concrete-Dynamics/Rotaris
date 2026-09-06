@@ -128,6 +128,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** The persona window asks main what it was opened for: its persona, the session the main window follows, the tab to select. */
   z.object({ kind: z.literal('window.personaPayload') }),
   /**
+   * ADR-0048's application modality, second execution (Part W; REQ-SHELL-051/054): a main window's application-modal
+   * surface (the command palette, the keyboard help) registers itself open or closed, and main's registry disables
+   * input in every other window of that main window's family for the duration. From a main window only; a persona
+   * window sending it is refused.
+   */
+  z.object({ kind: z.literal('window.modality'), active: z.boolean() }),
+  /**
    * Part U — the session browser's actions (REQ-SESSION-182). `session.repair` with no id is "repair every stale session"
    * (REQ-SESSION-060); `session.delete` is behind the browser's permanent-deletion confirmation (REQ-SESSION-166);
    * `session.export` is the four records of REQ-SESSION-199 and `session.exportTrajectory` the trajectory document, or the

@@ -24,7 +24,11 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-05** (Parts R and S — the persona window as a renderer instance, the window registry in
+Last reconciled with the code: **2026-09-06** (Parts T and U — the sentinel branch as a process shape under the run host, the
+`mcp.setup` request, the `session.*` commands and requests, the fourth checkpoint ask and the save-dialog seam, process view; the
+resources tree, the generator scripts, the sentinel and the generated module, component view; the enabled entry per run, the
+binding, the probe, the setup steps, the repair unit's order, the delete's four steps and the export's read, runtime view. Before
+that, 2026-09-05, Parts R and S — the persona window as a renderer instance, the window registry in
 main, the `window.*` and `mcp.*` commands, the run host's `mcp.*` requests and its MCP child processes, process view; the record's
 eight new fields and two MCP fields, the owner's coalesced publication, the session connections' lifetime, runtime view; `mcp`
 no longer a placeholder, `kernel` gaining the code-point order, no edge changed, component view. Before that Parts P and Q — the checkpoint asks, requests and commands, process view; the

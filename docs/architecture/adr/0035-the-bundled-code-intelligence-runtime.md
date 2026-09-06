@@ -246,3 +246,17 @@ fetched language servers). The tally stands.
 machine-setup half of `REQ-MCP-112` and `REQ-MCP-095/096`; the ONBOARDING tier's persona; the dashboard and
 project-switching tools (never granted by design); the isolated-tree binding; nested `.gitignore` files in the
 contains-code walk (the root file only).
+
+**At the merge (the manager, 2026-09-06).** Two consequences of the enabled entry surfaced only on the merged tree. The
+runtime creates `.serena/project.yml` in the workspace root whenever it starts with a project (finding 5 above), so with
+`enabled: true` every first run left an untracked directory in the user's repository — the Git proof's isolated launch
+found the base tree dirty. The reading taken, flagged for the owner: the load's `.gitignore` amendment (REQ-CONFIG-013,
+REQ-MCP-089) keeps the marker's directory ignored beside `.rotaris/`, the name taken from the generated manifest
+(`keepScopeDirIgnored`, `packages/config/src/load.ts`); the proofs seed both. And the ≈4.5 s discovery at every process's
+first run (finding 6) pushed five proofs' fixed windows: Part J, resilience, fetch and mission now switch the entry off
+in their scratch configuration, config carries the cost in its window, and IC-6's packaged launch reads `session running`
+at its 9 s capture where it read `completed`. A stray `builtin/` directory in the main checkout dated from the branch
+spike: the Bash tool resets its working directory to the main checkout, so a token launch of the pre-sentinel build
+there took the token for a workspace path (REQ-STARTUP-163) and Windows's stream syntax made a directory of it —
+unreachable now that the sentinel precedes `workspaceFromArgv`; removed, not committed.
+

@@ -71,6 +71,14 @@ bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
  * before any view has mounted. Null until the window has booted, and the action is then not dispatched.
  */
 let focusSession: ((sessionId: string) => void) | null = null;
+/**
+ * The workspace this window has open, for the one notice action that names one (ESC-34). Set once at bootstrap from
+ * the same value the tree is given, so the dispatcher — which is not a component — can compare without a lookup.
+ */
+let openWorkspace = '(no workspace)';
+/** REQ-GIT-082's comparison, the idiom this renderer already uses for "does this still name the open workspace". */
+const sameWorkspace = (a: string, b: string): boolean =>
+  a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 
 /**
  * REQ-CHAT-011: no session → start one; a loaded session with no run → record the prompt.
@@ -530,9 +538,23 @@ function dispatchNoticeAction(action: NoticeAction): void {
       shell.openSettings(action.category);
       return;
     case 'open-hook-review':
+      // ESC-34: the action names the workspace whose hooks it concerns. Reviewing a different workspace's hooks than
+      // the one on screen would show the wrong set (the decision is per fingerprint, REQ-HOOKS-095), so a notice that
+      // outlived a workspace change opens nothing: navigating between workspaces from a notice is NOT built.
+      if (!sameWorkspace(action.workspace, openWorkspace)) {
+        console.warn(`notice action "open-hook-review" names ${action.workspace}, which is not the open workspace`);
+        return;
+      }
       void bridge.command({ kind: 'hooks.review' });
       return;
     case 'open-provider-sign-in':
+      // REQ-WORKSPACE-152: clause (3)'s notice starts the flow at the catalog step, which is `add`. Clause (1)'s
+      // re-authenticate entry names a provider and is reached from the Settings surface, not from a notice; no notice
+      // in this build names one, so that branch has no caller and is recorded rather than guessed at.
+      if (action.provider !== undefined) {
+        console.warn(`notice action "open-provider-sign-in" named ${action.provider}: re-authenticate from a notice is not built`);
+        return;
+      }
       void bridge.command({ kind: 'providers.open', mode: 'add' });
       return;
     case 'focus-session':
@@ -998,6 +1020,8 @@ async function boot(): Promise<void> {
   if (role === 'persona') { await bootPersona(); return; }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
+  // ESC-34: the dispatcher is not a component, and one action names a workspace it must be checked against.
+  openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />

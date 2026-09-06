@@ -378,8 +378,9 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * Part V: the persistent notice's fields as REQ-NOTIFY-023 lists them — `sessionId` empty means the focused run
    * (REQ-NOTIFY-028); `persistent` decides the dismiss control (REQ-NOTIFY-040). The `ttlMs` this event carried since Part S
    * (REQ-MCP-044's 8 s auto-dismiss on the one slot) is gone: REQ-NOTIFY-040 says no notice leaves on a timer, so that
-   * warning now rides `acknowledgement.publish` below (the disagreement between REQ-MCP-044's 8 s and REQ-NOTIFY-011's
-   * single lifetime is an open question in ADR-0049's Part V note).
+   * warning now rides `acknowledgement.publish` below. The disagreement this part raised — REQ-MCP-044's 8 s against
+   * REQ-NOTIFY-011's single lifetime — was ruled on 2026-09-06 as ESC-33: REQ-MCP-044 was amended to cite the
+   * lifetime rather than restate it, so what the build already did is now what the corpus says.
    */
   z.object({ kind: z.literal('notice.publish'), severity: NoticeSeveritySchema, title: z.string(), message: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), sessionId: z.string(), persistent: z.boolean() }),
   /** Part V / REQ-NOTIFY-003: a transient the run host raises on its own — main pushes it to the main window's stack. */

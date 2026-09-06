@@ -188,10 +188,15 @@ acceptance order is what the chain preserves. Neither is lost: the warning half 
 outcome is in the session record. This proof does not fix which of the two wins, because nothing in the requirements
 does.
 
-**An open question for the owner (not decided here).** `REQ-MCP-044` gives its warning a UI toast "with an 8-second
-auto-dismiss". `REQ-NOTIFY-011` fixes the transient lifetime at 4200 ms and states that no surface declares a lifetime
-of its own. The build follows `REQ-NOTIFY-011` and routes that warning to the acknowledgement channel; the 8 s figure
-is not honoured anywhere. The two requirements disagree and only the owner may resolve it.
+**An open question for the owner — RULED 2026-09-06 as ESC-33, the same day.** `REQ-MCP-044` gave its warning a UI
+toast "with an 8-second auto-dismiss". `REQ-NOTIFY-011` fixes the transient lifetime at 4200 ms and states that no
+surface declares a lifetime of its own. The build followed `REQ-NOTIFY-011` and routed that warning to the
+acknowledgement channel; the 8 s figure was honoured nowhere. **The owner amended `REQ-MCP-044` to cite the lifetime
+rather than restate it** — the copy was the defect, not the definition, and the durable half of that requirement's
+two-channel delivery is its `mcp_config` issue record, which the amendment leaves untouched. **The build needed no
+change under this ruling**; the ruling is `owner-decisions.md` ESC-33 and the amendment is recorded in
+`../../spec/resolutions/16-mcp-integration.md`. The lever kept beside it: a warning that must outlive an
+acknowledgement is a **persistent notice** under `REQ-NOTIFY-040`, never a longer transient.
 
 **Not built, said so.** The application diagnostics of `REQ-NOTIFY-268`'s second branch are main's log line, because
 the diagnostics store (`REQ-STARTUP-130` onward) does not exist; a warning with no session and no focused run is
@@ -199,6 +204,21 @@ therefore readable in the log and nowhere else. `REQ-SHELL-118`'s update-offer n
 progress, is not built (there is no updater). Seven members of the action vocabulary parse and dispatch to nothing in
 this build — the update, the restart, the cloud account, the project initialization, the retry, the proposal revert and
 the settings save — each logged rather than silently ignored, and `open-library` has no target until the Library view
-exists. Two members outside `REQ-NOTIFY-044`'s list are carried because two other requirements demand them
-(`REQ-NOTIFY-224`'s hook review and `REQ-WORKSPACE-152`'s provider sign-in); that gap between the requirements is the
-second open question this part leaves.
+exists. Two members outside `REQ-NOTIFY-044`'s list were carried because two other requirements demand them
+(`REQ-NOTIFY-224`'s hook review and `REQ-WORKSPACE-152`'s provider sign-in). **That gap was RULED 2026-09-06 as
+ESC-34, the same day:** the owner added both members to `REQ-NOTIFY-044` on the precedent of its own resolution 12,
+where this vocabulary was corrected to match a behavioural requirement rather than the other way round. **This ruling
+did change the code:** `REQ-NOTIFY-044` requires an action concerning an object to carry that object's identity, and
+the two members shipped here carried none — `open-hook-review` now names the workspace whose hooks it concerns
+(`REQ-NOTIFY-224` publishes per workspace and hook set, so an unparameterised action reviews whichever workspace
+happens to be open), and `open-provider-sign-in` names a provider where one is named. A review action naming a
+workspace other than the open one opens nothing and is logged; navigating between workspaces from a notice is not
+built. The ruling is `owner-decisions.md` ESC-34 and the amendment is recorded in
+`../../spec/resolutions/19-notifications-errors-recovery.md`.
+
+**The changed path was measured, and it found nothing (GD-10).** `pnpm notice-proof` gained a sixth launch, because
+the identity main writes into the action and the identity the renderer checks it against are produced in two different
+processes and no unit test spans them. A workspace declaring one hook raises `REQ-NOTIFY-224`'s notice; the notice
+offers `Review hooks` carrying `data-action="open-hook-review"`; activating it opened `REQ-HOOKS-106`'s review for
+that workspace and no other, one hook listed, and the renderer's mismatch branch was never taken. The two strings
+agreed on the first run. Recorded because the finding is the absence: this change held no defect.

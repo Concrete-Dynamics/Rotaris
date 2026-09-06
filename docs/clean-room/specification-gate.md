@@ -179,7 +179,7 @@ the specification was sufficient to design from; that judgment stands. But a rea
 closure figures, or the phrase "approved as sufficient", as describing the corpus as it exists today.
 `../spec/README.md` carries the current counts and is the authority for them.
 
-Amendments made under the standing direction so far, in **nine** rounds. The **structural-ruling round**
+Amendments made under the standing direction so far, in **ten** rounds. The **structural-ruling round**
 applied SR-1 to SR-3; the **storage-ruling round** applied SR-4 to SR-8 and ESC-11, ESC-13, ESC-15,
 ESC-16 and ESC-18; the **ruling-application round** of 2026-09-01 applied everything that was ruled and
 never made — ESC-1, ESC-2, ESC-5, ESC-6, ESC-7, ESC-8, ESC-13's withheld half, ESC-19, ESC-20, ESC-21
@@ -194,11 +194,13 @@ rulings of that date: **ESC-22, ESC-24 and ESC-27 to ESC-31**. The **restore-mea
 2026-09-02 answered the first execution of `REQ-SESSION-201`'s restore, which found **two defects in the
 requirement itself** and one state no requirement described. The **owner-ruling round** of 2026-09-02 applied
 **GD-1** and **GD-4**, the two of the four Architecture Gate owner decisions that land in requirements.
-The **requirement-shape sweep** of 2026-09-02 was
+The **notice-measurement round** of 2026-09-06 answered the two questions the notice pipeline's first
+execution could not build past — one figure restated across domains, one closed vocabulary outgrown by two
+requirements outside it. The **requirement-shape sweep** of 2026-09-02 was
 not prompted by a defect report: it looked for the two *shapes* the previous two rounds' defects had, and
 found four more, one of them in the requirement the eighth round's own correction cited as its authority.
 **The first six are recorded in detail in
-[`provenance.md`](provenance.md); the seventh, eighth and ninth are recorded here and not yet there**,
+[`provenance.md`](provenance.md); the seventh, eighth, ninth and tenth are recorded here and not yet there**,
 together with the count changes they produced, and that file is not this document's to edit.
 
 **Current figures, superseding the closure figures above:** **3,953** identifiers across the nineteen
@@ -208,7 +210,8 @@ withdrawn. The ruling-application round minted seven identifiers and withdrew no
 defect-correction round minted one (`REQ-CONFIG-478`) and withdrew none; the measurement round minted one
 (`REQ-EVENTS-179`) and withdrew none; the platform-defect round minted two (`REQ-MONITOR-306`,
 `REQ-SHELL-169`) and withdrew none; the restore-measurement round minted one (`REQ-SESSION-202`) and
-withdrew none. **No requirement's strength was reduced in any of the last four rounds**, and live
+withdrew none. **No requirement's strength was reduced in the defect-correction, measurement, platform-defect or
+restore-measurement rounds**, and live
 behaviour grew by one, one, two and one respectively.
 
 ***One record-hygiene item is outstanding and is stated here rather than left to be discovered.***
@@ -935,6 +938,69 @@ mechanism and running it.
 
 **Count change: none.** All four corrections amend requirements in place. No identifier was minted,
 renumbered or withdrawn, and the figures recorded for the seventh round stand.
+
+### The notice-measurement round, 2026-09-06
+
+**The second round in which a specification defect was found by RUNNING something, and the first found by
+running a mechanism this corpus had already resolved.** ADR-0049's notice pipeline had been decided on
+paper in full and executed in part. On 2026-09-06 it was built whole (Part V) and measured, and the two
+things it could not build without a ruling were both defects in the requirements rather than in the
+architecture. Neither was a hard reading: each is visible the moment two documents are held side by side,
+and neither had been, because nothing before this needed both at once.
+
+***ESC-33 — a figure one domain owned, restated by another.*** `REQ-MCP-044` gave its construction warning
+"a UI toast of severity 'warning' with an 8-second auto-dismiss". `REQ-NOTIFY-011` fixes the acknowledgement
+lifetime at 4200 ms and says, in its second sentence, that it is the product's single definition of one and
+that no surface declares a lifetime of its own. **A conformant build could satisfy neither pair of
+sentences.** The shape is one this corpus already understands — it is why `REQ-NOTIFY-044` cites
+`REQ-SHELL-023`, `REQ-CONFIG-269` and `REQ-LIBRARY-103` rather than holding lists of its own, and it is what
+the ESC-27 follow-through fixed in `REQ-MCP-082` over `secrets.yaml` — but the sweep that found those
+looked at *lists*, and this is a *scalar*. **Fixed:** `REQ-MCP-044` names the channel as a transient
+acknowledgement held for the lifetime `REQ-NOTIFY-011` fixes, states that it declares none of its own, and
+states that the durable half of its two-channel delivery is the session issue record. The 8 s is preserved
+nowhere, and the amendment says where a longer-lived warning goes instead: `REQ-NOTIFY-040`'s persistent
+notice, which is a severity decision and not a second lifetime.
+
+***ESC-34 — a closed vocabulary that two other requirements had outgrown.*** `REQ-NOTIFY-044` enumerated
+eleven notice actions and closed itself with "an action naming a value outside the owning domain's
+vocabulary is not dispatched". Two requirements oblige a notice to offer an action the eleven could not
+express: `REQ-NOTIFY-224`, in this same domain, whose unreviewed-hooks notice "offers an action opening the
+review" — the modal dialog of `REQ-HOOKS-106`, not a settings category — and `REQ-WORKSPACE-152` (3), whose
+first-launch notice carries "an action that starts the flow", a clause that requirement deliberately writes
+stronger than its own clause (2), where the refusals get an action merely "leading to that same Settings
+surface". **Fixed:** both members added, both carrying their object as every other member does — the review
+parameterised by workspace, the setup by provider where one is named. **The precedent was already in the
+domain's own record:** resolution 12 had faced this exact disagreement and ruled that "the action vocabulary
+was corrected to match rather than the other way round".
+
+***What this round says about where the remaining defects are.*** The restore-measurement round named two
+shapes — a requirement phrased as "*X refused while Y*", and a requirement phrased as *a list of cases*.
+This round names a third, and it is cheaper to sweep for than either: **a figure or a vocabulary that one
+domain owns and another restates.** Both defects here are that shape. The corpus already has the remedy
+written down in a dozen places — cite the owner, hold no copy — so a sweep is mechanical: every number and
+every enumeration that appears in two documents is either a citation or a defect. Neither of this round's
+defects was found by reading domain 16 or domain 19; both were found by a build that had to satisfy the two
+at once.
+
+***A finding about the first-execution policy itself, recorded because it is the first of its kind.***
+GD-10 requires a mechanism's first execution to report back into the record that decided it. Every prior
+application of it returned a defect in the *code* or in the *architecture record*. This is the first time
+it returned defects in the **specification** from a mechanism the specification pass had fully resolved —
+domain 19 closed with thirty-seven of thirty-seven questions RESOLVED and no escalations. **A closed
+resolution record is evidence that every question asked was answered, and not that every question was
+asked.**
+
+**Count change: none.** Both corrections amend requirements in place. No identifier was minted, renumbered
+or withdrawn, so the figures recorded above stand unchanged. **One requirement's observable was reduced**
+and it is stated here rather than left to be noticed: `REQ-MCP-044`'s warning is now readable on screen for
+4200 ms where the text said 8 s. Nothing that depended on it was weakened — the requirement's other channel,
+the persisted `mcp_config` issue record, is what carries the warning after it leaves — but this round does
+not claim, as the four before it could, that no requirement's strength was reduced. The round is recorded
+in [`../spec/resolutions/16-mcp-integration.md`](../spec/resolutions/16-mcp-integration.md) and
+[`../spec/resolutions/19-notifications-errors-recovery.md`](../spec/resolutions/19-notifications-errors-recovery.md)
+as dated amendments; the rulings are ESC-33 and ESC-34 in
+[`../architecture/owner-decisions.md`](../architecture/owner-decisions.md). **No prior disposition is
+reversed.**
 
 ## What these decisions change
 

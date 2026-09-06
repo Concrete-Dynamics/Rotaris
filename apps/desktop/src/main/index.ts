@@ -173,7 +173,7 @@ async function main(): Promise<void> {
     if (ack.kind === 'workspace.ack') {
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
-          if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review')); return; }
+          if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
           const authenticated = providers.list().filter((row) => row.authenticated).map((row) => row.id);
           log(`providers: ${authenticated.length} authenticated${authenticated.length > 0 ? ` (${authenticated.join(', ')})` : ''}`);
@@ -223,9 +223,14 @@ async function main(): Promise<void> {
     // store logs the suppression itself, so the synchronous answer here is "accepted", not "shown".
     return true;
   };
-  /** REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's own closed vocabulary member. */
-  const recoveryFor = (action: string | undefined): Recovery =>
-    action === 'hooks.review' ? [{ label: 'Review hooks', action: { kind: 'open-hook-review' } }]
+  /**
+   * REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's own closed vocabulary member.
+   * ESC-34: the review action carries the workspace whose hooks it concerns, so the caller supplies one; with no
+   * workspace there is nothing to review and the notice is raised without an action rather than with an empty one.
+   */
+  const recoveryFor = (action: string | undefined, workspace?: string): Recovery =>
+    action === 'hooks.review'
+      ? (workspace === undefined || workspace === '' || workspace === '(no workspace)' ? [] : [{ label: 'Review hooks', action: { kind: 'open-hook-review', workspace } }])
       : action === 'hooks.settings' ? [{ label: 'Open hook settings', action: { kind: 'open-settings', category: 'hooks' } }]
         : action === 'config.models' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
           : action === 'providers.add' ? [{ label: 'Add a provider', action: { kind: 'open-provider-sign-in' } }]
@@ -474,7 +479,7 @@ async function main(): Promise<void> {
       void notices.report({
         severity: e.severity, title: e.title, message: e.message, detail: e.detail, persistent: e.persistent, sessionId: e.sessionId,
         ...(e.key === undefined ? {} : { key: e.key }),
-        ...(recoveryFor(e.action).length === 0 ? {} : { action: recoveryFor(e.action)[0]! }),
+        ...(recoveryFor(e.action, currentWorkspace).length === 0 ? {} : { action: recoveryFor(e.action, currentWorkspace)[0]! }),
       });
       log(`notice from the run host: ${e.title}${e.action ? ` [${e.action}]` : ''}${e.sessionId === '' ? '' : ` (session ${e.sessionId})`}`);
     }

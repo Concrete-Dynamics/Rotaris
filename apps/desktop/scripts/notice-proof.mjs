@@ -16,6 +16,10 @@ import { spawnSync } from 'node:child_process';
  *     corner, the widths and the 16 px inset measured against the window's own content box, and a view change clears.
  *  5. The presentations (REQ-NOTIFY-014/035/258): border and rule, never a filled background; the severity word in
  *     the accessible name; the four severities and the four kinds drawing one glyph set.
+ *  6. The action carries its object, and the object is the one on screen (REQ-NOTIFY-044 as amended under ESC-34,
+ *     REQ-NOTIFY-224): the unreviewed-hooks notice offers `open-hook-review` naming its workspace, and activating it
+ *     opens REQ-HOOKS-106's review for THAT workspace. The identity main writes and the identity the renderer checks
+ *     it against come from two different processes, so only the built application proves they are the same string.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
  */
@@ -58,7 +62,7 @@ function cleanEnvironment() {
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
   return env;
 }
-function scenario(name, { globalHooks = null } = {}) {
+function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
@@ -72,6 +76,9 @@ function scenario(name, { globalHooks = null } = {}) {
     // Part T's shipped code_intelligence entry costs about 4.5 s per run start; this proof measures notices.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
     'runtime:', '  permission_mode: autonomous', '',
+    // REQ-HOOKS-013: a WORKSPACE hook is never trusted without review, so the summary reports `review` and
+    // REQ-NOTIFY-224's notice is raised once the window is interactive.
+    ...(workspaceHook ? ['hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 0"', ''] : []),
   ].join('\n'));
   if (globalHooks !== null) {
     // The GLOBAL scope is trusted without review (REQ-HOOKS-013), so the run reaches the failure limit without a dialog.
@@ -257,6 +264,41 @@ const s3 = scenario('stack');
     visible: stacked.matches.length, order, gaps, insetRight: right, insetBottom: bottom, kinds, accessibleNames: names,
     afterViewChange: cleared.length, afterLifetime: expired.matches.length,
     png: join(output, 'stack.png'), elapsedMs: r.elapsedMs,
+  };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. ESC-34: the review action names its workspace, and that name reaches the review.
+const s4 = scenario('review-action', { workspaceHook: true });
+{
+  const r = launch('review-action', s4, {
+    ROTARIS_CAPTURE_AFTER_MS: '6000',
+    // The notice is raised 800 ms after the workspace opens; probe it, then click its action.
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@2500',
+    ROTARIS_CAPTURE_INSPECT_AT: '.notice__action@2500',
+    ROTARIS_CAPTURE_CLICKS: '.notice__action>>Review hooks@3200',
+    // Leaving the review without choosing is a rejection (REQ-HOOKS-107); the proof chooses, so nothing is left open.
+    ROTARIS_CAPTURE_HOOK_REVIEW: 'refuse', ROTARIS_CAPTURE_HOOK_REVIEW_MS: '900',
+  });
+  const titles = (probesAt(r.log, 2500, '[data-testid="notice-title"]') ?? []).map((m) => m.text);
+  expect(titles.includes('Workspace hooks need review'), `the notice on screen: ${JSON.stringify(titles)} (REQ-NOTIFY-224)`);
+  const actions = inspectAt(r.log, 2500, '.notice__action')?.matches ?? [];
+  expect(actions.length === 1 && actions[0].text === 'Review hooks', `the notice offers ${JSON.stringify(actions.map((a) => a.text))} (REQ-NOTIFY-224)`);
+  expect(actions[0].attrs['data-action'] === 'open-hook-review', `the action is ${actions[0].attrs['data-action']}, not the member REQ-NOTIFY-044 gained under ESC-34`);
+  // The whole point of the parameter: main writes the workspace into the action, the renderer compares it with the
+  // workspace it has open, and the review opens for THAT workspace. A mismatch in the form of the string — a slash, a
+  // drive letter's case — would silently open nothing, and no unit test spans the two processes to catch it.
+  const opened = r.log.match(/hook review opened for (.+) \((\d+) hook\(s\)\)/);
+  expect(opened !== null, `the action was activated and no review opened — see review-action.log`);
+  expect(!/is not the open workspace/.test(r.log), `the renderer refused the action's workspace: ${(r.log.match(/names .+ which is not the open workspace/) ?? [''])[0]}`);
+  const sameRoot = opened[1].replace(/\\/g, '/').toLowerCase() === s4.workspace.replace(/\\/g, '/').toLowerCase();
+  expect(sameRoot, `the review opened for ${opened[1]}, not for ${s4.workspace}`);
+  results.reviewAction = {
+    title: titles.find((t) => t === 'Workspace hooks need review') ?? null,
+    actionLabel: actions[0].text, member: actions[0].attrs['data-action'],
+    reviewOpenedFor: opened[1], hooks: Number(opened[2]), workspaceMatched: sameRoot,
+    png: join(output, 'review-action.png'), elapsedMs: r.elapsedMs,
   };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }

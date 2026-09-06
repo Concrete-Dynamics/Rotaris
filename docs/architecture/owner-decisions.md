@@ -1150,3 +1150,66 @@ capability switched off.
   step) stands; the reason is qualified in place and kept beside its qualification, under GD-10.
 - Languages beyond TypeScript and Python are not declared, by the amendment's own terms: the disclosure says
   a further language's server is obtained the same way. Declaring more is a release decision, not a defect.
+
+### ESC-33 — REQ-MCP-044's 8-second toast is a second copy of an owned figure
+
+**Ruled: amend `REQ-MCP-044`; `REQ-NOTIFY-011` is untouched.** Raised by Part V, ADR-0049's execution in
+full (2026-09-06): `REQ-MCP-044` gave its construction warning "a UI toast of severity 'warning' with an
+8-second auto-dismiss", and `REQ-NOTIFY-011` fixes the acknowledgement lifetime at 4200 ms while declaring
+itself the product's single definition of one and forbidding any surface from stating another. A build
+could not satisfy both.
+
+**Why this one.** The MCP text is the copy and the NOTIFY text is the definition, which is the same
+relationship `REQ-NOTIFY-044` already has with `REQ-SHELL-023`'s views, `REQ-CONFIG-269`'s categories and
+`REQ-LIBRARY-103`'s tabs — cite the owner, hold no copy that can drift. Nothing is lost by the shorter
+span: `REQ-MCP-044` delivers through **two** channels and the durable one is the persisted `mcp_config`
+session issue, readable in the session's issues file after the run; the acknowledgement was never the
+record. And `REQ-NOTIFY-268`, built in the same part, now records every warning notice at publication.
+
+*The alternatives were:* **grant `REQ-MCP-044` a lifetime of its own**, which reopens `REQ-NOTIFY-011`'s
+single definition for every domain that wants two more seconds and turns one figure into a per-surface
+negotiation; or **make this warning a persistent notice** under `REQ-NOTIFY-040`, which stays until
+dismissed or superseded. The second is not rejected — it remains available to `REQ-MCP-044` as a severity
+decision at no cost to `REQ-NOTIFY-011` — but it is a change to what the warning *is*, not to how long a
+transient lasts, and the owner did not make it here.
+
+**Consequences to carry.**
+
+- The 8 s figure is not preserved anywhere, and the amendment says so in place: a warning that must
+  outlive an acknowledgement is a persistent notice, not a longer transient. A later reader who wants the
+  MCP warning to stay on screen has one lever and it is severity.
+- The built product already matched this ruling before it was made: Part V routed the warning to the
+  acknowledgement channel because `REQ-NOTIFY-040` forbids the timed clear, and raised the disagreement
+  rather than choosing. No code changes under this ruling; two code comments citing it as an open question
+  now cite the amendment.
+
+### ESC-34 — the notice action vocabulary was closed against two actions the product owes
+
+**Ruled: amend `REQ-NOTIFY-044`; add both members.** Raised by Part V alongside ESC-33.
+`REQ-NOTIFY-224` obliges the unreviewed-hooks notice to offer "an action opening the review" — the modal
+dialog of `REQ-HOOKS-106` — and `REQ-WORKSPACE-152` (3) obliges the first-launch notice to carry "an
+action that starts the flow". `REQ-NOTIFY-044`'s eleven members reached neither, and that requirement's
+own closure ("an action naming a value outside the owning domain's vocabulary is not dispatched") makes
+the gap a refusal rather than a stretch.
+
+**Why this one.** `REQ-NOTIFY-224` and `REQ-WORKSPACE-152` state behaviour; `REQ-NOTIFY-044` enumerates.
+When the two last disagreed, **resolution 12 of this domain corrected the enumeration** — "the action
+vocabulary was corrected to match rather than the other way round" — and the same reading applies. The
+nearest existing member, opening settings at a category, reaches the surface *beside* each target rather
+than the target, and `REQ-WORKSPACE-152` distinguishes those two outcomes deliberately between its clause
+(2) and its clause (3). The vocabulary's closed property survives both additions: neither writes into the
+user's project.
+
+*The alternative was* to narrow the two behavioural requirements to `open-settings`, which costs the user
+a surface in each case and erases a distinction one of them draws on purpose.
+
+**Consequences to carry.**
+
+- Both members carry their object, as `REQ-NOTIFY-044` requires of every other member: the review is
+  parameterised by workspace (the notice is published per workspace and hook set), the setup by provider
+  where the action names one. **This one does change code** — the two members shipped in Part V carried no
+  parameter — and the change is made under this ruling rather than left as a divergence.
+- Activating a hook-review action whose workspace is not the open one is not built. The product logs it
+  and opens nothing; navigating between workspaces from a notice is owed, and is recorded in the map
+  rather than silently ignored.
+- The count is unchanged: no identifier was minted or withdrawn.

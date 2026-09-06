@@ -183,3 +183,38 @@ from a shell there.
 >
 > **ESC-12 was checked and nothing is owed here.** The ruling chooses a tool-server protocol line, which
 > is a technology decision; no requirement in this document states a protocol era and none should.
+
+
+> ## Amendment, 2026-09-06 — ESC-33: the warning's toast lifetime is cited, not restated
+>
+> **The defect this closes.** `REQ-MCP-044` stated its own figure for how long the construction warning
+> stays on screen — "a UI toast of severity 'warning' with an 8-second auto-dismiss" — and
+> `REQ-NOTIFY-011` fixes the acknowledgement lifetime at 4200 ms while stating, in the same breath, that
+> it is "the product's single definition of the acknowledgement lifetime" and that "no surface declares a
+> transient lifetime of its own". The two texts could not both be conformed to. This is the same shape as
+> the ESC-27 follow-through above and as `REQ-NOTIFY-044`'s own view, category and tab citations: a second
+> copy of another domain's figure, which drifted the moment that domain fixed one.
+>
+> **How it surfaced.** Not by review. The notice pipeline's first execution (ADR-0049, Part V, 2026-09-06)
+> had to route this warning somewhere, found that `REQ-NOTIFY-040` forbids the timed clear the 8 s implied,
+> and raised the disagreement rather than picking a side.
+>
+> **The amendment.** `REQ-MCP-044` now names the first channel as a transient acknowledgement of the
+> Warning kind (`REQ-NOTIFY-019`) held for the lifetime `REQ-NOTIFY-011` fixes, states that this document
+> declares no lifetime of its own, and states which half of the two-channel delivery is the durable one.
+> The withdrawn phrase is recorded in place with its reason. The domain's figure table keeps the row, now
+> carrying the citation instead of the number.
+>
+> **Checked before deleting.** Nothing this document owes depends on the 8 s. The warning's retrievability
+> is carried by the second channel — the persisted `mcp_config` session issue record, readable in the
+> session's issues file after the run — which the amendment leaves untouched, and by `REQ-NOTIFY-268`'s
+> record of every warning notice at publication. Every requirement that delivers through this one
+> (`REQ-MCP-069`, `REQ-MCP-071`, `REQ-MCP-107`) cites `REQ-MCP-044` and states no lifetime, so none needed
+> an edit.
+>
+> **The alternative, and why not.** A warning that genuinely must stay readable longer than an
+> acknowledgement is a **persistent notice** under `REQ-NOTIFY-040`, which stays until dismissed or
+> superseded. That is a severity decision available to any requirement and it costs `REQ-NOTIFY-011`
+> nothing. Granting `REQ-MCP-044` a lifetime of its own would have reopened the single definition for
+> every domain wanting a second or two more, which is precisely what `REQ-NOTIFY-011`'s second sentence
+> exists to prevent.

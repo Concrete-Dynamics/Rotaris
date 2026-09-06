@@ -52,13 +52,19 @@ export const NoticeActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('revert-proposal-review'), id: z.string().min(1) }),
   z.object({ kind: z.literal('save-settings') }),
   /**
-   * Two members REQ-NOTIFY-044 does not name, kept because two other requirements demand them and the built app already
-   * offered them (recorded as an open question in ADR-0049's Part V note): REQ-NOTIFY-224's unreviewed-hooks notice
-   * "offers an action opening the review" (the review dialog, REQ-HOOKS-106 — not a settings category), and
-   * REQ-WORKSPACE-152 (3)'s first-launch notice leads to the guided provider setup (the add-provider window).
+   * Two members REQ-NOTIFY-044 gained on 2026-09-06 under ESC-34, raised by this part and ruled by the owner: the
+   * eleven it named reached neither surface two other requirements oblige a notice to offer — REQ-NOTIFY-224's
+   * unreviewed-hooks notice "offers an action opening the review" (REQ-HOOKS-106's dialog, not a settings category),
+   * and REQ-WORKSPACE-152 (3)'s first-launch notice "carries an action that starts the flow", which that requirement
+   * writes deliberately stronger than its clause (2)'s action merely leading to Settings.
+   *
+   * Each carries its object, as REQ-NOTIFY-044 requires of every member concerning one: the review names the
+   * workspace it concerns, because REQ-NOTIFY-224 publishes per workspace and hook set and an unparameterised action
+   * would review whichever workspace happened to be open; the setup names a provider only where there is one to name
+   * (REQ-WORKSPACE-152 (1)'s re-authenticate entry), the first-launch notice starting at the catalog step.
    */
-  z.object({ kind: z.literal('open-hook-review') }),
-  z.object({ kind: z.literal('open-provider-sign-in') }),
+  z.object({ kind: z.literal('open-hook-review'), workspace: z.string().min(1) }),
+  z.object({ kind: z.literal('open-provider-sign-in'), provider: z.string().min(1).optional() }),
 ]);
 export type NoticeAction = z.infer<typeof NoticeActionSchema>;
 export type NoticeActionKind = NoticeAction['kind'];

@@ -185,7 +185,8 @@ describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
       { kind: 'focus-session', sessionId: 's1' }, { kind: 'open-view', view: 'git' }, { kind: 'open-settings', category: 'models' },
       { kind: 'open-library', tab: 'artifacts' }, { kind: 'install-update' }, { kind: 'restart' }, { kind: 'retry-run' },
       { kind: 'save-settings' }, { kind: 'open-cloud-account' }, { kind: 'open-project-init', workspace: 'C:/w' },
-      { kind: 'revert-proposal-review', id: 'p1' }, { kind: 'open-hook-review' }, { kind: 'open-provider-sign-in' },
+      { kind: 'revert-proposal-review', id: 'p1' }, { kind: 'open-hook-review', workspace: 'C:/w' },
+      { kind: 'open-provider-sign-in' }, { kind: 'open-provider-sign-in', provider: 'openrouter' },
     ]) expect(NoticeActionSchema.safeParse(action).success, JSON.stringify(action)).toBe(true);
 
     // A view outside REQ-SHELL-023, a library tab outside the two REQ-SHELL-115 names, an unknown member, a missing identity.
@@ -193,6 +194,10 @@ describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
     expect(NoticeActionSchema.safeParse({ kind: 'open-library', tab: 'prompts' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'delete-everything' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'focus-session' }).success).toBe(false);
+    // ESC-34: both members added on 2026-09-06 carry their object — the review always, the setup where one is named.
+    expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review' }).success).toBe(false);
+    expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review', workspace: '' }).success).toBe(false);
+    expect(NoticeActionSchema.safeParse({ kind: 'open-provider-sign-in', provider: '' }).success).toBe(false);
   });
 
   it('carries the one action through to the notice on screen', async () => {

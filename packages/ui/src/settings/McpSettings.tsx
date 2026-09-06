@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { McpHealth, McpListing, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
+import type { McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 
 /**
  * REQ-MCP-091/092/108/109/115, REQ-CONFIG-350..353/437: the "MCP Servers" category. Structure from docs/spec; craft from
@@ -15,6 +15,11 @@ import type { McpHealth, McpListing, McpSecretsView, McpServerRow, McpSetupStatu
  * machine-setup half of REQ-MCP-112 (developer tooling, package caches) and the warm steps of REQ-MCP-095/096 belong
  * with the onboarding domain's task registry (REQ-MCP-045/098), which does not exist; the bundle makes them moot for
  * `code_intelligence`, and the card says so as text (REQ-SHELL-149).
+ *
+ * ESC-32 / IC-7 (2026-09-06): the card also carries REQ-MCP-118's language-server disclosure — the runtime is installed,
+ * its language servers are not: each is downloaded at the first use of a symbol tool for that language, into the
+ * runtime's store under the per-user data directory; the declared packages (name, version, licence, source) come from
+ * the run host's status, which reads the binding manifest (REQ-MCP-116). Text only; present whenever the card is.
  */
 export interface McpSettingsProps {
   readonly listing: McpListing | null;
@@ -75,6 +80,28 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
   );
 }
 
+/** REQ-MCP-118: the language-server disclosure — text, never colour; readable before any fetch it describes. */
+function LanguageServers({ provisioning }: { provisioning: McpProvisioning }) {
+  return (
+    <div data-language-servers>
+      <div className="card-kicker">Language servers</div>
+      <p className="text-secondary">
+        The bundled runtime is installed with Rotaris; the language servers its symbol tools use are not. At the first use of a symbol tool for a
+        language, the runtime downloads that language's server into <span className="mono" data-language-server-store>{provisioning.store}</span>.
+        Nothing is downloaded before then.
+      </p>
+      <ul className="settings__hint" aria-label="Declared language servers">
+        {provisioning.servers.map((s) => s.packages.map((p) => (
+          <li key={`${s.language}/${p.name}`} data-language-server={p.name} data-language={s.language} data-version={p.version}>
+            <span className="mono">{p.name} {p.version}</span> — {s.language}; licence {p.license}; via {s.provisioner} from <span className="mono">{p.source}</span>
+          </li>
+        )))}
+      </ul>
+      <p className="text-tertiary settings__hint">A further language the runtime supports obtains its server the same way at first use and is not declared here.</p>
+    </div>
+  );
+}
+
 /** REQ-MCP-112: progress per step as text, one final outcome, cancel while running, re-run when finished. */
 function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null; onStart: McpSettingsProps['onSetupStart']; onCancel: McpSettingsProps['onSetupCancel'] }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -91,6 +118,7 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
         </div>
       </div>
       <p className="text-secondary">Creates the bundled runtime's project for this workspace, indexes it and initialises its project memories — three steps, in order, each bounded; a workspace without code gets the project only. Runs in the background; you can cancel between steps or while a step is running.</p>
+      {setup ? <LanguageServers provisioning={setup.provisioning} /> : null}
       {message ? <p className="composer__error" role="alert" data-setup-refused>{message}</p> : null}
       {setup === null ? <p className="text-secondary">Reading…</p> : (
         <>

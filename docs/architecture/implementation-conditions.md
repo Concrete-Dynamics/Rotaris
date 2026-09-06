@@ -1,7 +1,9 @@
 # Conditions that bind at implementation time
 
 Created 2026-09-02 by owner ruling GD-3. **Extended 2026-09-03 by the Architecture Gate**, which added
-IC-4, IC-5 and IC-6 under its decision 2 and recorded its decision 3 at the end of this file.
+IC-4, IC-5 and IC-6 under its decision 2 and recorded its decision 3 at the end of this file. **IC-7 was proposed
+2026-09-06 by ADR-0035's first execution and adopted by the owner the same day (ESC-32, option 2)**; it stays on the
+release until both halves of that option are shown.
 
 This file holds obligations that are **not** conditions of the Architecture Gate but **are** conditions on
 building the thing they name. It exists because the alternative to holding a whole gate for one mechanism's
@@ -362,7 +364,22 @@ ninth defect of decision 3's pattern was a blank packaged window, React twice in
 the unpackaged build shared and no test rendered. Owed and stated: the portable and its stub (ADR-0054),
 signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3).
 
-## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (PROPOSED)
+## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — half discharged)
+
+> **ADOPTED 2026-09-06 by the owner — option 2, ESC-32 (`owner-decisions.md`).** The language servers are tools
+> provisioned after installation, like Git and ripgrep. **Shown so far, the same day:** `REQ-STARTUP-159`, `058`,
+> `142`, `064` and `REQ-MCP-116` amended in place with the prior wording quoted, `REQ-MCP-118` minted (the
+> disclosure); the binding manifest declares TypeScript's two packages and Python's one with name, version, source
+> and licence, **checked against the runtime's own defaults at generation** — the check's first execution refused a
+> doctored pin (`pyright` 1.1.402 against the runtime's 1.1.403) and accepted the true ones; the MCP category's
+> code-intelligence card carries the disclosure on every status, idle included, with the store path under the
+> per-user data directory; `pnpm code-intel-proof` launch 5 read 3 declared packages on the card and the store
+> present, true to the runtime's own provisioning lines (not exercised (the profile was warm)); launch 7 on the packaged binary with
+> outbound blocked: tried typescript@5.9.3 — a declared package at its declared version. **Not yet shown, and the reason the condition stays:** the notices generator's
+> "Tools provisioned after installation" section listing them (`REQ-STARTUP-141/142/143`) — the generator is not
+> built (ADR-0054). That half is owed with it; until then a Windows release carrying the runtime is bound by this
+> entry exactly as before. Nothing here is a downgrade by the person doing the work: the owner set the option, and
+> the entry records what was shown and what was not.
 
 > **PROPOSED 2026-09-06 by Part T (ADR-0035's first execution), for the owner to set or refuse.** Nothing below is
 > a downgrade of REQ-STARTUP-159; it is the measured gap between that requirement and the runtime the owner chose.
@@ -407,3 +424,7 @@ written, and this entry says so where the next reader will look. The interim rea
 ADR-0035's note: the mechanism is complete; the fetch happens only when a run first uses a symbol tool for a
 language, from the runtime's own dependency providers, into the per-user data directory, and the failure with the
 network blocked is the server's own error result, not a host failure (`REQ-MCP-113`).
+
+**After ESC-32 (2026-09-06).** The three ways above are kept as written because the owner chose between
+them; the second is in force. What remains to discharge the entry is one artifact — the notices file's
+section — and it is named in ADR-0054 beside the generator that will produce it.

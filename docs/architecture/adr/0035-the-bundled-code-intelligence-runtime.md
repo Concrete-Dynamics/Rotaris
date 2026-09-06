@@ -134,7 +134,8 @@ against the pass-through reading.
 decision of 2026-09-05 — bundled at build time with uv 0.12.5; the proof is `pnpm code-intel-proof` (seven launches,
 `.code-intel-proof/results.json`); the spikes are `spikes/code-intelligence-bundle.md` and
 `spikes/code-intelligence-branch.md`. OQ-23 is resolved with the recommended reading; spike-list item 5 is taken;
-IC-7 is proposed. The status of this record stays as it is: the owner adopts or refuses IC-7.*
+IC-7 is proposed. The status of this record stays as it is: the owner adopts or refuses IC-7.* **Adopted 2026-09-06 in its
+second form, ESC-32 — see the note "IC-7 adopted" below.**
 
 **The mode that worked, and why.** Electron's own main entry with the token **first** — and `--` second. Two things the
 platform does before any JavaScript of ours runs, neither anticipated here (the spike's §1–2): a scheme-looking
@@ -195,6 +196,24 @@ cache (`tools/list` at 4,909 ms; the overview errored with the runtime's own tex
 typescript@5.9.3`). Serena can be pointed at pre-provisioned servers; the two that matter first are Node programs, so
 a self-contained bundle means shipping a Node runtime too — the owner's decision, proposed as IC-7 with three ways to
 discharge it. The mechanism is complete with the bundle as it is.
+
+**IC-7 adopted — option 2, ESC-32 (the manager, 2026-09-06).** The owner read the servers as tools provisioned after
+installation, the way Git and ripgrep are. The specification carries it (`REQ-STARTUP-159/058/142/064`, `REQ-MCP-116`
+amended in place; `REQ-MCP-118` minted for the disclosure), and the mechanism carries it in three places, none of
+them a new process or channel: **the pins** (`pins.json` `languageServers`: TypeScript's `typescript` 5.9.3 and
+`typescript-language-server` 5.1.3 through `npm`, Python's `pyright` 1.1.403 through `uvx`, each with source and
+licence), **the generator's check** — it imports the runtime's own defaults (`DEFAULT_TYPESCRIPT_VERSION`,
+`DEFAULT_TYPESCRIPT_LANGUAGE_SERVER_VERSION`, `PYRIGHT_VERSION`) and asks the runtime where it stores servers
+relative to its home (`language_servers/static`), refusing a pin the runtime would not fetch — and **the
+disclosure** (`McpSetupStatus.provisioning`, on every status the run host publishes, idle included; the card's
+"Language servers" block, text only). **First execution of the check:** a doctored `pyright` 1.1.402 was refused
+with the runtime's 1.1.403 named; the true pins were accepted; the committed module equals a fresh generation.
+`pnpm code-intel-proof` launch 5 read 3 declared packages and the store path on the card (present in the
+proof's profile), and checked them against launch 4's provisioning lines (not exercised (the profile was warm)); launch 7 on the
+packaged binary, outbound blocked: tried typescript@5.9.3 — a declared package at its declared version. **Found nothing** in the mechanism; the sentinel's restated
+home segment is now pinned to `CODE_INTELLIGENCE_HOME_SEGMENT` by a test, which it was not before. **What stays
+on IC-7:** the notices generator's section (`REQ-STARTUP-141/142/143`), not built — the condition binds the
+release until it lists the servers.
 
 **The client's owed halves, alive** (ADR-0034's note beside this one): `code_intelligence` ships **enabled** —
 `REQ-CONFIG-181`'s deviation of 2026-09-05 reverted, its record kept in `defaults.ts`; the grant tiers on the built-in

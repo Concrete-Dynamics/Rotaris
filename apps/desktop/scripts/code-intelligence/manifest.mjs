@@ -94,6 +94,34 @@ function py(args, timeoutMs = 120_000) {
 // ---- 1. the runtime's own version, and the extensions it indexes ----------------------------------------------
 const version = /(\d+\.\d+\.\d+)/.exec(py(['-V']))?.[1];
 if (version !== PINS.version) fail(`the runtime answers version '${version}', the pin is ${PINS.version} (REQ-MCP-011)`);
+
+// ---- 1b. the language servers the runtime provisions at first use (ESC-32 / IC-7; REQ-STARTUP-058's second list, REQ-MCP-118) ----
+// The pins must equal the runtime's OWN defaults for each package — the check of REQ-MCP-095's kind: a disclosure that names
+// a version the runtime will not fetch is defective. The store is asked of the runtime too, relative to its home.
+const lsScript = [
+  'import json, os',
+  'from solidlsp.language_servers.typescript_language_server import DEFAULT_TYPESCRIPT_VERSION, DEFAULT_TYPESCRIPT_LANGUAGE_SERVER_VERSION',
+  'from solidlsp.language_servers.pyright_server import PYRIGHT_VERSION',
+  'from solidlsp.settings import SolidLSPSettings',
+  'store = os.path.relpath(SolidLSPSettings(solidlsp_dir=os.environ["SERENA_HOME"]).ls_resources_dir, os.environ["SERENA_HOME"]).replace(os.sep, "/")',
+  'print(json.dumps({"defaults": {"typescript": DEFAULT_TYPESCRIPT_VERSION, "typescript-language-server": DEFAULT_TYPESCRIPT_LANGUAGE_SERVER_VERSION, "pyright": PYRIGHT_VERSION}, "store": store}))',
+].join('\n');
+const lsRun = spawnSync(PYTHON, ['-c', lsScript], { encoding: 'utf8', env, windowsHide: true, timeout: 120_000, cwd: APP });
+if (lsRun.status !== 0) fail(`the language-server defaults could not be read from the runtime: ${(lsRun.stderr ?? '').slice(-800)}`);
+const { defaults: runtimeDefaults, store: languageServerStore } = JSON.parse(lsRun.stdout.trim().split('\n').at(-1));
+if (!languageServerStore || languageServerStore.startsWith('..')) fail(`the runtime's language-server store is not under its home: '${languageServerStore}'`);
+const languageServers = Array.isArray(PINS.languageServers) ? PINS.languageServers : [];
+if (languageServers.length === 0) fail('pins.json declares no language servers (REQ-STARTUP-058)');
+for (const ls of languageServers) {
+  if (!['npm', 'uvx'].includes(ls.provisioner)) fail(`language '${ls.language}': provisioner '${ls.provisioner}' is not one the runtime uses`);
+  for (const pkg of ls.packages) {
+    for (const k of ['name', 'version', 'source', 'license']) if (typeof pkg[k] !== 'string' || pkg[k] === '') fail(`language server package '${pkg.name ?? '?'}': ${k} missing (REQ-STARTUP-058)`);
+    if (!/^\d+\.\d+\.\d+$/.test(pkg.version)) fail(`language server package '${pkg.name}': version '${pkg.version}' is not MAJOR.MINOR.PATCH (REQ-STARTUP-059)`);
+    if (!(pkg.name in runtimeDefaults)) fail(`language server package '${pkg.name}': the generator reads no default for it from the runtime — add the probe before declaring it`);
+    if (runtimeDefaults[pkg.name] !== pkg.version) fail(`language server package '${pkg.name}' is pinned ${pkg.version}; the runtime's own default is ${runtimeDefaults[pkg.name]} (REQ-STARTUP-058)`);
+  }
+}
+log(`language servers: ${languageServers.map((l) => `${l.language} (${l.packages.map((p) => `${p.name} ${p.version}`).join(', ')})`).join('; ')} — equal to the runtime's defaults; store ${languageServerStore}`);
 // The extensions: every language server the runtime would consider for a project (a positive default priority, which
 // is how its own project creation infers the languages of a workspace), its file-name matcher's extensions, united.
 const extScript = [
@@ -202,6 +230,11 @@ const lines = [
   '  /** REQ-MCP-099: the file-name extensions the runtime indexes — a workspace holding one such regular file contains code. */',
   `  languages: ${arr(languages)},`,
   `  extensions: ${arr(extensions)},`,
+  '  /** ESC-32 / IC-7 — REQ-STARTUP-058\'s second list, REQ-MCP-118: the language servers the runtime provisions at the first use of a language, each pin equal to the runtime\'s own default at generation; where the runtime stores them, relative to its home. */',
+  `  languageServerStore: ${q(languageServerStore)},`,
+  '  languageServers: [',
+  ...languageServers.map((l) => `    { language: ${q(l.language)}, provisioner: ${q(l.provisioner)}, packages: [${l.packages.map((p) => `{ name: ${q(p.name)}, version: ${q(p.version)}, source: ${q(p.source)}, license: ${q(p.license)} }`).join(', ')}] },`),
+  '  ],',
   '  /** REQ-MCP-015: the four tiers, by capability, bound to the runtime\'s names. */',
   '  tiers: {',
   ...Object.entries(CAPABILITIES).map(([tier, map]) => `    ${tier}: { ${Object.entries(map).map(([cap, name]) => `${cap}: ${q(name)}`).join(', ')} },`),

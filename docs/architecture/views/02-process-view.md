@@ -159,7 +159,8 @@ interpreter under `process.resourcesPath/code-intelligence/runtime/` (the source
 development), seeds the runtime's per-user home once (`<data>/code-intelligence/`, its interface off), and runs the
 runtime **synchronously with the parent's own pipes** (`stdio: 'inherit'`), exiting with the runtime's status — no
 window, no instance claim, no store, nothing of main's body evaluated. Under it the runtime (`python.exe`) and, at
-first use of a language, the language server it provisions (`npm`/`uvx` children; IC-7). It lives under the run host
+first use of a language, the language server it provisions (`npm`/`uvx` children; IC-7, adopted under ESC-32 — the packages declared
+in the binding manifest and disclosed on the MCP category, `REQ-MCP-118`; the status carries `provisioning`). It lives under the run host
 like every other MCP child: one per session, one transient per discovery or probe, killed by `terminateTree` (the
 `/T` reaches the runtime below the sentinel while both live; on stdin's end the runtime exits by itself). The
 `--` is Electron's, not ours: a scheme-looking positional followed by another positional exits the binary before any

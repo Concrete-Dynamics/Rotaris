@@ -49,6 +49,8 @@ function runtimeExecutable(): string | null {
  * of any kind (REQ-MCP-033): no dashboard server, no browser tab, no log window. The file is the user's afterwards.
  */
 function runtimeHome(python: string): string {
+  // The segment is restated here by design — this module imports nothing of `@rotaris/config`, whose
+  // `CODE_INTELLIGENCE_HOME_SEGMENT` is the same spelling; its test pins the two together (REQ-STARTUP-145, REQ-MCP-118).
   const home = join(resolveUserDirs().data, 'code-intelligence');
   const config = join(home, 'serena_config.yml');
   if (!existsSync(config)) {

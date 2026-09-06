@@ -2,10 +2,11 @@ import { existsSync, lstatSync, readdirSync, type Dirent } from 'node:fs';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
 import { compareCodePoints, millis, REDACTION_MARK, redact, toIsoUtc, type Clocks, type Millis } from '@rotaris/kernel';
-import type { McpHealth, McpListing, McpSecretRow, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
-import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
+import type { McpHealth, McpListing, McpProvisioning, McpSecretRow, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
+import { resolveUserDirs, WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import {
-  AGENTS_FILE_NAME, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME, CODE_INTELLIGENCE_SETUP_STEPS,
+  AGENTS_FILE_NAME, CODE_INTELLIGENCE_LANGUAGE_SERVERS, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME,
+  CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceLanguageServerStore,
   deriveSetupInvocation, DiagnosticSink, hasIndexableExtension, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
@@ -45,8 +46,19 @@ interface SurfaceMemo { readonly key: string; readonly surface: PersonaMcpSurfac
 
 const NOTICE_TTL_MS = 8_000;
 
+/**
+ * REQ-MCP-118 (ESC-32 / IC-7): the disclosure's data, from the manifest and the runtime's home under the per-user data
+ * directory (REQ-STARTUP-145) — on every status the host publishes, idle included, so it is readable before any fetch.
+ */
+function provisioning(): McpProvisioning {
+  return {
+    store: codeIntelligenceLanguageServerStore(resolveUserDirs().data),
+    servers: CODE_INTELLIGENCE_LANGUAGE_SERVERS.map((l) => ({ language: l.language, provisioner: l.provisioner, packages: l.packages.map((p) => ({ name: p.name, version: p.version, source: p.source, license: p.license })) })),
+  };
+}
+
 function idleSetup(): McpSetupStatus {
-  return { state: 'idle', steps: CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null })), outcome: null, message: '', containsCode: null, invocation: '', startedAt: null };
+  return { provisioning: provisioning(), state: 'idle', steps: CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null })), outcome: null, message: '', containsCode: null, invocation: '', startedAt: null };
 }
 
 /** Version-control metadata directories, never walked. */
@@ -370,20 +382,20 @@ export class McpHost {
     const steps = (): McpSetupStep[] => CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null }));
     const startedAt = toIsoUtc(this.deps.clocks.wall.instant());
     if (!server) {
-      this.setup = { status: { state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt }, abort: null };
+      this.setup = { status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt }, abort: null };
       return { ok: true, status: this.setup.status };
     }
     const invocation = deriveSetupInvocation(server.entry, server.resolved);
     if (!invocation.ok) {
       this.deps.log(`mcp setup: refused — ${invocation.reason}`, 'warn');
-      this.setup = { status: { state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt }, abort: null };
+      this.setup = { status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt }, abort: null };
       return { ok: true, status: this.setup.status };
     }
     const containsCode = workspaceContainsCode(workspaceRoot);
     const markerPresent = existsSync(join(workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS));
     const abort = new AbortController();
     const line = `${invocation.command} ${invocation.args.join(' ')}`.trim();
-    this.setup = { status: { state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt }, abort };
+    this.setup = { status: { provisioning: provisioning(), state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt }, abort };
     this.deps.log(`mcp setup: started for ${workspaceRoot} — invocation '${line}', contains code ${containsCode}, marker ${markerPresent ? 'present' : 'absent'}`);
     const description = server.description as ServerDescription;
     const env = { ...this.deps.parentEnv, ...(description.transport === 'stdio' ? description.env : {}) };

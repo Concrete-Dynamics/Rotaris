@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { BUILT_IN_ROLE_NAMES } from '@rotaris/contracts';
 import { builtInDefaults } from '../defaults.js';
 import {
-  CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS,
+  CODE_INTELLIGENCE_BINDING, CODE_INTELLIGENCE_DEFAULT_ARGS, CODE_INTELLIGENCE_HOME_SEGMENT, CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE, CODE_INTELLIGENCE_LANGUAGE_SERVERS,
+  CODE_INTELLIGENCE_MANIFEST, CODE_INTELLIGENCE_MEMORY_GATE, CODE_INTELLIGENCE_SETUP_STEPS, codeIntelligenceLanguageServerStore,
   deriveSetupInvocation, grantForTiers, hasIndexableExtension, memoriesBlockApplies, neverGrantNames, PROJECT_MEMORIES_BLOCK, tierNames,
 } from './code-intelligence.js';
 import { CODE_INTELLIGENCE_TOKEN, resolveCommand } from './commands.js';
@@ -15,7 +16,10 @@ import type { McpServerEntry } from './entry.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..', '..', '..');
-const pins = JSON.parse(readFileSync(join(repo, 'apps', 'desktop', 'scripts', 'code-intelligence', 'pins.json'), 'utf8')) as { python: string; distribution: string; version: string };
+const pins = JSON.parse(readFileSync(join(repo, 'apps', 'desktop', 'scripts', 'code-intelligence', 'pins.json'), 'utf8')) as {
+  python: string; distribution: string; version: string;
+  languageServers: readonly { language: string; provisioner: string; packages: readonly { name: string; version: string; source: string; license: string }[] }[];
+};
 
 /**
  * ADR-0035 / REQ-MCP-011/015/116: `pnpm check` needs no Python — the committed generated module is tested against the
@@ -27,6 +31,29 @@ describe('the code-intelligence binding manifest (REQ-MCP-116)', () => {
     expect(CODE_INTELLIGENCE_MANIFEST.version).toBe(pins.version);
     expect(CODE_INTELLIGENCE_MANIFEST.python).toBe(pins.python);
     expect(CODE_INTELLIGENCE_MANIFEST.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it('declares the language servers the runtime provisions, equal to the pins, each with the four fields (ESC-32; REQ-STARTUP-058, REQ-MCP-118)', () => {
+    expect(CODE_INTELLIGENCE_LANGUAGE_SERVERS).toEqual(pins.languageServers);
+    expect(CODE_INTELLIGENCE_LANGUAGE_SERVERS.map((l) => l.language)).toEqual(['typescript', 'python']);
+    for (const ls of CODE_INTELLIGENCE_LANGUAGE_SERVERS) {
+      expect(['npm', 'uvx']).toContain(ls.provisioner);
+      expect(ls.packages.length).toBeGreaterThan(0);
+      for (const p of ls.packages) {
+        expect(p.name.length).toBeGreaterThan(0);
+        expect(p.version).toMatch(/^\d+\.\d+\.\d+$/);
+        expect(p.source).toMatch(/^https:\/\//);
+        expect(p.license.length).toBeGreaterThan(0);
+      }
+    }
+    // The store is the runtime's answer, relative to its home, in forward slashes; the joined form ends with it.
+    expect(CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE).toMatch(/^[^./][^:]*$/);
+    expect(codeIntelligenceLanguageServerStore(join('D:', 'data')).split(/[\\/]/).slice(-CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE.split('/').length)).toEqual(CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE.split('/'));
+  });
+
+  it('the sentinel restates the home segment it cannot import, spelled the same (REQ-STARTUP-145)', () => {
+    const sentinel = readFileSync(join(repo, 'apps', 'desktop', 'src', 'main', 'sentinel.ts'), 'utf8');
+    expect(sentinel).toContain(`'${CODE_INTELLIGENCE_HOME_SEGMENT}'`);
   });
 
   it('holds REQ-MCP-015\'s four tiers at 10 / 7 / 2 / 1, pairwise disjoint, no never-grant name inside, every name reported', () => {

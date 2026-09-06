@@ -1075,3 +1075,6 @@ payload moved first paint by about 10 ms" measurement above is not re-taken: the
 servers are not — measured on the packaged binary with outbound blocked (`pnpm code-intel-proof` launch 7: `npm install
 typescript@5.9.3` attempted and failed). The licence text the bundle carries is one copy under the distribution's
 dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built.
+**IC-7 adopted 2026-09-06 (ESC-32, option 2):** the language servers are tools provisioned after installation;
+`REQ-STARTUP-142`'s section now lists them after Git and ripgrep, from the same manifest, and the generator that
+will write that section is the one still owed here — IC-7's second half is discharged when it does.

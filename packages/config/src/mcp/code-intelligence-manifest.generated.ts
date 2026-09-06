@@ -6,7 +6,7 @@
  * `apps/desktop/scripts/code-intelligence/pins.json` and REQ-MCP-015's counts. Not a configuration surface: never read
  * from disk at run time, never user-editable, never varying by workspace.
  * Generated 2026-09-06 from serena-agent 1.7.0 on Python 3.13.15: 24 tools listed by the server
- * under the shipped arguments (3650 ms to tools/list on the build machine), 52 names in the runtime's vocabulary.
+ * under the shipped arguments (3452 ms to tools/list on the build machine), 52 names in the runtime's vocabulary.
  */
 export const CODE_INTELLIGENCE_MANIFEST = {
   distribution: 'serena-agent',
@@ -25,6 +25,12 @@ export const CODE_INTELLIGENCE_MANIFEST = {
   /** REQ-MCP-099: the file-name extensions the runtime indexes — a workspace holding one such regular file contains code. */
   languages: ['ada', 'al', 'bash', 'bsl', 'clojure', 'cpp', 'crystal', 'csharp', 'cue', 'dart', 'elixir', 'elm', 'erlang', 'fortran', 'fsharp', 'gdscript', 'gleam', 'go', 'haskell', 'haxe', 'hlsl', 'java', 'julia', 'kotlin', 'lean4', 'lua', 'luau', 'matlab', 'msl', 'nextflow', 'nix', 'ocaml', 'pascal', 'perl', 'php', 'powershell', 'python', 'qml', 'r', 'rego', 'ruby', 'rust', 'scala', 'svelte', 'swift', 'systemverilog', 'terraform', 'typescript', 'vue', 'wolfram', 'zig'],
   extensions: ['.R', '.Rmd', '.Rnw', '.ada', '.adb', '.ads', '.al', '.app', '.app.src', '.bash', '.bsl', '.c', '.c++', '.c++m', '.cc', '.cginc', '.cjs', '.cjsx', '.cl', '.clcpp', '.clj', '.cljc', '.cljs', '.comp', '.compute', '.config', '.cp', '.cpp', '.cppm', '.cr', '.cs', '.cts', '.ctsx', '.cu', '.cue', '.cxx', '.cxxm', '.dal', '.dart', '.dpk', '.dpr', '.edn', '.elm', '.erb', '.erl', '.escript', '.ex', '.exs', '.f', '.f03', '.f08', '.f90', '.f95', '.for', '.fpp', '.frag', '.fs', '.fsi', '.fsx', '.fx', '.fxh', '.gd', '.gdscript', '.geom', '.gleam', '.glsl', '.go', '.h', '.hh', '.hip', '.hlsl', '.hlsli', '.hpp', '.hrl', '.hs', '.hx', '.hxx', '.inc', '.inl', '.ino', '.ipp', '.ixx', '.java', '.jl', '.js', '.jsx', '.kt', '.kts', '.lean', '.lhs', '.lpr', '.lua', '.luau', '.m', '.mjs', '.mjsx', '.ml', '.mlapp', '.mli', '.mlx', '.mm', '.mrc', '.mts', '.mtsx', '.nf', '.nix', '.os', '.pas', '.php', '.phtml', '.pl', '.pm', '.pp', '.ps1', '.psd1', '.psm1', '.py', '.pyi', '.qml', '.r', '.rb', '.re', '.rego', '.rei', '.rs', '.sbt', '.scala', '.sh', '.shader', '.sv', '.svelte', '.svh', '.swift', '.t', '.tesc', '.tese', '.tf', '.tfstate', '.tfvars', '.tpp', '.ts', '.tsx', '.txx', '.v', '.vert', '.vh', '.vue', '.wgsl', '.wl', '.wls', '.zig', '.zon'],
+  /** ESC-32 / IC-7 — REQ-STARTUP-058's second list, REQ-MCP-118: the language servers the runtime provisions at the first use of a language, each pin equal to the runtime's own default at generation; where the runtime stores them, relative to its home. */
+  languageServerStore: 'language_servers/static',
+  languageServers: [
+    { language: 'typescript', provisioner: 'npm', packages: [{ name: 'typescript', version: '5.9.3', source: 'https://registry.npmjs.org/typescript', license: 'Apache-2.0' }, { name: 'typescript-language-server', version: '5.1.3', source: 'https://registry.npmjs.org/typescript-language-server', license: 'MIT' }] },
+    { language: 'python', provisioner: 'uvx', packages: [{ name: 'pyright', version: '1.1.403', source: 'https://pypi.org/project/pyright/', license: 'MIT' }] },
+  ],
   /** REQ-MCP-015: the four tiers, by capability, bound to the runtime's names. */
   tiers: {
     read: { symbolLookup: 'find_symbol', fileSymbolOverview: 'get_symbols_overview', referencingSymbols: 'find_referencing_symbols', implementations: 'find_implementations', declaration: 'find_declaration', patternSearch: 'search_for_pattern', fileDiagnostics: 'get_diagnostics_for_file', memoryListing: 'list_memories', memoryReading: 'read_memory', usageInstructions: 'initial_instructions' },

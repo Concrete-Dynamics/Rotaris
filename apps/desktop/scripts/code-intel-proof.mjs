@@ -275,7 +275,7 @@ if (want(4)) {
 }
 
 // ---- 5. project setup from the MCP category ------------------------------------------------------------------------
-const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_CLICKS: 'button[data-action="setup-start"]@2500', ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
+const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_CLICKS: 'button[data-action="setup-start"]@2500', ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
 function setupSteps(log) {
   const probe = lines(log, /capture: probe \[data-setup-step\]/).at(-1) ?? '';
   const found = JSON.parse(probe.slice(probe.indexOf('→') + 2) || '[]');
@@ -300,6 +300,19 @@ if (want(5)) {
   if (!/Completed/.test(message)) throw new Error(`setup: the outcome reads '${message}'`);
   const times = Object.fromEntries(setupLog(r.log).map((l) => /mcp setup: (\w+) succeeded[^(]*\((\d+) ms\)/.exec(l)).filter(Boolean).map((m) => [m[1], Number(m[2])]));
   results.setup = { first: { steps: steps.map((s) => s.status), message, times, elapsedMs: r.elapsedMs, png: r.png } };
+  // REQ-MCP-118 (ESC-32 / IC-7): the disclosure is on the card — the store path under the profile's data directory, and every
+  // declared package with its version — and it is TRUE to the runtime: launch 4's provisioning lines named a declared version.
+  const probeOf = (sel) => { const p = lines(r.log, new RegExp(`capture: probe \\[${sel}\\]`)).at(-1) ?? ''; return JSON.parse(p.slice(p.indexOf('→') + 2) || '[]'); };
+  const store = probeOf('data-language-server-store').map((f) => f.text).join('');
+  const declared = probeOf('data-language-server').map((f) => ({ name: f.data['data-language-server'], version: f.data['data-version'], language: f.data['data-language'], text: f.text }));
+  if (!store.includes(join(root, 'local')) && !/code-intelligence/.test(store)) throw new Error(`disclosure: the store path is missing or wrong: '${store}'`);
+  if (declared.length < 3 || !declared.every((d) => /^\d+\.\d+\.\d+$/.test(d.version) && d.text.includes(d.name) && d.text.includes(d.version) && /licence/.test(d.text))) throw new Error(`disclosure: the declared servers are incomplete: ${JSON.stringify(declared)}`);
+  const provisioned = results.call?.languageServerProvisioned ?? previous.call?.languageServerProvisioned ?? [];
+  const named = declared.filter((d) => provisioned.some((l) => l.includes(`${d.name}@${d.version}`)));
+  if (provisioned.length > 0 && named.length === 0) throw new Error(`disclosure: launch 4 provisioned ${JSON.stringify(provisioned)} and none of it is a declared package`);
+  if (!existsSync(store)) console.log(`[code-intel-proof] 5 disclosure: the store ${store} does not exist yet (no language provisioned in this profile)`);
+  results.disclosure = { store, storeExists: existsSync(store), declared: declared.map((d) => `${d.language}: ${d.name} ${d.version}`), trueToRuntime: provisioned.length === 0 ? 'not exercised' : named.map((d) => `${d.name}@${d.version}`) };
+  console.log(`[code-intel-proof] 5 disclosure: ${declared.length} declared, store ${results.disclosure.storeExists ? 'present' : 'absent'}, true to the runtime: ${JSON.stringify(results.disclosure.trueToRuntime)}`);
   console.log(`[code-intel-proof] 5 setup: ${steps.map((s) => s.status).join(' ')} — ${message} (${JSON.stringify(times)})`);
 }
 if (want(5)) {
@@ -369,6 +382,12 @@ if (want(7) && packaged) {
   const c = await branch({ exe: packagedExe, before: [], tail: SERVER_TAIL(ws2), ws: ws2, env: blocked, call: { name: 'get_symbols_overview', args: { relative_path: 'src/index.ts' } }, callTimeoutMs: 120_000, sample: false });
   results.contained = { toolsListMs: c.toolsListMs, toolCount: c.toolNames?.length, call: c.call ?? null, error: c.error ?? null, fetchLines: c.fetchLines, exit: c.exit, verdict: c.call && !c.call.isError && /contained/.test(c.call.text) ? 'answered without fetching' : 'the runtime tried to fetch (IC-7 evidence)' };
   console.log(`[code-intel-proof] 7 contained: ${results.contained.verdict}; ${c.fetchLines.length} fetch line(s)`);
+  // ESC-32 / IC-7 adopted: what the packaged runtime tried to fetch with outbound blocked must be a DECLARED package at its
+  // declared version — the disclosure of REQ-MCP-118 is what the user was told, and it must be what happens.
+  const declaredPins = (previous.disclosure?.declared ?? results.disclosure?.declared ?? []).map((d) => d.replace(/^.*: /, '').replace(' ', '@'));
+  const tried = c.fetchLines.filter((l) => /npm install|uvx/.test(l));
+  if (tried.length > 0 && declaredPins.length > 0 && !tried.some((l) => declaredPins.some((p) => l.includes(p)))) throw new Error(`contained: the runtime tried ${JSON.stringify(tried)}, none of which the disclosure declared (${declaredPins.join(', ')})`);
+  results.contained.declaredFetch = tried.length === 0 ? 'nothing fetched' : declaredPins.filter((p) => tried.some((l) => l.includes(p)));
 } else if (want(7)) {
   results.contained = 'skipped: ROTARIS_CODE_INTEL_PACKAGED is not set (the packaged binary is needed)';
 }

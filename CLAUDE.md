@@ -49,7 +49,7 @@ the adoption rule and §3.2 is the list of views still to be drawn.
   mapping. Screens are **not** blocked — build against `rotaris-dim` and the adopted language.
 - **No Linux or macOS release artifact may be produced** until the build hosts exist (**IC-3**).
 
-`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-6**. A condition binds the work it
+`docs/architecture/implementation-conditions.md` holds **IC-1 to IC-7**. A condition binds the work it
 names: that work may not be reported complete until the condition is discharged, discharging means
 recording the result in the record whether or not it passed, and **no condition may be downgraded by
 the person doing the work**.

@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { compareCodePoints } from '@rotaris/kernel';
 import { CODE_INTELLIGENCE_MANIFEST } from './code-intelligence-manifest.generated.js';
 import type { ResolvedCommand } from './commands.js';
@@ -110,4 +111,28 @@ export function hasIndexableExtension(fileName: string): boolean {
   // The runtime's matchers are case-sensitive for most languages; a few (C/C++, Fortran, Ada) match case-insensitively.
   const ext = fileName.slice(dot);
   return CODE_INTELLIGENCE_EXTENSIONS.has(ext) || CODE_INTELLIGENCE_EXTENSIONS.has(ext.toLowerCase());
+}
+
+/**
+ * ESC-32 / IC-7 (2026-09-06) — REQ-STARTUP-058's second list, REQ-STARTUP-159, REQ-MCP-118: the language servers the runtime
+ * provisions at the first use of a language, declared with name, exact version, source and licence, and where the runtime
+ * stores them under its home. Read from the manifest, which the generator checked against the runtime's own defaults; the
+ * disclosure on the MCP category shows exactly this and restates nothing.
+ */
+export const CODE_INTELLIGENCE_LANGUAGE_SERVERS = CODE_INTELLIGENCE_MANIFEST.languageServers;
+export const CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE: string = CODE_INTELLIGENCE_MANIFEST.languageServerStore;
+
+/**
+ * REQ-STARTUP-145: the runtime's per-user home is one directory under the product's own data directory — its configuration,
+ * its cross-project memories, the language servers it provisions. `main/sentinel.ts` restates the segment by design (it
+ * imports nothing of this package so nothing can initialise before the branch); `code-intelligence.test.ts` pins the two
+ * spellings together.
+ */
+export const CODE_INTELLIGENCE_HOME_SEGMENT = 'code-intelligence' as const;
+export function codeIntelligenceRuntimeHome(dataDir: string): string {
+  return join(dataDir, CODE_INTELLIGENCE_HOME_SEGMENT);
+}
+/** The directory the disclosure names: the store under the home (REQ-MCP-118). */
+export function codeIntelligenceLanguageServerStore(dataDir: string): string {
+  return join(codeIntelligenceRuntimeHome(dataDir), ...CODE_INTELLIGENCE_LANGUAGE_SERVER_STORE.split('/'));
 }

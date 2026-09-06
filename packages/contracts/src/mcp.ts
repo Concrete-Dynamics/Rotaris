@@ -85,7 +85,22 @@ export const McpSetupStepSchema = z.object({
   elapsedMs: z.number().nonnegative().nullable(),
 });
 export type McpSetupStep = z.infer<typeof McpSetupStepSchema>;
+/**
+ * REQ-MCP-118 (ESC-32 / IC-7): the language-server disclosure's data — what the bundled runtime will download at the first
+ * use of a language, from where, under which licence, and into which directory. Read by the run host from the binding
+ * manifest (REQ-MCP-116); the category shows it as text on every setup status, idle included. No secret-looking field.
+ */
+export const McpLanguageServerPackageSchema = z.object({ name: z.string(), version: z.string(), source: z.string(), license: z.string() });
+export const McpLanguageServerSchema = z.object({ language: z.string(), provisioner: z.string(), packages: z.array(McpLanguageServerPackageSchema) });
+export const McpProvisioningSchema = z.object({
+  /** The runtime's store under its per-user home (REQ-STARTUP-145), as a path. */
+  store: z.string(),
+  servers: z.array(McpLanguageServerSchema),
+});
+export type McpProvisioning = z.infer<typeof McpProvisioningSchema>;
 export const McpSetupStatusSchema = z.object({
+  /** REQ-MCP-118: present on every status so the disclosure is readable before any fetch it describes. */
+  provisioning: McpProvisioningSchema,
   state: z.enum(['idle', 'running', 'finished']),
   steps: z.array(McpSetupStepSchema),
   outcome: z.enum(MCP_SETUP_OUTCOMES).nullable(),

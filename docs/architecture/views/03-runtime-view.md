@@ -165,7 +165,8 @@ run is configured with it — not exercised by the proof); the grant is the pers
 (REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
 server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the
 runtime answers `tools/list` about 4 s after launch, connect about 4.2 s; the first symbol tool on a language provisions
-that language's server (minutes, IC-7), warm afterwards. **The project setup** (`McpHost.startSetup`): the invocation
+that language's server (minutes; IC-7 adopted under ESC-32 — a declared package at its declared version, disclosed on the
+MCP category before any run can trigger it, `REQ-MCP-118`), warm afterwards. **The project setup** (`McpHost.startSetup`): the invocation
 derived from the entry (REQ-MCP-036 — a remote or launch-less entry is the non-retryable "not a local launch"
 refusal), the contains-code walk once (breadth-first from the root, VCS directories skipped, the root `.gitignore`
 honoured, dot-directories walked, no symlink followed, first indexable file stops it), the marker

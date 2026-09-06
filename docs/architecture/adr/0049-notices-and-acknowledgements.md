@@ -141,3 +141,64 @@ require their notice and the slot holds one. Not repaired here: the advisory is 
 and an entry on the Hooks tab, so nothing is lost durably, and a queue or a second slot is a change to this
 record's decision, which the requirements board's banners were already pressing on ("Revisit if"). Left as
 the first concrete case for that revisit.
+
+## Executed in full — 2026-09-06 (Part V), and the "Revisit if" answered
+
+*Recorded under GD-10.* Everything this record decided is now built, and the entry above — the single slot losing the
+hooks advisory to the run's outcome — is answered rather than repaired. **The answer is not a queue.**
+`REQ-NOTIFY-024` states that single-slot replacement is canonical and that no notice is queued, restored or
+re-presented; what makes a replaced notice retrievable is `REQ-NOTIFY-268`'s record, which had never been built. So the
+missing mechanism was the record, not a second slot, and this part built it.
+
+**What was built.** The store left `main/index.ts` for `main/notices.ts` and is now the whole of decision B: one
+serialised chain, so several publications in one turn are applied in acceptance order and the last of the burst is what
+stays on screen; **record-then-render**, so a `warning` or an `error` is written to the session's timeline before it is
+broadcast and a notice superseded within the same turn is still recorded; compare-and-clear on dismissal; and the
+run-start clear that spares a notice about another session. The two entry points of decision 5 are `report` and
+`acknowledge`, and the type refuses the mistake the decision names: `acknowledge` takes no action and no severity, so a
+failure or a refusal cannot be reported as a transient that disappears. The action vocabulary is a closed discriminated
+union carrying each member's identity, and the renderer's dispatcher checks a view against `REQ-SHELL-023`'s ids and a
+settings category against the Settings view's own list — imported from the domains that own them, never restated.
+
+**The transient surface is one surface.** `packages/ui/src/Acknowledgements.tsx` is the single stack of
+`REQ-NOTIFY-013`, mounted once per window (the main window and every persona window own their own, as decision 4 says).
+The Git view's private fixed toast is gone: it was a second transient surface, which `REQ-SHELL-113` forbids, and it
+had been in the built product since Part O without anyone reading the requirement that way.
+
+**Measured by `pnpm notice-proof` in the built application.** The advisory burst reproduced with a global hook that
+fails until it is switched off: the run's outcome and the advisory were published one millisecond apart, the slot held
+exactly one of them, and the advisory was read back out of the session's timeline afterwards, actor `system`, its body
+unchanged ("1 hook was switched off for the rest of this session after failing repeatedly…"). Scoping: an unscoped
+notice went at a run start, one about another session survived it and went only when its own session started.
+Compare-and-clear: dismissing the superseded identifier left its successor standing. The stack: 520 px alone, 360 px
+when three, 8 px gaps, 16 px from the right and bottom of the window's own content area, three visible of four
+published with the oldest gone and the newest nearest the corner, the kind words "Done / Warning / Failed" in the
+accessible names, and nothing left after the 4200 ms of `REQ-NOTIFY-011`.
+
+**Found — one defect, in this part's own wiring, and the proof is what found it.** Main's run-host branch built the
+notice with an empty body, so the advisory's sentence — the entire content of that notice — was dropped between the
+run host and both the screen and the record. The timeline entry was written with an empty message and an empty detail,
+which satisfies "an entry exists" and fails `REQ-NOTIFY-268`'s "unchanged". No test caught it because the store's own
+tests pass the body in directly; only the built application carried the field through five hops. The reading kept: a
+record is not evidence until something reads what it contains.
+
+**A reading, recorded because Part C's note says the opposite.** That note found the outcome replacing the advisory.
+With the same burst the winner is now the advisory, because the outcome is accepted first and the advisory second, and
+acceptance order is what the chain preserves. Neither is lost: the warning half is in the timeline, and the run's own
+outcome is in the session record. This proof does not fix which of the two wins, because nothing in the requirements
+does.
+
+**An open question for the owner (not decided here).** `REQ-MCP-044` gives its warning a UI toast "with an 8-second
+auto-dismiss". `REQ-NOTIFY-011` fixes the transient lifetime at 4200 ms and states that no surface declares a lifetime
+of its own. The build follows `REQ-NOTIFY-011` and routes that warning to the acknowledgement channel; the 8 s figure
+is not honoured anywhere. The two requirements disagree and only the owner may resolve it.
+
+**Not built, said so.** The application diagnostics of `REQ-NOTIFY-268`'s second branch are main's log line, because
+the diagnostics store (`REQ-STARTUP-130` onward) does not exist; a warning with no session and no focused run is
+therefore readable in the log and nowhere else. `REQ-SHELL-118`'s update-offer notice, updated in place with download
+progress, is not built (there is no updater). Seven members of the action vocabulary parse and dispatch to nothing in
+this build — the update, the restart, the cloud account, the project initialization, the retry, the proposal revert and
+the settings save — each logged rather than silently ignored, and `open-library` has no target until the Library view
+exists. Two members outside `REQ-NOTIFY-044`'s list are carried because two other requirements demand them
+(`REQ-NOTIFY-224`'s hook review and `REQ-WORKSPACE-152`'s provider sign-in); that gap between the requirements is the
+second open question this part leaves.

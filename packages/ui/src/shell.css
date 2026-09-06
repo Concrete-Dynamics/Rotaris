@@ -103,16 +103,63 @@
 
 /* ── The one persistent notice (REQ-SHELL-114/116, design G1: rule + glyph, never a filled background) ── */
 .notice { display: flex; align-items: flex-start; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: var(--rt-hairline-width) solid var(--rt-border); border-left: var(--rt-notice-rule-width) solid var(--rt-info-300); border-radius: var(--rt-radius-md, 6px); background: var(--rt-surface); animation: rt-rise var(--rt-duration-slow) var(--rt-ease-out); }
+.notice--success { border-left-color: var(--rt-axis-y-300); }
 .notice--warning { border-left-color: var(--rt-warn); }
 .notice--error { border-left-color: var(--rt-danger-300); }
 .notice__glyph { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid currentColor; font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text-secondary); }
+.notice--success .notice__glyph { color: var(--rt-axis-y-300); }
 .notice--warning .notice__glyph { color: var(--rt-warn); }
 .notice--error .notice__glyph { color: var(--rt-danger-300); }
 .notice__text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .notice__headline { font-size: var(--rt-text-sm, 13px); color: var(--rt-text); }
 .notice__details summary { cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .notice__detail { margin: 4px 0; padding: var(--rt-space-2, 8px); background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; user-select: text; }
+.notice__message { font-size: var(--rt-text-xs, 12px); }
 .notice__dismiss { align-self: center; }
+
+/* ── The ONE transient acknowledgement surface (REQ-NOTIFY-011..022, REQ-SHELL-112/113; craft from the design
+   system's Toast + ToastStack). Anchored to this WINDOW's content area, never the screen: a fixed inset follows
+   the window on move and resize with no user action (REQ-NOTIFY-012). ── */
+.ack-stack {
+  position: fixed; right: var(--rt-space-4, 16px); bottom: var(--rt-space-4, 16px); z-index: 60;
+  display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); align-items: flex-end;
+  pointer-events: none;
+}
+/* REQ-NOTIFY-013: 520 px alone, 360 px stacked, each reduced to the host width less the two margins. */
+.ack { width: min(520px, calc(100vw - 2 * var(--rt-space-4, 16px))); }
+.ack--stacked { width: min(360px, calc(100vw - 2 * var(--rt-space-4, 16px))); }
+.ack {
+  pointer-events: auto;
+  display: flex; align-items: flex-start; gap: var(--rt-space-2, 8px);
+  padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px);
+  background: var(--rt-surface); color: var(--rt-text);
+  border: var(--rt-hairline-width) solid var(--rt-border);
+  border-radius: var(--rt-radius-md); box-shadow: var(--rt-shadow-md);
+  /* REQ-NOTIFY-022: in from the anchoring edge over the theme's travel and enter duration, opacity rising. */
+  animation: rt-ack-in var(--rt-ack-enter) var(--rt-ease-out) both;
+}
+/* REQ-NOTIFY-014: the error presentation adds a rule down the left edge three times the border's width, in the
+   severity colour; neither presentation fills the background with a status colour. */
+.ack--fail { border-left: var(--rt-notice-rule-width) solid var(--rt-danger-300); }
+.ack__glyph {
+  width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1px solid currentColor; flex: none; margin-top: 1px;
+  font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text-secondary);
+}
+.ack--ok .ack__glyph { color: var(--rt-axis-y-300); }
+.ack--warn .ack__glyph { color: var(--rt-warn); }
+.ack--fail .ack__glyph { color: var(--rt-danger-300); }
+.ack__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ack__title { font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium, 500); }
+.ack__body { font-size: var(--rt-text-xs, 12px); }
+.ack__close {
+  margin-left: auto; flex: none; background: none; border: none; padding: 2px; cursor: pointer;
+  color: var(--rt-text-tertiary); font-size: 13px; line-height: 1; border-radius: var(--rt-radius-sm, 4px);
+}
+.ack__close:hover { color: var(--rt-text); }
+@keyframes rt-ack-in { from { opacity: 0; transform: translateX(var(--rt-ack-travel)); } }
+/* REQ-NOTIFY-022 / REQ-SHELL-135: reduced motion paints the first frame at its final position and nothing moves. */
+.ack[data-motion='reduced'] { animation: none; }
 
 /* ── Settings: categories as a vertical navigation list (REQ-CONFIG-268, REQ-SHELL-153), the Project section ── */
 .settings { display: grid; grid-template-columns: 200px 1fr; gap: var(--rt-space-5, 24px); height: 100%; min-height: 0; }
@@ -398,7 +445,6 @@
 .git__checkpoint-actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; flex: 1 1 auto; min-width: 0; max-width: 100%; }
 /* REQ-GIT-086: the picker is at least 220 px wide; a long entry is clipped by the select, never the card. */
 .git__picker { flex: 1 1 220px; min-width: 220px; width: auto; max-width: 100%; }
-.git__toast { position: fixed; right: var(--rt-space-5, 20px); bottom: calc(var(--rt-status-bar-height) + var(--rt-space-4, 16px)); z-index: 5; }
 .confirm-dialog__body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .confirm-dialog__lines { margin: 0; padding-left: var(--rt-space-4, 16px); }
 .worktree-dialog { width: min(560px, 100%); }

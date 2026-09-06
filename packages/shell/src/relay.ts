@@ -27,6 +27,7 @@ export class UpdateRelay {
     [CHANNEL.noticeCurrent]: 0,
     [CHANNEL.themeChanged]: 0,
     [CHANNEL.configChanged]: 0,
+    [CHANNEL.acknowledgementPublish]: 0,
     [CHANNEL.command]: 0,
   };
 

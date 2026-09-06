@@ -255,7 +255,8 @@ const leased = new Map<string, Record<string, string>>();
 // ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
 const mcp = new McpHost({
   clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
-  notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, headline: n.headline, detail: n.detail, ...(n.key === undefined ? {} : { key: n.key }), ttlMs: n.ttlMs } }),
+  // Part V: REQ-MCP-044's warning is a transient on the acknowledgement channel (REQ-NOTIFY-040 forbids the timed clear it had) — and the issue record it also writes.
+  acknowledge: (a) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: a.kind, title: a.title, ...(a.body === undefined ? {} : { body: a.body }) } }),
 });
 // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — THIS application's own executable (a utility process
 // runs the same binary) with the token first and `--` second (the branch's separator, measured in
@@ -328,7 +329,8 @@ const sessions = new Sessions({
   hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
   // ADR-0039: the capture at iteration close — Git through main to the workspace service, the row through the writer.
   checkpoints: (ctx) => createCheckpointPort(ctx, { clocks, ask, section: configuredFor(ctx.workspaceRoot)?.cfg.checkpoints ?? CHECKPOINTS_DEFAULTS, log: (m) => log(m) }),
-  notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', ...n } }),
+  // Part V: the engine's headline is the title and its prose the message body (REQ-NOTIFY-005: the detail block is for diagnostic output, which none of the three run notices carries); every run notice is dismissible.
+  notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.headline, message: n.detail, detail: '', ...(n.action === undefined ? {} : { action: n.action }), ...(n.key === undefined ? {} : { key: n.key }), sessionId: n.sessionId ?? '', persistent: true } }),
   supervisor: (workspaceRoot) => {
     const run = configuredFor(workspaceRoot);
     if (!run) return null;
@@ -504,6 +506,26 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
       return sessionFiles(sessionActions, s.dal, s.root, req.sessionId);
+    }
+    case 'timeline.append': {
+      // Part V / REQ-NOTIFY-268: through the live writer where the session is live (its ordinal counter), else one transaction under the store.
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const sid = asSessionId(req.sessionId);
+      const live = sessions.writer(sid);
+      if (live) {
+        const r = live.appendTimeline(req.name, req.actor, req.message, req.metadata);
+        return r.ok ? { kind: 'timeline.appended', sessionId: req.sessionId, ordinal: r.value } : { kind: 'refused', code: `timeline.${r.error.code}`, headline: 'The timeline entry could not be written', detail: 'reason' in r.error ? r.error.reason : r.error.code };
+      }
+      const dal = s.dal;
+      if (!dal.getSession(sid)) return { kind: 'refused', code: 'session.unknown', headline: 'No session with that id exists in this workspace' };
+      try {
+        const at = toIsoUtc(clocks.wall.instant());
+        const ordinal = dal.transaction(() => { const o = dal.nextTimelineOrdinal(sid); dal.insertTimeline(sid, o, at, req.name, req.actor, req.message, JSON.stringify(req.metadata)); return o; });
+        return { kind: 'timeline.appended', sessionId: req.sessionId, ordinal };
+      } catch (cause) {
+        return { kind: 'refused', code: 'timeline.write', headline: 'The timeline entry could not be written', detail: String(cause) };
+      }
     }
     case 'hooks.summary': {
       const s = stores.get(req.workspaceId);

@@ -2,12 +2,13 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import { PersonaWindows } from './windows.js';
+import { createNoticeStore } from './notices.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeCurrent, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
+import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
 import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
@@ -186,26 +187,48 @@ async function main(): Promise<void> {
   log(`run host: ${JSON.stringify(rhHello)}`);
 
   const relay = new UpdateRelay();
-  // ADR-0049 / REQ-SHELL-114: ONE current persistent notice, owned here; acknowledge is compare-and-clear.
-  let noticeSeq = 0;
   // Verification only: the capture may wait for the first terminal result (ROTARIS_CAPTURE_WAIT=result).
   let resultSeen = false;
-  let currentNotice: NoticeCurrent['current'] = null;
-  const publishNotice = (n: NoticeCurrent['current']) => { currentNotice = n; relay.broadcast(CHANNEL.noticeCurrent, { v: CONTRACT_SCHEMA_VERSION, current: n } satisfies NoticeCurrent); };
-  const publishedNoticeKeys = new Set<string>();
-  type Recovery = { label: string; command: string }[];
-  const raiseNotice = (severity: 'info' | 'warning' | 'error', headline: string, detail?: string, recovery?: Recovery) => {
-    publishNotice({ id: ++noticeSeq, severity, headline, ...(detail === undefined ? {} : { detail }), ...(recovery === undefined || recovery.length === 0 ? {} : { recovery }) });
+  /**
+   * ADR-0049 executed in full (Part V): the ONE notice store of this process (`main/notices.ts`) — a serialised
+   * publication chain, record-then-render for a warning or an error, compare-and-clear, and the run-start clear of
+   * REQ-NOTIFY-029/058. Nothing here publishes to channel 4 directly; the two entry points are `notices.report` and
+   * `notices.acknowledge`, which is ADR-0049 decision 5's single entry point.
+   *
+   * REQ-NOTIFY-028: an unscoped notice belongs to the run the main window follows, which is the session its renderer
+   * last subscribed to.
+   */
+  const notices = createNoticeStore({
+    broadcast: (current) => relay.broadcast(CHANNEL.noticeCurrent, current),
+    pushAcknowledgement: (a) => relay.broadcast(CHANNEL.acknowledgementPublish, a),
+    // REQ-NOTIFY-268: the entry goes to the session's timeline, which the run host owns (ADR-0002); main never writes it.
+    record: async (entry) => {
+      const workspaceId = currentWorkspaceId;
+      if (workspaceId === null || workspaceId === undefined) return false;
+      const r = await runHost.request({ kind: 'timeline.append', workspaceId, sessionId: entry.sessionId, name: 'notice', actor: 'system', message: entry.title, metadata: { notice_id: entry.noticeId, severity: entry.severity, message: entry.message, detail: entry.detail } }, millis(5_000)).catch(() => null);
+      return r?.kind === 'timeline.appended';
+    },
+    log,
+    focusedSession: () => followedSessionId,
+  });
+  type Recovery = { label: string; action: NoticeAction }[];
+  const raiseNotice = (severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => {
+    void notices.report({ severity, title: headline, ...(detail === undefined ? {} : { detail }), ...(recovery === undefined || recovery.length === 0 ? {} : { action: recovery[0]! }), ...(sessionId === undefined ? {} : { sessionId }) });
   };
   /** REQ-NOTIFY-224: once per key within this application session; nothing persists across a restart (REQ-NOTIFY-027). */
-  const raiseNoticeKeyed = (key: string, severity: 'info' | 'warning' | 'error', headline: string, detail?: string, recovery?: Recovery): boolean => {
-    if (publishedNoticeKeys.has(key)) return false;
-    publishedNoticeKeys.add(key);
-    raiseNotice(severity, headline, detail, recovery);
+  const raiseNoticeKeyed = (key: string, severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string): boolean => {
+    void notices.report({ severity, title: headline, key, ...(detail === undefined ? {} : { detail }), ...(recovery === undefined || recovery.length === 0 ? {} : { action: recovery[0]! }), ...(sessionId === undefined ? {} : { sessionId }) });
+    // The chain answers whether the key had been published; the caller's own log line is the only consumer and the
+    // store logs the suppression itself, so the synchronous answer here is "accepted", not "shown".
     return true;
   };
-  /** REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's recovery entry. */
-  const recoveryFor = (action: string | undefined): Recovery => action === 'hooks.review' ? [{ label: 'Review hooks', command: 'hooks.review' }] : action === 'hooks.settings' ? [{ label: 'Open hook settings', command: 'hooks.settings' }] : action === 'config.models' ? [{ label: 'Open Models settings', command: 'config.models' }] : action === 'providers.add' ? [{ label: 'Add a provider', command: 'providers.add' }] : [];
+  /** REQ-NOTIFY-223/224: the run host names an action; main maps it to the notice's own closed vocabulary member. */
+  const recoveryFor = (action: string | undefined): Recovery =>
+    action === 'hooks.review' ? [{ label: 'Review hooks', action: { kind: 'open-hook-review' } }]
+      : action === 'hooks.settings' ? [{ label: 'Open hook settings', action: { kind: 'open-settings', category: 'hooks' } }]
+        : action === 'config.models' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
+          : action === 'providers.add' ? [{ label: 'Add a provider', action: { kind: 'open-provider-sign-in' } }]
+            : [];
   /** REQ-WORKSPACE-152 (3): the first-launch notice — persistent, informational, dismissible, gating nothing. */
   const NO_PROVIDER_HEADLINE = 'No model provider is authenticated yet';
   /**
@@ -306,7 +329,7 @@ async function main(): Promise<void> {
     const r = await svc.link.request({ kind: 'config.bootstrap', workspaceRoot: canonicalPath(currentWorkspace) }, millis(30_000)).catch(() => null);
     if (r?.kind === 'config.snapshot') for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
     // ADR-0037 Tier B: the run host's next load folds the snapshot itself; nothing to hand over.
-    if (currentNotice?.headline === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) publishNotice(null);
+    if (notices.current()?.title === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) void notices.dismiss(notices.current()?.id);
   };
   const queue: ApprovalPayload[] = [];
   let openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null = null;
@@ -444,10 +467,20 @@ async function main(): Promise<void> {
       if (openDialog && openDialog.requestId === e.requestId) { openDialog.answered = true; if (!openDialog.win.isDestroyed()) openDialog.win.close(); }
     }
     else if (e.kind === 'notice.publish') {
-      const shown = e.key !== undefined ? raiseNoticeKeyed(e.key, e.severity, e.headline, e.detail, recoveryFor(e.action)) : (raiseNotice(e.severity, e.headline, e.detail, recoveryFor(e.action)), true);
-      log(`notice from the run host: ${e.headline}${e.action ? ` [${e.action}]` : ''}${shown ? '' : ' (already shown this session)'}`);
-      // REQ-MCP-044 (Part S): an auto-dismiss on the ONE notice slot (ADR-0049's known limit — a later notice supersedes it sooner).
-      if (shown && e.ttlMs !== undefined) { const id = noticeSeq; clocks.timers.after(millis(e.ttlMs), () => { if (currentNotice?.id === id) publishNotice(null); }); }
+      // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
+      // start of another (REQ-NOTIFY-029). No timer clears anything here any more: REQ-NOTIFY-040 allows a notice to
+      // leave only by replacement, a run-start clear, or the user's dismissal.
+      void notices.report({
+        severity: e.severity, title: e.title, message: e.message, detail: e.detail, persistent: e.persistent, sessionId: e.sessionId,
+        ...(e.key === undefined ? {} : { key: e.key }),
+        ...(recoveryFor(e.action).length === 0 ? {} : { action: recoveryFor(e.action)[0]! }),
+      });
+      log(`notice from the run host: ${e.title}${e.action ? ` [${e.action}]` : ''}${e.sessionId === '' ? '' : ` (session ${e.sessionId})`}`);
+    }
+    else if (e.kind === 'acknowledgement.publish') {
+      // REQ-NOTIFY-003's transient half, straight to the window's stack (REQ-MCP-044's warning arrives here since Part V).
+      notices.acknowledge(e.kindOf, e.title, e.body);
+      log(`acknowledgement from the run host: ${e.kindOf} "${e.title}"`);
     }
     else if (e.kind === 'run.paused') {
       // REQ-ORCH-085/086: the host is told; the dialog is a modal window over the main window.
@@ -1026,10 +1059,13 @@ async function main(): Promise<void> {
           }
           // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
           // REQ-WORKSPACE-137: the two provider refusals carry an action leading to the Models settings.
-          if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? [{ label: 'Open Settings', command: 'config.models' }] : undefined); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
+          if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? recoveryFor('config.models') : undefined); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
           return refusal(r, 'The session could not be started');
         }
         if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
+        // REQ-NOTIFY-058 / REQ-NOTIFY-029: a starting run clears the standing notice only where it is unscoped or
+        // scoped to this same session; a notice about another session survives, whatever order the events arrived in.
+        await notices.clearForRunStart(r.sessionId);
         // REQ-SHELL-078: a new session starts — every persona window and its cache go.
         personaWindows.destroyAll('a new session started');
         return { ok: true, value: { sessionId: r.sessionId } };
@@ -1234,7 +1270,9 @@ async function main(): Promise<void> {
         return r.kind === 'control.result' ? { ok: true, value: r.result } : refusal(r, 'The control could not be delivered');
       }
       case 'notice.acknowledge':
-        if (currentNotice && currentNotice.id === req.noticeId) publishNotice(null);
+        // REQ-NOTIFY-026: with an identifier this is a compare-and-clear, so dismissing a notice already superseded
+        // leaves its successor standing; without one it clears whatever is current.
+        await notices.dismiss(req.noticeId);
         return { ok: true };
       case 'workspace.backup': {
         // REQ-SESSION-201: the destination is a file the user chooses; nothing is written until then.
@@ -1512,6 +1550,39 @@ async function main(): Promise<void> {
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector });
         log(`capture: key ${step.selector}`);
+      });
+    }
+    // ROTARIS_CAPTURE_INSPECT_AT="selector@ms;;…": every match's bounding rectangle, every attribute and its text, plus the
+    // viewport and the focused element — the palette's 560×420 measured, its names read, focus return checked (REQ-SHELL-051/052).
+    const inspectScript = (selector: string) => `(() => { const d = (el) => ({ tag: el.tagName.toLowerCase(), id: el.id || null, className: typeof el.className === 'string' ? el.className : null, label: el.getAttribute('aria-label'), testId: el.getAttribute('data-testid') }); return { viewport: { width: innerWidth, height: innerHeight }, active: document.activeElement ? d(document.activeElement) : null, matches: [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => { const r = el.getBoundingClientRect(); return { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, attrs: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])), text: (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 600) }; }) }; })()`;
+    for (const step of steps(process.env['ROTARIS_CAPTURE_INSPECT_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const found = await win.webContents.executeJavaScript(inspectScript(step.selector)).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
+        log(`capture: inspect-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
+      });
+    }
+    // Part V's seams (verification only). ROTARIS_CAPTURE_NOTICES='<json>@ms;;…': one publication through the REAL
+    // store — the same `report`/`acknowledge`/`dismiss`/`clearForRunStart` the product calls, never a shortcut to the
+    // channel — so the proof exercises the queue, the record and the scoping rules rather than a stand-in for them.
+    // The JSON is `{op:'report'|'acknowledge'|'dismiss'|'run-start', …}`.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_NOTICES'])) {
+      clocks.timers.after(millis(step.at), () => {
+        let parsed: Record<string, unknown>;
+        try { parsed = JSON.parse(step.selector) as Record<string, unknown>; }
+        catch (cause) { log(`capture: notices at ${step.at} — unreadable step: ${String(cause)}`); return; }
+        const op = String(parsed['op'] ?? 'report');
+        if (op === 'acknowledge') { notices.acknowledge(parsed['kind'] as 'info' | 'ok' | 'warn' | 'fail', String(parsed['title']), parsed['body'] === undefined ? undefined : String(parsed['body'])); log(`capture: notices at ${step.at} acknowledge ${String(parsed['title'])}`); return; }
+        if (op === 'dismiss') { void notices.dismiss(parsed['id'] === undefined ? undefined : Number(parsed['id'])).then(() => log(`capture: notices at ${step.at} dismiss ${String(parsed['id'] ?? 'current')} → current ${notices.current()?.id ?? 'null'}`)); return; }
+        if (op === 'run-start') { void notices.clearForRunStart(String(parsed['sessionId'])).then(() => log(`capture: notices at ${step.at} run-start ${String(parsed['sessionId'])} → current ${notices.current()?.id ?? 'null'}`)); return; }
+        void notices.report({
+          severity: (parsed['severity'] ?? 'info') as NoticeSeverity, title: String(parsed['title']),
+          ...(parsed['message'] === undefined ? {} : { message: String(parsed['message']) }),
+          ...(parsed['detail'] === undefined ? {} : { detail: String(parsed['detail']) }),
+          ...(parsed['persistent'] === undefined ? {} : { persistent: Boolean(parsed['persistent']) }),
+          ...(parsed['sessionId'] === undefined ? {} : { sessionId: String(parsed['sessionId']) }),
+          ...(parsed['action'] === undefined ? {} : { action: parsed['action'] as { label: string; action: NoticeAction } }),
+          ...(parsed['acknowledge'] === undefined ? {} : { acknowledge: parsed['acknowledge'] as { kind: 'info' | 'ok' | 'warn' | 'fail'; body?: string } }),
+        }).then((r) => log(`capture: notices at ${step.at} report #${r.id} shown=${r.shown} → current ${notices.current()?.id ?? 'null'}`));
       });
     }
     // ROTARIS_CAPTURE_PNG_AT="path@ms;;…": a capture of the painted window at that time, beside the one at the end — the wait

@@ -4,6 +4,7 @@ export * from './commands.js';
 export * from './control.js';
 export * from './process-protocol.js';
 export * from './views.js';
+export * from './notices.js';
 export * from './status.js';
 export * from './tools.js';
 export * from './children.js';

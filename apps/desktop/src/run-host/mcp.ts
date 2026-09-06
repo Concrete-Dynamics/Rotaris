@@ -31,8 +31,13 @@ import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections
 export interface McpHostDeps {
   readonly clocks: Clocks;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
-  /** REQ-MCP-044 channel 1: the warning notice, 8 s auto-dismiss. */
-  readonly notice: (n: { severity: 'warning'; headline: string; detail: string; key?: string; ttlMs: number }) => void;
+  /**
+   * REQ-MCP-044 channel 1: the warning as a transient acknowledgement of kind `warn` (Part V). It rode `notice.publish` with an
+   * 8 s `ttlMs` from Part S; REQ-NOTIFY-040 forbids a notice leaving on a timer, and REQ-NOTIFY-011 fixes the transient lifetime
+   * once (4200 ms, not this requirement's 8 s — the disagreement is ADR-0049's open question), so the surface is the
+   * acknowledgement stack and the lifetime is the stack's. Channel 2, the `mcp_config` issue, is unchanged.
+   */
+  readonly acknowledge: (a: { kind: 'warn'; title: string; body?: string }) => void;
   /** OQ-22's reading: the run host's own environment, which every stdio child inherits under its server's map. */
   readonly parentEnv: Readonly<Record<string, string>>;
 }
@@ -44,7 +49,6 @@ export interface McpSessionContext {
 
 interface SurfaceMemo { readonly key: string; readonly surface: PersonaMcpSurface; readonly diagnostics: readonly Diagnostic[] }
 
-const NOTICE_TTL_MS = 8_000;
 
 /**
  * REQ-MCP-118 (ESC-32 / IC-7): the disclosure's data, from the manifest and the runtime's home under the per-user data
@@ -123,7 +127,7 @@ export class McpHost {
     if (!this.sink.admit(d, ctx?.sessionId ?? '')) return false;
     this.deps.log(`mcp: ${d.message}`, d.severity === 'info' ? 'info' : 'warn');
     if (d.channels === 'user' && d.severity === 'warning') {
-      this.deps.notice({ severity: 'warning', headline: d.message, detail: '', ...(d.key === '' ? {} : { key: `mcp:${d.key}` }), ttlMs: NOTICE_TTL_MS });
+      this.deps.acknowledge({ kind: 'warn', title: d.message });
       ctx?.writer?.recordIssue({ kind: 'mcp_config', severity: 'warning', actor: 'orchestrator', message: d.message, metadata: { ...(d.server === undefined ? {} : { server: d.server }), ...(d.persona === undefined ? {} : { persona: d.persona }) } });
     }
     return true;

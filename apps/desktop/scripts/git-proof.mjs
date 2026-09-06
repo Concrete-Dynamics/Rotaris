@@ -64,7 +64,7 @@ function cleanEnvironment() {
 const PROBES = [
   '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
   '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-checkpoint-row"]',
-  '[data-testid="git-checkpoint-session"]', '[data-testid="git-divider"]', '[data-testid="git-toast"]', '[data-testid="strip-branch"]', '.notice__headline', '.app-shell',
+  '[data-testid="git-checkpoint-session"]', '[data-testid="git-divider"]', '[data-testid="acknowledgement-title"]', '[data-testid="strip-branch"]', '.notice__headline', '.app-shell',
   '[data-testid="git-new-worktree"]', '[data-testid="git-merge"]', '[data-testid="worktree-dialog"]', '[data-testid="start-session-dialog"]', '[data-testid="git-confirm-force"]', '[data-testid="git-failure"]',
 ];
 
@@ -250,7 +250,7 @@ const deleted = launch('delete', workspace, local, preferences, {
   if (existsSync(derived)) throw new Error(`the worktree directory still exists at ${derived}`);
   const r = rows(p);
   if (r.some((x) => /feature\/proof/.test(x.text))) throw new Error('the feature/proof row is still in the table');
-  if (text(p, '[data-testid="git-toast"]')[0] !== 'Worktree deleted.') throw new Error(`the toast reads "${text(p, '[data-testid="git-toast"]')[0] ?? 'absent'}"`);
+  if (text(p, '[data-testid="acknowledgement-title"]')[0] !== 'Worktree deleted.') throw new Error(`the toast reads "${text(p, '[data-testid="acknowledgement-title"]')[0] ?? 'absent'}"`);
   if ((p['[data-testid="git-failure"]'] ?? []).length > 0) throw new Error('a failure dialog is open after the delete');
   results.delete = { rows: r.length, directoryGone: true, toast: 'Worktree deleted.', png: deleted.png };
 }

@@ -19,7 +19,7 @@ flowchart TB
 
   subgraph surface["Surface packages"]
     ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>theme, motion, shell-state"]
-    uicore["ui-core<br/>replica (the transcript mirror),<br/>notice store"]
+    uicore["ui-core<br/>replica (the transcript mirror),<br/>notice store,<br/>acknowledgement stack (one per window)"]
     shell["shell<br/>ProcessLink, UpdateRelay"]
   end
 

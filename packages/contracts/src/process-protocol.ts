@@ -1,4 +1,5 @@
 import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema } from './config.js';
+import { AcknowledgementKindSchema, NoticeSeveritySchema } from './notices.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
@@ -120,6 +121,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.files'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   /** ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup of one workspace — start, cancel, status. */
   z.object({ kind: z.literal('mcp.setup'), workspaceId: z.string(), action: z.enum(['start', 'cancel', 'status']) }),
+  /**
+   * Part V / REQ-NOTIFY-268: main records a warning or error notice into a session's timeline BEFORE rendering it. The
+   * run host appends through the live session writer where the session is live, else directly under the workspace store
+   * (the session row must exist); answered `timeline.appended {ordinal}` or `refused`.
+   */
+  z.object({ kind: z.literal('timeline.append'), workspaceId: z.string(), sessionId: z.string().min(1), name: z.string().min(1), actor: z.string().min(1), message: z.string(), metadata: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -342,6 +349,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('session.exported'), destination: z.string(), bytes: z.number().int().nonnegative(), documents: z.number().int().positive(), warnings: z.array(z.string()), elapsedMs: z.number().nonnegative() }),
   z.object({ kind: z.literal('session.files'), files: SessionFilesSchema }),
+  z.object({ kind: z.literal('timeline.appended'), sessionId: z.string(), ordinal: z.number().int().nonnegative() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 
@@ -366,7 +374,16 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   /** ADR-0019's liveness poll, on the channel that carries registration. */
   z.object({ kind: z.literal('presenter.poll'), seq: z.number().int().nonnegative() }),
   /** ADR-0015 / REQ-HOOKS-054/086: the run's notices for the host's channel (ADR-0049 owns the one current notice in main). */
-  z.object({ kind: z.literal('notice.publish'), severity: z.enum(['info', 'warning', 'error']), headline: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), /** REQ-MCP-044: an auto-dismiss after this many milliseconds (main clears the slot if the notice is still current). */ ttlMs: z.number().int().positive().optional() }),
+  /**
+   * Part V: the persistent notice's fields as REQ-NOTIFY-023 lists them — `sessionId` empty means the focused run
+   * (REQ-NOTIFY-028); `persistent` decides the dismiss control (REQ-NOTIFY-040). The `ttlMs` this event carried since Part S
+   * (REQ-MCP-044's 8 s auto-dismiss on the one slot) is gone: REQ-NOTIFY-040 says no notice leaves on a timer, so that
+   * warning now rides `acknowledgement.publish` below (the disagreement between REQ-MCP-044's 8 s and REQ-NOTIFY-011's
+   * single lifetime is an open question in ADR-0049's Part V note).
+   */
+  z.object({ kind: z.literal('notice.publish'), severity: NoticeSeveritySchema, title: z.string(), message: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), sessionId: z.string(), persistent: z.boolean() }),
+  /** Part V / REQ-NOTIFY-003: a transient the run host raises on its own — main pushes it to the main window's stack. */
+  z.object({ kind: z.literal('acknowledgement.publish'), kindOf: AcknowledgementKindSchema, title: z.string().min(1), body: z.string().optional() }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

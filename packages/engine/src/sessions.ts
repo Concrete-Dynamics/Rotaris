@@ -905,7 +905,7 @@ export class Sessions {
         const r = s.writer.resolvePause('paused', null, action);
         if (!r.ok) return err({ code: r.error.code, reason: 'reason' in r.error ? r.error.reason : r.error.code });
         s.owner.reconcile();
-        this.deps.notice?.({ severity: 'warning', headline: 'The paused session carries no message limit to resume from', detail: `Session ${sessionId} was paused at a message limit that is no longer recorded; it is now paused and can be continued from the composer.` });
+        this.deps.notice?.({ severity: 'warning', headline: 'The paused session carries no message limit to resume from', detail: `Session ${sessionId} was paused at a message limit that is no longer recorded; it is now paused and can be continued from the composer.`, sessionId });
         return ok({ resumed: false, messageLimit: null });
       }
       if (action === 'double') limit = limit * 2;

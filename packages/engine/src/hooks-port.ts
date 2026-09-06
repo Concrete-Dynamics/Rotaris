@@ -81,4 +81,6 @@ export interface RunNotice {
   readonly action?: string;
   /** REQ-NOTIFY-224: published once per key within one application session. */
   readonly key?: string;
+  /** REQ-NOTIFY-028 (Part V): the session the notice concerns; absent means the focused run. */
+  readonly sessionId?: string;
 }

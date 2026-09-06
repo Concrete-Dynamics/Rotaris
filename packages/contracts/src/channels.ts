@@ -4,6 +4,7 @@ import { ApprovalPayloadSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ConfigSnapshotSchema } from './config.js';
+import { AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 
 /**
  * The five named, typed IPC channels of ADR-0044.
@@ -11,8 +12,10 @@ import { ConfigSnapshotSchema } from './config.js';
  *  1. transcript:increment — session id, SEQUENCE, earliest-changed index, rows, diffs, personas
  *  2. session:snapshot     — session id, SEQUENCE, the whole-session update
  *  3. terminal:frames      — stream id, per-stream sequence (REQ-SHELL-104), kind, payload
- *  4. notice:current       — the single current notice or null, plus acknowledgements
+ *  4. notice:current       — the single current notice or null (ADR-0049)
  *  5. command              — request/response; see commands.ts
+ *  8. acknowledgement:publish — main → ONE window: a transient acknowledgement for that window's stack
+ *     (Part V; REQ-NOTIFY-003's transient half of a main-originated or run-host-originated event, REQ-MCP-044)
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -31,6 +34,7 @@ export const CHANNEL = {
   noticeCurrent: 'notice:current',
   themeChanged: 'theme:changed',
   configChanged: 'config:changed',
+  acknowledgementPublish: 'acknowledgement:publish',
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -173,18 +177,27 @@ export const TerminalFrameSchema = z.object({
 });
 export type TerminalFrame = z.infer<typeof TerminalFrameSchema>;
 
-export const NoticeSchema = z.object({
-  id: z.number().int().positive(),
-  severity: z.enum(['info', 'warning', 'error']),
-  headline: z.string(),
-  detail: z.string().optional(),
-  recovery: z.array(z.object({ label: z.string(), command: z.string() })).optional(),
-});
+/** ADR-0049 / REQ-NOTIFY-023: the one persistent notice; its shape lives in `notices.ts` beside the action vocabulary. */
+export { NoticeSchema };
 export const NoticeCurrentSchema = z.object({
   v: schemaVersion,
   current: NoticeSchema.nullable(),
 });
 export type NoticeCurrent = z.infer<typeof NoticeCurrentSchema>;
+
+/**
+ * Channel 8 (Part V): a transient acknowledgement main pushes to one window's stack (REQ-NOTIFY-013 — the stack is per
+ * window and is not the notice store). `timeoutMs` absent means the lifetime of REQ-NOTIFY-011, which the renderer's
+ * store holds once; zero or less never expires (REQ-NOTIFY-020).
+ */
+export const AcknowledgementPublishSchema = z.object({
+  v: schemaVersion,
+  kind: AcknowledgementKindSchema,
+  title: z.string().min(1),
+  body: z.string().optional(),
+  timeoutMs: z.number().int().optional(),
+});
+export type AcknowledgementPublish = z.infer<typeof AcknowledgementPublishSchema>;
 
 export const ThemeChangedSchema = z.object({ v: schemaVersion, name: z.enum(['rotaris-dim', 'nocturne', 'high-contrast']) });
 export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
@@ -200,6 +213,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.noticeCurrent]: NoticeCurrentSchema,
   [CHANNEL.themeChanged]: ThemeChangedSchema,
   [CHANNEL.configChanged]: ConfigChangedSchema,
+  [CHANNEL.acknowledgementPublish]: AcknowledgementPublishSchema,
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

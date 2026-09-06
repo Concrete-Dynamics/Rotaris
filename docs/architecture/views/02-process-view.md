@@ -35,7 +35,7 @@ flowchart LR
   RPR --> P
   RPE --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
-  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>theme:changed · config:changed" --> P
+  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish<br/>theme:changed · config:changed" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB
@@ -67,7 +67,8 @@ flowchart LR
 **Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`, `panels/git`, `interface/agentPopOut` — REQ-SHELL-073's "agent pop-out", Part R), `window.openPersona {persona, agentId, focusSteer?}` / `window.personaPayload` (Part R: open or raise the persona window; the window reads its persona, the followed session and the instance to select — answered by main from the registry; a raise is a request, REQ-SHELL-161), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
 `session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
 `git.read`, `worktree.create/remove/chooseAttach/probePath` (Part O — see the Git paragraph below),
-`pause.present/payload`, `approval.payload`, `notice.acknowledge`, `workspace.backup/restore`,
+`pause.present/payload`, `approval.payload`, `notice.acknowledge {noticeId?}` (Part V: an absent identifier clears
+whatever is current, one given is a compare-and-clear — REQ-NOTIFY-026), `workspace.backup/restore`,
 `shell.switchView`, `hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle`,
 `playbooks.catalogue`, `config.read/save/setField/liveState`, `providers.list/health/open/save/validate/signOut/
 delete/refresh`, `provider.payload/signIn`. Main relays a session or hook command to the run host, a workspace or
@@ -174,7 +175,8 @@ terminate then tree-killed after 5 s on cancel or timeout; the category polls th
 
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own
-per-stream sequence; `notice:current` is the single notice or null; `theme:changed` and `config:changed`
+per-stream sequence; `notice:current` is the single notice or null; `acknowledgement:publish` (channel 8, Part V) is a transient for ONE
+window's own stack — the stack is per window and is not the notice store (ADR-0049); `theme:changed` and `config:changed`
 repaint or repopulate every live window.
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Requests:
@@ -182,7 +184,10 @@ repaint or repopulate every live window.
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
 `config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown`, `hooks.*`, `playbooks.catalogue`,
 `checkpoint.list/recordSafety/recordRestore` (Part P), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
-`run.result`, `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish`, `log`, `ready`. **The run host's
+`run.result`, `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
+REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them; the `ttlMs` Part S added is gone — REQ-NOTIFY-040
+forbids a notice leaving on a timer), `acknowledgement.publish` (REQ-MCP-044's warning, now a transient),
+`log`, `ready`. **The run host's
 asks back to main** (on the `ServiceAsk` envelope): `credentials.lease {providerIds}` (ADR-0030), answered
 `credentials.leased {bearers, report}` — the only message in the product that carries a credential value, and it never
 crosses a renderer boundary — and the three checkpoint asks of the paragraph above, relayed to the workspace service.

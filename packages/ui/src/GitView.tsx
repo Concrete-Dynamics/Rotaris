@@ -51,6 +51,8 @@ export interface GitViewProps {
   readonly onCreateWorktree: (branch: string, path: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onDeleteWorktree: (path: string, force: boolean) => Promise<{ ok: true } | { ok: false; reason: string; needsForce: boolean }>;
   readonly probePath?: ((path: string) => Promise<{ exists: boolean; nonEmpty: boolean } | null>) | undefined;
+  /** REQ-NOTIFY-013 / REQ-SHELL-113: raise a transient on the window's ONE stack; this view owns no surface of its own. */
+  readonly onAcknowledge?: ((message: string) => void) | undefined;
   /** ADR-0039: absent means the card stays in its empty states (the listing is never requested). */
   readonly checkpoints?: CheckpointOps | undefined;
   /** REQ-GIT-100: after a successful restore the Git state and the session list are refreshed. */
@@ -159,17 +161,15 @@ export function GitView(props: GitViewProps) {
   const anchor = useRef<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  /**
+   * REQ-SHELL-113: the window has no second transient surface. This view used to draw its own fixed toast; it now
+   * raises the ONE acknowledgement stack of REQ-NOTIFY-013 through the callback the root supplies, and draws nothing.
+   */
+  const setToast = props.onAcknowledge ?? (() => undefined);
   const [pickedSession, setPickedSession] = useState<string | null>(null);
   // A selection survives a refresh only for rows that still exist (REQ-GIT-079: rebuilt each refresh, nothing stale).
   const [seenRows, setSeenRows] = useState(rows);
   if (seenRows !== rows) { setSeenRows(rows); const alive = new Set(rows.map((r) => r.path)); if ([...selected].some((p) => !alive.has(p))) setSelected(new Set([...selected].filter((p) => alive.has(p)))); }
-  useEffect(() => {
-    if (toast === null) return;
-    const t = setTimeout(() => setToast(null), 4_000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   // The G8 divider: pointer drag and Left/Right/Home/End; the split persists under `panels/git` (REQ-GIT-153).
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [right, setRight] = useState<number>(() => layout?.sizes[1] ?? GIT_RIGHT_DEFAULT);
@@ -313,7 +313,6 @@ export function GitView(props: GitViewProps) {
         {/* REQ-GIT-083: integration is owed (ADR-0039's neighbour); the button carries the disabled text in this build. */}
         <button type="button" className="btn btn-secondary" data-testid="git-merge" disabled title={eligible.length > 0 ? MERGE_ENABLED_TOOLTIP : MERGE_DISABLED_TOOLTIP}>Merge selected</button>
       </header>
-      {toast !== null && <div className="toast git__toast" role="status" data-testid="git-toast"><span className="toast-title">{toast}</span></div>}
       <div className="git__body" ref={bodyRef} style={{ gridTemplateColumns: `minmax(${GIT_PANE_MIN}px, 1fr) 8px ${right}px` }}>
         <div className="git__column git__left">
           <Card kicker="Worktrees" className="table-card git-card--table" testId="git-worktrees" actions={<span className="card-meta">{rows.length} listed</span>}>

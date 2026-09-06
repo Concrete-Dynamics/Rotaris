@@ -67,7 +67,7 @@ function cleanEnvironment() {
 const PROBES = [
   '[data-testid="git-checkpoint-row"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-restore"]', '[data-testid="git-checkpoint-session"]', '[data-testid="git-checkpoint-table"]',
   '[data-testid="checkpoint-confirm"]', '[data-testid="checkpoint-summary"]', '[data-testid="checkpoint-preview-text"]', '[data-testid="checkpoint-warning"]', '[data-testid="checkpoint-overwrite"]', '[data-testid="checkpoint-restore-confirm"]', '[data-testid="checkpoint-consent-reason"]',
-  '[data-testid="checkpoint-progress-text"]', '[data-testid="checkpoint-message"]', '[data-testid="git-toast"]', '.notice__headline', '.notice__detail', '.notice__body', '.app-shell', '[data-testid="git-branch"]',
+  '[data-testid="checkpoint-progress-text"]', '[data-testid="checkpoint-message"]', '[data-testid="acknowledgement-title"]', '.notice__headline', '.notice__detail', '.notice__body', '.app-shell', '[data-testid="git-branch"]',
 ];
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {

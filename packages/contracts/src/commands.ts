@@ -78,7 +78,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.pageOlder'), sessionId: z.string(), beforeIndex: z.number().int() }),
   /** ADR-0010 channel 1 over channel 5: the shell resolves focus to a session id before sending (ADR-0013). */
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
-  z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int() }),
+  /** REQ-NOTIFY-026: compare-and-clear with an id; no id clears whatever notice is current (Part V). */
+  z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int().optional() }),
   /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),
@@ -152,6 +153,8 @@ export interface RendererBridge {
   readonly onSessionSnapshot: (fn: (p: unknown) => void) => () => void;
   readonly onTerminalFrame: (fn: (p: unknown) => void) => () => void;
   readonly onNotice: (fn: (p: unknown) => void) => () => void;
+  /** Channel 8 (Part V): a transient acknowledgement for THIS window's stack (REQ-NOTIFY-013). */
+  readonly onAcknowledgement: (fn: (p: unknown) => void) => () => void;
   readonly onThemeChanged: (fn: (p: unknown) => void) => () => void;
   readonly onConfigChanged: (fn: (p: unknown) => void) => () => void;
 }

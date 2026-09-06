@@ -2,9 +2,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CommandOutcome, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus } from '@rotaris/contracts';
-import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
+import { BRIDGE_KEY, isBusy, isViewId, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus } from '@rotaris/contracts';
+import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
+import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -42,6 +42,8 @@ const replica: ReplicaStore = createReplicaStore({
   onDiagnostic: (m) => console.warn(`[replica] ${m}`),
 });
 const notices: NoticeStore = createNoticeStore();
+/** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack; main pushes to it over channel 8. */
+const acknowledgements: AcknowledgementStore = createAcknowledgementStore();
 /**
  * Part R (REQ-MONITOR-038's 250 ms budget, REQ-SHELL-076): the last whole-session update's apply-to-paint time and the
  * agent count it carried, read by the Mission view's data attributes and by main's persona-window paint measurement
@@ -62,6 +64,13 @@ bridge.onSessionSnapshot((p) => {
 });
 bridge.onTranscriptIncrement((p) => replica.getState().applyIncrement(p));
 bridge.onNotice((p) => notices.getState().apply(p));
+bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
+/**
+ * REQ-NOTIFY-044's `focus-session`: opening a session is the App component's own callback (it owns the replica and the
+ * browser state), so the root registers it here for the dispatcher, which is module-scoped because a notice may arrive
+ * before any view has mounted. Null until the window has booted, and the action is then not dispatched.
+ */
+let focusSession: ((sessionId: string) => void) | null = null;
 
 /**
  * REQ-CHAT-011: no session → start one; a loaded session with no run → record the prompt.
@@ -355,6 +364,7 @@ function Git({ workspace, git, layout, onLayout }: { workspace: string; git: Ret
     onRefresh={() => { void after(); }}
     onCreateWorktree={async (branch, path) => { const r = await bridge.command({ kind: 'worktree.create', branch, path }); if (r.ok) void after(); return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline }; }}
     onDeleteWorktree={async (path, force) => { const r = await bridge.command({ kind: 'worktree.remove', path, force }); if (r.ok) void after(); return r.ok ? { ok: true } : { ok: false, reason: r.headline, needsForce: r.code === 'worktree.needs-force' }; }}
+    onAcknowledge={(message) => { acknowledgements.getState().publish({ kind: 'info', title: message }); }}
     probePath={async (path) => { const r = await bridge.command({ kind: 'worktree.probePath', path }); return r.ok ? (r.value as { exists: boolean; nonEmpty: boolean }) : null; }}
   />;
 }
@@ -498,12 +508,53 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
   </>);
 }
 
-/** REQ-NOTIFY-223/224: a notice's action, resolved here to a command or a view. */
-function recover(command: string): void {
-  if (command === 'hooks.review') { void bridge.command({ kind: 'hooks.review' }); return; }
-  if (command === 'hooks.settings') { useShellState.getState().openSettings('hooks'); return; }
-  if (command === 'config.models') { useShellState.getState().openSettings('models'); return; }
-  if (command === 'providers.add') { void bridge.command({ kind: 'providers.open', mode: 'add' }); return; }
+/**
+ * REQ-NOTIFY-044 / REQ-SHELL-115 — the closed action vocabulary, dispatched here and nowhere else. Each member
+ * carries its object's identity, so the handler acts without a further lookup, and an action naming a view, a settings
+ * category or a library tab outside the owning domain's vocabulary is NOT dispatched (ADR-0049's sixth decision).
+ * Those vocabularies are imported from the domains that own them rather than restated, so neither can drift.
+ *
+ * No member writes into the user's project: the project action navigates only (REQ-NOTIFY-047).
+ */
+function dispatchNoticeAction(action: NoticeAction): void {
+  const shell = useShellState.getState();
+  switch (action.kind) {
+    case 'open-view':
+      // REQ-SHELL-023's seven ids, imported; an unknown id is a silent no-op inside `switchView` (REQ-SHELL-025).
+      if (!isViewId(action.view)) { console.warn(`notice action named a view outside REQ-SHELL-023: ${action.view}`); return; }
+      shell.switchView(action.view);
+      return;
+    case 'open-settings':
+      // REQ-CONFIG-269's categories, imported from the Settings view that owns the list.
+      if (!SETTINGS_CATEGORIES.some((c) => c.id === action.category)) { console.warn(`notice action named a settings category outside REQ-CONFIG-269: ${action.category}`); return; }
+      shell.openSettings(action.category);
+      return;
+    case 'open-hook-review':
+      void bridge.command({ kind: 'hooks.review' });
+      return;
+    case 'open-provider-sign-in':
+      void bridge.command({ kind: 'providers.open', mode: 'add' });
+      return;
+    case 'focus-session':
+      if (focusSession === null) { console.warn('notice action "focus-session" arrived before the window could open one'); return; }
+      focusSession(action.sessionId);
+      return;
+    case 'open-library':
+      // REQ-LIBRARY-103's tabs are checked by the schema; the Library view is not built, so there is nothing to open.
+      console.warn(`notice action "open-library" (${action.tab}) has no target: the Library view is not built`);
+      return;
+    case 'install-update':
+    case 'restart':
+    case 'open-cloud-account':
+    case 'open-project-init':
+    case 'retry-run':
+    case 'revert-proposal-review':
+    case 'save-settings':
+      // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no updater, no hosted cloud,
+      // no project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
+      console.warn(`notice action "${action.kind}" has no target in this build`);
+      return;
+  }
 }
 
 function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
@@ -625,6 +676,10 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer__input')?.focus()));
     return { ok: true };
   }, []);
+
+  // REQ-NOTIFY-044's `focus-session`: the dispatcher is module-scoped (a notice can arrive before a view mounts), so
+  // the opener is registered here for as long as this window lives.
+  useEffect(() => { focusSession = (id) => { void openSession(id); }; return () => { focusSession = null; }; }, [openSession]);
   const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
   const status = useMemo<readonly StatusItem[]>(
     () => [
@@ -664,7 +719,8 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}
-      onRecover={recover}
+      onAction={dispatchNoticeAction}
+      acknowledgements={acknowledgements}
       onOpenSessions={() => { void loadSessions(); }}
     />
     {browserOpen && (
@@ -897,12 +953,17 @@ function PersonaApp({ persona, initialSelect }: { persona: string; initialSelect
   const runLevel = useMemo(() => runLevelAgent(state.session, entry), [state.session, entry]);
   const nowIso = useElapsedTick(visible ? state.session : null);
   const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
-  return <PersonaWindow
-    persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
-    nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
-    onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
-    onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
-  />;
+  return (<>
+    <PersonaWindow
+      persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
+      nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
+      onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
+      onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
+    />
+    {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same
+        shared component the main window draws, swept for accessibility here in its own right (REQ-SHELL-112). */}
+    <Acknowledgements store={acknowledgements} />
+  </>);
 }
 async function bootPersona(): Promise<void> {
   const r = await bridge.command({ kind: 'window.personaPayload' });

@@ -1,8 +1,10 @@
 import { useEffect, type ReactNode } from 'react';
-import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
+import { PRIMARY_VIEWS, type Notice, type NoticeAction, type ViewId } from '@rotaris/contracts';
+import type { AcknowledgementStore } from '@rotaris/ui-core';
 import { NavRail } from './NavRail.js';
 import { useShellState } from './shell-state.js';
-import { markMotionStart } from './motion.js';
+import { Acknowledgements } from './Acknowledgements.js';
+import { NoticeBanner } from './Notice.js';
 
 /**
  * REQ-SHELL-024 — vertical layout, top to bottom: title bar; a
@@ -16,15 +18,6 @@ import { markMotionStart } from './motion.js';
  * control. The structure is the specification's, the language the design
  * system's. A view body is supplied by the caller through `views`.
  */
-export interface ShellNotice {
-  readonly id: number;
-  readonly severity: 'info' | 'warning' | 'error';
-  readonly headline: string;
-  readonly detail?: string | undefined;
-  /** REQ-NOTIFY-223/224: an action the notice offers, by the identifier the renderer root resolves. */
-  readonly recovery?: readonly { readonly label: string; readonly command: string }[] | undefined;
-}
-
 /** REQ-SHELL-038: a strip item is text; one carrying an accessible name, a tooltip and a state (the branch, REQ-GIT-122/161) is a record. */
 export type StatusItem = string | { readonly text: string; readonly name: string; readonly title?: string | undefined; readonly state?: string | undefined; readonly testId?: string | undefined };
 
@@ -33,37 +26,17 @@ export interface AppShellProps {
   readonly workspaceLabel: string;
   readonly statusItems: readonly StatusItem[];
   readonly views?: Partial<Record<ViewId, ReactNode>>;
-  readonly notice?: ShellNotice | null;
+  /** ADR-0049: the one current notice, mirrored from main's store; the banner itself is `Notice.tsx`. */
+  readonly notice?: Notice | null;
   readonly onAcknowledge?: ((id: number) => void) | undefined;
-  readonly onRecover?: ((command: string) => void) | undefined;
+  /** REQ-NOTIFY-044: the closed action vocabulary; the renderer root dispatches a member. */
+  readonly onAction?: ((action: NoticeAction) => void) | undefined;
+  /** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack. */
+  readonly acknowledgements?: AcknowledgementStore | undefined;
   readonly onOpenSessions?: (() => void) | undefined;
 }
 
-const GLYPH: Record<ShellNotice['severity'], string> = { info: 'i', warning: '!', error: '×' };
-
-export function NoticeBanner({ notice, onAcknowledge, onRecover }: { notice: ShellNotice; onAcknowledge?: ((id: number) => void) | undefined; onRecover?: ((command: string) => void) | undefined }) {
-  return (
-    <div ref={(element) => { if (element) markMotionStart(element); }} className={`notice notice--${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'}>
-      <span className="notice__glyph" aria-hidden="true">{GLYPH[notice.severity]}</span>
-      <div className="notice__text">
-        <span className="notice__headline">{notice.headline}</span>
-        {notice.detail && (
-          <details className="notice__details">
-            <summary>Details</summary>
-            <pre className="notice__detail mono">{notice.detail}</pre>
-            <button type="button" className="btn btn-ghost" onClick={() => { void navigator.clipboard?.writeText(notice.detail ?? ''); }}>Copy</button>
-          </details>
-        )}
-      </div>
-      {(notice.recovery ?? []).map((r) => (
-        <button key={r.command} type="button" className="btn btn-secondary notice__action" onClick={() => onRecover?.(r.command)}>{r.label}</button>
-      ))}
-      <button type="button" className="btn btn-ghost notice__dismiss" aria-label="Dismiss notice" onClick={() => onAcknowledge?.(notice.id)}>Dismiss</button>
-    </div>
-  );
-}
-
-export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge, onRecover, onOpenSessions }: AppShellProps) {
+export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
 
@@ -80,6 +53,9 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
     return () => window.removeEventListener('keydown', onKey);
   }, [switchView]);
 
+  // REQ-NOTIFY-021: changing view performs the clear operation, so nothing from the previous view lingers over the new one.
+  useEffect(() => { acknowledgements?.getState().clearAll(); }, [activeView, acknowledgements]);
+
   const active = PRIMARY_VIEWS.find((v) => v.id === activeView)!;
   const body = views[activeView];
 
@@ -94,7 +70,7 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
         <span className="title-bar__workspace">{workspaceLabel}</span>
       </header>
       <div className="notice-slot" aria-live="polite">
-        {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onRecover={onRecover} />}
+        {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onAction={onAction} />}
       </div>
       <div className="body">
         <NavRail items={PRIMARY_VIEWS} active={activeView} onSelect={(id: ViewId) => switchView(id)} />
@@ -113,6 +89,7 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
           : <span key={i} className="status-strip__item" aria-label={s.name} title={s.title} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>
         ))}
       </footer>
+      {acknowledgements && <Acknowledgements store={acknowledgements} />}
     </div>
   );
 }

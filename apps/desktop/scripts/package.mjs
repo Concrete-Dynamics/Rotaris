@@ -52,6 +52,15 @@ function finish(ok, why) {
 
 try {
   rmSync(join(RELEASE, 'load-proof.afterpack.json'), { force: true });
+  // ADR-0035 (Part T): the bundled code-intelligence runtime is BUILT here (idempotent on its pins' marker), then the
+  // committed binding manifest is checked against a fresh generation from that runtime — a diff is a refused build
+  // (REQ-MCP-116; the same kind of assertion as REQ-MCP-095's version cross-check). The build fetches; the product never does.
+  step('code-intelligence bundle', () => {
+    run('node', [join(APP, 'scripts', 'code-intelligence', 'bundle.mjs')]);
+    const marker = JSON.parse(readFileSync(join(APP, 'resources', 'code-intelligence', 'bundle.json'), 'utf8'));
+    return { bundle: { python: marker.answers.python, distribution: marker.distribution, version: marker.answers.distribution, bytes: marker.size.bytes, files: marker.size.files, builtAt: marker.builtAt, elapsedMs: marker.elapsedMs } };
+  });
+  step('code-intelligence manifest equals the committed module', () => run('node', [join(APP, 'scripts', 'code-intelligence', 'manifest.mjs'), '--check']));
   step('electron-vite build', () => run('pnpm', ['exec', 'electron-vite', 'build']));
   // The keep-prebuild counterfactual packs from the same configuration minus the prebuild exclusions, so the
   // prebuild is in the asar index where the binding's own loader looks first. Rule 4 has to refuse it.

@@ -1,0 +1,12 @@
+{
+  "$comment": "ADR-0035 / REQ-MCP-011 / REQ-MCP-116: the pins of the bundled code-intelligence runtime. The build reads them here; the generated manifest module (packages/config/src/mcp/code-intelligence-manifest.generated.ts) carries the same distribution and version and a test refuses a drift. uv is a build tool only — downloaded by version and hash when the machine's own does not match, never shipped.",
+  "python": "3.13.15",
+  "distribution": "serena-agent",
+  "version": "1.7.0",
+  "uv": {
+    "version": "0.12.5",
+    "assets": {
+      "win32-x64": { "file": "uv-x86_64-pc-windows-msvc.zip", "sha256": "4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a" }
+    }
+  }
+}

@@ -1136,11 +1136,21 @@ behaviour.
 > named variables before the overlay and which; until then a secret in the run host's own environment reaches
 > every stdio server.
 
-**OQ-23 — What the reserved-token branch must do.** *(ADR-0035.)* `REQ-MCP-033` describes the branch only
-as answering the protocol on standard streams, while `REQ-MCP-036` derives a command line from the same
-entry and `REQ-MCP-099` runs it with three setup subcommands. **Recommended reading:** the branch is a
+**OQ-23 — What the reserved-token branch must do.** ***RESOLVED 2026-09-06 — the recommended reading, taken by
+the first execution (Part T, ADR-0035's note; `spikes/code-intelligence-branch.md`).*** *(ADR-0035.)* `REQ-MCP-033`
+describes the branch only as answering the protocol on standard streams, while `REQ-MCP-036` derives a command line
+from the same entry and `REQ-MCP-099` runs it with three setup subcommands. **Recommended reading:** the branch is a
 general pass-through and `REQ-MCP-033` describes what happens when the remaining arguments select the
 server. If answered the other way, one of the two requirements must change.
+
+> **Taken as the pass-through.** `apps/desktop/src/main/sentinel.ts` hands every remaining argument to the bundled
+> runtime unchanged and propagates its exit status; `start-mcp-server …` makes it the server of `REQ-MCP-033`, and the
+> three setup subcommands of `REQ-MCP-099` (`project create`, `project index`, `memories initialize`, each with the
+> workspace root last) reach the runtime through the same branch — measured in the proof's setup launches (three
+> `succeeded`, the marker written). Neither requirement changes. **One thing the entry did not anticipate:** Electron's
+> binary on Windows exits before any JavaScript when a scheme-looking positional (the token's colon) is followed by
+> another positional, so the launch is `Rotaris.exe builtin:code-intelligence -- …` — the token still first, `--` the
+> branch's separator, dropped by it. Recorded in the spike and on ADR-0035.
 
 **OQ-28 — What the two structural counts mean for a document-model interface.** ***RESOLVED 2026-09-02 —
 the specification chose, and it chose reading 2 and then relaxed the requirement that reading breaks.***
@@ -2323,8 +2333,16 @@ binding on one machine.
 4. ***Taken 2026-09-05 — `spikes/mcp-console-suppression.md`.*** **Console-window suppression verified on a
    packaged build spawning a console application** — that no window appears at any point. *(ADR-0033,
    `REQ-MCP-113`.)* **Answered:** on the packaged build, every process started after the launch (cmd, node, headless conhost) had window handle 0 and title N/A at every sample while the echo call succeeded; the reserved token's child fails at spawn (ENOENT), not with a window.
-5. **The packaged binary's reserved-token branch** producing clean protocol output on standard output,
-   nothing else on standard output, no window, and the correct exit status. *(ADR-0035.)*
+5. ***Taken 2026-09-06 — `spikes/code-intelligence-branch.md` (and `spikes/code-intelligence-bundle.md` beside it).***
+   **The packaged binary's reserved-token branch** producing clean protocol output on standard output,
+   nothing else on standard output, no window, and the correct exit status. *(ADR-0035.)* **Answered:** Electron's
+   own main entry with the token first and `--` second (a scheme-looking positional followed by another positional
+   exits the binary −1 before any JavaScript, measured on the development and the packaged binary); the runtime's
+   JSON-RPC and nothing else after one CR LF Electron itself writes ~50 ms after start (tolerated by the transport as
+   a blank line, not a message); no window handle on any process at any sample; the runtime's own exit status (0 on
+   stdin's end, 2 from its argument parser, 1 when it is killed) observed by the parent every time. Re-run through the
+   proof's own client on the development entry (`pnpm code-intel-proof` launch 1) and on the packaged artifact under
+   `ROTARIS_CODE_INTEL_PACKAGED=1`.
 6. **Responses-dialect model requests against a non-vendor base URL with custom headers.**
    *(ADR-0027.)* If it fails, the fallback is a hand-written dialect behind the same port.
 7. **The board projection's serialisation cost across the workspace-service boundary** at

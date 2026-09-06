@@ -1,3 +1,6 @@
+// ADR-0035 (Part T): the pre-bootstrap branch is the FIRST import and must never be reordered — with the reserved token
+// first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
+import './sentinel.js';
 import { PersonaWindows } from './windows.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
@@ -923,6 +926,12 @@ async function main(): Promise<void> {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
         const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: currentWorkspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
         return r.kind === 'mcp.secrets' ? { ok: true, value: r.view } : refusal(r, 'The stored secrets could not be read');
+      }
+      // ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup runs in the run host; main relays the action and the status.
+      case 'mcp.setup': {
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.setup', workspaceId: currentWorkspaceId, action: req.action }, millis(15_000));
+        return r.kind === 'mcp.setup' ? { ok: true, value: r.status } : refusal(r, 'The code-intelligence setup could not be started');
       }
       case 'shell.hello': {
         const cb = currentWorkspaceId

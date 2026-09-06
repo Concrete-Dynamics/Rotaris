@@ -130,3 +130,22 @@ paths. **Edges unchanged** — `mcp → kernel, platform`. The code-point compar
 lives in `kernel` (`order.ts`), so neither package needed a new edge. The configuration pipeline of ADR-0034 lives in
 `config` (`src/mcp/`, `sections/mcp-servers.ts`); the run host composes the two (`run-host/mcp.ts`, `McpHost`) and
 is the only process that instantiates either.
+
+### The bundled code-intelligence runtime (Part T, 2026-09-06; ADR-0035's first execution)
+
+Not a package — a **resources tree** and three build scripts. `apps/desktop/resources/code-intelligence/` (git-ignored)
+holds `runtime/` — a self-contained CPython 3.13.15 with `serena-agent==1.7.0` in its own site-packages, no virtual
+environment, its console-script launchers trimmed — and `bundle.json`, the marker with the pins' hash and the
+interpreter's own answers. `apps/desktop/scripts/code-intelligence/pins.json` is the one place the build pins the
+interpreter, the distribution and `uv` (by version and sha256; never shipped); `bundle.mjs` builds the tree
+(`pnpm code-intel:bundle`, idempotent on the marker; the build fetches, the product never does); `manifest.mjs`
+starts the bundled runtime, reads `tools/list` and its version and the extensions it indexes, and **generates**
+`packages/config/src/mcp/code-intelligence-manifest.generated.ts` — REQ-MCP-116's binding manifest, committed so
+`pnpm check` needs no Python, regenerated and diffed by `pnpm package` (`--check`). `config/src/mcp/code-intelligence.ts`
+is the typed reader every consumer goes through (a test greps the tree for a runtime tool name anywhere else).
+**Edges unchanged**: `config` still imports nothing new; `mcp` gains `setup.ts` (REQ-MCP-099's step runner over
+`platform`'s spawn helper and the clock ports); the run host's `mcp.ts` reads `agent-tools`' gitignore reader for the
+contains-code walk (an edge it already had). Main gains its first module, `main/sentinel.ts` (the pre-bootstrap
+branch: `platform` for the per-user directory, nothing else), imported before anything that touches `electron`.
+`electron-builder.yml` carries the tree as `extraResources` outside the asar (a Python tree cannot run from an
+archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked`.

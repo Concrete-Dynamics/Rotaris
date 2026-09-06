@@ -1,7 +1,7 @@
 import { CONFIG_SCOPES, ConfigSnapshotSchema, DesktopSaveSchema } from './config.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
-import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema } from './mcp.js';
+import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
@@ -106,6 +106,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), workspaceId: z.string(), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), workspaceId: z.string(), server: z.string().optional() }),
+  /** ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup of one workspace — start, cancel, status. */
+  z.object({ kind: z.literal('mcp.setup'), workspaceId: z.string(), action: z.enum(['start', 'cancel', 'status']) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -276,6 +278,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list'), listing: McpListingSchema }),
   z.object({ kind: z.literal('mcp.probe'), results: z.array(z.object({ name: z.string(), health: McpHealthSchema })) }),
   z.object({ kind: z.literal('mcp.secrets'), view: McpSecretsViewSchema }),
+  /** ADR-0035 (Part T): the setup's status after the action was applied. */
+  z.object({ kind: z.literal('mcp.setup'), status: McpSetupStatusSchema }),
   /**
    * ADR-0030: the bearers leased to the run host for one run, with REQ-PROVIDER-067's priming report. This is the
    * one message in the product that carries a credential value; it travels main → utility process only and no

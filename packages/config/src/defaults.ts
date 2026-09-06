@@ -1,7 +1,8 @@
 import { BUILT_IN_ROLE_NAMES, type BuiltInRoleName } from '@rotaris/contracts';
 import { clonePlain, type PlainMap } from './merge.js';
 import type { TierAlias } from './keys.js';
-import { BUILT_IN_PERSONA_MCP_SERVERS, SHIPPED_MCP_SERVERS } from './mcp/defaults.js';
+import { BUILT_IN_PERSONA_CODE_INTELLIGENCE_TIERS, BUILT_IN_PERSONA_MCP_SERVERS, SHIPPED_MCP_SERVERS } from './mcp/defaults.js';
+import { CODE_INTELLIGENCE_SERVER_NAME, grantForTiers } from './mcp/code-intelligence.js';
 
 /**
  * The built-in default layer (REQ-CONFIG-031 layer 1), copied per load so no load can mutate the shipped
@@ -36,8 +37,13 @@ const DEFAULT_LAYER: PlainMap = {
   worktree_storage_subpath: 'worktrees',
   inject_agents_md: true,
   models: SHIPPED_MODELS,
-  // REQ-MCP-014: the servers each built-in persona carries (a list, replaced wholesale by an override — REQ-CONFIG-101).
-  personas: Object.fromEntries(BUILT_IN_ROLE_NAMES.map((role) => [role, { name: role, model: BUILT_IN_ROLE_TIERS[role], mcp_servers: [...(BUILT_IN_PERSONA_MCP_SERVERS[role] ?? [])] }])),
+  // REQ-MCP-014: the servers each built-in persona carries (a list, replaced wholesale by an override — REQ-CONFIG-101), and its
+  // `code_intelligence` grant: exactly the union of its tiers, the names read from the manifest (ADR-0035, Part T); no
+  // `mcp_tools` entry for `browser` or `web_search` (the whole discovered surface, REQ-MCP-007).
+  personas: Object.fromEntries(BUILT_IN_ROLE_NAMES.map((role) => {
+    const tiers = BUILT_IN_PERSONA_CODE_INTELLIGENCE_TIERS[role];
+    return [role, { name: role, model: BUILT_IN_ROLE_TIERS[role], mcp_servers: [...(BUILT_IN_PERSONA_MCP_SERVERS[role] ?? [])], ...(tiers ? { mcp_tools: { [CODE_INTELLIGENCE_SERVER_NAME]: grantForTiers(tiers) } } : {}) }];
+  })),
   // REQ-MCP-010 / REQ-CONFIG-181: the three shipped tool-server entries (see mcp/defaults.ts for the identities and the enabled deviation).
   mcp_servers: SHIPPED_MCP_SERVERS,
 };

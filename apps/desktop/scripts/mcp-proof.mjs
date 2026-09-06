@@ -77,7 +77,10 @@ function globalYaml({ alphaFlags = [], betaFlags = [], alphaTimeout = null, pers
     '# scratch configuration written by the MCP proof',
     'models:', '  scripted: { provider: scripted, model_id: scripted }',
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
-    'mcp_servers:',
+    // Part T (2026-09-06): the shipped `code_intelligence` entry is enabled and carried by twelve built-in personas, so the
+    // discovery-ahead of every process's first run would start the bundled runtime (~4 s) before this proof's fixtures are
+    // listed and its 9 s windows would close early. This proof measures the fixtures; the runtime is `pnpm code-intel-proof`'s.
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
     `  alpha: { command: ${y(node)}, args: ${y(alphaArgs)}, env: { ALPHA_KEY: placeholder, FROM_SHELL: "${'${PROOF_SHELL_VALUE}'}" }${alphaTimeout === null ? '' : `, request_timeout: ${alphaTimeout}`} }`,
     `  beta: { command: ${y(node)}, args: ${y(betaArgs)}, disabled_tools: [fail], tool_name_map: { extra: renamed_extra } }`,
     '  off: { command: node, args: [nothing.js], enabled: false }',
@@ -292,11 +295,13 @@ const results = {};
 {
   const r = launch('settings', {
     ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers',
-    ROTARIS_CAPTURE_CLICKS: 'button[data-action="check-status"]@1800;;button[data-action="check-status"]@6500',
+    // Part T (2026-09-06): the shipped `code_intelligence` row is probed too (available unconditionally, REQ-MCP-037) and the
+    // bundled runtime answers in ~4.2 s, so a probe round takes ~5 s; the second click and the capture wait for it.
+    ROTARIS_CAPTURE_CLICKS: 'button[data-action="check-status"]@1800;;button[data-action="check-status"]@12000',
     ROTARIS_CAPTURE_SELECT: 'select[aria-label="Secrets for"]>>alpha@9000',
     ROTARIS_CAPTURE_PROBE_AT: 'button[data-action="check-status"]@2000;;tr[data-mcp-server] [data-health-text]@2000',
     ROTARIS_CAPTURE_PROBE: 'tr[data-mcp-server];;tr[data-mcp-server] [data-health-text];;button[data-action="check-status"];;[data-secret-row];;[data-mask];;[data-expected];;[data-scope];;[data-line]',
-    ROTARIS_CAPTURE_AFTER_MS: '11000',
+    ROTARIS_CAPTURE_AFTER_MS: '19000',
   });
   const during = lines(r.log, /probe-at 2000 button/)[0] ?? '';
   if (!/Checking…/.test(during)) throw new Error(`the button did not read Checking… while probing: ${during}`);

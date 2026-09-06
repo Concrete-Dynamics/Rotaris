@@ -66,4 +66,36 @@ export const McpSecretsViewSchema = z.object({
   /** Which view answered: all servers or one. */
   server: z.string().nullable(),
 });
+
+/**
+ * ADR-0035 (Part T) / REQ-MCP-099 and REQ-MCP-112: the code-intelligence project setup as the settings category sees it.
+ * Three steps in the requirement's order, each in the closed status vocabulary of REQ-MCP-099 (plus `pending` and
+ * `running` for a step not yet reached or in flight); one final outcome of REQ-MCP-112's three, `unavailable` for the
+ * non-retryable "not a local launch" refusal of REQ-MCP-036/099. Every field is text a screen can show as text.
+ */
+export const MCP_SETUP_STEP_IDS = ['create', 'index', 'memory'] as const;
+export const MCP_SETUP_STEP_STATUSES = ['pending', 'running', 'succeeded', 'failed', 'skipped-no-code', 'not-attempted'] as const;
+export const MCP_SETUP_OUTCOMES = ['completed', 'failed', 'cancelled', 'unavailable'] as const;
+export const McpSetupStepSchema = z.object({
+  id: z.enum(MCP_SETUP_STEP_IDS),
+  label: z.string(),
+  status: z.enum(MCP_SETUP_STEP_STATUSES),
+  /** A failing step's output, its LAST 400 characters (REQ-MCP-099); a skipped or unattempted step's reason. */
+  detail: z.string(),
+  elapsedMs: z.number().nonnegative().nullable(),
+});
+export type McpSetupStep = z.infer<typeof McpSetupStepSchema>;
+export const McpSetupStatusSchema = z.object({
+  state: z.enum(['idle', 'running', 'finished']),
+  steps: z.array(McpSetupStepSchema),
+  outcome: z.enum(MCP_SETUP_OUTCOMES).nullable(),
+  /** The final sentence, or the refusal's text; empty while idle. */
+  message: z.string(),
+  /** REQ-MCP-099's contains-code answer, once taken for the run; null before. */
+  containsCode: z.boolean().nullable(),
+  /** The invocation the steps were derived from (REQ-MCP-036), for the log line the category shows; empty when none could be derived. */
+  invocation: z.string(),
+  startedAt: z.string().nullable(),
+});
+export type McpSetupStatus = z.infer<typeof McpSetupStatusSchema>;
 export type McpSecretsView = z.infer<typeof McpSecretsViewSchema>;

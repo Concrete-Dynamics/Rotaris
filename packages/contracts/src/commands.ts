@@ -117,6 +117,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().optional() }),
+  /** ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project-setup action — start, cancel, or read its status; the run host runs the steps. */
+  z.object({ kind: z.literal('mcp.setup'), action: z.enum(['start', 'cancel', 'status']) }),
   /**
    * ADR-0048's window registry, first executed (Part R; REQ-SHELL-072/073/076/078, REQ-MONITOR-072/073): open or raise the
    * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);

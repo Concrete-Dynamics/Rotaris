@@ -19,6 +19,7 @@ export * from './identity.js';
 export * from './discovery.js';
 export * from './probe.js';
 export * from './sessions.js';
+export * from './setup.js';
 
 /** REQ-MCP-033 / REQ-STARTUP-015: the one reserved argument token the shipped executable recognises. */
 export const CODE_INTELLIGENCE_TOKEN = 'builtin:code-intelligence' as const;

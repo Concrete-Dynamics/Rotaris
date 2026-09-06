@@ -219,3 +219,14 @@ child was spawned with the description's map alone and never the parent environm
 recorded under the ADR-0034 note's OQ-22 paragraph, which had claimed the overlay. Both a defect in the fix, not a new
 entry in the tally. With both corrected the `browser` row probes the real `npx.cmd` and reports what the runtime answers
 within the 8 s budget — the server's own outcome, not a host failure (`REQ-MCP-113`).
+
+**The token's launch path — 2026-09-06, Part T (ADR-0035's first execution).** The reserved token no longer fails at
+spawn: command resolution expands it to the application's own executable with the token first and `--` second, and the
+transport launches that like any other stdio child — three piped streams, hidden window — so `REQ-MCP-113`'s guarantee
+covers it by the same code (the proof sampled the packaged `Rotaris.exe` and its `python` at 300 ms: no window handle at
+any of 12 samples). Two things this transport learned from that child: the launch line is now logged at debug level (the
+proof reads the appended `--project` from it), and **whitespace before the first byte of the first message is dropped** —
+Electron's binary writes CR LF to standard output ~50 ms after start on Windows, before any JavaScript
+(`spikes/code-intelligence-branch.md` §2); a blank line is not a message under newline framing, and nothing else is
+tolerated. The stdin-end close path ends the runtime by itself (measured: exit 0 within a second), so `terminateTree`'s
+kill is the grace path only.

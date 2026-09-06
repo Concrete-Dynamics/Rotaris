@@ -10,7 +10,7 @@ import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort, REFS_ASK_BOUND } from './checkpoints.js';
 import { McpHost } from './mcp.js';
-import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, CODE_INTELLIGENCE_TOKEN, RUNTIME_DEFAULTS, type LiveState } from '@rotaris/config';
 import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
@@ -176,7 +176,10 @@ function scriptedClient(c: Clocks): ModelClient {
       if (mcpStep) {
         const toolName = mcpStep[2]!;
         if ((req.tools ?? []).some((t) => t.name === toolName)) {
-          const args = toolName === 'echo' ? { text: 'hello from the scripted agent' } : toolName === 'slow' ? { ms: 4_000 } : {};
+          // ROTARIS_SCRIPT_MCP_ARGS: a JSON map from callable name to the arguments the scripted agent sends (Part T's proof; verification only).
+          let scripted: Record<string, unknown> = {};
+          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_MCP_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          const args = toolName in scripted ? scripted[toolName] : toolName === 'echo' ? { text: 'hello from the scripted agent' } : toolName === 'slow' ? { ms: 4_000 } : {};
           yield ok<StreamPart>({ kind: 'text', delta: `Calling ${toolName} on ${mcpStep[1]}. ` });
           yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: toolName, argsDelta: JSON.stringify(args) });
           yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
@@ -253,9 +256,16 @@ const mcp = new McpHost({
   clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, headline: n.headline, detail: n.detail, ...(n.key === undefined ? {} : { key: n.key }), ttlMs: n.ttlMs } }),
 });
+// REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — THIS application's own executable (a utility process
+// runs the same binary) with the token first and `--` second (the branch's separator, measured in
+// spikes/code-intelligence-branch.md); in development Electron's binary with the main bundle before them, which is the
+// interpreted installation's "own language runtime" of REQ-MCP-033. Packaged is read off this bundle's own location.
+const packaged = import.meta.dirname.includes('app.asar');
+const codeIntelligenceLaunch = { command: process.execPath, args: packaged ? [CODE_INTELLIGENCE_TOKEN, '--'] : [join(import.meta.dirname, 'index.js'), CODE_INTELLIGENCE_TOKEN, '--'] };
+log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
 const configure = (workspaceRoot: string, attended: boolean) => {
   const r = configureRun(workspaceRoot, attended, {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks),
+    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks), codeIntelligenceLaunch,
     onRequest: (i) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`), log: (m) => log(m), liveState: () => liveState, bearers: (root) => leased.get(root) ?? {},
     mcpEvidence: (cfg, root, role) => mcp.evidenceFor(cfg, root, role),
   });
@@ -578,6 +588,18 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const run = configuredFor(s.root);
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       return { kind: 'mcp.secrets', view: mcp.secrets(run.cfg, req.server ?? null) };
+    }
+    // ADR-0035 (Part T) / REQ-MCP-099/112: the project setup — the steps run here; the reply is the status as it stands.
+    case 'mcp.setup': {
+      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus() };
+      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
+      const s = stores.get(req.workspaceId);
+      if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
+      const run = configuredFor(s.root) ?? (configure(s.root, true).ok ? configuredFor(s.root) : null);
+      if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
+      const started = mcp.startSetup(run.cfg, s.root);
+      if (!started.ok) return { kind: 'refused', code: 'mcp.setup.running', headline: started.reason };
+      return { kind: 'mcp.setup', status: started.status };
     }
     case 'shutdown': {
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their terminal results.

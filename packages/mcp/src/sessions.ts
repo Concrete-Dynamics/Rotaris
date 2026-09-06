@@ -18,8 +18,10 @@ import type { CallOutcome, McpLog, ServerDescription, ToolInfo } from './types.j
  *
  * Post-connect hooks (15 s each): the `lsp` name's `lsp_init {root}` (REQ-MCP-070 — a failure means the
  * server contributes no tools to the agent that triggered the connection and the entry is dropped, so a
- * later agent redoes the connection and the call); the code-intelligence binding probe (REQ-MCP-071) is
- * skipped with a stated reason until ADR-0035's manifest names the memory-listing tool.
+ * later agent redoes the connection and the call); the code-intelligence binding probe (REQ-MCP-071, live since
+ * ADR-0035 executed on 2026-09-06): the memory-listing tool named by the manifest, called once per connection with empty
+ * arguments under 15 s, matched on the trailing segment of the reported name; a failure or an exhausted budget reaches
+ * the run host's `probeFailed` (REQ-MCP-044's two channels), the connection stays open and the tools are still offered.
  */
 export interface Connected {
   readonly name: string;
@@ -44,9 +46,11 @@ export interface SessionDeps {
   readonly unreachable: (server: string, detail: string) => void;
   readonly connectBudgetMs?: Millis;
   readonly hookBudgetMs?: Millis;
-  /** REQ-MCP-071: the memory-listing tool's trailing segment, from ADR-0035's manifest; null until it exists. */
+  /** REQ-MCP-071: the memory-listing tool's trailing segment, from ADR-0035's manifest; null switches the probe off (a test's affordance). */
   readonly codeIntelligenceMemoryTool?: string | null;
   readonly codeIntelligenceServerName?: string;
+  /** REQ-MCP-071: the probe failed or exhausted its budget — the run host delivers the warning through REQ-MCP-044; no corrective action. */
+  readonly probeFailed?: (server: string, detail: string) => void;
 }
 
 export class ConnectionsClosed extends Error {
@@ -193,14 +197,16 @@ export class SessionConnections {
     }
     if (name === (this.deps.codeIntelligenceServerName ?? 'code_intelligence')) {
       const memoryTool = this.deps.codeIntelligenceMemoryTool ?? null;
-      if (memoryTool === null) return { kind: 'code_intelligence', outcome: 'skipped', detail: 'the binding probe of REQ-MCP-071 needs the memory-listing tool name from the manifest of REQ-MCP-116, which ADR-0035 has not executed; skipped' };
+      if (memoryTool === null) return { kind: 'code_intelligence', outcome: 'skipped', detail: 'the binding probe of REQ-MCP-071 is switched off: no memory-listing tool name was supplied' };
       const found = tools.find((t) => t.name === memoryTool || t.name.endsWith(`_${memoryTool}`) || t.name.endsWith(`-${memoryTool}`) || t.name.endsWith(`__${memoryTool}`));
       if (!found) return { kind: 'code_intelligence', outcome: 'skipped', detail: 'the server reports no memory-listing tool' };
       try {
         await callTool(opened.client, this.deps.clocks.monotonic, found.name, {}, hookBudget);
         return { kind: 'code_intelligence', outcome: 'ok', detail: '' };
       } catch (cause) {
-        return { kind: 'code_intelligence', outcome: 'failed', detail: String(cause instanceof Error ? cause.message : cause) };
+        const detail = String(cause instanceof Error ? cause.message : cause);
+        this.deps.probeFailed?.(name, detail);
+        return { kind: 'code_intelligence', outcome: 'failed', detail };
       }
     }
     return { kind: 'none', outcome: 'skipped', detail: '' };

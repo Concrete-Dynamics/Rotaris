@@ -108,6 +108,7 @@ export class OwnedStdioTransport implements Transport {
         return;
       }
       this.child = child;
+      this.spec.log.debug(`mcp ${this.spec.label}: launching ${this.spec.command} ${this.spec.args.join(' ')} (cwd ${this.spec.cwd})`);
       child.once('spawn', () => { settled = true; resolve(); });
       child.on('error', (error: Error) => {
         // Before spawn: the OS could not start the child at all (REQ-MCP-107 case 1). After: a transport error.
@@ -121,7 +122,21 @@ export class OwnedStdioTransport implements Transport {
         if (!settled) { settled = true; reject(new Error(this.exitDetail)); }
         this.settleClosed();
       });
+      // Measured 2026-09-06 (ADR-0035's first execution, spikes/code-intelligence-branch.md): Electron's binary on Windows
+      // writes CR LF to standard output about 50 ms after start, before any JavaScript of ours runs, when standard output
+      // is a pipe — `electron --version` shows it too, and ELECTRON_NO_ATTACH_CONSOLE does not change it. The application's
+      // own executable is the reserved token's child (REQ-MCP-033), so the stream's first line is blank; a blank line is
+      // not a message and is dropped here before the SDK's framing sees it. Only whitespace before the FIRST byte of the
+      // first message is dropped — anything else on standard output still reaches the parser and is still an error.
+      let leading = true;
       child.stdout?.on('data', (chunk: Buffer) => {
+        if (leading) {
+          let at = 0;
+          while (at < chunk.length && (chunk[at] === 0x0d || chunk[at] === 0x0a || chunk[at] === 0x20 || chunk[at] === 0x09)) at += 1;
+          if (at === chunk.length) return;
+          leading = false;
+          if (at > 0) chunk = chunk.subarray(at);
+        }
         this.buffer.append(chunk);
         for (;;) {
           let message: JSONRPCMessage | null;

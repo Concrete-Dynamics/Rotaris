@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { McpHealth, McpListing, McpSecretsView, McpServerRow } from '@rotaris/contracts';
+import type { McpHealth, McpListing, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 
 /**
  * REQ-MCP-091/092/108/109/115, REQ-CONFIG-350..353/437: the "MCP Servers" category. Structure from docs/spec; craft from
@@ -7,8 +7,14 @@ import type { McpHealth, McpListing, McpSecretsView, McpServerRow } from '@rotar
  * The "Configured servers" card lists EVERY configured server, disabled ones included, with the four-state health as
  * text beside the indicator, the `{name} · {type}` label, the masked muted line, the origin word and the toggle; the
  * header's "Check status" probes sequentially through the run host; the secrets card is the READ side only (the write
- * controls of REQ-MCP-110/111 are owed, said so on the card); the machine-setup action is present, disabled, with its
- * sentence (REQ-MCP-095/112 are owed with ADR-0035).
+ * controls of REQ-MCP-110/111 are owed, said so on the card).
+ *
+ * ADR-0035 (Part T): the "Code intelligence" card carries REQ-MCP-112's action for THIS workspace — "Set up code
+ * intelligence for this workspace" — with REQ-MCP-099's three steps as text (which is in progress, which finished and
+ * how), cancellable, one final outcome of three, re-runnable, a second concurrent run refused by the run host. The
+ * machine-setup half of REQ-MCP-112 (developer tooling, package caches) and the warm steps of REQ-MCP-095/096 belong
+ * with the onboarding domain's task registry (REQ-MCP-045/098), which does not exist; the bundle makes them moot for
+ * `code_intelligence`, and the card says so as text (REQ-SHELL-149).
  */
 export interface McpSettingsProps {
   readonly listing: McpListing | null;
@@ -22,9 +28,15 @@ export interface McpSettingsProps {
   readonly onToggle: (name: string, enabled: boolean) => Promise<{ ok: boolean; message: string }>;
   readonly secrets: McpSecretsView | null;
   readonly onSecretsServer: (server: string | null) => void;
+  /** REQ-MCP-099/112: the project setup's status as the run host holds it; null before the first read. */
+  readonly setup: McpSetupStatus | null;
+  readonly onSetupStart: () => Promise<{ ok: boolean; message: string }>;
+  readonly onSetupCancel: () => Promise<void>;
 }
 
 const HEALTH_TEXT: Record<McpHealth['state'], string> = { unknown: 'Unknown', checking: 'Checking…', healthy: 'Healthy', unreachable: 'Unreachable' };
+const STEP_TEXT: Record<McpSetupStep['status'], string> = { pending: 'Not started', running: 'In progress…', succeeded: 'Succeeded', failed: 'Failed', 'skipped-no-code': 'Skipped — no code', 'not-attempted': 'Not attempted' };
+const OUTCOME_TEXT: Record<NonNullable<McpSetupStatus['outcome']>, string> = { completed: 'Completed', failed: 'Only partly set up', cancelled: 'Cancelled', unavailable: 'Not available' };
 
 function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: McpHealth; probing: boolean; onToggle: McpSettingsProps['onToggle'] }) {
   const [busy, setBusy] = useState(false);
@@ -63,6 +75,44 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
   );
 }
 
+/** REQ-MCP-112: progress per step as text, one final outcome, cancel while running, re-run when finished. */
+function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null; onStart: McpSettingsProps['onSetupStart']; onCancel: McpSettingsProps['onSetupCancel'] }) {
+  const [message, setMessage] = useState<string | null>(null);
+  const running = setup?.state === 'running';
+  const start = async () => { setMessage(null); const r = await onStart(); if (!r.ok) setMessage(r.message); };
+  return (
+    <div className="card settings__card" data-mcp-setup data-setup-state={setup?.state ?? 'unknown'} data-setup-outcome={setup?.outcome ?? ''}>
+      <div className="providers-card__head">
+        <div className="card-kicker">Code intelligence</div>
+        <div className="providers-card__actions">
+          {running
+            ? <button type="button" className="btn btn-secondary btn-compact" onClick={() => { void onCancel(); }} data-action="setup-cancel">Cancel</button>
+            : <button type="button" className="btn btn-primary btn-compact" disabled={setup === null} onClick={() => { void start(); }} data-action="setup-start">{setup?.state === 'finished' ? 'Set up again' : 'Set up code intelligence for this workspace'}</button>}
+        </div>
+      </div>
+      <p className="text-secondary">Creates the bundled runtime's project for this workspace, indexes it and initialises its project memories — three steps, in order, each bounded; a workspace without code gets the project only. Runs in the background; you can cancel between steps or while a step is running.</p>
+      {message ? <p className="composer__error" role="alert" data-setup-refused>{message}</p> : null}
+      {setup === null ? <p className="text-secondary">Reading…</p> : (
+        <>
+          <ol className="settings__steps" aria-label="Setup steps" data-setup-steps>
+            {setup.steps.map((s) => (
+              <li key={s.id} data-setup-step={s.id} data-step-status={s.status}>
+                <span className="mcp__dot" data-state={s.status === 'running' ? 'checking' : s.status === 'succeeded' ? 'healthy' : s.status === 'failed' ? 'unreachable' : 'unknown'} aria-hidden="true" />
+                <span>{s.label}: </span><span data-step-text>{STEP_TEXT[s.status]}{s.elapsedMs !== null && s.status === 'succeeded' && s.elapsedMs > 0 ? ` (${(s.elapsedMs / 1000).toFixed(1)} s)` : ''}</span>
+                {s.detail ? <div className="text-tertiary settings__hint mono" data-step-detail>{s.detail}</div> : null}
+              </li>
+            ))}
+          </ol>
+          {setup.state === 'finished' && setup.outcome ? <p role="status" data-setup-message><strong>{OUTCOME_TEXT[setup.outcome]}.</strong> {setup.message}</p> : null}
+          {setup.state === 'running' ? <p role="status" className="text-secondary" data-setup-message>Running{setup.containsCode === false ? ' — the workspace contains no code, so indexing and the memory store will be skipped' : ''}…</p> : null}
+          {setup.invocation ? <p className="text-tertiary settings__hint mono" data-setup-invocation>Runs {setup.invocation}</p> : null}
+        </>
+      )}
+      <p className="text-tertiary settings__hint">The machine-setup half of this action — checking developer tooling and warming package caches for the other servers — is not built: it belongs with the onboarding task registry, which does not exist yet; the bundled runtime needs neither.</p>
+    </div>
+  );
+}
+
 export function McpSettings(props: McpSettingsProps) {
   const rows = props.listing?.rows ?? [];
   const [probeMessage, setProbeMessage] = useState<string | null>(null);
@@ -93,6 +143,7 @@ export function McpSettings(props: McpSettingsProps) {
           </table>
         )}
       </div>
+      <SetupCard setup={props.setup} onStart={props.onSetupStart} onCancel={props.onSetupCancel} />
       <div className="card settings__card" data-mcp-secrets>
         <div className="card-kicker">Stored secrets</div>
         <p className="text-secondary">What the two secrets files hold, per server and key, with every value masked. Adding, changing and deleting a secret here is not built yet; edit <code className="mono">secrets.yaml</code> beside the configuration file (workspace or global). A stored secret takes effect on the next configuration load.</p>
@@ -120,13 +171,6 @@ export function McpSettings(props: McpSettingsProps) {
             {props.secrets.expected.length === 0 ? `${chosen} declares no env keys.` : <>Expected keys of {chosen}: {props.secrets.expected.map((e) => <span key={e.key} className="mono" data-expected={e.key} data-satisfied={e.satisfied ? 'yes' : 'no'}>{e.key} ({e.satisfied ? 'stored' : 'missing'}) </span>)}</>}
           </div>
         ) : null}
-      </div>
-      <div className="card settings__card" data-mcp-setup>
-        <div className="card-kicker">Machine setup</div>
-        <div className="settings__action">
-          <button type="button" className="btn btn-secondary" disabled title="The bundled code-intelligence runtime and its setup manifest are not built yet (ADR-0035).">Check developer tooling and package caches</button>
-          <span className="text-secondary settings__hint">Re-runs the checks of the developer tooling and the package caches the MCP servers depend on. Not available: the setup manifest of the bundled runtime is not built yet (ADR-0035).</span>
-        </div>
       </div>
     </div>
   );

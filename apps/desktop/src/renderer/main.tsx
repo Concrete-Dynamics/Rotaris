@@ -2,7 +2,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type McpSetupStatus, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord } from '@rotaris/contracts';
 import { createNoticeStore, createReplicaStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { applyChange, applyTheme, AppShell, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
 import './design.css';
@@ -712,10 +712,32 @@ function useMcp(): McpSettingsProps {
   }, []);
   useEffect(() => { queueMicrotask(() => { void read(); void readSecrets(secretsServer); }); }, [read, readSecrets, secretsServer]);
   useEffect(() => bridge.onConfigChanged(() => { void read(); void readSecrets(secretsServer); }), [read, readSecrets, secretsServer]);
+  // ADR-0035 (Part T) / REQ-MCP-112: the project-setup action's status, read at mount and polled every 500 ms while a run is under way.
+  const [setup, setSetup] = useState<McpSetupStatus | null>(null);
+  const readSetup = useCallback(async () => {
+    const r = await bridge.command({ kind: 'mcp.setup', action: 'status' });
+    if (r.ok) setSetup(r.value as McpSetupStatus);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void readSetup(); }); }, [readSetup]);
+  useEffect(() => {
+    if (setup?.state !== 'running') return undefined;
+    const timer = setInterval(() => { void readSetup(); }, 500);
+    return () => clearInterval(timer);
+  }, [setup?.state, readSetup]);
   return {
     listing, loading, error, health, probing, secrets,
     onRefresh: () => { void read(); void readSecrets(secretsServer); },
     onSecretsServer: (server) => { setSecretsServer(server); },
+    setup,
+    onSetupStart: async () => {
+      const r = await bridge.command({ kind: 'mcp.setup', action: 'start' });
+      if (r.ok) { setSetup(r.value as McpSetupStatus); return { ok: true, message: '' }; }
+      return { ok: false, message: r.detail ?? r.headline };
+    },
+    onSetupCancel: async () => {
+      const r = await bridge.command({ kind: 'mcp.setup', action: 'cancel' });
+      if (r.ok) setSetup(r.value as McpSetupStatus);
+    },
     onProbeAll: async () => {
       if (probing || !listing) return;
       setProbing(true);

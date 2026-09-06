@@ -233,6 +233,10 @@ export interface TimelineRow {
   readonly actor: string;
   readonly message: string;
   readonly metadata: string;
+  /** REQ-SESSION-134, v10: 12 lowercase hex characters, or empty for a row written before v10 (nothing is minted for it). */
+  readonly id: string;
+  /** REQ-SESSION-134, v10: `debug|info|warning|error`; a row that names none reads the requirement's own default, `info`. */
+  readonly severity: string;
 }
 export interface EventRow {
   readonly session_id: string;
@@ -294,7 +298,7 @@ export class StoreDal {
       // REQ-SESSION-138: a plain INSERT — the one-shot is the primary key, not a check a caller could skip.
       insertLaunchAudit: db.prepare('INSERT INTO launch_audits (session_id, recorded_at, payload) VALUES (?, ?, ?)'),
       getLaunchAudit: db.prepare('SELECT * FROM launch_audits WHERE session_id = ?'),
-      insertTimeline: db.prepare('INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+      insertTimeline: db.prepare('INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata, id, severity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       maxTimelineOrdinal: db.prepare('SELECT max(ordinal) AS m FROM timeline WHERE session_id = ?'),
       timelineOf: db.prepare('SELECT * FROM timeline WHERE session_id = ? ORDER BY ordinal'),
       listLocks: db.prepare('SELECT * FROM session_locks'),
@@ -590,8 +594,12 @@ export class StoreDal {
   getLaunchAudit(id: SessionId): LaunchAuditRow | undefined {
     return this.stmts['getLaunchAudit']!.get(id) as LaunchAuditRow | undefined;
   }
-  insertTimeline(id: SessionId, ordinal: number, at: string, name: string, actor: string, message: string, metadata: string): void {
-    this.stmts['insertTimeline']!.run(id, ordinal, at, name, actor, message, metadata);
+  /**
+   * REQ-SESSION-134: `entryId` and `severity` are the entry's own, not defaulted here — a caller that has neither
+   * writes what it has, and the v10 note in `schema.ts` says why nothing is minted on its behalf.
+   */
+  insertTimeline(id: SessionId, ordinal: number, at: string, name: string, actor: string, message: string, metadata: string, entryId: string, severity: string): void {
+    this.stmts['insertTimeline']!.run(id, ordinal, at, name, actor, message, metadata, entryId, severity);
   }
   nextTimelineOrdinal(id: SessionId): number {
     const m = (this.stmts['maxTimelineOrdinal']!.get(id) as { m: number | null }).m;

@@ -70,12 +70,21 @@ function ringHeader(cap: number, dropped: number, ordinals: readonly number[], t
 
 /**
  * REQ-SESSION-134's entry as the record holds it: the stored columns, the ordinal as its position, metadata decoded.
- * Found on Part U's first execution (ADR-0024 note, defect 42, repair owed): the requirement's shape carries an `id` (12 hex)
- * and a `severity`; the `timeline` table holds neither, so the record cannot yield them and none is invented here. Adding
- * the two columns is a migration, which Part U does not take; the export carries what is stored and says nothing more.
+ *
+ * The falsified reading, kept beside its repair: Part U's first execution found the `timeline` table holding neither the
+ * requirement's `id` (12 hex) nor its `severity` (ADR-0024 note, defect 42), so the export carried the ordinal as the
+ * entry's position and no severity at all, and this function said "the export carries what is stored and says nothing
+ * more". Schema v10 added both columns and every writer now mints an id, so both are carried.
+ *
+ * An entry recorded before v10 has an empty id, and the field is omitted rather than emitted blank: REQ-SESSION-199
+ * requires the identifier for every entry it emits "that has one", and an entry whose record never held one has none.
+ * The ordinal stays beside it — it is the entry's position in the record, which the id does not give.
  */
 function timelineEntry(r: TimelineRow): JsonValue {
-  return { ordinal: r.ordinal, timestamp: r.at, type: r.name, actor: r.actor, message: r.message, metadata: parseJson(r.metadata) ?? r.metadata };
+  return {
+    ordinal: r.ordinal, ...(r.id === '' ? {} : { id: r.id }), timestamp: r.at, type: r.name,
+    severity: r.severity, actor: r.actor, message: r.message, metadata: parseJson(r.metadata) ?? r.metadata,
+  };
 }
 
 /** REQ-SESSION-135's shape from the issue row's columns (the issues record keeps no serialised entry beside them). */

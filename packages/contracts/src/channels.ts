@@ -7,6 +7,17 @@ import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 
 /**
+ * REQ-SESSION-134's severity vocabulary for a timeline entry, ascending, `info` where an entry names none. It is the
+ * same four members REQ-SESSION-135 gives an issue — one vocabulary, which is why REQ-EVENTS-056 calls the three
+ * below `error` "the other three members of the severity vocabulary REQ-SESSION-134 fixes". It is NOT the notice
+ * severity of REQ-NOTIFY-023, which carries `success` and no `debug`: the two are different vocabularies for
+ * different records, and a notice recorded into a timeline is mapped, never passed through (REQ-NOTIFY-268).
+ */
+export const TIMELINE_SEVERITIES = ['debug', 'info', 'warning', 'error'] as const;
+export const TimelineSeveritySchema = z.enum(TIMELINE_SEVERITIES);
+export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
+
+/**
  * The five named, typed IPC channels of ADR-0044.
  *
  *  1. transcript:increment — session id, SEQUENCE, earliest-changed index, rows, diffs, personas

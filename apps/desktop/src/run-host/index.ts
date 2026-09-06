@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSc
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
-import { CATALOGUE, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import { CATALOGUE, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
@@ -514,14 +514,14 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const sid = asSessionId(req.sessionId);
       const live = sessions.writer(sid);
       if (live) {
-        const r = live.appendTimeline(req.name, req.actor, req.message, req.metadata);
+        const r = live.appendTimeline(req.name, req.actor, req.message, req.metadata, req.severity ?? 'info');
         return r.ok ? { kind: 'timeline.appended', sessionId: req.sessionId, ordinal: r.value } : { kind: 'refused', code: `timeline.${r.error.code}`, headline: 'The timeline entry could not be written', detail: 'reason' in r.error ? r.error.reason : r.error.code };
       }
       const dal = s.dal;
       if (!dal.getSession(sid)) return { kind: 'refused', code: 'session.unknown', headline: 'No session with that id exists in this workspace' };
       try {
         const at = toIsoUtc(clocks.wall.instant());
-        const ordinal = dal.transaction(() => { const o = dal.nextTimelineOrdinal(sid); dal.insertTimeline(sid, o, at, req.name, req.actor, req.message, JSON.stringify(req.metadata)); return o; });
+        const ordinal = dal.transaction(() => { const o = dal.nextTimelineOrdinal(sid); dal.insertTimeline(sid, o, at, req.name, req.actor, req.message, JSON.stringify(req.metadata), timelineId(), req.severity ?? 'info'); return o; });
         return { kind: 'timeline.appended', sessionId: req.sessionId, ordinal };
       } catch (cause) {
         return { kind: 'refused', code: 'timeline.write', headline: 'The timeline entry could not be written', detail: String(cause) };

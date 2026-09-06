@@ -284,7 +284,7 @@ const exportRecords = launch('export-records', {
       bKeys: Object.keys(b).sort(), cKeys: Object.keys(c).sort(),
       audit: { complete: b.permission_audit.complete, dropped: b.permission_audit.dropped, retained: b.permission_audit.retained, oldest: b.permission_audit.oldest_ordinal, newest: b.permission_audit.newest_ordinal, cap: b.permission_audit.cap, entries: ords.length, contiguous, arithmetic: b.permission_audit.dropped + b.permission_audit.retained === b.permission_audit.newest_ordinal && b.permission_audit.oldest_ordinal - 1 === b.permission_audit.dropped, firstEntryFields: Object.keys(b.permission_audit.entries[0].entry).sort(), firstOrdinal: ords[0] },
       issues: { count: b.issues.entries.length, ids: b.issues.entries.map((e) => e.entry.id), locator: b.issues.entries[0].entry.evidence_ref, complete: b.issues.complete },
-      timeline: b.timeline.map((t) => [t.ordinal, t.type]),
+      timeline: b.timeline.map((t) => [t.ordinal, t.type, t.id ?? null, t.severity ?? null]),
       metrics: { session_id: b.metrics.session_id, decisions: b.metrics.permission_decisions, denials: b.metrics.permission_denials, issuesTotal: b.metrics.issues_total, buckets: b.metrics.tool_outcomes },
       empty: { timeline: c.timeline.map((t) => t.type), issues: c.issues.entries.length, audit: c.permission_audit.entries.length, auditComplete: c.permission_audit.complete, metricsId: c.metrics.session_id },
     }));
@@ -296,6 +296,12 @@ const exportRecords = launch('export-records', {
   expect(parsed.audit.firstEntryFields.includes('id') && parsed.audit.firstEntryFields.includes('decision') && parsed.audit.firstEntryFields.includes('rule_id'), `the entry's fields: ${JSON.stringify(parsed.audit.firstEntryFields)}`);
   expect(parsed.issues.count === 2 && parsed.issues.ids[0] === 'aaaaaaaaaaaa' && parsed.issues.locator === 'permission_audit#9' && parsed.issues.complete === true, `B's issues: ${JSON.stringify(parsed.issues)}`);
   expect(parsed.timeline.length === 4 && parsed.timeline[0][1] === 'session_marked_interrupted' && JSON.stringify(parsed.timeline.slice(1).map((t) => t[1])) === '["run_start","issue","run_end"]' && parsed.timeline.every((t, i) => t[0] === i + 1), `B's timeline: ${JSON.stringify(parsed.timeline)}`);
+  // REQ-SESSION-134 / REQ-SESSION-199, the repair of Part U's thirty-second defect (schema v10): the entry the PRODUCT
+  // wrote — the repair's own `session_marked_interrupted` — carries a 12-hex id and a severity through the export and out
+  // to a stock parser. The three planted with the pre-v10 column list carry no `id` key at all (an identifier the record
+  // never held is not invented on the way out) and read the requirement's default severity.
+  expect(/^[0-9a-f]{12}$/.test(parsed.timeline[0][2] ?? '') && parsed.timeline[0][3] === 'info', `the written entry's id and severity: ${JSON.stringify(parsed.timeline[0])}`);
+  expect(parsed.timeline.slice(1).every((t) => t[2] === null && t[3] === 'info'), `the pre-v10 entries: ${JSON.stringify(parsed.timeline.slice(1))}`);
   expect(parsed.metrics.session_id === 'B-nolock' && parsed.metrics.decisions === CAP && parsed.metrics.issuesTotal === 2, `B's metrics: ${JSON.stringify(parsed.metrics)}`);
   // C holds nothing but the repair's own timeline entry: the two rings export as empty records with `complete: true`, never as nothing.
   expect(JSON.stringify(parsed.empty.timeline) === '["session_marked_interrupted"]' && parsed.empty.issues === 0 && parsed.empty.audit === 0 && parsed.empty.auditComplete === true && parsed.empty.metricsId === 'C-deadlock', `C's empty records: ${JSON.stringify(parsed.empty)}`);

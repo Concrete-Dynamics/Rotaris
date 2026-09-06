@@ -153,6 +153,15 @@ describe('engine — the session writer feeds the projection owner (ADR-0008, AD
     expect(dal.eventsOfKind(sessionId, 'error')).toHaveLength(1);
     expect(dal.eventsOfKind(sessionId, 'error')[0]!.payload).toContain(`issues#${e.ok ? e.value : ''}`);
     expect(dal.timelineOf(sessionId).filter((t) => t.name === 'issue')).toHaveLength(2);
+    // REQ-SESSION-134 (the repair of Part U's defect 42): every entry carries its own 12-hex id, and an `issue` entry
+    // takes the severity of the issue it mirrors rather than the default.
+    expect(dal.timelineOf(sessionId).filter((t) => t.name === 'issue').map((t) => t.severity)).toEqual(['warning', 'error']);
+    expect(writer.appendTimeline('run_start', 'rotaris', 'a run is starting.', {}).ok).toBe(true);
+    expect(writer.appendTimeline('hook_run', 'A', "Hook 'A' (pre_tool) exited 1 in 5 ms", {}, 'warning').ok).toBe(true);
+    const entries = dal.timelineOf(sessionId);
+    expect(entries.every((t) => /^[0-9a-f]{12}$/.test(t.id))).toBe(true);
+    expect(new Set(entries.map((t) => t.id)).size).toBe(entries.length);
+    expect(entries.slice(-2).map((t) => [t.name, t.severity])).toEqual([['run_start', 'info'], ['hook_run', 'warning']]);
     // a tool row keeps its untruncated input in the record; the wire masks and clips it
     const r = writer.appendRow('tool', 'terminal: curl', false, { toolName: 'terminal', toolStatus: 'running', callKey: 'c1', input: 'curl --token abc123 ' + 'y'.repeat(20_000) });
     expect(r.ok).toBe(true);

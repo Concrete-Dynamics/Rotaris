@@ -10,14 +10,14 @@ import { hook } from './hooks.test.js';
 function harness(hooks: HookEntry[], withheld: HookEntry[] = []) {
   const clock = new FakeClock();
   const events: { kind: string; payload: HookStartPayload | HookFinishPayload }[] = [];
-  const timeline: { name: string; actor: string; message: string; metadata: Record<string, unknown> }[] = [];
+  const timeline: { name: string; actor: string; message: string; metadata: Record<string, unknown>; severity: string }[] = [];
   const issues: { kind: string; message: string; metadata: Record<string, unknown> }[] = [];
   const warnings: string[] = [];
   const logs: string[] = [];
   const invoked: string[] = [];
   const sinks: HookSinks = {
     event: (kind: 'hook.start' | 'hook.finish', payload: HookStartPayload | HookFinishPayload) => { events.push({ kind, payload }); },
-    timeline: (name, actor, message, metadata) => { timeline.push({ name, actor, message, metadata }); },
+    timeline: (name, actor, message, metadata, severity) => { timeline.push({ name, actor, message, metadata, severity }); },
     issue: (i) => { issues.push({ kind: i.kind, message: i.message, metadata: i.metadata }); },
     warn: (m) => { warnings.push(m); },
     log: (m) => { logs.push(m); },
@@ -62,7 +62,10 @@ describe('the HookEngine', () => {
     expect(r.outcomes.length).toBe(3);
     expect(t.events.map((e) => e.kind)).toEqual(['hook.start', 'hook.finish', 'hook.start', 'hook.finish', 'hook.start', 'hook.finish']);
     expect(t.timeline.length).toBe(3);
-    expect(t.timeline[0]).toMatchObject({ name: 'hook_run', actor: 'A', message: "Hook 'A' (pre_tool) exited 2 in 5 ms", metadata: { hook_id: 'global:0:pre_tool', exit_code: 2, blocked: true, tool_name: 'terminal', stderr: 'stop it', severity: 'info' } });
+    expect(t.timeline[0]).toMatchObject({ name: 'hook_run', actor: 'A', message: "Hook 'A' (pre_tool) exited 2 in 5 ms", severity: 'info', metadata: { hook_id: 'global:0:pre_tool', exit_code: 2, blocked: true, tool_name: 'terminal', stderr: 'stop it' } });
+    // REQ-HOOKS-119 / REQ-SESSION-134: the severity is the entry's own, and REQ-HOOKS-119's metadata inventory is closed —
+    // it never named `severity`, which was carried there only while the timeline table had no column for it (schema v10).
+    expect(Object.keys(t.timeline[0]!.metadata)).not.toContain('severity');
     expect((t.events[1]!.payload as HookFinishPayload)).toMatchObject({ hook_id: 'global:0:pre_tool', hook_name: 'A', lifecycle_point: 'pre_tool', scope: 'global', tool_name: 'terminal', exit_code: 2, blocked: true, skipped: false, skip_reason: '' });
     expect((t.events[1]!.payload as HookFinishPayload).output).toMatch(/^saw \d+ bytes\nstop it$/);
     // a legitimate stop files no failure issue (REQ-HOOKS-046/120)

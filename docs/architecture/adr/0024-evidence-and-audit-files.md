@@ -777,11 +777,38 @@ trajectory export (`REQ-SESSION-153`) reads the workspace from that payload and 
 writer is corrected (`session-writer.ts`, the falsified inventory kept beside it); the exporter reads the old key from
 stored histories too, so nothing recorded before this date exports a blank workspace.
 
-**Found — defect 42, repair owed.** `REQ-SESSION-134` fixes the timeline entry's shape with an `id` (12 hex) and a
-`severity`; the `timeline` table holds neither (`session_id, ordinal, at, name, actor, message, metadata`), so the
-record cannot yield them and the export carries the ordinal as the entry's position and no severity. Adding the two
-columns is a migration, which Part U does not take; the gap is stated in `export.ts` beside `timelineEntry` and stands
-owed with the next schema version.
+**Found — defect 42, REPAIRED 2026-09-06 (schema v10).** `REQ-SESSION-134` fixes the timeline entry's shape with an
+`id` (12 hex) and a `severity`; the `timeline` table held neither (`session_id, ordinal, at, name, actor, message,
+metadata`), so the record could not yield them and the export carried the ordinal as the entry's position and no
+severity. Part U did not take the migration and stated the gap in `export.ts` beside `timelineEntry`; v10 adds the two
+columns, every writer mints the id, and the export carries both.
+
+Four things the repair decided, each because leaving it unstated would have been a decision too:
+
+- **Nothing is minted for an entry recorded before v10.** Its `id` stays empty and the export omits the field rather
+  than emitting a blank one — `REQ-SESSION-199` requires the identifier for every entry it emits "that has one", and an
+  entry whose record never held one has none. An id invented afterwards would be an identifier that names nothing and
+  resolves nowhere, which is worse than the absence it hides. The `severity` default is the requirement's own, so an old
+  row reads `info` exactly as a new one that names none, and that column needs no such caveat.
+- **A severity is written only where a requirement names one.** `REQ-HOOKS-119`'s `hook_run` (warning where the outcome
+  carried one), an `issue` entry (the severity of the issue it mirrors, including `REQ-GIT-062`'s restore refusal) and
+  `REQ-NOTIFY-268`'s `notice` entry (the notice's own, mapped). Every other entry takes `info`: a severity nothing
+  requires would be this writer's judgement about another domain's record, and the vocabulary has no member for "not
+  stated" once `info` is the default.
+- **The notice severity is mapped, not passed through.** `REQ-NOTIFY-023`'s vocabulary carries `success` and no `debug`;
+  `REQ-SESSION-134`'s carries `debug` and no `success`. They are different vocabularies for different records, and the
+  map is total only because `REQ-NOTIFY-268` records warnings and errors alone.
+- **A second finding, from reading rather than running.** `hook_run` had been carrying its severity as a metadata key,
+  because the column did not exist. `REQ-HOOKS-119`'s metadata inventory is closed and never names `severity`, so the
+  entry had been shipping a field that requirement does not admit — a defect of the same gap, in the other direction.
+  It moves to the column, and `packages/hooks/src/engine.test.ts` now asserts the key's absence so it cannot return.
+
+**The repair was measured, and it found nothing further.** `pnpm sessions-proof` reads `REQ-SESSION-199`'s exported
+records back with a stock parser in a separate process: the entry the product wrote carries a 12-hex id and a severity
+through the export, and the three entries planted with the pre-v10 column list carry no `id` key at all. `pnpm
+notice-proof` reads the store a real run wrote: every entry of that run has an id, no two share one, the advisory's
+`notice` entry reads `warning` in the column, and no `hook_run` entry carries `severity` in its metadata. Both passed on
+the first run. Recorded because the finding is the absence: a repair that has now been executed held no defect of its own.
 
 **Not built, said so:** `REQ-EVENTS-172`'s JSON-lines export of the history (the event view's, which does not exist);
 the sixth of `REQ-SESSION-133`'s ring kinds beyond the three this store keeps.

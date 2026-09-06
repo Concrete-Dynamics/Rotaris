@@ -358,6 +358,24 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN last_restored_sequence INTEGER;
     `,
   },
+  {
+    to: 10,
+    // v10 repairs the thirty-second first-execution defect (Part U, ADR-0024 note "defect 42"): `REQ-SESSION-134`
+    // fixes the timeline entry's shape with an `id` of 12 hex characters and a `severity` from `debug|info|warning|
+    // error` defaulting to `info`, and the table held neither, so the record could not yield them and the export of
+    // `REQ-SESSION-199` carried the ordinal as the entry's position and no severity at all.
+    //
+    // A row written before this version keeps the empty id it is given here rather than being handed a minted one:
+    // an identifier the record never had is not recovered by inventing it afterwards, and `REQ-SESSION-199` requires
+    // the export to carry an identifier for every entry "that has one" — so an empty id reads as an absence and the
+    // export omits the field (the same discipline as v8's NULL worktree, REQ-GIT-017). The severity default is the
+    // requirement's own default and not an invention, so an old row reads `info` exactly as a new one that names none.
+    // NO new index: the timeline is read whole per session under `(session_id, ordinal)`; neither column is a predicate.
+    sql: `
+      ALTER TABLE timeline ADD COLUMN id       TEXT NOT NULL DEFAULT '';
+      ALTER TABLE timeline ADD COLUMN severity TEXT NOT NULL DEFAULT 'info';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

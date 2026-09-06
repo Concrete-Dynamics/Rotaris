@@ -334,10 +334,32 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     const s = dal.getSession(sid)!;
     expect([s.tokens_input, s.tokens_output, s.cost, s.run_started_at, s.stop_reason, s.iterations_completed]).toEqual([12, 34, '0.001', 't0', 'tasks_complete', 1]);
     expect(dal.nextTimelineOrdinal(sid)).toBe(1);
-    dal.insertTimeline(sid, 1, 't1', 'run_start', 'rotaris', 'a run is starting for S-agg', '{"workspace_root":"C:/ws"}');
-    dal.insertTimeline(sid, 2, 't2', 'run_end', 'rotaris', 'the run ended', '{"execution_status":"completed"}');
+    dal.insertTimeline(sid, 1, 't1', 'run_start', 'rotaris', 'a run is starting for S-agg', '{"workspace_root":"C:/ws"}', 'aaaaaaaaaaaa', 'info');
+    dal.insertTimeline(sid, 2, 't2', 'run_end', 'rotaris', 'the run ended', '{"execution_status":"completed"}', 'bbbbbbbbbbbb', 'warning');
     expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(['run_start', 'run_end']);
+    // REQ-SESSION-134 (v10): the id and the severity are the entry's own columns and read back as written.
+    expect(dal.timelineOf(sid).map((t) => [t.id, t.severity])).toEqual([['aaaaaaaaaaaa', 'info'], ['bbbbbbbbbbbb', 'warning']]);
     expect(dal.nextTimelineOrdinal(sid)).toBe(3);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  // v10 repairs Part U's thirty-second first-execution defect (ADR-0024's note, defect 42): REQ-SESSION-134 fixes the
+  // entry's shape with an `id` and a `severity` and the table held neither.
+  it('v10: an entry written as a pre-v10 store wrote one keeps an EMPTY id and reads the severity default; nothing is minted for it', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000091');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-v10');
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    // The pre-v10 write path exactly: the seven columns that existed before the migration, and no others.
+    r.db.exec(`INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata) VALUES ('${sid}', 1, 't1', 'run_start', 'rotaris', 'started', '{}')`);
+    dal.insertTimeline(sid, 2, 't2', 'hook_run', 'A', 'a hook warned', '{}', 'dddddddddddd', 'warning');
+    const rows = dal.timelineOf(sid);
+    expect(rows.map((t) => [t.id, t.severity])).toEqual([['', 'info'], ['dddddddddddd', 'warning']]);
+    // The columns take the row's ordering with them: neither is a predicate and the read stays under the primary key.
+    const plan = (r.db.prepare('EXPLAIN QUERY PLAN SELECT * FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sid) as { detail: string }[]).map((p) => p.detail).join(' | ');
+    expect(plan).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex_timeline_1/);
+    expect(plan).not.toMatch(/TEMP B-TREE/);
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -452,9 +474,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v9; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v10; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(9);
+    expect(CURRENT_SCHEMA_VERSION).toBe(10);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -588,7 +610,7 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.appendRow(sid, 0, 'user', true, 'hello');
       dal.insertEvent(sid, 1, 'session.start', '2026-09-05T00:00:00.000Z', 1, null, '{"event":"session.start"}');
       dal.insertLaunchAudit(sid, '2026-09-05T00:00:00.000Z', '{}');
-      dal.insertTimeline(sid, 1, '2026-09-05T00:00:00.000Z', 'run_start', 'rotaris', 'started', '{}');
+      dal.insertTimeline(sid, 1, '2026-09-05T00:00:00.000Z', 'run_start', 'rotaris', 'started', '{}', 'cccccccccccc', 'info');
       dal.ringInsert('permission_audit', sid, (ordinal) => dal.insertAudit({ session_id: sid, ordinal, recorded_at: 't', kind: 'decision', entry: '{}', agent_id: 'a', persona: 'p', tool_name: 'x', decision: 'allow', rule_id: 'r', source: 'policy' }));
       dal.ringInsert('tool_calls', sid, (ordinal) => dal.insertToolCall({ session_id: sid, ordinal, call_id: 'c', agent_name: 'a', tool_name: 'x', status: 'running', started_at: 't', elapsed_ms: null, is_error: 0, entry: '{}' }));
       dal.ringInsert('issues', sid, (ordinal) => dal.insertIssue({ session_id: sid, ordinal, id: 'abcdefabcdef', recorded_at: 't', kind: 'k', severity: 'warning', actor: 'a', message: 'm', evidence_ref: '', metadata: '{}' }));

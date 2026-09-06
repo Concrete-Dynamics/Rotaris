@@ -24,7 +24,9 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-06** (Parts V and W — the notice store's serialised chain with its record,
+Last reconciled with the code: **2026-09-06** (the repair of Part U's thirty-second defect — store **v10**'s
+`timeline.id` and `timeline.severity` in the runtime view's table, and `timeline.append` named in the process view's
+main → run host request list with the `severity` it now carries; then Parts V and W — the notice store's serialised chain with its record,
 channel 8 and the per-window acknowledgement stack, `timeline.append` to the run host, `window.modality` and the family
 modality in main's registry, `ui/commands`; and before them Parts T and U — the sentinel branch as a process shape under the run host, the
 `mcp.setup` request, the `session.*` commands and requests, the fourth checkpoint ask and the save-dialog seam, process view; the

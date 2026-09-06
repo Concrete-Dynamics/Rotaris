@@ -23,7 +23,12 @@ export interface HookSinks {
   /** The wire events; the timeline entry of an invocation is written BEFORE its `hook.finish` (REQ-HOOKS-121). */
   event(kind: 'hook.start', payload: HookStartPayload): void;
   event(kind: 'hook.finish', payload: HookFinishPayload): void;
-  timeline(name: 'hook_run', actor: string, message: string, metadata: Record<string, unknown>): void;
+  /**
+   * REQ-HOOKS-119 / REQ-SESSION-134: the entry's severity is the record's own column, not a metadata key —
+   * that requirement's metadata inventory is closed and never named `severity`, and it was carried there only
+   * while the timeline table had no column for it (repaired at schema v10).
+   */
+  timeline(name: 'hook_run', actor: string, message: string, metadata: Record<string, unknown>, severity: 'info' | 'warning'): void;
   issue(input: { kind: 'hook_failure' | 'hook_trust'; severity: 'warning'; actor: string; message: string; metadata: Record<string, unknown> }): void;
   /** The user's warning channel (REQ-HOOKS-054: never anything delivered to the agent). */
   warn(message: string): void;
@@ -194,7 +199,7 @@ export class HookEngine {
     };
     // REQ-HOOKS-121: the durable entry before the completion event.
     try {
-      sinks.timeline('hook_run', name, timelineMessage(outcome), { ...metadata, severity: warning === '' ? 'info' : 'warning' });
+      sinks.timeline('hook_run', name, timelineMessage(outcome), metadata, warning === '' ? 'info' : 'warning');
     } catch (cause) {
       sinks.log(`the hook_run entry for ${hook.id} could not be written: ${String(cause)}`);
     }

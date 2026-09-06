@@ -251,7 +251,7 @@ of §5 and none a channel: each is a request answered once.
   record, no run pauses, a live session exports what it holds at that instant; the file is written afterwards, outside
   the transaction, through `replaceDocument` with REQ-TRACE-061's ladder.
 
-## 7. The store the run writes (`packages/store/src/schema.ts`, v9)
+## 7. The store the run writes (`packages/store/src/schema.ts`, v10)
 
 | Table | Holds | Written by |
 |---|---|---|
@@ -261,7 +261,7 @@ of §5 and none a channel: each is a request answered once.
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192) | `appendRow`, `settleRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
-| `timeline` | ordered named entries with actor and metadata — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session_marked_interrupted`), the ladder |
+| `timeline` | ordered named entries with actor and metadata, each carrying **`id`** (12 hex) and **`severity`** (`debug` \| `info` \| `warning` \| `error`, default `info`) as their own columns since **v10** — REQ-SESSION-134's shape, which the table held neither of until the repair of Part U's thirty-second defect; a row written before v10 keeps an empty id and the export omits the field rather than minting one (REQ-SESSION-199) — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session_marked_interrupted`), the ladder |
 | `permission_audit`, `tool_calls`, `issues` (+ `ring_state`) | the three rings (ADR-0024); audit and issues refuse UPDATE by trigger | the gate's sink through the writer |
 | `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012); **`granted_mcp`** (Part S, no migration — the existing JSON column) now holds `{ granted: {server: [callable…]}, servers: [{name, transport, origin, fate: connected \| dropped, reason?}] }` written at spawn from the persona's memoised surface, projected as `AgentRecord.grantedMcp` / `mcpServers` (REQ-MCP-065/114) | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport` |
 | `queued_prompts` | QUEUED → TRIGGERED → COMPLETED, per session | `queuePrompt`, `editQueuedPrompt`, `removeQueuedPrompt`, `triggerQueuedPrompts` |

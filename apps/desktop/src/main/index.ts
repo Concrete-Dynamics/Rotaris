@@ -206,7 +206,11 @@ async function main(): Promise<void> {
     record: async (entry) => {
       const workspaceId = currentWorkspaceId;
       if (workspaceId === null || workspaceId === undefined) return false;
-      const r = await runHost.request({ kind: 'timeline.append', workspaceId, sessionId: entry.sessionId, name: 'notice', actor: 'system', message: entry.title, metadata: { notice_id: entry.noticeId, severity: entry.severity, message: entry.message, detail: entry.detail } }, millis(5_000)).catch(() => null);
+      // REQ-SESSION-134: the entry's severity is the record's own column. The notice vocabulary of REQ-NOTIFY-023 is
+      // not the timeline's (it carries `success`, which no timeline entry may), so it is mapped rather than passed
+      // through; only `warning` and `error` notices are recorded at all (REQ-NOTIFY-268), and the map is total anyway.
+      const severity = entry.severity === 'error' ? 'error' : entry.severity === 'warning' ? 'warning' : 'info';
+      const r = await runHost.request({ kind: 'timeline.append', workspaceId, sessionId: entry.sessionId, name: 'notice', actor: 'system', message: entry.title, severity, metadata: { notice_id: entry.noticeId, severity: entry.severity, message: entry.message, detail: entry.detail } }, millis(5_000)).catch(() => null);
       return r?.kind === 'timeline.appended';
     },
     log,

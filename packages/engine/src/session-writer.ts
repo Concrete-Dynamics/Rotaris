@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TranscriptRow } from '@rotaris/contracts';
+import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -105,6 +105,12 @@ export function maskRow(row: TranscriptRow): TranscriptRow {
 export function issueId(): string {
   return randomBytes(6).toString('hex');
 }
+
+/** REQ-SESSION-134: a timeline entry's id — the same 12-hex shape an issue's has, minted the same way. */
+export function timelineId(): string {
+  return randomBytes(6).toString('hex');
+}
+
 
 /** REQ-TOOLS-079: a decision entry; `id` is the ordinal the ring assigns (ADR-0024). */
 export interface DecisionEntry {
@@ -476,15 +482,22 @@ export class SessionWriter {
     }
   }
 
-  /** REQ-ORCH-139 / REQ-SESSION-087: a timeline entry, ordinal assigned here (ADR-0008 "Emission order"). Own transaction. */
-  appendTimeline(name: string, actor: string, message: string, metadata: Record<string, unknown>): Result<number, WriteFailure> {
+  /**
+   * REQ-ORCH-139 / REQ-SESSION-087: a timeline entry, ordinal assigned here (ADR-0008 "Emission order"). Own transaction.
+   *
+   * REQ-SESSION-134: the entry's `id` is minted here and its `severity` defaults to `info`. A caller passes another
+   * only where a requirement names one — `REQ-HOOKS-119`'s `hook_run` (warning where the outcome carried one) and
+   * `REQ-NOTIFY-268`'s `notice` entry (the notice's own severity) — because a severity nothing requires is a
+   * judgement this writer is not entitled to make about another domain's entry.
+   */
+  appendTimeline(name: string, actor: string, message: string, metadata: Record<string, unknown>, severity: TimelineSeverity = 'info'): Result<number, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
     try {
       return ok(dal.transaction(() => {
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, name, actor, message, JSON.stringify(metadata));
+        dal.insertTimeline(sessionId, ordinal, at, name, actor, message, JSON.stringify(metadata), timelineId(), severity);
         return ordinal;
       }));
     } catch (cause) {
@@ -701,7 +714,7 @@ export class SessionWriter {
         dal.ringInsert('issues', sessionId, (o) => {
           dal.insertIssue({ session_id: sessionId, ordinal: o, id, recorded_at: at, kind: input.kind, severity: input.severity, actor: input.actor, message: input.message, evidence_ref: ref, metadata: JSON.stringify(input.metadata ?? {}) });
         });
-        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'issue', input.actor, input.message, JSON.stringify({ issue_id: id, kind: input.kind, severity: input.severity, evidence_ref: ref }));
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'issue', input.actor, input.message, JSON.stringify({ issue_id: id, kind: input.kind, severity: input.severity, evidence_ref: ref }), timelineId(), input.severity);
         if (ev && line?.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'error', at, EVENT_SCHEMA_VERSION, null, line.value);
       });
     } catch (cause) {
@@ -792,14 +805,14 @@ export class SessionWriter {
         won = dal.claimChildStart(sessionId, taskId);
         if (won) {
           if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
-          dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_start', 'rotaris', `Child ${canonicalName} (${taskId}) started.`, JSON.stringify({ task_id: taskId, canonical_name: canonicalName }));
+          dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_start', 'rotaris', `Child ${canonicalName} (${taskId}) started.`, JSON.stringify({ task_id: taskId, canonical_name: canonicalName }), timelineId(), 'info');
         } else {
           const id = issueId();
           dal.ringInsert('issues', sessionId, (o) => {
             dal.insertIssue({ session_id: sessionId, ordinal: o, id, recorded_at: at, kind: 'stale_child_launch_claim', severity: 'warning', actor: 'rotaris', message: `A start claim for child ${canonicalName} (${taskId}) was suppressed: the record reads '${from}', not 'queued'.`, evidence_ref: '', metadata: JSON.stringify({ task_id: taskId, canonical_name: canonicalName, state: from }) });
           });
           issueRef = id;
-          dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_launch_suppressed', 'rotaris', `A start of child ${canonicalName} (${taskId}) was suppressed.`, JSON.stringify({ task_id: taskId, canonical_name: canonicalName, state: from, issue_id: id }));
+          dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_launch_suppressed', 'rotaris', `A start of child ${canonicalName} (${taskId}) was suppressed.`, JSON.stringify({ task_id: taskId, canonical_name: canonicalName, state: from, issue_id: id }), timelineId(), 'info');
         }
       });
     } catch (cause) {
@@ -842,7 +855,7 @@ export class SessionWriter {
     try {
       dal.transaction(() => {
         row = dal.insertQueuedPrompt(sessionId, promptId, content, at);
-        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_queued', 'user', `A prompt was queued for the next iteration (${promptId.slice(0, 8)}).`, JSON.stringify({ prompt_id: promptId }));
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_queued', 'user', `A prompt was queued for the next iteration (${promptId.slice(0, 8)}).`, JSON.stringify({ prompt_id: promptId }), timelineId(), 'info');
       });
     } catch (cause) {
       return this.fail(cause);
@@ -866,7 +879,7 @@ export class SessionWriter {
     try {
       dal.transaction(() => {
         moved = move(dal, sessionId);
-        if (moved) dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, name, 'user', message, JSON.stringify({ prompt_id: promptId }));
+        if (moved) dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, name, 'user', message, JSON.stringify({ prompt_id: promptId }), timelineId(), 'info');
       });
     } catch (cause) {
       return this.fail(cause);
@@ -887,7 +900,7 @@ export class SessionWriter {
           if (row.status !== 'QUEUED') continue;
           if (!dal.triggerQueuedPrompt(sessionId, row.prompt_id, at)) continue;
           triggered.push({ ...row, status: 'TRIGGERED', triggered_at: at });
-          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_triggered', 'rotaris', `Queued Prompt: ${row.prompt_id.slice(0, 8)} became a task in phase "Queued Prompts".`, JSON.stringify({ prompt_id: row.prompt_id }));
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_triggered', 'rotaris', `Queued Prompt: ${row.prompt_id.slice(0, 8)} became a task in phase "Queued Prompts".`, JSON.stringify({ prompt_id: row.prompt_id }), timelineId(), 'info');
         }
       });
     } catch (cause) {
@@ -910,7 +923,7 @@ export class SessionWriter {
       dal.durableTransaction(() => {
         dal.updateSessionRun(sessionId, patch);
         dal.setPause(sessionId, 'paused_message_limit', count, limit, at);
-        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'run_paused_message_limit', 'rotaris', `The run paused at the message limit: ${count} of ${limit ?? 'no'} messages.`, JSON.stringify({ count, limit }));
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'run_paused_message_limit', 'rotaris', `The run paused at the message limit: ${count} of ${limit ?? 'no'} messages.`, JSON.stringify({ count, limit }), timelineId(), 'info');
       });
     } catch (cause) {
       return this.fail(cause);
@@ -931,7 +944,7 @@ export class SessionWriter {
       dal.durableTransaction(() => {
         dal.setPause(sessionId, status, null, messageLimit, at);
         if (action === 'cancel') dal.updateSessionRun(sessionId, { stop_reason: 'message_limit_reached' });
-        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'pause_resolved', 'user', `The pause was resolved: ${action}${messageLimit === null ? '' : ` (limit ${messageLimit})`}.`, JSON.stringify({ action, message_limit: messageLimit }));
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'pause_resolved', 'user', `The pause was resolved: ${action}${messageLimit === null ? '' : ` (limit ${messageLimit})`}.`, JSON.stringify({ action, message_limit: messageLimit }), timelineId(), 'info');
       });
     } catch (cause) {
       return this.fail(cause);
@@ -964,7 +977,7 @@ export class SessionWriter {
       dal.transaction(() => {
         dal.insertCheckpoint({ session_id: sessionId, sequence: input.sequence, ref: input.ref, commit_id: input.commit, created_at: at, iteration: input.iteration, child_name: input.childName, files: JSON.stringify(input.files), kind: input.kind });
         trimmed = dal.trimCheckpoints(sessionId, keep);
-        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${input.files.length} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }));
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${input.files.length} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }), timelineId(), 'info');
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'checkpoint.created', at, EVENT_SCHEMA_VERSION, input.iteration, line.value);
         dal.touchSession(sessionId, this.status, at);
       });
@@ -1001,14 +1014,14 @@ export class SessionWriter {
       dal.transaction(() => {
         if (input.restored) {
           dal.setLastRestored(sessionId, input.sequence, at);
-          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${input.changedPaths} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }));
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${input.changedPaths} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }), timelineId(), 'info');
         } else {
           const id = issueId();
           const message = `Restore of checkpoint ${input.sequence} did not run: ${input.blockedReason}`;
           dal.ringInsert('issues', sessionId, (o) => {
             dal.insertIssue({ session_id: sessionId, ordinal: o, id, recorded_at: at, kind: 'checkpoint_restore', severity: 'warning', actor: 'checkpoints', message, evidence_ref: '', metadata: JSON.stringify({ dirty_paths: [...input.dirtyPaths], safety_sequence: input.safetySequence, tree_root: input.treeRoot }) });
           });
-          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'issue', 'checkpoints', message, JSON.stringify({ issue_id: id, kind: 'checkpoint_restore', severity: 'warning', evidence_ref: '' }));
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'issue', 'checkpoints', message, JSON.stringify({ issue_id: id, kind: 'checkpoint_restore', severity: 'warning', evidence_ref: '' }), timelineId(), 'warning');
           issueRef = id;
         }
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'checkpoint.restored', at, EVENT_SCHEMA_VERSION, null, line.value);

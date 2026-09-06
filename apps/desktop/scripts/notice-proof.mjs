@@ -112,7 +112,7 @@ const noticeSteps = (log) => log.split('\n').filter((l) => /capture: notices at 
 const results = {};
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
 const open = (s) => new Database(oneDatabase(s.local), { readonly: true });
-const timelineOf = (db) => db.prepare('SELECT session_id, name, actor, message, metadata FROM timeline ORDER BY ordinal').all();
+const timelineOf = (db) => db.prepare('SELECT session_id, name, actor, message, metadata, id, severity FROM timeline ORDER BY ordinal').all();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. The advisory the single slot loses is recorded before it is rendered (REQ-NOTIFY-268).
@@ -144,6 +144,14 @@ const s1 = scenario('advisory', {
   // the notice's body (its text is prose, not diagnostic output), so that is the field the entry must hold.
   expect(meta.severity === 'warning' && typeof meta.message === 'string' && meta.message.length > 0, `the recorded entry carries ${JSON.stringify(meta)} — title, body and detail go in unchanged`);
   expect(advisory.actor === 'system' && advisory.session_id === session.session_id, `the entry was written as ${advisory.actor} on ${advisory.session_id}`);
+  // REQ-SESSION-134 (schema v10, the repair of Part U's defect 42): the entry has its own 12-hex id, and the notice's
+  // severity reaches the record's COLUMN — mapped from REQ-NOTIFY-023's vocabulary, which is not the timeline's.
+  // Every hook_run entry the same run wrote carries an id too: nothing this run recorded is left without one.
+  expect(/^[0-9a-f]{12}$/.test(advisory.id) && advisory.severity === 'warning', `the recorded entry's id and severity: ${JSON.stringify([advisory.id, advisory.severity])}`);
+  expect(rows.every((t) => /^[0-9a-f]{12}$/.test(t.id)) && new Set(rows.map((t) => t.id)).size === rows.length, `an entry this run wrote carries no id, or two share one: ${JSON.stringify(rows.map((t) => [t.name, t.id]))}`);
+  const hookRuns = rows.filter((t) => t.name === 'hook_run');
+  expect(hookRuns.length > 0 && hookRuns.every((t) => t.severity === 'info' || t.severity === 'warning'), `REQ-HOOKS-119's severities: ${JSON.stringify(hookRuns.map((t) => t.severity))}`);
+  expect(hookRuns.every((t) => JSON.parse(t.metadata).severity === undefined), `a hook_run entry still carries severity in its metadata: ${JSON.stringify(hookRuns.map((t) => t.metadata))}`);
   // The burst itself: the run's outcome and the advisory are published in the same turn of the loop, and the slot
   // holds ONE of them (REQ-NOTIFY-024). Which of the two wins is acceptance order and this proof does not fix it; what
   // it fixes is that both were published, exactly one is on screen, and the warning half is retrievable afterwards.

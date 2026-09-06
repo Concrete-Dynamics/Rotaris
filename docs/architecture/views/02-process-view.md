@@ -186,7 +186,9 @@ repaint or repopulate every live window.
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
 `config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown`, `hooks.*`, `playbooks.catalogue`,
-`checkpoint.list/recordSafety/recordRestore` (Part P), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
+`checkpoint.list/recordSafety/recordRestore` (Part P), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
+`severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer
+that records it and never travels on the wire), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
 `run.result`, `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
 REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them; the `ttlMs` Part S added is gone — REQ-NOTIFY-040
 forbids a notice leaving on a timer), `acknowledgement.publish` (REQ-MCP-044's warning, now a transient),

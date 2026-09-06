@@ -5,7 +5,7 @@ import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
-import { SessionSnapshotSchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
+import { SessionSnapshotSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
@@ -125,8 +125,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * Part V / REQ-NOTIFY-268: main records a warning or error notice into a session's timeline BEFORE rendering it. The
    * run host appends through the live session writer where the session is live, else directly under the workspace store
    * (the session row must exist); answered `timeline.appended {ordinal}` or `refused`.
+   *
+   * REQ-SESSION-134 fixes the entry's severity vocabulary; `severity` is optional here and absent means the
+   * requirement's own default, `info`. The entry's `id` is not carried: it is minted by the writer that records the
+   * entry, never by the process asking for one (schema v10 repaired the table that held neither).
    */
-  z.object({ kind: z.literal('timeline.append'), workspaceId: z.string(), sessionId: z.string().min(1), name: z.string().min(1), actor: z.string().min(1), message: z.string(), metadata: z.record(z.string(), z.unknown()) }),
+  z.object({ kind: z.literal('timeline.append'), workspaceId: z.string(), sessionId: z.string().min(1), name: z.string().min(1), actor: z.string().min(1), message: z.string(), metadata: z.record(z.string(), z.unknown()), severity: TimelineSeveritySchema.optional() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;

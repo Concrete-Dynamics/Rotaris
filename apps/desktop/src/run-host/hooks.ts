@@ -49,7 +49,7 @@ export function createHookPort(ctx: HookPortContext, deps: HookRootDeps): HookPo
   const { writer } = ctx;
   const sinks: HookSinks = {
     event: (kind, payload) => { const r = writer.recordEvent(kind, payload as unknown as Record<string, unknown>); if (!r.ok) throw new Error(`${r.error.code}`); },
-    timeline: (name, actor, message, metadata) => { const r = writer.appendTimeline(name, actor, message, metadata); if (!r.ok) throw new Error(`${r.error.code}`); },
+    timeline: (name, actor, message, metadata, severity) => { const r = writer.appendTimeline(name, actor, message, metadata, severity); if (!r.ok) throw new Error(`${r.error.code}`); },
     issue: (i) => { const r = writer.recordIssue(i); if (!r.ok) throw new Error(`${r.error.code}`); },
     warn: ctx.warn,
     log: ctx.log,

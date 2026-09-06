@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, RING_CAPS, StoreDal } from '@rotaris/store';
-import { batchDocument, readRecords, readTrajectory, renderExport, Sessions, summariseTrajectory, trajectoryWarnings, writeExport, DELETE_LIVE_REFUSAL, DELETE_LIVENESS_UNKNOWN_REFUSAL, type JsonValue } from './index.js';
+import { batchDocument, readRecords, readTrajectory, renderExport, Sessions, summariseTrajectory, timelineId, trajectoryWarnings, writeExport, DELETE_LIVE_REFUSAL, DELETE_LIVENESS_UNKNOWN_REFUSAL, type JsonValue } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -149,7 +149,7 @@ describe('Part U — repair, delete and the exports', () => {
         dal.insertCheckpoint({ session_id: sid, sequence: 1, ref: `refs/rotaris/checkpoints/${sid}/1`, commit_id: 'c1', created_at: 't', iteration: 1, child_name: '', files: '["a"]', kind: 'iteration' });
         dal.insertCheckpoint({ session_id: sid, sequence: 2, ref: `refs/rotaris/checkpoints/${sid}/2`, commit_id: 'c2', created_at: 't', iteration: 2, child_name: '', files: '["b"]', kind: 'iteration' });
         dal.insertEvent(sid, 1, 'session.start', 't', 1, null, '{"event":"session.start"}');
-        dal.insertTimeline(sid, 1, 't', 'run_start', 'rotaris', 'started', '{}');
+        dal.insertTimeline(sid, 1, 't', 'run_start', 'rotaris', 'started', '{}', timelineId(), 'info');
         mkdirSync(join(dir, 'sessions', sid), { recursive: true });
         writeFileSync(join(dir, 'sessions', sid, 'summary.md'), '# summary\n');
       }
@@ -195,8 +195,10 @@ describe('Part U — repair, delete and the exports', () => {
           dal.ringInsert('permission_audit', sid, (ordinal) => dal.insertAudit({ session_id: sid, ordinal, recorded_at: `2026-09-05T10:00:${String(i % 60).padStart(2, '0')}.000Z`, kind: i === 2 ? 'mode_change' : 'decision', entry: JSON.stringify({ id: ordinal, tool_name: `t${i}`, decision: i % 7 === 0 ? 'deny' : 'allow', source: 'policy', summary: 's' }), agent_id: 'a', persona: 'p', tool_name: `t${i}`, decision: i % 7 === 0 ? 'deny' : 'allow', rule_id: 'r', source: 'policy' }));
         }
         dal.ringInsert('issues', sid, (ordinal) => dal.insertIssue({ session_id: sid, ordinal, id: 'abcdefabcdef', recorded_at: 't', kind: 'permission_denied', severity: 'warning', actor: 'gate', message: 'denied', evidence_ref: 'permission_audit#7', metadata: '{}' }));
-        dal.insertTimeline(sid, 1, 't1', 'run_start', 'rotaris', 'started', '{"a":1}');
-        dal.insertTimeline(sid, 2, 't2', 'issue', 'gate', 'denied', '{}');
+        dal.insertTimeline(sid, 1, 't1', 'run_start', 'rotaris', 'started', '{"a":1}', 'aaaaaaaaaaaa', 'info');
+        dal.insertTimeline(sid, 2, 't2', 'issue', 'gate', 'denied', '{}', 'bbbbbbbbbbbb', 'warning');
+        // An entry as a store written before schema v10 holds one: no id, the severity column at its default.
+        dal.db.exec("INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata) VALUES ('" + sid + "', 3, 't3', 'run_end', 'rotaris', 'ended', '{}')");
       });
       const r = readRecords(dal, sid, clock.wall)!;
       const audit = (r.document as { permission_audit: { cap: number; dropped: number; retained: number; oldest_ordinal: number; newest_ordinal: number; complete: boolean; entries: { ordinal: number; kind: string; entry: { id: number; tool_name: string } }[] } }).permission_audit;
@@ -213,9 +215,13 @@ describe('Part U — repair, delete and the exports', () => {
       // The one locator carried in the issues record is carried, not resolved.
       const issues = (r.document as { issues: { entries: { entry: { evidence_ref: string; id: string } }[] } }).issues;
       expect(issues.entries[0]!.entry).toMatchObject({ id: 'abcdefabcdef', evidence_ref: 'permission_audit#7' });
-      const timeline = (r.document as { timeline: { ordinal: number; type: string; metadata: unknown }[] }).timeline;
-      expect(timeline.map((t) => [t.ordinal, t.type])).toEqual([[1, 'run_start'], [2, 'issue']]);
+      const timeline = (r.document as { timeline: { ordinal: number; id?: string; severity: string; type: string; metadata: unknown }[] }).timeline;
+      expect(timeline.map((t) => [t.ordinal, t.type])).toEqual([[1, 'run_start'], [2, 'issue'], [3, 'run_end']]);
       expect(timeline[0]!.metadata).toEqual({ a: 1 });
+      // REQ-SESSION-134 / REQ-SESSION-199 (the repair of defect 42): the id and severity are exported for an entry that
+      // has them, and the id — never the severity — is omitted for an entry recorded before the columns existed.
+      expect(timeline.map((t) => [t.id, t.severity])).toEqual([['aaaaaaaaaaaa', 'info'], ['bbbbbbbbbbbb', 'warning'], [undefined, 'info']]);
+      expect(Object.keys(timeline[2]!)).not.toContain('id');
       const metrics = (r.document as { metrics: { permission_decisions: number; permission_denials: number; mode_changes: number; issues_by_kind: Record<string, number> } }).metrics;
       expect(metrics.mode_changes).toBe(0); // ordinal 2 was displaced by the cap: counts describe what is stored (REQ-SESSION-139)
       expect(metrics.permission_decisions).toBe(cap);

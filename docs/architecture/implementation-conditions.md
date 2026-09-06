@@ -361,3 +361,49 @@ counterfactuals refuse at the named rule. What the run found is on ADR-0056's se
 ninth defect of decision 3's pattern was a blank packaged window, React twice in the renderer bundle, a fault
 the unpackaged build shared and no test rendered. Owed and stated: the portable and its stub (ADR-0054),
 signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3).
+
+## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (PROPOSED)
+
+> **PROPOSED 2026-09-06 by Part T (ADR-0035's first execution), for the owner to set or refuse.** Nothing below is
+> a downgrade of REQ-STARTUP-159; it is the measured gap between that requirement and the runtime the owner chose.
+
+**Set by:** proposed under ADR-0035's spike (`spikes/code-intelligence-bundle.md` §3), 2026-09-06; binds only once the
+owner adopts it. **Binds:** any Windows release artifact (`pnpm package`'s installer, ADR-0054) that carries the bundled
+code-intelligence runtime — not the mechanism, which is built and proven with the bundle as it is. **Discharged into:** a
+note on ADR-0035 and ADR-0054, and the release pipeline's evidence.
+
+**Why it exists.** `REQ-STARTUP-159` requires that what the user installs is self-contained — nothing fetched at run
+time beyond the machine tools of `REQ-STARTUP-058` and the package caches of `REQ-STARTUP-064` — and `REQ-STARTUP-015`
+requires the bundled tool server to run "from what the user installed". The bundle (Python 3.13.15 with
+`serena-agent==1.7.0`, 175 MB under `resources/code-intelligence/`) satisfies that for the **runtime**: it answers
+`tools/list` and the protocol with nothing else installed. It does not satisfy it for the **language servers** the
+runtime's symbol tools need: measured with outbound blocked and a fresh home, the TypeScript server is obtained by
+`npm install typescript@5.9.3` and `typescript-language-server@5.1.3` (requiring `node` and `npm` on PATH), the Python
+server by `uvx --from pyright==1.1.403` (requiring `uv` on PATH and PyPI, and `pyright` itself downloads a Node runtime
+on first run), and every other language's server by its own download at first use — into the product's per-user data
+directory. Without them the symbol-level tools error ("The language server manager is not initialized") while the
+pattern search and the memory tools keep working.
+
+**What must be shown, and what would count.** One of:
+
+1. **Bundle the servers for the languages the release claims.** Serena accepts pre-provisioned servers (a present
+   `<home>/language_servers/static/<Server>/` is used without installing; `ls_specific_settings.<language>.ls_base_cmd`
+   overrides the launch outright). For TypeScript and Python that means shipping a Node runtime and two npm packages
+   beside the Python tree (an estimated 60–100 MB more, a second interpreter to pin and license under
+   `REQ-STARTUP-142`), and stating which languages the release supports offline. Counts as shown when the proof's
+   launch 7 (`pnpm code-intel-proof` under `ROTARIS_CODE_INTEL_PACKAGED=1`) answers a symbol overview on a TypeScript
+   file and a Python file from the packaged artifact with outbound blocked and an empty npm cache.
+2. **Amend the requirement.** Read `REQ-STARTUP-159`'s "machine tools of REQ-STARTUP-058 … the only things fetched
+   after installation" to include the code-intelligence language servers as tools provisioned after installation
+   (the way Git and ripgrep are), declared in the setup manifest with name, version, source and licence
+   (`REQ-STARTUP-142`'s "Tools provisioned after installation" section), and surfaced to the user before the first
+   fetch. Counts as shown when the specification carries the amendment and the notices generator lists them.
+3. **Ship without symbol-level tools for languages whose server is absent**, the pattern-search and memory tools
+   still offered, and say so on the MCP category. Counts as shown when the category's text names the languages the
+   installed runtime can serve without a fetch (today: none) and the proof asserts the wording.
+
+Until one of the three is adopted and shown, a release carrying the runtime does not meet `REQ-STARTUP-159` as
+written, and this entry says so where the next reader will look. The interim reading taken by Part T, recorded in
+ADR-0035's note: the mechanism is complete; the fetch happens only when a run first uses a symbol tool for a
+language, from the runtime's own dependency providers, into the per-user data directory, and the failure with the
+network blocked is the server's own error result, not a host failure (`REQ-MCP-113`).

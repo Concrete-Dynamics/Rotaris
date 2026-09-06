@@ -280,3 +280,17 @@ dropped from the discovery file; the 35 s bound at 35,005 ms and the exit 1,437 
 the manifest, `REQ-MCP-011/015/016(check)/034(binding, inert)/036/071/095/096/099/102/112/116`, the grant tiers);
 the palette entry (`REQ-MCP-108`'s `REQ-SHELL-048` half); `web_search` and `browser` exercised live; a real
 third-party server; `REQ-MCP-070` against the fixture named `lsp` only.
+
+**The owed halves, alive — 2026-09-06, Part T (ADR-0035's first execution; its note holds the measurements).** The
+`enabled: false` deviation above is **reverted**: `code_intelligence` ships enabled, the record kept beside the entry in
+`config/src/mcp/defaults.ts`. The binding probe of `REQ-MCP-071` ran for the first time — the manifest's memory-listing
+tool, once per connection, 15 s, `hook code_intelligence:ok` in the proof's connected line; its failure path now reaches
+the sink through `SessionDeps.probeFailed` (a warning, both channels, nothing withheld). `REQ-MCP-034`'s binding is live
+on the manifest's launch subcommand (the pipeline binds by default; `binding: null` is a test's affordance),
+`REQ-MCP-036`'s derivation and `REQ-MCP-102`'s block are in `config/src/mcp/code-intelligence.ts` and `prompt.ts`, and
+the grant tiers of `REQ-MCP-014` are on the built-in personas' `mcp_tools`. **A real third-party server** was exercised
+for the first time — Serena, twice per run as consequence 2 says (one discovery launch, one session launch; two launch
+lines in the proof's log). **A gap surfaced by the binding coming alive, stated, not fixed:** the MCP configuration is
+resolved per *workspace* (`configureRun(workspaceRoot)`), so the path REQ-MCP-034 appends is the workspace root even for
+a run in an isolated working tree, where the requirement wants the tree's root; nothing exercised it (no proof starts an
+isolated session through this path) and it is owed to whoever next touches the isolated-run start.

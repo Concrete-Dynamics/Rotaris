@@ -306,8 +306,8 @@ describe('REQ-MCP-010/014 — the shipped defaults', () => {
     expect(br.enabled).toBe(false);
     const ci = SHIPPED_MCP_SERVERS['code_intelligence'] as { command: string; enabled: boolean };
     expect(ci.command).toBe('builtin:code-intelligence');
-    // The owner's decision of 2026-09-05: false until ADR-0035 executes (a recorded deviation from REQ-CONFIG-181).
-    expect(ci.enabled).toBe(false);
+    // Enabled by default (REQ-CONFIG-181) since ADR-0035 executed on 2026-09-06; the 2026-09-05 deviation (`false`) is recorded in mcp/defaults.ts.
+    expect(ci.enabled).toBe(true);
     expect(BUILT_IN_PERSONA_MCP_SERVERS['tester']).toEqual(['browser', 'code_intelligence']);
     expect(BUILT_IN_PERSONA_MCP_SERVERS['librarian']).toEqual(['web_search']);
     expect(BUILT_IN_PERSONA_MCP_SERVERS['gatekeeper']).toEqual([]);

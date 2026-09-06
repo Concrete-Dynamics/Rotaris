@@ -1,15 +1,17 @@
-import { join } from 'node:path';
+import { existsSync, lstatSync, readdirSync, type Dirent } from 'node:fs';
+import { join, relative } from 'node:path';
 import { z } from 'zod';
-import { compareCodePoints, millis, REDACTION_MARK, redact, type Clocks, type Millis } from '@rotaris/kernel';
-import type { McpHealth, McpListing, McpSecretRow, McpSecretsView, McpServerRow } from '@rotaris/contracts';
+import { compareCodePoints, millis, REDACTION_MARK, redact, toIsoUtc, type Clocks, type Millis } from '@rotaris/kernel';
+import type { McpHealth, McpListing, McpSecretRow, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import {
-  AGENTS_FILE_NAME, DiagnosticSink, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
+  AGENTS_FILE_NAME, CODE_INTELLIGENCE_MARKER_SEGMENTS, CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, CODE_INTELLIGENCE_SERVER_NAME, CODE_INTELLIGENCE_SETUP_STEPS,
+  deriveSetupInvocation, DiagnosticSink, hasIndexableExtension, narrowAfterUpdate, renderMcpSection, resolvePersonaMcp,
   type Diagnostic, type LoadedConfiguration, type McpResolvedServer, type PersonaMcpSurface,
 } from '@rotaris/config';
-import { errorObservation, observation, type ToolExecutor } from '@rotaris/agent-tools';
+import { errorObservation, ignoredBy, loadRules, observation, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
-import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
+import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
 /**
  * The run host's MCP holder — ADR-0034's placement as READ on first execution: every path lives here, in the one
@@ -42,6 +44,47 @@ export interface McpSessionContext {
 interface SurfaceMemo { readonly key: string; readonly surface: PersonaMcpSurface; readonly diagnostics: readonly Diagnostic[] }
 
 const NOTICE_TTL_MS = 8_000;
+
+function idleSetup(): McpSetupStatus {
+  return { state: 'idle', steps: CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null })), outcome: null, message: '', containsCode: null, invocation: '', startedAt: null };
+}
+
+/** Version-control metadata directories, never walked. */
+const VCS_DIRS: ReadonlySet<string> = new Set(['.git', '.hg', '.svn']);
+
+/**
+ * REQ-MCP-099's contains-code test: walking the workspace from its root, the first regular file whose extension the
+ * manifest lists ends the walk; version-control metadata directories skipped, the workspace's ignore rules honoured
+ * (the root `.gitignore` through the search tool's reader — nested ignore files are not read, stated), dot-prefixed
+ * directories walked, no symbolic link followed at all (stricter than "none out of the workspace", and safe), once per
+ * setup run. Bounded by breadth-first order so a huge tree with code near the root answers fast.
+ */
+export function workspaceContainsCode(root: string): boolean {
+  const rules = loadRules(root);
+  const queue: string[] = [root];
+  while (queue.length > 0) {
+    const dir = queue.shift()!;
+    let entries: Dirent[];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const full = join(dir, e.name);
+      const rel = relative(root, full).split('\\').join('/');
+      if (e.isSymbolicLink()) continue;
+      if (e.isDirectory()) {
+        if (VCS_DIRS.has(e.name)) continue;
+        if (ignoredBy(rules, rel, true)) continue;
+        queue.push(full);
+        continue;
+      }
+      if (!e.isFile()) continue;
+      if (!hasIndexableExtension(e.name)) continue;
+      if (ignoredBy(rules, rel, false)) continue;
+      try { if (!lstatSync(full).isFile()) continue; } catch { continue; }
+      return true;
+    }
+  }
+  return false;
+}
 
 export class McpHost {
   readonly discovery: ToolDiscovery;
@@ -197,7 +240,9 @@ export class McpHost {
         clocks: this.deps.clocks, log: this.mcpLog, workspaceRoot, parentEnv: this.deps.parentEnv,
         // REQ-MCP-069: once per server per session, through both channels.
         unreachable: (server, detail) => { this.deliver({ severity: 'warning', scope: 'session', key: `mcp.unreachable.${server}`, channels: 'user', message: `MCP server '${server}' became unreachable: ${redact(detail)}; the call failed and later calls will try again (REQ-MCP-069)`, server }, ctx); },
-        codeIntelligenceMemoryTool: null,
+        // REQ-MCP-071 (ADR-0035, Part T): the binding probe's tool from the manifest; a failure warns through REQ-MCP-044 and changes nothing else.
+        codeIntelligenceMemoryTool: CODE_INTELLIGENCE_MEMORY_LISTING_TOOL, codeIntelligenceServerName: CODE_INTELLIGENCE_SERVER_NAME,
+        probeFailed: (server, detail) => { this.deliver({ severity: 'warning', scope: 'session', key: `mcp.binding-probe.${server}`, channels: 'user', message: `MCP server '${server}' did not answer its project-memory listing: ${redact(detail)}. Its symbol-level tools remain usable but may not be pointed at this project (REQ-MCP-071)`, server }, ctx); },
       });
       this.sessions.set(sessionId, s);
     }
@@ -297,6 +342,68 @@ export class McpHost {
       .sort((a, b) => compareCodePoints(a.server, b.server) || compareCodePoints(a.key, b.key));
     const expected = server === null ? [] : Object.keys(cfg.mcp.servers[server]?.entry.env ?? {}).sort(compareCodePoints).map((key) => ({ key, satisfied: cfg.mcp.secrets.some((e) => e.server === server && e.key === key) }));
     return { servers, rows, expected, server };
+  }
+
+  // ---- REQ-MCP-099 / REQ-MCP-112: the code-intelligence project setup (ADR-0035, Part T) ---------------------------
+
+  private setup: { status: McpSetupStatus; abort: AbortController | null } = { status: idleSetup(), abort: null };
+
+  setupStatus(): McpSetupStatus {
+    return this.setup.status;
+  }
+
+  /** REQ-MCP-112: cancellable at any point; the step in flight is terminated (REQ-MCP-099's ask, grace, tree kill) and the rest are not attempted. */
+  cancelSetup(): McpSetupStatus {
+    if (this.setup.abort && this.setup.status.state === 'running') { this.setup.abort.abort(); this.deps.log('mcp setup: cancellation requested'); }
+    return this.setup.status;
+  }
+
+  /**
+   * REQ-MCP-112: one run at a time, re-runnable on demand, never blocking the interface (the steps run on this process's
+   * event loop while the request returns at once; the category polls the status). REQ-MCP-099: the invocation derived from
+   * the configured `code_intelligence` entry (REQ-MCP-036) — a remote or launch-less entry is the non-retryable
+   * "not a local launch" failure and no substitute command is tried; the contains-code walk once per run.
+   */
+  startSetup(cfg: LoadedConfiguration, workspaceRoot: string): { ok: true; status: McpSetupStatus } | { ok: false; reason: string } {
+    if (this.setup.status.state === 'running') return { ok: false, reason: 'A code-intelligence setup is already running for this workspace; wait for it to finish or cancel it first.' };
+    const server = cfg.mcp.servers[CODE_INTELLIGENCE_SERVER_NAME];
+    const steps = (): McpSetupStep[] => CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null }));
+    const startedAt = toIsoUtc(this.deps.clocks.wall.instant());
+    if (!server) {
+      this.setup = { status: { state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt }, abort: null };
+      return { ok: true, status: this.setup.status };
+    }
+    const invocation = deriveSetupInvocation(server.entry, server.resolved);
+    if (!invocation.ok) {
+      this.deps.log(`mcp setup: refused — ${invocation.reason}`, 'warn');
+      this.setup = { status: { state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt }, abort: null };
+      return { ok: true, status: this.setup.status };
+    }
+    const containsCode = workspaceContainsCode(workspaceRoot);
+    const markerPresent = existsSync(join(workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS));
+    const abort = new AbortController();
+    const line = `${invocation.command} ${invocation.args.join(' ')}`.trim();
+    this.setup = { status: { state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt }, abort };
+    this.deps.log(`mcp setup: started for ${workspaceRoot} — invocation '${line}', contains code ${containsCode}, marker ${markerPresent ? 'present' : 'absent'}`);
+    const description = server.description as ServerDescription;
+    const env = { ...this.deps.parentEnv, ...(description.transport === 'stdio' ? description.env : {}) };
+    void runSetupSteps({
+      invocation, workspaceRoot, steps: CODE_INTELLIGENCE_SETUP_STEPS, creationStepId: 'create', markerPresent, containsCode, env,
+      clocks: this.deps.clocks, log: this.mcpLog, signal: abort.signal,
+      onStep: (step, all) => {
+        this.setup = { ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs })) } };
+        this.deps.log(`mcp setup: ${step.id} ${step.status}${step.detail ? ` — ${step.detail.slice(0, 200)}` : ''}${step.elapsedMs === null ? '' : ` (${step.elapsedMs.toFixed(0)} ms)`}`);
+      },
+    }).then((report) => {
+      const message = report.outcome === 'completed'
+        ? (containsCode ? 'Every step succeeded: the workspace is set up for code intelligence.' : 'The project was created; indexing and the memory store were skipped because the workspace contains no code.')
+        : report.outcome === 'cancelled' ? 'The setup was cancelled; the workspace is only partly set up.' : 'A step failed, so the workspace is only partly set up.';
+      this.setup = { status: { ...this.setup.status, state: 'finished', outcome: report.outcome, message }, abort: null };
+      this.deps.log(`mcp setup: ${report.outcome} — ${message}`);
+    }, (cause: unknown) => {
+      this.setup = { status: { ...this.setup.status, state: 'finished', outcome: 'failed', message: `The setup stopped unexpectedly: ${String(cause instanceof Error ? cause.message : cause)}` }, abort: null };
+    });
+    return { ok: true, status: this.setup.status };
   }
 
   // ---- lifetime -------------------------------------------------------------------------------------------------

@@ -155,6 +155,23 @@ recomputes and only narrows (the executor deleted, the prompt untouched). **Thei
 session live until the session's lock is released, which today is the run host's shutdown (`McpHost.closeAll`, after
 `Sessions.closeAll`; the discovery children are killed first so no outstanding discovery delays the exit).
 
+**Code intelligence (Part T; ADR-0035).** The shipped `code_intelligence` entry is **enabled** (REQ-CONFIG-181; the
+2026-09-05 deviation reverted, its record kept in `config/src/mcp/defaults.ts`), so every run whose persona carries it —
+twelve of the thirteen built-in roles — starts one runtime per session through the token. Its arguments come from the
+generated manifest (`start-mcp-server`, the transport and the host-integration context); REQ-MCP-034 appends
+`--project <root>` at command resolution for the root the run was configured with (an isolated tree's root when the
+run is configured with it — not exercised by the proof); the grant is the persona's tier union from the manifest (12 or
+19 names; REQ-MCP-014/015). On connection the binding probe calls the memory-listing tool once under 15 s
+(REQ-MCP-071; a failure warns through REQ-MCP-044 and withholds nothing); the prompt's `## MCP servers` entry for the
+server carries the fixed project-memories block iff both gating names are granted (REQ-MCP-102). Measured cold: the
+runtime answers `tools/list` about 4 s after launch, connect about 4.2 s; the first symbol tool on a language provisions
+that language's server (minutes, IC-7), warm afterwards. **The project setup** (`McpHost.startSetup`): the invocation
+derived from the entry (REQ-MCP-036 — a remote or launch-less entry is the non-retryable "not a local launch"
+refusal), the contains-code walk once (breadth-first from the root, VCS directories skipped, the root `.gitignore`
+honoured, dot-directories walked, no symlink followed, first indexable file stops it), the marker
+(`.serena/project.yml`) skipping creation, then the three steps in order with the closed status vocabulary; one run at
+a time, re-runnable, cancellable; the status held in the run host for the application's life, never on disk.
+
 ## 4. Children (ADR-0012)
 
 `delegate` is a tool call admitted through five checks in order (role known, depth, total, active, dependencies)

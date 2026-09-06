@@ -14,7 +14,7 @@ import { readPersonasSection, type PersonaEntry } from './sections/personas.js';
 import { readCompressorSection, type CompressorSection } from './sections/compressor.js';
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
 import { readMcpServersSection } from './sections/mcp-servers.js';
-import { readDiscoveryFiles, resolveMcpConfiguration, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
+import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
 import { readCircuitBreakerSection, type CircuitBreakerSection } from './circuit-breaker-section.js';
 import { FieldReader, typeName, vocabularyString, type Problem, type ProblemSink } from './sections/field.js';
 import { resolveSlotsAndReasoning } from './slots.js';
@@ -101,6 +101,7 @@ export interface McpResolveContext {
   readonly platform: NodeJS.Platform;
   readonly onPath?: ((executable: string) => boolean) | undefined;
   readonly readFile?: ((path: string) => string | null) | undefined;
+  readonly builtinLaunch?: BuiltinLaunch | null | undefined;
 }
 
 type ReadFile =
@@ -181,6 +182,8 @@ export interface LoadOptions {
   readonly onPath?: (executable: string) => boolean;
   /** REQ-MCP-027: the read-only reader for the discovery files and secrets.yaml; the filesystem by default. */
   readonly readFile?: (path: string) => string | null;
+  /** REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — the run host supplies the application's own executable. */
+  readonly builtinLaunch?: BuiltinLaunch | null;
 }
 
 function readSlots(top: PlainMap, sink: ProblemSink): { slots: Record<ModelSlot, string | null>; thinking: Record<ModelSlot, ReasoningLevel | null> } {
@@ -262,7 +265,7 @@ export function loadConfiguration(opts: LoadOptions): Result<LoadedConfiguration
     mergeWarnings: [...snapshotWarnings, ...merged.warnings.map((w) => `${w.source}: ${w.message}`)], ...(opts.toolServers ? { toolServers: opts.toolServers } : {}),
     authenticatedProviders, discoveredSlots,
     loadMs: started === null || !opts.now ? null : opts.now() - started,
-    mcp: { discovered: discovered.value, discoveryDiagnostics: discovered.diagnostics, globalDir: opts.globalDir, env, platform, onPath: opts.onPath, readFile: opts.readFile },
+    mcp: { discovered: discovered.value, discoveryDiagnostics: discovered.diagnostics, globalDir: opts.globalDir, env, platform, onPath: opts.onPath, readFile: opts.readFile, builtinLaunch: opts.builtinLaunch },
   });
 }
 
@@ -318,7 +321,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   // REQ-MCP-026: "yaml" when any YAML scope named the server; the raw documents say which did.
   const yamlNamed = new Set<string>();
   for (const scope of ['global', 'workspace'] as const) { const m = ctx.raw[scope].agents?.['mcp_servers']; if (isPlainMap(m)) for (const k of Object.keys(m)) yamlNamed.add(k); }
-  const mcp = resolveMcpConfiguration({ servers: mcpServers, yamlNamed, discovered: ctx.mcp.discovered, workspaceRoot: ctx.workspaceRoot, globalDir: ctx.mcp.globalDir, env: ctx.mcp.env, platform: ctx.mcp.platform, ...(ctx.mcp.onPath ? { onPath: ctx.mcp.onPath } : {}), ...(ctx.mcp.readFile ? { readFile: ctx.mcp.readFile } : {}) });
+  const mcp = resolveMcpConfiguration({ servers: mcpServers, yamlNamed, discovered: ctx.mcp.discovered, workspaceRoot: ctx.workspaceRoot, globalDir: ctx.mcp.globalDir, env: ctx.mcp.env, platform: ctx.mcp.platform, ...(ctx.mcp.onPath ? { onPath: ctx.mcp.onPath } : {}), ...(ctx.mcp.readFile ? { readFile: ctx.mcp.readFile } : {}), builtinLaunch: ctx.mcp.builtinLaunch ?? null });
   // REQ-MCP-103/105: the server set the referential stage validates against is the merged map (ADR-0016 consequence 3).
   const referential = referentialMessages({ defaultPersona, slots: draft.slots, models: draft.models, personas: draft.personas, compressorModel: draft.compressorModel, toolServers: ctx.toolServers ?? Object.keys(mcp.servers), authenticatedProviders: ctx.authenticatedProviders ?? [] });
 

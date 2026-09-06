@@ -150,6 +150,27 @@ or probe, all through `OwnedStdioTransport` (three piped streams, hidden window,
 to is `apps/desktop/scripts/fixtures/mcp-fixture-server.mjs`. The scripted client's step `mcp:<server>.<tool>` calls an
 MCP tool by its callable name; `ROTARIS_CAPTURE_PROMPT_MS` delays the typed prompt (verification only).
 
+**The bundled code-intelligence runtime (Part T; ADR-0035's first execution).** A `stdio` entry whose command is the
+reserved token `builtin:code-intelligence` launches **the application's own executable** with the token first and `--`
+second (`Rotaris.exe builtin:code-intelligence -- start-mcp-server --transport stdio --context ide --project <root>`;
+in development `electron.exe out/main/index.js` before them): that process is a **sixth process shape**, the
+**sentinel** — Electron's main entry whose first module (`main/sentinel.ts`) sees the token, resolves the bundled
+interpreter under `process.resourcesPath/code-intelligence/runtime/` (the source tree's `apps/desktop/resources/` in
+development), seeds the runtime's per-user home once (`<data>/code-intelligence/`, its interface off), and runs the
+runtime **synchronously with the parent's own pipes** (`stdio: 'inherit'`), exiting with the runtime's status — no
+window, no instance claim, no store, nothing of main's body evaluated. Under it the runtime (`python.exe`) and, at
+first use of a language, the language server it provisions (`npm`/`uvx` children; IC-7). It lives under the run host
+like every other MCP child: one per session, one transient per discovery or probe, killed by `terminateTree` (the
+`/T` reaches the runtime below the sentinel while both live; on stdin's end the runtime exits by itself). The
+`--` is Electron's, not ours: a scheme-looking positional followed by another positional exits the binary before any
+JavaScript (spike `code-intelligence-branch.md`). The transport tolerates the one CR LF Electron writes to standard
+output at start. **`mcp.setup`** — renderer → main `{action: start | cancel | status}`; main → run host
+`{workspaceId, action}` → `mcp.setup {status}` (or `refused mcp.setup.running`): REQ-MCP-099's three steps run in the
+run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
+`project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
+terminate then tree-killed after 5 s on cancel or timeout; the category polls the status every 500 ms while it runs.
+`ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step.
+
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own
 per-stream sequence; `notice:current` is the single notice or null; `theme:changed` and `config:changed`

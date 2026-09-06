@@ -30,6 +30,13 @@ asarUnpack:
   # binaries node-pty's winpty path executes beside them.
   - "**/*.node"
   - "**/node_modules/node-pty/build/Release/**"
+# ADR-0035 / ADR-0054 (Part T): the bundled code-intelligence runtime rides OUTSIDE the asar — a Python tree cannot
+# run from an archive — under resources/code-intelligence, built by `pnpm code-intel:bundle` (package.mjs runs it
+# first). afterPack asserts the interpreter answers from inside win-unpacked (build-hooks.cjs, rule "runtime").
+extraResources:
+  - from: resources/code-intelligence
+    to: code-intelligence
+    filter: ["**/*"]
 publish: null
 win:
   target:

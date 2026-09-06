@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { availability, findOnPath, resolveCommand, type Availability, type ResolvedCommand } from './commands.js';
+import { availability, findOnPath, resolveCommand, type Availability, type BuiltinLaunch, type ResolvedCommand } from './commands.js';
+import { CODE_INTELLIGENCE_BINDING } from './code-intelligence.js';
 import { describeForRuntime, type RuntimeDescription } from './describe.js';
 import type { Diagnostic } from './diagnostics.js';
 import type { DiscoveredServers } from './discovery-files.js';
@@ -15,6 +16,7 @@ export * from './persona.js';
 export * from './describe.js';
 export * from './prompt.js';
 export * from './defaults.js';
+export * from './code-intelligence.js';
 
 /**
  * The load-time half of ADR-0034's pipeline, run once per configuration load over the merged `mcp_servers` map:
@@ -52,7 +54,10 @@ export interface McpResolveInput {
   readonly platform?: NodeJS.Platform;
   readonly onPath?: (executable: string) => boolean;
   readonly readFile?: (path: string) => string | null;
+  /** REQ-MCP-034: the manifest's binding by default (ADR-0035 executed 2026-09-06); `null` switches the stage off for a test. */
   readonly binding?: { readonly launchSubcommand: string; readonly projectPathOption: string; readonly projectFromCwdOption: string } | null;
+  /** REQ-MCP-033: what the token launches; the run host supplies it, a test may omit it. */
+  readonly builtinLaunch?: BuiltinLaunch | null;
 }
 
 export function originOf(name: string, yamlNamed: ReadonlySet<string>, discovered: Readonly<Record<string, McpOrigin>>): McpOrigin {
@@ -79,7 +84,7 @@ export function resolveMcpConfiguration(input: McpResolveInput): McpConfiguratio
     let url: string | null = null;
     let unresolved: string[] = [];
     if (entry.type === 'stdio') {
-      const r = resolveCommand({ name, command: entry.command ?? '', args: entry.args, workspaceRoot: input.workspaceRoot, onPath, binding: input.binding ?? null });
+      const r = resolveCommand({ name, command: entry.command ?? '', args: entry.args, workspaceRoot: input.workspaceRoot, onPath, binding: input.binding === undefined ? CODE_INTELLIGENCE_BINDING : input.binding, builtinLaunch: input.builtinLaunch ?? null });
       diagnostics.push(...r.diagnostics);
       resolved = r.value;
     } else {

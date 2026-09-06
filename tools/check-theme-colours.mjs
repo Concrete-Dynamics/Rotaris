@@ -10,7 +10,9 @@ function walk(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      if (!['node_modules', 'dist', 'out', 'release'].includes(entry.name) && relative('.', path).replaceAll('\\', '/') !== 'packages/contracts/src/theme') walk(path);
+      // apps/desktop/resources/code-intelligence is the bundled third-party runtime (ADR-0035), built, never authored here.
+      const rel = relative('.', path).replaceAll('\\', '/');
+      if (!['node_modules', 'dist', 'out', 'release', '.cache'].includes(entry.name) && rel !== 'packages/contracts/src/theme' && rel !== 'apps/desktop/resources/code-intelligence') walk(path);
       continue;
     }
     if (!sourceExtensions.has(extname(entry.name)) || /\.test\.[^.]+$/.test(entry.name)) continue;

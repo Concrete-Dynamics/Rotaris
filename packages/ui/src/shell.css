@@ -446,6 +446,8 @@
 .mcp__dot[data-state="healthy"] { background: var(--rt-ok); }
 .mcp__dot[data-state="unreachable"] { background: var(--rt-danger-300); }
 @media (prefers-reduced-motion: reduce) { .mcp__dot[data-state="checking"] { animation: none; } }
+/* Part T: the code-intelligence setup's three steps as text (REQ-MCP-112, REQ-SHELL-149). */
+.settings__steps { list-style: none; margin: var(--rt-space-3, 12px) 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
 .workspace--with-agents { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents transcript inspector' 'agents composer inspector'; }
 .workspace:not(.workspace--with-agents):not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'transcript inspector' 'composer inspector'; }

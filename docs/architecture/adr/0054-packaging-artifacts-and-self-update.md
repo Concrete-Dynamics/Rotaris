@@ -1059,3 +1059,19 @@ mechanism rather than a better process.
 portable and its launcher stub (SR-7, alternative P4) — the second build technology this record carries is
 still on paper. **Not done:** signing (no certificate; `signtool` finds no signature on any artifact), the
 release gate, an icon. The installer was produced, not installed.
+
+## The bundled code-intelligence runtime as `extraResources` — 2026-09-06, Part T (ADR-0035's first execution)
+
+The runtime rides **outside the asar**, under `resources/code-intelligence/` (`electron-builder.yml` `extraResources`;
+a Python tree cannot run from an archive), built by `pnpm code-intel:bundle` before `electron-vite build` and asserted
+by `afterPack` to answer its own version and the distribution's from inside `win-unpacked` (the "runtime" rule beside
+rules 1a and 4; `build-hooks.cjs`). **Measured growth of the artifact** on the build that first carried it (this
+worktree, `pnpm package` end to end in 353 s, IC-6's rules green): `win-unpacked` from 442 MB to the figure in the
+handoff and `release/load-proof.json` — the runtime is 167.2 MiB in 10,603 files, byte-compiled so an installation
+under Program Files never writes bytecode; the installer's growth is in the same report. The "327 MB of additional
+payload moved first paint by about 10 ms" measurement above is not re-taken: the runtime is never read at first paint
+(only the sentinel path touches it), so first paint is unaffected by construction. **IC-7** (proposed in
+`implementation-conditions.md`) binds the release this artifact would be: the runtime is self-contained, its language
+servers are not — measured on the packaged binary with outbound blocked (`pnpm code-intel-proof` launch 7: `npm install
+typescript@5.9.3` attempted and failed). The licence text the bundle carries is one copy under the distribution's
+dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built.

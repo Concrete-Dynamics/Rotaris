@@ -223,6 +223,29 @@ async function checkNaming(version) {
   return { templates, expected };
 }
 
+/**
+ * ADR-0035 / ADR-0054 (Part T): the bundled code-intelligence runtime is in the artifact and ANSWERS from inside it — the
+ * interpreter under win-unpacked/resources/code-intelligence/runtime reports its version and the distribution's, both equal
+ * to the committed pins. Evidence about the artifact (ADR-0056's discipline), not about the bundle step's exit status.
+ */
+function checkRuntime(appOutDir) {
+  const pins = JSON.parse(readFileSync(path.join(APP_DIR, 'scripts', 'code-intelligence', 'pins.json'), 'utf8'));
+  const root = path.join(appOutDir, 'resources', 'code-intelligence');
+  const python = path.join(root, 'runtime', 'python.exe');
+  if (!existsSync(python)) throw new Error(`runtime: no interpreter at ${python} — extraResources did not carry the bundle`);
+  const marker = JSON.parse(readFileSync(path.join(root, 'bundle.json'), 'utf8'));
+  if (marker.version !== pins.version || marker.python !== pins.python) throw new Error(`runtime: the artifact's bundle.json pins ${marker.distribution} ${marker.version} on Python ${marker.python}; pins.json says ${pins.version} on ${pins.python}`);
+  const r = spawnSync(python, ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "version": m.version("serena-agent"), "distribution": "serena-agent"}))'], { encoding: 'utf8', windowsHide: true, timeout: 60_000, env: { PYTHONUTF8: '1', SYSTEMROOT: process.env['SYSTEMROOT'] || 'C:\\Windows' } });
+  if (r.status !== 0) throw new Error(`runtime: the packaged interpreter did not answer (exit ${r.status ?? r.signal}): ${(r.stderr || '').slice(-400)}`);
+  const answers = JSON.parse(r.stdout.trim());
+  if (answers.python !== pins.python) throw new Error(`runtime: the packaged interpreter answers Python ${answers.python}, the pin is ${pins.python}`);
+  if (answers.version !== pins.version) throw new Error(`runtime: the packaged tree answers ${pins.distribution} ${answers.version}, the pin is ${pins.version}`);
+  let bytes = 0, files = 0;
+  const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else { bytes += statSync(p).size; files += 1; } } };
+  walk(root);
+  return { python, answers, bytes, files, licenseFile: marker.licenseFile, licensePresent: existsSync(path.join(root, 'runtime', ...String(marker.licenseFile).split('/'))) };
+}
+
 /** electron-builder: called after the app is packed into appOutDir and before the artifact is made. */
 async function afterPack(ctx) {
   const platform = platformOf(ctx);
@@ -245,6 +268,8 @@ async function afterPack(ctx) {
     for (const b of BINDINGS) report.rule1a.push(checkRule1a(b, platform, arch, marker, unpackedRoot, asarEntries));
     console.log(`[ic6] rule 1a: ${report.rule1a.map((b) => `${b.name} ${b.files.map((f) => `${path.basename(f.rel)} ${f.size} B`).join(', ')}`).join('; ')} — all newer than the marker, byte-identical in the artifact, no prebuild`);
     report.naming = await checkNaming(ctx.packager.appInfo.version);
+    report.runtime = checkRuntime(appOutDir);
+    console.log(`[ic6] runtime: ${report.runtime.python} answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
     const probe = runProbe(exe, appOutDir);
     report.probe = { status: probe.status, stderr: probe.stderr };
     report.rule4 = checkRule4(probe, report.rule1a, unpackedRoot, marker);

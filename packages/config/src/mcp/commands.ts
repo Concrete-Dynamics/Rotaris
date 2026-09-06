@@ -36,18 +36,29 @@ export interface ResolveCommandInput {
   readonly workspaceRoot: string | null;
   readonly onPath: (executable: string) => boolean;
   /**
-   * REQ-MCP-034: the runtime's launch subcommand and the two project-selection options, from ADR-0035's manifest.
-   * Null until that manifest exists — the binding stage is present and inert.
+   * REQ-MCP-034: the runtime's launch subcommand and the two project-selection options, from ADR-0035's manifest
+   * (`CODE_INTELLIGENCE_BINDING`, the caller's default). Null switches the binding stage off — a test's affordance only;
+   * from 2026-09-06 the manifest exists and the pipeline always binds.
    */
   readonly binding: { readonly launchSubcommand: string; readonly projectPathOption: string; readonly projectFromCwdOption: string } | null;
+  /**
+   * REQ-MCP-033 / ADR-0035: what the reserved token LAUNCHES — the application's own executable with the token as its
+   * first argument (`Rotaris.exe builtin:code-intelligence -- …`; in development Electron's binary with the main bundle
+   * before it). The launch path supplies it (`codeIntelligenceLaunch` in the run host); absent, the token stays the
+   * command and the spawn fails as ENOENT the way it did before ADR-0035 executed (the console spike, Part S).
+   */
+  readonly builtinLaunch?: BuiltinLaunch | null;
 }
+
+/** The executable and the argument prefix the token expands to; `args` ends with the token (and the `--` the branch expects). */
+export interface BuiltinLaunch { readonly command: string; readonly args: readonly string[] }
 
 /** REQ-MCP-033 first, then 028, 029, 030/031, 032, then 034 and 035. Side-effect free on its inputs (REQ-MCP-009). */
 export function resolveCommand(input: ResolveCommandInput): Staged<ResolvedCommand> {
   const diagnostics: Diagnostic[] = [];
   const { command } = input;
   let out: ResolvedCommand;
-  if (command === CODE_INTELLIGENCE_TOKEN) out = { command, args: [...input.args], builtin: true };
+  if (command === CODE_INTELLIGENCE_TOKEN) out = input.builtinLaunch ? { command: input.builtinLaunch.command, args: [...input.builtinLaunch.args, ...input.args], builtin: true } : { command, args: [...input.args], builtin: true };
   else if (command.trim() === '' || isPathLike(command) || KNOWN_EXECUTABLES.has(command)) out = { command, args: [...input.args], builtin: false };
   else if (command.startsWith('uvx:')) {
     const pkg = command.slice('uvx:'.length);
@@ -65,7 +76,7 @@ export function resolveCommand(input: ResolveCommandInput): Staged<ResolvedComma
     }
   } else out = { command, args: [...input.args], builtin: false };
 
-  // REQ-MCP-034: the workspace binding, matched on the launch subcommand alone; inert until the manifest exists.
+  // REQ-MCP-034: the workspace binding, matched on the launch subcommand alone, independently of the entry's name.
   if (input.binding && input.workspaceRoot !== null && out.args.includes(input.binding.launchSubcommand)) {
     const hasSelection = out.args.includes(input.binding.projectPathOption) || out.args.includes(input.binding.projectFromCwdOption);
     if (!hasSelection) out = { ...out, args: [...out.args, input.binding.projectPathOption, input.workspaceRoot] };

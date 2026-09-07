@@ -24,7 +24,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-07** (Parts X and Y — the Library view: `ui/library` and `ui/markdown` in the
+Last reconciled with the code: **2026-09-07** (Parts Z and AA — the transcript: `ui/transcript` with the recycled
+slot pool, the projection and the two bounded caches, `transcript/Row.tsx` as the one row renderer and
+`TranscriptSurface.tsx` around it, `config/display-section.ts` and `model/reasoning.ts`, in the component view;
+`shell.openExternal`, the three `display/*` preference keys and `session.pageOlder` now actually called, in the
+process view; the `thinking` row, `upsertMessageRow`'s stable segment key, the stall detector, the `display:`
+configuration section and a new §9 for what a surface does with a publication, in the runtime view. Earlier the same
+day, Parts X and Y — the Library view: `ui/library` and `ui/markdown` in the
 component view; the three `prompts.*` requests, the three `artifacts.*` requests and the ninth channel `library:changed`
 in the process view; store **v11**'s two workspace-scoped prompt tables and **v12**'s `artifacts` row with its declared
 index, and the artifact body files beside the session's other files, in the runtime view. Before that, **2026-09-06** — the repair of Part U's thirty-second defect — store **v10**'s

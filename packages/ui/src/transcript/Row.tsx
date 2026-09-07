@@ -455,7 +455,10 @@ export function Row(p: RowProps) {
     const durationMs = groupDurationMs(display.members, display.durationMs, surface.nowMs);
     const running = (display.counts.running ?? 0) > 0;
     return (
-      <article {...common} className={`row row--group tool tool--${severity}`} data-family={display.family} data-severity={severity} data-testid="row-group">
+      // REQ-CHAT-065: the header carries the number of members, so it is observable rather than only readable
+      // out of the summary string. Part Z's placeholder published it and the proof reads it; the real row did
+      // not, which is what the merge found.
+      <article {...common} className={`row row--group tool tool--${severity}`} data-family={display.family} data-severity={severity} data-members={display.members.length} data-testid="row-group">
         <div className="row__grid">
           <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
           <span className="row__attribution"><span className="row__role">{display.family}</span></span>

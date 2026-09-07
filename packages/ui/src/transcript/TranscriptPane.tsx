@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { createElement, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import type { ApprovalPayload, TranscriptRow } from '@rotaris/contracts';
 import {
   LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
@@ -344,7 +344,12 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
       const held = renderings.get(key);
       if (held !== undefined) return held;
     }
-    const element = renderRow({ display: d, expanded: open, onToggle: () => toggle(d.key, open), match, place });
+    // `createElement` and NOT `renderRow(props)`. Calling a component as a plain function runs its hooks in the
+    // CALLER's render — this component's — which is outside the provider this component renders, so every row
+    // read the inert default surface: `runActive` false, both preferences off, no link opener and no menu. Neither
+    // half could see it apart: Part Z's placeholder read no context, and Part AA's plain list rendered `<Row/>` as
+    // an element inside the provider. It is the defect the merge of the two found.
+    const element = createElement(renderRow, { display: d, expanded: open, onToggle: () => toggle(d.key, open), match, place });
     if (key !== null) renderings.set(key, element, sourceTextOf(d).length);
     return element;
   };
@@ -362,7 +367,11 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
           if (d !== undefined) { void copyRowEntry(rowMenuEntries(d)[0]!, onAcknowledge); e.preventDefault(); }
           return;
         }
-        if (moveCurrentRow(e.currentTarget, e.key)) e.preventDefault();
+        // Scoped to the POOL, not the pane: `moveCurrentRow` looks one container deep (`:scope > * > .row`), and
+        // in the pool a row sits inside its slot inside the pool inside the scroller. Part AA wrote it against a
+        // plain list where the rows are its own children.
+        const pool = e.currentTarget.querySelector<HTMLElement>('.transcript__pool');
+        if (pool !== null && moveCurrentRow(pool, e.key)) e.preventDefault();
       }}
     >
       {searchOpen && (

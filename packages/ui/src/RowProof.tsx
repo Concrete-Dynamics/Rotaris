@@ -90,9 +90,14 @@ export function rowProofRows(): readonly TranscriptRow[] {
     row(1, { kind: 'agent', persona: 'orchestrator', name: 'orchestrator', body: ROW_PROOF_MARKDOWN }),
     row(2, { kind: 'thinking', persona: 'orchestrator', name: 'orchestrator', body: 'A reasoning body that stays hidden until the preference or a click asks for it.', startedAt: at(2), durationMs: 4_000 }),
     row(3, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: '✓ read_file README.md', toolName: 'read_file', toolStatus: 'ok', callKey: 'call-ok', durationMs: 3_200, startedAt: at(3), input: '{ "path": "README.md" }', output: 'line one of the untruncated output\nline two\nline three' }),
-    row(4, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'read_file MISSING.md', toolName: 'read_file', toolStatus: 'failed', callKey: 'call-failed', durationMs: 120, startedAt: at(4), input: '{ "path": "MISSING.md" }', output: 'no such file' }),
+    // REQ-CHAT-064: the four outcome rows carry FOUR DIFFERENT families on purpose — reading, searching, running,
+    // editing — so that no two consecutive rows fold and each outcome can be measured on a row of its own. Two of
+    // them shared a family while this fixture was written against a surface that did not project; the merge with
+    // Part Z applied the projection and folded them, which is the requirement working rather than a defect. The
+    // fold itself is measured on the `proof-groups` surface below, which exists for it.
+    row(4, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'grep MISSING.md', toolName: 'grep', toolStatus: 'failed', callKey: 'call-failed', durationMs: 120, startedAt: at(4), input: '{ "path": "MISSING.md" }', output: 'no such file' }),
     row(5, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'terminal rm -rf build', toolName: 'terminal', toolStatus: 'blocked', callKey: 'call-blocked', durationMs: 0, startedAt: at(5), input: '{ "command": "rm -rf build" }', blockedReason: 'a recursive delete is denied by the starter rules' }),
-    row(6, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'terminal git status', toolName: 'terminal', toolStatus: 'running', settled: false, callKey: 'call-running', startedAt: at(6), output: 'On branch main' }),
+    row(6, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'write_file NOTES.md', toolName: 'write_file', toolStatus: 'running', settled: false, callKey: 'call-running', startedAt: at(6), output: 'On branch main' }),
     row(7, { kind: 'diff', body: 'NOTES.md [Edited] +2 -1\n[1]+ a changed line' }),
     row(8, { kind: 'system', body: 'A system notice, which renders as text and never as Markdown: **not bold**.' }),
     row(9, { kind: 'agent', persona: 'coding-agent', name: 'helper', body: 'The child agent answers, still streaming…', settled: false }),

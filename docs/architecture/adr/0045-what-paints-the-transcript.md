@@ -519,3 +519,31 @@ the acceptance is owed to the benchmark part, and what is recorded here is a mea
 ADR-0045's "Revisit if" is not fired: no measured recycler failed the budget. Its two replacement triggers are
 live — `H_max` at 4,320 is exceeded by a portrait 8K panel or by any display at a `scaleFactor` below 1, and the
 settle signal is still a proxy.
+
+## The merge with Part AA — 2026-09-07: two defects the recycler only has when a real row is in the slot
+
+*Recorded under GD-10, by the manager, on merged main. Part Z measured the pool against a placeholder row and
+Part AA measured its row inside a plain list. Both were green. Neither arrangement is the product, and the two
+defects below exist only in the one that is — which is the argument for merging before either half is believed.*
+
+**Forty-five — every row read the INERT surface, so two shipped preferences did nothing.** The pane painted a
+row by CALLING the renderer, `renderRow({ display, expanded, … })`, and a component called as a plain function
+runs its hooks in the caller's render. The caller is `TranscriptPane`, which is *outside* the
+`TranscriptSurfaceProvider` that `TranscriptPane` itself renders, so `useContext` resolved to the inert default:
+`runActive` false, `display/showReasoning` and `display/autoCollapseTools` both off, no link opener, no context
+menu. The visible symptom was small — a running tool call drew no `◉ running…` — and the cause was that half
+the part's user-facing behaviour was disconnected. **Neither half could see it**: Part Z's placeholder read no
+context at all, and Part AA's plain list rendered `<Row/>` as an element, which resolves context at its position.
+The fix is `createElement(renderRow, props)`; the rendering cache is unaffected, because it caches the element.
+
+**Forty-seven — keyboard navigation was dead in the pool.** `moveCurrentRow` finds rows with
+`:scope > .row, :scope > * > .row`, which is correct for a list whose rows are its own children. In the pool a row
+sits inside its slot inside the pool inside the scroller — four levels — so `rowsIn` found none and ArrowDown
+moved nothing. REQ-CHAT-077 was met on the persona window and not on the Workspace, and only the merged product
+has both. The handler now scopes to `.transcript__pool`.
+
+**What both have in common is worth stating, because it will recur.** A recycled pool is not a list with a
+different layout: it changes where a row sits in the element tree and how it is created. Any helper written
+against "the rows are my children", and any component that reads context, has to be re-checked against the pool
+rather than assumed to carry over. That is a consequence of this decision and belongs here rather than in the
+part that tripped over it.

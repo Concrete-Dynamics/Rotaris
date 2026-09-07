@@ -12,13 +12,13 @@ flowchart TB
   subgraph roots["Composition roots — apps/desktop/src (the only importers of electron)"]
     main["main<br/>windows, dialogs, relay, preferences,<br/>process supervision, capture seams"]
     preload["preload<br/>the one frozen bridge"]
-    renderer["renderer<br/>React root; role by route:<br/>main / approval / pause / hook-review"]
+    renderer["renderer<br/>React root; role by route:<br/>main / approval / pause / hook-review /<br/>provider / persona / rows-proof (verification)"]
     runhost["run-host<br/>sessions, runs, tools, hooks,<br/>configuration per run"]
     wsservice["workspace-service<br/>identifier, store open/migrate,<br/>backup, restore, config Tier A"]
   end
 
   subgraph surface["Surface packages"]
-    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog,<br/>ArtifactsTab, ArtifactInspector),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>markdown (ADR-0051: parser, tree renderer, parse cache),<br/>theme, motion, shell-state"]
+    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog,<br/>ArtifactsTab, ArtifactInspector),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>markdown (ADR-0051: parser, tree renderer, parse cache),<br/>transcript/Row (the ONE row renderer) + TranscriptSurface<br/>(the list, the menu, keyboard nav, delegation, scope),<br/>theme, motion, shell-state"]
     uicore["ui-core<br/>replica (the transcript mirror),<br/>notice store,<br/>acknowledgement stack (one per window)"]
     shell["shell<br/>ProcessLink, UpdateRelay"]
   end
@@ -122,7 +122,9 @@ Edges worth knowing the reason for:
 | Preferences, theme data | `platform` (store), `contracts/theme` (data), `ui/theme.ts` (projection) | main, renderer |
 | Views and dialogs | `ui`, `ui-core` | renderer |
 | The session artifact store: records, documents, the two context blocks, the tool port | `engine/src/artifacts/` (+ `store` v12, `contracts/artifacts.ts`) | run-host (`Sessions` builds one per live session; `run-host/tools.ts` binds the three executors) |
-| Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the inspector today; the transcript later — nothing renders Markdown a second way) |
+| Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the artifact inspector's Preview tab and, from Part AA, the transcript's agent-message rows — nothing renders Markdown a second way) |
+| One transcript row, drawn: the categories, the outcomes, the group header, the trailers, the stalled indicator (REQ-CHAT-056/057/060/061/062/065/164) | `ui/src/transcript/Row.tsx` — a **pure function of its props**, holding no state, because Part Z's pool rebinds slots (ADR-0045) | renderer (the Workspace transcript and every persona window) |
+| A transcript surface: the expansion map, the one context menu, keyboard navigation, the delegation-context header, the scope toggle (REQ-CHAT-059/068/069/075/077) | `ui/src/TranscriptSurface.tsx` | renderer |
 
 ### `mcp` (Part S, 2026-09-05)
 

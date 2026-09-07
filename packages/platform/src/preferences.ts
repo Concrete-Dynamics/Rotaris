@@ -18,6 +18,15 @@ export const PREFERENCE_KEYS = {
   'panels/library': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
   /** REQ-SHELL-073 / REQ-MONITOR-072: "agent pop-out" — an ordinary agent click opens the persona window; default off; persists across windows and restarts. */
   'interface/agentPopOut': { type: 'boolean', default: false, owner: 'REQ-SHELL-073', coerce: (value: unknown) => value === true || value === 'true' },
+  /**
+   * Part AA — REQ-CHAT-167 registers this key BY NAME ("stored in the desktop preference store under the
+   * registered key `display/showReasoning`"), REQ-SHELL-006 being the registration this list is. Default **off**,
+   * so reasoning rows summarize per REQ-CHAT-062 and reveal nothing until asked. Written user-wide like every
+   * desktop preference (REQ-CONFIG-405) and not part of the YAML configuration surface.
+   */
+  'display/showReasoning': { type: 'boolean', default: false, owner: 'REQ-CHAT-167', coerce: (value: unknown) => value === true || value === 'true' },
+  /** REQ-CHAT-067: auto-collapse all but the most recent tool-call/result pair; default **off**; a desktop preference, not YAML. */
+  'display/autoCollapseTools': { type: 'boolean', default: false, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value === true || value === 'true' },
 } as const;
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
 export function coercePaneLayout(value: unknown, panes: number): PaneLayout | undefined {

@@ -3,7 +3,8 @@ import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contrac
 import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
-import { TranscriptRows } from './TranscriptRows.js';
+import { RowList, type Acknowledger } from './TranscriptSurface.js';
+import { personaColourToken } from './transcript/Row.js';
 import { markMotionStart } from './motion.js';
 
 /**
@@ -33,6 +34,13 @@ export interface PersonaWindowProps {
   readonly onCancel: (agentId: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** A raise asked the steer card to take focus (REQ-MONITOR-137: the inspector's Steer opens this card). */
   readonly focusSteer?: number | undefined;
+  /** Part AA — REQ-CHAT-076: `http(s)` links open through `shell.openExternal`; without an opener a link is inert (ADR-0051). */
+  readonly onOpenLink?: ((href: string) => void) | undefined;
+  /** Part AA — REQ-CHAT-075: this window's own acknowledgement stack (ADR-0049: one per window). */
+  readonly onAcknowledge?: Acknowledger | undefined;
+  /** Part AA — REQ-CHAT-167 / REQ-CHAT-067: the two display preferences, read once by the root and passed down. */
+  readonly showReasoning?: boolean | undefined;
+  readonly autoCollapseTools?: boolean | undefined;
 }
 
 export const TRANSCRIPT_EMPTY = 'No transcript activity for this agent yet.';
@@ -40,16 +48,15 @@ export const ARTIFACTS_EMPTY = 'No artifacts published yet.';
 export const STEER_PLACEHOLDER = 'Add context or redirect this agent…';
 export const ACTIVITY_EMPTY = 'No activity text has been recorded for this agent.';
 
-/** REQ-SHELL-075 (a): the persona's assigned colour — one of six named tokens of the adopted language by a stable hash of the name (never a literal colour). */
-const PERSONA_TOKENS = ['--rt-accent-300', '--rt-axis-y-300', '--rt-axis-x-300', '--rt-ok', '--rt-warn', '--rt-run'] as const;
-export function personaColourToken(persona: string): string {
-  let h = 0;
-  for (const ch of persona) h = (h * 31 + ch.codePointAt(0)!) % PERSONA_TOKENS.length;
-  return PERSONA_TOKENS[h]!;
-}
+/**
+ * REQ-SHELL-075 (a): the persona's assigned colour — one of six named tokens of the adopted language by a stable
+ * hash of the name (never a literal colour). Part AA moved the one definition into `transcript/Row.tsx`, where
+ * REQ-CHAT-057's continuation bar is its second reader; re-exported here so nothing that named it breaks.
+ */
+export { personaColourToken };
 
 export function PersonaWindow(props: PersonaWindowProps) {
-  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer } = props;
+  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false } = props;
   const agents = session?.agents ?? [];
   const instances = instancesOf(persona, agents, runLevel);
   const shown = instances.find((a) => a.id === selectedAgentId) ?? instances[0] ?? null;
@@ -93,7 +100,19 @@ export function PersonaWindow(props: PersonaWindowProps) {
           <section className="card persona-window__transcript" aria-label={`${shown.name} transcript`} data-testid="persona-transcript" data-rows={own.length}>
             <div className="ov-card__head"><span className="card-kicker">Agent transcript</span><span className="card-meta">{countNoun(own.length, 'row')}</span></div>
             <div className="transcript persona-window__rows" role="log" aria-live="polite">
-              {own.length === 0 ? <div className="empty-state"><span className="empty-state-title">{TRANSCRIPT_EMPTY}</span></div> : <TranscriptRows rows={own} />}
+              {own.length === 0
+                ? <div className="empty-state"><span className="empty-state-title">{TRANSCRIPT_EMPTY}</span></div>
+                : (
+                  // Part AA: the SAME `Row` the Workspace draws (Part R's one-renderer rule), over a plain list rather
+                  // than Part Z's recycled pool — this is a small agent-scoped transcript and ADR-0045's invariance
+                  // claim is about the main window's. The choice is recorded in `TranscriptSurface.tsx`'s head comment.
+                  <RowList
+                    rows={own}
+                    label={`${shown.name} transcript`}
+                    acknowledge={onAcknowledge}
+                    surface={{ showReasoning, autoCollapseTools, runActive: shown.live, nowMs: nowIso === null ? 0 : Date.parse(nowIso), openLink: onOpenLink }}
+                  />
+                )}
             </div>
             <div className="text-secondary persona-window__note">Terminal output previews are not streamed to this window yet (ADR-0021 owed).</div>
           </section>

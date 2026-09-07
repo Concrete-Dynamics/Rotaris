@@ -4,7 +4,7 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded } from '@rotaris/ui';
+import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, RowProof } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -65,6 +65,41 @@ bridge.onSessionSnapshot((p) => {
 bridge.onTranscriptIncrement((p) => replica.getState().applyIncrement(p));
 bridge.onNotice((p) => notices.getState().apply(p));
 bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
+/**
+ * Part AA — REQ-CHAT-075/076. Every transcript surface in this window acknowledges what it did: a copy that
+ * worked and one the platform refused, an open that worked and one that failed. Both go to THIS window's stack
+ * (ADR-0049's fourth decision), so a persona window's acknowledgements are its own.
+ */
+const acknowledge = (kind: 'ok' | 'fail' | 'info' | 'warn', title: string, body?: string): void => {
+  acknowledgements.getState().publish({ kind, title, ...(body === undefined ? {} : { body }) });
+};
+/**
+ * REQ-CHAT-076: an `http(s)` link opens in the SYSTEM BROWSER through the one command; the renderer never
+ * navigates (ADR-0051). "Opening MUST be acknowledged and a failure to open MUST be reported rather than
+ * passing silently" is why every outcome ends in the stack and none is dropped.
+ */
+const openLink = (href: string): void => {
+  void bridge.command({ kind: 'shell.openExternal', url: href }).then((r) => {
+    if (r.ok) acknowledge('ok', 'Opened in your browser', href);
+    else acknowledge('fail', r.headline, r.detail ?? href);
+  });
+};
+/**
+ * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`) — both default OFF, both
+ * global to the transcript, both taking effect immediately on the rows already on screen. Module-scoped because
+ * every transcript surface in the window reads the same two values, the persona window included.
+ */
+const displayPrefs = createStore<{ showReasoning: boolean; autoCollapseTools: boolean }>(() => ({ showReasoning: false, autoCollapseTools: false }));
+async function readDisplayPrefs(): Promise<void> {
+  const [reasoning, collapse] = await Promise.all([
+    bridge.command({ kind: 'prefs.get', key: 'display/showReasoning' }),
+    bridge.command({ kind: 'prefs.get', key: 'display/autoCollapseTools' }),
+  ]);
+  displayPrefs.setState({
+    showReasoning: reasoning.ok && (reasoning.value as { value?: boolean }).value === true,
+    autoCollapseTools: collapse.ok && (collapse.value as { value?: boolean }).value === true,
+  });
+}
 /**
  * REQ-NOTIFY-044's `focus-session`: opening a session is the App component's own callback (it owns the replica and the
  * browser state), so the root registers it here for the dispatcher, which is module-scoped because a notice may arrive
@@ -261,7 +296,9 @@ function Workspace({ models, workspace, popOut, prompts, onOpenStash }: { models
   const personas = useMemo(() => personasOf(snapshot), [snapshot]);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
   const nowIso = useElapsedTick(session);
+  const display = useStore(displayPrefs, (s) => s);
   return <WorkspaceView
+    onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
     onRecordPrompt={(text) => prompts.push('history', text)}
@@ -1109,8 +1146,10 @@ function PersonaApp({ persona, initialSelect }: { persona: string; initialSelect
   const runLevel = useMemo(() => runLevelAgent(state.session, entry), [state.session, entry]);
   const nowIso = useElapsedTick(visible ? state.session : null);
   const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
+  const display = useStore(displayPrefs, (s) => s);
   return (<>
     <PersonaWindow
+      onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
       persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
@@ -1153,12 +1192,20 @@ async function boot(): Promise<void> {
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
   setStoredMotionPreference(motionSetting);
   const settingsCategory = categoryReply.ok ? String((categoryReply.value as { value?: string }).value ?? 'models') : 'models';
+  // Part AA: REQ-CHAT-167 and REQ-CHAT-067's two display preferences, read once before the first paint so no row is
+  // drawn against a default the user has already changed.
+  await readDisplayPrefs();
   const role = new URLSearchParams(window.location.search).get('role');
   if (role === 'approval') { await bootApproval(); return; }
   if (role === 'pause') { await bootPause(); return; }
   if (role === 'provider') { await bootProvider(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   if (role === 'persona') { await bootPersona(); return; }
+  // Part AA's proof harness (verification only; main serves this role only under ROTARIS_CAPTURE_PNG + ROTARIS_ROWS_PROOF).
+  if (role === 'rows-proof') {
+    createRoot(document.getElementById('root')!).render(<StrictMode><RowProof onOpenLink={openLink} onAcknowledge={acknowledge} /><Acknowledgements store={acknowledgements} /></StrictMode>);
+    return;
+  }
   const hello = await bridge.command({ kind: 'shell.hello' });
   const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
   // ESC-34: the dispatcher is not a component, and one action names a workspace it must be checked against.

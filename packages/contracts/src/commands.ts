@@ -14,8 +14,14 @@ import { PromptListSchema } from './library.js';
  * lower-cased view name of REQ-SHELL-023, and the `{view}.{arrangement}` form is for "a view carrying more than
  * one independent multi-pane arrangement", which the Library does not — the Prompts tab's one split is the whole
  * of it (REQ-LIBRARY-106), and the other two tabs declare no divider.
+ *
+ * Part AA registers the transcript's two display preferences, both **user-wide desktop preferences**
+ * (REQ-CONFIG-405) and neither part of the YAML configuration surface: **`display/showReasoning`**, the key
+ * REQ-CHAT-167 names literally, default **off**; and **`display/autoCollapseTools`** (REQ-CHAT-067), default
+ * **off**. REQ-CHAT-166's four tool-content caps are NOT here — those are workspace configuration, written to
+ * the `display` section of `agents.yaml`, and are Part Z's.
  */
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'interface/agentPopOut'] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'interface/agentPopOut', 'display/showReasoning', 'display/autoCollapseTools'] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -98,6 +104,15 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
+  /**
+   * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER. The renderer is
+   * sandboxed and must never navigate (ADR-0051), so a link is an element that asks for this command; main is
+   * the only process that may hand a URL to the platform. **The opening is acknowledged and a failure is
+   * reported**, never passed silently, which is why it is a command with an outcome rather than a fire-and-forget
+   * message. Main refuses anything that is not `http:` or `https:` — the text is model-authored, and a
+   * `file:`, `javascript:` or shell scheme reaching `shell.openExternal` would execute at the reader's expense.
+   */
+  z.object({ kind: z.literal('shell.openExternal'), url: z.string().min(1) }),
   /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
   z.object({ kind: z.literal('approval.payload') }),
   /** ADR-0015: the Hooks tab (REQ-HOOKS-103..105/109/136/137) and the review dialog (REQ-HOOKS-106/107). Every read re-reads the sources (REQ-CONFIG-014). */

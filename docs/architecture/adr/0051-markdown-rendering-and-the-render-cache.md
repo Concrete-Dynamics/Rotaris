@@ -165,6 +165,55 @@ are recorded beside that:
    transcript part's to build. Until then the renderer takes an `onOpenLink` the caller may omit, and a link
    with no opener renders with its target as its title, inert rather than navigable. **Recorded as owed.**
 
+## Second execution (Part AA, 2026-09-07) — the transcript consumes it: `packages/ui/src/transcript/Row.tsx`
+
+The transcript is now this module's second consumer and the product still renders Markdown exactly one way.
+`packages/ui/src/TranscriptRows.tsx` is deleted; `Row` draws every category of `REQ-CHAT-046` that has a drawn
+form, for **both** transcript surfaces — the Workspace's and the persona window's (`REQ-MONITOR-071`, Part R's
+one-renderer rule) — and `pnpm rows-proof` compares the two live subtrees rather than asserting that they share an
+import. The **owe of note 4 above is closed**: `shell.openExternal` exists, in `contracts/src/commands.ts` and in
+main, the open is acknowledged and a failure is reported (`REQ-CHAT-076`).
+
+**Two decisions of this record held and were measured; one thing this record did not decide was wrong in the code
+that met it.**
+
+1. **Alternative B's central claim — "no injection surface at all" — is now measurable rather than argued.** The
+   fixture body carries `<script>window.__rowsProofHtmlExecuted = true;</script>`; the launch reads it back as the
+   *text* of a paragraph. And the stronger structural figure: **`document.querySelectorAll('img').length === 0`**
+   with two image references on screen, one remote and one naming `file:///C:/…`. There is no `<img>` in the
+   renderer's element list, so `REQ-CHAT-056`'s "no image is ever loaded" is a property of the closed element set
+   and not of a filter that could be got round.
+2. **The no-network claim is measured from the MAIN process, with a positive control.** `ROTARIS_CAPTURE_NET=1`
+   logs every request the window's session issues through `webRequest.onBeforeRequest`; the launch records **six**
+   requests — the document, the script, the stylesheet, two fonts and the harness's deliberate same-origin control
+   subresource — and **zero** for either image URL. The control is what makes the zero a measurement: without it a
+   silent log would prove only that nobody was watching. It also had to be **same-origin**, and finding that out was
+   worth the detour: the renderer's policy is `connect-src 'none'` and `img-src 'self' data:` (ADR-0056), so a
+   remote control never reaches the observer at all. That policy is a second, independent bar to a remote image and
+   it is **not** what makes the requirement hold — what makes it hold is item 1.
+3. **The defect this execution found is in the drawing, and it is a `REQ-CHAT-062` one:** a reasoning row's summary
+   string carries its own leading marker (`▸ reasoning · <N>s · ~<T> tok`, `◉ reasoning… <N>s · ~<T> tok`), and the
+   collapsible header also draws a chevron. Both at once reads **`▾▸ reasoning · 4s · ~19 tok`** once the row is
+   expanded — one state stated twice, and stated contradictorily. The marker *is* the chevron. `reasoningSummary`
+   now returns `marker` and `label` separately, the header draws `▾` when open and the marker when closed, and the
+   launch asserts both forms. The same reading caught a second, smaller thing beside it: the requirement writes the
+   settled form with a `·` after `reasoning` and the streaming form **without** one, and the first implementation
+   had inserted one into both.
+4. **The parse cache's live-row rule is not exercised by this consumer yet, and that is stated rather than
+   implied.** `Markdown` calls `markdownCache.parse()`; `peek()` — note 3 of the first execution — belongs to the
+   row that is *streaming*, and choosing between the two calls per row is Part Z's rendering-cache work
+   (`REQ-CHAT-058`), because it is Z that knows which rows are live and holds the measurement cache keyed on the
+   four-part key. Recorded as owed to Part Z rather than half-built here.
+5. **`linkifyBare` is now exported from `parse.ts`.** `REQ-CHAT-076` makes a bare `http(s)` URL activatable in
+   **any** row's text, not only in one that renders Markdown, and a user row or a system notice renders no Markdown
+   at all. Exporting the post-parse transform keeps one definition of what a bare URL is and of where its trailing
+   punctuation ends; writing a second regex beside it would have been the second Markdown path this record forbids.
+
+**Owed, and named here so it is not read as met.** `REQ-CHAT-076`'s "clicking a live terminal preview requests the
+terminal pop-out for that stream" is implemented (`.tool__preview--terminal`, keyed on the row's `streamId`) and is
+**left unexercised**: `CHANNEL.terminalFrames` has no producer anywhere in the product, so no row can carry a live
+stream id. Owed to the ADR-0021 part.
+
 ## Revisit if
 
 Parse cost at the 200 ms budget with many streaming rows proves too high, in which case the answer is

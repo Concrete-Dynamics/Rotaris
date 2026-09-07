@@ -225,7 +225,12 @@ export function trimUrlTail(url: string): string {
   return out;
 }
 
-function linkifyBare(spans: readonly Span[]): Span[] {
+/**
+ * Exported for Part AA: `REQ-CHAT-076` makes a bare `http(s)` URL activatable in **any** row's text, not only
+ * in one that renders Markdown, and a row that renders no Markdown still needs this transform. Exporting it
+ * keeps ONE definition of what a bare URL is and of where its trailing punctuation ends.
+ */
+export function linkifyBare(spans: readonly Span[]): Span[] {
   const out: Span[] = [];
   for (const span of spans) {
     if (span.kind !== 'text') { out.push(span); continue; }

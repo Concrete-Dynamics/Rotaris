@@ -1011,6 +1011,33 @@ async function main(): Promise<void> {
           : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
         return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`), circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled } };
       }
+      /**
+       * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER, the opening is
+       * acknowledged and a failure is reported rather than passing silently. The renderer is sandboxed and never
+       * navigates (ADR-0051); main is the only process that hands a URL to the platform.
+       *
+       * **The scheme is checked here and nowhere else.** Transcript text is model-authored, so a `file:`,
+       * `javascript:` or shell-registered scheme reaching `shell.openExternal` would run at the reader's expense
+       * on their machine. Only `http:` and `https:` are opened; everything else, and anything that is not a URL
+       * at all, is refused with the target named.
+       */
+      case 'shell.openExternal': {
+        let parsed: URL;
+        try { parsed = new URL(req.url); }
+        catch { return { ok: false, code: 'link.unreadable', headline: 'That link could not be opened', detail: `“${req.url}” is not a web address.` }; }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return { ok: false, code: 'link.scheme', headline: 'That link could not be opened', detail: `Only http and https links open in the browser; this one is “${parsed.protocol.replace(':', '')}”.` };
+        }
+        // Verification seam (only with ROTARIS_CAPTURE_PNG): `record` opens nothing and reports success, `fail`
+        // reports the platform refusal, so both halves of the requirement are exercised without launching a browser.
+        const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+        if (scripted === 'fail') { log(`capture: open-external REFUSED ${parsed.href}`); return { ok: false, code: 'link.failed', headline: 'That link could not be opened', detail: 'The system browser refused to open it (scripted).' }; }
+        if (scripted === 'record') { log(`capture: open-external ${parsed.href}`); return { ok: true, value: { url: parsed.href } }; }
+        try { await shell.openExternal(parsed.href); }
+        catch (cause) { return { ok: false, code: 'link.failed', headline: 'That link could not be opened', detail: cause instanceof Error ? cause.message : String(cause) }; }
+        log(`opened externally: ${parsed.href}`);
+        return { ok: true, value: { url: parsed.href } };
+      }
       case 'theme.get':
         return { ok: true, value: { name: currentTheme.name } };
       case 'theme.set': {
@@ -1035,8 +1062,9 @@ async function main(): Promise<void> {
         } else if (req.key === 'ui/reduced_motion') {
           if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
           await preferences.write(req.key, req.value);
-        } else if (req.key === 'interface/agentPopOut') {
-          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Agent pop-out requires a boolean value' };
+        } else if (req.key === 'interface/agentPopOut' || req.key === 'display/showReasoning' || req.key === 'display/autoCollapseTools') {
+          // Part AA: REQ-CHAT-167's `display/showReasoning` and REQ-CHAT-067's `display/autoCollapseTools`, both booleans and both off by default.
+          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'This display preference requires a boolean value' };
           await preferences.write(req.key, req.value);
         } else {
           if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
@@ -1446,8 +1474,26 @@ async function main(): Promise<void> {
     }).catch(() => { closeConfirmed = true; win.close(); });
   });
   win.once('ready-to-show', () => win.show());
-  if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(process.env['ELECTRON_RENDERER_URL']);
-  else await win.loadFile(join(__dirname, '../renderer/index.html'));
+  /**
+   * Part AA's verification seams (only with `ROTARIS_CAPTURE_PNG`).
+   *
+   * `ROTARIS_CAPTURE_NET=1` logs **every request this window's session issues**, from the MAIN process rather
+   * than from the page — REQ-CHAT-056's "no image is ever loaded from a Markdown image reference" is a claim
+   * about the process, and a page cannot honestly measure itself. The observer sees the app's own `file:` assets too;
+   * the proof reads the whole list rather than a filtered one.
+   *
+   * `ROTARIS_ROWS_PROOF=1` loads the renderer in the `rows-proof` role — the row renderer mounted over a fixture
+   * array, which is the surface Part AA can prove before Part Z's pool exists (the plan's own instruction).
+   */
+  if (capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {
+    win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
+      log(`capture: net ${details.method} ${details.resourceType} ${details.url}`);
+      callback({});
+    });
+  }
+  const rowsProof = capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
+  if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(rowsProof ? `${process.env['ELECTRON_RENDERER_URL']}?role=rows-proof` : process.env['ELECTRON_RENDERER_URL']);
+  else await win.loadFile(join(__dirname, '../renderer/index.html'), rowsProof ? { query: { role: 'rows-proof' } } : undefined);
 
   if (argvWorkspace) await openWorkspace(argvWorkspace);
 
@@ -1796,6 +1842,25 @@ async function main(): Promise<void> {
       clocks.timers.after(millis(step.at), async () => {
         const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
         log(`capture: probe-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
+      });
+    }
+    // Part AA's seam (verification only). ROTARIS_CAPTURE_DRAG_AT="selector@ms;;…": a REAL pointer selection across the
+    // matched element — press just inside its top-left, move, release just inside its bottom-right — then the resulting
+    // document selection logged. REQ-CHAT-075 requires selection "in every row category including rows whose body is
+    // rendered Markdown", and a Range set by script would prove the document model rather than the pointer.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_DRAG_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const box = await win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`) as { x: number; y: number; width: number; height: number } | null;
+        if (!box) { log(`capture: drag-at ${step.at} ${step.selector} → no such element`); return; }
+        const from = { x: Math.round(box.x + 2), y: Math.round(box.y + 4) };
+        const to = { x: Math.round(box.x + box.width - 2), y: Math.round(box.y + box.height - 4) };
+        win.webContents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1 });
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round((from.x + to.x) / 2), y: Math.round((from.y + to.y) / 2), button: 'left' });
+        win.webContents.sendInputEvent({ type: 'mouseMove', x: to.x, y: to.y, button: 'left' });
+        win.webContents.sendInputEvent({ type: 'mouseUp', x: to.x, y: to.y, button: 'left', clickCount: 1 });
+        await new Promise((r) => clocks.timers.after(millis(120), () => r(undefined)));
+        const selected = await win.webContents.executeJavaScript('String(document.getSelection() ?? "")') as string;
+        log(`capture: drag-at ${step.at} ${step.selector} → ${JSON.stringify(selected)}`);
       });
     }
     // ROTARIS_CAPTURE_SHOT="path@ms;;…": a PNG of the main window at that time, so a proof can keep a dialog mid-flow (the

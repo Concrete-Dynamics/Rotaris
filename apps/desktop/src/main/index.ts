@@ -1557,7 +1557,32 @@ async function main(): Promise<void> {
           const labels = [...document.querySelectorAll('.nav-item span')].map((element) => ({ text:(element.textContent || '').trim(), rect:rect(element), scrollWidth:element.scrollWidth, clientWidth:element.clientWidth }));
           return { dpr:devicePixelRatio, viewport:{width:innerWidth,height:innerHeight}, theme:document.documentElement.dataset.theme, view:document.querySelector('.app-shell')?.getAttribute('data-view'), rootBackground:getComputedStyle(document.documentElement).getPropertyValue('--rt-bg').trim(), texts, controls, icons, labels };
         })()`);
+        /**
+         * Wait for every finite animation to finish before measuring. Found 2026-09-08: this proof had been red
+         * since Part V put a startup notice on the first screen (2026-09-06), failing contrast on EVERY theme at
+         * EVERY scale. The notice fades in — `@keyframes rt-rise { from { opacity: 0 } }` over
+         * `--rt-duration-slow` — and the capture at 900 ms photographed it mid-fade, measuring its text at about
+         * a quarter opacity: ratios near 1.26 against a 4.5 floor, and the focus ring on its buttons at 0.
+         * **Nothing was wrong with the product; the measurement was taken of a frame no user is asked to read.**
+         * Infinite animations (`rt-pulse` on a live row) never finish and are excluded, or this would hang.
+         */
+        const settle = () => win.webContents.executeJavaScript(`(async () => {
+          const running = document.getAnimations().filter((a) => {
+            const t = a.effect && a.effect.getComputedTiming();
+            return t && t.iterations !== Infinity;
+          });
+          // Bounded, and the bound is not a nicety: the first form awaited the finished promise unconditionally
+          // renderer hung until the 120 s spawn timeout SIGTERMed it on every run. An animation whose element is
+          // removed, or one left paused, never settles it. 600 ms clears the slow duration token (900 ms
+          // fallback) minus the 900 ms the capture already waits, and a frame that has not settled by then is
+          // measured as it stands rather than not measured at all.
+          await Promise.race([
+            Promise.all(running.map((a) => a.finished.catch(() => undefined))),
+            new Promise((resolve) => setTimeout(resolve, 600)),
+          ]);
+        })()`);
         const take = async (name: string) => {
+          await settle();
           const image = await win.webContents.capturePage();
           writeFileSync(join(proofDir, `${name}.png`), image.toPNG());
           writeFileSync(join(proofDir, `${name}.json`), `${JSON.stringify(await metadata(), null, 2)}\n`);

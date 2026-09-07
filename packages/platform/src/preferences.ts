@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { pathKey } from './canonical.js';
 import { guardedRead, replaceDocument, replaceDocumentSync } from './document.js';
 
 export const PREFERENCE_KEYS = {
@@ -34,7 +36,55 @@ export const PREFERENCE_KEYS = {
   'display/showReasoning': { type: 'boolean', default: false, owner: 'REQ-CHAT-167', coerce: (value: unknown) => value === true || value === 'true' },
   /** REQ-CHAT-067: auto-collapse all but the most recent tool-call/result pair; default **off**; a desktop preference, not YAML. */
   'display/autoCollapseTools': { type: 'boolean', default: false, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value === true || value === 'true' },
+  /**
+   * REQ-CHAT-010 / REQ-SHELL-069 (Part AB): the Workspace view's transcript/composer divider, keyed by the
+   * lower-cased view name with no `{view}.{arrangement}` suffix — the Workspace carries ONE multi-pane
+   * arrangement, exactly as the Library does. Pane count 2, sizes `[transcript, composer]`; the declared
+   * defaults are REQ-CHAT-010's own figures (composer 150 px, composer minimum 110 px, transcript minimum
+   * 180 px) and anything else reads as nothing stored.
+   */
+  'panels/workspace': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
 } as const;
+
+/**
+ * REQ-SHELL-159 / REQ-CHAT-015 / REQ-NOTIFY-066 (Part AB): the per-workspace composer draft. It is the FIRST
+ * **parametrised** row of this table, and the distinction matters because REQ-SHELL-006 closes the key set.
+ * What REQ-SHELL-159 registers is literally `workspaces/{workspace-key}/composerDraft` — a template — so what
+ * is closed is the family and its shape, and the only way to mint a member is `composerDraftKey`, which takes
+ * a workspace path. A caller cannot spell one by hand and reach `PreferenceStore`: `preferenceEntry` refuses
+ * a key that is neither in the table above nor a member of this family, which keeps "a key that does not
+ * appear in that table does not exist" true of a family as it is of a literal.
+ *
+ * The default is the empty string, REQ-SHELL-159's own. The 400 ms write debounce and its four flush points
+ * are the CALLER's (ADR-0042's decision: "ordinary keys may be debounced; the composer draft uses the 400 ms
+ * debounce with its four named flush points"), and are not this store's business — the store writes when it
+ * is told to, whole or not at all.
+ */
+const COMPOSER_DRAFT = { type: 'string', default: '', owner: 'REQ-SHELL-159', coerce: (value: unknown) => (typeof value === 'string' ? value : '') } as const;
+const COMPOSER_DRAFT_KEY = /^workspaces\/[0-9a-f]{16}\/composerDraft$/;
+export type ComposerDraftKey = `workspaces/${string}/composerDraft`;
+
+/**
+ * REQ-SHELL-159 keys the draft "by workspace path"; REQ-SHELL-006 makes keys slash-namespaced. A workspace
+ * path carries both separators and, on Windows, a colon, so embedding one would make the namespace ambiguous
+ * and the key unparseable. The key is therefore a stable digest of `pathKey` — the identity spelling every other
+ * per-workspace comparison in this product uses (W-27, ADR-0058 rule 6), case-folded on Windows — which is a
+ * function of the path and so is "keyed by workspace path", while two different workspaces can never collide onto
+ * one draft and two spellings of ONE workspace can never split it in two (REQ-CHAT-015).
+ */
+export function workspaceKey(workspacePath: string, platform: NodeJS.Platform = process.platform): string {
+  return createHash('sha256').update(pathKey(workspacePath, platform)).digest('hex').slice(0, 16);
+}
+export function composerDraftKey(workspacePath: string, platform: NodeJS.Platform = process.platform): ComposerDraftKey {
+  return `workspaces/${workspaceKey(workspacePath, platform)}/composerDraft`;
+}
+
+/** REQ-SHELL-006: the registry entry for a key, or a refusal — the runtime half of "an unregistered key does not exist". */
+export function preferenceEntry(key: PreferenceKey): { readonly coerce: (value: unknown) => unknown } {
+  if (key in PREFERENCE_KEYS) return PREFERENCE_KEYS[key as keyof typeof PREFERENCE_KEYS];
+  if (COMPOSER_DRAFT_KEY.test(key)) return COMPOSER_DRAFT;
+  throw new Error(`preference key ${key} is not registered (REQ-SHELL-006)`);
+}
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
 export function coercePaneLayout(value: unknown, panes: number): PaneLayout | undefined {
   if (!value || typeof value !== 'object') return undefined;
@@ -42,8 +92,8 @@ export function coercePaneLayout(value: unknown, panes: number): PaneLayout | un
   if (v.version !== 1 || v.panes !== panes || !Array.isArray(v.sizes) || v.sizes.length !== panes || !v.sizes.every((n) => typeof n === 'number' && Number.isFinite(n))) return undefined;
   return { version: 1, panes, sizes: [...(v.sizes as number[])] };
 }
-export type PreferenceKey = keyof typeof PREFERENCE_KEYS;
-export type PreferenceValue<K extends PreferenceKey> = ReturnType<(typeof PREFERENCE_KEYS)[K]['coerce']>;
+export type PreferenceKey = keyof typeof PREFERENCE_KEYS | ComposerDraftKey;
+export type PreferenceValue<K extends PreferenceKey> = K extends keyof typeof PREFERENCE_KEYS ? ReturnType<(typeof PREFERENCE_KEYS)[K]['coerce']> : string;
 
 export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonly env: Readonly<Record<string, string | undefined>>; readonly home: string; }
 
@@ -74,11 +124,11 @@ export class PreferenceStore {
   }
 
   read<K extends PreferenceKey>(key: K): PreferenceValue<K> {
-    const entry = PREFERENCE_KEYS[key];
-    return entry.coerce(this.document()[key]) as PreferenceValue<K>;
+    return preferenceEntry(key).coerce(this.document()[key]) as PreferenceValue<K>;
   }
 
   async write<K extends PreferenceKey>(key: K, value: PreferenceValue<K>): Promise<void> {
+    preferenceEntry(key); // REQ-SHELL-006: the gate is the same on the way in as on the way out.
     const document = this.document();
     if (value === undefined) delete document[key]; else document[key] = value;
     const result = await replaceDocument(this.file, serialise(document), { createParent: true });

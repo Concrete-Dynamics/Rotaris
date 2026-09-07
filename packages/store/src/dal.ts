@@ -100,6 +100,8 @@ export interface QueuedPromptRow {
   readonly status: string;
   readonly created_at: string;
   readonly triggered_at: string | null;
+  /** REQ-CHAT-038 (v13, Part AB): the optional context snapshot, one JSON object as supplied; null when none was. */
+  readonly context_snapshot: string | null;
 }
 export interface LockRow extends LockRecord {
   readonly session_id: string;
@@ -339,7 +341,7 @@ export class StoreDal {
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
       // REQ-CHAT-038: the prompt records; the QUEUED → TRIGGERED move is one conditional update whose row count is the claim.
-      insertQueuedPrompt: db.prepare('INSERT INTO queued_prompts (session_id, prompt_id, position, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
+      insertQueuedPrompt: db.prepare('INSERT INTO queued_prompts (session_id, prompt_id, position, content, status, created_at, context_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?)'),
       queuedPromptsOf: db.prepare('SELECT * FROM queued_prompts WHERE session_id = ? ORDER BY position'),
       maxQueuedPosition: db.prepare('SELECT max(position) AS m FROM queued_prompts WHERE session_id = ?'),
       updateQueuedPrompt: db.prepare("UPDATE queued_prompts SET content = ? WHERE session_id = ? AND prompt_id = ? AND status = 'QUEUED'"),
@@ -668,10 +670,15 @@ export class StoreDal {
   setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {
     this.stmts['setPause']!.run(status, pausedAtCount, messageLimit, updatedAt, id);
   }
-  insertQueuedPrompt(id: SessionId, promptId: string, content: string, createdAt: string): QueuedPromptRow {
+  /**
+   * REQ-CHAT-038/039 (v13): the owner is `id` and is the primary key's first column, so it is fixed at the insert and
+   * no later statement can move it — which is "ownership MUST be preserved across edit and trigger" as a property of
+   * the table. `contextSnapshot` is the optional snapshot, stored verbatim.
+   */
+  insertQueuedPrompt(id: SessionId, promptId: string, content: string, createdAt: string, contextSnapshot: string | null = null): QueuedPromptRow {
     const position = ((this.stmts['maxQueuedPosition']!.get(id) as { m: number | null }).m ?? 0) + 1;
-    this.stmts['insertQueuedPrompt']!.run(id, promptId, position, content, 'QUEUED', createdAt);
-    return { session_id: id, prompt_id: promptId, position, content, status: 'QUEUED', created_at: createdAt, triggered_at: null };
+    this.stmts['insertQueuedPrompt']!.run(id, promptId, position, content, 'QUEUED', createdAt, contextSnapshot);
+    return { session_id: id, prompt_id: promptId, position, content, status: 'QUEUED', created_at: createdAt, triggered_at: null, context_snapshot: contextSnapshot };
   }
   queuedPromptsOf(id: SessionId): QueuedPromptRow[] {
     return this.stmts['queuedPromptsOf']!.all(id) as QueuedPromptRow[];

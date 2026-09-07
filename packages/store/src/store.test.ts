@@ -474,9 +474,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v12; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v13; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -751,10 +751,39 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v12, and the migration list is append-only with nothing renumbered', () => {
-    // Part X reserved v11 and Part Y v12 before either was written; the ladder is asserted whole rather than at
-    // its top, so a later part that renumbers an earlier entry fails here and not in a migration on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
+  it('is v13, and the migration list is append-only with nothing renumbered', () => {
+    // Part X reserved v11, Part Y v12 and Part AB v13 before any of them was written; the ladder is asserted whole
+    // rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+  });
+});
+
+/** Part AB — REQ-CHAT-038/039 (v13): the optional context snapshot, and the ownership the table itself keeps. */
+describe('store — v13: the queued prompt\u2019s context snapshot and its owner (Part AB; REQ-CHAT-038/039)', () => {
+  it('stores the snapshot beside the prompt, keeps the owner across edit and trigger, and moves it for exactly one caller', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000063');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const mine = asSessionId('S-mine'), theirs = asSessionId('S-theirs');
+    for (const sid of [mine, theirs]) dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    const snapshot = JSON.stringify({ session_id: mine, note: 'from the composer' });
+    expect(dal.insertQueuedPrompt(mine, 'p-1', 'scoped', 't1', snapshot).context_snapshot).toBe(snapshot);
+    expect(dal.insertQueuedPrompt(mine, 'p-2', 'plain', 't1').context_snapshot).toBeNull();
+    // REQ-CHAT-039: the listing is one session's, so a scoped prompt is invisible to any other session's surfaces.
+    expect(dal.queuedPromptsOf(mine).map((p) => p.prompt_id)).toEqual(['p-1', 'p-2']);
+    expect(dal.queuedPromptsOf(theirs)).toEqual([]);
+    // Ownership and the snapshot survive the edit and the trigger; neither statement names `session_id` as a target.
+    expect(dal.updateQueuedPrompt(mine, 'p-1', 'scoped, edited')).toBe(true);
+    expect(dal.triggerQueuedPrompt(mine, 'p-1', 't2')).toBe(true);
+    const row = dal.queuedPromptsOf(mine)[0]!;
+    expect([row.session_id, row.content, row.status, row.context_snapshot]).toEqual([mine, 'scoped, edited', 'TRIGGERED', snapshot]);
+    // REQ-CHAT-038: a second caller of the same transition observes it is no longer QUEUED and leaves it alone.
+    expect(dal.triggerQueuedPrompt(mine, 'p-1', 't3')).toBe(false);
+    // And another session cannot reach it at all — the statements are keyed by (session_id, prompt_id).
+    expect(dal.triggerQueuedPrompt(theirs, 'p-2', 't4')).toBe(false);
+    expect(dal.updateQueuedPrompt(theirs, 'p-2', 'stolen')).toBe(false);
+    r.db.close();
+    forgetSpelling(r.dir);
   });
 });

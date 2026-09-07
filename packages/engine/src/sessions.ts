@@ -395,9 +395,64 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
   };
 }
 
-/** REQ-CHAT-041: exactly the QUEUED prompts of the session, in queue order. */
+/**
+ * REQ-CHAT-041: exactly the QUEUED prompts of the session, in queue order.
+ *
+ * REQ-CHAT-039's visibility half is this one line: the listing is a query over ONE session's rows, so a prompt
+ * scoped to a session is visible to that session's surfaces and to no other, and the panel of REQ-CHAT-036 shows
+ * "exactly the prompts in QUEUED status belonging to the focused run's session" because it is handed this.
+ * The context snapshot is deliberately NOT published: it is the queue's own bookkeeping, the panel never shows it,
+ * and REQ-CHAT-153 keeps the panel's own content out of anything a model reads.
+ */
 function queuedOf(dal: StoreDal, sessionId: SessionId): { id: string; content: string; createdAt: string }[] {
   return dal.queuedPromptsOf(sessionId).filter((p) => p.status === 'QUEUED').map((p) => ({ id: p.prompt_id, content: p.content, createdAt: p.created_at }));
+}
+
+/**
+ * REQ-CHAT-039's ownership rule, as a value (Part AB).
+ *
+ * "Ownership may come from an explicit session id or from a `session_id` key in the context snapshot." The
+ * control channel addresses a session, and that addressing IS the explicit session id — a queued prompt is
+ * created through `Sessions.control({op:'createQueuedPrompt', sessionId, …})` and the writer it reaches belongs
+ * to that session. So the snapshot is the SECOND route, and the only thing it can do here is agree or disagree:
+ * a snapshot naming another session is refused with the disagreement named, because writing it under the
+ * addressed session would silently mis-scope a prompt and writing it under the named one would cross a session
+ * boundary the store's foreign key owns.
+ *
+ * **The unscoped case is not decided here.** REQ-CHAT-038 admits "empty = unscoped" and REQ-CHAT-039 gives an
+ * unscoped prompt a behaviour of its own; `queued_prompts.session_id` is NOT NULL by construction and the owner's
+ * 2026-09-07 amendment to REQ-CHAT-041 reads "one session-scoped queue" per instance without amending 039. That
+ * is OQ-51, raised against REQ-CHAT-039. Every route in this build supplies the addressed session, so `unscoped`
+ * is unreachable through the product and is returned rather than thrown, so a future route meets a refusal that
+ * names the open question instead of a foreign-key error.
+ */
+/**
+ * The control channel's arguments are scalars, arrays of scalars and one-level records of scalars
+ * (`ControlRequestSchema`), so a context snapshot travels either as such a record or, for a caller with a
+ * deeper one, as its JSON text. An unreadable text is no snapshot rather than an error: REQ-CHAT-038 makes the
+ * snapshot optional, and a caller who sent nothing readable supplied nothing.
+ */
+function readContextSnapshot(raw: unknown): Record<string, unknown> | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'string') {
+    if (raw.trim() === '') return null;
+    try { const parsed: unknown = JSON.parse(raw); return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null; }
+    catch { return null; }
+  }
+  return typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+}
+
+export type QueueOwnership =
+  | { readonly kind: 'scoped'; readonly sessionId: string }
+  | { readonly kind: 'conflict'; readonly reason: string }
+  | { readonly kind: 'unscoped' };
+export function resolveQueueOwnership(addressedSessionId: string | null, snapshot: unknown): QueueOwnership {
+  const named = snapshot !== null && typeof snapshot === 'object' && !Array.isArray(snapshot) && typeof (snapshot as Record<string, unknown>)['session_id'] === 'string'
+    ? ((snapshot as Record<string, string>)['session_id'] ?? '').trim()
+    : '';
+  if (addressedSessionId === null || addressedSessionId === '') return named === '' ? { kind: 'unscoped' } : { kind: 'scoped', sessionId: named };
+  if (named !== '' && named !== addressedSessionId) return { kind: 'conflict', reason: `the context snapshot scopes this prompt to session ${named}, which is not the session it was submitted to (${addressedSessionId})` };
+  return { kind: 'scoped', sessionId: addressedSessionId };
 }
 
 /** REQ-ORCH-014: derived, not stored — `classifying` while the run is starting and no audit exists, then the audit's `run_intent`. */
@@ -842,8 +897,19 @@ export class Sessions {
       }
       case 'createQueuedPrompt': {
         const content = text('text');
+        // REQ-CHAT-038: empty content is an invalid value and is rejected before anything is written; `text` already
+        // refuses an absent or blank argument (REQ-MONITOR-008), so the two rules meet at one check.
         if (content === null) return { ok: false };
-        const r = s!.writer.queuePrompt(randomUUID(), content);
+        /**
+         * REQ-CHAT-039 (Part AB): the optional context snapshot travels as one JSON object, and ownership is resolved
+         * from it and from the addressed session before the row exists. A snapshot that names another session is a
+         * refusal, not a silent re-scoping; an unscoped prompt cannot be represented and is refused with OQ-51 as the
+         * reason rather than guessed at.
+         */
+        const snapshot = readContextSnapshot(req.args['context']);
+        const ownership = resolveQueueOwnership(req.sessionId, snapshot);
+        if (ownership.kind !== 'scoped') return { ok: false };
+        const r = s!.writer.queuePrompt(randomUUID(), content, snapshot === null || snapshot === undefined ? null : JSON.stringify(snapshot));
         if (!r.ok) return { ok: false };
         s!.owner.reconcile();
         return { ok: true, value: r.value.prompt_id };

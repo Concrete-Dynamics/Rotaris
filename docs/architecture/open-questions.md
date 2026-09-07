@@ -2157,6 +2157,37 @@ validated and leaves the provider's health unchecked. What the specification sho
 OpenAI-compatible instance's validation may issue a minimal paid request (the only authenticated call every such
 endpoint has), whether a public catalog is a warning or a refusal, and where the statement lives.
 
+**OQ-51 — Does an UNSCOPED queued prompt still exist?** *(No ADR; raised against `REQ-CHAT-039` by the composer's
+first execution, Part AB, 2026-09-07.)* `REQ-CHAT-038` gives a queued prompt "a session ownership field (empty =
+unscoped)" and `REQ-CHAT-039` gives an unscoped prompt a behaviour of its own: it "MUST be consumable by any run
+but invisible to session-scoped listings". **Two things in the record now disagree with that sentence.**
+
+1. **The store cannot represent one, and has not been able to since v6.** `queued_prompts.session_id` is
+   `TEXT NOT NULL REFERENCES sessions(session_id)` (`store/src/schema.ts`, the v6 migration), so every queued
+   prompt is scoped by construction. Nothing has ever written an unscoped one and no route offers to.
+2. **`REQ-CHAT-041` was amended on 2026-09-07 and 039 was not amended with it.** The amendment
+   (`docs/spec/resolutions/2026-09-06-accepted-review.md`, OQ-1/7/9/16/35) replaced "every window and every run
+   sharing the same process" with "eligible windows and runs for the **same session ID** across its processes",
+   and added "one authoritative service owns the queue and atomic queued-to-triggered transitions". Its own
+   summary line reads "REQ-CHAT-041 assigns **one session-scoped queue** to the application instance." A queue
+   that is session-scoped per instance has no place to put a prompt belonging to no session; but 039 still says
+   one exists, and a requirement is not amended by another requirement's summary.
+
+**What the owner should decide.** Either (a) an unscoped prompt is withdrawn — 039's second sentence goes, 038's
+"empty = unscoped" becomes "always scoped", and the schema is already right; or (b) it survives, in which case
+`REQ-CHAT-041`'s "same session ID" needs a carve-out saying which runs may consume a prompt belonging to no
+session, `REQ-CHAT-036`'s panel needs a rule for a prompt it must not show but a run may consume, and the store
+needs a nullable owner and a second visibility path.
+
+**What Part AB built, and what it did not.** The **scoped** half is built and measured — ownership comes from the
+session the prompt was submitted to (the control channel's addressing IS the explicit session id) or from a
+`session_id` key in the context snapshot, which v13 now stores; a snapshot naming another session is refused
+rather than silently re-scoped; ownership is the primary key's first column, so edit and trigger cannot move it;
+and `pnpm composer-proof` measures REQ-CHAT-038's exactly-once transition under two callers on two connections.
+The **unscoped** half is not implemented in either reading. `resolveQueueOwnership` returns an explicit
+`unscoped` verdict that every route refuses, naming this question, so a future route meets a stated refusal
+rather than a foreign-key error.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

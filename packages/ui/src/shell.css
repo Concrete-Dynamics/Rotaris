@@ -77,7 +77,33 @@
 
 /* ── Workspace view: transcript + composer (REQ-CHAT-001/-010/-011) ── */
 .view:has(> .workspace) { padding: 0; display: flex; flex-direction: column; }
-.workspace { display: grid; grid-template-rows: minmax(180px, 1fr) auto; height: 100%; min-height: 0; }
+/*
+ * Part AB — REQ-CHAT-010's geometry. The four figures are SPECIFICATION values and are written as the
+ * requirement writes them: the composer block defaults to 150 px and never falls below 110 px, the transcript
+ * area never below 180 px, and the composer widget itself never below 48 px. `--rt-composer-height` is the
+ * divider's live value, set on the element by the view and persisted per user under `panels/workspace`
+ * (REQ-SHELL-069). `minmax(min-content, …)` rather than a fixed track, so a stored height smaller than the
+ * controls can never clip the send button off the window — the stored figure is an aim, the content is a floor.
+ * Four rows now: the run header (REQ-CHAT-008/158), the transcript, the queue panel (REQ-CHAT-036, "directly
+ * above the composer" — it had no grid area and was auto-placed BELOW it) and the composer with its divider.
+ */
+.workspace { display: grid; grid-template-rows: auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); height: 100%; min-height: 0; }
+.run-header { display: flex; align-items: center; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-5, 24px); border-bottom: var(--rt-hairline-width) solid var(--rt-border); background: var(--rt-chrome); }
+.run-header__state { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
+.run-header[data-state='running'] .run-header__state, .run-header[data-state='starting'] .run-header__state { color: var(--rt-run); }
+.run-header[data-state='failed'] .run-header__state { color: var(--rt-danger-300); }
+.run-header[data-state='recovery'] .run-header__state { color: var(--rt-warn); }
+.run-header__timing { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); min-width: 48px; }
+.run-header .run-controls { margin-left: auto; }
+/* REQ-CHAT-010: the divider is a real control — a pointer target with a keyboard tab stop, not a decorative rule. */
+.composer__divider { height: 8px; cursor: row-resize; background: var(--rt-chrome); border-top: var(--rt-hairline-width) solid var(--rt-border); }
+.composer__divider:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+/* REQ-CHAT-009's chips: the label states the current choice, the control offers the alternatives. */
+.composer__chips { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.chip-control { display: inline-flex; align-items: center; gap: var(--rt-space-1, 4px); }
+.chip-control__label { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
+.chip-control__select { min-height: 28px; width: max-content; padding: 3px 26px 3px 8px; font-size: var(--rt-text-xs, 12px); }
+.chip-control__select:disabled { opacity: 0.6; cursor: default; }
 /*
  * ADR-0045 (Part Z): the transcript is a scroll container of absolutely positioned slots, so the pane owns the
  * scrolling and `.transcript` becomes the frame the toolbar, the intent line and the wait header share with it.
@@ -152,8 +178,9 @@
 .rows-proof { display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); height: 100vh; overflow: auto; }
 .rows-proof__controls { display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px); }
 .rows-proof__surface { min-height: 0; overflow: auto; border-top: 1px solid var(--rt-border); }
-.composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); border-top: 1px solid var(--rt-border); background: var(--rt-chrome); }
-.composer__input { min-height: 48px; resize: none; }
+/* REQ-CHAT-010: minimum 110 px for the block, 48 px for the widget; the block scrolls rather than clipping a control. */
+.composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; overflow: auto; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); background: var(--rt-chrome); }
+.composer__input { min-height: 48px; resize: none; flex: 1 1 auto; }
 .composer__actions { display: flex; justify-content: flex-end; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 
@@ -288,10 +315,14 @@
 .approval__actions .btn:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 
 /* ── The delegation tree (REQ-MONITOR-036..047, 304): a side column beside the transcript ── */
-.workspace--with-agents { grid-template-columns: 260px 1fr; grid-template-areas: 'agents transcript' 'agents composer'; }
+.workspace--with-agents { grid-template-columns: 260px 1fr; grid-template-areas: 'agents runhead' 'agents transcript' 'agents queue' 'agents divider' 'agents composer'; }
 .workspace--with-agents > .agents { grid-area: agents; }
 .workspace--with-agents > .transcript { grid-area: transcript; }
 .workspace--with-agents > .composer { grid-area: composer; }
+/* Part AB: every layout names the same five rows, so the queue panel is above the composer in all of them. */
+.workspace > .run-header { grid-area: runhead; }
+.workspace > .queue { grid-area: queue; }
+.workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
 .agents__header { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-2, 8px); }
 .agents__title { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
@@ -588,8 +619,8 @@
 /* Part T: the code-intelligence setup's three steps as text (REQ-MCP-112, REQ-SHELL-149). */
 .settings__steps { list-style: none; margin: var(--rt-space-3, 12px) 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
-.workspace--with-agents { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents transcript inspector' 'agents composer inspector'; }
-.workspace:not(.workspace--with-agents):not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'transcript inspector' 'composer inspector'; }
+.workspace--with-agents { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
+.workspace:not(.workspace--with-agents):not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'runhead inspector' 'transcript inspector' 'queue inspector' 'divider inspector' 'composer inspector'; }
 .workspace:not(.workspace--with-agents):not(.workspace--narrow) > .transcript { grid-area: transcript; }
 .workspace:not(.workspace--with-agents):not(.workspace--narrow) > .composer { grid-area: composer; }
 .workspace > .inspector { grid-area: inspector; }
@@ -628,7 +659,7 @@
 .ctx-ring__tick { stroke: var(--rt-text-secondary); stroke-width: 2; }
 .ctx-ring__value { position: relative; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text); }
 .agent-row__dot--idle { background: var(--rt-text-tertiary); }
-.workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'transcript' 'composer'; grid-template-rows: auto minmax(180px, 1fr) auto; position: relative; }
+.workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'runhead' 'transcript' 'queue' 'divider' 'composer'; grid-template-rows: auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); position: relative; }
 .workspace--narrow > .workspace__drawer-bar { grid-area: bar; display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-bottom: 1px solid var(--rt-border); background: var(--rt-chrome); }
 .workspace--narrow > .transcript { grid-area: transcript; }
 .workspace--narrow > .composer { grid-area: composer; }

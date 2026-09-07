@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
-import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout } from './index.js';
+import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-platform-')); });
@@ -209,6 +209,35 @@ describe('platform — desktop preferences (ADR-0042)', () => {
     expect(coercePaneLayout({ version: 1, panes: 3, sizes: [1, 2, 3] }, 2)).toBeUndefined();
     expect(coercePaneLayout({ version: 1, panes: 2, sizes: [1, 'x'] }, 2)).toBeUndefined();
     expect(coercePaneLayout(null, 2)).toBeUndefined();
+  });
+
+  /**
+   * Part AB — REQ-SHELL-159 / REQ-CHAT-015 / REQ-NOTIFY-066: the per-workspace composer draft, the first
+   * PARAMETRISED row of REQ-SHELL-006's closed table.
+   */
+  it('keys the composer draft by workspace, round-trips it character for character, and keeps one workspace out of another', async () => {
+    const store = new PreferenceStore(join(dir, 'preferences'));
+    const a = composerDraftKey('C:\\ws\\alpha', 'win32');
+    const b = composerDraftKey('C:\\ws\\beta', 'win32');
+    expect(a).toMatch(/^workspaces\/[0-9a-f]{16}\/composerDraft$/);
+    expect(a).not.toBe(b);
+    // The canonical spelling decides, so the same workspace typed differently is the same draft (REQ-CHAT-015).
+    expect(composerDraftKey('c:/ws/ALPHA/', 'win32')).toBe(a);
+    // An absent key reads as REQ-SHELL-159's declared default, the empty string, without creating a file.
+    expect(store.read(a)).toBe('');
+    const typed = '  line one\nline two\ttabbed\n\némoji 🌱 and a trailing space \n';
+    await store.write(a, typed);
+    expect(new PreferenceStore(join(dir, 'preferences')).read(a)).toBe(typed);
+    expect(new PreferenceStore(join(dir, 'preferences')).read(b)).toBe('');
+    // The key set stays closed: a key that is neither in the table nor a member of the family does not exist.
+    expect(() => store.read('workspaces/not-a-digest/composerDraft' as never)).toThrow(/REQ-SHELL-006/);
+    expect(() => store.read('composer/draft' as never)).toThrow(/REQ-SHELL-006/);
+  });
+
+  it('registers the Workspace divider as an ordinary pane layout (REQ-CHAT-010 / REQ-SHELL-069)', async () => {
+    const store = new PreferenceStore(join(dir, 'preferences'));
+    await store.write('panels/workspace', { version: 1, panes: 2, sizes: [520, 210] });
+    expect(store.read('panels/workspace')).toEqual({ version: 1, panes: 2, sizes: [520, 210] });
   });
 });
 

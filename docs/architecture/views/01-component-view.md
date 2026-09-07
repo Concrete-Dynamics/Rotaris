@@ -35,7 +35,7 @@ flowchart TB
   subgraph foundation["Foundation packages"]
     config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot"]
     model["model<br/>ports, DefaultAgentBackend,<br/>AiSdkModelClient, ScriptedModelClient"]
-    store["store<br/>schema (v12), StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
+    store["store<br/>schema (v13), StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
     contracts["contracts<br/>channels, commands, control, process protocol,<br/>status, tools, children, hooks, intent, roles,<br/>config projections, theme data"]
     kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, generated requirement symbols"]

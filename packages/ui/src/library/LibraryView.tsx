@@ -16,9 +16,9 @@ import { useShellState } from '../shell-state.js';
  * sits above the refresh where nothing the refresh does can reach it. The field itself is still the Library's,
  * as REQ-LIBRARY-103 requires — it is drawn here and nowhere else, and the tabs never draw one of their own.
  *
- * This file is also the seam between the two halves of the Library: it owns the shell, `PromptsTab` is Part X's,
- * and the Artifacts tab is built against `LibraryTabProps` by whoever builds the session artifact store. Neither
- * tab appears in this file by name.
+ * This file is also the seam between the Library's parts: it owns the shell, `PromptsTab` is Part X's and
+ * `ArtifactsTab` is Part Y's, each built against `LibraryTabProps`, and the Proposals tab will be a third built the
+ * same way. NO tab appears in this file by name — that is what lets a tab be built and merged without touching it.
  */
 export const LIBRARY_TITLE = 'Library';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search prompts, artifacts, and proposals…';

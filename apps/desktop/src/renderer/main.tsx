@@ -370,9 +370,10 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
  * REQ-SHELL-023's Library view (Part X). The shell, the one search field and the three tabs are the view's; the
  * Prompts tab is built here from the state `usePrompts` holds above every view.
  *
- * The other two tab bodies are PLACEHOLDERS, and each says why it is empty rather than showing an empty table that
- * would read as "there is nothing", which is a different claim. The artifacts placeholder is the seam: the tab that
- * replaces it is built against `LibraryTabProps` and slots in here, in this one expression.
+ * The Artifacts tab is Part Y's, built against `LibraryTabProps` and mounted here since the merge, along with the
+ * inspectors it opens. The PROPOSALS body is still a placeholder, and it says why it is empty rather than showing an
+ * empty table that would read as "there is nothing", which is a different claim: no ADR owns the improvement artifact
+ * store's write path (OQ-45), so the tab behind it is a part of its own and has not been authorised.
  */
 function TabPlaceholder({ testId, title, body }: { testId: string; title: string; body: string }) {
   return (

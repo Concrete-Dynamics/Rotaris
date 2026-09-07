@@ -135,6 +135,9 @@ function toolRows(db, sessionId, tool) {
   return db.prepare('SELECT ordinal, status, is_error, agent_name, entry FROM tool_calls WHERE session_id = ? AND tool_name = ? ORDER BY ordinal').all(sessionId, tool).map((r) => ({ ...r, entry: JSON.parse(r.entry) }));
 }
 const PROBE_ROWS = 'tr[data-artifact-id]';
+// The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
+// after the view switch. Before the merge this proof drove a Library that held only this tab and needed no click.
+const ARTIFACTS_TAB = '[data-testid="library-tab"][data-tab="artifacts"]';
 const PROBES = [PROBE_ROWS, '[data-testid="library-artifacts"]', '[data-testid="library-artifacts-empty"]', '[data-testid="library-artifacts-inspect"]', '[data-testid="artifact-inspector"]', '[data-testid="artifact-inspector-meta"]', '[data-testid="artifact-inspector-status"]', '[data-testid="artifact-preview"]', '[data-testid="artifact-save"]'];
 const results = {};
 
@@ -144,6 +147,7 @@ const results = {};
     // The Library is shown FIRST (empty), the run then publishes, the view is left and returned to: the row
     // appears on the next refresh, with no restart and no manual reload (REQ-LIBRARY-136).
     ROTARIS_CAPTURE_VIEWS: '6@1200;;2@2000;;6@14000',
+    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@1400`, `${ARTIFACTS_TAB}@14400`].join(';;'),
     ROTARIS_CAPTURE_PROMPT: 'publish the plan', ROTARIS_CAPTURE_PROMPT_MS: '2600',
     ROTARIS_SCRIPT: 'artifact:artifact_write,artifact:artifact_list,answer',
     ROTARIS_CAPTURE_PROBE_AT: `${PROBE_ROWS}@1600;;[data-testid="library-artifacts-empty"]@1600`,
@@ -220,7 +224,7 @@ const results = {};
     // artifact: REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` reaches them and its diagnostic is recorded.
     ROTARIS_SCRIPT: 'artifact:artifact_write,delegate:coding-agent:one,delegate:tester:two,wait:4000,answer', ROTARIS_CHILD_SCRIPT: 'answer',
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_VIEWS: '6@16000', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_VIEWS: '6@16000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@16400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '18000',
   }, { files: { workspace: WORKSPACE_ORCHESTRATOR } });
   const db = new Database(oneDatabase(), { readonly: true });
@@ -260,7 +264,7 @@ const results = {};
     ROTARIS_CAPTURE_PROMPT: 'publish with a bad tag', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write:bad,answer',
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ bad: { slug: 'refused', title: 'Refused', body: 'nothing should survive this', tags: ['research', 'Nonsense'] } }),
-    ROTARIS_CAPTURE_VIEWS: '6@11000', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_VIEWS: '6@11000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@11400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '13000',
   });
   const db = new Database(oneDatabase(), { readonly: true });
@@ -291,6 +295,7 @@ let edited = null;
     ROTARIS_CAPTURE_RESIZE: '1360x980@500',
     ROTARIS_CAPTURE_VIEWS: '6@11000',
     ROTARIS_CAPTURE_CLICKS: [
+      `${ARTIFACTS_TAB}@11400`,                            // the Library opens on Prompts; take the tab this proof is about
       `${PROBE_ROWS}@12000`,                               // select the row
       '[data-testid="library-artifacts-inspect"]@13000',   // REQ-LIBRARY-108's primary control
       '[data-testid="artifact-tab-markdown"]@14500',       // REQ-LIBRARY-132's second tab
@@ -347,7 +352,7 @@ let edited = null;
     ROTARIS_CAPTURE_RESUME: edited.sessionId,
     ROTARIS_CAPTURE_RESIZE: '1360x980@300',
     ROTARIS_CAPTURE_VIEWS: '6@4000',
-    ROTARIS_CAPTURE_CLICKS: [`${PROBE_ROWS}@5000`, '[data-testid="library-artifacts-inspect"]@6000'].join(';;'),
+    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@4400`, `${PROBE_ROWS}@5000`, '[data-testid="library-artifacts-inspect"]@6000'].join(';;'),
     ROTARIS_CAPTURE_PROBE_AT: [`${PROBE_ROWS}@4600`, '[data-testid="artifact-inspector-status"]@7200'].join(';;'),
     ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '9000',

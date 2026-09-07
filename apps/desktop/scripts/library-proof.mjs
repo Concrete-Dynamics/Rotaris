@@ -77,7 +77,7 @@ function cleanEnvironment() {
 const PROBES = [
   '.app-shell', '[data-testid="library"]', '.library__title', '[data-testid="library-search"]', '[data-testid="library-tab"]',
   '[data-testid="library-stash-row"]', '[data-testid="library-history-row"]', '[data-testid="library-stash-empty"]', '[data-testid="library-history-empty"]',
-  '[data-testid="library-artifacts-placeholder"]', '[data-testid="library-proposals-placeholder"]', '[data-testid="library-divider"]',
+  '[data-testid="library-artifacts"]', '[data-testid="library-proposals-placeholder"]', '[data-testid="library-divider"]',
   '[data-testid="composer-stash"]', '[data-testid="transcript-stash"]', '.composer__input', '[data-testid="notice"]', '[data-testid="notice-title"]',
 ];
 
@@ -184,7 +184,10 @@ const stashed = launch('stash', shellProfile.workspace, shellProfile.local, shel
   ROTARIS_CAPTURE_AFTER_MS: '3000',
 });
 const afterStash = storedPrompts(shellProfile.local);
-if (afterStash.userVersion !== 11) throw new Error(`the store migrated to v${afterStash.userVersion}, not v11`);
+// v11 is where the two prompt tables land; a later part adds its own version and the store passes through v11 on
+// the way, so what this asserts is "at least v11" and not the top of the ladder — the ladder itself is asserted in
+// `store.test.ts`, and pinning the number here made the proof fail on Part Y's v12 for no behavioural reason.
+if (afterStash.userVersion < 11) throw new Error(`the store migrated to v${afterStash.userVersion}, below v11`);
 if (JSON.stringify(afterStash.stash) !== JSON.stringify(['Draft a migration plan'])) throw new Error(`the stash holds ${JSON.stringify(afterStash.stash)}`);
 if (afterStash.history.length !== 0) throw new Error(`stashing wrote ${afterStash.history.length} history row(s); REQ-LIBRARY-137 records only a sent or queued prompt`);
 const clearedComposer = stashed.inspects['.composer__input@2300']?.matches?.[0]?.text;
@@ -309,8 +312,11 @@ if (notice.at['.app-shell@3400']?.[0]?.data?.['data-view'] === 'library') throw 
 const opened = first(notice.probes, '[data-testid="library"]');
 if (opened === null) throw new Error('the notice action did not open the Library');
 if (opened.data['data-tab'] !== 'artifacts') throw new Error(`the Library opened on the "${opened.data['data-tab']}" tab, not the one the action named`);
-if ((notice.probes['[data-testid="library-artifacts-placeholder"]'] ?? []).length !== 1) throw new Error('the Artifacts tab body was not the placeholder this part supplies');
-results.notice = { before: notice.at['.app-shell@3400']?.[0]?.data?.['data-view'] ?? null, action: 'open-library', tab: opened.data['data-tab'], placeholder: true };
+// The tab the action names is the one that renders. Part Y's `ArtifactsTab` occupies this slot since the merge;
+// before it, the assertion read a placeholder here. What is asserted is unchanged: the named tab's body, and not
+// another tab's, is what `open-library` put on screen.
+if ((notice.probes['[data-testid="library-artifacts"]'] ?? []).length !== 1) throw new Error('the Artifacts tab body did not render for the tab the action named');
+results.notice = { before: notice.at['.app-shell@3400']?.[0]?.data?.['data-view'] ?? null, action: 'open-library', tab: opened.data['data-tab'], artifactsTabRendered: true };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

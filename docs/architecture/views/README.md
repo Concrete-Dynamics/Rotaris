@@ -24,7 +24,10 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-06** (the repair of Part U's thirty-second defect — store **v10**'s
+Last reconciled with the code: **2026-09-07** (Parts X and Y — the Library view: `ui/library` and `ui/markdown` in the
+component view; the three `prompts.*` requests, the three `artifacts.*` requests and the ninth channel `library:changed`
+in the process view; store **v11**'s two workspace-scoped prompt tables and **v12**'s `artifacts` row with its declared
+index, and the artifact body files beside the session's other files, in the runtime view. Before that, **2026-09-06** — the repair of Part U's thirty-second defect — store **v10**'s
 `timeline.id` and `timeline.severity` in the runtime view's table, and `timeline.append` named in the process view's
 main → run host request list with the `severity` it now carries; then Parts V and W — the notice store's serialised chain with its record,
 channel 8 and the per-window acknowledgement stack, `timeline.append` to the run host, `window.modality` and the family

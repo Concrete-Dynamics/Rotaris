@@ -1,5 +1,5 @@
 import { createElement, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
-import type { ApprovalPayload, TranscriptRow } from '@rotaris/contracts';
+import type { ApprovalPayload, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import {
   LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
 } from './constants.js';
@@ -9,7 +9,7 @@ import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAn
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
 import { Row, TranscriptSurfaceProvider, isReasoningRow, placements, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
-import type { DisplayRow, RowRenderProps } from './types.js';
+import type { DisplayRow, RowRenderProps, TrailerRow } from './types.js';
 
 /**
  * ADR-0045's **fixed-capacity recycled row pool**, and ADR-0046's **step 5 — present**.
@@ -29,8 +29,14 @@ export interface TranscriptPaneProps {
   readonly running: boolean;
   readonly groupTools: boolean;
   readonly caps?: DisplayCaps | undefined;
-  readonly pendingQuestions: readonly { readonly requestId: string; readonly prompt: string }[];
+  readonly pendingQuestions: readonly QuestionPrompt[];
   readonly pendingApprovals: readonly ApprovalPayload[];
+  /**
+   * Part AC — REQ-CHAT-098 / REQ-CHAT-103: the trailer row is already a control (`Row.tsx`) and this is the one
+   * handler behind it, for BOTH trailers — a question row opens the stepper, an approval row raises its dialog.
+   * Absent leaves the row drawn and inert, which is what it was until this part.
+   */
+  readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   readonly questionAgent?: string | undefined;
   readonly scopeAgent?: string | null | undefined;
   /** REQ-CHAT-165: fetch the next older span. Resolves false when the load FAILED, which a reader must be able to tell from having reached the oldest row. */
@@ -72,7 +78,7 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
     rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent,
-    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row,
+    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer,
     showReasoning = false, autoCollapseTools = false, onOpenLink, onAcknowledge, nowMs = 0,
   } = props;
 
@@ -158,7 +164,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    */
   const surface: TranscriptSurface = {
     showReasoning, autoCollapseTools, runActive: running, nowMs: nowMs === 0 ? ticked : nowMs,
-    openLink: onOpenLink, openMenu: (request) => setMenu(request),
+    openLink: onOpenLink, openMenu: (request) => setMenu(request), openTrailer: onOpenTrailer,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
   };

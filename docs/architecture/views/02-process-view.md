@@ -69,7 +69,10 @@ flowchart LR
 is wired end to end and, from Part Z, is CALLED: the transcript asks for the next older span when the reader scrolls
 toward the top, and the replica's `prependOlder` places it above — REQ-CHAT-165, REQ-SESSION-192),
 `git.read`, `worktree.create/remove/chooseAttach/probePath` (Part O — see the Git paragraph below),
-`pause.present/payload`, `approval.payload`, `notice.acknowledge {noticeId?}` (Part V: an absent identifier clears
+`pause.present/payload`, `approval.payload`, `approval.raise {requestId}` (Part AC, REQ-CHAT-098/103: the approval
+trailer row shares the question trailer's one click handler, and an approval's modal is a separate window, so
+"re-openable while pending" is main raising the dialog already up; refused when no dialog is open for that request —
+a queued one never jumps the queue), `notice.acknowledge {noticeId?}` (Part V: an absent identifier clears
 whatever is current, one given is a compare-and-clear — REQ-NOTIFY-026), `workspace.backup/restore`,
 `shell.switchView`, `window.modality {active}` (Part W: the main window's application-modal surface — the command
 palette, the keyboard help — registering itself open or closed; main's registry disables input in every persona window
@@ -257,7 +260,11 @@ talk directly.
 
 A control is `{ op, sessionId, args }` from the renderer, carried unchanged through main to the run host, and
 answered `{ ok, value? }`; `value` is populated for exactly `createQueuedPrompt` and `submitSteeringPrompt`.
-The twenty-two operations are `contracts/src/control.ts` (REQ-MONITOR-004's enumeration). Nothing in main
+The twenty-two operations are `contracts/src/control.ts` (REQ-MONITOR-004's enumeration). **The argument value space
+is a scalar, an array of scalars or a record of scalars** — REQ-MONITOR-013's "text, numbers, booleans, and simple
+collections of those" encoded literally — and Part AC found it too narrow for REQ-CHAT-095's answers map, which is a
+record of records; `answerQuestion` therefore carries two flat maps keyed by step id rather than widening the space
+(ADR-0010's fourth note). Nothing in main
 decides a control's outcome; main logs it.
 
 ## The wire bus (ADR-0010 #2) stays in the run host

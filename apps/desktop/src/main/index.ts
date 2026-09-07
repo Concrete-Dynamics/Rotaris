@@ -862,6 +862,15 @@ async function main(): Promise<void> {
         const p = dialogPayloads.get(senderId);
         return p ? { ok: true, value: p } : { ok: false, code: 'approval.none', headline: 'This window was not opened for an approval' };
       }
+      case 'approval.raise': {
+        // Part AC — REQ-CHAT-098/103: the approval trailer re-opens what is already up. Main raises; it never decides.
+        const open = openDialog;
+        if (!open || open.requestId !== req.requestId || open.win.isDestroyed()) return { ok: false, code: 'approval.none', headline: 'No approval dialog is open for that request' };
+        open.win.show();
+        open.win.focus();
+        log(`approval ${req.requestId} raised from the transcript trailer`);
+        return { ok: true };
+      }
       case 'pause.payload': {
         const p = pausePayloads.get(senderId);
         return p ? { ok: true, value: p } : { ok: false, code: 'pause.none', headline: 'This window was not opened for a pause' };
@@ -1367,7 +1376,14 @@ async function main(): Promise<void> {
       }
       case 'session.control': {
         // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
-        const r = await runHost.request({ kind: 'session.control', request: req.request }, millis(10_000));
+        // Part AC's seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_QUESTION_STALE corrupts the request
+        // id of a forwarded `answerQuestion` so that no wait carries it. REQ-CHAT-102's failed delivery is otherwise
+        // a race between the click and the wait being released, which no script can hit reliably; the whole product
+        // path — the stepper, the channel, the run host's routing — is exercised unchanged, only the id is stale.
+        const forwarded = capturing && process.env['ROTARIS_CAPTURE_QUESTION_STALE'] && req.request.op === 'answerQuestion'
+          ? { ...req.request, args: { ...req.request.args, requestId: `${String(req.request.args['requestId'])}-stale` } }
+          : req.request;
+        const r = await runHost.request({ kind: 'session.control', request: forwarded }, millis(10_000));
         if (req.request.op === 'answerApproval' && r.kind === 'control.result') {
           // REQ-TOOLS-063: a delivered answer marks its dialog answered (the run host's close follows); an undeliverable one leaves it open.
           const d = dialogs.get(senderId);
@@ -1846,6 +1862,18 @@ async function main(): Promise<void> {
       clocks.timers.after(millis(step.at), async () => {
         const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
         log(`capture: probe-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
+      });
+    }
+    // Part AC's seam (verification only). ROTARIS_CAPTURE_QUESTION_ELSEWHERE="<option>@ms": the prompt the open stepper
+    // is showing, answered from ANOTHER surface — main reads the request id off the stepper and sends `answerQuestion`
+    // itself. REQ-CHAT-098 then requires the modal to close programmatically without emitting a second decision, and
+    // the proof asserts exactly that by counting the controls the renderer sent afterwards.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_QUESTION_ELSEWHERE'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const found = await win.webContents.executeJavaScript('(() => { const el = document.querySelector(\'[data-testid="question-stepper"]\'); return el ? { requestId: el.getAttribute("data-request"), sessionId: el.getAttribute("data-session") } : null; })()') as { requestId: string; sessionId: string } | null;
+        if (!found) { log(`capture: question-elsewhere ${step.at} → no stepper on screen`); return; }
+        const r = await runHost.request({ kind: 'session.control', request: { op: 'answerQuestion', sessionId: found.sessionId, args: { requestId: found.requestId, selected: { [step.selector]: 'answered elsewhere' }, freeform: {} } } }, millis(10_000)).catch(() => null);
+        log(`capture: question-elsewhere ${step.at} ${found.requestId} → ${r && r.kind === 'control.result' ? (r.result.ok ? 'delivered' : 'false') : 'undelivered'}`);
       });
     }
     // Part AA's seam (verification only). ROTARIS_CAPTURE_DRAG_AT="selector@ms;;…": a REAL pointer selection across the

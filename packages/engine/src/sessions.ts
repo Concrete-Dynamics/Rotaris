@@ -1,5 +1,5 @@
 import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type PermissionPreset, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type PermissionPreset, type QuestionAnswers, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend } from '@rotaris/model';
@@ -579,7 +579,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -635,7 +635,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -901,6 +901,38 @@ export class Sessions {
         const option = req.args['option'];
         if (typeof requestId !== 'string' || requestId === '' || typeof option !== 'string' || !(APPROVAL_OPTIONS as readonly string[]).includes(option)) return { ok: false };
         return this.answerApproval(requestId, option as ApprovalOption) ? { ok: true } : { ok: false };
+      }
+      case 'answerQuestion': {
+        /*
+         * Part AC — REQ-CHAT-101's "Submit delivers every step's answer in one payload", carried across
+         * REQ-MONITOR-013's boundary. The answers map REQ-CHAT-095 fixes is `{step_id: {selected_option,
+         * freeform_text}}` — a record of RECORDS, which `ControlRequestSchema`'s argument value space (a scalar, an
+         * array of scalars, or a record of scalars) cannot express. Rather than widen that space, the payload is two
+         * flat maps keyed by step id, each a record of scalars the schema already admits, recombined here into the
+         * one map the tool receives. The operation is still one request carrying every step's answer.
+         * REQ-CHAT-102 rests on the return: `false` here is what keeps the modal open and refuses to report success.
+         */
+        const requestId = req.args['requestId'];
+        if (typeof requestId !== 'string' || requestId === '') return { ok: false };
+        const selected = req.args['selected'];
+        const freeform = req.args['freeform'];
+        const answers: QuestionAnswers = {};
+        const scalarMap = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? v as Record<string, unknown> : {});
+        const sel = scalarMap(selected);
+        const free = scalarMap(freeform);
+        for (const id of new Set([...Object.keys(sel), ...Object.keys(free)])) {
+          answers[id] = {
+            selected_option: typeof sel[id] === 'string' && sel[id] !== '' ? sel[id] : null,
+            freeform_text: typeof free[id] === 'string' && free[id] !== '' ? free[id] : null,
+          };
+        }
+        return this.answerQuestions(requestId, answers) ? { ok: true } : { ok: false };
+      }
+      case 'cancelQuestions': {
+        // REQ-CHAT-101: closing the stepper cancels the whole prompt and releases the waiting call at once.
+        const requestId = req.args['requestId'];
+        if (typeof requestId !== 'string' || requestId === '') return { ok: false };
+        return this.cancelQuestions(requestId) ? { ok: true } : { ok: false };
       }
       default:
         // REQ-MONITOR-004's remaining operations have no mechanism behind them in this build (decision 9 of the plan) and answer false.
@@ -1183,6 +1215,22 @@ export class Sessions {
     for (const s of this.live.values()) {
       if (s.run && s.run.answerApproval(requestId, option)) return true;
       if (s.tools?.answerApproval(requestId, option)) return true;
+    }
+    return false;
+  }
+
+  /** Part AC — REQ-CHAT-096: the same lookup for a question set; a stale prompt id resolves nothing anywhere. */
+  answerQuestions(requestId: string, answers: QuestionAnswers): boolean {
+    for (const s of this.live.values()) {
+      if (s.run && s.run.answerQuestions(requestId, answers)) return true;
+      if (s.tools?.answerQuestions?.(requestId, answers) === true) return true;
+    }
+    return false;
+  }
+  cancelQuestions(requestId: string): boolean {
+    for (const s of this.live.values()) {
+      if (s.run && s.run.cancelQuestions(requestId)) return true;
+      if (s.tools?.cancelQuestions?.(requestId) === true) return true;
     }
     return false;
   }

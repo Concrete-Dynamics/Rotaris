@@ -2,9 +2,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof } from '@rotaris/ui';
+import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -209,6 +209,30 @@ async function control(op: Parameters<typeof bridge.command>[0] extends infer R 
   return v.ok ? { ok: true, ...(v.value === undefined ? {} : { value: v.value }) } : { ok: false, reason: refusal };
 }
 
+/**
+ * Part AC — REQ-CHAT-101/102: every step's answer in ONE control request. The answers map REQ-CHAT-095 fixes is a
+ * record of records and `ControlRequestSchema`'s value space is not (REQ-MONITOR-013 limits arguments to text,
+ * numbers, booleans and simple collections of those), so it crosses as two flat maps keyed by step id and is
+ * recombined in `Sessions.control`. `delivered` is false unless a waiting call actually took the answers — which is
+ * exactly what REQ-CHAT-102 turns into "the modal stays open", so it is never softened into an optimistic true.
+ */
+async function answerQuestions(requestId: string, answers: QuestionAnswers): Promise<{ delivered: boolean }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { delivered: false };
+  const selected: Record<string, string | null> = {};
+  const freeform: Record<string, string | null> = {};
+  for (const [id, a] of Object.entries(answers)) { selected[id] = a.selected_option; freeform[id] = a.freeform_text; }
+  const r = await bridge.command({ kind: 'session.control', request: { op: 'answerQuestion', sessionId, args: { requestId, selected, freeform } } });
+  return { delivered: r.ok && (r.value as { ok: boolean }).ok };
+}
+
+/** REQ-CHAT-101: cancellation, forwarded to the waiting tool call, which the stepper emits exactly once. */
+function cancelQuestions(requestId: string): void {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return;
+  void bridge.command({ kind: 'session.control', request: { op: 'cancelQuestions', sessionId, args: { requestId } } });
+}
+
 /** REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. */
 async function continueSession(action: PauseResolution = 'continue'): Promise<{ ok: true } | { ok: false; reason: string }> {
   const sessionId = replica.getState().sessionId;
@@ -335,7 +359,7 @@ async function pageOlder(beforeIndex: number): Promise<boolean> {
   return true;
 }
 
-function Workspace({ models, workspace, popOut, prompts, onOpenStash, groupTools }: { models: readonly string[]; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean }) {
+function Workspace({ models, workspace, popOut, prompts, onOpenStash, groupTools, onOpenTrailer }: { models: readonly string[]; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; onOpenTrailer: (trailer: TrailerRow) => void }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const reachedOldest = useStore(replica, (s) => s.reachedOldest);
@@ -346,6 +370,7 @@ function Workspace({ models, workspace, popOut, prompts, onOpenStash, groupTools
   const display = useStore(displayPrefs, (s) => s);
   return <WorkspaceView
     onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
+    onOpenTrailer={onOpenTrailer}
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
     onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
@@ -922,6 +947,22 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   // REQ-NOTIFY-044's `focus-session`: the dispatcher is module-scoped (a notice can arrive before a view mounts), so
   // the opener is registered here for as long as this window lives.
   useEffect(() => { focusSession = (id) => { void openSession(id); }; return () => { focusSession = null; }; }, [openSession]);
+
+  /*
+   * Part AC — REQ-CHAT-098/103: ONE trailer handler and ONE modal for this window, held here rather than in the
+   * Workspace view so that switching views cannot unmount a stepper the user is halfway through. A question trailer
+   * opens the stepper; an approval trailer raises the dialog window that is already up (ADR-0019/ADR-0048 paint an
+   * approval in its own window, and REQ-CHAT-103's difference is that the first approval auto-opens while a question
+   * waits for this click). The open stepper is derived by looking the request id up in the record's pending list, so
+   * REQ-CHAT-098's "the modal closes programmatically when the pending state clears" is not an effect that has to
+   * fire — the prompt leaves the list and there is nothing left to render.
+   */
+  const [stepperRequestId, setStepperRequestId] = useState<string | null>(null);
+  const openTrailer = useCallback((trailer: TrailerRow) => {
+    if (trailer.sort === 'question') { setStepperRequestId(trailer.requestId); return; }
+    void bridge.command({ kind: 'approval.raise', requestId: trailer.requestId });
+  }, []);
+  const stepperPrompt = session?.pendingQuestions.find((q) => q.request_id === stepperRequestId) ?? null;
   const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
   const status = useMemo<readonly StatusItem[]>(
     () => [
@@ -949,7 +990,7 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
-        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} />,
+        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} onOpenTrailer={openTrailer} />,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
@@ -972,6 +1013,16 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
         onRevealFiles={async (sessionId) => outcomeOf(await bridge.command({ kind: 'session.revealFiles', sessionId }))}
         onBackup={() => workspaceAction('workspace.backup')}
         onRestore={() => workspaceAction('workspace.restore')}
+      />
+    )}
+    {/* Part AC — REQ-CHAT-098..102: the question stepper, one per window, keyed so a new prompt never reuses its state. */}
+    {stepperPrompt && (
+      <QuestionStepper
+        key={stepperPrompt.request_id}
+        prompt={stepperPrompt}
+        onSubmit={(answers) => answerQuestions(stepperPrompt.request_id, answers)}
+        onCancel={() => cancelQuestions(stepperPrompt.request_id)}
+        onClose={() => setStepperRequestId(null)}
       />
     )}
     {/* REQ-LIBRARY-141: the stash dialog, opened from the transcript toolbar (and, once the slash catalogue exists, by `/pop`). */}

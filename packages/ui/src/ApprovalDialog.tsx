@@ -11,6 +11,18 @@ import type { ApprovalOption, ApprovalPayload } from '@rotaris/contracts';
  * with the three buttons disabled and a status line. The structure is the specification's; the language
  * is the design system's (`.dialog`, `.btn-*`, tokens).
  */
+
+/**
+ * REQ-CHAT-103's exact sentence for a decision that found no waiting call.
+ *
+ * The falsified wording, kept beside its replacement (found by Part AC, 2026-09-07): this read "The answer could
+ * not be delivered: no run is waiting for this request any more." REQ-TOOLS-063, which this dialog was built to,
+ * asks only for "a status line saying the answer could not be delivered" and leaves the wording open, so nothing in
+ * that requirement could catch it — but REQ-CHAT-103, which pairs the approval trailer with the question stepper,
+ * FIXES the sentence in quotation marks, and the two must be read together because they describe one machinery.
+ */
+export const APPROVAL_DELIVERY_FAILED = 'Could not deliver the decision. The waiting agent is no longer available.';
+
 export interface ApprovalDialogProps {
   readonly payload: ApprovalPayload;
   readonly othersWaiting: number;
@@ -64,7 +76,7 @@ export function ApprovalDialog({ payload, othersWaiting, onAnswer }: ApprovalDia
           {payload.reason}
         </p>
         {othersWaiting > 0 && <p className="approval__queue text-secondary">{othersWaiting} other request{othersWaiting === 1 ? '' : 's'} waiting.</p>}
-        {undeliverable && <p className="approval__status" role="status">The answer could not be delivered: no run is waiting for this request any more.</p>}
+        {undeliverable && <p className="approval__status" role="status" data-testid="approval-failure">{APPROVAL_DELIVERY_FAILED}</p>}
         <div className="dialog-actions approval__actions">
           <button ref={deny} type="button" className="btn btn-danger" disabled={disabled} onClick={() => { void answer('deny'); }}>Deny</button>
           <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => { void answer('session'); }}>Approve for this session</button>

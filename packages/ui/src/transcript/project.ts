@@ -1,4 +1,4 @@
-import type { ApprovalPayload, TranscriptRow } from '@rotaris/contracts';
+import { stepsPhrase, type ApprovalPayload, type QuestionPrompt, type TranscriptRow } from '@rotaris/contracts';
 import { DIFF_LINE_CAP, GROUP_BLOB_CAP, THINKING_STALE_SECONDS } from './constants.js';
 import type { DisplayRow, TrailerRow } from './types.js';
 
@@ -105,8 +105,8 @@ export interface ProjectOptions {
   readonly caps: DisplayCaps;
   /** REQ-CHAT-059: the keys the reader has opened. An open row is drawn untruncated whatever the caps say. */
   readonly expanded: ReadonlySet<string>;
-  /** REQ-CHAT-051: the pending state, from which the trailer rows are computed. */
-  readonly pendingQuestions: readonly { readonly requestId: string; readonly prompt: string }[];
+  /** REQ-CHAT-051: the pending state, from which the trailer rows are computed. Widened by Part AC to carry the steps. */
+  readonly pendingQuestions: readonly QuestionPrompt[];
   readonly pendingApprovals: readonly ApprovalPayload[];
   /** REQ-CHAT-051: the question trailer is attributed to the agent that asked. */
   readonly questionAgent?: string | undefined;
@@ -262,26 +262,33 @@ function foldRuns(rows: readonly TranscriptRow[], groupTools: boolean, expanded:
  * REQ-CHAT-051 / REQ-MONITOR-230: the trailer rows, computed from what is pending at that moment, always following
  * every recorded row, appended identically by the whole-state and the incremental paths.
  *
- * **The question trailer is met for approvals and PENDING for questions.** REQ-CHAT-051 reads
- * "N step(s) - <title of the first step>", and `SessionRecord.pendingQuestions` carries `{requestId, prompt}` with
- * no steps and no titles. REQ-CHAT-094 allows one pending prompt per conversation, so the only reading the shape
- * supports is that the LIST is that one prompt's steps: N is the list's length and the title is the first entry's
- * prompt. Part AC widens the field to carry the steps, and the trailer then reads the widened shape.
- * REQ-CHAT-168 binds the wording at zero, one and many.
+ * **The question trailer now reads the widened field (Part AC, 2026-09-07).** The falsified reason, kept beside its
+ * replacement: Part Z built this arm against `SessionRecord.pendingQuestions` as `{requestId, prompt}[]`, which
+ * carried neither steps nor titles, and took the LIST to be one prompt's steps — N the list's length and the title
+ * the first entry's prompt — because REQ-CHAT-094 allows one pending prompt per conversation and that was the only
+ * reading the shape supported. It was the wrong reading of a field that could not express the requirement: the list
+ * is one entry PER CONVERSATION, and each entry now carries its own ordered steps. N is that prompt's step count and
+ * the title is its first step's title, which is what REQ-CHAT-051 asks for. REQ-CHAT-168 binds the wording at zero,
+ * one and many, and the phrase is `stepsPhrase` from the contracts so the trailer and REQ-CHAT-095's
+ * "Received answers for N step(s)." can never disagree about the grammar.
+ *
+ * The prompt trailer is the FIRST pending prompt: REQ-CHAT-051 defines one question trailer row, and a run whose
+ * children each ask at once would otherwise draw one per conversation with no requirement licensing the stack.
  */
 export function trailerRows(o: Pick<ProjectOptions, 'pendingQuestions' | 'pendingApprovals' | 'questionAgent'>): DisplayRow[] {
   const out: DisplayRow[] = [];
-  if (o.pendingQuestions.length > 0) {
-    const n = o.pendingQuestions.length;
-    const first = o.pendingQuestions[0]!;
+  const first = o.pendingQuestions[0];
+  if (first) {
+    const n = first.steps.length;
+    const title = (first.steps[0]?.title ?? '').trim();
     const trailer: TrailerRow = {
-      sort: 'question', requestId: first.requestId, role: o.questionAgent ?? 'rotaris',
-      // REQ-CHAT-168 at one and at many; and a prompt with no text yields the count alone rather than a dangling
-      // separator — Part AA's guard, which the half that computed the wording did not have.
-      text: first.prompt === '' ? `${n} ${n === 1 ? 'step' : 'steps'}` : `${n} ${n === 1 ? 'step' : 'steps'} — ${first.prompt}`,
+      sort: 'question', requestId: first.request_id, role: first.agent_id || o.questionAgent || first.persona || 'rotaris',
+      // REQ-CHAT-168 at zero, one and many; and a first step with no title yields the count alone rather than a
+      // dangling separator — Part AA's guard, kept through the widening.
+      text: title === '' ? stepsPhrase(n) : `${stepsPhrase(n)} — ${title}`,
       steps: n,
     };
-    out.push({ shape: 'trailer', key: `trailer:question:${first.requestId}`, trailer });
+    out.push({ shape: 'trailer', key: `trailer:question:${first.request_id}`, trailer });
   }
   for (const a of o.pendingApprovals) {
     const trailer: TrailerRow = {

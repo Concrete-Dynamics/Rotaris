@@ -7,6 +7,7 @@ import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
 import { TranscriptPane } from './transcript/TranscriptPane.js';
 import type { DisplayCaps } from './transcript/project.js';
+import type { TrailerRow } from './transcript/types.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -79,6 +80,8 @@ export interface WorkspaceViewProps {
   /** Part AA — REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`), both default OFF. */
   readonly showReasoning?: boolean | undefined;
   readonly autoCollapseTools?: boolean | undefined;
+  /** Part AC — REQ-CHAT-098/103: clicking a trailer row opens the question stepper or raises the approval dialog. */
+  readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -321,7 +324,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false }: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, onOpenTrailer }: WorkspaceViewProps) {
   const [text, setText] = useState('');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -518,6 +521,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           autoCollapseTools={autoCollapseTools}
           onOpenLink={onOpenLink}
           onAcknowledge={onAcknowledge}
+          onOpenTrailer={onOpenTrailer}
           nowMs={nowIso === null ? 0 : Date.parse(nowIso)}
         />
       </div>

@@ -773,3 +773,28 @@
 .md__cell--right { text-align: right; }
 .md__cell--center { text-align: center; }
 .md__rule { border: 0; border-top: 1px solid var(--rt-divider); margin: var(--rt-space-3, 12px) 0; }
+
+/*
+ * Part AC — the question stepper (REQ-CHAT-099..102), over the design system's `.dialog`. Two figures here are the
+ * REQUIREMENT's own and are written as the numbers it states rather than as tokens: the 520×420 minimum and the
+ * 28 px pills. Everything else — colour, spacing, radii, type — is a token by name (`docs/design/README.md` §2).
+ */
+.question-stepper { width: min(560px, 100%); min-width: 520px; min-height: 420px; }
+.question-stepper__pills { display: flex; align-items: center; gap: var(--rt-space-2, 8px); list-style: none; margin: 0; padding: 0; }
+/* REQ-CHAT-099: numbered circular pills, 28 px. */
+.question-stepper__pill { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--rt-radius-pill); font-size: var(--rt-text-xs, 12px); font-weight: var(--rt-weight-medium); background: var(--rt-surface-2); color: var(--rt-text-tertiary); border: 1px solid var(--rt-border); }
+.question-stepper__pill[data-state='active'] { background: var(--rt-fill-accent); color: var(--rt-fill-accent-ink); border-color: var(--rt-accent-500); }
+.question-stepper__pill[data-state='done'] { background: var(--rt-fill-y); color: var(--rt-fill-y-ink); border-color: var(--rt-ok); }
+.question-stepper__title { margin: 0; font-weight: var(--rt-weight-display); font-size: var(--rt-text-md, 14px); }
+.question-stepper__description { margin: 0; color: var(--rt-text-tertiary); }
+.question-stepper__options { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+/* REQ-CHAT-100: single-select cards; the selected one takes an accent border and an accent surface fill. */
+.question-stepper__option { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: var(--rt-space-3, 12px); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md); background: var(--rt-surface-2); color: var(--rt-text); cursor: pointer; transition: background var(--rt-duration) var(--rt-ease), border-color var(--rt-duration) var(--rt-ease); }
+.question-stepper__option:hover:not(:disabled) { border-color: var(--rt-border-strong); }
+.question-stepper__option.is-selected { border-color: var(--rt-accent-500); background: var(--rt-accent-tint-14); }
+.question-stepper__option-label { font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium); }
+.question-stepper__option-description { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); }
+/* REQ-CHAT-100: the freeform editor's maximum height is 100 px. */
+.question-stepper__freeform { max-height: 100px; min-height: 56px; resize: vertical; width: 100%; }
+.question-stepper__status { margin: 0; font-size: var(--rt-text-sm, 13px); color: var(--rt-danger-300); }
+.question-stepper__actions { margin-top: auto; }

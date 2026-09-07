@@ -167,8 +167,16 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'ultra' } })).toEqual({ ok: false });
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'fast' } })).toEqual({ ok: true });
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'slow' } })).toEqual({ ok: false });
-    for (const op of ['answerQuestion', 'cancelQuestions', 'forceCompression', 'clearTranscript', 'skipCheck', 'terminalInput', 'terminalResize', 'terminalInterrupt', 'terminalKill'] as const) {
+    for (const op of ['forceCompression', 'clearTranscript', 'skipCheck', 'terminalInput', 'terminalResize', 'terminalInterrupt', 'terminalKill'] as const) {
       expect(sessions.control({ op, sessionId: sid, args: { streamId: 'x', text: 'y' } })).toEqual({ ok: false });
+    }
+    // Part AC — REQ-CHAT-096: the two question operations HAVE a mechanism behind them now, and both refuse the same
+    // two ways: a missing request id (REQ-MONITOR-008) and a stale one that names no waiting call. This session's
+    // tool port is the test's stand-in and holds no question wait, so a well-formed request refuses too.
+    for (const op of ['answerQuestion', 'cancelQuestions'] as const) {
+      expect(sessions.control({ op, sessionId: sid, args: { streamId: 'x', text: 'y' } })).toEqual({ ok: false });
+      expect(sessions.control({ op, sessionId: sid, args: { requestId: '' } })).toEqual({ ok: false });
+      expect(sessions.control({ op, sessionId: sid, args: { requestId: 'no-such-prompt', selected: { a: 'x' } } })).toEqual({ ok: false });
     }
     expect(sessions.control({ op: 'announceShutdown', sessionId: sid, args: {} })).toEqual({ ok: true });
     const result = await sessions.running(sid);

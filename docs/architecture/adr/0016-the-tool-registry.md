@@ -142,3 +142,33 @@ at port creation decides the surface (a later `setMode` to `restricted` leaves t
 denied by the default). `coordinator_only` removes its closed five names and never an MCP tool. **Found: nothing**
 in the registry; consequence 3's coupling (the `tools:` validator fed the configured server set) is now real —
 `referentialMessages` takes the merged `mcp_servers` map and `REQ-MCP-103`'s exact form is the message.
+
+**Fifth execution, 2026-09-07, the declared-but-unexecuted name (Part AC).** `ask_questions` had sat in the frozen
+table since the first execution with a `userPromptChannel` prerequisite, a facet declaration of `d(false, false,
+false)` and **no executor**, so every resolution removed it as `executor_absent` — the reason code this build added
+to REQ-TOOLS-004's four — before the prerequisite it was given could ever decide anything. Part AC built the
+executor (`agent-tools/src/tools/questions.ts`) and the run host's `userPromptChannel` now carries attendedness
+(REQ-TOOLS-053/069) rather than the literal `false` it held while there was nothing for it to be true of. Both
+paths were then exercised for the first time: an attended run keeps the name, an unattended one loses it with
+`user_prompt_channel_absent`.
+
+**Found — a second gate behind the first, and it was silent (the fortieth).** With the executor registered and the
+prerequisite met, the tool was *still* uncallable, because **no built-in persona declared it** and REQ-ORCH-016's
+direct-work bundle does not name it either: `directWorkBundle()` resolves by facet, and `ask_questions` declares
+none of the three (correctly — it reaches a person, not the workspace, REQ-TOOLS-007). The registry's whole
+apparatus of removals and reason codes is downstream of a persona's `tools:` list, so a name **no persona ever
+declared produces no removal, no reason code and no log line**: the tool was simply absent from the listing, in
+silence, and the scripted agent's step fell through to an ordinary answer. This is the mirror image of
+consequence 1 — the table being closed says nothing about the table being *reached* — and it was invisible to
+every reading of the registry because the registry is not where it happens.
+
+`ask_questions` therefore joins the **orchestrator's** declared tools and no other persona's, for the reason
+REQ-CHAT-094 gives: a pending prompt is scoped to one conversation, and the orchestrator's is the conversation the
+desktop user is in. `coordinator_only` does not remove it — `COORDINATOR_REMOVES` is the closed five
+write-and-command names (REQ-TOOLS-006) and asking a person is neither, which the fifth execution confirms in the
+built app. **Whether a delegated child may ask is left open** against REQ-TOOLS-002 rather than settled here: the
+mechanism supports it (the wait registry is per tool port, which is per conversation), but no requirement says
+which personas should, and REQ-CHAT-051 defines exactly one question trailer row.
+
+**Found: nothing else** in the registry. The four-stage narrowing fold, the alias table and the fail-closed
+accessor behaved as the first execution recorded them; the new name changes no stage.

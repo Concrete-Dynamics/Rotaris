@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
-import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
+import type { ApprovalOption, PermissionPreset, QuestionAnswers, QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -706,6 +706,27 @@ export class Run {
   answerApproval(requestId: string, option: ApprovalOption): boolean {
     for (const p of this.ports) if (p.answerApproval(requestId, option)) return true;
     return this.deps.tools?.answerApproval(requestId, option) ?? false;
+  }
+
+  /**
+   * Part AC — REQ-CHAT-096: the same routing for a question set. The (conversation, prompt id) pair is targeted by
+   * the id alone here because a port IS a conversation and a request id is minted per prompt: the port that holds
+   * the id is the conversation the prompt belongs to, and no other port can claim it.
+   */
+  answerQuestions(requestId: string, answers: QuestionAnswers): boolean {
+    for (const p of this.ports) if (p.answerQuestions?.(requestId, answers) === true) return true;
+    return this.deps.tools?.answerQuestions?.(requestId, answers) ?? false;
+  }
+  cancelQuestions(requestId: string): boolean {
+    for (const p of this.ports) if (p.cancelQuestions?.(requestId) === true) return true;
+    return this.deps.tools?.cancelQuestions?.(requestId) ?? false;
+  }
+  /** REQ-CHAT-097: every conversation's pending prompt, for the whole-session update. */
+  pendingQuestions(): QuestionPrompt[] {
+    const out: QuestionPrompt[] = [];
+    for (const p of this.ports) out.push(...(p.pendingQuestions?.() ?? []));
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) out.push(...(this.deps.tools.pendingQuestions?.() ?? []));
+    return out;
   }
 
   /** REQ-MONITOR-009 / REQ-ORCH-133: cancel one child; the reserved run id is a full cancellation. */

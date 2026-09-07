@@ -23,6 +23,17 @@ function store(protector: Protector = okProtector, log: string[] = []) {
 const cred = { access_token: 'sk-or-v1-abc', refresh_token: '', expires_at: 0, account_id: null, extra: { provider_family: 'openai-compatible', api_base: 'https://openrouter.ai/api/v1' } };
 
 describe('the credential store (ADR-0029; REQ-PROVIDER-014/017/018/019)', () => {
+  it('OQ-19: a completed credential write preserves another operation lock and excludes it from enumeration', async () => {
+    const s = store();
+    await s.ensureDirectory();
+    const siblingLock = s.lockFor('deepseek');
+    writeFileSync(siblingLock, JSON.stringify({ pid: process.pid, started_at: 'now' }));
+    expect((await s.save('openai-compatible--openrouter', cred)).ok).toBe(true);
+    expect(existsSync(siblingLock)).toBe(true);
+    expect(s.list()).toEqual(['openai-compatible--openrouter']);
+    expect(s.strayEntries()).toEqual([]);
+    expect(readdirSync(s.directory).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+  });
   it('writes one JSON file per provider, five keys, two-space indented, and reads it back', async () => {
     const s = store();
     expect((await s.save('openai-compatible--openrouter', cred)).ok).toBe(true);

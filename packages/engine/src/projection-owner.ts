@@ -48,6 +48,9 @@ const RECORD_TICK = millis(80);
 
 export class ProjectionOwner {
   private readonly rows = new Map<number, TranscriptRow>();
+  private readonly durableRows = new Map<number, TranscriptRow>();
+  private frozen = false;
+  private lastSession: SessionRecord;
   private lowestHeld = Number.POSITIVE_INFINITY;
   private pendingGrowth: { handle: TimerHandle; fromIndex: number } | null = null;
   /** A record publication owed to a child or tool event, coalesced (REQ-SHELL-076's spirit; one read per interval, not one per event). */
@@ -55,7 +58,8 @@ export class ProjectionOwner {
   readonly counters = { increments: 0, snapshots: 0, growthTicks: 0 };
 
   constructor(private readonly deps: ProjectionOwnerDeps) {
-    for (const r of deps.readResident()) this.hold(r);
+    this.lastSession = deps.readSession();
+    for (const r of deps.readResident()) { this.hold(r); this.durableRows.set(r.index, r); }
   }
 
   get sessionId(): SessionId {
@@ -70,12 +74,15 @@ export class ProjectionOwner {
 
   /** The writer's post-commit hand-off. */
   onCommitted(c: Committed): void {
+    if (this.frozen) return;
     if (c.released) {
       for (let i = c.released.fromIndex; i <= c.released.toIndex; i++) this.rows.delete(i);
+      for (let i = c.released.fromIndex; i <= c.released.toIndex; i++) this.durableRows.delete(i);
       this.lowestHeld = c.released.toIndex + 1;
     }
     if (c.kind === 'row' && c.row) {
       this.hold(c.row);
+      this.durableRows.set(c.row.index, c.row);
       // A pending growth tick for this or a later row is superseded by the committed publication.
       if (this.pendingGrowth && this.pendingGrowth.fromIndex >= c.row.index) this.cancelGrowth();
       this.publishIncrement(c.row.index, [c.row]);
@@ -92,6 +99,7 @@ export class ProjectionOwner {
 
   /** Intra-row growth: in memory only, coalesced (REQ-MONITOR-219/220). */
   grow(index: number, body: string): void {
+    if (this.frozen) return;
     const held = this.rows.get(index);
     if (!held || held.settled) return;
     this.rows.set(index, { ...held, body });
@@ -110,6 +118,7 @@ export class ProjectionOwner {
 
   /** REQ-MONITOR-220: at run end, pending publications are flushed. */
   flushPending(): void {
+    if (this.frozen) return;
     if (!this.pendingGrowth) return;
     const from = this.pendingGrowth.fromIndex;
     this.cancelGrowth();
@@ -124,6 +133,20 @@ export class ProjectionOwner {
 
   /** REQ-MONITOR-226: the same two publications, on request. The snapshot carries the number the surface resumes from. */
   reconcile(): void {
+    this.attach();
+  }
+
+  /** OQ-42: cancel display timers and restore the cached committed transcript boundary. */
+  freezeAtDurableBoundary(): void {
+    if (this.frozen) return;
+    this.frozen = true;
+    this.cancelGrowth();
+    this.pendingRecord?.cancel();
+    this.pendingRecord = null;
+    this.rows.clear();
+    this.lowestHeld = Number.POSITIVE_INFINITY;
+    for (const row of this.durableRows.values()) this.hold(row);
+    try { this.lastSession = this.deps.readSession(); } catch { /* The last published durable snapshot remains available. */ }
     this.attach();
   }
 
@@ -156,7 +179,8 @@ export class ProjectionOwner {
 
   private publishSnapshot(): void {
     if (this.pendingRecord) { this.pendingRecord.cancel(); this.pendingRecord = null; }
-    const session = this.deps.readSession();
+    const session = this.frozen ? this.lastSession : this.deps.readSession();
+    this.lastSession = session;
     const seq = this.deps.seq.stamp(this.deps.sessionId);
     this.counters.snapshots += 1;
     this.deps.publisher.snapshot({ v: CONTRACT_SCHEMA_VERSION, sessionId: this.deps.sessionId, seq, session });

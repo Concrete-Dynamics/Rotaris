@@ -250,7 +250,7 @@ describe('Part U — repair, delete and the exports', () => {
       const t = readTrajectory(dal, sid)!;
       const doc = t.document as Record<string, unknown>;
       expect(Object.keys(doc).sort()).toEqual(['dropped_events', 'duration_seconds', 'ended_at', 'events', 'permission_mode', 'session_id', 'started_at', 'status', 'stop_reason', 'summary', 'task', 'trajectory_version', 'truncated', 'workspace']);
-      expect(doc).toMatchObject({ trajectory_version: 1, session_id: 'S-traj', task: 'second', workspace: 'D:/elsewhere/ws', permission_mode: 'autonomous', status: 'completed', stop_reason: 'tasks_complete', truncated: false, dropped_events: 0, started_at: '2026-09-05T10:00:08.000Z', ended_at: '2026-09-05T10:00:10.000Z', duration_seconds: 2 });
+      expect(doc).toMatchObject({ trajectory_version: 1, session_id: 'S-traj', task: 'second', workspace: 'D:/elsewhere/ws', permission_mode: 'autonomous', status: 'unknown', stop_reason: '', truncated: false, dropped_events: 0, started_at: '2026-09-05T10:00:08.000Z', ended_at: '', duration_seconds: 0 });
       expect((doc['events'] as unknown[]).length).toBe(10);
       expect(doc['summary']).toMatchObject({ events: 10, unknown_events: 1, warnings: 1, runs: 2, iterations: 1, tool_calls: 1, tool_failures: 0, permission_decisions: 1, permission_denials: 1, child_agents: 0, errors: 1, fatal_errors: 0, tokens: { input: 9, output: 4, total: 13 }, cost: '0.25' });
       expect((doc['summary'] as { event_types: Record<string, number> }).event_types['made.up']).toBe(1);
@@ -259,6 +259,20 @@ describe('Part U — repair, delete and the exports', () => {
         'Session S-traj: 1 stored line could not be decoded and is not in the document.',
       ]);
       expect(JSON.stringify(doc)).not.toContain(dir.replace(/\\/g, '/'));
+    });
+
+    it('derives terminal outcome within the latest run and falls back to its result', () => {
+      const sid = plant('S-segment', 'completed');
+      event('S-segment', 1, 'session.start', { task: 'old' });
+      event('S-segment', 2, 'session.end', { status: 'completed', stop_reason: 'old', duration_seconds: 99 });
+      event('S-segment', 3, 'result', { status: 'completed', stop_reason: 'old' });
+      event('S-segment', 4, 'session.start', { task: 'new' });
+      expect(readTrajectory(dal, sid)!.document).toMatchObject({ task: 'new', status: 'unknown', stop_reason: '', ended_at: '', duration_seconds: 0 });
+      event('S-segment', 5, 'result', { result: { status: 'interrupted', stop_reason: 'user_cancelled' } });
+      expect(readTrajectory(dal, sid)!.document).toMatchObject({ status: 'interrupted', stop_reason: 'user_cancelled', ended_at: '2026-09-05T10:00:05.000Z', duration_seconds: 1 });
+      event('S-segment', 6, 'session.end', { status: 'failed', stop_reason: 'failure', duration_seconds: 1.5 });
+      event('S-segment', 7, 'usage.update', { tokens: { total: 5 } });
+      expect(readTrajectory(dal, sid)!.document).toMatchObject({ status: 'failed', stop_reason: 'failure', ended_at: '2026-09-05T10:00:06.000Z', duration_seconds: 1.5 });
     });
 
     it('a capped history reports its drop count and the warning; a batch keeps selection order under the three-key wrapper', async () => {

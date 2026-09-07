@@ -1443,7 +1443,11 @@ Nothing states where it comes from, how it is keyed, or how it is updated. Treat
 alongside the known-limits table is the obvious reading, but it is a **third table of third-party model
 facts** and its update policy should be decided deliberately.
 
-**OQ-19 — The credential directory's contents rule versus the adjacent lock file.** *(ADR-0029.)* *Part K (2026-09-05) takes the record's reading: `<id>.lock` sits beside `<id>.json` inside the directory, enumeration filters `*.json`, and the lock is reclaimed only when its holder is provably gone; the amendment stays available.*
+**OQ-19 — CLOSED by accepted review, applied 2026-09-07.** REQ-PROVIDER-018/063
+and ADR-0029 now permit adjacent coordination locks. Completed operations remove
+their own staging files and preserve overlapping operations' files. Enumeration
+filters credential JSON. Regression coverage verifies a completed write beside
+another operation's retained lock. The following paragraphs preserve the historical question.
 `REQ-PROVIDER-018` says that once any credential operation has finished the directory holds nothing but
 the per-provider files; `REQ-PROVIDER-152` requires an **adjacent** lock file for every read-modify-write.
 The record reads the first as being about the operation's temp files. If it is meant literally and
@@ -1457,7 +1461,12 @@ instance that crashed left behind, and `REQ-STARTUP-164`'s reclaim path is one i
 processes of this application genuinely coexist (constraint C-14). **Deleting a lock file and deleting a
 settle-a-dead-owner obligation are different acts.***
 
-**OQ-20 — "No diagnostic anywhere" versus the per-provider last error.** *(ADR-0030.)* The 30-second
+**OQ-20 — CLOSED by accepted review, applied 2026-09-07.** REQ-PROVIDER-012/057
+now explicitly preserve credentials and last-error state for REQ-PROVIDER-013's
+pre-contact failure result. The unsupported-method implementation and regression
+coverage follow that exception. The following text preserves the historical question.
+
+**Historical OQ-20.** The 30-second
 non-interactive attempt that fails before contacting a provider must produce the failure result and
 nothing else — no traceback, warning or other diagnostic in the log or the interface (`REQ-PROVIDER-013`).
 Every other failure path records a per-provider last error (`REQ-PROVIDER-057`). Does the last-error
@@ -1695,7 +1704,19 @@ the product no longer has, which is its own amendment. C-11 records the narrowin
 conflict, now **split into its two halves with their two owners**, and does **not** report the property
 satisfied.
 
-**OQ-42 — After a sticky mid-run store failure, may publication continue unanchored? *Narrowed on one
+**OQ-42 — CLOSED as a policy decision, 2026-09-06; implementation evidence updated 2026-09-07.**
+
+Accepted review OQ-42 chooses controlled cancellation of affected runs, store-wide
+admission closure, and a frozen durable transcript. Separate in-memory notices
+identify the failure, last durable event ordinal and recovery instructions.
+Terminal persistence failure produces an explicitly unconfirmed caller outcome.
+Explicit reopening waits for cancellation and performs a rolled-back write probe
+before admitting execution. Failed probes preserve quarantine. The engine's
+shared-store and projection-failure regressions cover these paths; desktop
+presentation verification remains tracked in the root resolution progress ledger.
+The following text preserves the historical question and its former interim policy.
+
+**Historical OQ-42 — After a sticky mid-run store failure, may publication continue unanchored? *Narrowed on one
 side by the amendment; the remaining half is harder, not easier.*** *(ADR-0010 consequence 7, which cites
 this; not blocking, because the record states an interim behaviour.)*
 

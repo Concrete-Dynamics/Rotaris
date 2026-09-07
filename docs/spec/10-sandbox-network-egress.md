@@ -54,6 +54,8 @@ The product gates outbound network access and confines shell command execution. 
 
 ### Fetch tool — egress enforcement
 
+**Direct transport policy (REQ-SANDBOX-022, accepted OQ-37, 2026-09-07).** Every fetch hop MUST connect directly to its classified destination. Proxy environment variables, system proxy settings and process-global proxy configuration MUST have no effect on this tool. Tool help and direct-connect failures MUST disclose this policy. The tool MUST preserve per-hop classification and its existing failure vocabulary. Future proxy support requires an explicit policy amendment covering both destination and proxy endpoints.
+
 - **REQ-SANDBOX-022** — Before any connection is opened, the policy is applied to the host of the requested URL and, separately, to the host of each redirect target. A server whose host resolves to deny observes zero connection attempts and zero requests.
 - **REQ-SANDBOX-023** — Redirects are never followed automatically; each hop is re-classified before it is fetched. When a permitted host redirects to a denied host, the request is refused at that hop and the denied server sees nothing.
 - **REQ-SANDBOX-024** — The redirect hop budget is 20. Exceeding it yields `failure_kind` `too_many_redirects`, `error_class` `TooManyRedirects`, and a detail whose required content is the hop budget that was exhausted and the fact that no terminal response was ever reached; the phrasing is the implementation's, and the budget figure is normative while its rendering is not.

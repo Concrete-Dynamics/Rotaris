@@ -517,6 +517,12 @@ export class Sessions {
 
   /** REQ-SESSION-083/112/118: load, validate, claim, sweep, then expose the projection. */
   resume(dal: StoreDal, workspaceRoot: string, sessionId: SessionId): Result<ResumeSuccess, ResumeFailure> {
+    if (SessionWriter.storeFailure(dal)) {
+      const active = [...this.live.values()].some((s) => s.dal.db === dal.db && s.run && !s.run.isEnded);
+      if (active) return err({ code: 'store', reason: 'Store recovery is waiting for affected runs to finish cancellation.' });
+      const recovered = SessionWriter.recoverStore(dal);
+      if (!recovered.ok) return recovered;
+    }
     const row = dal.getSession(sessionId);
     if (!row || row.workspace_root !== workspaceRoot) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const todo = parseTodoDocument(row);
@@ -525,7 +531,13 @@ export class Sessions {
       try { JSON.parse(row.progress); }
       catch (cause) { return err({ code: 'state-unreadable', reason: `session ${sessionId} has unreadable stored state: ${String(cause instanceof Error ? cause.message : cause)}` }); }
     }
-    const existing = this.live.get(sessionId);
+    let existing = this.live.get(sessionId);
+    if (existing?.writer.failed) {
+      existing.log?.close();
+      this.bus.detachSession(sessionId);
+      this.live.delete(sessionId);
+      existing = undefined;
+    }
     if (existing && this.isRunActive(sessionId)) return err({ code: 'run-active', reason: `Session ${sessionId} is already active in this application.` });
     if (existing) return ok({ sessionId, settledChildren: 0 });
     // REQ-GIT-019: a bound session continues in its tree, or refuses with the path stated when the tree is gone.
@@ -576,6 +588,8 @@ export class Sessions {
    * `.rotaris/`, the work happens in the tree.
    */
   start(dal: StoreDal, workspaceRoot: string, prompt: string, opts: StartOptions = {}): Result<SessionId, StartRefusal | { code: string; reason: string }> {
+    const storeFailure = SessionWriter.storeFailure(dal);
+    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before starting work: ${storeFailure}` });
     const attendedNow = this.deps.attended?.() ?? false;
     const setup = this.setupFor(workspaceRoot, attendedNow);
     if (!setup.ok) return err(setup.error);
@@ -680,6 +694,8 @@ export class Sessions {
   prompt(sessionId: SessionId, prompt: string): Result<TranscriptRow, { code: string; reason: string }> {
     let s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
+    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     const setup = this.setupFor(s.dal.getSession(sessionId)?.workspace_root ?? '', this.deps.attended?.() ?? false);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });

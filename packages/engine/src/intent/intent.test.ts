@@ -41,6 +41,18 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(r).toMatchObject({ category: 'moderate_feature', fallback: true, carried_over: false });
     expect(r.reason).toMatch(/no small model is configured/);
   });
+  it('A2: independently bounds prompt and untrusted prior response while preserving historical code', async () => {
+    const { b, inputs } = backend(() => ok('{"intent":"question"}'));
+    const code = 'const historical = true;\n';
+    await classifyIntent({ prompt: 'p'.repeat(5000), metadata: { entrypoint: 'desktop' }, priorResponse: code + 'h'.repeat(5000) }, SLOTS, deps(b, new FakeClock()), new AbortController().signal);
+    const sent = inputs[0]!;
+    const text = sent.messages[0]!.content.map((p) => p.kind === 'text' ? p.text : '').join('');
+    expect(text).toContain(`<request>\n${'p'.repeat(4000)}\n</request>`);
+    expect(text).toContain(`<prior_response>\n${(code + 'h'.repeat(5000)).slice(0, 4000)}\n</prior_response>`);
+    expect(sent.systemPrompt).toContain('untrusted context');
+    expect(sent.tools).toEqual([]);
+  });
+
   it('REQ-ORCH-010/011: the strict rung answers; the prompt is cut at 4000 and no codebase content is sent', async () => {
     const { b, inputs } = backend(() => ok('{"intent":"single_file_change","confidence":0.9,"reason":"one file"}'));
     const r = await classifyIntent({ prompt: 'x'.repeat(5000), metadata: { entrypoint: 'desktop' } }, SLOTS, deps(b, new FakeClock()), new AbortController().signal);

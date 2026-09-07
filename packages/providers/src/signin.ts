@@ -165,7 +165,6 @@ export class ProviderService {
     const method = entry.value.signInMethod;
     if (method !== 'api-key' || entry.value.connectionMode === 'local-sdk') {
       const message = `${entry.value.displayName} signs in with "${METHOD_LABELS[method]}", which this build does not provide yet.`;
-      this.recordError(id, message);
       return { outcome: 'failed', message };
     }
     const key = headerValidKey(apiKey);

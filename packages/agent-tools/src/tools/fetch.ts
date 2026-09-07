@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { directFetch } from './direct-fetch.js';
 import { millis, type Timers } from '@rotaris/kernel';
 import { canonicalizeHost, classifyExplained, describeSource, PERMISSIVE_EGRESS, type Classification, type EgressPolicy } from '../egress.js';
 import type { Observation, ToolContext, ToolExecutor } from './types.js';
@@ -11,9 +12,8 @@ import type { Observation, ToolContext, ToolExecutor } from './types.js';
  * shaping (REQ-SANDBOX-034) and the rendering (REQ-SANDBOX-036). The failure-kind vocabulary is REQ-TOOLS-092's
  * eight spellings and nothing else.
  *
- * NO PROXY (ADR-0023 consequence 2, OQ-37): the runtime's `fetch` honours no proxy environment variable by
- * construction, so every connection this tool opens goes straight to the host it classified. That is the
- * fail-closed direction for REQ-SANDBOX-022's zero-connection promise; a corporate proxy is not consulted.
+ * OQ-37: a dedicated direct dispatcher is supplied on every production request,
+ * including redirect hops. Environment and process-global proxy settings have no effect.
  *
  * The `ask` disposition belongs to the gate (REQ-TOOLS-091): the named host reaches `execute` already approved
  * and is seeded into the request's permitted set; a hop onto a NEW host classifying `ask` is refused, because
@@ -139,7 +139,7 @@ const platformMessage = (e: unknown): string => {
 };
 
 export function fetchTool(deps: FetchDeps): ToolExecutor<FetchArgs> {
-  const fetchImpl = deps.fetchImpl ?? fetch;
+  const fetchImpl = deps.fetchImpl ?? directFetch;
 
   async function run(a: FetchArgs, ctx: ToolContext): Promise<FetchResult> {
     const url = typeof a.url === 'string' ? a.url : '';
@@ -184,7 +184,7 @@ export function fetchTool(deps: FetchDeps): ToolExecutor<FetchArgs> {
     const transportFailure = (cause: unknown, hopUrl: string, hopHost: string, received: Partial<FetchResult>): FetchResult => {
       if (expired) return refusedTimed('timeout', 'FetchTimeout', `The fetch of ${hopUrl} did not complete within ${t.seconds} s, the deadline supplied by ${LEVEL_TEXT[t.level]}.`, received);
       if (ctx.signal.aborted) return refusedTimed('network_error', 'NetworkError', `The fetch of ${hopUrl} was cancelled by the run before it completed.`, received);
-      return refusedTimed('network_error', 'NetworkError', `The connection to ${hopHost} failed before a response was received: ${platformMessage(cause)}`, received);
+      return refusedTimed('network_error', 'NetworkError', `The direct connection to ${hopHost} failed before a response was received: ${platformMessage(cause)}. This fetch tool uses direct connections; proxy environment variables and system proxy settings have no effect.`, received);
     };
 
     try {

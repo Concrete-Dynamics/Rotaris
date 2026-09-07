@@ -4,9 +4,9 @@
  * consultation order is denied, allowed, default (REQ-SANDBOX-014, REQ-TOOLS-084); "local" is textual
  * loopback only and performs no name resolution (REQ-TOOLS-087, REQ-SANDBOX-018).
  *
- * OQ-36 reading, said here: REQ-SANDBOX-006 governs and an IPv6 literal canonicalises UNBRACKETED
- * (`http://[::1]:9000/` → `::1`); REQ-TOOLS-086's "re-bracket" sentence is the one not followed.
+ * Accepted OQ-36: REQ-SANDBOX-006 owns unbracketed canonical IPv6. URL authorities use brackets.
  */
+import { isIP } from 'node:net';
 export type Disposition = 'allow' | 'ask' | 'deny';
 
 export interface EgressPolicy {
@@ -24,18 +24,14 @@ export function canonicalizeHost(input: string): string {
   if (raw === '') return '';
   let host = '';
   try {
-    host = new URL(raw).hostname;
+    const url = isIP(raw) === 6 ? `http://[${raw}]` : raw.includes('://') ? raw : `http://${raw}`;
+    host = new URL(url).hostname;
   } catch {
-    if (raw.includes('://')) return '';
-    try {
-      host = new URL(`http://${raw}`).hostname;
-    } catch {
-      return '';
-    }
+    return '';
   }
   host = host.toLowerCase();
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
-  while (host.endsWith('.')) host = host.slice(0, -1);
+  if (host.endsWith('.')) host = host.slice(0, -1);
   return host;
 }
 

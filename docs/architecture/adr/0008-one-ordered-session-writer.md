@@ -119,8 +119,10 @@ requirement"**.
 durable operation that records the entry**, and that a record whose cap has dropped entries retain
 enough to say so. `REQ-SESSION-132` requires a record kind a session never wrote to read as empty
 rather than missing **without a placeholder being created for it**; the launch audit
-(`REQ-SESSION-138`) is the one deliberate exception. `REQ-SESSION-175`, `REQ-EVENTS-078` and
-`REQ-HOOKS-128` keep history and diagnostics writing off the run's failure path.
+(`REQ-SESSION-138`) is the one deliberate exception. Under accepted OQ-42
+(2026-09-06), REQ-EVENTS-078/088 distinguish isolated consumer faults from a
+durable-store failure: the latter quarantines the shared store and cancels affected
+runs. In-memory failure notices remain available independently of failed recording.
 
 ## Alternatives considered
 
@@ -464,7 +466,7 @@ ADR-0004's primitive under `REQ-SESSION-033`'s six-attempt ladder, generation-or
 never overwrites a newer one (`packages/engine/src/run/summary.ts`). Schema v3 adds columns and two tables
 and **no index**, because no budgeted query reads them yet.
 
-**One reading this record now carries, stated so a reader does not have to choose.** `REQ-SESSION-094`
+**Historical reading, superseded by accepted A3 on 2026-09-06.** `REQ-SESSION-094`
 orders the lock release *before* `session.end` and `result`; `REQ-EVENTS-098` makes the right to write a
 session's history exactly the right to hold its lock. Read flatly they conflict for the two terminal
 events. The writer's `endRun` commits **one durable transaction** in `REQ-SESSION-094`'s order — the
@@ -473,6 +475,16 @@ its patch — so the writer holds the lock at the instant it records the pair an
 commit is visible, and the bus forwards both after the commit while the sink is still attached. If the
 owner reads `REQ-SESSION-094` as requiring the release to be *visible* before the pair is recorded, it is
 a one-line change and this note is where it is argued.
+
+**Accepted A3, 2026-09-06: terminal ownership.** The writer retains its lock
+through the durable terminal transaction and committed event delivery. Teardown
+then detaches session consumers, clears bindings and releases ownership in
+guaranteed cleanup. The terminal transaction contains the system row, terminal
+events and final state. Its lock stays held after commit until cleanup. A failed
+terminal commit publishes no authoritative terminal outcome; the recording-failure
+decision OQ-42 governs cancellation and recovery. `run.test.ts` verifies ownership
+during both terminal inserts and blocking-consumer delivery, and verifies that
+release follows detachment.
 
 **A second reading, on the persisted status at normal completion.** `REQ-MONITOR-029` maps the terminal
 result `completed` to the status `completed`; `REQ-SESSION-093` says a normal completion takes its status

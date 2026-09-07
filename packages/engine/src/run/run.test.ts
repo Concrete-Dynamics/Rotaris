@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -91,6 +91,57 @@ describe('engine/run — the run loop end to end against a real store and a scri
     const summary = join(dir, 'sessions', sid, 'summary.md');
     expect(existsSync(summary)).toBe(true);
     expect(readFileSync(summary, 'utf8')).toContain('completed');
+  });
+
+  it('A3: holds ownership through terminal inserts and delivery, releasing after detachment', async () => {
+    const { backend } = scripted([answer('ok')]);
+    const { sessions } = sessionsWith(backend);
+    const sid = asSessionId('S1');
+    const terminal: string[] = [];
+    const insert = dal.insertEvent.bind(dal);
+    vi.spyOn(dal, 'insertEvent').mockImplementation((...args) => {
+      if (args[2] === 'session.end' || args[2] === 'result') expect(dal.getLock(sid)).toBeDefined();
+      return insert(...args);
+    });
+    const release = dal.releaseLock.bind(dal);
+    vi.spyOn(dal, 'releaseLock').mockImplementation((...args) => {
+      expect(sessions.bus.consumers(sid)).toBe(0);
+      expect(terminal).toEqual(['session.end', 'result']);
+      return release(...args);
+    });
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => {
+      if (e.event === 'session.end' || e.event === 'result') {
+        expect(dal.getLock(sid)).toBeDefined();
+        terminal.push(e.event);
+      }
+    } });
+    expect(sessions.start(dal, 'C:/ws', 'ownership').ok).toBe(true);
+    await sessions.running(sid);
+    expect(dal.getLock(sid)).toBeUndefined();
+    expect(terminal).toEqual(['session.end', 'result']);
+  });
+
+  it('A3: terminal persistence failure rolls back the pair and still detaches and releases', async () => {
+    const { backend } = scripted([answer('ok')]);
+    const { sessions } = sessionsWith(backend);
+    const sid = asSessionId('S1');
+    const delivered: string[] = [];
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => { delivered.push(e.event); } });
+    const insert = dal.insertEvent.bind(dal);
+    vi.spyOn(dal, 'insertEvent').mockImplementation((...args) => {
+      if (args[2] === 'result') throw new Error('injected terminal write failure');
+      return insert(...args);
+    });
+    expect(sessions.start(dal, 'C:/ws', 'failed commit').ok).toBe(true);
+    const result = await sessions.running(sid);
+    expect(result).toMatchObject({ status: 'error', execution_status: 'unknown', persistence: { confirmed: false } });
+    expect(events(sid)).not.toContain('session.end');
+    expect(events(sid)).not.toContain('result');
+    expect(delivered).not.toContain('session.end');
+    expect(delivered).not.toContain('result');
+    expect(sessions.bus.consumers(sid)).toBe(0);
+    expect(dal.getLock(sid)).toBeUndefined();
+    expect(warnings.some((w) => w.includes('injected terminal write failure'))).toBe(true);
   });
 
   it('REQ-MONITOR-219: growth of the agent row is coalesced into a 50 ms tick, in memory, and the settle cancels a pending tick', async () => {
@@ -295,6 +346,43 @@ describe('engine/run — the run loop end to end against a real store and a scri
       expect(dal.getSession(sid)!.stop_reason).toBe('application_shutdown');
       expect(dal.getLock(sid)).toBeUndefined();
     }
+  });
+
+  it('OQ-42: quarantines sibling runs, refuses admission and probes explicit reopen recovery', async () => {
+    let entered = 0;
+    const backend: AgentBackend = { ownsTheLoop: false, runTurn: (_i, _s, signal) => new Promise<TurnReport>((resolve) => {
+      entered += 1;
+      signal.addEventListener('abort', () => resolve({ status: 'failed', text: '', usage: { input: 0, output: 0 }, error: modelError({ code: 'aborted', headline: 'aborted', transient: false }) }), { once: true });
+    }) };
+    const { sessions } = sessionsWith(backend);
+    const a = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
+    const b = (sessions.start(dal, 'C:/ws', 'b') as { value: SessionId }).value;
+    await vi.waitFor(() => expect(entered).toBe(2));
+    const boundaryA = events(a).length;
+    const boundaryB = events(b).length;
+    const insert = vi.spyOn(dal, 'insertEvent').mockImplementationOnce(() => { throw new Error('injected full disk'); });
+    expect(sessions.writer(a)!.recordEvent('error', { message: 'failure probe' }).ok).toBe(false);
+    insert.mockRestore();
+    expect(sessions.run(a)!.stop.requested).toBe(true);
+    expect(sessions.run(b)!.stop.requested).toBe(true);
+    expect(sessions.start(dal, 'C:/ws', 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });
+    expect(sessions.resume(dal, 'C:/ws', a)).toMatchObject({ ok: false, error: { code: 'store' } });
+    const outcomes = await Promise.all([sessions.running(a), sessions.running(b)]);
+    for (const outcome of outcomes) expect(outcome).toMatchObject({ status: 'error', persistence: { confirmed: false } });
+    expect(events(a).length).toBe(boundaryA);
+    expect(events(b).length).toBe(boundaryB);
+    expect(sessions.prompt(a, 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });
+    const probe = vi.spyOn(dal.db, 'exec').mockImplementationOnce(() => { throw new Error('still full'); });
+    expect(sessions.resume(dal, 'C:/ws', a)).toMatchObject({ ok: false, error: { code: 'store' } });
+    probe.mockRestore();
+    expect(SessionWriter.storeFailure(dal)).toContain('injected full disk');
+    expect(sessions.resume(dal, 'C:/ws', a).ok).toBe(true);
+    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
+    expect(sessions.writer(a)!.failed).toBeNull();
+    expect(events(a).length).toBe(boundaryA);
+    expect(dal.db.prepare("SELECT name FROM sqlite_master WHERE name = '__probe'").get()).toBeUndefined();
+    expect(sessions.start(dal, 'C:/ws', 'recovered').ok).toBe(true);
+    await sessions.closeAll();
   });
 
   it('REQ-SESSION-147 / REQ-EVENTS-165: a blocking consumer sees every event after its commit, in ordinal order, and holds the run until it takes each', async () => {

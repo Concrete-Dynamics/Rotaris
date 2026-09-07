@@ -109,7 +109,8 @@ to back and asserts the second binds the first port belongs in the conformance s
 
 `REQ-PROVIDER-013`'s no-diagnostic path is implemented as a distinct branch that constructs the failure
 result and **returns without touching the logger or the last-error record**. Every other failure path
-records a last error; this one must not (OQ-20).
+records a last error. Accepted OQ-20 (2026-09-07) explicitly preserves prior
+last-error state on the pre-contact branch; REQ-PROVIDER-012/057 now cite that exception.
 
 ## Consequences accepted
 

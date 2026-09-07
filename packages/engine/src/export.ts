@@ -270,11 +270,17 @@ export function readTrajectory(dal: StoreDal, sessionId: SessionId): Trajectory 
       if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) events.push(parsed);
       else warnings += 1;
     }
-    const starts = events.filter((e) => str(e['event']) === 'session.start');
-    const latest = starts[starts.length - 1];
-    const first = events[0]; const last = events[events.length - 1];
+    const latestStart = events.findLastIndex((e) => str(e['event']) === 'session.start');
+    const latest = events[latestStart];
+    const segment = latestStart >= 0 ? events.slice(latestStart) : events;
+    const end = segment.findLast((e) => str(e['event']) === 'session.end');
+    const result = segment.findLast((e) => str(e['event']) === 'result');
+    const nestedResult = result?.['result'];
+    const resultPayload = nestedResult !== null && typeof nestedResult === 'object' && !Array.isArray(nestedResult) ? nestedResult : result;
+    const outcome = str(end?.['status']) ? end : resultPayload;
+    const first = events[0];
     const startedAt = str(latest?.['timestamp']) || str(first?.['timestamp']) || row.run_started_at || row.created_at;
-    const endedAt = str(last?.['timestamp']) || row.updated_at;
+    const endedAt = str(outcome?.['status']) ? str((str(end?.['status']) ? end : result)?.['timestamp']) : '';
     const started = Date.parse(startedAt); const ended = Date.parse(endedAt);
     const duration = Number.isFinite(started) && Number.isFinite(ended) && ended >= started ? (ended - started) / 1000 : 0;
     const summary = summariseTrajectory(events, warnings);
@@ -288,9 +294,9 @@ export function readTrajectory(dal: StoreDal, sessionId: SessionId): Trajectory 
       permission_mode: str(latest?.['permission_mode']) || row.permission_mode || '',
       started_at: startedAt,
       ended_at: endedAt,
-      status: row.execution_status,
-      stop_reason: row.stop_reason ?? '',
-      duration_seconds: duration,
+      status: str(outcome?.['status']) || 'unknown',
+      stop_reason: str(outcome?.['stop_reason']),
+      duration_seconds: typeof end?.['duration_seconds'] === 'number' ? num(end['duration_seconds']) : duration,
       truncated: row.truncated === 1,
       dropped_events: row.dropped_count,
       summary: summary as unknown as JsonValue,

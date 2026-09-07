@@ -145,6 +145,17 @@ describe('scanner (ADR-0018, REQ-TOOLS-033..038)', () => {
 });
 
 describe('egress classifier (ADR-0023, REQ-TOOLS-084..087)', () => {
+  it('OQ-36: canonical host normalization is idempotent for bare hosts and IPv6', () => {
+    for (const [input, expected] of [
+      ['example.com:8080', 'example.com'], ['::1', '::1'],
+      ['0:0:0:0:0:0:0:1', '::1'], ['[::1]:9000', '::1'],
+      ['http://[2001:db8::1]:9000/x', '2001:db8::1'],
+    ]) {
+      expect(canonicalizeHost(input!)).toBe(expected);
+      expect(canonicalizeHost(canonicalizeHost(input!))).toBe(expected);
+    }
+    expect(matchHostPattern('http://[::1]:9000', canonicalizeHost('::1'))).toBe(true);
+  });
   it('canonicalises per REQ-SANDBOX-006 (unbracketed IPv6), lower-case, no port, no userinfo, no root dot, IDNA', () => {
     expect(canonicalizeHost('http://[::1]:9000/')).toBe('::1');
     expect(canonicalizeHost('HTTPS://User:pw@Example.COM.:8443/x')).toBe('example.com');

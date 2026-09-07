@@ -8,6 +8,17 @@ function respond(status: number, body: string, statusText = ''): (input: string,
 const base = { providerId: 'openai-compatible--openrouter', displayName: 'OpenRouter', modelsUrl: 'https://openrouter.ai/api/v1/models', token: 'sk-or-key' };
 
 describe('generic discovery (REQ-PROVIDER-069/071/072)', () => {
+  it('A5: preserves true, false and unknown independently of model names', () => {
+    for (const declaration of [true, false]) {
+      const model = modelOfItem({ id: 'm', capabilities: { accepts_image_input: declaration } }, 'p')!;
+      expect(model.capabilities.accepts_image_input).toBe(declaration);
+      expect(JSON.parse(JSON.stringify(model)).capabilities.accepts_image_input).toBe(declaration);
+    }
+    const unknown = modelOfItem({ id: 'vision-image-model' }, 'p')!;
+    expect(Object.hasOwn(unknown.capabilities, 'accepts_image_input')).toBe(false);
+    expect(Object.hasOwn(JSON.parse(JSON.stringify(unknown)).capabilities, 'accepts_image_input')).toBe(false);
+    expect(modelOfItem({ id: 'm', input_modalities: ['text'] }, 'p')!.capabilities.accepts_image_input).toBe(false);
+  });
   it('sends the bearer and the user agent, and maps a models payload', async () => {
     let seen: { url: string; headers: Record<string, string> } | null = null;
     const fetch = async (url: string, init?: RequestInit) => { seen = { url, headers: Object.fromEntries(new Headers(init?.headers).entries()) }; return new Response(JSON.stringify({ data: [{ id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', context_length: 200000, architecture: { input_modalities: ['text', 'image'] }, top_provider: { max_completion_tokens: 32000 }, pricing: { prompt: '0.000001' } }, { id: 'x/y' }] }), { status: 200 }); };

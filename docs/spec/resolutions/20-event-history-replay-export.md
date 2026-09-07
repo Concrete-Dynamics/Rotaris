@@ -319,3 +319,23 @@ section now records that nothing is outstanding.
 > obligation and no ladder. `REQ-TRACE-061` was written to be citable across domains for exactly this
 > case; whether this document should cite it or state its own is not settled here, and minting a
 > competing ladder owner would be the wrong answer to it.
+
+## Accepted amendment, 2026-09-06 — A6: latest-run outcome
+
+REQ-EVENTS-138 now derives identity and terminal outcome within the segment
+starting at the latest retained `session.start`. An unfinished segment exports
+an unknown outcome, empty stop reason/end timestamp and zero duration. The
+whole-history counts retain their scope. This addresses the sequence
+`start(A), end(A), result(A), start(B)` and also prevents session-row state from
+supplying an outcome absent from the exported events. Regression coverage is
+in `packages/engine/src/session-actions.test.ts`.
+
+## Accepted amendment, 2026-09-06 — A9: export replacement retries
+
+The user accepted specification-review item A9. REQ-EVENTS-145 now cites
+REQ-TRACE-061 for every export format it governs, including trajectory, batch,
+and line-delimited exports. Exhaustion produces a recoverable failure and
+preserves the previous destination. REQ-SESSION-033 retains its local summary-file
+scope. This closes the export-ladder question recorded in the historical
+2026-09-02 amendment above. Implementation verification is tracked in
+`SPECIFICATION_RESOLUTION_PROGRESS.md` at the repository root.

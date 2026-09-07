@@ -270,12 +270,33 @@ export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
 }
 
 export class SessionWriter {
+  /** One quarantine per open database, shared across all session writers using it. */
+  private static readonly storeFailures = new WeakMap<StoreDal['db'], string>();
+  private static readonly storeWriters = new WeakMap<StoreDal['db'], Set<WeakRef<SessionWriter>>>();
+
+  static storeFailure(dal: StoreDal): string | undefined {
+    return this.storeFailures.get(dal.db);
+  }
+
+  /** Explicit recovery after every affected run has settled; the probe leaves the store unchanged. */
+  static recoverStore(dal: StoreDal): Result<void, { code: 'store'; reason: string }> {
+    try {
+      dal.db.exec('BEGIN IMMEDIATE');
+      try {
+        dal.db.exec('CREATE TABLE IF NOT EXISTS __probe(x)');
+        dal.db.exec('INSERT INTO __probe(x) VALUES (1)');
+      } finally { dal.db.exec('ROLLBACK'); }
+      this.storeFailures.delete(dal.db);
+      return ok(undefined);
+    } catch (cause) { return err({ code: 'store', reason: `Store recovery probe failed: ${String(cause)}` }); }
+  }
   private nextIndex: number;
   private nextOrdinal: number;
   private residentCount: number;
   private dropped: number;
   private generation = 0;
   private failedReason: string | null = null;
+  private readonly failureListeners = new Set<(reason: string, lastOrdinal: number) => void>();
   /** The status the row carries; a row append touches `updated_at` without changing it. */
   private status: string;
   /** REQ-MONITOR-044/049/060 (Part R): per-agent called and active tools and the latest prompt reading, fed at the two chokepoints below. */
@@ -283,6 +304,10 @@ export class SessionWriter {
 
   constructor(private readonly deps: SessionWriterDeps) {
     const { dal, sessionId } = deps;
+    let writers = SessionWriter.storeWriters.get(dal.db);
+    if (!writers) { writers = new Set(); SessionWriter.storeWriters.set(dal.db, writers); }
+    writers.add(new WeakRef(this));
+    this.failedReason = SessionWriter.storeFailure(dal) ?? null;
     // REQ-SESSION-169's rehydration in miniature: the counters are rebuilt from the store exactly once.
     this.nextIndex = dal.nextRowIndex(sessionId);
     this.nextOrdinal = dal.nextOrdinal(sessionId);
@@ -305,6 +330,12 @@ export class SessionWriter {
   get failed(): string | null {
     return this.failedReason;
   }
+  /** Recording failure is sticky; a late subscriber observes the same durable boundary. */
+  onFailed(listener: (reason: string, lastOrdinal: number) => void): () => void {
+    this.failureListeners.add(listener);
+    if (this.failedReason) listener(this.failedReason, this.nextOrdinal - 1);
+    return () => { this.failureListeners.delete(listener); };
+  }
   /** The generation of the last committed save — the checkable expression of last-requested-wins (REQ-SESSION-069). */
   get lastGeneration(): number {
     return this.generation;
@@ -317,6 +348,8 @@ export class SessionWriter {
    * already ran at open, exactly once, before any of this.
    */
   static create(deps: SessionWriterDeps, args: OpenSessionArgs): Result<SessionWriter, { code: 'lock-held'; holder: { pid: number; host: string } } | { code: 'store'; reason: string }> {
+    const failure = this.storeFailure(deps.dal);
+    if (failure) return err({ code: 'store', reason: failure });
     const { dal, sessionId, wall } = deps;
     const now = toIsoUtc(wall.instant());
     try {
@@ -348,6 +381,8 @@ export class SessionWriter {
 
   /** REQ-SESSION-047/083/112: claim an existing session, with one local-dead-pid reap. */
   static open(deps: SessionWriterDeps, args: OpenExistingSessionArgs): Result<SessionWriter, SessionOpenError> {
+    const failure = this.storeFailure(deps.dal);
+    if (failure) return err({ code: 'store', reason: failure });
     const { dal, sessionId, wall } = deps;
     if (!dal.getSession(sessionId)) return err({ code: 'no-session', sessionId });
     const now = toIsoUtc(wall.instant());
@@ -533,11 +568,9 @@ export class SessionWriter {
   }
 
   /**
-   * REQ-SESSION-094's terminal unit, ONE durable transaction in the requirement's order: the
-   * system row of REQ-SESSION-093; the lock release; `session.end` then `result`
-   * (REQ-EVENTS-076); the terminal status with its patch. The writer holds the lock at the
-   * instant it records the pair and holds nothing when the commit is visible, which is the
-   * reading that satisfies REQ-EVENTS-098 and REQ-SESSION-094 together (recorded on ADR-0008).
+   * REQ-SESSION-094's terminal unit: the system row, `session.end`, `result`, and
+   * terminal state commit in one durable transaction while the session lock is held.
+   * Run teardown retains ownership through publication and detachment, then releases it.
    * The commit hand-off carries the row, the events and the save, in that order.
    */
   endRun(args: EndRunArgs): Result<{ ordinals: number[] }, WriteFailure> {
@@ -561,7 +594,6 @@ export class SessionWriter {
           dal.appendRow(sessionId, rowIndex, 'system', true, row.body, at, { ts });
           if (rowLine?.ok && rowEv) { dal.insertEvent(sessionId, ordinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, rowLine.value); committed.push({ ordinal, event: rowEv, line: rowLine.value }); ordinal += 1; }
         }
-        dal.releaseLock(sessionId, args.pid, args.host);
         for (const l of lines) {
           if (!l.line.ok) continue;
           dal.insertEvent(sessionId, ordinal, l.kind, at, EVENT_SCHEMA_VERSION, null, l.line.value);
@@ -1054,12 +1086,25 @@ export class SessionWriter {
 
   private fail(cause: unknown): Result<never, WriteFailure> {
     const reason = String(cause);
+    SessionWriter.storeFailures.set(this.deps.dal.db, reason);
+    for (const ref of SessionWriter.storeWriters.get(this.deps.dal.db) ?? []) {
+      const writer = ref.deref();
+      if (writer && writer !== this) writer.markFailed(reason);
+    }
+    this.markFailed(reason);
+    return err({ code: 'history-failed', reason });
+  }
+
+  private markFailed(reason: string): void {
     if (!this.failedReason) {
       this.failedReason = reason;
+      for (const listener of this.failureListeners) {
+        try { listener(reason, this.nextOrdinal - 1); }
+        catch (cause) { this.deps.warn(`recording-failure notification failed: ${String(cause)}`); }
+      }
       // REQ-EVENTS-088: exactly one warning for the run.
       this.deps.warn(`the session's history is incomplete from this point: a recording step failed (${reason})`);
     }
-    return err({ code: 'history-failed', reason });
   }
 
   /** REQ-EVENTS-091: after the append that overflowed the headroom, before any further event. Its own transaction. */

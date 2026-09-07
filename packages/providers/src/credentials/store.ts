@@ -182,10 +182,10 @@ export class CredentialStore {
     return r.ok ? ok(undefined) : err(failure('credential.protect', `No credential was stored: the credential store at ${this.deps.dir} could not be protected`, r.error.detail ?? r.error.headline));
   }
 
-  /** REQ-PROVIDER-018's post-condition, exposed for the test: what the directory holds besides `<id>.json`. */
+  /** Inventory diagnostic: entries outside credential JSON and adjacent coordination locks. Active staging may appear. */
   strayEntries(): string[] {
     try {
-      return readdirSync(this.deps.dir).filter((f) => !f.endsWith('.json'));
+      return readdirSync(this.deps.dir).filter((f) => !f.endsWith('.json') && !f.endsWith('.lock'));
     } catch {
       return [];
     }

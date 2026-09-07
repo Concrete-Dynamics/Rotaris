@@ -252,7 +252,7 @@ This fixes where a **decision** entry's identifier lives and nothing else. The m
 
 **REQ-TOOLS-085** — Host patterns support exactly one wildcard form: a single leading `*.`. `*.example.com` matches one or more leading labels (`api.example.com`, `a.b.example.com`) but not bare `example.com`, and not a different domain that merely ends with the same characters — matching compares whole DNS labels, never raw substrings. A `*` anywhere else raises an error at pattern build (message naming the pattern and the only supported form) rather than matching literally or silently matching nothing.
 
-**REQ-TOOLS-086** — Host normalization: lower-case; strip user-info, port, IPv6 brackets, and trailing root dot; encode non-ASCII names via IDNA; re-bracket bare IPv6 literals. When no host can be read the result is empty and callers must treat it as unknown — never as permitted.
+**REQ-TOOLS-086** — REQ-SANDBOX-006 owns host normalization for matching and classification, including unbracketed canonical IPv6. Brackets are added only when constructing a URL authority. When no host can be read, the canonical result is empty and callers MUST classify it as unknown and deny it under REQ-SANDBOX-008.
 
 **REQ-TOOLS-087** — "Local" means genuine loopback only: the names {`localhost`, `localhost.localdomain`, `ip6-localhost`} and loopback IP addresses. Private-range and link-local addresses (e.g., `169.254.169.254`, internal `10.x`) deliberately count as remote — they are exactly what a policy gates. A hostless or unreadable URL counts as remote.
 

@@ -30,6 +30,20 @@ function service(fetch = okCatalogue) {
   return { svc, credentials, settings };
 }
 
+describe('OQ-20 pre-contact sign-in failures', () => {
+  it('returns one actionable failure while preserving credentials and last-error state', async () => {
+    let contacts = 0;
+    const { svc, credentials } = service(fetchWith(() => { contacts += 1; return new Response('{}'); }));
+    const before = svc.lastError('codex');
+    const result = await svc.signInWithKey('codex', KEY);
+    expect(result.outcome).toBe('failed');
+    expect(svc.lastError('codex')).toBe(before);
+    expect(contacts).toBe(0);
+    expect(credentials.list()).toEqual([]);
+    expect(log).toEqual([]);
+  });
+});
+
 describe('the API-key sign-in for an OpenAI-compatible instance (ADR-0030; REQ-PROVIDER-051..054/133)', () => {
   it('validates, discovers, persists the credential only after discovery, writes the snapshot with picks, reports the outcome', async () => {
     const { svc, credentials, settings } = service();

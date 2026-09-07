@@ -32,8 +32,9 @@ covers the gateway staging directory (`REQ-PROVIDER-063`).
 
 `REQ-PROVIDER-018`: writes are atomic — staged in a temp file inside the credential directory whose
 name starts with the provider id and ends `.tmp`, mode `0600` on POSIX, renamed onto the target; a
-failed write deletes the temp file and reports; and **once any credential operation has finished the
-directory holds nothing but `<provider_id>.json` files**.
+failed write deletes its temp file and reports. Accepted OQ-19 (2026-09-07)
+permits credential JSON and adjacent coordination locks; each completed operation
+cleans its own staging files while preserving files owned by overlapping operations.
 
 `REQ-PROVIDER-152` requires every read-modify-write over a credential file **or** over the discovery
 snapshot to be performed while holding an exclusive lock on an adjacent lock file; acquisition failure
@@ -112,8 +113,8 @@ process (ADR-0030), through the write primitive of ADR-0004 with its own policy.
   Failure anywhere aborts the write **before the target is touched**.
 - **Atomic write.** Create `<provider_id><random>.tmp` inside the credential directory, protect it,
   write, `fsync`, rename onto the target; on any failure unlink the temp file.
-  `REQ-PROVIDER-018`'s "the directory holds nothing but `<provider_id>.json` files" is a post-condition
-  worth asserting in tests, **including on the failure path**.
+  Tests assert that the operation's staging files are removed on success and failure,
+  credential enumeration filters JSON files, and other operations' locks remain intact.
 - **Status is computed, never cached.** One function of (stored credential, clock reading), with
   per-provider classification rules held in the registry of ADR-0028 rather than in a shared predicate,
   because `REQ-PROVIDER-024`, `REQ-PROVIDER-034`, `REQ-PROVIDER-045` and `REQ-PROVIDER-050` differ
@@ -180,12 +181,10 @@ session lock and it does not share that lock's reaping rule; this one waits up t
 1. Credentials are protected against **other users, not against other processes of the same user**.
    That is what the specification asks for; it is worth recording explicitly so nobody later believes
    otherwise. SR-4 does not change it: a database file would have had exactly the same property.
-2. A lock file appears in the credential directory. `REQ-PROVIDER-018`'s "holds nothing but
-   `<provider_id>.json` files" is stated about the *credential operation's temp files*, and
-   `REQ-PROVIDER-152` requires an *adjacent* lock file; the two must be read together. **Flagged for
-   confirmation (OQ-19)** — and note that OQ-19 now has a cheaper resolution than it had: if the
-   specification withdraws the lock file with its multi-instance premise, the contradiction disappears
-   rather than being adjudicated.
+2. A coordination lock file appears beside its credential JSON under
+   REQ-PROVIDER-152. Accepted OQ-19 explicitly permits it in REQ-PROVIDER-018.
+   Enumeration filters credential JSON; operation completion cleans only that
+   operation's staging files. Dead-owner reclamation remains required.
 3. Every credential save also writes bridge artifacts before returning, so the save path is a composite
    operation whose partial failure is defined: the credential save still succeeds and the artifact
    failure is a warning. **This composite is not a transaction and must not be made one by moving it

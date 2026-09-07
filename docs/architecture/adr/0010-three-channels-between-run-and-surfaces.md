@@ -353,7 +353,17 @@ Two things follow and they belong here because this record owns the view channel
    that diffs a live surface against the durable transcript **mid-row** still fails correctly behaving
    code for that reason; the comparison `REQ-MONITOR-242` asks for remains watched-transcript against
    reattached-transcript.
-7. **What happens after a sticky mid-run store failure is returned as an open question rather than
+7. **Accepted OQ-42, 2026-09-06; implementation updated 2026-09-07.** Durable-store
+   failure cancels affected runs and closes admission on their shared database.
+   Projections cancel pending timers and return to cached committed rows. The
+   separate in-memory failure notice identifies the last durable boundary and
+   recovery instructions. Terminal persistence failure produces an unconfirmed
+   caller outcome. Reopening probes writable storage after affected runs settle;
+   successful recovery rebuilds the session projection from its durable record.
+   The following paragraphs preserve the historical question and interim policy,
+   superseded by this accepted decision.
+
+   **Historical: What happens after a sticky mid-run store failure is returned as an open question rather than
    decided here.** The case is narrower than it was: `REQ-EVENTS-084` and `REQ-SESSION-089` now settle
    the other half, so a store that will not **open** refuses the run outright and there is no
    degrade-and-continue. What remains is `REQ-EVENTS-088`'s **mid-run** failure, which marks a session's

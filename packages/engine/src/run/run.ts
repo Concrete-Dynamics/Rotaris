@@ -178,6 +178,8 @@ export interface RunResult {
   readonly error: string | null;
   readonly execution_status: string;
   readonly severity: 'information' | 'warning' | 'error';
+  /** Present for the in-memory outcome when terminal persistence could not be confirmed. */
+  readonly persistence?: { readonly confirmed: false; readonly lastEventOrdinal: number };
 }
 
 /** ADR-0014 rule 1: the one 30 s allowance, shared by the cancellation grace and the force-exit backstop. */
@@ -201,6 +203,8 @@ export class Run {
   private tokenSamples: [string, number][];
   private sampler: TimerHandle | null = null;
   private result: RunResult | null = null;
+  private recordingFailure: { reason: string; lastEventOrdinal: number } | null = null;
+  private readonly unsubscribeRecordingFailure: () => void;
   private readonly dispatched = new Map<string, string>();
   private children: IterationChildren | null = null;
   /** REQ-ORCH-072: the root agent's own child identity for this iteration. */
@@ -247,6 +251,17 @@ export class Run {
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
       this.hardCancel = Budget.begin(this.deps.clocks.monotonic.now(), STOP_GRACE);
       this.deps.clocks.timers.after(STOP_GRACE, () => { if (!this.ended) this.stop.request(s.reason ?? 'user_cancelled', true); });
+    });
+    this.unsubscribeRecordingFailure = deps.writer.onFailed((reason, lastEventOrdinal) => {
+      this.recordingFailure = { reason, lastEventOrdinal };
+      this.lastFailure = `Durable recording failed: ${reason}`;
+      this.stop.request('agent_session_aborted');
+      this.deps.owner.freezeAtDurableBoundary();
+      this.deps.notice?.({
+        severity: 'error', headline: 'Run recording failed; completion is unconfirmed',
+        detail: `In-memory status: cancellation requested. Last durable event ordinal: ${lastEventOrdinal}. ${reason}. Restore writable storage, then reopen the session to inspect its saved boundary before continuing.`,
+        sessionId: this.sessionId, key: `recording-failure:${this.sessionId}`,
+      });
     });
   }
 
@@ -654,12 +669,14 @@ export class Run {
     this.sampler?.cancel();
     this.sampleTokens(false);
     writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: count, todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()) });
+    if (writer.failed) return this.teardown('agent_session_aborted');
     owner.flushPending();
     try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the pause failed on ${this.sessionId}: ${String(cause)}`); }
     const usage = this.aggregates.usagePayload();
     this.deps.onPaused?.({ count, limit, tokens: usage.tokens });
     if (this.hooks) { try { await this.hooks.fireLifecycle('session_end', { status: 'interrupted' }); } catch { /* recorded elsewhere */ } this.hooks = null; }
     bus.detachSession(this.sessionId);
+    this.unsubscribeRecordingFailure();
     this.ended = true;
     const result: RunResult = {
       status: 'interrupted', session_id: this.sessionId, stop_reason: 'message_limit_reached', summary: `The run paused at the message limit (${count} of ${limit}).`,
@@ -780,6 +797,7 @@ export class Run {
       error, execution_status: status, severity: summary.severity,
     };
     this.result = result;
+    try {
     const step = (name: string, fn: () => void) => { try { fn(); } catch (cause) { this.deps.warn(`teardown step ${name} failed on ${this.sessionId}: ${String(cause)}`); } };
     // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `result.status` is
     // the one string the payload and the session.end event below both carry.
@@ -791,7 +809,7 @@ export class Run {
     step('flush-publications', () => owner.flushPending());
     // (logging cleanup: the session log is not built — REQ-SESSION-142 lands with its own mechanism.)
     step('terminal-transaction', () => {
-      // REQ-SESSION-093's row, REQ-SESSION-094's lock release, session.end then result (REQ-SESSION-095), the terminal save.
+      // REQ-SESSION-093's row, session.end then result (REQ-SESSION-095), and the terminal save under the held lock.
       // REQ-MONITOR-166: once more at the terminal state, then the sampler goes.
       this.sampler?.cancel();
       this.sampleTokens(false);
@@ -819,9 +837,25 @@ export class Run {
       if (adv !== '') this.deps.notice?.({ severity: 'warning', headline: 'Hooks need attention', detail: adv, action: 'hooks.settings', sessionId: this.sessionId });
       this.hooks = null;
     });
-    // Finally, every per-session binding goes (REQ-EVENTS-071).
-    step('remove-bindings', () => bus.detachSession(this.sessionId));
-    this.ended = true;
+    } finally {
+      // Cleanup preserves ownership until the last session binding has been removed.
+      this.hooks = null;
+      try { bus.detachSession(this.sessionId); }
+      finally {
+        try { writer.release(this.deps.pid, this.deps.host); }
+        catch (cause) { this.deps.warn(`teardown lock release failed on ${this.sessionId}: ${String(cause)}`); }
+        finally { this.unsubscribeRecordingFailure(); this.ended = true; }
+      }
+    }
+    if (this.recordingFailure) {
+      const failure = this.recordingFailure;
+      this.result = {
+        ...result, status: 'error', execution_status: 'unknown', severity: 'error',
+        stop_reason: 'agent_session_aborted', summary: 'Run completion is unconfirmed because durable recording failed.',
+        error: failure.reason, persistence: { confirmed: false, lastEventOrdinal: failure.lastEventOrdinal },
+      };
+      return this.result;
+    }
     return result;
   }
 }

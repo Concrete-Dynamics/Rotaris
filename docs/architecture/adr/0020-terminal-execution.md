@@ -126,9 +126,9 @@ can say, so it is the product owner's call.
 2. Under a PTY, stdout and stderr are **merged** and the shell echoes the submitted line. The capture
    handed to the agent must strip the echoed command and the marker frames; `REQ-TOOLS-113`'s
    output-derived warning checks then run over the cleaned text, or they will match the command line
-   itself. `REQ-TOOLS-098`'s soft-pause advisory tells the agent the process "may be writing to
-   stderr" and suggests re-running with `2>&1`, which only makes sense if stderr is not captured —
-   open question OQ-13.
+   itself. Under the accepted OQ-13 amendment (2026-09-07), `REQ-TOOLS-098`'s empty
+   soft-pause advisory states that stdout and stderr share the captured stream and offers polling
+   or interruption. Redirection advice is reserved for a backend that excludes stderr from capture.
 3. `background=true` gives pipes, not a PTY, so a background session's terminal tab has no real
    terminal to resize. `REQ-TOOLS-128` and `REQ-SHELL-106` already anticipate this: a resize always
    resizes the emulated screen, even when the backend is gone, and then the real terminal when

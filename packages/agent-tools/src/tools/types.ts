@@ -37,6 +37,8 @@ export interface ToolExecutor<A = unknown> {
   readonly name: string;
   readonly description: string;
   readonly schema: z.ZodType<A>;
+  /** Product-specific diagnostics for schema refusal, before permissions or execution. */
+  validationError?(args: Readonly<Record<string, unknown>>, detail: string): Observation;
   execute(args: A, ctx: ToolContext): Promise<Observation>;
   /** REQ-TOOLS-105 etc.: how the call renders in a row header; defaults to the sorted argument keys. */
   label?(args: A): string;

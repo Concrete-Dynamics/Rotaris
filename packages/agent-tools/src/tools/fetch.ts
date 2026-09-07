@@ -235,7 +235,7 @@ export function fetchTool(deps: FetchDeps): ToolExecutor<FetchArgs> {
 
   return {
     name: 'fetch',
-    description: 'Retrieve one HTTP(S) resource as raw text (HTML included), at most max_lines lines, optionally windowed by from_line/to_line. Every host, the requested one and every redirect target, is checked against the workspace egress policy before a connection is opened; redirects are never followed onto a host the policy does not permit.',
+    description: 'Retrieve one HTTP(S) resource as raw text (HTML included), at most max_lines lines, optionally windowed by from_line/to_line. Every host, the requested one and every redirect target, is checked against the workspace egress policy before a connection is opened; redirects are never followed onto a host the policy does not permit. Connections are direct; proxy environment variables and system proxy settings have no effect.',
     schema: fetchSchema,
     // REQ-SANDBOX-042: the URL is the gated subject; it is what the row header shows.
     label: (a) => `fetch ${typeof a.url === 'string' ? a.url : ''}`.trimEnd(),

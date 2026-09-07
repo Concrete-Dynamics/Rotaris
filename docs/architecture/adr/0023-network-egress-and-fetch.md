@@ -106,11 +106,11 @@ Shaping is applied after the body is decoded — window first, cap second, `trun
 cap. Rendering is one function under a snapshot test, since the block names and the sorted-keys,
 nulls-omitted rule are observable.
 
-**`REQ-TOOLS-086` and `REQ-SANDBOX-006` disagree** about whether the canonical form of an IPv6 literal
-is bracketed: the first says the normaliser re-brackets bare IPv6 literals, the second requires
-`http://[::1]:9000/` to canonicalise to `::1`, unbracketed, as a stated required result. **The
-recommended reading is `REQ-SANDBOX-006`**, which owns egress classification and states concrete
-required results; see OQ-36. This must be resolved before the classifier is written.
+**Accepted OQ-36, applied 2026-09-07.** REQ-TOOLS-086 now cites REQ-SANDBOX-006
+as the sole canonical-host owner. IPv6 canonicalizes unbracketed for matching
+and classification; brackets belong to URL authority serialization. Regression
+coverage includes bare IPv6, expanded loopback, bracketed host/port and bare
+DNS host/port inputs, including repeated normalization.
 
 ## Consequences accepted
 
@@ -119,10 +119,14 @@ required results; see OQ-36. This must be resolved before the classifier is writ
    specification's deliberate choice (`REQ-SANDBOX-018` says the test performs no name resolution) and
    it must be **documented on the settings surface rather than silently strengthened** — strengthening
    it would break the requirement.
-2. **Proxy behaviour is unspecified** (OQ-37). The chosen client does not honour proxy environment
-   variables by default, so choosing it makes "no proxy" the de facto answer. That is the fail-closed
-   direction for the zero-connection promise, but it will surprise corporate users and should be an
-   explicit decision rather than a library default.
+2. **Accepted OQ-37: direct connections.** Each production fetch explicitly uses
+   a dedicated direct Undici dispatcher, including redirect hops. Proxy environment
+   variables, system settings and the process-global dispatcher have no effect.
+   Tool help and connection failures disclose the policy. The direct dispatcher
+   is explicit because current Node supports configurable global dispatchers:
+   [Node fetch documentation](https://nodejs.org/api/globals.html#custom-dispatcher).
+   A local socket regression installs a proxy as the global dispatcher and verifies
+   that the tool's transport reaches the target directly with zero proxy contacts.
 3. **On native Windows there is no egress enforcement for terminal commands at all** — only
    `REQ-TOOLS-094`'s permission heuristic — because ADR-0022 has no backend there and the in-confinement
    switch is the only other control. That is a user-visible consequence of two requirements composing
@@ -206,11 +210,12 @@ per-call stands. The unit suite (`fetch.test.ts`, fifty cases) runs the loop aga
 records every URL asked for, so "zero connection attempts" is an empty list, and one suite against a real
 `node:http` server with a `FakeClock`-driven deadline.
 
-**OQ-37 — no proxy, by construction.** The runtime's `fetch` honours no proxy environment variable; every
-connection goes to the host that was classified, which is the fail-closed direction for `REQ-SANDBOX-022`'s
-zero-connection promise. The module comment says so. A corporate user behind a mandatory proxy will see
-`network_error`; the question stays open for the owner. Consequence 1 (textual classification) stands and its
-settings-surface sentence is owed with `REQ-SANDBOX-113` — not this part.
+**OQ-37 — accepted direct transport, 2026-09-07.** The production adapter
+explicitly selects its dedicated direct dispatcher for each classified hop.
+Tool help and `network_error` details disclose the direct-connect requirement.
+The earlier assumption about runtime defaults is superseded by this explicit
+selection. Consequence 1's textual-classification settings disclosure retains
+its existing owner under REQ-SANDBOX-113.
 
 **Readings taken:** `error_class` for the three transport kinds, which no requirement fixes: `FetchTimeout`,
 `NetworkError`, `HttpError`. A three-line body ending in a newline has three lines (one trailing terminator is

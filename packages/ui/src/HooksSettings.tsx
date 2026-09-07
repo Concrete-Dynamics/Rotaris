@@ -39,6 +39,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
   return (
     <div className="settings__section hooks">
       <h1 className="display">Hooks</h1>
+      <p className="text-secondary">Processes started by a hook can survive its timeout and application exit. Hook timeout handling stops the hook's own process and bounds output collection. Terminal-tool process trees follow the terminal cleanup policy.</p>
       <p className="text-secondary">
         A hook is a shell command of your own that runs at a named point of a run — around tool calls and at session, iteration, child-agent and verifier
         boundaries. It runs on this machine under your own account and is not subject to the agent permission policy. Hooks are declared in

@@ -29,6 +29,20 @@ const args = (a: Record<string, unknown>) => ({ command: '', is_input: false, re
 
 afterAll(async () => { await manager?.dispose(); rmSync(root, { recursive: true, force: true }); });
 
+it.each([
+  { reset: true, is_input: true },
+  { command: 'x', background: true, is_input: true },
+  { command: 'x', background: true, reset: true },
+  { background: true },
+  { session_action: 'send_input' },
+])('OQ-15: validation preserves stable diagnostic labels: %j', async (input) => {
+  const t = terminalTool({} as TerminalManager, TERMINAL_DEFAULTS);
+  const r = await t.execute(args(input), ctx());
+  expect(r).toMatchObject({ isError: true, failureKind: 'invalid_request', outcomeKind: 'invalid_request' });
+  expect(diag(r.text)).toMatchObject({ error_class: 'ValueError', failure_kind: 'invalid_request', outcome_kind: 'invalid_request' });
+  expect(output(r.text)).toBe('(no output)');
+});
+
 describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
   it('classifies in the fixed order and renders the diagnostic block with sorted keys and nulls dropped', () => {
     expect(classifyOutcome({ failureKind: 'timeout', exitCode: 124, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'timeout', severity: 'error' });
@@ -85,6 +99,12 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(r.text)['exit_code']).toBe(7);
     expect(output(r.text)).toContain('__rot_deadbeefdeadbeefdeadbeef_e:0');
   });
+  it('OQ-13: the foreground PTY captures stderr in the terminal output', async () => {
+    const t = await tool();
+    const r = await t.execute(args({ command: "[Console]::Error.WriteLine('stderr-captured')" }), ctx());
+    expect(output(r.text)).toContain('stderr-captured');
+  });
+
   it('REQ-TOOLS-097/099: the hard timeout kills the tree, restarts the session, reports 124 and session_reset; shell state is gone', async () => {
     const t = await tool();
     await t.execute(args({ command: "$env:ROTARIS_GONE = 'set'" }), ctx());
@@ -100,7 +120,9 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const r = await t.execute(args({ command: 'Start-Sleep -Seconds 3; Write-Output done-later' }), ctx());
     expect(diag(r.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause', outcome_severity: 'warning' });
     expect(diag(r.text)['failure_kind']).toBeUndefined();
-    expect(r.text).toMatch(/No output for 1\.5 seconds; the process may still be running or may be writing to stderr/);
+    expect(r.text).toContain('No output for 1.5 seconds in the merged terminal stream; stdout and stderr are both captured.');
+    expect(r.text).toContain('Poll by calling the tool again with an empty command');
+    expect(r.text).not.toContain('re-run the command with 2>&1');
     await new Promise((res) => setTimeout(res, 3_500));
     const poll = await t.execute(args({ command: '' }), ctx());
     expect(output(poll.text)).toContain('done-later');

@@ -1,5 +1,35 @@
 # Accepted specification resolutions
 
+## 2026-09-07 stable error classifications
+
+- OQ-15: amended REQ-TOOLS-101, REQ-SANDBOX-083, ADR-0001 and the question register. Stable failure/outcome codes govern classification; validation retains `ValueError`, and wrap refusals use `SandboxUnavailableError`. Implementation exception names are optional redacted detail.
+- Found and repaired a gate-level gap: an unknown terminal action failed schema validation before terminal diagnostics were produced. Executors can now supply a schema-refusal observation; terminal supplies its fixed compatibility label. Added gate coverage and five argument-combination regressions.
+- Verification: gate and terminal suites passed (2 files / 37 tests, 37.55 seconds); TypeScript and `git diff --check` passed. The terminal run again emitted two `AttachConsole failed` helper diagnostics, retained under OQ-10's native-process audit.
+- Remaining delivery: the current terminal has no confinement-wrapping integration. Its refusal observation and no-execution guarantee require implementation and regression coverage alongside the native confinement work (OQ-7/OQ-35). OQ-15 policy is closed; full delivery remains in progress.
+
+## 2026-09-07 terminal capture clarification
+
+- OQ-13: REQ-TOOLS-098, ADR-0020 and the question register now specify capture-aware soft-pause advice. The foreground PTY merges stdout and stderr; help and empty-output observations explain that capture and offer polling or interruption.
+- Added a real PowerShell stderr-capture regression and strengthened the empty soft-pause assertions. The terminal suite passed: 1 file / 14 tests. Two native `AttachConsole failed` diagnostics remain tracked under OQ-10.
+- Fresh verification after architecture/register reconciliation: terminal suite passed again (14 tests, 38.05 seconds); `pnpm exec tsc -p tsconfig.json --noEmit` and `git diff --check` passed.
+
+## 2026-09-07 ownership and confinement clarifications
+
+- Applied OQ-1 to REQ-CHAT-041: one application-instance/session-ID queue and atomic service-owned consumption.
+- Applied OQ-7 to REQ-TOOLS-123: original host `.git`/`.rotaris` state preserved; inability to preserve it refuses the command.
+- Applied OQ-9 to REQ-TOOLS-111: cleanup scope is terminal-tool process trees; hook-descendant survival remains explicit. Hooks Settings now explains that behavior.
+- Applied OQ-16 to REQ-TOOLS-049: shipped preset lists and existing declared authoring controls.
+- Applied OQ-35 to REQ-SANDBOX-079 and REQ-TOOLS-123: each confined command receives fresh inner-shell state initialized from configured cwd/environment; unconfined shell state remains persistent.
+- The register records these as closed policy choices with historical questions preserved. Remaining delivery work: dependent ADR reconciliation, cross-process queue proof, native host-path/crash-cleanup evidence, confined-mode help/observation integration, and visual verification of hook help.
+- `pnpm exec vitest run packages/engine/src/control.test.ts packages/hooks/src packages/agent-tools/src/policy.test.ts` passed: 7 files / 93 tests. This establishes regression safety for the exercised queue, hooks and permission paths; native confinement remains separately unverified.
+
+## 2026-09-07 network work package
+
+- OQ-36: REQ-TOOLS-086 delegates canonicalization to REQ-SANDBOX-006. Fixed bare IPv6 and host/port inputs; added idempotence and matching coverage. ADR-0023 and the register record the closure.
+- OQ-37: explicit direct dispatcher on every production fetch hop; tool help and failures disclose proxy exclusion. Added a real local target/proxy regression with a proxied control request. The dependency was already present transitively and is now declared directly. Owning requirement, ADR and register amended.
+- Current network verification: policy, fetch and direct-fetch suites pass, 3 files / 78 tests. The shared worktree advanced to `dd36106` during this work; no commit or push was issued by this agent. Earlier changes are present in current history; remaining edits are left uncommitted.
+- Wider verification: `pnpm exec vitest run packages/agent-tools/src` passed, 8 files / 125 tests; TypeScript and `git diff --check` passed. The Windows PTY helper emitted two `AttachConsole failed` diagnostics during the wider run despite its successful exit. Carry that native-process evidence into OQ-10's platform validation.
+
 Accepted: 2026-09-06. Scope: all 48 decisions in [the review](SPECIFICATION_REVIEW.md), including owning requirements, resolution history, dependent architecture, affected implementation and verification. Preserve stable requirement identifiers. Commits and pushes are deferred by user instruction.
 
 ## Completion rule

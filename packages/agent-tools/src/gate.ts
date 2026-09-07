@@ -196,6 +196,13 @@ export class Gate {
     const parsed = executor.schema.safeParse(repaired);
     if (!parsed.success) {
       const detail = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+      const diagnostic = executor.validationError?.(repaired, detail);
+      if (diagnostic) {
+        return finish({ text: diagnostic.text, isError: true, status: 'failed', decision: null, observation: diagnostic }, {
+          failure_kind: 'invalid_request', outcome_kind: diagnostic.outcomeKind ?? 'invalid_request',
+          exit_code: diagnostic.exitCode ?? null, warnings: diagnostic.warnings ?? [],
+        });
+      }
       return finish({ text: `The arguments for '${call.name}' do not match its schema (${detail}). Re-issue the call with corrected arguments.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
     }
 

@@ -108,7 +108,7 @@ export class TerminalManager {
   }
 }
 
-function invalid(message: string, a: TerminalArgs): Observation {
+function invalid(message: string, a: { readonly command: string }): Observation {
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: message, error_class: 'ValueError', exit_code: null, failure_kind: 'invalid_request', outcome_kind: 'invalid_request', outcome_severity: 'warning', warnings: [] });
   return errorObservation(`${message}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'invalid_request', failureKind: 'invalid_request', exitCode: null, warnings: [] });
 }
@@ -116,8 +116,9 @@ function invalid(message: string, a: TerminalArgs): Observation {
 export function terminalTool(manager: TerminalManager, config: TerminalConfig): ToolExecutor<TerminalArgs> {
   return {
     name: 'terminal',
-    description: 'Run a command in a persistent shell session (working directory and variables persist across calls). On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable. One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`, or re-run with `2>&1`.',
+    description: 'Run a command in a persistent shell session (working directory and variables persist across calls). On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable. One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream.',
     schema: terminalSchema,
+    validationError: (a, detail) => invalid(`Invalid terminal request: ${detail}`, { command: typeof a['command'] === 'string' ? a['command'] : '' }),
     label: (a) => renderAction({ command: a.command, timeout: a.timeout, reset: a.reset, background: a.background, session_id: a.session_id, session_action: a.session_action }),
     execute: async (a, ctx) => {
       // REQ-TOOLS-101: request validation.
@@ -161,7 +162,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${r.error ? ` (${r.error})` : ''}`;
       } else if (r.softPaused) {
         detail = r.output === ''
-          ? `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds; the process may still be running or may be writing to stderr. Poll by calling the tool again with an empty command, interrupt by sending C-c with is_input=true, or re-run the command with 2>&1.`
+          ? `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
           : 'The command is still running; this is the output so far. Poll again with an empty command.';
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;

@@ -74,10 +74,11 @@ runner must expose a before-collection hook for `REQ-TRACE-182`.
 3. **`REQ-TOOLS-165`'s `*.py` plugin extension is unsatisfiable as written.** A TypeScript/Node host
    cannot import a Python module into its own process, which `REQ-TOOLS-163` requires. Escalated in
    ADR-0025 rather than absorbed here.
-4. `REQ-TOOLS-101` fixes the literal observable `error_class: "ValueError"`, which is a Python
-   exception name. Under TypeScript it becomes a string constant the product emits deliberately, not
-   an artifact of the language — and `REQ-SANDBOX-083`'s "the type name of the failure" then has no
-   language to draw on. See open question OQ-15.
+4. OQ-15's accepted amendment (2026-09-07) defines language-independent product diagnostics.
+   `REQ-TOOLS-101` retains `error_class: "ValueError"` as a fixed compatibility string.
+   `REQ-SANDBOX-083` fixes wrap refusals to `SandboxUnavailableError`; implementation exception
+   names may appear in optional redacted detail. The stable machine-readable codes are
+   `failure_kind` and outcome kind. Schema refusal preserves the terminal diagnostic through the gate.
 5. The test framework must be chosen for its before-collection hook, not only for ergonomics.
 
 ## Revisit if

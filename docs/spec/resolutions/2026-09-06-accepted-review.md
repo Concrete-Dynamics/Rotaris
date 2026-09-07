@@ -1,5 +1,49 @@
 # Accepted review amendments — 2026-09-06
 
+## OQ-1, OQ-7, OQ-9, OQ-16, OQ-35 — ownership and confinement (2026-09-07)
+
+- REQ-CHAT-041 assigns one session-scoped queue to the application instance.
+- REQ-TOOLS-123 adopts REQ-SANDBOX-077's original-host-path preservation rule.
+- REQ-TOOLS-111 scopes termination to terminal-tool process trees and preserves
+  REQ-HOOKS-033's explicit descendant exception, now disclosed in Hooks Settings.
+- REQ-TOOLS-049 defines permission rule lists as shipped presets; the existing
+  declared controls remain authorable.
+- REQ-SANDBOX-079 defines fresh confined-shell state and preserves persistent
+  unconfined-shell behavior. Help and observations disclose the active lifetime.
+
+The question register closes these policy choices separately from implementation
+and platform proof. The root progress ledger records remaining evidence.
+
+## OQ-36 and OQ-37 — host identity and direct transport (2026-09-07)
+
+REQ-TOOLS-086 now cites REQ-SANDBOX-006 as the canonical-host owner. IPv6
+matching uses unbracketed canonical literals. The implementation also fixes
+bare IPv6 and host/port normalization, with idempotence regression coverage.
+
+REQ-SANDBOX-022's direct-transport amendment makes proxy behavior explicit.
+Every production request and redirect uses a dedicated direct dispatcher.
+Tool help and connection failures disclose the policy. Undici 7.29.0 was
+already resolved in the repository and is now a declared agent-tools dependency.
+The local socket regression installs a global proxy dispatcher, verifies direct
+target delivery with zero proxy contacts, and confirms the control request
+reaches the proxy. ADR-0023 and the question register record both closures.
+
+## OQ-15 — stable error classifications (2026-09-07)
+
+REQ-TOOLS-101 preserves `ValueError` as a
+fixed compatibility label through schema validation. REQ-SANDBOX-083 fixes wrap
+refusals to `SandboxUnavailableError`. Stable failure/outcome codes govern machine
+classification; optional implementation exception detail is redacted. ADR-0001 and
+the question register reflect this policy; the progress ledger tracks wrapper delivery.
+
+## OQ-13 — foreground capture (2026-09-07)
+
+REQ-TOOLS-098 now requires capture-aware empty soft-pause advice. Foreground PTYs
+merge stdout and stderr; tool help and observations describe that stream and offer
+polling or interruption. Redirection advice is reserved for backends that exclude
+stderr. ADR-0020 and the question register record the amendment. Real PowerShell
+PTY coverage checks stderr capture and the empty soft-pause observation.
+
 Authority: the user accepted all recommendations in the repository-root
 `SPECIFICATION_REVIEW.md`, with evidence-led adjustments permitted. This record
 tracks applied cross-domain decisions; the root

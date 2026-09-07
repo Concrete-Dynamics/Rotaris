@@ -6,8 +6,20 @@ import { PendingApprovals, PresenterRegistry, type PresenterPort } from './appro
 import type { ToolHooks } from './gate.js';
 import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
+import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
 
 const ROOT = 'D:/ws';
+
+it('OQ-15: an unknown terminal action preserves the ValueError contract through the gate', async () => {
+  const terminal = terminalTool({} as TerminalManager, TERMINAL_DEFAULTS);
+  const h = harness({ extraExecutors: [['terminal', terminal]] });
+  const r = await h.gate.dispatch(h.call('terminal', { session_action: 'unknown' }), new AbortController().signal);
+  expect(r).toMatchObject({ status: 'failed', isError: true, observation: { failureKind: 'invalid_request', outcomeKind: 'invalid_request' } });
+  expect(r.text).toContain('"error_class":"ValueError"');
+  expect(r.text).toContain('[terminal_output]\n(no output)');
+  expect(h.rec.settles[0]).toMatchObject({ failure_kind: 'invalid_request', outcome_kind: 'invalid_request' });
+  expect(h.rec.decisions).toHaveLength(0);
+});
 
 function recordingSink() {
   const decisions: Record<string, unknown>[] = [];

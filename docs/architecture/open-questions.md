@@ -1071,7 +1071,12 @@ means is that the named record cannot be ratified until the question is answered
 blocked by the gate items in `docs/clean-room/specification-gate.md` and by the escalations above, not by
 anything in this list.**
 
-**OQ-1 — Where the queued-prompt service lives.** *(ADR-0002, ADR-0043.)* `REQ-CHAT-041` scopes queue
+**OQ-1 — Decision closed, 2026-09-07.** REQ-CHAT-041 now scopes the queue to
+the application instance and session ID. The run host remains its authoritative
+owner, with atomic queued-to-triggered transitions and session-filtered windows.
+Cross-process conformance evidence is tracked in the resolution ledger.
+
+**Historical question.** `REQ-CHAT-041` scopes queue
 visibility and consumption to windows and runs "sharing the same process", and `REQ-CHAT-038` requires an
 atomic queued-to-triggered transition **exactly one caller wins**, while `REQ-MONITOR-139` and
 `REQ-ORCH-071` make the queue session-owned and let a run consume only its own session's prompts. Under
@@ -1231,11 +1236,10 @@ it: the requirement is relaxed and the architecture stands. The cost of that rul
 in ESC-13's own words rather than softened — under reading 2 the product ships a benchmark whose headline
 structural invariant reports false, informational or not, in a domain whose whole point is determinism.
 
-**OQ-36 — Host canonicalisation contradicts itself.** *(ADR-0023; must be resolved before the classifier
-is written.)* `REQ-TOOLS-086` says the normaliser strips brackets from an IPv6 literal and then
-**re-brackets** it; `REQ-SANDBOX-006` requires a bracketed loopback URL to canonicalise to the
-**unbracketed** form as a stated required result. **Recommended reading: `REQ-SANDBOX-006`**, which owns
-egress classification and states concrete required results.
+**OQ-36 — CLOSED by accepted review, applied 2026-09-07.** REQ-TOOLS-086
+cites REQ-SANDBOX-006's unbracketed IPv6 canonical form. Brackets belong to URL
+authority serialization. The classifier handles bare IPv6 and DNS host/port
+inputs; regression coverage verifies repeated normalization and matching.
 
 ### Silence and under-determination
 
@@ -1284,7 +1288,12 @@ of the hosted mode is canonical**, and **does the quota property carry a number 
 and explicitly refuses to hold a list of names, and `REQ-PROVIDER-049` disclaims one too. A number
 resolves the second cleanly.
 
-**OQ-7 — "Leaves nothing behind" versus the documented artifact.** *(ADR-0022.)* `REQ-SANDBOX-077`
+**OQ-7 — Decision closed, 2026-09-07.** REQ-TOOLS-123 now cites
+REQ-SANDBOX-077's host-path preservation rule. A backend unable to preserve
+the host path refuses the command. Native confinement proof remains governed
+by REQ-SANDBOX-127 and tracked as platform evidence.
+
+**Historical question.** `REQ-SANDBOX-077`
 requires every carve-out to exist only inside the confined view with the host filesystem holding exactly
 what it held before, and forbids a backend that cannot do so from creating anything. `REQ-TOOLS-123`
 records as a "documented, deliberate artifact" that an empty directory may appear inside a writable root
@@ -1297,7 +1306,12 @@ it must not be emitted with no figures and that it carries run-to-date cumulativ
 thing. Whether a usage event accompanies every model turn, or follows the sample, or both, is unstated
 and affects journal volume against `REQ-EVENTS-091`'s cap.
 
-**OQ-9 — Do hook descendants survive application exit?** *(ADR-0002, ADR-0015.)* `REQ-HOOKS-033` states
+**OQ-9 — Decision closed, 2026-09-07.** REQ-TOOLS-111 now scopes cleanup
+to terminal-tool process trees. REQ-HOOKS-033 retains its hook-descendant survival
+exception. Hooks Settings discloses the distinction. Crash-path evidence remains
+part of platform validation.
+
+**Historical question.** `REQ-HOOKS-033` states
 that descendants **may outlive the hook and the run**, that the run must neither track nor report them,
 and that termination must not widen to the process group. `REQ-TOOLS-111` requires that once the
 application has exited, no background command it started is still running, **whatever ended it** — which
@@ -1385,7 +1399,13 @@ the figures it decides (whether a returned `FULL` commit survives; how far behin
 in commits and milliseconds) come from the same run, and the directory-`fsync` half gets its answer from the
 two documents' lag against each other.
 
-**OQ-13 — Stderr in foreground capture.** *(ADR-0020.)* `REQ-TOOLS-098` requires the soft-pause detail to
+**OQ-13 — Stderr in foreground capture. Decision closed 2026-09-07.** The accepted amendment to
+`REQ-TOOLS-098` requires capture-aware advice: merged foreground PTYs capture stdout and stderr;
+empty soft pauses report that fact and offer polling or interruption. Redirection advice applies
+only to a backend that excludes stderr. ADR-0020, tool help and observations now agree; a real
+PowerShell PTY regression verifies stderr capture and the soft-pause advisory.
+
+Historical question: *(ADR-0020.)* `REQ-TOOLS-098` requires the soft-pause detail to
 tell the agent the process "may be writing to stderr" and to suggest re-running with a redirection, which
 only makes sense if stderr is **not** captured — while a pseudo-terminal-backed persistent shell, required
 by `REQ-SHELL-166`, necessarily merges it. The advisory text is required content either way, but the
@@ -1413,14 +1433,25 @@ is still a change to an observable. *Wholly unaffected by SR-4: `secrets.yaml` i
 edits and version control tracks, so it stays a file under the ruling's own principle, and the question
 survives intact. It is the only survivor of the OQ-11/OQ-14 pair the atomic primitive carried.*
 
-**OQ-15 — `error_class` is language-shaped.** *(ADR-0001.)* `REQ-TOOLS-101` fixes `ValueError` as a
+**OQ-15 — Decision closed 2026-09-07.** REQ-TOOLS-101 retains the fixed compatibility
+label `ValueError`; REQ-SANDBOX-083 fixes wrap refusals to `SandboxUnavailableError`.
+Stable `failure_kind`/outcome codes govern machine classification. Implementation exception names
+are optional redacted diagnostic detail. ADR-0001 records the amendment. Validation and gate
+coverage are implemented; confinement-wrapper integration remains tracked in the progress ledger.
+
+Historical question: *(ADR-0001.)* `REQ-TOOLS-101` fixes `ValueError` as a
 literal observable value and `REQ-SANDBOX-083` defines the sandbox case as "the type name of the failure"
 — an implementation-language-dependent string on an otherwise machine-readable field. Under ADR-0001's
 language choice neither is a language artifact. Either `error_class` is a **closed product vocabulary**,
 in which case the sandbox and terminal values need enumerating, or it is free text, in which case
 `ValueError` is not a contract.
 
-**OQ-16 — Configurable permission rule lists that no key defines.** *(ADR-0017.)* `REQ-TOOLS-049`'s "rule
+**OQ-16 — Decision closed, 2026-09-07.** REQ-TOOLS-049 now defines this
+release's rule lists as shipped presets. Existing mode, grant and declared
+permission controls remain authorable. A custom rule format requires a future
+schema and validation contract.
+
+**Historical question.** `REQ-TOOLS-049`'s "rule
 lists replace rather than deep-merge across layers" reads as though a user may author permission rules,
 but **no configuration key anywhere in domains 05, 10 or 15 defines one**, and the presets are fixed.
 Either user rule authoring is in scope and needs a key and a settings surface, or the sentence covers only
@@ -1526,7 +1557,13 @@ process of this application is exactly what `REQ-STARTUP-161` forbids. The per-w
 therefore the only one that can hold, and it should be **stated in the requirement rather than inferred**
 by every reader who meets the pair. Still needs a product-owner statement.
 
-**OQ-35 — Shell state under confinement.** *(ADR-0022.)* Foreground calls accumulate working directory,
+**OQ-35 — Decision closed, 2026-09-07.** REQ-SANDBOX-079 now defines each
+confined command as a fresh inner shell initialized from configured session
+working directory/environment. Changes inside that invocation end with it.
+Unconfined commands retain their persistent shell. REQ-TOOLS-123 cites that
+lifetime, and tool help/observations must disclose the active mode.
+
+**Historical question.** Foreground calls accumulate working directory,
 exported variables and aliases in a persistent shell (`REQ-TOOLS-097`), but a confined command is rendered
 as a nested shell invocation submitted into that shell (`REQ-SANDBOX-079`), so a directory change or an
 export inside a confined command lives in the inner shell and dies with it. **Does shell state persist
@@ -1534,7 +1571,14 @@ across confined foreground calls?** The two requirements describe different beha
 and confined modes and neither says so. This must be resolved before the terminal tool's description is
 written, since the description is what tells the agent whether a directory change persists.
 
-**OQ-37 — Proxy behaviour for `fetch`.** *(ADR-0023.)* Nothing says whether `fetch` honours system or
+**OQ-37 — CLOSED by accepted review, applied 2026-09-07.** The fetch tool
+uses explicit direct transport for every hop. Proxy environment variables,
+system settings and global dispatchers have no effect. Tool help and failures
+disclose this requirement. A local target/proxy regression verifies zero proxy
+contacts for direct fetch and confirms the proxy receives the control request.
+The following text preserves the historical question.
+
+**Historical OQ-37.** Nothing says whether `fetch` honours system or
 environment proxy settings. It matters: a proxy changes which host a connection is actually opened to, and
 `REQ-SANDBOX-022` promises that a denied host observes zero connection attempts. The chosen client does
 not honour proxy environment variables by default, which makes "no proxy" the de facto answer — the

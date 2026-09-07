@@ -88,6 +88,61 @@ export const ApprovalAnswerSchema = z.object({
 });
 export type ApprovalAnswer = z.infer<typeof ApprovalAnswerSchema>;
 
+/**
+ * REQ-TOOLS-157 / REQ-CHAT-092: the structured-questions vocabulary — 1 to 10 ordered steps, at most 8 options a
+ * step, `allow_freeform` defaulting to true. The field spellings are the ACTION's own (snake_case), and the same
+ * value is what the session record publishes as a pending prompt, exactly as `ApprovalPayloadSchema` is: one shape
+ * from the model's arguments to the trailer row, so nothing translates it on the way and nothing can translate it
+ * wrongly. The **bounds are not enforced by this schema** — REQ-TOOLS-157 requires every violation reported as a
+ * validation error naming it, and a zod `.max(10)` refusal names one and stops. `validateQuestionSteps` in
+ * `@rotaris/agent-tools` is the single enforcement point and it reports all of them.
+ */
+export const QUESTION_STEPS_MAX = 10;
+export const QUESTION_OPTIONS_MAX = 8;
+export const QuestionOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().default(''),
+});
+export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
+export const QuestionStepSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().default(''),
+  options: z.array(QuestionOptionSchema).default([]),
+  allow_freeform: z.boolean().default(true),
+});
+export type QuestionStep = z.infer<typeof QuestionStepSchema>;
+
+/** REQ-CHAT-096: routing targets the exact (conversation, prompt id) pair, so the prompt carries both. */
+export const QuestionPromptSchema = z.object({
+  request_id: z.string().min(1),
+  session_id: z.string().min(1),
+  /** REQ-CHAT-094: at most one prompt pending per conversation; this is that conversation. */
+  conversation_id: z.string().min(1),
+  agent_id: z.string(),
+  persona: z.string(),
+  steps: z.array(QuestionStepSchema),
+});
+export type QuestionPrompt = z.infer<typeof QuestionPromptSchema>;
+
+/** REQ-CHAT-095: `{step_id: {selected_option, freeform_text}}`; either may be null and both null is "(no answer)". */
+export const QuestionAnswerSchema = z.object({
+  selected_option: z.string().nullable(),
+  freeform_text: z.string().nullable(),
+});
+export type QuestionAnswer = z.infer<typeof QuestionAnswerSchema>;
+export const QuestionAnswersSchema = z.record(z.string(), QuestionAnswerSchema);
+export type QuestionAnswers = z.infer<typeof QuestionAnswersSchema>;
+
+/**
+ * REQ-CHAT-168: a count is written for the count it carries — zero, one and many all read correctly. Used for
+ * REQ-CHAT-051's "N step(s) — <first title>" trailer and REQ-CHAT-095's "Received answers for N step(s).",
+ * so the two can never disagree about the grammar.
+ */
+export function stepsPhrase(n: number): string {
+  return `${n} ${n === 1 ? 'step' : 'steps'}`;
+}
+
 /** REQ-TOOLS-013: the exact refusal text. */
 export function denialText(ruleId: string, reason: string, toolName: string): string {
   return `Permission denied by rule '${ruleId}'. ${reason} The '${toolName}' call was not executed. Choose a different approach or ask the user to adjust the permission policy.`;

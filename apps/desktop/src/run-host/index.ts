@@ -208,6 +208,29 @@ function scriptedClient(c: Clocks): ModelClient {
         }
         log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
       }
+      // ask[:<key>] — Part AC's step: one `ask_questions` call, with the steps taken from ROTARIS_SCRIPT_QUESTIONS by
+      // key (a JSON map) or the two-step default below. Verification only.
+      const askStep = /^ask(?::([\w-]+))?$/.exec(step);
+      if (askStep) {
+        if ((req.tools ?? []).some((t) => t.name === 'ask_questions')) {
+          let scripted: Record<string, unknown> = {};
+          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_QUESTIONS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          const key = askStep[1] ?? 'ask';
+          const fallback = {
+            steps: [
+              { id: 'scope', title: 'Which scope should this change cover?', description: 'Pick the narrowest that still solves the problem.', options: [{ label: 'This file only' }, { label: 'The whole package', description: 'Slower, but consistent.' }] },
+              { id: 'notes', title: 'Anything else the agent should know?', options: [], allow_freeform: true },
+            ],
+          };
+          const args = key in scripted ? scripted[key] : fallback;
+          yield ok<StreamPart>({ kind: 'text', delta: 'Asking the user. ' });
+          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'ask_questions', argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+          yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+          return;
+        }
+        log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
+      }
       // mcp:<server>.<tool> — the MCP proof's step: the callable name after `.` (a renamed tool by its replacement name); fixed arguments per tool.
       const mcpStep = /^mcp:([^.]+)\.(.+)$/.exec(step);
       if (mcpStep) {

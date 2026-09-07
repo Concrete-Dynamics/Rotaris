@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IntentStatusSchema } from './intent.js';
-import { ApprovalPayloadSchema } from './tools.js';
+import { ApprovalPayloadSchema, QuestionPromptSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ConfigSnapshotSchema } from './config.js';
@@ -141,7 +141,15 @@ export const SessionRecordSchema = z.object({
   }),
   /** REQ-MONITOR-044/036: the delegated children as presented; the tree is derived from parentId. */
   agents: z.array(AgentRecordSchema),
-  pendingQuestions: z.array(z.object({ requestId: z.string(), prompt: z.string() })),
+  /**
+   * REQ-CHAT-051 / REQ-SESSION-157 / REQ-CHAT-097: the question prompts pending right now, from which the question
+   * trailer row is computed. **Widened by Part AC (2026-09-07) from `{requestId, prompt}[]`**, which carried neither
+   * the steps nor their titles the trailer must name; the earlier shape forced `trailerRows` to read the LIST as one
+   * prompt's steps. It is DERIVED from the live run at every snapshot, like `wait` above and unlike `pendingApprovals`
+   * — a wait held in the run host's memory, so no column mirrors it and a process that died holds none (ADR-0010's
+   * fourth note). REQ-SESSION-025's persistence limb is therefore still owed and is recorded as owed.
+   */
+  pendingQuestions: z.array(QuestionPromptSchema),
   tokenUsage: z.object({ input: z.number().int(), output: z.number().int() }),
   /** Decimal string (ADR-0031). */
   cost: z.string(),

@@ -52,6 +52,28 @@ export interface PersonaResolver {
 const READ_TOOLS = ['read_file', 'haet_read', 'grep', 'glob', 'artifact_read', 'artifact_list'];
 const WRITE_TOOLS = ['write_file', 'haet_edit', 'haet'];
 const DELEGATION = ['delegate', 'todo'];
+/**
+ * Part AC: `ask_questions` reaches the ORCHESTRATOR, and only it, for now.
+ *
+ * Found by building the tool (2026-09-07): the executor existed, the prerequisite was met, the registry kept the
+ * name — and no agent could still call it, because **no built-in persona declared it**, and REQ-ORCH-016's
+ * direct-work bundle does not name it either (it is not a workspace capability and declares no facet). The
+ * registry's declared-but-unexecuted path had a second gate behind the first, and nothing said so: a name a
+ * persona never declares produces no removal and no reason code, so the tool was simply absent from the listing
+ * in silence.
+ *
+ * The orchestrator, because REQ-CHAT-094 scopes a pending prompt to ONE CONVERSATION and the orchestrator's is the
+ * conversation the desktop user is in — REQ-CHAT-051's trailer names the agent that asked, and the run-level agent
+ * is that one. `coordinator_only` does not remove it: `COORDINATOR_REMOVES` is the closed five write-and-command
+ * names (REQ-TOOLS-006), and asking a person a question is neither.
+ *
+ * **Whether a delegated child may ask the user is left open, deliberately.** REQ-CHAT-094's "per conversation"
+ * admits more than one asker and the mechanism supports it (the wait registry is per tool port, which is per
+ * conversation), but no requirement says which personas should, REQ-CHAT-051 defines exactly one question trailer,
+ * and `requirements-engineer` — the persona whose whole job is "the questions that remain" — is the obvious
+ * candidate. Raised as an open question against REQ-TOOLS-002 rather than settled here.
+ */
+const ASK = ['ask_questions'];
 
 function persona(name: string, tools: readonly string[], prompt: string, extra: Partial<Persona> = {}): Persona {
   return { name, tools, coordinatorOnly: false, readOnly: false, systemPrompt: prompt, implementer: tools.some((t) => WRITE_TOOLS.includes(t) || t === 'terminal'), ...extra };
@@ -66,8 +88,8 @@ export const ROLE_ALIASES: Readonly<Record<string, RoleName>> = ROLE_SPAWN_ALIAS
 const ROUTING = 'Route work to specialists: an ambiguous or under-specified request → requirements-engineer; a question about the repository as it stands → codebase-analyst; a question answerable only from outside the repository → librarian; design → architect; an ordered plan → planner; implementation → coding-agent; testing → tester; documentation → docs-writer; behaviour-preserving restructuring → refactorer; final acceptance → verifier.';
 
 export const BUILT_IN_PERSONAS: Readonly<Record<RoleName, Persona>> = Object.freeze({
-  orchestrator: persona('orchestrator', [...READ_TOOLS, ...WRITE_TOOLS, 'terminal', ...DELEGATION],
-    `You are the orchestrator. You coordinate: you do not modify files or run commands yourself — every work item reaches a specialist through the delegate tool, and you keep a todo list current for work spanning more than one step. ${ROUTING} Delegate in parallel where work is independent, wait only when you need a result, and finish by answering the user plainly with what was done.`,
+  orchestrator: persona('orchestrator', [...READ_TOOLS, ...WRITE_TOOLS, 'terminal', ...DELEGATION, ...ASK],
+    `You are the orchestrator. You coordinate: you do not modify files or run commands yourself — every work item reaches a specialist through the delegate tool, and you keep a todo list current for work spanning more than one step. ${ROUTING} Delegate in parallel where work is independent, wait only when you need a result, and finish by answering the user plainly with what was done. Where a choice is genuinely the user's to make and guessing would waste work, ask with ask_questions rather than assuming.`,
     { coordinatorOnly: true }),
   'requirements-engineer': persona('requirements-engineer', READ_TOOLS, 'You clarify ambiguous requests into precise requirements. Read what you need; write nothing; answer with the requirements as you understand them and the questions that remain.'),
   'codebase-analyst': persona('codebase-analyst', READ_TOOLS, 'You answer questions about the repository as it stands. Read and search; never modify anything; answer with what you found and where.'),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TranscriptRow } from '@rotaris/contracts';
+import type { QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import { classifyRows } from '@rotaris/ui-core';
 import { capLines, capDiff, familyOf, groupSeverity, groupSummary, projectDisplay, rowKey, trailerRows, type ProjectOptions } from './project.js';
 import type { DisplayRow } from './types.js';
@@ -27,6 +27,12 @@ const asTrailer = (d: DisplayRow | undefined): Extract<DisplayRow, { shape: 'tra
   if (!d || d.shape !== 'trailer') throw new Error(`expected a trailer, got ${d ? d.shape : 'nothing'}`);
   return d;
 };
+
+/** Part AC: one pending question prompt with the given step titles (REQ-CHAT-092's shape). */
+const question = (titles: readonly string[]): QuestionPrompt => ({
+  request_id: 'q1', session_id: 's', conversation_id: 'root', agent_id: 'orchestrator', persona: 'orchestrator',
+  steps: titles.map((title, i) => ({ id: `s${i}`, title, description: '', options: [], allow_freeform: true })),
+});
 
 const options = (rows: readonly TranscriptRow[], over: Partial<ProjectOptions> = {}): ProjectOptions => ({
   rows, running: true, groupTools: true,
@@ -256,7 +262,7 @@ describe('ADR-0046 step 4 — the projection', () => {
 
   it('REQ-CHAT-051 / REQ-MONITOR-230: the trailer rows follow every recorded row and are computed, not recorded', () => {
     const display = projectDisplay(options([row(0)], {
-      pendingQuestions: [{ requestId: 'q1', prompt: 'Which branch?' }, { requestId: 'q1', prompt: 'Which remote?' }],
+      pendingQuestions: [question(['Which branch?', 'Which remote?'])],
       pendingApprovals: [{ request_id: 'a1', agent_id: 'orchestrator', persona: 'orchestrator', command: 'rm -rf build', tool_name: 'terminal', options: [], reason: '', cwd: '' } as never],
       questionAgent: 'orchestrator',
     }));
@@ -264,9 +270,13 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(asTrailer(display[1]).trailer.text).toBe('2 steps — Which branch?');
     expect(asTrailer(display[2]).trailer.text).toBe('Approval needed — rm -rf build');
     // REQ-CHAT-168 at one: "1 step", never "1 step(s)".
-    const one = trailerRows({ pendingQuestions: [{ requestId: 'q', prompt: 'Only one?' }], pendingApprovals: [], questionAgent: 'a' });
+    const one = trailerRows({ pendingQuestions: [question(['Only one?'])], pendingApprovals: [], questionAgent: 'a' });
     expect(asTrailer(one[0]).trailer.text).toBe('1 step — Only one?');
     expect(trailerRows({ pendingQuestions: [], pendingApprovals: [], questionAgent: undefined })).toEqual([]);
+    // Part AC — REQ-CHAT-051 defines ONE question trailer: a second conversation's pending prompt adds no row.
+    const two = trailerRows({ pendingQuestions: [question(['First?']), { ...question(['Second?']), request_id: 'q2', conversation_id: 'child' }], pendingApprovals: [], questionAgent: 'a' });
+    expect(two).toHaveLength(1);
+    expect(asTrailer(two[0]).trailer.requestId).toBe('q1');
   });
 
   it('REQ-CHAT-059: identity is stable and never positional', () => {

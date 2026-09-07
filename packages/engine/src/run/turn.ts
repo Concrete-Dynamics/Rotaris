@@ -2,7 +2,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
-import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
+import type { ApprovalOption, PermissionPreset, QuestionAnswers, QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -66,6 +66,16 @@ export interface ToolPort {
   currentMode(): PermissionPreset;
   /** REQ-MONITOR-254: false when no wait carries this id here. */
   answerApproval(requestId: string, option: ApprovalOption): boolean;
+  /**
+   * Part AC — REQ-CHAT-096 / REQ-MONITOR-004's "answer a pending question set" and "cancel a pending question set",
+   * routed by request id exactly as an approval is; false when no wait carries this id here. Optional because a port
+   * without a user-prompt channel has none: `ask_questions` is removed from such a port by the registry's
+   * prerequisite (REQ-TOOLS-004), so there is nothing there to answer.
+   */
+  answerQuestions?(requestId: string, answers: QuestionAnswers): boolean;
+  cancelQuestions?(requestId: string): boolean;
+  /** REQ-CHAT-097: what the whole-session update publishes for this port's conversation. */
+  pendingQuestions?(): readonly QuestionPrompt[];
 }
 
 export interface TurnDeps {

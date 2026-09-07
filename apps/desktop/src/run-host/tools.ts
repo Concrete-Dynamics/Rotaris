@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PolicyContext, readFileTool, realPathOf,
+  askQuestionsTool, buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
@@ -159,12 +159,34 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors.set('artifact_read', artifactReadTool(artifacts) as ToolExecutor);
     executors.set('artifact_list', artifactListTool(artifacts) as ToolExecutor);
   }
+  /*
+   * Part AC (REQ-TOOLS-157/158, REQ-CHAT-092..097): the user-prompt channel. ONE registry per port, and a port IS a
+   * conversation, which is what makes REQ-CHAT-094's "one pending prompt per conversation" structural rather than a
+   * check. The publication is `writer.save`: it commits and hands the projection owner a `save`, which republishes
+   * the whole-session update reading `pendingQuestions` from this registry — REQ-CHAT-097's "published to the
+   * surface", with no timer anywhere in the path. `attended` is the frontend's presence (REQ-TOOLS-053): a run with
+   * no window to paint the prompt cannot show it, so the prompt is discarded and the call sees `cancelled`
+   * (REQ-CHAT-094). The budget is REQ-TOOLS-178's shared `runtime.approval_timeout_seconds`, whose 300 s default is
+   * REQ-CHAT-093's figure and whose 0 means no limit.
+   */
+  const questions = new PendingQuestions(deps.clocks.timers);
+  const conversationId = ctx.parentId ?? 'root';
+  executors.set('ask_questions', askQuestionsTool({
+    pending: questions, conversationId, agentId: ctx.agentName, timeoutMs: runtime.approvalTimeoutMs,
+    publish: () => {
+      if (!ctx.attended()) return false;
+      return ctx.writer.save(ctx.writer.currentStatus).ok;
+    },
+  }) as ToolExecutor);
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
   // `canPublishArtifacts` follows the store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted`
   // for a build that withholds publishing separately, and no requirement in this part names such a grant — a
   // persona that must not publish declares no `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken.
   const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly }, {}, {
-    delegationRuntime: delegationAvailable, userPromptChannel: false, artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
+    // Part AC: `userPromptChannel` is attendedness (REQ-TOOLS-053/069) — an unattended run has no surface to put a
+    // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
+    // literal `false` until this part, because there was no executor for it to be true of.
+    delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
   }, isEntry);
   for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
@@ -234,7 +256,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         ...(r.followUp === undefined ? {} : { followUp: r.followUp }),
       };
     },
-    cancelPending: () => approvals.cancelAll(),
+    // REQ-MONITOR-012 / REQ-TOOLS-054/177 and REQ-CHAT-096: run stop, shutdown and host teardown release every wait
+    // on a person — the approvals AND the question prompts, on the one sweep the engine already performs.
+    cancelPending: () => approvals.cancelAll() + questions.cancelAll(),
     setMode: (requested, _source): ModeChange => {
       const previous = mode;
       const wanted = resolvePreset(requested).preset;
@@ -246,5 +270,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     },
     currentMode: () => mode,
     answerApproval: (requestId, option) => approvals.resolve(requestId, option),
+    // Part AC — REQ-CHAT-096: routed by request id; a stale id resolves nothing here and the caller answers `false`,
+    // which is what REQ-CHAT-102 turns into "the modal stays open" rather than a reported success.
+    answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
+    cancelQuestions: (requestId) => questions.cancel(requestId),
+    pendingQuestions: () => questions.pending(),
   };
 }

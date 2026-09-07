@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRecord, TranscriptRow } from '@rotaris/contracts';
+import type { AgentRecord, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
@@ -16,6 +16,11 @@ import { RUN_OWNED_KINDS, SCOPE_NO_AGENT, scopedRows } from './TranscriptSurface
 const AT = '2026-09-07T09:00:00.000Z';
 const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 'agent', settled: true, body: 'x', at: AT, ts: '09:00:00', ...over });
 const display = (r: TranscriptRow): DisplayRow => ({ shape: 'row', key: `${r.index}`, row: r });
+/** Part AC: one pending question prompt, its steps named by title. */
+const prompt = (titles: readonly string[]): QuestionPrompt => ({
+  request_id: 'q1', session_id: 's', conversation_id: 'root', agent_id: 'orchestrator', persona: 'orchestrator',
+  steps: titles.map((title, i) => ({ id: `s${i}`, title, description: '', options: [], allow_freeform: true })),
+});
 
 describe('rows — REQ-CHAT-047/057, the role and the attribution', () => {
   it('projects the five named roles and leaves the vocabulary open', () => {
@@ -130,17 +135,23 @@ describe('rows — REQ-CHAT-062/164/065, the sentences that carry counts (REQ-CH
     expect(groupDurationMs([members[0]!], 2_000, Date.parse(AT) + 99_000)).toBe(2_000);
   });
 
-  it('REQ-CHAT-051 / REQ-CHAT-168: the question trailer agrees with its count at one and at many', () => {
+  it('REQ-CHAT-051 / REQ-CHAT-168: the question trailer agrees with its count at zero, one and many', () => {
     // The wording is computed in `project.ts`'s `trailerRows`, which is the ONE place it is written; this asserts
     // it there and that `trailerText` reads it back unchanged, rather than asserting a second implementation.
-    const text = (prompts: readonly string[]): string => {
-      const [t] = trailerRows({ pendingQuestions: prompts.map((prompt, i) => ({ requestId: `r${i}`, prompt })), pendingApprovals: [], questionAgent: 'a' });
+    // Part AC: the trailer reads the WIDENED `pendingQuestions` — one entry per conversation, each carrying its
+    // own ordered steps — so N is the prompt's step count and the title is its first step's title.
+    const text = (titles: readonly string[]): string => {
+      const [t] = trailerRows({ pendingQuestions: [prompt(titles)], pendingApprovals: [], questionAgent: 'a' });
       return t !== undefined && t.shape === 'trailer' ? trailerText(t.trailer) : '';
     };
     expect(text(['Pick a branch'])).toBe('1 step — Pick a branch');
     expect(text(['Pick a branch', 'b', 'c'])).toBe('3 steps — Pick a branch');
+    // A first step with no title yields the count alone rather than a dangling separator.
     expect(text([''])).toBe('1 step');
-    expect(text([])).toBe('');
+    expect(text(['', 'b'])).toBe('2 steps');
+    // At zero — a prompt that carries no step at all still reads grammatically (REQ-CHAT-168).
+    expect(text([])).toBe('0 steps');
+    expect(trailerRows({ pendingQuestions: [], pendingApprovals: [], questionAgent: 'a' })).toEqual([]);
   });
 });
 

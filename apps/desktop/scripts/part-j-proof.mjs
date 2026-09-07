@@ -118,7 +118,7 @@ launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PRO
 
 // 3. A graceful pause, then the composer's Continue.
 const s3 = scenario('pause', []);
-launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '.composer__actions .btn-secondary>>Pause@1900;;.composer__actions .btn-primary>>Continue run@6500', ROTARIS_CAPTURE_AFTER_MS: '16000' });
+launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '.composer__actions .btn-secondary>>Pause@1900;;.composer__actions .btn-primary>>Continue run@6500', ROTARIS_CAPTURE_AFTER_MS: '26000' });
 {
   const db = open(s3);
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();

@@ -47,6 +47,14 @@ function scratchAgentsYaml(workspace) {
     '  permission_mode: autonomous',
     'rotaris:',
     '  delegation_strategy: single',
+    // Part T's shipped `code_intelligence` entry is enabled by default and its discovery costs every run start
+    // about 4.5 s. This proof's capture windows were sized before that and stopped fitting: the loop scenario
+    // reached two supervisor activations of the three it needs, leaving the session `running` with no stop
+    // reason, which reads like a supervisor defect and is not one. Switched off here, as `artifacts-proof` and
+    // `composer-proof` already do, rather than widening a window that would drift again.
+    'mcp:',
+    '  servers:',
+    '    code_intelligence: { enabled: false }',
     '',
   ].join('\n'));
 }
@@ -122,7 +130,7 @@ writeFileSync(join(resumeWorkspace, 'README.md'), '# resume proof\n');
 scratchAgentsYaml(resumeWorkspace);
 launch('resume-before', resumeWorkspace, resumeLocal, resumePreferences, {
   ROTARIS_CAPTURE_PROMPT: 'finish the first run',
-  ROTARIS_CAPTURE_AFTER_MS: '6500',
+  ROTARIS_CAPTURE_AFTER_MS: '11000',
 });
 const resumeFile = oneDatabase(resumeLocal);
 const planted = new Database(resumeFile);
@@ -143,7 +151,7 @@ launch('resume-after', resumeWorkspace, resumeLocal, resumePreferences, {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_INTENT_SCRIPT: 'garbage',
   ROTARIS_CAPTURE_PROMPT: 'continue after restart',
-  ROTARIS_CAPTURE_AFTER_MS: '8500',
+  ROTARIS_CAPTURE_AFTER_MS: '18000',
 });
 const resumedDb = new Database(resumeFile, { readonly: true });
 const after = resumedDb.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed FROM sessions').all();

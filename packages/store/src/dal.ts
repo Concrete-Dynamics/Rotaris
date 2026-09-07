@@ -248,6 +248,41 @@ export interface EventRow {
   /** The wire line, verbatim (REQ-EVENTS-080). */
   readonly payload: string;
 }
+/**
+ * v12 — REQ-LIBRARY-088's field set as stored. The list-valued fields are serialised JSON, `body_file` is the
+ * name of the Markdown document beside the session's other files (REQ-SESSION-002) and never its content, and
+ * `importance` is DERIVED at write time (REQ-LIBRARY-088: `high` exactly for a child report whose status is not
+ * `succeeded`) so no caller can supply one.
+ */
+export interface ArtifactRow {
+  readonly session_id: string;
+  readonly id: string;
+  readonly slug: string;
+  readonly title: string;
+  readonly kind: string;
+  readonly source_task_id: string | null;
+  readonly canonical_name: string | null;
+  readonly source_persona: string | null;
+  readonly status: string;
+  readonly summary: string;
+  readonly key_findings: string;
+  readonly highlight_paths: string;
+  readonly snippets: string;
+  readonly edited_files: string;
+  readonly created_files: string;
+  readonly tags: string;
+  readonly supersedes: string | null;
+  readonly superseded_by: string | null;
+  readonly created_by: string;
+  readonly consumed_by: string;
+  readonly timeline_event_id: string | null;
+  readonly conversation_id: string | null;
+  readonly importance: string;
+  readonly created_at: string;
+  readonly edited_at: string | null;
+  readonly body_file: string;
+}
+export type ArtifactInsert = Omit<ArtifactRow, 'session_id'> & { readonly session_id: string };
 
 export class StoreDal {
   private readonly stmts: Record<string, Statement>;
@@ -392,6 +427,38 @@ export class StoreDal {
       checkpointsBeyond: db.prepare('SELECT * FROM checkpoints WHERE session_id = ? ORDER BY sequence DESC LIMIT -1 OFFSET ?'),
       deleteCheckpoint: db.prepare('DELETE FROM checkpoints WHERE session_id = ? AND sequence = ?'),
       setLastRestored: db.prepare('UPDATE sessions SET last_restored_sequence = ?, updated_at = ? WHERE session_id = ?'),
+
+      // Part Y (v12): the session artifact store. The record and its index entry are ONE insert — the declared index is
+      // maintained by the engine inside the caller's transaction (REQ-LIBRARY-087), so there is no second write to
+      // sequence and no window in which one exists without the other. Every statement names session_id (REQ-ORCH-151,
+      // REQ-ORCH-149's session scope), and there is NO statement that updates anything but the body and its timestamp,
+      // the supersession links or the consumer list: REQ-LIBRARY-094's "everything else stays immutable through every
+      // editing surface" is enforced by the absence of a statement, as REQ-SESSION-131's is.
+      insertArtifact: db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
+        highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
+        VALUES (@session_id, @id, @slug, @title, @kind, @source_task_id, @canonical_name, @source_persona, @status, @summary, @key_findings,
+        @highlight_paths, @snippets, @edited_files, @created_files, @tags, @supersedes, @superseded_by, @created_by, @consumed_by, @timeline_event_id, @conversation_id, @importance, @created_at, @edited_at, @body_file)`),
+      // REQ-LIBRARY-096: ascending by creation time, the index's own order; the plan is asserted in `store.test.ts`.
+      artifactsOf: db.prepare('SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at, id'),
+      artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
+      artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
+      artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
+      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' ORDER BY created_at, id"),
+      slugsLike: db.prepare('SELECT slug FROM artifacts WHERE session_id = ? AND (slug = ? OR slug LIKE ?)'),
+      // REQ-LIBRARY-094: only the body's timestamp moves here — the body itself is a file, so the row records that it changed and nothing more.
+      touchArtifactEdited: db.prepare('UPDATE artifacts SET edited_at = ? WHERE session_id = ? AND id = ?'),
+      // REQ-LIBRARY-092: a re-materialisation updates in place and preserves id, slug, title, creation time, supersession links, consumers and edit timestamp.
+      rematerialiseArtifact: db.prepare(`UPDATE artifacts SET status = @status, summary = @summary, key_findings = @key_findings, highlight_paths = @highlight_paths,
+        snippets = @snippets, edited_files = @edited_files, created_files = @created_files, tags = @tags, source_persona = @source_persona, canonical_name = @canonical_name,
+        created_by = @created_by, importance = @importance, timeline_event_id = coalesce(@timeline_event_id, timeline_event_id), conversation_id = coalesce(@conversation_id, conversation_id)
+        WHERE session_id = @session_id AND id = @id`),
+      // REQ-LIBRARY-095: both directions, each its own statement so neither can be written without the other being available.
+      setArtifactSupersedes: db.prepare('UPDATE artifacts SET supersedes = ? WHERE session_id = ? AND id = ?'),
+      setArtifactSupersededBy: db.prepare('UPDATE artifacts SET superseded_by = ? WHERE session_id = ? AND id = ?'),
+      // REQ-LIBRARY-096: the actor appended at most once — the caller reads, decides, writes, inside one transaction.
+      setArtifactConsumers: db.prepare('UPDATE artifacts SET consumed_by = ? WHERE session_id = ? AND id = ?'),
+      setArtifactTimelineEvent: db.prepare('UPDATE artifacts SET timeline_event_id = ? WHERE session_id = ? AND id = ?'),
+      countArtifacts: db.prepare('SELECT count(*) AS c FROM artifacts WHERE session_id = ?'),
       // Part U (REQ-SESSION-166): the one delete statement. Every child table declares ON DELETE CASCADE and the open
       // enables enforcement (open.ts, defect 40), so the row's removal takes its thirteen dependants in the same statement;
       // `store.test.ts` plants a row in every table and asserts each is gone.
@@ -729,6 +796,54 @@ export class StoreDal {
   /** REQ-GIT-155: written only in the transaction that reports a restore successful. */
   setLastRestored(id: SessionId, sequence: number, updatedAt: string): void {
     this.stmts['setLastRestored']!.run(sequence, updatedAt, id);
+  }
+
+  // Part Y (v12): the session artifact store's statements (REQ-LIBRARY-087/088/092/094/095/096).
+  /** One INSERT: the row and its index entry, indivisible by construction (REQ-LIBRARY-087). */
+  insertArtifact(row: ArtifactInsert): void {
+    this.stmts['insertArtifact']!.run(row);
+  }
+  /** REQ-LIBRARY-096: ascending by creation time. Hydration reads this and tolerates whatever it finds (REQ-LIBRARY-091). */
+  artifactsOf(id: SessionId): ArtifactRow[] {
+    return this.stmts['artifactsOf']!.all(id) as ArtifactRow[];
+  }
+  /** REQ-LIBRARY-096: lookup accepts an id or a slug; the id is tried first, so a slug that looks like an id cannot shadow one. */
+  artifactByRef(id: SessionId, ref: string): ArtifactRow | undefined {
+    return (this.stmts['artifactById']!.get(id, ref) as ArtifactRow | undefined) ?? (this.stmts['artifactBySlug']!.get(id, ref) as ArtifactRow | undefined);
+  }
+  /** REQ-LIBRARY-092: idempotence keyed on the task id, falling back to the canonical agent name. */
+  artifactByTask(id: SessionId, taskId: string): ArtifactRow | undefined {
+    return this.stmts['artifactByTask']!.get(id, taskId) as ArtifactRow | undefined;
+  }
+  artifactByCanonical(id: SessionId, canonicalName: string): ArtifactRow | undefined {
+    return (this.stmts['artifactByCanonical']!.all(id, canonicalName) as ArtifactRow[])[0];
+  }
+  /** The slugs a candidate would collide with, so REQ-LIBRARY-088's `-2`, `-3` is decided from what the session holds. */
+  slugsLike(id: SessionId, base: string): string[] {
+    return (this.stmts['slugsLike']!.all(id, base, `${base}-%`) as { slug: string }[]).map((r) => r.slug);
+  }
+  /** REQ-LIBRARY-094: the body is a file; the row records only that a person edited it, and when. */
+  touchArtifactEdited(id: SessionId, artifactId: string, editedAt: string): boolean {
+    return this.stmts['touchArtifactEdited']!.run(editedAt, id, artifactId).changes === 1;
+  }
+  /** REQ-LIBRARY-092: in place; id, slug, title, creation time, supersession links, consumers and `edited_at` are not in the statement. */
+  rematerialiseArtifact(row: Pick<ArtifactRow, 'session_id' | 'id' | 'status' | 'summary' | 'key_findings' | 'highlight_paths' | 'snippets' | 'edited_files' | 'created_files' | 'tags' | 'source_persona' | 'canonical_name' | 'created_by' | 'importance' | 'timeline_event_id' | 'conversation_id'>): boolean {
+    return this.stmts['rematerialiseArtifact']!.run(row).changes === 1;
+  }
+  /** REQ-LIBRARY-095: both directions, written inside one transaction by the caller. */
+  linkSupersession(id: SessionId, newerId: string, olderId: string): void {
+    this.stmts['setArtifactSupersedes']!.run(olderId, id, newerId);
+    this.stmts['setArtifactSupersededBy']!.run(newerId, id, olderId);
+  }
+  setArtifactConsumers(id: SessionId, artifactId: string, consumers: readonly string[]): void {
+    this.stmts['setArtifactConsumers']!.run(JSON.stringify(consumers), id, artifactId);
+  }
+  /** REQ-LIBRARY-092: the `artifact_published` entry's id linked back onto the record, in the transaction that wrote it. */
+  setArtifactTimelineEvent(id: SessionId, artifactId: string, entryId: string): void {
+    this.stmts['setArtifactTimelineEvent']!.run(entryId, id, artifactId);
+  }
+  artifactCount(id: SessionId): number {
+    return (this.stmts['countArtifacts']!.get(id) as { c: number }).c;
   }
 
   totals(): { sessions: number; rows: number } {

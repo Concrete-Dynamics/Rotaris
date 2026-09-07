@@ -526,14 +526,25 @@ export class SessionWriter {
    * judgement this writer is not entitled to make about another domain's entry.
    */
   appendTimeline(name: string, actor: string, message: string, metadata: Record<string, unknown>, severity: TimelineSeverity = 'info'): Result<number, WriteFailure> {
+    const r = this.appendTimelineEntry(name, actor, message, metadata, severity);
+    return r.ok ? ok(r.value.ordinal) : r;
+  }
+
+  /**
+   * The same append, returning the entry's minted `id` beside its ordinal. Part Y is its first caller:
+   * REQ-LIBRARY-092 requires the `artifact_published` entry's id to be linked back onto the artifact record,
+   * and an ordinal is a position rather than an identifier (the v10 repair's own reasoning).
+   */
+  appendTimelineEntry(name: string, actor: string, message: string, metadata: Record<string, unknown>, severity: TimelineSeverity = 'info'): Result<{ ordinal: number; id: string }, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
+    const id = timelineId();
     try {
       return ok(dal.transaction(() => {
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, name, actor, message, JSON.stringify(metadata), timelineId(), severity);
-        return ordinal;
+        dal.insertTimeline(sessionId, ordinal, at, name, actor, message, JSON.stringify(metadata), id, severity);
+        return { ordinal, id };
       }));
     } catch (cause) {
       return this.fail(cause);

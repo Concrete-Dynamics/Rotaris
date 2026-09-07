@@ -3,9 +3,9 @@ import type { ChildRow } from '@rotaris/store';
 /**
  * REQ-ORCH-055..060, REQ-ORCH-063, REQ-MONITOR-023, REQ-TOOLS-154: the messages a parent receives — the
  * background-started message, the completion notification, the resume message with per-child report
- * blocks capped at 4,000 characters, and the child's payload in the fixed order (workspace-root prefix,
- * then the task text; the artifact items are empty until ADR-0041). The wording is the implementation's;
- * the facts each must carry are the requirements'.
+ * blocks capped at 4,000 characters, and the child's payload in the fixed order (the dependency reports,
+ * Part Y's artifact context blocks, the workspace-root prefix, then the task text). The wording is the
+ * implementation's; the facts each must carry are the requirements'.
  */
 export const REPORT_BLOCK_CAP = 4_000;
 
@@ -78,10 +78,16 @@ export function priorAgentContext(deps: readonly ChildRow[]): string {
   return ['[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]', ...sections].join('\n\n');
 }
 
-/** REQ-TOOLS-154 (1) and (6), with REQ-ORCH-047's block ahead of everything when present. */
-export function childPayload(workspaceRoot: string, task: string, priorContext: string): string {
+/**
+ * REQ-TOOLS-154 (1) and (6), with REQ-ORCH-047's block ahead of everything when present, then Part Y's
+ * artifact blocks — `PRIOR SIBLING ARTIFACT INDEX` and, where the launch attached any, `PRIOR AGENT CONTEXT
+ * (FULL)` (REQ-LIBRARY-097, REQ-LIBRARY-098). They sit after the dependency reports and before the workspace
+ * root and the task, so the child reads what its dependencies found first and the session's wider index next.
+ */
+export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = []): string {
   const parts: string[] = [];
   if (priorContext) parts.push(priorContext);
+  for (const block of artifactBlocks) if (block !== '') parts.push(block);
   parts.push(`Workspace root: ${workspaceRoot}. Treat any other absolute path you encounter as stale; every path you use is relative to this root.`);
   parts.push(task);
   return parts.join('\n\n');

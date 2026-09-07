@@ -14,10 +14,22 @@ export interface DelegateRequest {
   readonly inheritedContext: readonly string[];
   readonly category: string;
   readonly runInBackground: boolean;
+  /**
+   * REQ-LIBRARY-098: the artifacts the caller attached explicitly, by id or slug. The engine resolves them
+   * and injects the `PRIOR AGENT CONTEXT (FULL)` block into the child; the tool reports back what could not
+   * be resolved. Absent where no artifact store exists (the tool then carries none).
+   */
+  readonly attachArtifacts?: readonly string[] | undefined;
+}
+
+/** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */
+export interface AttachmentOutcome {
+  readonly attached: number;
+  readonly unresolved: readonly string[];
 }
 
 export type DelegateOutcome =
-  | { readonly status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; readonly canonicalName: string; readonly taskId: string; readonly message: string }
+  | { readonly status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; readonly canonicalName: string; readonly taskId: string; readonly message: string; readonly attachments?: AttachmentOutcome | undefined }
   | { readonly status: 'rejected'; readonly canonicalName: string; readonly message: string };
 
 export interface BackgroundOutput {

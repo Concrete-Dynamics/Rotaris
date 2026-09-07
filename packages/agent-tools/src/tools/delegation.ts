@@ -8,8 +8,8 @@ import { errorObservation, observation, type ToolExecutor } from './types.js';
  * `wait_for_tasks` with the returned id.
  */
 export interface DelegationPort {
-  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean }): Promise<
-    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string }
+  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[] }): Promise<
+    | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: { attached: number; unresolved: readonly string[] } | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): { status: 'ok' | 'still_running' | 'not_found'; state: string; text: string };
@@ -41,10 +41,17 @@ export function delegateTool(port: DelegationPort, parentId: string): ToolExecut
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {
-      const warnings: string[] = [];
-      if (a.attach_artifacts.length > 0) warnings.push(`${a.attach_artifacts.length} attachment(s) were ignored: the artifact store is not built yet.`);
-      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background });
+      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts });
       if (r.status === 'rejected') return errorObservation(renderDelegateObservation(r.canonicalName, 'rejected', r.message, null));
+      // REQ-LIBRARY-098 (Part Y): the attachments are injected as the child's `PRIOR AGENT CONTEXT (FULL)` block; what
+      // the store could not resolve is reported HERE, to the caller, rather than only inside the child's own block.
+      // The placeholder this replaced said "the artifact store is not built yet"; it is, and the falsified line is gone
+      // from the code with its reason kept in this comment.
+      const warnings: string[] = [];
+      if (r.attachments) {
+        if (r.attachments.attached > 0) warnings.push(`${r.attachments.attached} artifact(s) were attached to its context.`);
+        if (r.attachments.unresolved.length > 0) warnings.push(`${r.attachments.unresolved.length} attachment(s) could not be resolved: ${r.attachments.unresolved.join(', ')}.`);
+      }
       let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings].join(' '), r.taskId);
       if (!a.run_in_background) {
         // REQ-TOOLS-153: the same mechanism as wait_for_tasks, over exactly this one task.

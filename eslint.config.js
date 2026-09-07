@@ -92,7 +92,7 @@ const ENGINE_CODE = [
 export default tseslint.config(
   {
     // The proof directories hold scratch workspaces a real model may write code into (the slice's third prompt did).
-    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', '.slice-proof/**', '.overview-proof/**', '.fetch-proof/**', '.git-proof/**', '.resilience-proof/**', '.checkpoint-proof/**', '.sessions-proof/**', '.mcp-proof/**', '.part-h-proof/**', '.part-j-proof/**', '.config-proof/**', '.theme-proof/**', 'packages/kernel/src/generated/**', 'apps/desktop/scripts/**', 'packages/*/spike/**', '.mission-proof/**', '.code-intel-proof/**', 'apps/desktop/resources/**', 'apps/desktop/.cache/**'],
+    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', '.slice-proof/**', '.overview-proof/**', '.fetch-proof/**', '.git-proof/**', '.resilience-proof/**', '.checkpoint-proof/**', '.sessions-proof/**', '.mcp-proof/**', '.part-h-proof/**', '.part-j-proof/**', '.config-proof/**', '.theme-proof/**', 'packages/kernel/src/generated/**', 'apps/desktop/scripts/**', 'packages/*/spike/**', '.mission-proof/**', '.artifacts-proof/**', '.code-intel-proof/**', 'apps/desktop/resources/**', 'apps/desktop/.cache/**'],
   },
   ...tseslint.configs.recommended,
   {

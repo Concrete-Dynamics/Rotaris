@@ -9,7 +9,7 @@ import {
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import type { McpHost } from './mcp.js';
-import { backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
+import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
 /**
@@ -152,9 +152,19 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     executors.set('background_output', backgroundOutputTool(ctx.delegation, parentId) as ToolExecutor);
     executors.set('wait_for_tasks', waitForTasksTool(ctx.delegation, parentId) as ToolExecutor);
   }
+  // Part Y (REQ-LIBRARY-099/100/101): the three artifact executors over the engine's port, bound to THIS agent.
+  const artifacts = ctx.artifacts;
+  if (artifacts) {
+    executors.set('artifact_write', artifactWriteTool(artifacts) as ToolExecutor);
+    executors.set('artifact_read', artifactReadTool(artifacts) as ToolExecutor);
+    executors.set('artifact_list', artifactListTool(artifacts) as ToolExecutor);
+  }
   // ONE resolution feeds the prompt listing and the callable set (REQ-TOOLS-010).
+  // `canPublishArtifacts` follows the store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted`
+  // for a build that withholds publishing separately, and no requirement in this part names such a grant — a
+  // persona that must not publish declares no `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken.
   const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly }, {}, {
-    delegationRuntime: delegationAvailable, userPromptChannel: false, artifactStore: false, canPublishArtifacts: false, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
+    delegationRuntime: delegationAvailable, userPromptChannel: false, artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
   }, isEntry);
   for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();

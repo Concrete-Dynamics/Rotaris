@@ -2,9 +2,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
+import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -258,6 +258,60 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
     onCancelAgent={cancelAgent} onCancelRun={() => stopRun(false)}
     onOpen={open} onPopOut={(agent) => { void openPersona(agent, false); }}
   />;
+}
+
+/**
+ * Part Y — the Library's Artifacts tab and its inspectors, mounted in the Library slot of `REQ-SHELL-023`'s
+ * seven views.
+ *
+ * **This component is Part Y's half of the Library and is replaced at merge time.** Part X owns the Library
+ * shell (`LibraryView`), its one search field and its three tabs; the merge keeps this file's `artifacts`
+ * state and inspector stack and hands `<ArtifactsTab …/>` to the shell as the `artifacts` node, so what
+ * changes here is three lines: the hook, the tab node and the refresh. Until then the tab is mounted with an
+ * empty query and its own revision counter, which is what the artifacts proof drives.
+ */
+function Library() {
+  const [revision, setRevision] = useState(0);
+  const [open, setOpen] = useState<readonly { id: string; raised: number }[]>([]);
+  const read = useCallback(async () => {
+    const r = await bridge.command({ kind: 'artifacts.list' });
+    if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+    const v = r.value as { sessionId: string | null; artifacts: ArtifactRowPayload[]; warnings: string[] };
+    return { ok: true as const, sessionId: v.sessionId, artifacts: v.artifacts, warnings: v.warnings };
+  }, []);
+  const load = useCallback(async (id: string) => {
+    const r = await bridge.command({ kind: 'artifacts.body', ref: id });
+    return r.ok ? { ok: true as const, artifact: r.value as ArtifactLoaded } : { ok: false as const, reason: r.detail ?? r.headline };
+  }, []);
+  const save = useCallback(async (id: string, body: string) => {
+    const r = await bridge.command({ kind: 'artifacts.save', ref: id, body });
+    // REQ-LIBRARY-105: an artifact write IS a library change, so the table re-reads and shows ` · edited`.
+    if (r.ok) setRevision((n) => n + 1);
+    return r.ok ? { ok: true as const, editedAt: (r.value as { editedAt: string }).editedAt } : { ok: false as const, reason: r.detail ?? r.headline };
+  }, []);
+  // REQ-LIBRARY-131: opening an id that is already open RE-RAISES the visible dialog instead of duplicating it.
+  const inspect = useCallback((id: string) => {
+    setOpen((current) => (current.some((x) => x.id === id)
+      ? current.map((x) => (x.id === id ? { id, raised: x.raised + 1 } : x))
+      : [...current, { id, raised: 1 }]));
+  }, []);
+  return (
+    <div className="library" data-testid="library" data-view-revision={String(revision)}>
+      <header className="page-header">
+        <h1 className="display">Library</h1>
+        <span className="page-header-sub">Artifacts published or reported in the loaded session.</span>
+      </header>
+      <ArtifactsTab query="" revision={revision} onRead={read} onInspect={inspect} />
+      {open.map((entry) => (
+        // ADR-0051: a link is an element that requests an external open THROUGH THE COMMAND CHANNEL. No such
+        // command exists yet — `REQ-CHAT-076` fixes the opening, its acknowledgement and its failure report,
+        // and that belongs to the transcript part that consumes this renderer. Until then no opener is passed
+        // and a link renders with its target as its title, inert rather than navigable. Recorded as owed.
+        <ArtifactInspector key={entry.id} id={entry.id} raised={entry.raised} onLoad={load} onSave={save}
+          onClose={(id) => setOpen((current) => current.filter((x) => x.id !== id))} />
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -732,6 +786,9 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
         workspace: <Workspace models={models} workspace={workspace} popOut={popOut} />,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
+        // Part Y: the Library slot holds the Artifacts tab and its inspectors. Part X's `LibraryView` replaces
+        // this node at merge time and takes `<ArtifactsTab …/>` as its `artifacts` child.
+        library: <Library />,
         settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,
       }}
       notice={notice}

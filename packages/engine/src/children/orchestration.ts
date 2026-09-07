@@ -5,7 +5,9 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import { runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
-import type { BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
+import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
+import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
+import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
@@ -63,6 +65,8 @@ export interface ChildrenDeps {
   readonly shouldPause?: (() => boolean) | undefined;
   /** Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and waits. */
   readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number) => TurnResilience } | undefined;
+  /** Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports land in it and its two context blocks reach every child. */
+  readonly artifacts?: ArtifactStore | undefined;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -75,9 +79,11 @@ export class IterationChildren implements DelegationOps {
   private readonly startedAt = new Map<string, Millis>();
   private readonly toolCalls = new Map<string, number>();
   private readonly resumeWaiters = new Map<string, () => void>();
+  /** REQ-LIBRARY-098: the artifacts each launch attached explicitly, by reference, for as long as the run lives. */
+  private readonly attached = new Map<string, readonly string[]>();
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
-    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas });
+    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}) });
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.execute(row), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
   }
@@ -98,16 +104,33 @@ export class IterationChildren implements DelegationOps {
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved } = r.value;
+    // REQ-LIBRARY-098: the attachment list belongs to THIS launch, not to the record — a child does not outlive
+    // the run that spawned it, so it is remembered here for the moment the child's payload is assembled.
+    const attachments = this.rememberAttachments(row.task_id, req.attachArtifacts ?? []);
     const alias = aliasResolved ? ` Alias '${aliasResolved}' resolved to '${row.persona}'.` : '';
     // REQ-ORCH-056/058: a state change triggers a pass; the delegate observation returns at once.
     this.scheduler.pass();
     const now = this.ledger.get(row.task_id) ?? row;
     if (held || now.state === 'waiting_on_model_slot') {
       const cap = this.deps.modelCap(row.model_key) ?? 0;
-      return { status: 'waiting_on_model_slot', canonicalName: row.canonical_name, taskId: row.task_id, message: `Queued behind model '${row.model_key}''s slot cap: ${this.ledger.slotsInUse(row.model_key)} of ${cap} slots in use; the task starts by itself once a slot opens.${alias}` };
+      return { status: 'waiting_on_model_slot', canonicalName: row.canonical_name, taskId: row.task_id, message: `Queued behind model '${row.model_key}''s slot cap: ${this.ledger.slotsInUse(row.model_key)} of ${cap} slots in use; the task starts by itself once a slot opens.${alias}`, attachments };
     }
-    if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}` };
-    return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}` };
+    if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments };
+    return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments };
+  }
+
+  /**
+   * REQ-LIBRARY-098: the references are resolved AT DELEGATION so the caller is told at once what could not
+   * be resolved; the block itself is assembled when the child's payload is built, from the store as it stands
+   * then. Where no artifact store exists every reference is reported unresolved rather than silently dropped.
+   */
+  private rememberAttachments(taskId: string, references: readonly string[]): AttachmentOutcome | undefined {
+    if (references.length === 0) return undefined;
+    const store = this.deps.artifacts;
+    if (!store) return { attached: 0, unresolved: [...references] };
+    this.attached.set(taskId, references);
+    const unresolved = references.filter((ref) => store.lookup(ref) === null);
+    return { attached: references.length - unresolved.length, unresolved };
   }
 
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): BackgroundOutput {
@@ -208,6 +231,9 @@ export class IterationChildren implements DelegationOps {
       prior = priorAgentContext(depRows);
       if (prior) this.ledger.markContextInjected(row.task_id);
     }
+    // REQ-LIBRARY-097/098: the automatic sibling index and the explicitly attached artifacts, assembled from the
+    // store as it stands at launch — a newly created agent is given them, so they are built here and not at spawn.
+    const artifactBlocks = this.artifactContext(row);
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
@@ -230,7 +256,7 @@ export class IterationChildren implements DelegationOps {
         ...(resilience ? { resilience } : {}),
       }, task, history, controller.signal);
       try {
-        outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior), controller.signal);
+        outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks), controller.signal);
         // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
         // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
         const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';
@@ -296,6 +322,40 @@ export class IterationChildren implements DelegationOps {
     if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
     const settledRow = this.ledger.get(row.task_id);
     if (settledRow) this.scheduler.settled(settledRow);
+  }
+
+  /**
+   * REQ-LIBRARY-097 / REQ-LIBRARY-098 — the two blocks, and the context-selection diagnostic both injection
+   * paths record. The index lists the session's artifacts (superseded ones excluded, unsuccessful ones
+   * first); the full block carries the bodies of what this launch attached. Neither raises: an unreadable
+   * document leaves its record listed and is reported inside the block (REQ-LIBRARY-091).
+   */
+  private artifactContext(row: ChildRow): readonly string[] {
+    const store = this.deps.artifacts;
+    if (!store) return [];
+    const blocks: string[] = [];
+    const index = siblingIndexBlock(store.hydrate().records);
+    if (index.text !== '') blocks.push(index.text);
+    const references = this.attached.get(row.task_id) ?? [];
+    let full: ReturnType<typeof fullContextBlock> | null = null;
+    if (references.length > 0) {
+      const resolved: AttachedResolution[] = references.map((reference) => {
+        const record = store.lookup(reference);
+        if (!record) return { reference, record: null, body: null, failure: 'the reference names no artifact in this session' };
+        const body = store.body(record.id);
+        return body.ok ? { reference, record, body: body.value.text, failure: null } : { reference, record, body: null, failure: body.error.reason };
+      });
+      full = fullContextBlock(resolved);
+      if (full.text !== '') blocks.push(full.text);
+    }
+    if (blocks.length > 0) {
+      this.deps.writer.appendTimeline('context_selection', 'rotaris', `${row.canonical_name} was given ${index.included} sibling artifact(s)${full ? ` and ${full.included} attached artifact(s)` : ''}.`, {
+        task_id: row.task_id, canonical_name: row.canonical_name,
+        sibling_index_included: index.included, sibling_index_elided: index.elided,
+        attached_included: full?.included ?? 0, attached_elided: full?.elided ?? [], attached_unresolved: full?.unresolved ?? [],
+      });
+    }
+    return blocks;
   }
 
   /** REQ-ORCH-080: on stop with active background children, wait up to the drain timeout without cancelling them. */

@@ -40,7 +40,16 @@ export interface PersonaResolver {
   readonly knownRoles: () => readonly string[];
 }
 
-const READ_TOOLS = ['read_file', 'haet_read', 'grep', 'glob'];
+/**
+ * Part Y: `artifact_read` and `artifact_list` join the read group. Three reasons, none of them convenience:
+ * REQ-TOOLS-007 puts both in the read-only class, REQ-ORCH-016's direct-work bundle already names both as
+ * capabilities, and REQ-LIBRARY-097 gives EVERY newly created agent a block whose elision marker names
+ * `artifact_list` as the way to reach what it left out — a marker naming a tool no persona declares would be
+ * false on its face. `artifact_write` is deliberately NOT here: publishing is a grant (REQ-TOOLS-004 keeps a
+ * reason code for withholding it), so a persona that should publish declares it in configuration
+ * (REQ-TOOLS-002). That no built-in persona does is recorded as an open question rather than settled here.
+ */
+const READ_TOOLS = ['read_file', 'haet_read', 'grep', 'glob', 'artifact_read', 'artifact_list'];
 const WRITE_TOOLS = ['write_file', 'haet_edit', 'haet'];
 const DELEGATION = ['delegate', 'todo'];
 

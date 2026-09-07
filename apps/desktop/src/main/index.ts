@@ -1162,6 +1162,25 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'session.list', workspaceId: currentWorkspaceId }, millis(5_000));
         return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
       }
+      // ---- Part Y: the Library's Artifacts tab (REQ-LIBRARY-108/131..136). Main relays; the run host owns the store and the files. ----
+      case 'artifacts.list': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing artifacts' };
+        const r = await runHost.request({ kind: 'artifacts.list', workspaceId: currentWorkspaceId }, millis(5_000));
+        return r.kind === 'artifacts.state' ? { ok: true, value: r.state } : refusal(r, 'The session artifacts could not be read');
+      }
+      case 'artifacts.body': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before opening an artifact' };
+        const r = await runHost.request({ kind: 'artifacts.body', workspaceId: currentWorkspaceId, ref: req.ref }, millis(10_000));
+        return r.kind === 'artifacts.body' ? { ok: true, value: { id: r.id, slug: r.slug, title: r.title, artifactKind: r.kind_, status: r.status, producer: r.producer, persona: r.persona, edited: r.edited, body: r.body, fallback: r.fallback } } : refusal(r, 'The artifact could not be loaded');
+      }
+      case 'artifacts.save': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before saving an artifact' };
+        const r = await runHost.request({ kind: 'artifacts.save', workspaceId: currentWorkspaceId, ref: req.ref, body: req.body }, millis(10_000));
+        return r.kind === 'artifacts.saved' ? { ok: true, value: { id: r.id, editedAt: r.editedAt } } : refusal(r, 'The artifact could not be saved');
+      }
       // ---- Part U: the session browser's actions (REQ-SESSION-182). Main supplies the dialogs and the platform's file manager; the run host does the work. ----
       case 'session.repair': {
         await awaitWorkspace();

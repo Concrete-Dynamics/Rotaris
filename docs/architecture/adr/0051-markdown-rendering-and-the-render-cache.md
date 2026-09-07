@@ -127,6 +127,44 @@ images are supported. This needs answering — probably by the design reference,
 visual question as a functional one — before the renderer's element list is fixed. **Images in
 particular interact with the no-network-request rule.** See OQ-31.
 
+**Closed by the specification, 2026-09-07 (Part Y).** `REQ-CHAT-056` now says "The dialect is fixed, and is
+fixed here" and enumerates it: beyond the five treatments, headings, block quotes, ordered and unordered
+lists, task lists, tables, thematic breaks and strikethrough; a bare URL is a link on the same terms as an
+authored one; **raw HTML is shown as the text it is** and never rendered as markup; and **no image is ever
+loaded** — an image reference renders as its alternative text carrying an activatable reference, whether it
+names a remote location or one on this machine. The question is answered as written, and the renderer's
+element list is fixed to it. It also answers itself in this record's favour: a subset that must never render
+markup is what alternative B gives for nothing, because no node type in the tree can carry any.
+
+## First execution (Part Y, 2026-09-07) — `packages/ui/src/markdown/`
+
+Built as decided. `parse.ts` produces a tree, `Markdown.tsx` renders that tree to elements, `cache.ts` holds
+the parse cache keyed on source text at 256 entries and two million source characters with running hit and
+miss totals. No markup string is produced anywhere, and no code path could produce one. The first consumer is
+the artifact inspector's Preview tab (`REQ-LIBRARY-132`, re-rendered on every keystroke); the transcript
+consumes the same module later, and nothing in the product renders Markdown a second way.
+
+**What the execution found: no defect in this record's decision.** Parsing to a tree, rendering the tree to
+elements, and keying the parse cache on source text alone all held under the first real consumer. Four things
+are recorded beside that:
+
+1. **The dialect question closed itself** (above). This record's first consequence — "the supported subset
+   must be written down" — is discharged by `parse.ts`'s node types, where the six heading levels are spelled
+   out one by one rather than computed into a tag name, so the element list is a closed literal set.
+2. **Tolerance by construction rather than by a catch is a property of the inline parser's shape**: every
+   delimiter that does not match falls through to a text node, so an unterminated fence, an unclosed emphasis
+   run and a half-written link each render as readable text with no error path at all. Measured over the
+   streaming cases in `markdown.test.ts`.
+3. **The measurement cache is deliberately not built here.** It is keyed on the four-part key (identity,
+   content, laid-out width, expansion state) and holds a row's measured height, which only the transcript
+   has. This record's live-row rule — a live row reads the parse cache but does not insert into it — is
+   implemented as `peek()` beside `parse()`, both counting, so the transcript applies the rule by choosing
+   the call rather than by remembering it.
+4. **Links are elements that request an external open through the command channel — and there is no such
+   command yet.** `REQ-CHAT-076` fixes the opening, its acknowledgement and its failure report, which is the
+   transcript part's to build. Until then the renderer takes an `onOpenLink` the caller may omit, and a link
+   with no opener renders with its target as its title, inert rather than navigable. **Recorded as owed.**
+
 ## Revisit if
 
 Parse cost at the 200 ms budget with many streaming rows proves too high, in which case the answer is

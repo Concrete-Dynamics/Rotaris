@@ -64,8 +64,10 @@ flowchart LR
 
 ## Message families
 
-**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`, `panels/git`, `interface/agentPopOut` — REQ-SHELL-073's "agent pop-out", Part R), `window.openPersona {persona, agentId, focusSteer?}` / `window.personaPayload` (Part R: open or raise the persona window; the window reads its persona, the followed session and the instance to select — answered by main from the registry; a raise is a request, REQ-SHELL-161), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
-`session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control`,
+**Renderer → main (`CommandRequestSchema`).** `shell.hello`, `theme.get/set`, `prefs.get/set` (keys: the theme, the motion preference, the Settings tab, `panels/overview`, `panels/git`, `interface/agentPopOut` — REQ-SHELL-073's "agent pop-out", Part R — and `display/groupTools`, REQ-CHAT-067's tool-grouping switch, default ON, Part Z), `window.openPersona {persona, agentId, focusSteer?}` / `window.personaPayload` (Part R: open or raise the persona window; the window reads its persona, the followed session and the instance to select — answered by main from the registry; a raise is a request, REQ-SHELL-161), `repository.read` (the Overview's card; relayed to the workspace service, waiting for a workspace open in flight),
+`session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control` (`pageOlder`
+is wired end to end and, from Part Z, is CALLED: the transcript asks for the next older span when the reader scrolls
+toward the top, and the replica's `prependOlder` places it above — REQ-CHAT-165, REQ-SESSION-192),
 `git.read`, `worktree.create/remove/chooseAttach/probePath` (Part O — see the Git paragraph below),
 `pause.present/payload`, `approval.payload`, `notice.acknowledge {noticeId?}` (Part V: an absent identifier clears
 whatever is current, one given is a compare-and-clear — REQ-NOTIFY-026), `workspace.backup/restore`,

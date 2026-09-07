@@ -1038,6 +1038,10 @@ async function main(): Promise<void> {
         } else if (req.key === 'interface/agentPopOut') {
           if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Agent pop-out requires a boolean value' };
           await preferences.write(req.key, req.value);
+        } else if (req.key === 'display/groupTools') {
+          // REQ-CHAT-067 (Part Z): the tool-grouping switch, default on.
+          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Tool grouping requires a boolean value' };
+          await preferences.write(req.key, req.value);
         } else {
           if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
           await preferences.write(req.key, req.value);
@@ -1828,6 +1832,64 @@ async function main(): Promise<void> {
     }
     // ROTARIS_CAPTURE_RECONCILE_AT="ms;;ms": a whole read of the followed session at that time — one publication while a chosen
     // view is visible, for REQ-MONITOR-038's refresh measurement on a stored record (verification only).
+    /**
+     * ROTARIS_CAPTURE_OPEN_AT="<sessionId>@ms;;…": the same route the resume seam takes — the title bar's
+     * "Sessions" control, then that row's "Open" — repeated, so ONE process can hold three transcripts of
+     * different lengths in turn. ADR-0045's element-count invariant is a within-iteration claim, so measuring it
+     * across three processes would not be measuring it at all.
+     */
+    for (const step of steps(process.env['ROTARIS_CAPTURE_OPEN_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const clickAt = (rect: { x: number; y: number }) => {
+          win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+          win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
+        };
+        const centre = (finder: string) => win.webContents.executeJavaScript(`(() => { const b = ${finder}; if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as Promise<{ x: number; y: number } | null>;
+        const control = await centre(`document.querySelector('.title-bar__sessions')`);
+        if (!control) { log(`capture: open-at ${step.at}: no "Sessions" control on screen`); return; }
+        clickAt(control);
+        await new Promise((r) => clocks.timers.after(millis(700), () => r(undefined)));
+        const open = await centre(`document.querySelector('.session-browser tr[data-session-id=${JSON.stringify(step.selector)}] button')`);
+        if (!open) { log(`capture: open-at ${step.at}: no session row for "${step.selector}"`); return; }
+        clickAt(open);
+        log(`capture: open-at ${step.at} opened session "${step.selector}"`);
+      });
+    }
+    /**
+     * Part Z's seams (verification only).
+     *
+     * ROTARIS_CAPTURE_EVAL_AT="<expression>@ms": one expression evaluated in the renderer at that time and logged
+     * as JSON. The transcript proof reads ADR-0045's structural counts, the replica's six row-level counters and
+     * the apply-to-paint samples through it, and drives the scroller with it — all of which are values the product
+     * already computes for itself. It reads and moves nothing a user cannot reach; the counting rule it calls
+     * (`window.__rotarisCounts`) is the product's ONE definition (ADR-0045's closing obligation), not a restatement.
+     */
+    for (const step of steps(process.env['ROTARIS_CAPTURE_EVAL_AT'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const found = await win.webContents.executeJavaScript(`(async () => { try { return await (${step.selector}); } catch (cause) { return { error: String(cause) }; } })()`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
+        log(`capture: eval-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
+      });
+    }
+    /**
+     * ROTARIS_CAPTURE_GAP_AT="count@ms": `count` transcript publications delivered to the window with a sequence
+     * number far above the one it expects — the deliberately dropped publication of ADR-0046 consequence 2, which
+     * is the only way step 0's branch is ever executed. The FIRST is the gap the surface refuses; the rest arrive
+     * while it is reconciling and are dropped by the subscription handler without reaching the apply stage, which
+     * is what makes exactly one `refused` and one `reset` a property of the fixture rather than of arrival timing
+     * (REQ-UIBENCH-083). The payloads are well formed; only the number is wrong.
+     */
+    for (const step of steps(process.env['ROTARIS_CAPTURE_GAP_AT'])) {
+      clocks.timers.after(millis(step.at), () => {
+        if (!followedSessionId) { log(`capture: gap-at ${step.at}: no session followed`); return; }
+        const count = Math.max(1, Number(step.selector) || 1);
+        for (let i = 0; i < count; i += 1) {
+          win.webContents.send(CHANNEL.transcriptIncrement, {
+            v: CONTRACT_SCHEMA_VERSION, sessionId: followedSessionId, seq: 1_000_000 + i, earliestChanged: 0, rows: [], diffs: [], personas: [],
+          });
+        }
+        log(`capture: gap-at ${step.at} → ${count} publications numbered from 1000000`);
+      });
+    }
     for (const step of steps(process.env['ROTARIS_CAPTURE_RECONCILE_AT'])) {
       clocks.timers.after(millis(step.at), () => { if (followedSessionId) { void runCommand({ kind: 'session.reconcile', sessionId: followedSessionId }); log(`capture: reconcile at ${step.at}`); } else log(`capture: reconcile at ${step.at}: no session followed`); });
     }

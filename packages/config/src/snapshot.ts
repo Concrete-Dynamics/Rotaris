@@ -5,6 +5,7 @@ import { isPlainMap, type PlainMap } from './merge.js';
 import { loadConfiguration, scopeFiles, type LoadedConfiguration } from './load.js';
 import { rolePreferences, slotPreferences } from './preferences.js';
 import { RUNTIME_DEFAULTS } from './sections/runtime.js';
+import { DISPLAY_DEFAULTS } from './display-section.js';
 import { renderFatal } from './validate.js';
 import { saveDesktop, writeConfigFields, type DesktopSave, type RoleEdit, type WriteRefusal } from './writers.js';
 
@@ -30,6 +31,8 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
     rawRuntime: { workspace: rawRuntimeOf(cfg.raw.workspace.agents), global: rawRuntimeOf(cfg.raw.global.agents) },
     circuitBreakerEnabled: cfg.circuitBreaker.enabled,
     compressorThresholdPercentage: cfg.compressor.threshold_percentage,
+    // REQ-CHAT-166 (Part Z): the transcript reads its caps from the same snapshot the settings screen does.
+    display: { ...cfg.display },
     delegationStrategy: cfg.delegationStrategy,
     referential: [...cfg.referential],
     warnings: [...cfg.warnings],
@@ -49,7 +52,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       memory_diagnostics_enabled: RUNTIME_DEFAULTS.memory_diagnostics_enabled, sandbox_mode: RUNTIME_DEFAULTS.sandbox_mode,
     },
     rawRuntime: { workspace: null, global: null },
-    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, delegationStrategy: 'orchestrator', referential: [], warnings: [],
     files: { workspace: files.workspace.agents, global: files.global.agents },
   };
 }

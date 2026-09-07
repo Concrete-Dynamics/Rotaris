@@ -161,6 +161,17 @@ function scriptedClient(c: Clocks): ModelClient {
         yield { ok: false as const, error };
         return;
       }
+      // Part Z (REQ-CHAT-163/062): `think` streams deliberation on the reasoning channel before the answer, so the
+      // streamed-reasoning ROW has a producer in a scripted run. The three provider SHAPES that carry deliberation
+      // are normalised inside the AI SDK client and are proven there; this proves what the engine does with one.
+      if (step === 'think') {
+        yield ok<StreamPart>({ kind: 'reasoning', delta: 'Weighing the request. ' });
+        yield ok<StreamPart>({ kind: 'reasoning', delta: 'Two options remain, and the second is cheaper.' });
+        yield ok<StreamPart>({ kind: 'text', delta: 'The scripted answer, after deliberating.' });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 18, output: 9 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
       if (step === 'hang') {
         await new Promise<void>((resolve) => { if (req.signal.aborted) resolve(); else req.signal.addEventListener('abort', () => resolve(), { once: true }); });
         yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } };

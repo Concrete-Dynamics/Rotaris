@@ -73,6 +73,14 @@ export interface RowExtra {
   readonly output?: string;
   readonly diff?: string;
   readonly blockedReason?: string;
+  /**
+   * REQ-CHAT-046's live-terminal stream id, on the row rather than on a frame. It is NOT persisted (no store
+   * migration in this batch) and it does not need to be: a row carrying a live stream is by definition unsettled
+   * and at the newest end of the resident window, and release takes whole pages from the OLDEST end
+   * (REQ-SESSION-192), so no row is ever released while it carries one and REQ-CHAT-165's "identical to the row
+   * released" is unaffected. Nothing sets it in this build — ADR-0021's fan-out has no first execution.
+   */
+  readonly streamId?: string;
 }
 /** What a settle may add to a tool row (REQ-CHAT-060: the outcome, the duration, the output, a blocked reason). */
 export interface RowSettle {
@@ -257,16 +265,27 @@ function isTerminalStatus(status: string): boolean {
   return status !== 'idle' && !isActiveStatus(status);
 }
 
+/**
+ * REQ-CHAT-046 / REQ-CHAT-062: the streamed-character count on a reasoning row. It is DERIVED from the body — the
+ * body of a thinking row IS the concatenation of the reasoning deltas received, which REQ-CHAT-163 fixes character
+ * for character — so it needs no column, and deriving it identically on both sides of the release boundary is what
+ * keeps a paged-in row identical to the row released (REQ-CHAT-165). One definition, called from every construction
+ * site: the writer's append, the writer's settle and the store read.
+ */
+export function withDerivedRowFields(row: TranscriptRow): TranscriptRow {
+  return row.kind === 'thinking' ? { ...row, chars: row.body.length } : row;
+}
+
 export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
   const row: TranscriptRow = { index: r.row_index, kind: r.kind, settled: r.settled === 1, body: r.body, at: r.at, ts: r.ts };
-  return {
+  return withDerivedRowFields({
     ...row, ...(r.persona === null ? {} : { persona: r.persona }), ...(r.name === null ? {} : { name: r.name }),
     ...(r.tool_name === null ? {} : { toolName: r.tool_name }), ...(r.tool_status === null ? {} : { toolStatus: r.tool_status }),
     ...(r.call_key === null ? {} : { callKey: r.call_key }), ...(r.duration_ms === null ? {} : { durationMs: r.duration_ms }),
     ...(r.started_at === null ? {} : { startedAt: r.started_at }), ...(r.input === null ? {} : { input: r.input }),
     ...(r.output === null ? {} : { output: r.output }), ...(r.diff === null ? {} : { diff: r.diff }),
     ...(r.blocked_reason === null ? {} : { blockedReason: r.blocked_reason }),
-  };
+  });
 }
 
 export class SessionWriter {
@@ -292,6 +311,8 @@ export class SessionWriter {
   }
   private nextIndex: number;
   private nextOrdinal: number;
+  /** REQ-CHAT-054: the OPEN response row per stable message key; an entry leaves as soon as its row settles. */
+  private readonly messageRows = new Map<string, number>();
   private residentCount: number;
   private dropped: number;
   private generation = 0;
@@ -413,7 +434,7 @@ export class SessionWriter {
     const index = this.nextIndex;
     const { persona, name, ...tool } = extra;
     const definedTool = Object.fromEntries(Object.entries(tool).filter(([, v]) => v !== undefined));
-    const row: TranscriptRow = { index, kind, settled, body, at, ts, ...(persona === undefined ? {} : { persona }), ...(name === undefined ? {} : { name }), ...definedTool };
+    const row: TranscriptRow = withDerivedRowFields({ index, kind, settled, body, at, ts, ...(persona === undefined ? {} : { persona }), ...(name === undefined ? {} : { name }), ...definedTool });
     const ev = this.envelope('transcript.row', at, { index, row: maskRow(row) });
     const line = serializeEvent(ev);
     if (!line.ok) {
@@ -448,6 +469,35 @@ export class SessionWriter {
     return ok(row);
   }
 
+  /**
+   * REQ-CHAT-054, message deduplication — the limb a renderer cannot repair, because a record that appended twice
+   * is already wrong by the time a view reads it. One stable message key per response segment:
+   *
+   *  - a **replayed** message event whose key has already been seen persists ONCE: the recorded row is returned and
+   *    nothing is appended (the ladder re-running a failed step on a fallback model is exactly this case, and it
+   *    appended a second `agent` row before this existed);
+   *  - a **cumulative committed-text snapshot** — a provider that resends the whole text rather than a delta —
+   *    updates the current response row IN PLACE rather than appending;
+   *  - a streamed response **finalizes in place**, which is `settleRow` on the same index;
+   *  - a response after a **tool boundary** or as a **new streaming segment** carries a new key and so becomes a
+   *    distinct row.
+   */
+  upsertMessageRow(key: string, kind: string, body: string, settled: boolean, extra: RowExtra = {}): Result<TranscriptRow, WriteFailure> {
+    const held = this.messageRows.get(key);
+    if (held === undefined) {
+      const r = this.appendRow(kind, body, settled, extra);
+      if (r.ok && !settled) this.messageRows.set(key, r.value.index);
+      return r;
+    }
+    const current = this.deps.dal.residentRows(this.deps.sessionId).find((r) => r.row_index === held);
+    // Released past the resident window, or already settled: the event is a replay and the row persists once.
+    if (!current) { this.messageRows.delete(key); return err({ code: 'row-not-resident', index: held }); }
+    if (current.settled === 1) return ok(toTranscriptRow(current));
+    if (!settled) return ok(withDerivedRowFields({ ...toTranscriptRow(current), body }));
+    this.messageRows.delete(key);
+    return this.settleRow(held, body);
+  }
+
   /** REQ-EVENTS-052 settled form: the second and last event for an index. One transaction. */
   settleRow(index: number, body: string, settle: RowSettle = {}): Result<TranscriptRow, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
@@ -457,7 +507,7 @@ export class SessionWriter {
     if (!current) return err({ code: 'row-not-resident', index });
     if (current.settled === 1) return err({ code: 'row-already-settled', index });
     const definedSettle = Object.fromEntries(Object.entries(settle).filter(([, v]) => v !== undefined));
-    const row: TranscriptRow = { ...toTranscriptRow(current), ...definedSettle, settled: true, body };
+    const row: TranscriptRow = withDerivedRowFields({ ...toTranscriptRow(current), ...definedSettle, settled: true, body });
     const ev = this.envelope('transcript.row', at, { index, row: maskRow(row) });
     const line = serializeEvent(ev);
     if (!line.ok) this.deps.warn(`event transcript.row (settled) for row ${index} could not be serialised and was not recorded: ${line.error.reason}`);

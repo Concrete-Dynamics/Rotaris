@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type ApprovalPayload, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
 import { liveDescendants, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
-import { TranscriptRows, rowRole, rowTime, toolOutcome } from './TranscriptRows.js';
+import { rowRole, rowTime, toolOutcome } from './TranscriptRows.js';
+import { TranscriptPane } from './transcript/TranscriptPane.js';
+import type { DisplayCaps } from './transcript/project.js';
 
 // The row helpers moved to TranscriptRows.tsx in Part R (one renderer for every transcript surface); re-exported so nothing that named them here breaks.
 export { rowRole, rowTime, toolOutcome };
@@ -61,6 +63,14 @@ export interface WorkspaceViewProps {
   readonly onOpenStash?: (() => void) | undefined;
   /** REQ-LIBRARY-137: a prompt that was sent or queued is front-inserted into the history; nothing else is. */
   readonly onRecordPrompt?: ((text: string) => void) | undefined;
+  /** REQ-CHAT-165 (Part Z): the next older span, fetched off the interface thread; false when the load failed. */
+  readonly onPageOlder?: ((beforeIndex: number) => Promise<boolean>) | undefined;
+  /** REQ-CHAT-165: the first recorded row is among those held, which is distinguishable from a failed load. */
+  readonly reachedOldest?: boolean | undefined;
+  /** REQ-CHAT-067: the tool-grouping display preference, default ON, from the desktop preference store. */
+  readonly groupTools?: boolean | undefined;
+  /** REQ-CHAT-166: the four display caps, from the workspace `agents.yaml` `display` section. */
+  readonly displayCaps?: DisplayCaps | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -254,15 +264,12 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
     </div>
   );
 }
-/** REQ-CHAT-051: one trailer row per pending approval, after every recorded row. */
-function ApprovalTrailerRow({ p }: { p: ApprovalPayload }) {
-  return (
-    <article className="row row--approval" data-request-id={p.request_id}>
-      <header className="row__head"><span className="row__role">{p.agent_id || p.persona}</span></header>
-      <div className="row__body">Approval needed — {p.command !== '' ? p.command : p.tool_name}</div>
-    </article>
-  );
-}
+/*
+ * REQ-CHAT-051's trailer rows were drawn here as `ApprovalTrailerRow`, appended by the view after the recorded
+ * rows. They are now computed by ADR-0046 step 4 (`transcript/project.ts`, `trailerRows`) and are DisplayRows like
+ * any other, which is what makes them appear identically on the whole-state and the incremental paths
+ * (REQ-MONITOR-230) and searchable by REQ-CHAT-074 rather than invisible to it.
+ */
 
 /** REQ-TOOLS-077: strictest-first; `autonomous` needs an explicit confirmation; declining restores the previous selection. */
 function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
@@ -306,7 +313,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt }: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps }: WorkspaceViewProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -316,14 +323,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const [pausePending, setPausePending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
-  const tail = useRef<HTMLDivElement>(null);
   const runActive = session !== null && isBusy(session.executionStatus);
   // A pending stop is one requested against the run that is still active; a new run begins from a submit, which resets it.
   const stopPending = runActive && stopRequested;
-  const lastBodyLength = rows.at(-1)?.body.length ?? 0;
   const pending = session?.pendingApprovals ?? [];
-
-  useEffect(() => { tail.current?.scrollIntoView({ block: 'end' }); }, [rows.length, lastBodyLength, pending.length]);
 
   const submit = async () => {
     const value = text;
@@ -475,14 +478,23 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         {session?.wait && runActive && (
           <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onCancel={() => setConfirming('stop')} />
         )}
-        {rows.length === 0 && (
-          <div className="empty-state">
-            <span className="empty-state-title">{session ? 'No rows yet' : 'Describe the outcome you want…'}</span>
-          </div>
-        )}
-        <TranscriptRows rows={rows} />
-        {pending.map((p) => <ApprovalTrailerRow key={p.request_id} p={p} />)}
-        <div ref={tail} />
+        {/*
+          * ADR-0045's recycled pool and ADR-0046's steps 4 and 5. The empty state (REQ-CHAT-073), the projection,
+          * the trailer rows (REQ-CHAT-051), tail-follow (REQ-CHAT-070), the anchor (REQ-CHAT-071), "N new updates"
+          * (REQ-CHAT-072), search (REQ-CHAT-074) and paging (REQ-CHAT-165) are all the pane's.
+          */}
+        <TranscriptPane
+          rows={rows}
+          running={runActive}
+          groupTools={groupTools}
+          caps={displayCaps}
+          pendingQuestions={session?.pendingQuestions ?? []}
+          pendingApprovals={pending}
+          questionAgent={session?.agents[0]?.name}
+          onPageOlder={onPageOlder}
+          reachedOldest={reachedOldest}
+          onFocusComposer={() => area.current?.focus()}
+        />
       </div>
       {(!narrow || drawer === 'inspector') && inspector}
       <QueuePanel prompts={queued} onEdit={onEditQueued} onRemove={onRemoveQueued} onError={setError} />

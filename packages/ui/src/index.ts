@@ -33,4 +33,4 @@ export * from './AgentTable.js';
 export * from './MissionView.js';
 export * from './PersonaWindow.js';
 export * from './markdown/index.js';
-export * from './library/index.js';
+export * from './library/index.js'; export * from './transcript/index.js';

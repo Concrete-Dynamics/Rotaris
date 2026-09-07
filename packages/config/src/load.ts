@@ -13,6 +13,7 @@ import { readModelsSection, type ModelEntry } from './sections/models.js';
 import { readPersonasSection, type PersonaEntry } from './sections/personas.js';
 import { readCompressorSection, type CompressorSection } from './sections/compressor.js';
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
+import { readDisplaySection, type DisplaySection } from './display-section.js';
 import { readMcpServersSection } from './sections/mcp-servers.js';
 import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
 import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
@@ -65,6 +66,8 @@ export interface LoadedConfiguration {
   readonly circuitBreaker: CircuitBreakerSection;
   /** REQ-GIT-070..072 (Part P): the three checkpoint keys, `max_per_session` rejected at load below 1 (REQ-GIT-071). */
   readonly checkpoints: CheckpointsSection;
+  /** REQ-CHAT-166 (Part Z): the transcript's four display caps — the reader `SECTION_KEYS` declared and nothing stood behind. */
+  readonly display: DisplaySection;
   readonly hooks: HooksResolved;
   readonly worktreeStorageSubpath: string;
   readonly injectAgentsMd: boolean;
@@ -316,6 +319,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const compressor = readCompressorSection(top['compressor'], sink);
   const circuitBreaker = readCircuitBreakerSection(top['circuit_breaker'], sink);
   const checkpoints = readCheckpointsSection(top['checkpoints'], sink);
+  const display = readDisplaySection(top['display'], sink);
   // REQ-MCP-002: every defect of a YAML-scope server entry is fatal and every one is reported (the discovered entries were validated before the merge).
   const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
 
@@ -353,6 +357,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     compressor: { ...compressor, model: draft.compressorModel },
     circuitBreaker: { ...circuitBreaker, model: draft.circuitBreakerModel },
     checkpoints,
+    display,
     hooks,
     worktreeStorageSubpath: worktree,
     injectAgentsMd,

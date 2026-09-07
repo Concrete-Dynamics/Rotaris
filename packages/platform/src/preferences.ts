@@ -18,6 +18,13 @@ export const PREFERENCE_KEYS = {
   'panels/library': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
   /** REQ-SHELL-073 / REQ-MONITOR-072: "agent pop-out" — an ordinary agent click opens the persona window; default off; persists across windows and restarts. */
   'interface/agentPopOut': { type: 'boolean', default: false, owner: 'REQ-SHELL-073', coerce: (value: unknown) => value === true || value === 'true' },
+  /**
+   * REQ-CHAT-067 (Part Z): the tool-grouping display setting, default **ON** — the one member of REQ-CHAT-067's
+   * pair whose default is on. A desktop preference written user-wide (REQ-CONFIG-405) and explicitly NOT part of
+   * the YAML configuration surface, unlike REQ-CHAT-166's four caps, which are workspace configuration.
+   * An absent or unusable value reads as ON, which is the declared default rather than a coercion accident.
+   */
+  'display/groupTools': { type: 'boolean', default: true, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value !== false && value !== 'false' },
 } as const;
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
 export function coercePaneLayout(value: unknown, panes: number): PaneLayout | undefined {

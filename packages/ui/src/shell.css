@@ -78,7 +78,27 @@
 /* ── Workspace view: transcript + composer (REQ-CHAT-001/-010/-011) ── */
 .view:has(> .workspace) { padding: 0; display: flex; flex-direction: column; }
 .workspace { display: grid; grid-template-rows: minmax(180px, 1fr) auto; height: 100%; min-height: 0; }
-.transcript { overflow: auto; padding: var(--rt-space-4, 16px) var(--rt-space-5, 24px); display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
+/*
+ * ADR-0045 (Part Z): the transcript is a scroll container of absolutely positioned slots, so the pane owns the
+ * scrolling and `.transcript` becomes the frame the toolbar, the intent line and the wait header share with it.
+ */
+.transcript { overflow: hidden; padding: var(--rt-space-4, 16px) var(--rt-space-5, 24px); display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
+.transcript__pane { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); flex: 1 1 auto; min-height: 0; }
+/* REQ-CHAT-070: the border treatment present while following the tail and absent while not. */
+.transcript__scroll { position: relative; overflow: auto; flex: 1 1 auto; min-height: 0; border: var(--rt-hairline-width) solid transparent; border-radius: var(--rt-radius-md, 6px); }
+.transcript__scroll.is-following { border-color: var(--rt-accent-tint-14); }
+/* Drawn OVER the intact pool of empty slots rather than instead of it (ADR-0045's element-count invariance). */
+.transcript__scroll .empty-state { position: absolute; inset: 0; margin: auto; max-width: 420px; height: max-content; }
+/* The pool: a constant number of slots, positioned from the measured offset table rather than from document flow. */
+.transcript__pool { position: relative; width: 100%; }
+.transcript__slot { position: absolute; inset-inline: 0; top: 0; will-change: transform; }
+.slot--empty { pointer-events: none; }
+.transcript__new { position: absolute; align-self: center; z-index: 2; }
+.transcript__search { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); background: var(--rt-chrome); }
+.transcript__search-input { flex: 1 1 auto; }
+.transcript__search-count { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); white-space: nowrap; }
+.transcript__page-error { padding: var(--rt-space-2, 8px); font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
+.transcript__oldest { padding: var(--rt-space-2, 8px); font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); text-align: center; }
 .transcript .empty-state { margin: auto; max-width: 420px; width: 100%; }
 .row { display: flex; flex-direction: column; gap: 4px; padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
 .row--user { border-color: var(--rt-accent-tint-14); }

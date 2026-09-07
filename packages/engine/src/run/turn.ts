@@ -1,4 +1,7 @@
-import { millis, toIsoUtc, type Clocks } from '@rotaris/kernel';
+import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel';
+
+/** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
+const STALL_AFTER = millis(10_000);
 import type { ApprovalOption, PermissionPreset } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -149,9 +152,12 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       deps.warn(`the turn exceeded ${deps.maxStepsPerTurn} model steps and was ended as partial (the final step belt fired)`);
       return { report: { status: 'partial', text: lastReport.text, usage }, messages, toolCallCount };
     }
+    // REQ-CHAT-054: one stable message key per response SEGMENT. A tool boundary ends a segment, so the next step's
+    // response is a distinct row; the ladder re-running THIS step on a fallback reuses the key and so persists once.
+    const segment = `${deps.agentName}#${steps}`;
     const report = deps.resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(stepDeps, choice, messages, specs, signal, unresponsiveMs), signal)
-      : (await step(stepDeps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null)).report;
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(stepDeps, choice, messages, specs, signal, unresponsiveMs, segment), signal)
+      : (await step(stepDeps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null, segment)).report;
     lastReport = report;
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
     writer.activity.usage(deps.agentName, report.usage.input);
@@ -208,29 +214,81 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
  * `unresponsiveMs` set, a timer on the clock port aborts the call when no event of any kind arrived within it
  * (REQ-ORCH-090); the ladder then re-runs the step on the fallback. The timer disarms on the first event.
  */
-async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly ChatMessage[], specs: readonly ToolSpec[], signal: AbortSignal, unresponsiveMs: number | null): Promise<StepOutcome> {
+async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly ChatMessage[], specs: readonly ToolSpec[], signal: AbortSignal, unresponsiveMs: number | null, segment: string): Promise<StepOutcome> {
   const { writer, owner, backend, clocks } = deps;
   let index: number | null = null;
   let text = '';
   let seen = false;
   let unresponsive = false;
+  /** REQ-CHAT-163 / REQ-CHAT-062: the streamed-reasoning row of this step, and the text it has been given. */
+  let reasoningIndex: number | null = null;
+  let reasoning = '';
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   if (signal.aborted) controller.abort(); else signal.addEventListener('abort', onAbort, { once: true });
   const timer = unresponsiveMs === null ? null : clocks.timers.after(millis(unresponsiveMs), () => { if (!seen) { unresponsive = true; controller.abort(); } });
+
+  /**
+   * REQ-CHAT-164's DETECTION half (the drawing half is the renderer's): ten seconds with no output of any kind
+   * marks the live row stalled; the next output of any kind clears the mark. It appends no row, cancels nothing
+   * and changes nothing recorded - `markStalled` publishes and does not write. The timer is the clock port's,
+   * never a bare one (ADR-0006). Before any output there is no live row for the call and nothing is marked; that
+   * window is stated in ADR-0046's note rather than met by appending the row the requirement forbids appending.
+   */
+  const stall: { timer: TimerHandle | null } = { timer: null };
+  let stalled = false;
+  const liveRow = (): number | null => (index !== null ? index : reasoningIndex);
+  const armStall = (): void => {
+    stall.timer?.cancel();
+    stall.timer = clocks.timers.after(STALL_AFTER, () => {
+      const row = liveRow();
+      if (row === null) return;
+      stalled = true;
+      owner.markStalled(row, toIsoUtc(clocks.wall.instant()));
+    });
+  };
+  const outputArrived = (): void => {
+    if (stalled) {
+      stalled = false;
+      const row = liveRow();
+      if (row !== null) owner.markStalled(row, null);
+    }
+    armStall();
+  };
+
   const sink = {
-    started: () => { seen = true; timer?.cancel(); },
+    started: () => { seen = true; timer?.cancel(); armStall(); },
     delta: (d: string) => {
+      outputArrived();
+      // REQ-CHAT-163: a reasoning burst is finished the moment the answer body starts, so its row settles here
+      // rather than at the end of the call - a thinking row that stayed live past its own content would keep
+      // counting upward against REQ-CHAT-062 while nothing was arriving for it.
+      if (reasoningIndex !== null) { writer.settleRow(reasoningIndex, reasoning); reasoningIndex = null; }
       text += d;
       if (index === null) {
-        const r = writer.appendRow('agent', text, false, { persona: deps.persona, name: deps.agentName });
+        const r = writer.upsertMessageRow(segment, 'agent', text, false, { persona: deps.persona, name: deps.agentName });
         if (r.ok) index = r.value.index;
       } else {
         owner.grow(index, text);
       }
     },
-    reasoning: () => undefined,
-    usage: () => undefined,
+    /**
+     * REQ-CHAT-163: deliberation appears ONLY in the reasoning channel, which means a streamed-reasoning row.
+     * Before this the sink discarded it - the reasoning-delta shape was recognised by the client and then dropped
+     * here, so no thinking row has ever existed in this product and REQ-CHAT-048/062 had nothing to act on.
+     * REQ-CHAT-059 keys a thinking row by its START TIME, which is why `startedAt` is stamped on the append.
+     */
+    reasoning: (d: string) => {
+      outputArrived();
+      reasoning += d;
+      if (reasoningIndex === null) {
+        const r = writer.upsertMessageRow(`${segment}:reasoning`, 'thinking', reasoning, false, { persona: deps.persona, name: deps.agentName, startedAt: toIsoUtc(clocks.wall.instant()) });
+        if (r.ok) reasoningIndex = r.value.index;
+      } else {
+        owner.grow(reasoningIndex, reasoning);
+      }
+    },
+    usage: () => { outputArrived(); },
   };
   let report: TurnReport;
   try {
@@ -240,8 +298,12 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     }, sink, controller.signal);
   } finally {
     timer?.cancel();
+    stall.timer?.cancel();
     signal.removeEventListener('abort', onAbort);
   }
-  if (index !== null) writer.settleRow(index, report.text || text);
+  // REQ-CHAT-164: "when a streamed phase completes, its animation MUST stop where it stands" - settling does that,
+  // and no completion row is appended for either phase.
+  if (reasoningIndex !== null) writer.settleRow(reasoningIndex, reasoning);
+  if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
   return { report, unresponsive: unresponsive && !signal.aborted };
 }

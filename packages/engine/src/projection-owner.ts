@@ -3,6 +3,7 @@ import { CONTRACT_SCHEMA_VERSION, type SessionRecord, type SessionSnapshot, type
 import { RESIDENT_ROW_CAP } from '@rotaris/store';
 import type { SequenceCounters } from './sequence.js';
 import type { Committed } from './session-writer.js';
+import { withDerivedRowFields } from './session-writer.js';
 
 /**
  * ADR-0043 — the projection owner: one per live session, in the run host,
@@ -102,7 +103,9 @@ export class ProjectionOwner {
     if (this.frozen) return;
     const held = this.rows.get(index);
     if (!held || held.settled) return;
-    this.rows.set(index, { ...held, body });
+    // REQ-CHAT-062: the streamed-character count advances with the body, so the derivation runs on growth too — the
+    // same one function the writer and the store read use, so the figure never depends on which path produced the row.
+    this.rows.set(index, withDerivedRowFields({ ...held, body }));
     if (this.pendingGrowth) {
       if (index < this.pendingGrowth.fromIndex) this.pendingGrowth.fromIndex = index;
       return;
@@ -114,6 +117,22 @@ export class ProjectionOwner {
       this.publishIncrement(from, this.residentRows.filter((r) => r.index >= from));
     });
     this.pendingGrowth = { handle, fromIndex: index };
+  }
+
+  /**
+   * REQ-CHAT-164: the provider fell silent on this live row's call, or spoke again. A DISPLAY change — it is
+   * published and never recorded, appends no row, cancels nothing and leaves the record untouched — so the row is
+   * republished at once rather than waiting for a growth tick that a silent provider will never cause.
+   * `sinceIso` null clears the mark. Setting the mark twice with the same instant publishes nothing.
+   */
+  markStalled(index: number, sinceIso: string | null): void {
+    if (this.frozen) return;
+    const held = this.rows.get(index);
+    if (!held || held.settled) return;
+    if ((held.stalledSince ?? null) === sinceIso) return;
+    const { stalledSince: _drop, ...rest } = held;
+    this.rows.set(index, sinceIso === null ? rest : { ...rest, stalledSince: sinceIso });
+    this.publishIncrement(index, this.residentRows.filter((r) => r.index >= index));
   }
 
   /** REQ-MONITOR-220: at run end, pending publications are flushed. */

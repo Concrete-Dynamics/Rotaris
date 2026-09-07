@@ -14,8 +14,11 @@ import { PromptListSchema } from './library.js';
  * lower-cased view name of REQ-SHELL-023, and the `{view}.{arrangement}` form is for "a view carrying more than
  * one independent multi-pane arrangement", which the Library does not — the Prompts tab's one split is the whole
  * of it (REQ-LIBRARY-106), and the other two tabs declare no divider.
+ *
+ * `display/groupTools` is REQ-CHAT-067's tool-grouping switch, default ON — a desktop preference in the preference
+ * store (REQ-CONFIG-405), explicitly NOT part of the YAML configuration surface, unlike REQ-CHAT-166's four caps.
  */
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'interface/agentPopOut'] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'interface/agentPopOut', 'display/groupTools'] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome

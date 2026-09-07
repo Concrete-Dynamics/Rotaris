@@ -123,6 +123,22 @@ Edges worth knowing the reason for:
 | Views and dialogs | `ui`, `ui-core` | renderer |
 | The session artifact store: records, documents, the two context blocks, the tool port | `engine/src/artifacts/` (+ `store` v12, `contracts/artifacts.ts`) | run-host (`Sessions` builds one per live session; `run-host/tools.ts` binds the three executors) |
 | Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the inspector today; the transcript later — nothing renders Markdown a second way) |
+| The transcript engine: the recycled slot pool, the apply pipeline's steps 3-5, the two bounded caches, the search index (ADR-0045, ADR-0046) | `ui/src/transcript/` | renderer (the Workspace transcript; the persona window keeps a plain list) |
+
+### `ui/transcript` (Part Z, 2026-09-07; ADR-0045's first execution, ADR-0046 steps 3-5)
+
+The transcript engine, as its own module because it is the most intricate component in the product and ordinary list
+idioms are wrong inside it: `types.ts` (the `DisplayRow` / `RowRenderProps` seam, and the one statement of how
+REQ-CHAT-046's twelve row categories map onto three display shapes), `constants.ts` (`H_MAX`, the pool capacity, and
+**the product's ONE definition of `widgets` and `ui_objects`** — ADR-0045's closing obligation, cited from the proof
+and owed to ADR-0053 rather than restated by it), `project.ts` (ADR-0046 step 4, pure), `pool.ts` (the offset table,
+the visible span, the anchor, REQ-CHAT-053's four update shapes, pure), `cache.ts` (REQ-CHAT-058's two bounded LRU
+caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `TranscriptPane.tsx` (the fixed
+slot pool and step 5) and `PlaceholderRow.tsx` (deleted when Part AA's `Row.tsx` lands). **Edges unchanged** —
+`ui -> kernel, contracts, ui-core`. `ui-core`'s replica gains ADR-0046 step 3 (`classifyRows` and the six row-level
+counters `REQ-UIBENCH-064` fixes, distinct from the seven publication classes it already had). `config` gains
+`display-section.ts`, the reader `SECTION_KEYS` had declared and nothing stood behind; `model` gains `reasoning.ts`,
+the pure normaliser for REQ-CHAT-163's three provider shapes.
 
 ### `mcp` (Part S, 2026-09-05)
 

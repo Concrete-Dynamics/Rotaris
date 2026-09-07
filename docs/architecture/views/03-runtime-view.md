@@ -96,10 +96,16 @@ Before every model step, in this order: `shouldPause()` (a graceful pause stops 
 pending **steering** injected as a marked user message (`steering_injected`, the supervisor's counter reset) →
 the **loop supervisor**'s `check()` (`continue` | `inject` a corrective user message | `escalate` — the turn
 fails with `circuit_breaker_escalation`) → the 100-step belt → the model step (streamed into its own `agent`
-row). After the step: the supervisor observes the message; each tool call is observed, written as a running
-`tool` row, dispatched through the **gate** (policy → approval when needed → executor; hooks in its two slots),
-settled with its outcome (and a `diff` row for an edit); the results go back as one tool message; hook feedback
-follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
+row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
+discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).
+Both rows are written through `upsertMessageRow` under one stable key per response **segment**, which is what
+makes a replayed event persist once and a ladder retry update the row in place rather than append a second
+(REQ-CHAT-054). A step also arms a **stall detector** on the clock port: ten seconds with no output of any kind
+marks the live row `stalledSince`, the next output clears it, and neither publishes anything into the record
+(REQ-CHAT-164's detection half; the drawing half is the renderer's). After the step: the supervisor observes the
+message; each tool call is observed, written as a running `tool` row, dispatched through the **gate** (policy →
+approval when needed → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
+edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
 The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`,
@@ -258,7 +264,7 @@ of §5 and none a channel: each is a request answered once.
 | `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`; the binding and the mode at `create` only |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
-| `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192) | `appendRow`, `settleRow` |
+| `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added two wire fields and NO column: `chars` (REQ-CHAT-046's streamed-character count) is **derived** from the body by one function called from the append, the settle, the owner's growth tick and the store read, so a paged-in row is identical to the row released; `streamId` is carried and not recorded, and nothing sets it until ADR-0021 has a producer | `appendRow`, `settleRow`, `upsertMessageRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
 | `timeline` | ordered named entries with actor and metadata, each carrying **`id`** (12 hex) and **`severity`** (`debug` \| `info` \| `warning` \| `error`, default `info`) as their own columns since **v10** — REQ-SESSION-134's shape, which the table held neither of until the repair of Part U's thirty-second defect; a row written before v10 keeps an empty id and the export omits the field rather than minting one (REQ-SESSION-199) — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session_marked_interrupted`), the ladder |
@@ -277,7 +283,12 @@ of §5 and none a channel: each is a request answered once.
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then
   runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
   tier, providers to lease and message limit come from that.
-- **Tier C** — everything else is read at the next load; nothing watches a file.
+- **Tier C** — everything else is read at the next load; nothing watches a file. **The `display:` section** —
+  REQ-CHAT-166's four transcript caps, the reader `SECTION_KEYS` declared and nothing stood behind until Part Z —
+  is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over
+  `config:changed`, where a change re-projects the resident window once (which is a settings change, not transcript
+  update content, so it sits outside what REQ-MONITOR-223 measures). REQ-CHAT-067's grouping switch is **not** here:
+  it is a desktop preference (`display/groupTools`, REQ-CONFIG-405), which is why the two live in different stores.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the
@@ -285,3 +296,35 @@ of §5 and none a channel: each is a request answered once.
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
   next fetch of a running session with no restart, an unsaved settings edit reaches nothing.
+
+## 9. What a surface does with a publication (ADR-0046, ADR-0045; Part Z)
+
+The run host publishes; this is the other end of the same numbered stream, in the renderer, and it is where the
+reader's place is kept. Six steps, in order, on every publication:
+
+| step | where | what it does |
+|---|---|---|
+| 0 sequence check | `ui-core/replica.ts` | the number equals the one expected, or the surface has missed a publication: **`refused`**, apply nothing, stop consuming, request a whole read with **no timer**. An expectation is created by a whole-session update and by nothing else; a number at or below it is a superseded publication, discarded uncounted |
+| 1 applicability | `replica.ts` | an earliest-changed index before the oldest row held is **declined** — one further whole read, the rows on display unchanged (REQ-SESSION-161) |
+| 2 reset | `replica.ts` | a whole-session update sets the expectation and classifies **`reset`** |
+| 3 row classification | `replica.ts` (`classifyRows`) | one `insert` per row added, one `remove` per row removed, one `update` per changed retained row; **one `noop` and no row counters** when nothing changed. Six cumulative counters, pure, byte-identical across two replays (REQ-UIBENCH-064/083) |
+| 4 projection | `ui/transcript/project.ts` | role-to-kind mapping, duplicate-reasoning and dead-session hygiene, edit-diff placement, folding, display caps, then the computed trailer rows. **Bounded by what changed**: from the earliest-changed index back to the nearest group boundary, never over the resident window |
+| 5 present | `ui/transcript/TranscriptPane.tsx` | the displayed array, the preserved anchor and the expansion map to ADR-0045's recycler |
+
+**During a recovery episode** the surface is *reconciling* and the subscription handler **drops** further
+publications for that session rather than queueing them, so exactly one `refused` and one `reset` are counted per
+episode however many arrive — an arrival-timing dependency would break the benchmark's determinism claim outright.
+
+**What paints it (ADR-0045).** A scroll container of **154 absolutely positioned slots** — `ceil(H_max ÷ 30 px) + 10`
+with `H_max` a declared product constant of 4,320 px — allocated at window construction, never added to or removed
+from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
+the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
+to a prefix-sum offset table, which is what makes the anchor of REQ-CHAT-071 exact: the identity and viewport offset
+of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained
+rendering is reused only while identity, content, laid-out width and expansion state are all unchanged; a live row is
+redrawn on every repaint. Expansion state lives in the pane, keyed by stable identity, because a slot rebind would
+otherwise carry one row's state onto another.
+
+**Older rows** are fetched by `session.pageOlder` when the reader scrolls toward the top and placed above by the
+replica's `prependOlder`, off the interface thread, with the anchor holding the reader still; a failed load says so
+and is re-attemptable, and reaching the oldest recorded row is a different state from a failure (REQ-CHAT-165).

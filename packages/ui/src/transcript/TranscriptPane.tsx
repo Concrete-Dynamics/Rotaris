@@ -1,0 +1,385 @@
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import type { ApprovalPayload, TranscriptRow } from '@rotaris/contracts';
+import {
+  LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
+} from './constants.js';
+import { createMeasurementCache, createRenderCache, reuseKey, sourceTextOf, type TranscriptCacheStats } from './cache.js';
+import { CAP_DEFAULTS, isLive, projectDisplay, rowKey, type DisplayCaps } from './project.js';
+import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAnchor, updateShape, visibleRange, type Anchor } from './pool.js';
+import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
+import { PlaceholderRow } from './PlaceholderRow.js';
+import type { DisplayRow, RowRenderProps } from './types.js';
+
+/**
+ * ADR-0045's **fixed-capacity recycled row pool**, and ADR-0046's **step 5 — present**.
+ *
+ * The transcript is a scroll container holding a CONSTANT number of absolutely positioned row slots, allocated at
+ * window construction and never added to or removed from. Scrolling and content changes REBIND slots to displayed
+ * rows and mutate their contents in place; a slot showing nothing is EMPTIED rather than unmounted. The slot index
+ * is the framework key, never the row identity — the whole point of the recycler is that the framework must not
+ * unmount and remount as the visible set moves — and that is why a row may hold no state of its own: a rebind
+ * would carry one row's state onto another.
+ *
+ * `ToolRow`'s `useState(open)` in `TranscriptRows.tsx` is the existing instance of that bug. Expansion state lives
+ * here, in a map keyed by stable identity (REQ-CHAT-059), and reaches a row as a prop.
+ */
+export interface TranscriptPaneProps {
+  readonly rows: readonly TranscriptRow[];
+  readonly running: boolean;
+  readonly groupTools: boolean;
+  readonly caps?: DisplayCaps | undefined;
+  readonly pendingQuestions: readonly { readonly requestId: string; readonly prompt: string }[];
+  readonly pendingApprovals: readonly ApprovalPayload[];
+  readonly questionAgent?: string | undefined;
+  readonly scopeAgent?: string | null | undefined;
+  /** REQ-CHAT-165: fetch the next older span. Resolves false when the load FAILED, which a reader must be able to tell from having reached the oldest row. */
+  readonly onPageOlder?: ((beforeIndex: number) => Promise<boolean>) | undefined;
+  /** REQ-CHAT-165: the first recorded row is among those held, so there is nothing older to fetch. */
+  readonly reachedOldest?: boolean | undefined;
+  /** REQ-CHAT-074: closing the search panel refocuses the composer. */
+  readonly onFocusComposer?: (() => void) | undefined;
+  /** Part AA's `Row`, once it lands; the placeholder until then. THIS DEFAULT IS THE ONE LINE THE MERGE CHANGES. */
+  readonly renderRow?: ((p: RowRenderProps) => ReactElement) | undefined;
+}
+
+export interface TranscriptCounts {
+  readonly widgets: number;
+  readonly uiObjects: number;
+  readonly slots: number;
+  readonly bound: number;
+  readonly displayed: number;
+  readonly render: TranscriptCacheStats;
+  readonly measurement: TranscriptCacheStats;
+}
+
+/** REQ-CHAT-073's empty state. Its second clause — "and the Clear action MUST be disabled" — has nothing to be
+ * true of in this build: section 14, transcript clearing, is out of the plan, `clearTranscript` answers false and
+ * no Clear action exists anywhere in the product. The requirement is therefore met in one clause of two, and this
+ * is recorded rather than reported as met whole (ADR-0046's first-execution note carries it). */
+const EMPTY_TITLE = 'No transcript yet';
+const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activity and results here.';
+
+export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
+  const {
+    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent,
+    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = PlaceholderRow,
+  } = props;
+
+  const scroller = useRef<HTMLDivElement | null>(null);
+  /** A programmatic scroll must not change the follow state (REQ-CHAT-070): only reader-caused movement may. */
+  const programmatic = useRef(false);
+  const pendingAnchor = useRef<Anchor | null>(null);
+  const previousDisplay = useRef<readonly DisplayRow[]>([]);
+  const previousTable = useRef(buildOffsets([]));
+
+  // REQ-CHAT-058's two bounded caches, and the slot nodes, held as VALUES rather than as refs so that reading a
+  // measurement while laying out is an ordinary read of state rather than a ref read during render.
+  const [measurements] = useState(createMeasurementCache);
+  const [renderings] = useState(createRenderCache<ReactElement>);
+  const [slotNodes] = useState(() => new Map<number, HTMLDivElement>());
+
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [following, setFollowing] = useState(true);
+  /** REQ-CHAT-072: how many displayed rows there were when the reader stopped following; null while following. */
+  const [seenCount, setSeenCount] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState({ height: 600, width: 800 });
+  const [capacity, setCapacity] = useState(POOL_CAPACITY);
+  const [tick, setTick] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [current, setCurrent] = useState(0);
+  /**
+   * REQ-CHAT-074: showing a match DISABLES tail-follow, selects the row and scrolls it to centre. Turning follow
+   * off belongs in the handler and not in the effect that scrolls, because the reader's action is what causes it —
+   * and because while follow is on, the pin below runs on every update and would drag the match straight back off
+   * screen. The first execution measured exactly that: the count read "1 of 1" and the transcript stayed pinned to
+   * the tail with the matched row never bound to a slot.
+   */
+  const showMatch = (next: number): void => { setCurrent(next); setFollowing(false); };
+  const [paging, setPaging] = useState<'idle' | 'loading' | 'failed'>('idle');
+  const [measuredVersion, setMeasuredVersion] = useState(0);
+
+  // ---- ADR-0046 step 4 ------------------------------------------------------------------------------------
+  const display = projectDisplay({ rows, running, groupTools, caps, expanded, pendingQuestions, pendingApprovals, questionAgent, scopeAgent });
+
+  // ---- REQ-CHAT-058: heights, measured rather than assumed -------------------------------------------------
+  // `measuredVersion` is read so the table is rebuilt once the observer has recorded a real height; a `peek` is a
+  // pure read that moves no recency and counts no hit, which is what makes it safe to do while laying out.
+  const heights = display.map((d) => {
+    const key = reuseKey(d, viewport.width, expanded.has(d.key), null);
+    return (key === null ? undefined : measurements.peek(key)) ?? estimateHeight(d);
+  });
+  const table = buildOffsets(heights);
+
+  // ---- REQ-CHAT-074: the match set, indexed against DISPLAYED rows -----------------------------------------
+  const matches: Match[] = searchOpen && query !== '' ? indexAll(display, query) : [];
+  const activeMatch = matches[current] ?? null;
+
+  const range = visibleRange(table, scrollTop, viewport.height, display.length, capacity);
+  const bind = (slot: number): DisplayRow | null => {
+    const at = range.first + slot;
+    return at <= range.last ? display[at] ?? null : null;
+  };
+
+  const unseen = following || seenCount === null ? 0 : Math.max(0, display.length - seenCount);
+
+  const toggle = (key: string): void => {
+    setExpanded((held) => {
+      const next = new Set(held);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // ---- REQ-CHAT-070: following the tail -------------------------------------------------------------------
+  const onScroll = (): void => {
+    const el = scroller.current;
+    if (!el) return;
+    setScrollTop(el.scrollTop);
+    // A scroll the application performed — pinning to the bottom, restoring an anchor, jumping to a search match —
+    // leaves the state unchanged; only movement the reader causes may change it.
+    if (programmatic.current) { programmatic.current = false; return; }
+    // The reader has moved for themselves, so an anchor being held across a settle is no longer theirs.
+    pendingAnchor.current = null;
+    const atMax = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_EPSILON;
+    setFollowing(atMax);
+    setSeenCount(atMax ? null : (held) => (held === null ? display.length : held));
+    // REQ-CHAT-165: scrolling toward the top loads the next older span, off the interface thread.
+    if (el.scrollTop < PAGE_OLDER_THRESHOLD && !reachedOldest && paging !== 'loading' && onPageOlder && rows.length > 0) {
+      setPaging('loading');
+      void onPageOlder(rows[0]!.index).then((ok) => setPaging(ok ? 'idle' : 'failed')).catch(() => setPaging('failed'));
+    }
+  };
+
+  /**
+   * The measurement pass and the viewport, both driven by a ResizeObserver rather than by an effect body: an
+   * observer callback is where a measurement legitimately becomes state, and observing a node delivers its first
+   * size immediately, so no separate initial pass is needed.
+   */
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const onViewport = new ResizeObserver(() => {
+      setViewport({ height: el.clientHeight, width: el.clientWidth });
+      // ADR-0045's ONE growth branch, in the product's own rendering path and not conditioned on being measured.
+      setCapacity(capacityFor(el.clientHeight));
+    });
+    onViewport.observe(el);
+    return () => onViewport.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const key = (entry.target as HTMLElement).dataset['measure'];
+        const height = entry.contentRect.height;
+        if (key === undefined || key === '' || height <= 0) continue;
+        const held = measurements.peek(key);
+        if (held === undefined || Math.abs(held - height) > 0.5) { measurements.set(key, height, 0); changed = true; }
+      }
+      if (changed) setMeasuredVersion((v) => v + 1);
+    });
+    for (const node of slotNodes.values()) observer.observe(node);
+    return () => observer.disconnect();
+    // Re-observing on every displayed change is what keeps a rebound slot measured under its NEW key.
+  }, [measurements, slotNodes, display, capacity]);
+
+  /** REQ-CHAT-053 / REQ-CHAT-071 / REQ-CHAT-072: what an update does to the reader's position. */
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const before = previousDisplay.current;
+    const beforeTable = previousTable.current;
+    // REQ-CHAT-053: which of the four shapes this was. Only a shape matching none of them may reset the view, and
+    // even a reset restores by REQ-CHAT-071's anchor rather than by re-applying a stored pixel offset.
+    const shape = updateShape(before, display);
+    if (el && !following && pendingAnchor.current === null) pendingAnchor.current = captureAnchor(before, beforeTable, el.scrollTop);
+    previousDisplay.current = display;
+    previousTable.current = table;
+    if (!el) return;
+    if (following) {
+      programmatic.current = true;
+      el.scrollTop = el.scrollHeight;
+      pendingAnchor.current = null;
+      return;
+    }
+    // Each of the four shapes leaves the reader's position and every row's expansion state exactly as set: the
+    // expansion map is keyed by identity and is untouched here, and the position is restored by anchor. A shape
+    // matching none of the four is the only one permitted to reset, and REQ-CHAT-053 requires even that reset to
+    // restore by REQ-CHAT-071's anchor — which is why the same restoration runs whatever the shape was, and why
+    // the shape is recorded on the element rather than branched on.
+    //
+    // **The anchor is HELD until the geometry settles, and released only by the reader.** REQ-CHAT-071 says
+    // "restore that anchor AFTER GEOMETRY SETTLES", and a row that has just arrived carries an ESTIMATED height
+    // until the measurement pass reaches it: restoring once, on arrival, restores against estimates, and the
+    // content then shifts under the reader by the whole estimation error as the real heights land. The first
+    // execution measured exactly that - fifty rows paged in above the viewport moved the reader 360 px, of which
+    // about 260 px was estimate against measurement. This effect re-runs whenever the measured total changes, so
+    // the held anchor is re-applied until it stops moving, and `onScroll` drops it the moment the reader scrolls.
+    const restored = restoreAnchor(display, table, pendingAnchor.current);
+    if (restored !== null && Math.abs(restored - el.scrollTop) > 0.5) { programmatic.current = true; el.scrollTop = restored; }
+    el.dataset['shape'] = shape;
+    if (restored === null) pendingAnchor.current = null;
+    // `table` is rebuilt every render, so depending on the object itself re-pinned the tail continuously; its
+    // total height is the only part of it this effect reacts to. (The first execution measured that: see ADR-0046.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [display, table.total, following]);
+
+  /** REQ-CHAT-063: while any row is live, refresh at 1000 ms; when none is, nothing repaints on a timer at all. */
+  const anyLive = display.some(isLive);
+  useEffect(() => {
+    if (!anyLive) return;
+    const handle = setInterval(() => setTick((t) => t + 1), LIVE_REFRESH_MS);
+    return () => clearInterval(handle);
+  }, [anyLive]);
+
+  /** REQ-CHAT-002 / REQ-CHAT-074: Ctrl+F opens the panel — this closes Part W's Ctrl+F owe. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); setSearchOpen(true); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  /** REQ-CHAT-074: showing a match disables tail-follow, selects the row and scrolls it to centre. */
+  const matchAt = activeMatch?.at ?? null;
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el || matchAt === null) return;
+    const top = previousTable.current.offsets[matchAt] ?? 0;
+    programmatic.current = true;
+    el.scrollTop = Math.max(0, top - el.clientHeight / 2);
+    // Jumping to a match is the application deliberately MOVING the reader, so any anchor held across a settle is
+    // stale and is dropped; the next update captures a fresh one at the centred position. Without this the held
+    // anchor pulled the transcript straight back off the match — the same failure the pin had, one layer down.
+    pendingAnchor.current = null;
+  }, [matchAt]);
+
+  const empty = display.length === 0;
+  /**
+   * REQ-CHAT-058: a retained rendering is reused only while identity, content, the width it was laid out for and
+   * expansion state are ALL unchanged — `reuseKey` is that predicate, and it returns null for a LIVE row, which is
+   * therefore redrawn on every repaint so its elapsed time keeps advancing. The 1000 ms tick causes the repaint;
+   * nothing else changes on it, so no scroll position moves and no row that is not live reflows.
+   */
+  const paint = (d: DisplayRow): ReactElement => {
+    const open = expanded.has(d.key);
+    const match = activeMatch !== null && activeMatch.key === d.key ? activeMatch.range : null;
+    const key = reuseKey(d, viewport.width, open, match);
+    if (key !== null) {
+      const held = renderings.get(key);
+      if (held !== undefined) return held;
+    }
+    const element = renderRow({ display: d, expanded: open, onToggle: () => toggle(d.key), match });
+    if (key !== null) renderings.set(key, element, sourceTextOf(d).length);
+    return element;
+  };
+
+  return (
+    <div className="transcript__pane" data-testid="transcript-pane" data-tick={tick}>
+      {searchOpen && (
+        <div className="transcript__search" role="search" aria-label="Search transcript">
+          <input
+            className="input transcript__search-input" autoFocus placeholder="Search transcript…" aria-label="Search transcript"
+            data-testid="transcript-search-input" value={query}
+            onChange={(e) => { setQuery(e.currentTarget.value); showMatch(0); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); showMatch(stepMatch(current, matches.length, 1)); }
+              if (e.key === 'Escape') { e.preventDefault(); setSearchOpen(false); onFocusComposer?.(); }
+            }}
+          />
+          <span className="transcript__search-count" data-testid="transcript-search-count">{countLabel(matches.length, current)}</span>
+          <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-prev" onClick={() => showMatch(stepMatch(current, matches.length, -1))}>Previous</button>
+          <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-next" onClick={() => showMatch(stepMatch(current, matches.length, 1))}>Next</button>
+          <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-close" onClick={() => { setSearchOpen(false); onFocusComposer?.(); }}>Close</button>
+        </div>
+      )}
+      {unseen > 0 && (
+        <button type="button" className="btn btn-secondary btn-compact transcript__new" data-testid="transcript-new-updates"
+          onClick={() => { setFollowing(true); setSeenCount(null); }}>{newUpdatesLabel(unseen)}</button>
+      )}
+      <div
+        ref={scroller}
+        className={`transcript__scroll${following ? ' is-following' : ''}`}
+        data-testid="transcript-scroll"
+        data-following={following ? '1' : '0'}
+        data-displayed={display.length}
+        data-slots={capacity}
+        data-bound={range.last - range.first + 1}
+        data-paging={paging}
+        data-measured={measuredVersion}
+        data-cache={`${renderings.stats.entries}/${renderings.stats.characters}/${renderings.stats.hits}/${renderings.stats.misses}`}
+        // REQ-CHAT-070: the description states which of the two states is current, and never describes both alike.
+        aria-description={following
+          ? 'Following new output as it arrives.'
+          : 'Not following; new output is arriving out of view.'}
+        onScroll={onScroll}
+      >
+        {empty && (
+          <div className="empty-state" data-testid="transcript-empty">
+            <span className="empty-state-title">{EMPTY_TITLE}</span>
+            <span className="empty-state-hint">{EMPTY_BODY}</span>
+          </div>
+        )}
+        {/*
+          * The pool is rendered whether or not the transcript has any rows — "emptied rather than unmounted"
+          * applies to the pool as a whole as much as to one slot, and it is what makes ADR-0045's element-count
+          * invariance hold across 0 rows as well as across 1200. REQ-CHAT-073's empty state is drawn OVER an
+          * intact pool of empty slots rather than instead of one.
+          */}
+        <div className="transcript__pool" style={{ height: `${table.total}px` }}>
+            {paging === 'failed' && (
+              <div className="transcript__page-error" role="status" data-testid="transcript-page-failed">Older messages could not be loaded. Scroll up to try again.</div>
+            )}
+            {reachedOldest && (
+              <div className="transcript__oldest" data-testid="transcript-oldest">This is the start of the conversation.</div>
+            )}
+            {Array.from({ length: capacity }, (_, slot) => {
+              const d = bind(slot);
+              const at = range.first + slot;
+              const measureKey = d === null ? '' : reuseKey(d, viewport.width, expanded.has(d.key), null) ?? '';
+              return (
+                <div
+                  key={slot}
+                  ref={(node) => { if (node) slotNodes.set(slot, node); else slotNodes.delete(slot); }}
+                  className={`transcript__slot slot${d === null ? ' slot--empty' : ''}`}
+                  data-slot={slot}
+                  data-measure={measureKey}
+                  data-bound={d === null ? '' : d.key}
+                  style={{ transform: `translateY(${d === null ? 0 : table.offsets[at] ?? 0}px)`, visibility: d === null ? 'hidden' : 'visible' }}
+                >
+                  {d === null ? null : paint(d)}
+                </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Verification only, and named so. ADR-0045 owes the benchmark a **definition** of `widgets` and `ui_objects`
+ * rather than a behaviour; this is that definition made readable from outside the process, so the transcript proof
+ * and, later, ADR-0053's harness both read one rule instead of restating it. No surface behaves differently
+ * because it exists.
+ */
+export function readTranscriptCounts(): TranscriptCounts {
+  const scroll = document.querySelector('[data-testid="transcript-scroll"]');
+  const slots = document.querySelectorAll('.transcript__slot');
+  let bound = 0;
+  for (const slot of slots) if ((slot as HTMLElement).dataset['bound'] !== '') bound += 1;
+  const zero: TranscriptCacheStats = { entries: 0, characters: 0, hits: 0, misses: 0, evictions: 0 };
+  const cache = (scroll as HTMLElement | null)?.dataset['cache']?.split('/').map(Number) ?? [];
+  return {
+    widgets: countWidgets(document), uiObjects: countUiObjects(document), slots: slots.length, bound,
+    displayed: Number((scroll as HTMLElement | null)?.dataset['displayed'] ?? 0),
+    render: cache.length === 4 ? { entries: cache[0]!, characters: cache[1]!, hits: cache[2]!, misses: cache[3]!, evictions: 0 } : zero,
+    measurement: zero,
+  };
+}
+
+export { rowKey };

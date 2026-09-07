@@ -83,6 +83,27 @@ export const TranscriptRowSchema = z.object({
   diff: z.string().optional(),
   /** REQ-CHAT-060: reachable from a blocked row. */
   blockedReason: z.string().optional(),
+  /**
+   * REQ-CHAT-046's streamed-character count, on reasoning rows — what REQ-CHAT-062 divides by 4 for `~<T> tok`.
+   * DERIVED from the row body rather than stored (no store migration in this batch), and derived at both ends of
+   * the release boundary, so a paged-in row is identical to the row released (REQ-CHAT-165).
+   */
+  chars: z.number().int().nonnegative().optional(),
+  /**
+   * REQ-CHAT-046's live-terminal stream id — what REQ-CHAT-066 (an unsettled live terminal row never folds) and
+   * REQ-CHAT-076 (clicking a live preview requests the pop-out) key on. NOT `TerminalFrameSchema.streamId` below,
+   * which belongs to a frame; this one belongs to a row. Nothing publishes a terminal frame in this build
+   * (ADR-0021 has no first execution), so no row carries one yet — the field is added now because the clauses
+   * that read it are written now and would otherwise key on nothing.
+   */
+  streamId: z.string().optional(),
+  /**
+   * REQ-CHAT-164: the instant the provider fell silent on this live row's call, set by the stream-side detector
+   * after 10 s with no output and cleared on the next output of any kind. A DISPLAY field — published, never
+   * recorded — so "MUST NOT change what the transcript records" holds. The elapsed seconds are counted from it by
+   * REQ-CHAT-063's live-row refresh rather than republished each second.
+   */
+  stalledSince: z.string().optional(),
 });
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 

@@ -3,6 +3,7 @@ import { APICallError, jsonSchema, Output, streamText, tool, type LanguageModel,
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type StreamPart, type ToolSpec } from './ports.js';
+import { createStreamNormaliser, reasoningItemSeparator } from './reasoning.js';
 
 /**
  * ADR-0027 — the AI SDK behind `ModelClient`, for the request-and-stream
@@ -163,18 +164,32 @@ export class AiSdkModelClient implements ModelClient {
         ...(req.thinking === 'unset' ? {} : { providerOptions: { openai: { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking } } }),
       });
       let usage: { input: number; output: number } | null = null;
+      // REQ-CHAT-163: every text and reasoning part passes through the normaliser, which is where the three shapes
+      // deliberation arrives in are recognised and where whitespace-only deltas are preserved exactly as received.
+      const normalise = createStreamNormaliser();
+      let reasoningItem: string | null = null;
       for await (const part of result.fullStream) {
         switch (part.type) {
           case 'text-delta':
-            yield ok<StreamPart>({ kind: 'text', delta: part.text });
+            // Shape (b): a thinking block inside the content is routed to the reasoning channel here, never below.
+            for (const out of normalise.accept({ kind: 'text', delta: part.text })) yield ok<StreamPart>(out);
             break;
-          case 'reasoning-delta':
-            yield ok<StreamPart>({ kind: 'reasoning', delta: part.text });
+          case 'reasoning-delta': {
+            // Shape (a), and shape (c)'s item boundary: a new reasoning id is a new item, separated by a blank line.
+            const id = (part as { id?: string }).id ?? null;
+            const separator = reasoningItemSeparator(reasoningItem, id);
+            reasoningItem = id;
+            if (separator !== '') yield ok<StreamPart>({ kind: 'reasoning', delta: separator });
+            for (const out of normalise.accept({ kind: 'reasoning', delta: part.text })) yield ok<StreamPart>(out);
             break;
+          }
           case 'tool-call':
             yield ok<StreamPart>({ kind: 'tool-call', callId: part.toolCallId, name: part.toolName, argsDelta: JSON.stringify(part.input ?? {}) });
             break;
           case 'finish': {
+            // Anything the normaliser held back because it might have been the start of a tag is emitted before the
+            // finish, so the finished message equals the concatenation of the deltas received (REQ-CHAT-157).
+            for (const out of normalise.flush()) yield ok<StreamPart>(out);
             const u = part.totalUsage;
             usage = { input: u.inputTokens ?? 0, output: u.outputTokens ?? 0 };
             yield ok<StreamPart>({ kind: 'usage', usage });

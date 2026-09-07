@@ -54,6 +54,20 @@ export const RuntimeViewSchema = z.object({
   /** REQ-SHELL-125: the launch dialog preselects the effective configured value (REQ-TOOLS-114). Read here, not edited here. */
   sandbox_mode: z.enum(SANDBOX_MODE_NAMES),
 });
+/**
+ * REQ-CHAT-166's four display caps as the transcript reads them — workspace configuration, written to and read back
+ * from the `display` section of the workspace `agents.yaml` (REQ-CONFIG-172/175). A line cap of `null` is
+ * "unlimited", the last of the offered values 1, 2, 5, 10, 20, 50, unlimited. The Display settings CATEGORY that
+ * offers the four controls is REQ-CONFIG-472 and is not built: this is the read path and the cap behaviour only.
+ */
+export const DisplayViewSchema = z.object({
+  show_tool_results: z.boolean(),
+  show_tool_inputs: z.boolean(),
+  tool_result_lines: z.number().int().nullable(),
+  tool_input_lines: z.number().int().nullable(),
+});
+export type DisplayView = z.infer<typeof DisplayViewSchema>;
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -68,6 +82,8 @@ export const ConfigSnapshotSchema = z.object({
   rawRuntime: z.object({ workspace: z.record(z.string(), z.unknown()).nullable(), global: z.record(z.string(), z.unknown()).nullable() }),
   circuitBreakerEnabled: z.boolean(),
   compressorThresholdPercentage: z.number().int(),
+  /** REQ-CHAT-166 (Part Z): the transcript's four display caps, resolved. */
+  display: DisplayViewSchema,
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES),
   referential: z.array(z.string()),
   warnings: z.array(z.string()),

@@ -4,7 +4,7 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded } from '@rotaris/ui';
+import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -62,7 +62,37 @@ bridge.onSessionSnapshot((p) => {
     (window as unknown as { __rotarisPersonaPainted?: unknown }).__rotarisPersonaPainted = { at: Date.now(), seq, agents };
   }));
 });
-bridge.onTranscriptIncrement((p) => replica.getState().applyIncrement(p));
+/**
+ * Part Z, verification instruments (no surface behaves differently because they exist):
+ *
+ *  - the apply-to-paint sample of every transcript increment, taken at the point REQ-CHAT-055 fixes — after the
+ *    frame showing the update has been painted, never a synchronous figure. A double `requestAnimationFrame` is
+ *    the same proxy ADR-0045's spike used and the same one the whole-session path above already uses, and it is a
+ *    PROXY: it says a frame boundary passed after the change was committed, not that a frame containing the change
+ *    was presented. ADR-0045 measured that the platform's own paint event cannot be used for this (with no damage
+ *    it delivers about one frame every five seconds), and did not establish that the two agree where both resolve.
+ *  - the replica's counters, both sets: ADR-0043's seven publication classes and ADR-0046 step 3's six row ops.
+ *  - ADR-0045's structural counts, read from the ONE definition in `@rotaris/ui` rather than restated here.
+ */
+const applySamples: { seq: number; rows: number; ms: number }[] = [];
+bridge.onTranscriptIncrement((p) => {
+  const t0 = performance.now();
+  const outcome = replica.getState().applyIncrement(p);
+  const seq = (p as { seq?: number }).seq ?? 0;
+  const rows = ((p as { rows?: unknown[] }).rows ?? []).length;
+  if (outcome !== 'applied') return;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    applySamples.push({ seq, rows, ms: performance.now() - t0 });
+    if (applySamples.length > 400) applySamples.shift();
+  }));
+});
+Object.assign(window as unknown as Record<string, unknown>, {
+  __rotarisCounts: () => readTranscriptCounts(),
+  __rotarisReplica: () => { const s = replica.getState(); return { counters: s.counters, rowOps: s.rowOps, rows: s.rows.length, reachedOldest: s.reachedOldest, oldestIndex: s.rows[0]?.index ?? null }; },
+  __rotarisApplies: () => applySamples.slice(),
+  __rotarisResetApplies: () => { applySamples.length = 0; return true; },
+  __rotarisRow: (index: number) => replica.getState().rows.find((r) => r.index === index) ?? null,
+});
 bridge.onNotice((p) => notices.getState().apply(p));
 bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
 /**
@@ -254,15 +284,33 @@ function loadIntoComposer(text: string): void {
   if (!load()) requestAnimationFrame(() => requestAnimationFrame(() => { load(); }));
 }
 
-function Workspace({ models, workspace, popOut, prompts, onOpenStash }: { models: readonly string[]; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void }) {
+/**
+ * REQ-CHAT-165 (Part Z): the next older span, through the `session.pageOlder` command and the replica's
+ * `prependOlder` action — both of which have existed since the walking skeleton and neither of which anything
+ * called. It runs off the interface thread (a command round trip through main to the run host) and returns false
+ * when the load FAILED, which is what makes a failure distinguishable from having reached the oldest row.
+ */
+async function pageOlder(beforeIndex: number): Promise<boolean> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return false;
+  const r = await bridge.command({ kind: 'session.pageOlder', sessionId, beforeIndex });
+  if (!r.ok) return false;
+  const page = r.value as { rows?: TranscriptRow[]; oldest?: boolean };
+  replica.getState().prependOlder(page.rows ?? [], page.oldest === true);
+  return true;
+}
+
+function Workspace({ models, workspace, popOut, prompts, onOpenStash, groupTools }: { models: readonly string[]; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
+  const reachedOldest = useStore(replica, (s) => s.reachedOldest);
   const snapshot = useConfigSnapshot(workspace);
   const personas = useMemo(() => personasOf(snapshot), [snapshot]);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
   const nowIso = useElapsedTick(session);
   return <WorkspaceView
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
+    onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
     onRecordPrompt={(text) => prompts.push('history', text)}
     personas={personas} entry={entry} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60}
@@ -706,10 +754,12 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialPopOut, initialGroupTools }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean; initialGroupTools: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
+  // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store.
+  const [groupTools] = useState(initialGroupTools);
   const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
@@ -862,7 +912,7 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
-        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} />,
+        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} />,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
@@ -1135,7 +1185,7 @@ async function bootPersona(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, groupToolsReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
@@ -1143,8 +1193,11 @@ async function boot(): Promise<void> {
     bridge.command({ kind: 'prefs.get', key: 'panels/git' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/library' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/agentPopOut' }),
+    bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
   ]);
   const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
+  // REQ-CHAT-067: the tool-grouping setting defaults ON, so an unset preference reads as on.
+  const initialGroupTools = groupToolsReply.ok ? (groupToolsReply.value as { value?: boolean }).value !== false : true;
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialLibraryLayout = libraryLayoutReply.ok ? ((libraryLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
@@ -1165,7 +1218,7 @@ async function boot(): Promise<void> {
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} initialGroupTools={initialGroupTools} />
     </StrictMode>,
   );
 }

@@ -210,9 +210,10 @@ describe('shell state — the two application-modal dialogs and the Escape slots
 
   it('takes the composer\'s registration and lets it go on unmount (REQ-SHELL-049\'s Ctrl+Return)', () => {
     const submit = vi.fn();
-    useShellState.getState().registerComposer({ submit, enabled: false });
+    const setText = vi.fn();
+    useShellState.getState().registerComposer({ submit, enabled: false, setText });
     expect(useShellState.getState().composer?.enabled).toBe(false);
-    useShellState.getState().registerComposer({ submit, enabled: true });
+    useShellState.getState().registerComposer({ submit, enabled: true, setText });
     expect(useShellState.getState().composer?.enabled).toBe(true);
     useShellState.getState().registerComposer(null);
     expect(useShellState.getState().composer).toBeNull();

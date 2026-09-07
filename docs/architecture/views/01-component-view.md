@@ -18,7 +18,7 @@ flowchart TB
   end
 
   subgraph surface["Surface packages"]
-    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>theme, motion, shell-state"]
+    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>theme, motion, shell-state"]
     uicore["ui-core<br/>replica (the transcript mirror),<br/>notice store,<br/>acknowledgement stack (one per window)"]
     shell["shell<br/>ProcessLink, UpdateRelay"]
   end
@@ -35,7 +35,7 @@ flowchart TB
   subgraph foundation["Foundation packages"]
     config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot"]
     model["model<br/>ports, DefaultAgentBackend,<br/>AiSdkModelClient, ScriptedModelClient"]
-    store["store<br/>schema (v6), StoreDal, open/migrate,<br/>lock, rings"]
+    store["store<br/>schema (v11), StoreDal, open/migrate,<br/>lock, rings, saved prompts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
     contracts["contracts<br/>channels, commands, control, process protocol,<br/>status, tools, children, hooks, intent, roles,<br/>config projections, theme data"]
     kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, generated requirement symbols"]
@@ -130,6 +130,17 @@ paths. **Edges unchanged** — `mcp → kernel, platform`. The code-point compar
 lives in `kernel` (`order.ts`), so neither package needed a new edge. The configuration pipeline of ADR-0034 lives in
 `config` (`src/mcp/`, `sections/mcp-servers.ts`); the run host composes the two (`run-host/mcp.ts`, `McpHost`) and
 is the only process that instantiates either.
+
+### `ui/library` (Part X, 2026-09-07)
+
+The Library view's shell and its Prompts tab: `LibraryView.tsx` (the title, the ONE search field, the three tabs of
+REQ-LIBRARY-103), `types.ts` (`LibraryTabProps` — the query, already case-folded by the shell, and the revision a tab
+re-reads on), `PromptsTab.tsx` and `StashDialog.tsx`. **Edges unchanged** — `ui → kernel, contracts, ui-core` — and the
+new contract file `contracts/src/library.ts` (the two prompt lists, the prompt state, and REQ-LIBRARY-105's closed set
+of library changes) sits beside `notices.ts`, which keeps the single copy of the three tab names. `main` gains
+`main/library.ts`, the revision counter whose `bump` takes a member of that closed set, which is how a settings write
+is kept from counting as a library change (`app-main → contracts`, an edge it already had). The tab bodies reach
+`LibraryView` as nodes, so a tab built elsewhere needs no change to the shell.
 
 ### The bundled code-intelligence runtime (Part T, 2026-09-06; ADR-0035's first execution)
 

@@ -27,6 +27,8 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  *  5. command              — request/response; see commands.ts
  *  8. acknowledgement:publish — main → ONE window: a transient acknowledgement for that window's stack
  *     (Part V; REQ-NOTIFY-003's transient half of a main-originated or run-host-originated event, REQ-MCP-044)
+ *  9. library:changed      — main → every window: a revision counter, bumped for the four things
+ *     REQ-LIBRARY-105 closes a "library change" to and for nothing else (Part X)
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -46,6 +48,7 @@ export const CHANNEL = {
   themeChanged: 'theme:changed',
   configChanged: 'config:changed',
   acknowledgementPublish: 'acknowledgement:publish',
+  libraryChanged: 'library:changed',
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -217,6 +220,18 @@ export type ThemeChanged = z.infer<typeof ThemeChangedSchema>;
 export const ConfigChangedSchema = z.object({ v: schemaVersion, snapshot: ConfigSnapshotSchema });
 export type ConfigChanged = z.infer<typeof ConfigChangedSchema>;
 
+/**
+ * Part X (REQ-LIBRARY-105): a library change landed. The payload is a REVISION and not the changed data —
+ * "once a burst of changes has settled, all three tabs MUST show the stored state including the last change of
+ * that burst; no change may be lost because a later one overtook it". A counter cannot be overtaken: a surface
+ * that sees the number move re-reads the store and gets whatever is there now, so two writes racing to publish
+ * still end with the later state on screen. Carrying the data instead would make the last message win, which is
+ * the failure the requirement names. It is bumped for exactly the four things `LIBRARY_CHANGES` lists, and a
+ * settings change that touches none of them is not one of them.
+ */
+export const LibraryChangedSchema = z.object({ v: schemaVersion, revision: z.number().int().nonnegative() });
+export type LibraryChanged = z.infer<typeof LibraryChangedSchema>;
+
 export const CHANNEL_SCHEMAS = {
   [CHANNEL.transcriptIncrement]: TranscriptIncrementSchema,
   [CHANNEL.sessionSnapshot]: SessionSnapshotSchema,
@@ -225,6 +240,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.themeChanged]: ThemeChangedSchema,
   [CHANNEL.configChanged]: ConfigChangedSchema,
   [CHANNEL.acknowledgementPublish]: AcknowledgementPublishSchema,
+  [CHANNEL.libraryChanged]: LibraryChangedSchema,
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

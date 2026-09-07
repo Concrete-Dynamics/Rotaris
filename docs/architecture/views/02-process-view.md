@@ -35,7 +35,7 @@ flowchart LR
   RPR --> P
   RPE --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
-  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish<br/>theme:changed · config:changed" --> P
+  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>theme:changed · config:changed" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB
@@ -141,6 +141,23 @@ as the request of the same name → `checkpoint.namespaceDeleted {deleted, detai
 `ROTARIS_CAPTURE_SAVE_PATH` answers the export save dialogs with `;;`-separated paths consumed in order (the backup's
 `ROTARIS_CAPTURE_BACKUP_TO` is unchanged).
 
+**The Library's saved prompts and its change channel (Part X; REQ-LIBRARY-105/137/138).** Renderer → main:
+`prompts.read`, `prompts.push {list, text}` and `prompts.take {list, index, remove}` — no session id, because the two
+lists belong to the workspace and outlive every session; `remove` is a REQUIRED boolean, not a defaulted one
+(REQ-LIBRARY-107 makes keeping and removing two deliberate acts), and `index` is the entry's position in the WHOLE
+list, newest first, so a filtered view acts on the row the user chose. Main relays each to the run host, which owns
+the store, exactly as it relays `timeline.append`: `prompts.read {workspaceId}` → `prompts.state {state}`,
+`prompts.push {workspaceId, list, text}` → `prompts.state`, `prompts.take {workspaceId, list, index, remove}` →
+`prompts.taken {text, state}`; a store failure comes back `refused` and main raises REQ-LIBRARY-138's persistent
+notice "Could not save prompt history" while the window keeps its lists in memory. **A ninth channel,
+`library:changed`** (main → every live window), carries `{v, revision}` and nothing else: a counter cannot be
+overtaken, so a burst settles with the last write visible (REQ-LIBRARY-105), and a window off the Library sees the
+move and re-reads when it is next shown. Main bumps it for exactly the four things REQ-LIBRARY-105 closes a
+"library change" to (`LIBRARY_CHANGES` in `contracts/src/library.ts`) — Part X writes the two prompt members — and
+`bump` takes a member of that union, so a settings write has no way to reach it. A `prompts.take` that KEPT the
+entry writes nothing and bumps nothing. `prefs.set` gains `panels/library` (REQ-SHELL-069, no arrangement suffix).
+Verification seam: `ROTARIS_CAPTURE_PROMPTS="history>>text@ms;;stash>>{n}text @ms"` pushes through the real command.
+
 **MCP (Part S; ADR-0033/0034's first execution).** Renderer → main: `mcp.list` (every configured server: name, type, the
 masked line, origin, enabled, overridden, available, unresolved placeholders, expected env keys), `mcp.probe {name?}` (one
 server per request so the category probes sequentially under main's bound), `mcp.setEnabled {name, enabled}` (the session
@@ -179,14 +196,16 @@ terminate then tree-killed after 5 s on cancel or timeout; the category polls th
 **Main → renderer (`CHANNEL`).** `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own
 per-stream sequence; `notice:current` is the single notice or null; `acknowledgement:publish` (channel 8, Part V) is a transient for ONE
-window's own stack — the stack is per window and is not the notice store (ADR-0049); `theme:changed` and `config:changed`
+window's own stack — the stack is per window and is not the notice store (ADR-0049); `library:changed` (channel 9,
+Part X) is the library revision, to every live window; `theme:changed` and `config:changed`
 repaint or repopulate every live window.
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
 `config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown`, `hooks.*`, `playbooks.catalogue`,
-`checkpoint.list/recordSafety/recordRestore` (Part P), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
+`checkpoint.list/recordSafety/recordRestore` (Part P), `prompts.read/push/take` (Part X, session-less like
+`session.list` — REQ-LIBRARY-137/138), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
 `severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer
 that records it and never travels on the wire), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
 `run.result`, `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields

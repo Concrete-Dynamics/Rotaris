@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { claimAsideName, CURRENT_SCHEMA_VERSION, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
+import { claimAsideName, CURRENT_SCHEMA_VERSION, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -474,9 +474,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v10; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v11; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(10);
+    expect(CURRENT_SCHEMA_VERSION).toBe(11);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -656,5 +656,95 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     expect(seen).toEqual([1, 2, 3]);
     r.db.close();
     forgetSpelling(r.dir);
+  });
+});
+
+describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ-CHAT-045)', () => {
+  function open(n: string) {
+    const id = mintWorkspaceId(`000000000000000000000000000000${n}`);
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    return { r, dal: new StoreDal(r.db) };
+  }
+
+  it('front-inserts, suppresses only ADJACENT duplicates, and refuses a blank entry (REQ-LIBRARY-137/139)', () => {
+    const { r, dal } = open('60');
+    expect(dal.readPrompts()).toEqual({ history: [], stash: [] });
+    expect(dal.pushPrompt('history', 'first', 't1').added).toBe(true);
+    // Equal to the current front item: not added, and the list does not move.
+    expect(dal.pushPrompt('history', 'first', 't2').added).toBe(false);
+    expect(dal.pushPrompt('history', 'second', 't3').added).toBe(true);
+    // NOT adjacent any more: the same text is added again, which is the whole of "only adjacent".
+    expect(dal.pushPrompt('history', 'first', 't4').added).toBe(true);
+    expect(dal.readPrompts().history).toEqual(['first', 'second', 'first']);
+    // REQ-LIBRARY-139: blank entries are discarded, so a blank push is not a change to either list.
+    expect(dal.pushPrompt('stash', '   ', 't5').added).toBe(false);
+    expect(dal.readPrompts().stash).toEqual([]);
+    // The two lists are independent: a write to one does not touch the other (REQ-LIBRARY-138).
+    expect(dal.pushPrompt('stash', 'kept', 't6').lists).toEqual({ history: ['first', 'second', 'first'], stash: ['kept'] });
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('enforces REQ-LIBRARY-139\'s caps on SAVE and again on LOAD, silently, oldest first', () => {
+    const { r, dal } = open('61');
+    for (let n = 1; n <= 201; n += 1) dal.pushPrompt('history', `prompt ${n}`, 't');
+    const saved = dal.readPrompts().history;
+    expect(saved).toHaveLength(PROMPT_CAPS.history);
+    expect(saved[0]).toBe('prompt 201');
+    expect(saved.at(-1)).toBe('prompt 2');
+    expect(saved).not.toContain('prompt 1');
+    expect((r.db.prepare('SELECT count(*) AS c FROM prompt_history').get() as { c: number }).c).toBe(200);
+    // The LOAD half, over rows this build did not write: 105 stash rows planted directly, plus two blank ones.
+    for (let n = 1; n <= 105; n += 1) r.db.prepare('INSERT INTO prompt_stash (text, at) VALUES (?, ?)').run(`stashed ${n}`, 't');
+    r.db.prepare("INSERT INTO prompt_stash (text, at) VALUES ('   ', 't')").run();
+    const loaded = dal.readPrompts().stash;
+    expect(loaded).toHaveLength(PROMPT_CAPS.stash);
+    expect(loaded[0]).toBe('stashed 105');
+    expect(loaded).not.toContain('   ');
+    // The trim is a WRITE, so the next load has nothing left to discard — the store agrees with the surface.
+    expect((r.db.prepare('SELECT count(*) AS c FROM prompt_stash').get() as { c: number }).c).toBe(100);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('takes by the entry\'s ORIGINAL index and answers an out-of-range index with the empty string (REQ-LIBRARY-107/137)', () => {
+    const { r, dal } = open('62');
+    for (const text of ['alpha', 'beta', 'alpha two', 'gamma']) dal.pushPrompt('stash', text, 't');
+    // Newest first: gamma(0), alpha two(1), beta(2), alpha(3). A filter on "alpha" would show indexes 1 and 3.
+    expect(dal.readPrompts().stash).toEqual(['gamma', 'alpha two', 'beta', 'alpha']);
+    expect(dal.promptAt('stash', 1)).toBe('alpha two');
+    // "Use" keeps the entry; only "Use and remove" removes it.
+    expect(dal.readPrompts().stash).toHaveLength(4);
+    expect(dal.popPrompt('stash', 1)).toBe('alpha two');
+    expect(dal.readPrompts().stash).toEqual(['gamma', 'beta', 'alpha']);
+    // REQ-LIBRARY-137, word for word: "an out-of-range index returns an empty string without error".
+    expect(dal.popPrompt('stash', 99)).toBe('');
+    expect(dal.popPrompt('stash', -1)).toBe('');
+    expect(dal.promptAt('stash', 99)).toBe('');
+    expect(dal.removePrompt('stash', 99)).toBe(false);
+    expect(dal.readPrompts().stash).toEqual(['gamma', 'beta', 'alpha']);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('reads both lists newest-first from the primary key, with no sort (spike 8\'s rule)', () => {
+    const { r, dal } = open('63');
+    dal.pushPrompt('history', 'one', 't');
+    dal.pushPrompt('stash', 'two', 't');
+    for (const table of ['prompt_history', 'prompt_stash']) {
+      const plan = (r.db.prepare(`EXPLAIN QUERY PLAN SELECT text FROM ${table} ORDER BY seq DESC LIMIT 200`).all() as { detail: string }[]).map((p) => p.detail).join(' | ');
+      // The order is the b-tree's, read backwards; a TEMP B-TREE here would mean the declared shape bought nothing.
+      expect(plan, table).not.toMatch(/TEMP B-TREE/);
+      const take = (r.db.prepare(`EXPLAIN QUERY PLAN SELECT seq, text FROM ${table} ORDER BY seq DESC LIMIT 1 OFFSET 3`).all() as { detail: string }[]).map((p) => p.detail).join(' | ');
+      expect(take, table).not.toMatch(/TEMP B-TREE/);
+    }
+    // The prompt tables are workspace-scoped: no session row exists here at all, and neither table names one.
+    expect((r.db.prepare('SELECT count(*) AS c FROM sessions').get() as { c: number }).c).toBe(0);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('is v11, and the migration list is append-only with nothing renumbered', () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(11);
   });
 });

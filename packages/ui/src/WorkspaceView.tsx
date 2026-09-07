@@ -54,6 +54,25 @@ export interface WorkspaceViewProps {
   readonly onSelectAgent?: ((id: string | null, source?: 'click' | 'key') => void) | undefined;
   /** REQ-SHELL-072/073, REQ-MONITOR-137: open or raise the persona window; `focusSteer` when the inspector's Steer asked for it. */
   readonly onOpenPersona?: ((agent: AgentRecord, focusSteer: boolean) => void) | undefined;
+  /** REQ-LIBRARY-140 / REQ-CHAT-042 (Part X): the composer's Stash control — pushes the TRIMMED composer text and clears the composer. */
+  readonly onStash?: ((text: string) => void) | undefined;
+  /** REQ-LIBRARY-140: the transcript toolbar's "Apply stash (n)"; the count is live, and the control is drawn only where an opener exists. */
+  readonly stashCount?: number | undefined;
+  readonly onOpenStash?: (() => void) | undefined;
+  /** REQ-LIBRARY-137: a prompt that was sent or queued is front-inserted into the history; nothing else is. */
+  readonly onRecordPrompt?: ((text: string) => void) | undefined;
+}
+
+/** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
+export function applyStashLabel(count: number): string {
+  return `Apply stash (${count})`;
+}
+/**
+ * REQ-CHAT-044: an entry going into a non-empty composer is appended after one blank line; into an empty one it
+ * replaces the text. Pure, so the rule is checkable without a DOM.
+ */
+export function composeWithStashed(current: string, incoming: string): string {
+  return current === '' ? incoming : `${current}\n\n${incoming}`;
 }
 
 /** REQ-MONITOR-051: below 1180 px the inspector and the agents panel are overlay drawers, one open at a time. */
@@ -287,7 +306,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona }: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt }: WorkspaceViewProps) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -317,7 +336,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       // REQ-CHAT-035: during a run an ordinary submission is queued for the running session.
       const q = await onQueue(value);
       setBusy(false);
-      if (q.ok) { setError(null); setStatus('Message queued for the next iteration.'); }
+      // REQ-LIBRARY-137: "each sent or queued prompt and nothing else" — a queue that was refused queued nothing.
+      if (q.ok) { setError(null); setStatus('Message queued for the next iteration.'); onRecordPrompt?.(value); }
       else { setText(value); setError('Message could not be queued because the run is no longer active.'); }
       area.current?.focus();
       return;
@@ -331,7 +351,19 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       setError(r.reason);
     } else {
       setError(null);
+      // REQ-LIBRARY-137: front-inserted once the prompt was actually sent; a refused submission sent nothing.
+      onRecordPrompt?.(value);
     }
+    area.current?.focus();
+  };
+
+  /** REQ-CHAT-042 / REQ-LIBRARY-140: the trimmed text onto the top of the stash, and the composer cleared. */
+  const stash = () => {
+    if (!onStash) return;
+    const trimmed = text.trim();
+    if (trimmed === '') { area.current?.focus(); return; }
+    onStash(trimmed);
+    setText('');
     area.current?.focus();
   };
 
@@ -375,7 +407,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   // REQ-SHELL-049/050 (Part W): Ctrl+Return is the window-wide fallback submit — the registration says whether the send control is enabled.
   const registerComposer = useShellState((st) => st.registerComposer);
   const registerOverlay = useShellState((st) => st.registerOverlay);
-  useEffect(() => { registerComposer({ submit: () => { void submit(); }, enabled: !busy }); });
+  useEffect(() => {
+    registerComposer({
+      submit: () => { void submit(); },
+      enabled: !busy,
+      // REQ-LIBRARY-107 through REQ-CHAT-044: append after one blank line into a non-empty composer, replace an
+      // empty one, and take focus. The Library and the stash dialog reach the composer through this and nothing else.
+      setText: (incoming: string) => { setText((current) => composeWithStashed(current, incoming)); requestAnimationFrame(() => area.current?.focus()); },
+    });
+  });
   useEffect(() => () => registerComposer(null), [registerComposer]);
   // REQ-SHELL-055 (2): window-level Escape on this view closes both compact overlay drawers; nothing to close is nothing done.
   const drawerOpen = drawer !== null;
@@ -422,6 +462,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         </aside>
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
+        {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
+        {onOpenStash && (
+          <div className="transcript__toolbar" role="toolbar" aria-label="Transcript actions">
+            <button type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
+              data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</button>
+          </div>
+        )}
         {intentStatusText(session?.intent ?? null) && (
           <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase}>{intentStatusText(session?.intent ?? null)}</div>
         )}
@@ -472,6 +519,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               )}
             </div>
           )}
+          {/* REQ-LIBRARY-140 / REQ-CHAT-042: a ghost control beside the composer; it stashes whatever is typed, run or no run. */}
+          {onStash && <button type="button" className="btn btn-ghost" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}>Stash</button>}
           {runActive && onSteer && <button type="button" className="btn btn-secondary" onClick={() => setSteering({ id: 'run', name: 'the run' })}>Steer</button>}
           {runActive && onPause && <button type="button" className="btn btn-secondary" disabled={pausePending || session?.executionStatus === 'pausing'} onClick={() => { void pause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</button>}
           {runActive ? (

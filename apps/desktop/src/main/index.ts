@@ -3,6 +3,7 @@
 import './sentinel.js';
 import { PersonaWindows } from './windows.js';
 import { createNoticeStore } from './notices.js';
+import { createLibraryRevision } from './library.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
@@ -215,6 +216,18 @@ async function main(): Promise<void> {
     },
     log,
     focusedSession: () => followedSessionId,
+  });
+  /**
+   * Part X (REQ-LIBRARY-105): the library revision, and the ONE place it is broadcast from. `bump` takes a member of
+   * REQ-LIBRARY-105's closed four, so a settings write has no way to reach it (`main/library.ts` explains why the
+   * argument is a type and not a convention). Every live window is told, whichever view it is showing, because "a
+   * change that arrives while the Library is off screen MUST be visible the next time the Library is shown".
+   */
+  const libraryRevision = createLibraryRevision((revision, change) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(CHANNEL.libraryChanged, { v: CONTRACT_SCHEMA_VERSION, revision });
+    }
+    log(`library change (${change}) → revision ${revision}`);
   });
   type Recovery = { label: string; action: NoticeAction }[];
   const raiseNotice = (severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => {
@@ -1016,7 +1029,7 @@ async function main(): Promise<void> {
       case 'prefs.get':
         return { ok: true, value: { value: preferences.read(req.key) } };
       case 'prefs.set': {
-        if (req.key === 'panels/overview' || req.key === 'panels/git') {
+        if (req.key === 'panels/overview' || req.key === 'panels/git' || req.key === 'panels/library') {
           if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
           await preferences.write(req.key, req.value);
         } else if (req.key === 'ui/reduced_motion') {
@@ -1216,6 +1229,31 @@ async function main(): Promise<void> {
         if (anyFile === null) return { ok: false, code: 'session.no-files', headline: 'This session has no files yet', detail: `No log, summary or artifact body has been written for it, so there is nothing to reveal in ${r.files.directory}.` };
         shell.showItemInFolder(anyFile);
         return { ok: true, value: { directory: r.files.directory, log: r.files.log, summary: r.files.summary, artifacts: r.files.artifacts } };
+      }
+      // ---- Part X: the saved prompts (REQ-LIBRARY-137/138). Relayed to the run host, which owns the store, exactly
+      // as `timeline.append` is; main adds the library revision (REQ-LIBRARY-105) and REQ-LIBRARY-138's failure notice. ----
+      case 'prompts.read':
+      case 'prompts.push':
+      case 'prompts.take': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its saved prompts' };
+        const r = await runHost.request(
+          req.kind === 'prompts.read' ? { kind: 'prompts.read', workspaceId: currentWorkspaceId }
+            : req.kind === 'prompts.push' ? { kind: 'prompts.push', workspaceId: currentWorkspaceId, list: req.list, text: req.text }
+              : { kind: 'prompts.take', workspaceId: currentWorkspaceId, list: req.list, index: req.index, remove: req.remove },
+          millis(10_000),
+        ).catch((e: Error) => ({ kind: 'refused' as const, code: 'prompts.ask', headline: 'Could not save prompt history', detail: e.message }));
+        if (r.kind !== 'prompts.state' && r.kind !== 'prompts.taken') {
+          // REQ-LIBRARY-138: the persistent notice, with the detail the requirement writes; the window's in-memory
+          // lists stay usable, which is what that detail promises, so nothing here clears anything.
+          if (req.kind !== 'prompts.read') raiseNotice('error', 'Could not save prompt history', 'Rotaris will keep prompts in memory for this window.');
+          return refusal(r, 'Could not save prompt history');
+        }
+        // REQ-LIBRARY-105: exactly a write that changed a list is a library change; a read is not one, and neither is
+        // a `take` that kept the entry (`remove: false` copies and stores nothing).
+        if (req.kind === 'prompts.push') libraryRevision.bump(req.list === 'history' ? 'prompt-history' : 'prompt-stash');
+        else if (req.kind === 'prompts.take' && req.remove) libraryRevision.bump(req.list === 'history' ? 'prompt-history' : 'prompt-stash');
+        return { ok: true, value: r.kind === 'prompts.state' ? { state: r.state } : { text: r.text, state: r.state } };
       }
       case 'session.resume': {
         if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };
@@ -1635,6 +1673,25 @@ async function main(): Promise<void> {
           ...(parsed['action'] === undefined ? {} : { action: parsed['action'] as { label: string; action: NoticeAction } }),
           ...(parsed['acknowledge'] === undefined ? {} : { acknowledge: parsed['acknowledge'] as { kind: 'info' | 'ok' | 'warn' | 'fail'; body?: string } }),
         }).then((r) => log(`capture: notices at ${step.at} report #${r.id} shown=${r.shown} → current ${notices.current()?.id ?? 'null'}`));
+      });
+    }
+    // Part X's seam (verification only). ROTARIS_CAPTURE_PROMPTS="history>>text@ms;;stash>>text@ms": one saved-prompt
+    // write through the REAL command — the same `prompts.push` a surface sends, so the store, the caps, the duplicate
+    // suppression and the library revision are all exercised rather than stood in for. `{n}` before the text pushes
+    // n entries with the index appended, which is how a proof reaches REQ-LIBRARY-139's cap without an env var per row.
+    for (const step of steps(process.env['ROTARIS_CAPTURE_PROMPTS'])) {
+      clocks.timers.after(millis(step.at), async () => {
+        const list = step.selector === 'stash' ? 'stash' : 'history';
+        const raw = step.arg ?? '';
+        const repeat = /^\{(\d+)\}(.*)$/.exec(raw);
+        const count = repeat ? Number(repeat[1]) : 1;
+        const template = repeat ? repeat[2] ?? '' : raw;
+        let failures = 0;
+        for (let n = 1; n <= count; n += 1) {
+          const outcome = await runCommand({ kind: 'prompts.push', list, text: repeat ? `${template}${n}` : template });
+          if (!outcome.ok) failures += 1;
+        }
+        log(`capture: prompts at ${step.at} ${list} ×${count} → ${failures === 0 ? 'ok' : `${failures} refused`}, revision ${libraryRevision.value}`);
       });
     }
     // ROTARIS_CAPTURE_TEXT_AT="needle@ms": whether the document's rendered text contains the needle — a keyword must be matched

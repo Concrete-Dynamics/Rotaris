@@ -376,6 +376,30 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE timeline ADD COLUMN severity TEXT NOT NULL DEFAULT 'info';
     `,
   },
+  {
+    to: 11,
+    // v11 lands with the Library's Prompts tab (Part X): the saved prompt history and the prompt stash
+    // (REQ-LIBRARY-137/138/139, REQ-CHAT-045). Workspace-scoped and NOT session-scoped — saved prompts outlive
+    // every session, so neither table references `sessions` and neither is touched by REQ-SESSION-166's delete.
+    //
+    // ONE ROW PER ENTRY, and the reason is a sentence of the requirement rather than a preference: REQ-LIBRARY-138
+    // says "persisting one entry MUST NOT require rewriting the others", and one JSON list per column would fail
+    // that sentence on every write. ADR-0042's earlier reading — both lists as one pretty-printed JSON document at
+    // `<workspace>/.rotaris/rotaris-prompts.json`, byte-exact — is FALSIFIED and kept beside this replacement:
+    // REQ-CHAT-045 was amended to defer the question to REQ-LIBRARY-138 and now fixes no path, no file name and no
+    // document format, and REQ-LIBRARY-138 names the workspace's durable store. The ADR carries the same note.
+    //
+    // `seq` is the entry's arrival order and its identity; the newest entry is the highest `seq`, so a
+    // front-insertion is an INSERT and nothing already stored moves. AUTOINCREMENT so a displaced `seq` is never
+    // handed to a later entry — REQ-LIBRARY-139's caps delete the lowest rows, and a reused number would make
+    // "newest first" ambiguous after a trim. NO index: both readers are `ORDER BY seq DESC LIMIT <cap>` over one
+    // small table, which the INTEGER PRIMARY KEY serves in reverse with no sort (a plan `store.test.ts` asserts,
+    // spike 8's rule).
+    sql: `
+      CREATE TABLE prompt_history ( seq INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, at TEXT NOT NULL );
+      CREATE TABLE prompt_stash   ( seq INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, at TEXT NOT NULL );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

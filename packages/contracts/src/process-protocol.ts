@@ -11,6 +11,7 @@ import { ApprovalPayloadSchema } from './tools.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
+import { PromptListSchema, PromptStateSchema } from './library.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -131,6 +132,18 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * entry, never by the process asking for one (schema v10 repaired the table that held neither).
    */
   z.object({ kind: z.literal('timeline.append'), workspaceId: z.string(), sessionId: z.string().min(1), name: z.string().min(1), actor: z.string().min(1), message: z.string(), metadata: z.record(z.string(), z.unknown()), severity: TimelineSeveritySchema.optional() }),
+  /**
+   * Part X — the saved prompts (REQ-LIBRARY-137/138/139). Session-LESS, like `session.list` and `mcp.list`:
+   * the lists belong to the workspace and outlive every session, so no session id appears and none is implied.
+   *
+   * `remove` is a REQUIRED boolean rather than a defaulted one. REQ-LIBRARY-107 makes keeping and removing
+   * two deliberate acts ("Whether the entry survives that MUST never be implicit"), and a default would let a
+   * call site take that choice silently. `index` is the entry's index in the WHOLE list, newest first, so a
+   * filtered view (REQ-LIBRARY-104) removes the row the user chose rather than the row at that screen position.
+   */
+  z.object({ kind: z.literal('prompts.read'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('prompts.push'), workspaceId: z.string(), list: PromptListSchema, text: z.string() }),
+  z.object({ kind: z.literal('prompts.take'), workspaceId: z.string(), list: PromptListSchema, index: z.number().int().nonnegative(), remove: z.boolean() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -354,6 +367,9 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.exported'), destination: z.string(), bytes: z.number().int().nonnegative(), documents: z.number().int().positive(), warnings: z.array(z.string()), elapsedMs: z.number().nonnegative() }),
   z.object({ kind: z.literal('session.files'), files: SessionFilesSchema }),
   z.object({ kind: z.literal('timeline.appended'), sessionId: z.string(), ordinal: z.number().int().nonnegative() }),
+  /** Part X: both saved-prompt lists as stored, newest first (REQ-LIBRARY-138); `prompts.taken` also carries the text the caller asked for. */
+  z.object({ kind: z.literal('prompts.state'), state: PromptStateSchema }),
+  z.object({ kind: z.literal('prompts.taken'), text: z.string(), state: PromptStateSchema }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

@@ -1,7 +1,7 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
-import { openStore, StoreDal, forgetSpelling, type StoreHandle } from '@rotaris/store';
+import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
 import { CATALOGUE, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
@@ -63,6 +63,10 @@ function reply(id: number, r: ProcessReply): void {
 }
 function log(message: string, level: 'info' | 'warn' = 'info'): void {
   send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level, message } });
+}
+/** Part X: the DAL's readonly lists as the wire carries them (REQ-LIBRARY-138); the schema wants mutable arrays. */
+function asState(lists: PromptLists): { history: string[]; stash: string[] } {
+  return { history: [...lists.history], stash: [...lists.stash] };
 }
 
 /**
@@ -525,6 +529,26 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
         return { kind: 'timeline.appended', sessionId: req.sessionId, ordinal };
       } catch (cause) {
         return { kind: 'refused', code: 'timeline.write', headline: 'The timeline entry could not be written', detail: String(cause) };
+      }
+    }
+    // Part X — the saved prompts (REQ-LIBRARY-137/138/139). Session-less, like `session.list`: the run host owns the
+    // workspace's store, and the two lists belong to the workspace rather than to any session. Every rule about an
+    // entry is the DAL's; this case is the boundary and nothing else. A store failure comes back as a refusal, which
+    // main turns into REQ-LIBRARY-138's persistent notice while the window keeps its lists in memory.
+    case 'prompts.read':
+    case 'prompts.push':
+    case 'prompts.take': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const dal = s.dal;
+      try {
+        if (req.kind === 'prompts.read') return { kind: 'prompts.state', state: asState(dal.readPrompts()) };
+        if (req.kind === 'prompts.push') return { kind: 'prompts.state', state: asState(dal.pushPrompt(req.list, req.text, toIsoUtc(clocks.wall.instant())).lists) };
+        // REQ-LIBRARY-107: `remove` decides, and it is the caller's explicit choice — "Use" keeps, "Use and remove" pops.
+        const text = req.remove ? dal.popPrompt(req.list, req.index) : dal.promptAt(req.list, req.index);
+        return { kind: 'prompts.taken', text, state: asState(dal.readPrompts()) };
+      } catch (cause) {
+        return { kind: 'refused', code: 'prompts.write', headline: 'Could not save prompt history', detail: String(cause) };
       }
     }
     case 'hooks.summary': {

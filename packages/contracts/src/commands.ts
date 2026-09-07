@@ -6,9 +6,16 @@ import { HOOK_AGENT_IDS } from './hooks.js';
 import { PROVIDER_DIALOG_MODES } from './providers.js';
 import { PaneLayoutSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
+import { PromptListSchema } from './library.js';
 
-/** REQ-SHELL-069: the pane-layout keys registered so far — the Overview's and the Git view's (REQ-GIT-153). */
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'interface/agentPopOut'] as const;
+/**
+ * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
+ * from Part X, the Library's. `panels/library` is REQ-SHELL-069's rule applied without a suffix: the key is the
+ * lower-cased view name of REQ-SHELL-023, and the `{view}.{arrangement}` form is for "a view carrying more than
+ * one independent multi-pane arrangement", which the Library does not — the Prompts tab's one split is the whole
+ * of it (REQ-LIBRARY-106), and the other two tabs declare no divider.
+ */
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'interface/agentPopOut'] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -149,6 +156,15 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.exportTrajectory'), sessionIds: z.array(z.string().min(1)).min(1) }),
   z.object({ kind: z.literal('session.openLog'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.revealFiles'), sessionId: z.string().min(1) }),
+  /**
+   * Part X — the saved prompts (REQ-LIBRARY-137/138), mirroring the run host's three requests; main relays each
+   * as it relays `timeline.append`, and bumps the library revision on a write (REQ-LIBRARY-105). No session id:
+   * the lists belong to the workspace and outlive every session (REQ-LIBRARY-138). `remove` is required, not
+   * defaulted — REQ-LIBRARY-107 makes keeping and removing two deliberate acts.
+   */
+  z.object({ kind: z.literal('prompts.read') }),
+  z.object({ kind: z.literal('prompts.push'), list: PromptListSchema, text: z.string() }),
+  z.object({ kind: z.literal('prompts.take'), list: PromptListSchema, index: z.number().int().nonnegative(), remove: z.boolean() }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];
@@ -164,5 +180,7 @@ export interface RendererBridge {
   readonly onAcknowledgement: (fn: (p: unknown) => void) => () => void;
   readonly onThemeChanged: (fn: (p: unknown) => void) => () => void;
   readonly onConfigChanged: (fn: (p: unknown) => void) => () => void;
+  /** Part X: the library-change broadcast (REQ-LIBRARY-105) — a revision counter, so a surface that is off screen re-reads when it is next shown. */
+  readonly onLibraryChanged: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

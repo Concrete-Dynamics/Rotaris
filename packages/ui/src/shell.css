@@ -610,3 +610,39 @@
 .persona-window__readings dd { margin: 0; }
 .persona-window__steer-box { width: 100%; box-sizing: border-box; }
 .persona-window__steer-actions { justify-content: flex-start; }
+
+/* ── The Library view (Part X; REQ-LIBRARY-102..107, REQ-LIBRARY-141) ──────────────────────────────
+   Structure from docs/spec, craft from docs/design/system: page header, Tabs, Card (accented for the
+   stash), Empty state. Every value a token; nothing here names a colour or a size the design does not. */
+.library { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); height: 100%; overflow: hidden; box-sizing: border-box; }
+.library__header { display: flex; align-items: baseline; gap: var(--rt-space-3, 12px); }
+.library__title { margin: 0; }
+.library__spacer { flex: 1; }
+.library__search { min-width: 320px; }
+.library__search .input { width: 100%; box-sizing: border-box; }
+.library__tabs { flex-wrap: wrap; }
+.library__tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; }
+.library__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.library__empty { flex: 1; }
+.library__placeholder { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+
+.library-prompts { display: grid; align-items: stretch; gap: 0; flex: 1; min-height: 0; }
+.library-prompts__divider { width: 8px; align-self: stretch; cursor: col-resize; border-radius: var(--rt-radius-md); }
+.library-prompts__divider:hover, .library-prompts__divider:focus-visible { background: var(--rt-hover); }
+.library-card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: 0; min-height: 0; overflow: hidden; }
+.library-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2, 8px); }
+.library-card__actions { display: flex; gap: var(--rt-space-2, 8px); justify-content: flex-end; }
+.library-list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.library-list__row { display: block; width: 100%; text-align: left; border: 0; background: transparent; font: inherit; color: inherit;
+  padding: 6px var(--rt-space-2, 8px); border-radius: var(--rt-radius-sm); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-list__row:hover { background: var(--rt-hover); }
+.library-list__row.is-selected { background: var(--rt-accent-tint-10); box-shadow: inset 3px 0 0 var(--rt-accent-300); }
+.library-list__row.is-disabled { cursor: default; color: var(--rt-text-tertiary); }
+.library-list__row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.library-list.is-disabled .library-list__row:hover { background: transparent; }
+.stash-dialog { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
+.stash-dialog__list { max-height: 240px; }
+
+/* REQ-LIBRARY-140: the transcript toolbar — one row above the rows, holding the stash opener. */
+.transcript__toolbar { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding-bottom: var(--rt-space-2, 8px); }

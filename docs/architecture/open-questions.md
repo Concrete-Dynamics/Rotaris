@@ -2188,6 +2188,22 @@ The **unscoped** half is not implemented in either reading. `resolveQueueOwnersh
 `unscoped` verdict that every route refuses, naming this question, so a future route meets a stated refusal
 rather than a foreign-key error.
 
+**OQ-52 — May a delegated child ask the user a structured question?** *(No ADR; raised against `REQ-TOOLS-002` by
+structured questions' first execution, Part AC, 2026-09-07, and entered here by the manager — Part AC recorded it
+in `children/personas.ts` and ADR-0016's note but not in this register, which is where a question has to be to be
+answered.)*
+
+The mechanism supports it: the wait registry is per tool port, and a port is one conversation, so a child could
+hold its own pending prompt without disturbing the run's. Two things stop it being a decision the implementation
+may take. **No requirement says which personas may ask** — `ask_questions` is declared by the orchestrator alone
+in this build, and that was chosen to satisfy REQ-CHAT-094's one-pending-prompt-per-conversation rule rather than
+because a requirement named the orchestrator. And **REQ-CHAT-051 defines ONE question trailer**: "a single question
+row" attributed to the agent that asked. Two children asking at once has no defined presentation, and inventing a
+second trailer would extend a vocabulary REQ-CHAT-046 closes.
+
+Until it is answered the tool stays on the orchestrator, which is the narrow reading and refuses nothing a
+requirement grants.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

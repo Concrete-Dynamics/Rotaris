@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, type WorkspaceId } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { claimAsideName, CURRENT_SCHEMA_VERSION, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
+import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -474,9 +474,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v11; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v12; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(11);
+    expect(CURRENT_SCHEMA_VERSION).toBe(12);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -618,13 +618,20 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.enqueueSlot(sid, 'm', 'bg_00000001');
       dal.insertQueuedPrompt(sid, 'q1', 'later', 't');
       dal.insertCheckpoint({ session_id: sid, sequence: 1, ref: 'refs/rotaris/checkpoints/x/1', commit_id: 'c', created_at: 't', iteration: 1, child_name: '', files: '[]', kind: 'iteration' });
+      // Part Y (v12): the artifact record goes with its session, so its body file is the only thing left to remove.
+      dal.insertArtifact({
+        session_id: raw, id: `art_${raw.slice(-6)}A`, slug: `slug-${raw.toLowerCase()}`, title: 't', kind: 'agent_published', source_task_id: null, canonical_name: null, source_persona: 'p',
+        status: 'published', summary: 's', key_findings: 'k', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', tags: '[]', supersedes: null, superseded_by: null,
+        created_by: 'a', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal', created_at: 't', edited_at: null, body_file: 'artifact-x.md',
+      });
       return sid;
     };
     const gone = plant('S-gone');
     const kept = plant('S-kept');
     const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all() as { name: string }[]).map((t) => t.name).sort();
-    // Every table that carries a session_id is a dependant of the session row: thirteen today plus `sessions` itself.
-    expect(tables).toEqual(['checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
+    // Every table that carries a session_id is a dependant of the session row: fourteen today (Part Y's `artifacts`
+    // among them) plus `sessions` itself.
+    expect(tables).toEqual(['artifacts', 'checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
     const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
     for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
     // The delete runs on the RUN HOST's kind of connection — openStore on the resolved file, no migrateStore — which is
@@ -744,7 +751,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v11, and the migration list is append-only with nothing renumbered', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(11);
+  it('is v12, and the migration list is append-only with nothing renumbered', () => {
+    // Part X reserved v11 and Part Y v12 before either was written; the ladder is asserted whole rather than at
+    // its top, so a later part that renumbers an earlier entry fails here and not in a migration on a user's disk.
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(12);
   });
 });

@@ -26,6 +26,7 @@ packages/kernel/src/generated/
 .notice-proof/
 .palette-proof/
 .mission-proof/
+.artifacts-proof/
 .code-intel-proof/
 .library-proof/
 # ADR-0035 (Part T): the bundled code-intelligence runtime is built by `pnpm code-intel:bundle` from committed pins, never committed.

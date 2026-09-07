@@ -400,7 +400,8 @@ plantSession('F-moved', 'completed', { worktree: JSON.stringify({ worktree_path:
 withDb((db) => db.prepare("INSERT INTO checkpoints (session_id, sequence, ref, commit_id, created_at, iteration, child_name, files, kind) VALUES ('F-moved', 1, 'refs/rotaris/checkpoints/F-moved/1', ?, 't', 1, '', '[]', 'iteration')").run(head));
 const filesA = join(dirname(dbFile()), 'sessions', A);
 const tables = tablesWithSession();
-expect(tables.length === 14, `tables carrying session_id: ${tables.join(', ')}`);
+// Part Y (v12) added `artifacts`: fifteen tables carry a session_id, and the cascade takes each of them.
+expect(tables.length === 15, `tables carrying session_id: ${tables.join(', ')}`);
 const plantedBefore = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
 expect(refsOf(workspace, A).length === 2, `A's refs before: ${JSON.stringify(refsOf(workspace, A))}`);
 const del = launch('delete', {

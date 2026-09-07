@@ -400,6 +400,65 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE TABLE prompt_stash   ( seq INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL, at TEXT NOT NULL );
     `,
   },
+  {
+    to: 12,
+    // v12 lands with the session artifact store (Part Y; REQ-LIBRARY-087/088, REQ-ORCH-149). v11 is the saved-prompt
+    // tables' (Part X); the list is append-only and the two numbers were reserved before either was written.
+    //
+    // REQ-LIBRARY-087 asks for "one full record per artifact together with a metadata entry in an index ordered by
+    // creation time … written together as one indivisible step". The falsified reading, kept beside its replacement:
+    // that sentence was written when artifacts were files, and reads there as a record document plus a separate index
+    // document whose two writes have to be made atomic by hand. On rows it is ONE table row and its DECLARED index,
+    // maintained by the engine inside the same transaction as the insert — so "no reader ever finds a record without
+    // its index entry" is a property of the store rather than of a caller's discipline, and there is no second
+    // document to keep in step. `artifacts_by_created` IS that index, ordered by creation time as the requirement
+    // words it; `store.test.ts` asserts the listing's query plan uses it (spike 8's rule).
+    //
+    // The BODY is never a column (REQ-LIBRARY-087, REQ-SESSION-002): `body_file` holds the file's NAME, not a path,
+    // because the directory is resolved from the store's own location at read time — REQ-SESSION-198 keeps the store
+    // machine-local and a stored absolute path would not survive the profile it lives in moving.
+    //
+    // `slug` is UNIQUE per session, so REQ-LIBRARY-088's `-2`, `-3` uniquification is enforced where the rows are
+    // rather than trusted to whoever mints one. `status` carries NO check constraint: REQ-LIBRARY-088 forms that set
+    // from REQ-ORCH-112's plus `published`, and a CHECK would be a second copy that stops widening when that
+    // requirement widens. Validation lives with the vocabulary (`contracts/artifacts.ts`) and hydration skips a row
+    // that fails it (REQ-LIBRARY-091).
+    sql: `
+      CREATE TABLE artifacts (
+        session_id        TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        id                TEXT NOT NULL,
+        slug              TEXT NOT NULL,
+        title             TEXT NOT NULL,
+        kind              TEXT NOT NULL,
+        source_task_id    TEXT,
+        canonical_name    TEXT,
+        source_persona    TEXT,
+        status            TEXT NOT NULL,
+        summary           TEXT NOT NULL DEFAULT '',
+        key_findings      TEXT NOT NULL DEFAULT '',
+        highlight_paths   TEXT NOT NULL DEFAULT '[]',
+        snippets          TEXT NOT NULL DEFAULT '[]',
+        edited_files      TEXT NOT NULL DEFAULT '[]',
+        created_files     TEXT NOT NULL DEFAULT '[]',
+        tags              TEXT NOT NULL DEFAULT '[]',
+        supersedes        TEXT,
+        superseded_by     TEXT,
+        created_by        TEXT NOT NULL DEFAULT '',
+        consumed_by       TEXT NOT NULL DEFAULT '[]',
+        timeline_event_id TEXT,
+        conversation_id   TEXT,
+        importance        TEXT NOT NULL DEFAULT 'normal',
+        created_at        TEXT NOT NULL,
+        edited_at         TEXT,
+        body_file         TEXT NOT NULL,
+        PRIMARY KEY (session_id, id),
+        UNIQUE (session_id, slug)
+      );
+      -- REQ-LIBRARY-087's index: the metadata entry, ordered by creation time. REQ-LIBRARY-096 sorts ascending by it
+      -- and REQ-LIBRARY-097 reads the same order reversed; \`id\` last so a tie is broken and the order is total.
+      CREATE INDEX artifacts_by_created ON artifacts(session_id, created_at, id);
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

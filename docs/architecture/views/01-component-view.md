@@ -18,14 +18,14 @@ flowchart TB
   end
 
   subgraph surface["Surface packages"]
-    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>theme, motion, shell-state"]
+    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog,<br/>ArtifactsTab, ArtifactInspector),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>markdown (ADR-0051: parser, tree renderer, parse cache),<br/>theme, motion, shell-state"]
     uicore["ui-core<br/>replica (the transcript mirror),<br/>notice store,<br/>acknowledgement stack (one per window)"]
     shell["shell<br/>ProcessLink, UpdateRelay"]
   end
 
   subgraph domain["Domain packages"]
-    engine["engine<br/>Sessions, SessionWriter, ProjectionOwner,<br/>Run, turn loop, todo, supervisor,<br/>children (ledger, scheduler, orchestration, personas),<br/>intent classifier, playbooks, event bus"]
-    tools["agent-tools<br/>registry, policy, gate, approvals,<br/>egress, tools/*, terminal (node-pty)"]
+    engine["engine<br/>Sessions, SessionWriter, ProjectionOwner,<br/>Run, turn loop, todo, supervisor,<br/>children (ledger, scheduler, orchestration, personas),<br/>artifacts (store, sidecar, context blocks, tool port),<br/>intent classifier, playbooks, event bus"]
+    tools["agent-tools<br/>registry, policy, gate, approvals,<br/>egress, tools/* (files, search, todo, fetch,<br/>delegation, artifacts), terminal (node-pty)"]
     hooks["hooks<br/>matcher, runner, trust, policy,<br/>external import, HookEngine"]
     providers["providers<br/>catalogue (six frozen records), credential store<br/>(protection adapter, adjacent lock), discovery,<br/>slot assignment, project_settings.yaml, ProviderService"]
     workspace["workspace<br/>backup, restore"]
@@ -35,7 +35,7 @@ flowchart TB
   subgraph foundation["Foundation packages"]
     config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot"]
     model["model<br/>ports, DefaultAgentBackend,<br/>AiSdkModelClient, ScriptedModelClient"]
-    store["store<br/>schema (v11), StoreDal, open/migrate,<br/>lock, rings, saved prompts"]
+    store["store<br/>schema (v12), StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
     contracts["contracts<br/>channels, commands, control, process protocol,<br/>status, tools, children, hooks, intent, roles,<br/>config projections, theme data"]
     kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, generated requirement symbols"]
@@ -121,6 +121,8 @@ Edges worth knowing the reason for:
 | Process links, the update relay | `shell` | main |
 | Preferences, theme data | `platform` (store), `contracts/theme` (data), `ui/theme.ts` (projection) | main, renderer |
 | Views and dialogs | `ui`, `ui-core` | renderer |
+| The session artifact store: records, documents, the two context blocks, the tool port | `engine/src/artifacts/` (+ `store` v12, `contracts/artifacts.ts`) | run-host (`Sessions` builds one per live session; `run-host/tools.ts` binds the three executors) |
+| Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the inspector today; the transcript later — nothing renders Markdown a second way) |
 
 ### `mcp` (Part S, 2026-09-05)
 

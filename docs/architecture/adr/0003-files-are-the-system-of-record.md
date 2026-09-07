@@ -317,3 +317,36 @@ the record's transaction; the export writes nothing under it.
 **Not built, said so:** the palette entries of `REQ-SHELL-048` (no palette exists; the browser's row menu is the one
 surface), the artifact bodies, and the improvement library's exclusion from the delete (`REQ-SESSION-007` — there is no
 library to exclude).
+
+## Further execution — 2026-09-07, the artifact bodies (Part Y)
+
+The last line of the note above said the artifact bodies were not built. They are now, and this is where they went.
+
+**One file per artifact, named flat.** `REQ-LIBRARY-087` keeps each artifact's Markdown document "on disk as a file the
+record references and never holds inside itself", and `REQ-SESSION-002` is "the single definition of where those files
+live and of what may live there" — a place holding "exactly three kinds of file and nothing else", the set "closed
+deliberately". A subdirectory is not one of those three kinds, and nothing in that requirement makes a directory a file,
+so the bodies are named **`artifact-<id>.md` beside `summary.md` and `session.log`** rather than under `artifacts/`. The
+record carries the file's NAME, never a path: the store is machine-local (`REQ-SESSION-198`) and a stored absolute path
+would not survive the per-user directory it lives in moving.
+
+**A defect this found, in Part U's placeholder.** `run-host/session-actions.ts` held `SESSION_ARTIFACTS_DIR =
+'artifacts'` and reported the per-session files as `{ log, summary, artifacts: <that directory, if present> }`. Under the
+flat naming that directory never exists, so "Reveal the session's files" would have reported *no artifact body* for a
+session holding several, and `REQ-SESSION-191`'s answer would have been wrong in exactly the case it exists for. It is
+replaced by `SESSION_ARTIFACT_PREFIX = 'artifact-'` and a scan naming one body that exists; the falsified constant's
+reason is kept beside its replacement in that file. The proof asserts no `artifacts` directory is created.
+
+**What is on disk is the record, readable without this application.** The file is `REQ-LIBRARY-090`'s rendering — YAML
+frontmatter, the title, then the present sections in the fixed order, each omitted entirely when empty — and the artifacts
+proof reads one **in a separate node process with a stock YAML parser and none of this product's code loaded**, checking
+the frontmatter against the row, the title, and that the sections are a subset of the six in the stated order.
+
+**The tension this execution could not resolve, raised rather than papered over.** `REQ-LIBRARY-087` fixes the on-disk
+document as that rendering and forbids the record holding the body inside itself; `REQ-LIBRARY-093` says a publish's
+`body_markdown` is the submitted body unchanged and its `key_findings` is that same body. Both cannot be literally true
+of one stored thing without a second storage location, which neither requirement provides for. The decision taken: **the
+document is the record's `body_markdown`**, and the submitted body survives unchanged inside it as the Key Findings
+section and in the `key_findings` column. `REQ-LIBRARY-099`'s section filter therefore reads the record's columns and
+never parses the document; `REQ-LIBRARY-094`'s edit overwrites the document and nothing else; `REQ-LIBRARY-134`'s
+fallback for an empty stored body is that same rendering. Open question, not a settled reading.

@@ -50,6 +50,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start. */
   z.object({ kind: z.literal('session.newId') }),
   z.object({ kind: z.literal('session.list') }),
+  /**
+   * Part Y — the Library's Artifacts tab and its inspector (REQ-LIBRARY-108/131..136). Main relays each to the
+   * run host, which owns the store and the session's files, exactly as it relays `timeline.append`.
+   */
+  z.object({ kind: z.literal('artifacts.list') }),
+  z.object({ kind: z.literal('artifacts.body'), ref: z.string().min(1) }),
+  z.object({ kind: z.literal('artifacts.save'), ref: z.string().min(1), body: z.string() }),
   /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */
   z.object({ kind: z.literal('repository.read') }),
   /** REQ-GIT-105: the Git view's refresh, relayed to the workspace service; a missing Git raises REQ-GIT-104's notice in main. */

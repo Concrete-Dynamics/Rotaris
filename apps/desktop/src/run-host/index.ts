@@ -2,7 +2,7 @@ import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSc
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
-import { CATALOGUE, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
+import { CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
 import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
@@ -175,6 +175,27 @@ function scriptedClient(c: Clocks): ModelClient {
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
         return;
+      }
+      // artifact:<tool>[:<key>] — Part Y's proof: one of the three artifact tools, with arguments taken from
+      // ROTARIS_SCRIPT_ARTIFACT_ARGS by key (a JSON map) or the defaults below. Verification only.
+      const artifactStep = /^artifact:(artifact_write|artifact_read|artifact_list)(?::([\w-]+))?$/.exec(step);
+      if (artifactStep) {
+        const toolName = artifactStep[1]!;
+        if ((req.tools ?? []).some((t) => t.name === toolName)) {
+          let scripted: Record<string, unknown> = {};
+          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_ARTIFACT_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          const key = artifactStep[2] ?? toolName;
+          const fallback = toolName === 'artifact_write'
+            ? { slug: 'scripted-plan', title: 'The scripted plan', body: 'The first line of the scripted body.\n\nA second paragraph with `code` and **bold**.', tags: ['research'] }
+            : toolName === 'artifact_read' ? { id_or_slug: 'scripted-plan' } : {};
+          const args = key in scripted ? scripted[key] : fallback;
+          yield ok<StreamPart>({ kind: 'text', delta: `Calling ${toolName}. ` });
+          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: toolName, argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+          yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+          return;
+        }
+        log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
       }
       // mcp:<server>.<tool> — the MCP proof's step: the callable name after `.` (a renamed tool by its replacement name); fixed arguments per tool.
       const mcpStep = /^mcp:([^.]+)\.(.+)$/.exec(step);
@@ -550,6 +571,57 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       } catch (cause) {
         return { kind: 'refused', code: 'prompts.write', headline: 'Could not save prompt history', detail: String(cause) };
       }
+    }
+    // Part Y — the Library's Artifacts tab (REQ-LIBRARY-108/131..136). The store and the session's files are this
+    // process's (ADR-0002, ADR-0058); the tab reads the LOADED session and nothing else (REQ-LIBRARY-136).
+    case 'artifacts.list': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const loaded = sessions.loadedSessionId();
+      const store = loaded ? sessions.artifactsOf(loaded) : null;
+      if (!loaded || !store) return { kind: 'artifacts.state', state: { sessionId: null, artifacts: [], warnings: [] } };
+      const hydrated = store.hydrate();
+      const now = clocks.wall.instant();
+      return {
+        kind: 'artifacts.state',
+        state: {
+          sessionId: loaded,
+          // REQ-LIBRARY-136: superseded artifacts are hidden from the Library table.
+          artifacts: hydrated.records.filter((r) => r.supersededBy === null).map((r) => ({
+            id: r.id, slug: r.slug, title: r.title, kind: r.kind, status: r.status,
+            persona: r.sourcePersona ?? '', producer: r.createdBy || r.canonicalName || '', summary: r.summary,
+            createdAt: r.createdAt, createdLabel: relativeTime(r.createdAt, now), edited: r.editedAt !== null,
+            tags: [...r.tags], importance: r.importance, supersededBy: r.supersededBy,
+          })),
+          warnings: [...hydrated.warnings],
+        },
+      };
+    }
+    case 'artifacts.body': {
+      const loaded = sessions.loadedSessionId();
+      const store = loaded ? sessions.artifactsOf(loaded) : null;
+      // REQ-LIBRARY-136: opening an artifact from the Library requires it to belong to the loaded session.
+      if (!store) return { kind: 'refused', code: 'artifacts.no-session', headline: 'Artifact not found in the loaded session.' };
+      const record = store.lookup(req.ref);
+      if (!record) return { kind: 'refused', code: 'artifacts.unknown', headline: `Unknown artifact: '${req.ref}'` };
+      const body = store.body(record.id);
+      // REQ-LIBRARY-134: a load failure leaves the editor read-only with the stated message; the record stays listed.
+      if (!body.ok) return { kind: 'refused', code: 'artifacts.body', headline: body.error.reason };
+      return {
+        kind: 'artifacts.body', id: record.id, slug: record.slug, title: record.title, kind_: record.kind, status: record.status,
+        producer: record.createdBy || record.canonicalName || '', persona: record.sourcePersona ?? '', edited: record.editedAt !== null,
+        body: body.value.text, fallback: body.value.fallback,
+      };
+    }
+    case 'artifacts.save': {
+      const loaded = sessions.loadedSessionId();
+      const store = loaded ? sessions.artifactsOf(loaded) : null;
+      if (!store) return { kind: 'refused', code: 'artifacts.no-session', headline: 'Artifact not found in the loaded session.' };
+      const r = store.editBody(req.ref, req.body);
+      // REQ-LIBRARY-133: the footer shows `Save failed: <err>` on failure; the reason travels as the refusal's headline.
+      if (!r.ok) return { kind: 'refused', code: `artifacts.${r.error.code}`, headline: r.error.reason };
+      log(`artifact ${r.value.id} edited by hand at ${r.value.editedAt} (REQ-LIBRARY-094)`);
+      return { kind: 'artifacts.saved', id: r.value.id, editedAt: r.value.editedAt };
     }
     case 'hooks.summary': {
       const s = stores.get(req.workspaceId);

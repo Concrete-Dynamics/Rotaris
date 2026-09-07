@@ -8,6 +8,7 @@ import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { SessionSnapshotSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
+import { ArtifactsStateSchema } from './artifacts.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
@@ -144,6 +145,16 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('prompts.read'), workspaceId: z.string() }),
   z.object({ kind: z.literal('prompts.push'), workspaceId: z.string(), list: PromptListSchema, text: z.string() }),
   z.object({ kind: z.literal('prompts.take'), workspaceId: z.string(), list: PromptListSchema, index: z.number().int().nonnegative(), remove: z.boolean() }),
+  /**
+   * Part Y — the Library's Artifacts tab (REQ-LIBRARY-108/131..136). The run host answers because the store and
+   * the session's files are its (ADR-0002, ADR-0058); the renderer never touches either. `artifacts.list`
+   * carries no session id: REQ-LIBRARY-136 scopes the tab to the LOADED session, so the host answers for the
+   * session it holds and reports none when it holds none — a renderer that named a session could ask for one
+   * that is not loaded and would then need the refusal REQ-LIBRARY-136 already words for the inspector.
+   */
+  z.object({ kind: z.literal('artifacts.list'), workspaceId: z.string() }),
+  z.object({ kind: z.literal('artifacts.body'), workspaceId: z.string(), ref: z.string().min(1) }),
+  z.object({ kind: z.literal('artifacts.save'), workspaceId: z.string(), ref: z.string().min(1), body: z.string() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
@@ -370,6 +381,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   /** Part X: both saved-prompt lists as stored, newest first (REQ-LIBRARY-138); `prompts.taken` also carries the text the caller asked for. */
   z.object({ kind: z.literal('prompts.state'), state: PromptStateSchema }),
   z.object({ kind: z.literal('prompts.taken'), text: z.string(), state: PromptStateSchema }),
+  /** Part Y: the Artifacts tab's three answers (REQ-LIBRARY-108/133/134/136). */
+  z.object({ kind: z.literal('artifacts.state'), state: ArtifactsStateSchema }),
+  z.object({ kind: z.literal('artifacts.body'), id: z.string(), slug: z.string(), title: z.string(), kind_: z.string(), status: z.string(), producer: z.string(), persona: z.string(), edited: z.boolean(), body: z.string(), fallback: z.boolean() }),
+  z.object({ kind: z.literal('artifacts.saved'), id: z.string(), editedAt: z.string() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

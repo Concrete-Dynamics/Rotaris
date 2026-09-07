@@ -20,6 +20,8 @@ import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
+import { ArtifactStore } from './artifacts/store.js';
+import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
@@ -72,6 +74,12 @@ export interface ToolPortContext {
   /** REQ-ORCH-016/018: the entry role's grant for this run, decided by the pre-flight; other roles ignore it. */
   readonly grant?: IntentGrant | undefined;
   readonly intent?: IntentCategory | undefined;
+  /**
+   * Part Y (REQ-LIBRARY-099/100/101): the artifact operations bound to THIS agent — a publish records its
+   * canonical instance name and a read records it as a consumer. Absent means no artifact store, and the
+   * registry then removes the three tools with `artifact_store_absent` (REQ-TOOLS-004).
+   */
+  readonly artifacts?: ArtifactOps | undefined;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -177,6 +185,8 @@ interface Live {
   commitTarget?: { owner?: ProjectionOwner; run?: Run } | undefined;
   /** Part Q: the session-wide memory (REQ-ORCH-091 a/d) — fresh for a new session, rehydrated from the timeline for a loaded one. */
   memory: ResilienceMemory | null;
+  /** Part Y (REQ-ORCH-149): the session's artifact store, one per live session, shared across iterations and continuations. */
+  artifacts: ArtifactStore | null;
 }
 
 export interface SessionListItem {
@@ -323,7 +333,8 @@ export function durationLabel(startedAt: string | null, until: string): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-function relativeTime(updatedAt: string, now: number): string {
+/** One relative-time wording for every listing: the session browser's rows and, since Part Y, REQ-LIBRARY-136's created label. */
+export function relativeTime(updatedAt: string, now: number): string {
   const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
   if (elapsed < 60_000) return 'just now';
   if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m ago`;
@@ -575,7 +586,7 @@ export class Sessions {
     const settled = settleStaleChildren(dal, writer, sessionId, warn);
     if (settled > 0) warn(`${settled} child record(s) from a previous run were settled cancelled before continuation (REQ-ORCH-053)`);
     // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null });
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn) });
     return ok({ sessionId, settledChildren: settled });
   }
 
@@ -628,7 +639,7 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory() };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn) };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true);
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -647,6 +658,7 @@ export class Sessions {
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: opts.worktree !== undefined, dal, writer, warn, log: (m) => { log?.info(m); } });
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
+    const artifacts = live.artifacts!;
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
@@ -672,8 +684,8 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
-        dal, budget, modelCap: capFor,
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }) }),
+        dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
@@ -754,6 +766,9 @@ export class Sessions {
     // REQ-GIT-051: numbering continues across a resume — the port reads the rows and the refs at each capture.
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: effectiveRootOf(storedRow).binding !== null, dal: s.dal, writer: s.writer, warn, log: (m) => { s.log?.info(m); } });
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
+    // Part Y (REQ-ORCH-149): the store outlives the run — a continuation reads the artifacts earlier iterations published.
+    const artifacts = s.artifacts ?? this.newArtifactStore(s.dal, sessionId, () => s.writer, warn);
+    s.artifacts = artifacts;
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
@@ -784,8 +799,8 @@ export class Sessions {
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent }),
-        dal: s.dal, budget, modelCap: capFor,
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }) }),
+        dal: s.dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
@@ -1088,6 +1103,34 @@ export class Sessions {
   /** REQ-SESSION-002/191: where a session's files live — the caller decides which exist. */
   filesDir(dal: StoreDal, sessionId: SessionId): string {
     return this.deps.sessionFilesDir(dal, sessionId);
+  }
+
+  /**
+   * Part Y (REQ-ORCH-149) — the session's artifact store. One per live session, shared across iterations and
+   * continuations, holding no state of its own so every read is the stored state (REQ-LIBRARY-105's freshness
+   * follows from that rather than from a cache the surfaces have to invalidate).
+   */
+  private newArtifactStore(dal: StoreDal, sessionId: SessionId, writer: () => SessionWriter, warn: (m: string) => void): ArtifactStore {
+    return new ArtifactStore({
+      dal, sessionId, directory: () => this.deps.sessionFilesDir(dal, sessionId), wall: this.deps.clocks.wall, warn,
+      // REQ-LIBRARY-092: the `artifact_published` entry, through the live writer's ordinal counter, with its minted id.
+      timeline: (name, message, metadata) => { const r = writer().appendTimelineEntry(name, 'rotaris', message, metadata); return r.ok ? r.value : null; },
+    });
+  }
+
+  /**
+   * REQ-LIBRARY-136 / REQ-LIBRARY-102: the Library reads the LOADED session's artifacts. A session that is not
+   * loaded has no store here, and the surface answers "Artifact not found in the loaded session." rather than
+   * opening a second store behind the one this process holds (REQ-LIBRARY-158).
+   */
+  artifactsOf(sessionId: SessionId): ArtifactStore | null {
+    return this.live.get(sessionId)?.artifacts ?? null;
+  }
+
+  /** The session currently loaded in this host, if any — what the Library's artifacts tab reads. */
+  loadedSessionId(): SessionId | null {
+    for (const [id] of this.live) return id;
+    return null;
   }
 
   /** REQ-GIT-058 gate 5 / REQ-GIT-059: the safety row through the one transaction; the trimmed rows' refs come back for the prune. */

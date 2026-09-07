@@ -16,6 +16,7 @@ import type { Budget as ChildBudget } from '../children/ledger.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
+import type { ArtifactStore } from '../artifacts/store.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
 import { clampBudget } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -113,6 +114,8 @@ export interface RunDeps {
   /** Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation. */
   readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null) | undefined;
   readonly dal?: StoreDal | undefined;
+  /** Part Y (REQ-ORCH-149): the session artifact store, shared across iterations; absent means no artifacts exist. */
+  readonly artifacts?: ArtifactStore | undefined;
   readonly budget?: ChildBudget | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
   readonly summariser?: SummariserDeps | null | undefined;
@@ -526,6 +529,9 @@ export class Run {
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
         steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
+        // Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports materialise into it and its
+        // two context blocks reach every child the iteration launches.
+        ...(this.deps.artifacts ? { artifacts: this.deps.artifacts } : {}),
       }, iteration)
       : null;
     this.children = children;

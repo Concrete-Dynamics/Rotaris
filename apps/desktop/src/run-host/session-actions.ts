@@ -2,7 +2,7 @@ import type { ProcessReply, ServiceAsk, SessionFilesPayload } from '@rotaris/con
 import { asSessionId, type Clocks, type Millis } from '@rotaris/kernel';
 import type { StoreDal } from '@rotaris/store';
 import { batchDocument, readRecords, readTrajectory, trajectoryWarnings, writeExport, type JsonValue, type Sessions } from '@rotaris/engine';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { REFS_ASK_BOUND } from './checkpoints.js';
 
@@ -23,7 +23,14 @@ export interface SessionActionDeps {
 /** REQ-SESSION-142's log file name, as the run host's appender writes it (`fileAppender` in tools.ts). */
 export const SESSION_LOG_FILE = 'session.log';
 export const SESSION_SUMMARY_FILE = 'summary.md';
-export const SESSION_ARTIFACTS_DIR = 'artifacts';
+/**
+ * Part Y: the artifact bodies are FLAT — `artifact-<id>.md` beside `summary.md` — not a subdirectory.
+ * The falsified reason, kept beside its replacement: Part U wrote `SESSION_ARTIFACTS_DIR = 'artifacts'` when
+ * no artifact existed, so "reveal the session's files" would have found nothing to reveal for a session that
+ * had published one — REQ-SESSION-002 closes that place to three kinds of file and says nothing that makes a
+ * subdirectory one of them, and the flat naming is what Part Y wrote (ADR-0003's note).
+ */
+export const SESSION_ARTIFACT_PREFIX = 'artifact-';
 
 export function repairSessions(deps: SessionActionDeps, dal: StoreDal, workspaceRoot: string, sessionId: string | undefined): ProcessReply {
   const report = deps.sessions.repair(dal, workspaceRoot, sessionId === undefined ? { all: true } : { sessionId });
@@ -113,6 +120,12 @@ export function sessionFiles(deps: SessionActionDeps, dal: StoreDal, workspaceRo
   if (!row || row.workspace_root !== workspaceRoot) return { kind: 'refused', code: 'session.no-session', headline: `No session exists under id ${rawId} in this workspace.` };
   const directory = deps.sessions.filesDir(dal, asSessionId(rawId));
   const present = (name: string) => (existsSync(join(directory, name)) ? join(directory, name) : null);
-  const files: SessionFilesPayload = { directory, log: present(SESSION_LOG_FILE), summary: present(SESSION_SUMMARY_FILE), artifacts: present(SESSION_ARTIFACTS_DIR) };
+  // REQ-SESSION-002: `artifacts` names ONE of the artifact bodies that exist, so the reveal has something to point at.
+  let artifacts: string | null = null;
+  try {
+    const first = existsSync(directory) ? readdirSync(directory).filter((n) => n.startsWith(SESSION_ARTIFACT_PREFIX) && n.endsWith('.md')).sort()[0] : undefined;
+    artifacts = first === undefined ? null : join(directory, first);
+  } catch { artifacts = null; }
+  const files: SessionFilesPayload = { directory, log: present(SESSION_LOG_FILE), summary: present(SESSION_SUMMARY_FILE), artifacts };
   return { kind: 'session.files', files };
 }

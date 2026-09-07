@@ -2,6 +2,7 @@ import type { SessionId } from '@rotaris/kernel';
 import { isTerminalChildState, type ChildState, type SettlingPath } from '@rotaris/contracts';
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
+import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 
@@ -51,7 +52,7 @@ export interface Spawned {
 }
 
 export class ChildLedger {
-  constructor(private readonly deps: { readonly dal: StoreDal; readonly writer: SessionWriter; readonly sessionId: SessionId; readonly iteration: number; readonly budget: Budget; readonly modelCap: (modelKey: string) => number | null; readonly warn: (m: string) => void; readonly personas?: PersonaResolver | undefined }) {}
+  constructor(private readonly deps: { readonly dal: StoreDal; readonly writer: SessionWriter; readonly sessionId: SessionId; readonly iteration: number; readonly budget: Budget; readonly modelCap: (modelKey: string) => number | null; readonly warn: (m: string) => void; readonly personas?: PersonaResolver | undefined; readonly artifacts?: ArtifactStore | undefined }) {}
 
   get sessionId(): SessionId {
     return this.deps.sessionId;
@@ -151,9 +152,28 @@ export class ChildLedger {
     const r = this.deps.writer.claimChildStart(taskId, row?.canonical_name ?? taskId);
     return r.ok && r.value;
   }
+  /**
+   * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives
+   * here, beside the one write every report passes through — the ordinary path, the scheduler's cancellation
+   * and the user's cancel all call this — so no third caller can store a report without one, exactly as the
+   * adjacent-duplicate rule lives beside its insert rather than in a caller.
+   */
   storeReport(taskId: string, report: Record<string, unknown>): void {
     const r = this.deps.writer.storeChildReport(taskId, report);
     if (!r.ok) this.deps.warn(`the report for child ${taskId} could not be stored: ${r.error.code}`);
+    const artifacts = this.deps.artifacts;
+    if (!artifacts) return;
+    const row = this.get(taskId);
+    if (!row) return;
+    const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+    const m = artifacts.materialiseChildReport({
+      taskId, canonicalName: row.canonical_name, persona: row.persona,
+      status: text(report['status']) || row.state, summary: text(report['summary']),
+      keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
+      highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
+    });
+    if (!m.ok) this.deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
   }
   markObserved(taskId: string): void {
     this.deps.dal.setChildObserved(this.deps.sessionId, taskId);

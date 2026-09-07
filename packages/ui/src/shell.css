@@ -646,3 +646,56 @@
 
 /* REQ-LIBRARY-140: the transcript toolbar — one row above the rows, holding the stash opener. */
 .transcript__toolbar { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding-bottom: var(--rt-space-2, 8px); }
+/* ---- Part Y: the Library's Artifacts tab, the artifact inspector, and ADR-0051's Markdown rendering ---- */
+/* Craft from the adopted design language (docs/design): the card and table patterns every other view draws,
+   every value a token by name. Structure is docs/spec's (REQ-LIBRARY-108, REQ-LIBRARY-131..135). */
+.library-artifacts { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+/* REQ-LIBRARY-108: columns auto-size to contents on every refresh. */
+.library-artifacts__table { table-layout: auto; font-size: var(--rt-text-xs, 12px); }
+.library-artifacts__table th, .library-artifacts__table td { padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+.library-artifacts__row { cursor: pointer; }
+.library-artifacts__row:hover { background: var(--rt-hover); }
+.library-artifacts__row.is-selected { background: var(--rt-accent-tint-10); box-shadow: inset 3px 0 0 var(--rt-accent-300); }
+.library-artifacts__title { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+.library-artifacts__actions { display: flex; justify-content: flex-end; gap: var(--rt-space-2, 8px); padding-top: var(--rt-space-2, 8px); border-top: 1px solid var(--rt-divider); }
+
+/* REQ-LIBRARY-131: modeless, 720x560, several open at once — the stack sits above the view and never blocks it. */
+.artifact-inspector { position: fixed; right: var(--rt-space-4, 16px); bottom: var(--rt-space-4, 16px); width: 720px; height: 560px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); box-shadow: var(--rt-shadow-lg); z-index: 40; overflow: hidden; }
+.artifact-inspector:focus { outline: 2px solid var(--rt-focus); outline-offset: -2px; }
+.artifact-inspector__head { display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'title close' 'meta close'; gap: 2px var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); border-bottom: 1px solid var(--rt-divider); }
+.artifact-inspector__title { grid-area: title; margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-size: var(--rt-text-lg, 16px); }
+.artifact-inspector__meta { grid-area: meta; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-secondary); }
+.artifact-inspector__close { grid-area: close; align-self: start; }
+.artifact-inspector__tabs { display: flex; gap: var(--rt-space-1, 4px); padding: 0 var(--rt-space-4, 16px); border-bottom: 1px solid var(--rt-divider); }
+.artifact-inspector__tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; }
+.artifact-inspector__body { flex: 1; min-height: 0; overflow: auto; padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); }
+/* REQ-LIBRARY-132: a MEASURED monospace face, so tables and fenced blocks stay aligned while typing. */
+.artifact-inspector__editor { width: 100%; height: 100%; box-sizing: border-box; resize: none; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); line-height: var(--rt-leading-body, 1.5); tab-size: 2; }
+.artifact-inspector__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-4, 16px); border-top: 1px solid var(--rt-divider); }
+.artifact-inspector__status { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-secondary); }
+
+/* ADR-0051 / REQ-CHAT-056: the enumerated treatments. Fenced code monospace on a shaded background of its own,
+   bold heavier, italic slanted, inline code monospace, links in a colour distinct from body text. */
+.md { font-size: var(--rt-text-sm, 13px); line-height: var(--rt-leading-body, 1.5); color: var(--rt-text); }
+.md__p { margin: 0 0 var(--rt-space-2, 8px); }
+.md__h { margin: var(--rt-space-3, 12px) 0 var(--rt-space-2, 8px); font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); }
+.md__h1 { font-size: var(--rt-text-lg, 16px); }
+.md__h2 { font-size: var(--rt-text-md, 14px); }
+.md__h3, .md__h4, .md__h5, .md__h6 { font-size: var(--rt-text-sm, 13px); }
+.md__strong { font-weight: var(--rt-weight-display); }
+.md__em { font-style: italic; }
+.md__strike { text-decoration: line-through; }
+.md__code { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); background: var(--rt-surface-2); border-radius: var(--rt-radius-sm, 4px); padding: 0 3px; }
+.md__pre { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs, 12px); background: var(--rt-surface-2); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); padding: var(--rt-space-2, 8px); overflow: auto; margin: 0 0 var(--rt-space-2, 8px); }
+.md__pre code { font: inherit; background: none; padding: 0; }
+.md__link { font: inherit; color: var(--rt-accent-300); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; text-decoration: underline; }
+.md__link:disabled { cursor: default; color: var(--rt-accent-300); }
+.md__quote { margin: 0 0 var(--rt-space-2, 8px); padding-left: var(--rt-space-3, 12px); border-left: 2px solid var(--rt-divider); color: var(--rt-text-secondary); }
+.md__list { margin: 0 0 var(--rt-space-2, 8px); padding-left: var(--rt-space-4, 16px); }
+.md__item--task { list-style: none; margin-left: calc(-1 * var(--rt-space-4, 16px)); }
+.md__task { margin-right: var(--rt-space-1, 4px); }
+.md__table { border-collapse: collapse; margin: 0 0 var(--rt-space-2, 8px); font-size: var(--rt-text-xs, 12px); }
+.md__table th, .md__table td { border: 1px solid var(--rt-border); padding: 2px 6px; text-align: left; }
+.md__cell--right { text-align: right; }
+.md__cell--center { text-align: center; }
+.md__rule { border: 0; border-top: 1px solid var(--rt-divider); margin: var(--rt-space-3, 12px) 0; }

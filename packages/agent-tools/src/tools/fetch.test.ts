@@ -264,7 +264,7 @@ describe('transport outcomes (REQ-SANDBOX-033, REQ-TOOLS-092)', () => {
     const o = await tool.execute(args({ url: 'http://down.example/' }), ctx());
     expect(o.failureKind).toBe('network_error');
     expect(diag(o)).toMatchObject({ error_class: 'NetworkError' });
-    expect(String(diag(o)['detail'])).toBe('The connection to down.example failed before a response was received: fetch failed: connect ECONNREFUSED 10.0.0.9:80');
+    expect(String(diag(o)['detail'])).toBe('The direct connection to down.example failed before a response was received: fetch failed: connect ECONNREFUSED 10.0.0.9:80. This fetch tool uses direct connections; proxy environment variables and system proxy settings have no effect.');
     expect('final_url' in diag(o)).toBe(false);
   });
   it('the run\'s own abort is not a timeout', async () => {

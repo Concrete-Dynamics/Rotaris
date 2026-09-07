@@ -35,6 +35,7 @@
     "code-intel-proof": "node apps/desktop/scripts/code-intel-proof.mjs",
     "notice-proof": "node apps/desktop/scripts/notice-proof.mjs",
     "library-proof": "node apps/desktop/scripts/library-proof.mjs",
+    "artifacts-proof": "node apps/desktop/scripts/artifacts-proof.mjs",
     "palette-proof": "node apps/desktop/scripts/palette-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",

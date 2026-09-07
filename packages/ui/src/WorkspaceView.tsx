@@ -4,12 +4,13 @@ import { AgentTree } from './AgentTree.js';
 import { liveDescendants, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
-import { rowRole, rowTime, toolOutcome } from './TranscriptRows.js';
+import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
 import { TranscriptPane } from './transcript/TranscriptPane.js';
 import type { DisplayCaps } from './transcript/project.js';
 
-// The row helpers moved to TranscriptRows.tsx in Part R (one renderer for every transcript surface); re-exported so nothing that named them here breaks.
-export { rowRole, rowTime, toolOutcome };
+// Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
+// root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
+// name ambiguous across two `export *` sources and silently drop it — the merge defect Parts X and Y met.
 
 /**
  * The Workspace view's conversation surface, at the point the mechanism has
@@ -71,6 +72,13 @@ export interface WorkspaceViewProps {
   readonly groupTools?: boolean | undefined;
   /** REQ-CHAT-166: the four display caps, from the workspace `agents.yaml` `display` section. */
   readonly displayCaps?: DisplayCaps | undefined;
+  /** Part AA — REQ-CHAT-076: `http(s)` links open in the system browser through `shell.openExternal`; without an opener a link is inert (ADR-0051). */
+  readonly onOpenLink?: ((href: string) => void) | undefined;
+  /** Part AA — REQ-CHAT-075/076: a copy or an open is acknowledged when it works and reported when it does not; this window's own stack (ADR-0049). */
+  readonly onAcknowledge?: Acknowledger | undefined;
+  /** Part AA — REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`), both default OFF. */
+  readonly showReasoning?: boolean | undefined;
+  readonly autoCollapseTools?: boolean | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -313,8 +321,10 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps }: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false }: WorkspaceViewProps) {
   const [text, setText] = useState('');
+  // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
+  const [scope, setScope] = useState<'all' | 'task'>('all');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
@@ -404,6 +414,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const agents = session?.agents ?? [];
   const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
+  // REQ-CHAT-069: "This task" keeps the run-owned kinds plus the selected agent's rows; with no agent selected it is
+  // unavailable with that as its stated reason, so the transcript is never filtered to nothing.
+  const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected) : rows), [scope, selected, rows]);
   // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<'agents' | 'inspector' | null>(null);
@@ -466,10 +479,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
-        {onOpenStash && (
+        {(onOpenStash || agents.length > 0) && (
           <div className="transcript__toolbar" role="toolbar" aria-label="Transcript actions">
-            <button type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
-              data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</button>
+            {onOpenStash && (
+              <button type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
+                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</button>
+            )}
+            {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
+            {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
           </div>
         )}
         {intentStatusText(session?.intent ?? null) && (
@@ -478,13 +495,16 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         {session?.wait && runActive && (
           <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onCancel={() => setConfirming('stop')} />
         )}
+        {/* Part AA — REQ-CHAT-068: above the shown transcript, and only for a CHILD agent; a root agent produces none. */}
+        {scope === 'task' && selected !== null && selected.id !== RUN_AGENT_ID && <DelegationHeader agent={selected} />}
         {/*
           * ADR-0045's recycled pool and ADR-0046's steps 4 and 5. The empty state (REQ-CHAT-073), the projection,
           * the trailer rows (REQ-CHAT-051), tail-follow (REQ-CHAT-070), the anchor (REQ-CHAT-071), "N new updates"
-          * (REQ-CHAT-072), search (REQ-CHAT-074) and paging (REQ-CHAT-165) are all the pane's.
+          * (REQ-CHAT-072), search (REQ-CHAT-074) and paging (REQ-CHAT-165) are all the pane's. Part AA's `Row` is
+          * what a bound slot draws, and the pane is the surface that supplies it its services.
           */}
         <TranscriptPane
-          rows={rows}
+          rows={shownRows}
           running={runActive}
           groupTools={groupTools}
           caps={displayCaps}
@@ -494,6 +514,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           onPageOlder={onPageOlder}
           reachedOldest={reachedOldest}
           onFocusComposer={() => area.current?.focus()}
+          showReasoning={showReasoning}
+          autoCollapseTools={autoCollapseTools}
+          onOpenLink={onOpenLink}
+          onAcknowledge={onAcknowledge}
+          nowMs={nowIso === null ? 0 : Date.parse(nowIso)}
         />
       </div>
       {(!narrow || drawer === 'inspector') && inspector}

@@ -7,7 +7,8 @@ import { createMeasurementCache, createRenderCache, reuseKey, sourceTextOf, type
 import { CAP_DEFAULTS, isLive, projectDisplay, rowKey, type DisplayCaps } from './project.js';
 import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAnchor, updateShape, visibleRange, type Anchor } from './pool.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
-import { PlaceholderRow } from './PlaceholderRow.js';
+import { Row, TranscriptSurfaceProvider, isReasoningRow, placements, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
+import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
 import type { DisplayRow, RowRenderProps } from './types.js';
 
 /**
@@ -38,7 +39,16 @@ export interface TranscriptPaneProps {
   readonly reachedOldest?: boolean | undefined;
   /** REQ-CHAT-074: closing the search panel refocuses the composer. */
   readonly onFocusComposer?: (() => void) | undefined;
-  /** Part AA's `Row`, once it lands; the placeholder until then. THIS DEFAULT IS THE ONE LINE THE MERGE CHANGES. */
+  /** REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`), both default OFF. */
+  readonly showReasoning?: boolean | undefined;
+  readonly autoCollapseTools?: boolean | undefined;
+  /** REQ-CHAT-076: `http(s)` opens in the system browser; absent leaves a link inert (ADR-0051). */
+  readonly onOpenLink?: ((href: string) => void) | undefined;
+  /** REQ-CHAT-075: a copy or an open is acknowledged when it works and REPORTED when it does not (ADR-0049). */
+  readonly onAcknowledge?: Acknowledger | undefined;
+  /** REQ-CHAT-063: the instant live rows are drawn against; the pane's own tick advances it. */
+  readonly nowMs?: number | undefined;
+  /** Part AA's `Row` is the default. A caller overrides it only to draw a fixture (the proofs do). */
   readonly renderRow?: ((p: RowRenderProps) => ReactElement) | undefined;
 }
 
@@ -62,7 +72,8 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
     rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent,
-    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = PlaceholderRow,
+    onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row,
+    showReasoning = false, autoCollapseTools = false, onOpenLink, onAcknowledge, nowMs = 0,
   } = props;
 
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -78,7 +89,12 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const [renderings] = useState(createRenderCache<ReactElement>);
   const [slotNodes] = useState(() => new Map<number, HTMLDivElement>());
 
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * REQ-CHAT-059 / REQ-CHAT-167: what the READER set by hand, keyed by stable identity. It is deliberately not
+   * the effective set: `display/showReasoning` supplies a DEFAULT, and a row the reader has opened or closed
+   * keeps the state the reader gave it, overriding the preference for that row (REQ-CHAT-167's last sentence).
+   */
+  const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const [following, setFollowing] = useState(true);
   /** REQ-CHAT-072: how many displayed rows there were when the reader stopped following; null while following. */
   const [seenCount, setSeenCount] = useState<number | null>(null);
@@ -86,6 +102,8 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const [viewport, setViewport] = useState({ height: 600, width: 800 });
   const [capacity, setCapacity] = useState(POOL_CAPACITY);
   const [tick, setTick] = useState(0);
+  /** REQ-CHAT-063: the instant live rows are drawn against, read in the tick effect and NEVER during render. */
+  const [ticked, setTicked] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [current, setCurrent] = useState(0);
@@ -99,9 +117,54 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const showMatch = (next: number): void => { setCurrent(next); setFollowing(false); };
   const [paging, setPaging] = useState<'idle' | 'loading' | 'failed'>('idle');
   const [measuredVersion, setMeasuredVersion] = useState(0);
+  /** REQ-CHAT-075: ONE context menu per surface, held here so that no row holds an open/closed flag. */
+  const [menu, setMenu] = useState<RowMenuRequest | null>(null);
+
+  /**
+   * The effective expansion, folded from the reader's overrides and the preference default.
+   *
+   * It is computed from `rows` rather than from the projection, which would be circular — step 4 reads the
+   * expansion (REQ-CHAT-061: an expanded row shows its untruncated value whatever REQ-CHAT-166's caps say) and
+   * the default reads the projection. The cycle breaks because `defaultExpanded` is true for **reasoning rows
+   * only**, and a reasoning row is never folded into a group (REQ-CHAT-064 folds tool rows), so its display key
+   * equals `rowKey(row)` and is knowable before step 4 runs. **If `defaultExpanded` ever answers true for a
+   * shape step 4 can create, this shortcut stops being sound and the projection has to hand back its own keys.**
+   */
+  const expanded = ((): ReadonlySet<string> => {
+    const set = new Set<string>();
+    for (const [key, open] of overrides) if (open) set.add(key);
+    if (showReasoning) {
+      for (const r of rows) {
+        if (!isReasoningRow(r)) continue;
+        const key = rowKey(r);
+        if (overrides.get(key) !== false) set.add(key);
+      }
+    }
+    return set;
+  })();
 
   // ---- ADR-0046 step 4 ------------------------------------------------------------------------------------
   const display = projectDisplay({ rows, running, groupTools, caps, expanded, pendingQuestions, pendingApprovals, questionAgent, scopeAgent });
+
+  /**
+   * The services and preferences every row in THIS pane shares (Part AA's `TranscriptSurface`). One value per
+   * surface and never per row: rebinding a slot cannot carry one row's value to another because there is only
+   * one value, which is the reason a context is safe here at all while row state is not.
+   *
+   * `memberExpanded` / `toggleMember` are how a group's MEMBER is opened. `RowRenderProps` carries one
+   * `expanded` for the whole `DisplayRow`, so a group cannot express its members' states through it — the
+   * second gap in the seam, found when the two halves met. The map is the same one, keyed by the member's own
+   * display key, which never collides with its group's: `project.ts` keys a group `group:<first member's key>`.
+   */
+  const surface: TranscriptSurface = {
+    showReasoning, autoCollapseTools, runActive: running, nowMs: nowMs === 0 ? ticked : nowMs,
+    openLink: onOpenLink, openMenu: (request) => setMenu(request),
+    memberExpanded: (key) => expanded.has(key),
+    toggleMember: (key) => toggle(key, expanded.has(key)),
+  };
+
+  /** REQ-CHAT-057 / REQ-CHAT-067: the two facts a row cannot know about itself, once for the whole array. */
+  const places = placements(display);
 
   // ---- REQ-CHAT-058: heights, measured rather than assumed -------------------------------------------------
   // `measuredVersion` is read so the table is rebuilt once the observer has recorded a real height; a `peek` is a
@@ -124,10 +187,11 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
 
   const unseen = following || seenCount === null ? 0 : Math.max(0, display.length - seenCount);
 
-  const toggle = (key: string): void => {
-    setExpanded((held) => {
-      const next = new Set(held);
-      if (next.has(key)) next.delete(key); else next.add(key);
+  /** REQ-CHAT-167: a row the reader toggles keeps the state the reader gave it, overriding the preference. */
+  const toggle = (key: string, openNow: boolean): void => {
+    setOverrides((held) => {
+      const next = new Map(held);
+      next.set(key, !openNow);
       return next;
     });
   };
@@ -231,7 +295,10 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const anyLive = display.some(isLive);
   useEffect(() => {
     if (!anyLive) return;
-    const handle = setInterval(() => setTick((t) => t + 1), LIVE_REFRESH_MS);
+    // The first read is on the first interval rather than synchronously in the effect body: a live row's
+    // elapsed time is drawn from `row.startedAt` until the clock first ticks, so nothing shows a wrong figure
+    // meanwhile, and a synchronous setState here would cascade a render on every mount.
+    const handle = setInterval(() => { setTick((t) => t + 1); setTicked(Date.now()); }, LIVE_REFRESH_MS);
     return () => clearInterval(handle);
   }, [anyLive]);
 
@@ -265,21 +332,39 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * therefore redrawn on every repaint so its elapsed time keeps advancing. The 1000 ms tick causes the repaint;
    * nothing else changes on it, so no scroll position moves and no row that is not live reflows.
    */
-  const paint = (d: DisplayRow): ReactElement => {
+  const paint = (d: DisplayRow, at: number): ReactElement => {
     const open = expanded.has(d.key);
     const match = activeMatch !== null && activeMatch.key === d.key ? activeMatch.range : null;
-    const key = reuseKey(d, viewport.width, open, match);
+    // REQ-CHAT-057's attribution and REQ-CHAT-067's "most recent pair" are facts about a row's NEIGHBOURS, which
+    // `RowRenderProps` cannot carry — the seam's one gap, found when the two halves met. `placements` computes
+    // both once per projection and the reuse key carries the result, so a row whose place changed is redrawn.
+    const place = places[at];
+    const key = reuseKey(d, viewport.width, open, match, place);
     if (key !== null) {
       const held = renderings.get(key);
       if (held !== undefined) return held;
     }
-    const element = renderRow({ display: d, expanded: open, onToggle: () => toggle(d.key), match });
+    const element = renderRow({ display: d, expanded: open, onToggle: () => toggle(d.key, open), match, place });
     if (key !== null) renderings.set(key, element, sourceTextOf(d).length);
     return element;
   };
 
   return (
-    <div className="transcript__pane" data-testid="transcript-pane" data-tick={tick}>
+    <div
+      className="transcript__pane" data-testid="transcript-pane" data-tick={tick}
+      onKeyDown={(e) => {
+        // REQ-CHAT-077 / REQ-CHAT-075: arrows, Page and Home/End move the current row; Ctrl+C copies it. The
+        // pool binds a WINDOW of rows to slots, so moving past the bound span has to scroll before it can
+        // select — which the plain list Part AA wrote it against never had to do.
+        if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+          const key = (e.currentTarget.querySelector('.row--current') as HTMLElement | null)?.dataset['rowKey'];
+          const d = display.find((x) => x.key === key);
+          if (d !== undefined) { void copyRowEntry(rowMenuEntries(d)[0]!, onAcknowledge); e.preventDefault(); }
+          return;
+        }
+        if (moveCurrentRow(e.currentTarget, e.key)) e.preventDefault();
+      }}
+    >
       {searchOpen && (
         <div className="transcript__search" role="search" aria-label="Search transcript">
           <input
@@ -330,6 +415,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
           * invariance hold across 0 rows as well as across 1200. REQ-CHAT-073's empty state is drawn OVER an
           * intact pool of empty slots rather than instead of one.
           */}
+        <TranscriptSurfaceProvider value={surface}>
         <div className="transcript__pool" style={{ height: `${table.total}px` }}>
             {paging === 'failed' && (
               <div className="transcript__page-error" role="status" data-testid="transcript-page-failed">Older messages could not be loaded. Scroll up to try again.</div>
@@ -351,11 +437,13 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
                   data-bound={d === null ? '' : d.key}
                   style={{ transform: `translateY(${d === null ? 0 : table.offsets[at] ?? 0}px)`, visibility: d === null ? 'hidden' : 'visible' }}
                 >
-                  {d === null ? null : paint(d)}
+                  {d === null ? null : paint(d, range.first + slot)}
                 </div>
             );
           })}
         </div>
+        {menu && <RowContextMenu request={menu} acknowledge={onAcknowledge} onClose={() => setMenu(null)} />}
+        </TranscriptSurfaceProvider>
       </div>
     </div>
   );

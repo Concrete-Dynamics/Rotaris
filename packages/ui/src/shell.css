@@ -100,12 +100,58 @@
 .transcript__page-error { padding: var(--rt-space-2, 8px); font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 .transcript__oldest { padding: var(--rt-space-2, 8px); font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); text-align: center; }
 .transcript .empty-state { margin: auto; max-width: 420px; width: 100%; }
-.row { display: flex; flex-direction: column; gap: 4px; padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
+/* Part AA — REQ-CHAT-057's stated geometry. The four figures below (52, 112, 30, 8pt) and the 10/5 px margins are
+   SPECIFICATION values, written as the requirement writes them; every colour and every spacing CHOICE beside them
+   is a token by name. The list wrapper carries the rows so the transcript's own gap cannot add to the 5 px. */
+.rowlist { display: flex; flex-direction: column; gap: 0; }
+.row { display: block; margin: 5px 10px; min-height: 30px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
+.row__grid { display: grid; grid-template-columns: 52px 112px minmax(0, 1fr); align-items: baseline; column-gap: var(--rt-space-2, 8px); }
+.row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.row__attribution { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row__task { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* REQ-CHAT-057: a continuation row shows a 2 px bar in the role gutter, coloured by the persona (the token comes from the element). */
+.row__bar { display: block; width: 2px; align-self: stretch; min-height: 14px; border-radius: 1px; }
+.row:hover { border-color: var(--rt-border-strong); }
+.row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.row__match { background: var(--rt-fill-accent); color: var(--rt-fill-accent-ink); border-radius: var(--rt-radius-sm, 4px); }
 .row--user { border-color: var(--rt-accent-tint-14); }
 .row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
-.row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); }
-.row__time { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+.row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow: hidden; text-overflow: ellipsis; }
+/* REQ-CHAT-057: timestamps in the monospace stack at 8 pt — the requirement's own unit, not a token's. */
+.row__time { font-family: var(--rt-font-mono); font-size: 8pt; color: var(--rt-text-tertiary); }
 .row__body { font-size: var(--rt-text-sm, 13px); color: var(--rt-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* REQ-CHAT-075: selection must take exactly the characters the pointer covers, in EVERY category including Markdown bodies. */
+.row__body, .row .md, .row__delegation { user-select: text; }
+.row__body--md { white-space: normal; }
+.row__body--thinking { color: var(--rt-text-secondary); }
+/* REQ-CHAT-164: the stalled indicator that REPLACES the animated one; it states the fact and animates nothing. */
+.row__stalled { font-size: var(--rt-text-xs, 12px); color: var(--rt-warn); }
+.row__pulse { animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .row__pulse { animation: none; } }
+.row__pulse[data-motion='reduced'] { animation: none; }
+/* REQ-CHAT-051 / REQ-CHAT-076: a trailer row is a control — clicking it opens the stepper or the approval dialog. */
+.row__trailer { font: inherit; font-size: var(--rt-text-sm, 13px); color: var(--rt-text); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.row__trailer:disabled { cursor: default; color: var(--rt-text); }
+/* REQ-CHAT-065: an expanded group reveals its members BENEATH the header, which stays where it is. */
+.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px); }
+.row__members .row { margin-left: 0; margin-right: 0; background: var(--rt-bg); }
+/* REQ-CHAT-068: the delegation-context header's expanded detail. */
+.row__delegation { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--rt-space-2, 8px); margin: var(--rt-space-2, 8px) 0 0; font-size: var(--rt-text-xs, 12px); }
+.row__delegation dt { color: var(--rt-text-tertiary); }
+.row__delegation dd { margin: 0; color: var(--rt-text); }
+.row__delegation-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* REQ-CHAT-069: the scope toggle in the transcript toolbar, with the agent's state and live elapsed time beside it. */
+.row__scope { align-items: center; }
+.row__scope-detail { font-size: var(--rt-text-2xs, 10px); margin-left: var(--rt-space-2, 8px); }
+/* REQ-CHAT-075: the ONE context menu of a surface, owned by the surface and never by a row. */
+.row__menu { position: fixed; z-index: 40; display: flex; flex-direction: column; min-width: 180px; padding: var(--rt-space-1, 4px); background: var(--rt-surface); border: 1px solid var(--rt-border-strong); border-radius: var(--rt-radius-md, 6px); box-shadow: var(--rt-shadow-2, none); }
+.row__menu-item { font: inherit; font-size: var(--rt-text-sm, 13px); color: var(--rt-text); background: none; border: 0; padding: var(--rt-space-1, 4px) var(--rt-space-2, 8px); text-align: left; cursor: pointer; border-radius: var(--rt-radius-sm, 4px); }
+.row__menu-item:hover:not(:disabled) { background: var(--rt-hover); }
+.row__menu-item:disabled { color: var(--rt-text-disabled); cursor: default; }
+/* Verification only: Part AA's `rows-proof` role draws both surfaces at once (`pnpm rows-proof`). */
+.rows-proof { display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); height: 100vh; overflow: auto; }
+.rows-proof__controls { display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px); }
+.rows-proof__surface { min-height: 0; overflow: auto; border-top: 1px solid var(--rt-border); }
 .composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); border-top: 1px solid var(--rt-border); background: var(--rt-chrome); }
 .composer__input { min-height: 48px; resize: none; }
 .composer__actions { display: flex; justify-content: flex-end; }
@@ -203,8 +249,16 @@
 .tool__chevron, .tool__name { color: var(--rt-accent-300); }
 .tool__outcome { margin-left: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .tool__outcome--running { color: var(--rt-accent-300); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+/* REQ-CHAT-060: `blocked` in the theme's fail state text colour. `--rt-fail` is the state's BOUNDARY token, checked at
+   3:1; `--rt-danger-300` is that same state's readable-text token, checked at 4.5:1 (`theme/static-contrast.ts`), and
+   text is what this is. REQ-CHAT-065: a group takes its colour from the most severe member outcome. */
 .tool__outcome--failed, .tool__outcome--blocked { color: var(--rt-danger-300); }
-.tool--blocked .tool__name { color: var(--rt-danger-300); }
+/* The child combinators are load-bearing: a group coloured `failed` reveals its members INSIDE its own element, and a
+   descendant selector tints the names of the ok members too — found by looking at an expanded group. */
+.tool--blocked > .row__grid > .row__main > .tool__header > .tool__name,
+.tool--failed > .row__grid > .row__main > .tool__header > .tool__name,
+.tool--blocked > .row__grid > .row__main > .tool__header > .tool__chevron,
+.tool--failed > .row__grid > .row__main > .tool__header > .tool__chevron { color: var(--rt-danger-300); }
 .tool__preview { font-size: var(--rt-text-xs, 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tool__card { display: flex; flex-direction: column; gap: 4px; margin-top: var(--rt-space-2, 8px); }
 .tool__caption { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); color: var(--rt-text-tertiary); }

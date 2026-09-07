@@ -100,7 +100,17 @@ export function sourceTextOf(d: DisplayRow): string {
  * ADR-0045's reuse predicate as one value. Null means "never reuse": a live row is redrawn every repaint
  * (REQ-CHAT-058), and a rendering that could go stale must not be keyed at all rather than keyed carelessly.
  */
-export function reuseKey(d: DisplayRow, width: number, expanded: boolean, match: { start: number; end: number } | null): string | null {
+export function reuseKey(
+  d: DisplayRow, width: number, expanded: boolean, match: { start: number; end: number } | null,
+  /**
+   * REQ-CHAT-057's attribution and REQ-CHAT-067's auto-collapse are drawn from a row's PLACE among its
+   * neighbours, so two renderings of an identical row differ when its place does. Found at the merge of Parts Z
+   * and AA: without this, inserting a row above a block reused the rendering that drew attribution and the new
+   * first row of the block silently lost its role line.
+   */
+  place?: { readonly blockStart: boolean; readonly recentTool: boolean } | undefined,
+): string | null {
   if (isLive(d)) return null;
-  return `${d.key}|${hash(sourceTextOf(d))}|${Math.round(width)}|${expanded ? 'o' : 'c'}|${match === null ? '' : `${match.start}-${match.end}`}`;
+  const p = place === undefined ? '' : `${place.blockStart ? 'b' : ''}${place.recentTool ? 'r' : ''}`;
+  return `${d.key}|${hash(sourceTextOf(d))}|${Math.round(width)}|${expanded ? 'o' : 'c'}|${match === null ? '' : `${match.start}-${match.end}`}|${p}`;
 }

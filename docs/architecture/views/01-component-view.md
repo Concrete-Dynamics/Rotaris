@@ -12,13 +12,13 @@ flowchart TB
   subgraph roots["Composition roots — apps/desktop/src (the only importers of electron)"]
     main["main<br/>windows, dialogs, relay, preferences,<br/>process supervision, capture seams"]
     preload["preload<br/>the one frozen bridge"]
-    renderer["renderer<br/>React root; role by route:<br/>main / approval / pause / hook-review"]
+    renderer["renderer<br/>React root; role by route:<br/>main / approval / pause / hook-review /<br/>provider / persona / rows-proof (verification)"]
     runhost["run-host<br/>sessions, runs, tools, hooks,<br/>configuration per run"]
     wsservice["workspace-service<br/>identifier, store open/migrate,<br/>backup, restore, config Tier A"]
   end
 
   subgraph surface["Surface packages"]
-    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog,<br/>ArtifactsTab, ArtifactInspector),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>markdown (ADR-0051: parser, tree renderer, parse cache),<br/>theme, motion, shell-state"]
+    ui["ui<br/>AppShell, NavRail, WorkspaceView,<br/>SettingsView (+settings/), SessionBrowser,<br/>library/ (the Library shell, Prompts tab, stash dialog,<br/>ArtifactsTab, ArtifactInspector),<br/>ApprovalDialog, PauseDialog, HookReviewDialog,<br/>commands (the one action vocabulary, palette,<br/>keyboard help, Kbd, the window keydown handler),<br/>markdown (ADR-0051: parser, tree renderer, parse cache),<br/>transcript/Row (the ONE row renderer) + TranscriptSurface<br/>(the list, the menu, keyboard nav, delegation, scope),<br/>theme, motion, shell-state"]
     uicore["ui-core<br/>replica (the transcript mirror),<br/>notice store,<br/>acknowledgement stack (one per window)"]
     shell["shell<br/>ProcessLink, UpdateRelay"]
   end
@@ -122,10 +122,12 @@ Edges worth knowing the reason for:
 | Preferences, theme data | `platform` (store), `contracts/theme` (data), `ui/theme.ts` (projection) | main, renderer |
 | Views and dialogs | `ui`, `ui-core` | renderer |
 | The session artifact store: records, documents, the two context blocks, the tool port | `engine/src/artifacts/` (+ `store` v12, `contracts/artifacts.ts`) | run-host (`Sessions` builds one per live session; `run-host/tools.ts` binds the three executors) |
-| Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the inspector today; the transcript later — nothing renders Markdown a second way) |
+| Markdown: the subset, its tree, its renderer, the bounded parse cache (ADR-0051) | `ui/src/markdown/` | renderer (the artifact inspector's Preview tab and, from Part AA, the transcript's agent-message rows — nothing renders Markdown a second way) |
 | The transcript engine: the recycled slot pool, the apply pipeline's steps 3-5, the two bounded caches, the search index (ADR-0045, ADR-0046) | `ui/src/transcript/` | renderer (the Workspace transcript; the persona window keeps a plain list) |
+| One transcript row, drawn: the categories, the outcomes, the group header, the trailers, the stalled indicator (REQ-CHAT-056/057/060/061/062/065/164) | `ui/src/transcript/Row.tsx` — a **pure function of its props**, holding no state, because Part Z's pool rebinds slots (ADR-0045) | renderer (the Workspace transcript and every persona window) |
+| A transcript surface: the expansion map, the one context menu, keyboard navigation, the delegation-context header, the scope toggle (REQ-CHAT-059/068/069/075/077) | `ui/src/TranscriptSurface.tsx` | renderer |
 
-### `ui/transcript` (Part Z, 2026-09-07; ADR-0045's first execution, ADR-0046 steps 3-5)
+### `ui/transcript` (Parts Z and AA, 2026-09-07; ADR-0045's first execution, ADR-0046 steps 3-5, ADR-0051's second)
 
 The transcript engine, as its own module because it is the most intricate component in the product and ordinary list
 idioms are wrong inside it: `types.ts` (the `DisplayRow` / `RowRenderProps` seam, and the one statement of how
@@ -134,7 +136,8 @@ REQ-CHAT-046's twelve row categories map onto three display shapes), `constants.
 and owed to ADR-0053 rather than restated by it), `project.ts` (ADR-0046 step 4, pure), `pool.ts` (the offset table,
 the visible span, the anchor, REQ-CHAT-053's four update shapes, pure), `cache.ts` (REQ-CHAT-058's two bounded LRU
 caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `TranscriptPane.tsx` (the fixed
-slot pool and step 5) and `PlaceholderRow.tsx` (deleted when Part AA's `Row.tsx` lands). **Edges unchanged** —
+slot pool and step 5) and `Row.tsx` (Part AA's renderer, which the pane binds into each slot; Part Z's
+`PlaceholderRow.tsx` stood in for it until the two branches merged and is gone). **Edges unchanged** —
 `ui -> kernel, contracts, ui-core`. `ui-core`'s replica gains ADR-0046 step 3 (`classifyRows` and the six row-level
 counters `REQ-UIBENCH-064` fixes, distinct from the seven publication classes it already had). `config` gains
 `display-section.ts`, the reader `SECTION_KEYS` had declared and nothing stood behind; `model` gains `reasoning.ts`,

@@ -198,12 +198,15 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(group.blob.length).toBe(2000);
     // REQ-CHAT-065: the severity ordering, and a summary that never emits raw tool output.
     expect(groupSeverity(group.counts)).toBe('failed');
-    expect(groupSummary(group.family, group.counts)).toBe('reading ×2 · 1 failed · 1 ok');
+    // The summary's order is REQ-CHAT-065's own example, `reading ×4 · 3 ok · 1 failed` — ok first. It is NOT
+    // the severity ranking above, which the requirement gives for the header's COLOUR and which runs the other
+    // way. Both halves of this batch implemented one of the two and this assertion had the colour ranking.
+    expect(groupSummary(group.family, group.counts)).toBe('reading ×2 · 1 ok · 1 failed');
   });
 
   it('REQ-CHAT-168: a group summary is written for the counts it carries, at one and at many', () => {
     expect(groupSummary('reading', { ok: 1, failed: 0, blocked: 0, running: 0 })).toBe('reading ×1 · 1 ok');
-    expect(groupSummary('reading', { ok: 3, failed: 1, blocked: 0, running: 0 })).toBe('reading ×4 · 1 failed · 3 ok');
+    expect(groupSummary('reading', { ok: 3, failed: 1, blocked: 0, running: 0 })).toBe('reading ×4 · 3 ok · 1 failed');
     expect(groupSeverity({ ok: 2, failed: 0, blocked: 1, running: 1 })).toBe('blocked');
     expect(groupSeverity({ ok: 2, failed: 0, blocked: 0, running: 1 })).toBe('running');
   });

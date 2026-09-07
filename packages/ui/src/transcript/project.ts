@@ -37,6 +37,9 @@ export function familyOf(toolName: string): string {
 export const SEVERITY_ORDER = ['failed', 'blocked', 'running', 'ok'] as const;
 export type Severity = (typeof SEVERITY_ORDER)[number];
 
+/** REQ-CHAT-065's summary order — the requirement's example — as against `SEVERITY_ORDER`, its colour ranking. */
+const SUMMARY_ORDER = ['ok', 'failed', 'blocked', 'running'] as const;
+
 export function groupSeverity(counts: Readonly<Record<Severity, number>>): Severity {
   for (const s of SEVERITY_ORDER) if (counts[s] > 0) return s;
   return 'ok';
@@ -47,10 +50,15 @@ export function groupSeverity(counts: Readonly<Record<Severity, number>>): Sever
  * 1 failed". REQ-CHAT-168 binds it: the count is written for the count it carries, at zero and one as much as at
  * many, and an outcome with no members is not named at all. It NEVER emits raw tool input or output.
  */
-export function groupSummary(family: string, counts: Readonly<Record<Severity, number>>): string {
-  const total = SEVERITY_ORDER.reduce((n, s) => n + counts[s], 0);
-  const parts = SEVERITY_ORDER.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${s}`);
-  return parts.length === 0 ? `${family} ×${total}` : `${family} ×${total} · ${parts.join(' · ')}`;
+export function groupSummary(family: string, counts: Readonly<Record<Severity, number>>, members?: number): string {
+  const total = members ?? SEVERITY_ORDER.reduce((n, s) => n + counts[s], 0);
+  // The ORDER is the requirement's own example, `reading × 4 · 3 ok · 1 failed` — ok first, then failed, blocked,
+  // running. It is NOT `SEVERITY_ORDER`, which is the severity ranking REQ-CHAT-065 gives for the header's COLOUR
+  // and is deliberately the opposite way round. The first form here reused the colour ranking and produced
+  // `reading × 4 · 1 failed · 3 ok`; the two halves of this batch disagreed on the string and the requirement's
+  // example settled it. Kept beside its replacement rather than repaired quietly.
+  const parts = SUMMARY_ORDER.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${s}`);
+  return [`${family} ×${total}`, ...parts].join(' · ');
 }
 
 /** A short, stable, order-independent content hash — the fallback identity of REQ-CHAT-059, and the cache's content key. */
@@ -268,7 +276,10 @@ export function trailerRows(o: Pick<ProjectOptions, 'pendingQuestions' | 'pendin
     const first = o.pendingQuestions[0]!;
     const trailer: TrailerRow = {
       sort: 'question', requestId: first.requestId, role: o.questionAgent ?? 'rotaris',
-      text: `${n} ${n === 1 ? 'step' : 'steps'} — ${first.prompt}`, steps: n,
+      // REQ-CHAT-168 at one and at many; and a prompt with no text yields the count alone rather than a dangling
+      // separator — Part AA's guard, which the half that computed the wording did not have.
+      text: first.prompt === '' ? `${n} ${n === 1 ? 'step' : 'steps'}` : `${n} ${n === 1 ? 'step' : 'steps'} — ${first.prompt}`,
+      steps: n,
     };
     out.push({ shape: 'trailer', key: `trailer:question:${first.requestId}`, trailer });
   }

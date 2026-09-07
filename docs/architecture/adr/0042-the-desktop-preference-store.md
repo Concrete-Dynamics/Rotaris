@@ -268,3 +268,27 @@ count 2, declared default 480 px right with both columns at least 280 (REQ-GIT-0
 divider, read at boot beside `panels/overview`. `pnpm git-proof` drags the divider by keyboard (three Left presses,
 16 px each) in its first launch, checks the file holds `[…, 528]`, and reads it back on the fifth. **Found: nothing** —
 the corrected serialiser round-trips the second nested record exactly as it did the first.
+
+**Fourth execution — 2026-09-07, the Library's split, and the prompt file falsified (Part X).** `panels/library`
+joins the registry under REQ-SHELL-069's key rule for the sixth view: the lower-cased view name with **no**
+`{view}.{arrangement}` suffix, because that form is for "a view carrying more than one independent multi-pane
+arrangement" and the Library carries one — the Prompts tab's stash/history split (REQ-LIBRARY-106), the other two
+tabs declaring no divider. Same record shape, pane count 2, declared default 480 px left with both columns at
+least 240 px. Written from the tab's divider (pointer drag, or Left/Right/Home on the focused separator), read at
+boot beside `panels/overview` and `panels/git`. **Found: nothing** — the third nested record round-trips exactly
+as the first two did, and the key rule needed no interpretation beyond reading its own second sentence.
+
+**The falsified reading kept beside its replacement.** The Context section above, and the Decision's last bullet,
+record that "prompt history and stash are **not in this store** — they are per workspace, at
+`<workspace>/.rotaris/rotaris-prompts.json`, in the byte-exact format `REQ-CHAT-045` fixes", and the *Revisit if*
+clause names the withdrawal of that byte format as the one change that would reopen the question. **That
+withdrawal has happened.** `REQ-CHAT-045` now reads "Where they are held is REQ-LIBRARY-138's and is not fixed
+here: no path, no file name and no document format is contractual, and this requirement states none", and
+`REQ-SHELL-157` says the same; `REQ-LIBRARY-138` names **the workspace's durable store**, and adds a sentence the
+file form could not have met — "persisting one entry MUST NOT require rewriting the others". Part X therefore
+writes both lists as **rows** in the workspace database at schema v11, one row per entry (`schema.ts` carries the
+same note). The reasoning above is not deleted: it was correct while the byte format stood, it named exactly the
+condition under which it would fall, and that condition is what fell. What survives unchanged is the *reason for
+the separation* — a prompt is per workspace and a preference is per user, so the two never meet — and the
+consequence 7 guard still holds: no preference key has a row type in any schema, and neither prompt table is a
+preference key.

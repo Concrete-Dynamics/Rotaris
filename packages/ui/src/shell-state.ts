@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { isViewId, STARTUP_VIEW, type ViewId } from '@rotaris/contracts';
+import { isViewId, LIBRARY_TABS, STARTUP_VIEW, type ViewId } from '@rotaris/contracts';
 
 /**
  * Local-only interface state (ADR-0043, ADR-0057): the active view, and later
@@ -17,6 +17,14 @@ export interface ShellState {
   readonly settingsCategory: string | null;
   openSettings(category: string): void;
   takeSettingsCategory(): void;
+  /**
+   * REQ-LIBRARY-102 / REQ-SHELL-115 (Part X): a Library tab a notice action asked for, consumed once — the same
+   * shape `settingsCategory` takes for REQ-NOTIFY-223. REQ-LIBRARY-103 closes the tab names and says activating
+   * an unknown one is ignored, so `openLibrary` switches the view but records no tab it does not recognise.
+   */
+  readonly libraryTab: string | null;
+  openLibrary(tab: string): void;
+  takeLibraryTab(): void;
   /** REQ-CONFIG-286/287: the unsaved-settings guard; asked before a view switch away from Settings while dirty. */
   readonly navigationGuard: ((next: ViewId) => Promise<boolean>) | null;
   setNavigationGuard(guard: ((next: ViewId) => Promise<boolean>) | null): void;
@@ -49,6 +57,18 @@ export interface ShellState {
 export interface ComposerRegistration {
   readonly submit: () => void;
   readonly enabled: boolean;
+  /**
+   * REQ-LIBRARY-107 (Part X): load a prompt into the composer from the Library or the stash dialog. It is on the
+   * registration and not a DOM lookup so no surface reaches for the textarea; the composer owns its own text.
+   *
+   * What "load into the composer" means is REQ-CHAT-044's, and it is not a plain replacement: an entry going into
+   * a NON-EMPTY composer is appended after one blank line (`<current>\n\n<incoming>`), into an empty one it
+   * replaces the text, and the composer takes focus afterwards. REQ-CHAT-044 states that for the stash routes;
+   * `REQ-LIBRARY-107` uses the same verb for the history routes and states no different rule, so one rule serves
+   * all four and a user never loses text they had already typed. Recorded as a decision taken where the history
+   * route is silent.
+   */
+  readonly setText: (text: string) => void;
 }
 export type OverlayKind = 'slashPopup' | 'searchPanel' | 'drawers';
 export type OverlayCloser = () => boolean;
@@ -83,6 +103,14 @@ export const useShellState = create<ShellState>((set, get) => ({
   },
   takeSettingsCategory() {
     set({ settingsCategory: null });
+  },
+  libraryTab: null,
+  openLibrary(tab) {
+    // REQ-LIBRARY-103: an unknown tab name is ignored — the Library still opens, on whichever tab it was showing.
+    set({ activeView: 'library', ...(LIBRARY_TABS.includes(tab as (typeof LIBRARY_TABS)[number]) ? { libraryTab: tab } : {}) });
+  },
+  takeLibraryTab() {
+    set({ libraryTab: null });
   },
   launchOptions: null,
   setLaunchOptions(options) {

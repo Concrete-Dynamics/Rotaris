@@ -24,6 +24,7 @@ const bridge: RendererBridge = Object.freeze({
   onThemeChanged: subscribe(CHANNEL.themeChanged),
   onConfigChanged: subscribe(CHANNEL.configChanged),
   onAcknowledgement: subscribe(CHANNEL.acknowledgementPublish),
+  onLibraryChanged: subscribe(CHANNEL.libraryChanged),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

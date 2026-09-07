@@ -2,9 +2,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, GitView, OverviewView, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
+import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -197,7 +197,64 @@ function useElapsedTick(session: { executionStatus: string; updatedAt: string } 
   return busy ? nowIso : session?.updatedAt ?? null;
 }
 
-function Workspace({ models, workspace, popOut }: { models: readonly string[]; workspace: string; popOut: boolean }) {
+/**
+ * Part X — the workspace's saved prompts (REQ-LIBRARY-137/138/139), held ABOVE the views. That placement is
+ * REQ-LIBRARY-105's: "A change that arrives while the Library is off screen MUST be visible the next time the
+ * Library is shown, with no manual refresh." Only the active view is mounted, so a hook inside the Library would
+ * miss every change made from the composer; here, the composer's live count and the Library's two lists are one
+ * state, and the `library:changed` revision re-reads it wherever the window happens to be.
+ */
+interface PromptsApi {
+  readonly history: readonly string[];
+  readonly stash: readonly string[];
+  readonly revision: number;
+  /** REQ-LIBRARY-137: front-insert into one list; the DAL suppresses an adjacent duplicate and enforces the cap. */
+  push: (list: PromptList, text: string) => void;
+  /** REQ-LIBRARY-107: the entry's text; `remove` decides whether it survives. Empty for an index naming no entry. */
+  take: (list: PromptList, index: number, remove: boolean) => Promise<string>;
+}
+function usePrompts(workspace: string): PromptsApi {
+  const [state, setState] = useState<{ history: readonly string[]; stash: readonly string[] }>({ history: [], stash: [] });
+  const [revision, setRevision] = useState(0);
+  const hasWorkspace = workspace !== '(no workspace)';
+  const read = useCallback(async () => {
+    if (!hasWorkspace) return;
+    const r = await bridge.command({ kind: 'prompts.read' });
+    if (r.ok) setState((r.value as { state: PromptState }).state);
+  }, [hasWorkspace]);
+  // On mount, and again whenever the revision moves — a library change, and nothing else, is what moves it.
+  useEffect(() => { queueMicrotask(() => { void read(); }); }, [read, revision]);
+  useEffect(() => bridge.onLibraryChanged((p) => setRevision((p as { revision?: number }).revision ?? 0)), []);
+  const push = useCallback((list: PromptList, text: string) => {
+    // REQ-LIBRARY-138: the window's own lists move FIRST, so a persistence failure leaves prompts usable in this
+    // window exactly as the notice's detail promises; the store's answer replaces them when it arrives. The
+    // adjacent-duplicate rule is applied here too so the optimistic list matches what the DAL will store.
+    setState((s) => (text.trim() === '' || s[list][0] === text ? s : { ...s, [list]: [text, ...s[list]] }));
+    void bridge.command({ kind: 'prompts.push', list, text }).then((r) => { if (r.ok) setState((r.value as { state: PromptState }).state); });
+  }, []);
+  const take = useCallback(async (list: PromptList, index: number, remove: boolean): Promise<string> => {
+    const r = await bridge.command({ kind: 'prompts.take', list, index, remove });
+    if (!r.ok) return '';
+    const value = r.value as { text: string; state: PromptState };
+    setState(value.state);
+    return value.text;
+  }, []);
+  return { history: state.history, stash: state.stash, revision, push, take };
+}
+
+/**
+ * REQ-LIBRARY-107: load the prompt into the composer, switch to the Workspace view, focus the composer. The
+ * composer registers itself when it mounts, so after a view switch it may not exist for another frame — the same
+ * two-frame wait the shell uses for Ctrl+L (`AppShell.nowOrAfterMount`), for the same reason.
+ */
+function loadIntoComposer(text: string): void {
+  if (text === '') return;
+  useShellState.getState().switchView('workspace');
+  const load = (): boolean => { const composer = useShellState.getState().composer; if (!composer) return false; composer.setText(text); return true; };
+  if (!load()) requestAnimationFrame(() => requestAnimationFrame(() => { load(); }));
+}
+
+function Workspace({ models, workspace, popOut, prompts, onOpenStash }: { models: readonly string[]; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const snapshot = useConfigSnapshot(workspace);
@@ -206,6 +263,8 @@ function Workspace({ models, workspace, popOut }: { models: readonly string[]; w
   const nowIso = useElapsedTick(session);
   return <WorkspaceView
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
+    onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
+    onRecordPrompt={(text) => prompts.push('history', text)}
     personas={personas} entry={entry} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60}
     onSelectAgent={(id, source) => { if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     onOpenPersona={(agent, focusSteer) => { void openPersona(agent, focusSteer); }}
@@ -305,6 +364,39 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
     onGoTo={(view) => useShellState.getState().switchView(view)}
   />;
+}
+
+/**
+ * REQ-SHELL-023's Library view (Part X). The shell, the one search field and the three tabs are the view's; the
+ * Prompts tab is built here from the state `usePrompts` holds above every view.
+ *
+ * The other two tab bodies are PLACEHOLDERS, and each says why it is empty rather than showing an empty table that
+ * would read as "there is nothing", which is a different claim. The artifacts placeholder is the seam: the tab that
+ * replaces it is built against `LibraryTabProps` and slots in here, in this one expression.
+ */
+function TabPlaceholder({ testId, title, body }: { testId: string; title: string; body: string }) {
+  return (
+    <div className="empty-state library__placeholder" data-testid={testId}>
+      <span className="empty-state-title">{title}</span>
+      <span className="empty-state-hint">{body}</span>
+    </div>
+  );
+}
+function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void }) {
+  // REQ-LIBRARY-105: the query lives above the tabs, so a refresh replaces the lists and never the typed text.
+  const [query, setQuery] = useState('');
+  return (
+    <LibraryView
+      query={query}
+      onQuery={setQuery}
+      prompts={<PromptsTab query={foldLibraryQuery(query)} revision={prompts.revision} history={prompts.history} stash={prompts.stash} layout={layout} onLayout={onLayout}
+        onUse={(list, index, remove) => { void prompts.take(list, index, remove).then(loadIntoComposer); }} />}
+      artifacts={<TabPlaceholder testId="library-artifacts-placeholder" title="No artifact store yet"
+        body="Agents publish reports and deliverables into a per-session artifact store. That store is not built in this version, so nothing can appear here yet — this tab is not saying the session published nothing." />}
+      proposals={<TabPlaceholder testId="library-proposals-placeholder" title="No improvement proposals yet"
+        body="Proposals come from the post-run improvement analyst, and neither the analyst nor the store that would hold its artifacts is built in this version. This tab is not saying a run produced no suggestions." />}
+    />
+  );
 }
 
 /**
@@ -562,8 +654,11 @@ function dispatchNoticeAction(action: NoticeAction): void {
       focusSession(action.sessionId);
       return;
     case 'open-library':
-      // REQ-LIBRARY-103's tabs are checked by the schema; the Library view is not built, so there is nothing to open.
-      console.warn(`notice action "open-library" (${action.tab}) has no target: the Library view is not built`);
+      // REQ-LIBRARY-103's three tab names, imported from the domain that owns the list — the same discipline the
+      // view and the settings category take. An action naming a tab outside it is not dispatched (ADR-0049's
+      // sixth decision), and `openLibrary` ignores an unknown name a second time on the way in.
+      if (!(LIBRARY_TABS as readonly string[]).includes(action.tab)) { console.warn(`notice action named a Library tab outside REQ-LIBRARY-103: ${action.tab}`); return; }
+      shell.openLibrary(action.tab);
       return;
     case 'install-update':
     case 'restart':
@@ -579,7 +674,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
@@ -599,6 +694,12 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   // REQ-GIT-076/153: the Git view's split, keyed `git` (REQ-SHELL-069), per user.
   const [gitLayout, setGitLayout] = useState<PaneLayout | undefined>(initialGitLayout);
   const onGitLayout = useCallback((l: PaneLayout) => { setGitLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/git', value: l }); }, []);
+  // REQ-LIBRARY-106 / REQ-SHELL-069 (Part X): the Prompts tab's split, keyed `library`, per user.
+  const [libraryLayout, setLibraryLayout] = useState<PaneLayout | undefined>(initialLibraryLayout);
+  const onLibraryLayout = useCallback((l: PaneLayout) => { setLibraryLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/library', value: l }); }, []);
+  // Part X: the saved prompts, above every view (REQ-LIBRARY-105), and the stash dialog they open (REQ-LIBRARY-141).
+  const prompts = usePrompts(workspace);
+  const [stashOpen, setStashOpen] = useState(false);
   const git = useGitState(workspace);
   /**
    * REQ-SHELL-125 / REQ-SESSION-184: "New session" opens the launch dialog — refused with the sentence while a run is
@@ -729,9 +830,10 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
-        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} />,
+        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} />,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
+        library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
         settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,
       }}
       notice={notice}
@@ -752,6 +854,11 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
         onBackup={() => workspaceAction('workspace.backup')}
         onRestore={() => workspaceAction('workspace.restore')}
       />
+    )}
+    {/* REQ-LIBRARY-141: the stash dialog, opened from the transcript toolbar (and, once the slash catalogue exists, by `/pop`). */}
+    {stashOpen && (
+      <StashDialog stash={prompts.stash} onClose={() => setStashOpen(false)}
+        onTake={(index, remove) => { void prompts.take('stash', index, remove).then(loadIntoComposer); }} />
     )}
     {launch && (
       <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} confinementAvailable={false}
@@ -996,17 +1103,19 @@ async function bootPersona(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, popOutReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/overview' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/git' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/library' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/agentPopOut' }),
   ]);
   const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
+  const initialLibraryLayout = libraryLayoutReply.ok ? ((libraryLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
   applyTheme(runningTheme, document.documentElement);
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
@@ -1024,7 +1133,7 @@ async function boot(): Promise<void> {
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

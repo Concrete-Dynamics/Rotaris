@@ -32,3 +32,4 @@ export * from './Inspector.js';
 export * from './AgentTable.js';
 export * from './MissionView.js';
 export * from './PersonaWindow.js';
+export * from './library/index.js';

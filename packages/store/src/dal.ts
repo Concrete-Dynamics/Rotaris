@@ -145,6 +145,22 @@ export const RING_KINDS = ['permission_audit', 'tool_calls', 'issues'] as const;
 export type RingKind = (typeof RING_KINDS)[number];
 export const RING_CAPS: Readonly<Record<RingKind, number>> = Object.freeze({ permission_audit: 5000, tool_calls: 5000, issues: 500 });
 
+/**
+ * v11 (Part X): the two saved-prompt lists and REQ-LIBRARY-139's caps, one policy table — the same shape
+ * `RING_CAPS` above takes for REQ-SESSION-133, and for the same reason: the cap is enforced by the statements
+ * here, so the figure belongs beside them. `contracts` declares the same two names for the wire (it and this
+ * package cannot import each other); both cite REQ-LIBRARY-137, which is the single definition of the pair.
+ * The two figures are "fixed by this document: neither is configurable, and no key of any scope changes them".
+ */
+export const PROMPT_LISTS = ['history', 'stash'] as const;
+export type PromptList = (typeof PROMPT_LISTS)[number];
+export const PROMPT_CAPS: Readonly<Record<PromptList, number>> = Object.freeze({ history: 200, stash: 100 });
+/** Both lists as stored, newest first, capped, blank entries dropped (REQ-LIBRARY-139). */
+export interface PromptLists {
+  readonly history: readonly string[];
+  readonly stash: readonly string[];
+}
+
 export interface RingState {
   readonly next_ordinal: number;
   readonly held: number;
@@ -398,6 +414,32 @@ export class StoreDal {
       deleteSession: db.prepare('DELETE FROM sessions WHERE session_id = ?'),
       // Part U (REQ-SESSION-153/189): the whole history in stored order — the trajectory's events, read in one transaction.
       eventsOf: db.prepare('SELECT * FROM events WHERE session_id = ? ORDER BY ordinal'),
+
+      // v11 (Part X): the saved prompts. One statement pair per list rather than a table name spliced into SQL —
+      // every SQL string in the product is prepared here and none is built from a value (ADR-0058, consequence 16).
+      // The reader takes `LIMIT cap` so a store holding more than the cap (an older build, a restored artifact)
+      // still answers with at most the cap while the trim runs beside it: REQ-LIBRARY-139 enforces "on both load
+      // and save", and the read must not depend on the write having happened first.
+      readHistory: db.prepare('SELECT text FROM prompt_history ORDER BY seq DESC LIMIT ?'),
+      readStash: db.prepare('SELECT text FROM prompt_stash ORDER BY seq DESC LIMIT ?'),
+      frontHistory: db.prepare('SELECT text FROM prompt_history ORDER BY seq DESC LIMIT 1'),
+      frontStash: db.prepare('SELECT text FROM prompt_stash ORDER BY seq DESC LIMIT 1'),
+      insertHistory: db.prepare('INSERT INTO prompt_history (text, at) VALUES (?, ?)'),
+      insertStash: db.prepare('INSERT INTO prompt_stash (text, at) VALUES (?, ?)'),
+      // REQ-LIBRARY-139: the oldest beyond the cap, by the same OFFSET form the checkpoint trim uses — exact
+      // under the gaps AUTOINCREMENT leaves, which `max(seq) - cap` would not be.
+      trimHistory: db.prepare('DELETE FROM prompt_history WHERE seq IN (SELECT seq FROM prompt_history ORDER BY seq DESC LIMIT -1 OFFSET ?)'),
+      trimStash: db.prepare('DELETE FROM prompt_stash WHERE seq IN (SELECT seq FROM prompt_stash ORDER BY seq DESC LIMIT -1 OFFSET ?)'),
+      // REQ-LIBRARY-139: a blank entry is discarded on load, and is discarded FROM THE STORE so the next load
+      // does not have to discard it again (a load that keeps answering around a row it will not show is a store
+      // disagreeing with every surface over it).
+      pruneBlankHistory: db.prepare("DELETE FROM prompt_history WHERE trim(text) = ''"),
+      pruneBlankStash: db.prepare("DELETE FROM prompt_stash WHERE trim(text) = ''"),
+      // REQ-LIBRARY-107: by the entry's own position from the newest, so a filtered view removes the right item.
+      historyAt: db.prepare('SELECT seq, text FROM prompt_history ORDER BY seq DESC LIMIT 1 OFFSET ?'),
+      stashAt: db.prepare('SELECT seq, text FROM prompt_stash ORDER BY seq DESC LIMIT 1 OFFSET ?'),
+      deleteHistoryAt: db.prepare('DELETE FROM prompt_history WHERE seq = ?'),
+      deleteStashAt: db.prepare('DELETE FROM prompt_stash WHERE seq = ?'),
     };
   }
 
@@ -729,6 +771,81 @@ export class StoreDal {
   /** REQ-GIT-155: written only in the transaction that reports a restore successful. */
   setLastRestored(id: SessionId, sequence: number, updatedAt: string): void {
     this.stmts['setLastRestored']!.run(sequence, updatedAt, id);
+  }
+
+  // v11 (Part X): the saved prompts (REQ-LIBRARY-137/138/139). Every rule the requirements state about an entry
+  // lives HERE, beside the insert and the delete, and not in a caller — there is no second route to these tables,
+  // so no later caller can skip the duplicate suppression or the cap by writing its own path.
+  private readonly promptStmts = { history: { read: 'readHistory', front: 'frontHistory', insert: 'insertHistory', trim: 'trimHistory', pruneBlank: 'pruneBlankHistory', at: 'historyAt', deleteAt: 'deleteHistoryAt' }, stash: { read: 'readStash', front: 'frontStash', insert: 'insertStash', trim: 'trimStash', pruneBlank: 'pruneBlankStash', at: 'stashAt', deleteAt: 'deleteStashAt' } } as const;
+
+  /**
+   * REQ-LIBRARY-139, the LOAD half: blank entries removed, the cap enforced, both lists newest first. The prune
+   * and the trim run in one transaction with the two reads, so no reader ever sees a list half-trimmed
+   * (REQ-CHAT-045: "no reader ever observes a partly applied change to either list").
+   */
+  readPrompts(caps: Readonly<Record<PromptList, number>> = PROMPT_CAPS): PromptLists {
+    return this.transaction(() => {
+      const list = (which: PromptList): string[] => {
+        const s = this.promptStmts[which];
+        this.stmts[s.pruneBlank]!.run();
+        this.stmts[s.trim]!.run(Math.max(0, caps[which]));
+        return (this.stmts[s.read]!.all(Math.max(0, caps[which])) as { text: string }[]).map((r) => String(r.text));
+      };
+      return { history: list('history'), stash: list('stash') };
+    });
+  }
+
+  /**
+   * REQ-LIBRARY-137: front-insert, "suppressing only adjacent duplicates (a new entry equal to the current front
+   * item is not added)"; the stash "front-inserts non-empty text", and REQ-LIBRARY-139 discards blank entries, so
+   * a blank push is not a change to either list. REQ-LIBRARY-139's SAVE half is the trim in the same transaction.
+   * `added` is false where nothing was written — the caller uses it to decide whether a library change happened
+   * at all (REQ-LIBRARY-105: a write that changes nothing is not one).
+   */
+  pushPrompt(list: PromptList, text: string, at: string, caps: Readonly<Record<PromptList, number>> = PROMPT_CAPS): { added: boolean; lists: PromptLists } {
+    const s = this.promptStmts[list];
+    const added = this.transaction(() => {
+      if (text.trim() === '') return false;
+      const front = this.stmts[s.front]!.get() as { text: string } | undefined;
+      if (front !== undefined && front.text === text) return false;
+      this.stmts[s.insert]!.run(text, at);
+      this.stmts[s.trim]!.run(Math.max(0, caps[list]));
+      return true;
+    });
+    return { added, lists: this.readPrompts(caps) };
+  }
+
+  /** REQ-LIBRARY-107: remove the entry at `index` counted from the newest. False when the index names no entry. */
+  removePrompt(list: PromptList, index: number): boolean {
+    const s = this.promptStmts[list];
+    return this.transaction(() => {
+      if (!Number.isInteger(index) || index < 0) return false;
+      const row = this.stmts[s.at]!.get(index) as { seq: number; text: string } | undefined;
+      if (row === undefined) return false;
+      return this.stmts[s.deleteAt]!.run(row.seq).changes === 1;
+    });
+  }
+
+  /**
+   * REQ-LIBRARY-137: "Popping a stash entry removes and returns it by index; an out-of-range index returns an
+   * empty string without error." The read and the removal are one transaction, so the text returned is the text
+   * of the row that went.
+   */
+  popPrompt(list: PromptList, index: number): string {
+    const s = this.promptStmts[list];
+    return this.transaction(() => {
+      if (!Number.isInteger(index) || index < 0) return '';
+      const row = this.stmts[s.at]!.get(index) as { seq: number; text: string } | undefined;
+      if (row === undefined) return '';
+      return this.removePrompt(list, index) ? String(row.text) : '';
+    });
+  }
+
+  /** The entry at `index` counted from the newest, without removing it — REQ-LIBRARY-107's "Use" and the dialog's "Apply". */
+  promptAt(list: PromptList, index: number): string {
+    if (!Number.isInteger(index) || index < 0) return '';
+    const row = this.stmts[this.promptStmts[list].at]!.get(index) as { text: string } | undefined;
+    return row === undefined ? '' : String(row.text);
   }
 
   totals(): { sessions: number; rows: number } {

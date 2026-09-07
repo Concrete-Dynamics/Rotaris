@@ -18,3 +18,4 @@ export * from './repository.js';
 export * from './git.js';
 export * from './checkpoints.js';
 export * from './mcp.js';
+export * from './library.js';

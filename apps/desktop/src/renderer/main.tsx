@@ -335,7 +335,53 @@ async function pageOlder(beforeIndex: number): Promise<boolean> {
   return true;
 }
 
-function Workspace({ models, workspace, popOut, prompts, onOpenStash, groupTools }: { models: readonly string[]; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean }) {
+/**
+ * Part AB — REQ-CHAT-008's synthetic state: the persisted session claims busy but no local run exists. The verdict
+ * comes from the ONE liveness predicate (REQ-SESSION-171) through `session.list`'s `stale`, never from this window
+ * inferring it from silence, and it is re-asked only when the followed session or its status changes — there is no
+ * poll, because a wrong answer here would mislabel a live run and a timer would make it a race.
+ */
+function useNeedsRecovery(sessionId: string | null, executionStatus: string | null): boolean {
+  const [recovery, setRecovery] = useState(false);
+  const busy = executionStatus !== null && isBusy(executionStatus);
+  useEffect(() => {
+    let live = true;
+    queueMicrotask(() => {
+      if (!live) return;
+      if (!sessionId || !busy) { setRecovery(false); return; }
+      void bridge.command({ kind: 'session.list' }).then((r) => {
+        if (!live || !r.ok) return;
+        const rows = (r.value as { sessions?: readonly SessionListItemPayload[] }).sessions ?? [];
+        setRecovery(rows.find((s) => s.sessionId === sessionId)?.stale === true);
+      });
+    });
+    return () => { live = false; };
+  }, [sessionId, busy, executionStatus]);
+  return recovery;
+}
+
+/**
+ * Part AB — REQ-CHAT-014 (200 ms to application state) and REQ-SHELL-159 (400 ms to the preference store). The
+ * view owns both timers over the keystroke stream; this holds the published value and performs the store write,
+ * which main keys by the workspace it has open (REQ-CHAT-015: a draft never reaches another workspace's composer).
+ */
+function useDraft(workspace: string): { draft: string | undefined; publish: (t: string) => void; write: (t: string) => void } {
+  const [stored, setStored] = useState<string | undefined>(undefined);
+  const [, setPublished] = useState('');
+  useEffect(() => {
+    if (workspace === '(no workspace)') return;
+    let live = true;
+    void bridge.command({ kind: 'composer.readDraft' }).then((r) => { if (live && r.ok) setStored((r.value as { text: string }).text); });
+    return () => { live = false; };
+  }, [workspace]);
+  return {
+    draft: stored,
+    publish: setPublished,
+    write: (text: string) => { void bridge.command({ kind: 'composer.writeDraft', text }); },
+  };
+}
+
+function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenStash, groupTools, layout, onLayout }: { models: readonly string[]; modelsLoaded: boolean; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const reachedOldest = useStore(replica, (s) => s.reachedOldest);
@@ -344,8 +390,28 @@ function Workspace({ models, workspace, popOut, prompts, onOpenStash, groupTools
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
   const nowIso = useElapsedTick(session);
   const display = useStore(displayPrefs, (s) => s);
+  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
+  const drafts = useDraft(workspace);
+  /**
+   * REQ-CHAT-006/009: the three chips choose what the NEXT run starts with, and in this architecture that is Tier A
+   * configuration — the same scoped per-field write (REQ-CONFIG-441/463) the permission-mode chip already takes, so
+   * "the next run starts from it" is the configuration load's own rule rather than a second mechanism beside it.
+   * The persona is the run's default role (`default_persona`); the model and the reasoning are that role's own,
+   * which is what `entryOf` reads back, so the chip shows the value it just wrote.
+   */
+  const setField = useCallback(async (patch: Record<string, unknown>): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const r = await bridge.command({ kind: 'config.setField', patch });
+    return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+  }, []);
+  const entryPersona = entry.persona;
   return <WorkspaceView
     onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
+    needsRecovery={needsRecovery} modelsLoaded={modelsLoaded} history={prompts.history} configuredMode={snapshot?.runtime.permission_mode}
+    draft={drafts.draft} onPublishDraft={drafts.publish} onWriteDraft={drafts.write}
+    composerHeight={layout?.sizes[1]} onComposerHeight={(sizes) => onLayout({ version: 1, panes: 2, sizes: [...sizes] })}
+    onSetNextPersona={(persona) => setField({ default_persona: persona })}
+    onSetNextModel={(model) => setField({ personas: { [entryPersona]: { model } } })}
+    onSetNextReasoning={(level) => setField({ personas: { [entryPersona]: { thinking: level } } })}
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
     onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
@@ -791,7 +857,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialPopOut, initialGroupTools }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean; initialGroupTools: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut, initialGroupTools }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean; initialGroupTools: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
@@ -807,6 +873,9 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   const [browserLoading, setBrowserLoading] = useState(false);
   const [browserError, setBrowserError] = useState<string | null>(null);
   const [models, setModels] = useState<readonly string[]>([]);
+  // REQ-CHAT-009: whether the options have ARRIVED, which is not the same as there being any — a workspace that
+  // configures none is loaded with nothing to offer, and the chip says so rather than staying on a loading label.
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   // REQ-SHELL-069: the Overview's pane split, per user, under panels/.
   const [layout, setLayout] = useState<PaneLayout | undefined>(initialLayout);
   const onLayout = useCallback((l: PaneLayout) => { setLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/overview', value: l }); }, []);
@@ -816,6 +885,9 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   // REQ-LIBRARY-106 / REQ-SHELL-069 (Part X): the Prompts tab's split, keyed `library`, per user.
   const [libraryLayout, setLibraryLayout] = useState<PaneLayout | undefined>(initialLibraryLayout);
   const onLibraryLayout = useCallback((l: PaneLayout) => { setLibraryLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/library', value: l }); }, []);
+  // Part AB — REQ-CHAT-010 / REQ-SHELL-069: the Workspace's transcript/composer divider, keyed `workspace`, per user.
+  const [workspaceLayout, setWorkspaceLayout] = useState<PaneLayout | undefined>(initialWorkspaceLayout);
+  const onWorkspaceLayout = useCallback((l: PaneLayout) => { setWorkspaceLayout(l); void bridge.command({ kind: 'prefs.set', key: 'panels/workspace', value: l }); }, []);
   // Part X: the saved prompts, above every view (REQ-LIBRARY-105), and the stash dialog they open (REQ-LIBRARY-141).
   const prompts = usePrompts(workspace);
   const [stashOpen, setStashOpen] = useState(false);
@@ -848,8 +920,8 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   // REQ-MONITOR-144: the run header's model selector offers the configured models.
   useEffect(() => {
     if (workspace === '(no workspace)') return;
-    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) setModels((r.value as ConfigSnapshot).models); }); });
-    return bridge.onConfigChanged((p) => setModels((p as { snapshot: ConfigSnapshot }).snapshot.models));
+    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) { setModels((r.value as ConfigSnapshot).models); setModelsLoaded(true); } }); });
+    return bridge.onConfigChanged((p) => { setModels((p as { snapshot: ConfigSnapshot }).snapshot.models); setModelsLoaded(true); });
   }, [workspace]);
   // REQ-SESSION-109: a session found paused at the message limit presents the dialog at once, once per pause.
   const presentedPause = useRef<string | null>(null);
@@ -949,7 +1021,7 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
-        workspace: <Workspace models={models} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} />,
+        workspace: <Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} />,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
@@ -1224,7 +1296,7 @@ async function bootPersona(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, groupToolsReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, groupToolsReply, workspaceLayoutReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
@@ -1233,6 +1305,7 @@ async function boot(): Promise<void> {
     bridge.command({ kind: 'prefs.get', key: 'panels/library' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/agentPopOut' }),
     bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
+    bridge.command({ kind: 'prefs.get', key: 'panels/workspace' }),
   ]);
   const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
   // REQ-CHAT-067: the tool-grouping setting defaults ON, so an unset preference reads as on.
@@ -1240,6 +1313,8 @@ async function boot(): Promise<void> {
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialLibraryLayout = libraryLayoutReply.ok ? ((libraryLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
+  // Part AB — REQ-CHAT-010 / REQ-SHELL-069: the Workspace's transcript/composer split, read before the first paint.
+  const initialWorkspaceLayout = workspaceLayoutReply.ok ? ((workspaceLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
   applyTheme(runningTheme, document.documentElement);
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
@@ -1265,7 +1340,7 @@ async function boot(): Promise<void> {
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} initialGroupTools={initialGroupTools} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} initialGroupTools={initialGroupTools} />
     </StrictMode>,
   );
 }

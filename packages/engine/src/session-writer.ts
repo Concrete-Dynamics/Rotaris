@@ -939,15 +939,19 @@ export class SessionWriter {
   }
 
   /** REQ-SESSION-067: a no-op where nothing is outstanding — and with synchronous commits nothing ever is. */
-  /** REQ-CHAT-035/038: one queued prompt, its record and its timeline entry in one transaction. */
-  queuePrompt(promptId: string, content: string): Result<QueuedPromptRow, WriteFailure> {
+  /**
+   * REQ-CHAT-035/038: one queued prompt, its record and its timeline entry in one transaction.
+   * REQ-CHAT-039 (Part AB): `contextSnapshot` is the optional snapshot, stored beside the prompt; the OWNER is
+   * `sessionId` — this writer's session — and is settled here and nowhere else, so edit and trigger cannot move it.
+   */
+  queuePrompt(promptId: string, content: string, contextSnapshot: string | null = null): Result<QueuedPromptRow, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const at = toIsoUtc(wall.instant());
     let row: QueuedPromptRow | null = null;
     try {
       dal.transaction(() => {
-        row = dal.insertQueuedPrompt(sessionId, promptId, content, at);
+        row = dal.insertQueuedPrompt(sessionId, promptId, content, at, contextSnapshot);
         dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'prompt_queued', 'user', `A prompt was queued for the next iteration (${promptId.slice(0, 8)}).`, JSON.stringify({ prompt_id: promptId }), timelineId(), 'info');
       });
     } catch (cause) {

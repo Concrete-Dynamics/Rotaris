@@ -62,6 +62,61 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(sessions.control({ op: 'removeQueuedPrompt', sessionId: sid, args: { promptId } })).toEqual({ ok: false });
   });
 
+  /**
+   * Part AB — REQ-CHAT-039's scoped half, and REQ-CHAT-038's exactly-once transition. The unscoped half is NOT
+   * tested because it is not built: `queued_prompts.session_id` is NOT NULL and OQ-59 asks the owner whether an
+   * unscoped prompt still exists after REQ-CHAT-041's 2026-09-07 amendment to "one session-scoped queue".
+   */
+  it('scopes a queued prompt by the session it was submitted to, keeps the ownership across edit and trigger, and refuses a snapshot naming another session (REQ-CHAT-038/039)', async () => {
+    const sessions = makeSessions(many(5));
+    const started = sessions.start(dal, 'C:/ws', 'first task');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    // The addressing IS the explicit session id; a snapshot agreeing with it is stored and changes nothing.
+    const agreed = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'scoped', context: { session_id: sid, note: 'from the composer' } } });
+    expect(agreed.ok).toBe(true);
+    // A snapshot naming ANOTHER session is refused rather than silently re-scoped or written under the wrong owner.
+    expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'mis-scoped', context: { session_id: 'S-somewhere-else' } } })).toEqual({ ok: false });
+    const promptId = agreed.ok ? agreed.value! : '';
+    const afterCreate = dal.queuedPromptsOf(sid);
+    expect(afterCreate).toHaveLength(1);
+    expect(afterCreate[0]!.session_id).toBe(sid);
+    expect(JSON.parse(afterCreate[0]!.context_snapshot!) as Record<string, unknown>).toEqual({ session_id: sid, note: 'from the composer' });
+    // Ownership and the snapshot survive an edit …
+    expect(sessions.control({ op: 'editQueuedPrompt', sessionId: sid, args: { promptId, text: 'scoped, edited' } })).toEqual({ ok: true });
+    const afterEdit = dal.queuedPromptsOf(sid)[0]!;
+    expect([afterEdit.session_id, afterEdit.content, afterEdit.context_snapshot]).toEqual([sid, 'scoped, edited', afterCreate[0]!.context_snapshot]);
+    // A context snapshot is optional, and an unreadable one is no snapshot rather than an error (REQ-CHAT-038).
+    const plain = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'no snapshot', context: 'not json' } });
+    expect(plain.ok).toBe(true);
+    expect(dal.queuedPromptsOf(sid).find((p) => p.content === 'no snapshot')!.context_snapshot).toBeNull();
+    // … and the trigger.
+    await sessions.running(sid);
+    const afterTrigger = dal.queuedPromptsOf(sid)[0]!;
+    expect(afterTrigger.session_id).toBe(sid);
+    expect(afterTrigger.status).toBe('TRIGGERED');
+    expect(afterTrigger.context_snapshot).toBe(afterCreate[0]!.context_snapshot);
+  });
+
+  it('moves QUEUED → TRIGGERED for exactly one of two callers racing the same prompt (REQ-CHAT-038)', () => {
+    const sessions = makeSessions(many(2));
+    const started = sessions.start(dal, 'C:/ws', 'first task');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    const queued = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'consume me once' } });
+    const promptId = queued.ok ? queued.value! : '';
+    // Two callers attempting the same transition on the same prompt: the conditional UPDATE's row count is the
+    // claim, so exactly one sees `true` and the other "observes that the prompt is no longer QUEUED".
+    const claims = [dal.triggerQueuedPrompt(sid, promptId, 'T1'), dal.triggerQueuedPrompt(sid, promptId, 'T2')];
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    const row = dal.queuedPromptsOf(sid)[0]!;
+    expect([row.status, row.triggered_at]).toEqual(['TRIGGERED', 'T1']);
+    // The loser left it alone: nothing was overwritten and the row is still owned by the same session.
+    expect(row.session_id).toBe(sid);
+    // A third caller is the same refusal, however many runs are eligible.
+    expect(dal.triggerQueuedPrompt(sid, promptId, 'T3')).toBe(false);
+  });
+
   it('a steer needs an agent id and text, returns its id, and reaches the conversation at its next step (REQ-MONITOR-005/008/133/134)', async () => {
     const sessions = makeSessions(many(3));
     const started = sessions.start(dal, 'C:/ws', 'steer me');

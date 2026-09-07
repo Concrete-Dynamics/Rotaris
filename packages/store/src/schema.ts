@@ -459,6 +459,28 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX artifacts_by_created ON artifacts(session_id, created_at, id);
     `,
   },
+  {
+    to: 13,
+    // v13 lands with the composer (Part AB): REQ-CHAT-038's "optional context snapshot" on the queued prompt, which the
+    // table has never held, and which REQ-CHAT-039 makes load-bearing — "ownership may come from an explicit session id
+    // OR from a `session_id` key in the context snapshot". Without a column the second route has nothing to read and the
+    // requirement could only be half-quoted. One nullable JSON text column; NULL is "no snapshot was supplied", which is
+    // every prompt written before this migration and every prompt the composer queues.
+    //
+    // NO new index and NO new statement shape: every reader still names `(session_id, prompt_id)` or scans one session's
+    // prompts, and the QUEUED → TRIGGERED move is the same one conditional UPDATE whose row count is the claim
+    // (REQ-CHAT-038). Ownership is the primary key's first column and NOTHING updates it, which is how "ownership MUST be
+    // preserved across edit and trigger" is a property of the schema rather than of a caller's discipline.
+    //
+    // **What this migration deliberately does NOT do.** REQ-CHAT-038 admits an UNSCOPED prompt ("empty = unscoped") that
+    // any run may consume. `session_id` is `TEXT NOT NULL REFERENCES sessions(session_id)` and has been since v6, so no
+    // such row can exist; and on 2026-09-07 the owner amended REQ-CHAT-041 to "one session-scoped queue" per application
+    // instance without amending 039 alongside it. Whether an unscoped prompt still exists is OQ-51, raised against
+    // REQ-CHAT-039 rather than decided here; dropping the NOT NULL would be deciding it.
+    sql: `
+      ALTER TABLE queued_prompts ADD COLUMN context_snapshot TEXT;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

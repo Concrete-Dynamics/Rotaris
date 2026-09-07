@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import {
+  clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
+  DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, reasoningChipLabel,
+  REASONING_LEVELS, runHeaderControlReason, runStateLabel, runStateOf, runTimingLabel, runTimingSeconds, sendRefusal,
+  type HistoryWalk, type RunState,
+} from './composer.js';
 import { AgentTree } from './AgentTree.js';
 import { liveDescendants, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
@@ -79,6 +85,38 @@ export interface WorkspaceViewProps {
   /** Part AA — REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`), both default OFF. */
   readonly showReasoning?: boolean | undefined;
   readonly autoCollapseTools?: boolean | undefined;
+  /**
+   * Part AB — REQ-CHAT-008: the persisted session claims busy but no local run exists. Decided upstream by the ONE
+   * liveness predicate (REQ-SESSION-171, `Sessions.list`'s `stale`), never by this view guessing from silence.
+   */
+  readonly needsRecovery?: boolean | undefined;
+  /**
+   * Part AB — REQ-CHAT-007's second limb: an unanswered project-setup prompt gates execution. **Nothing in this
+   * build can set it**: the only project setup that exists is Part T's code-intelligence setup (REQ-MCP-099/112),
+   * a settings-category action that gates nothing. The refusal is implemented and unreachable, and that is recorded.
+   */
+  readonly projectSetupPending?: boolean | undefined;
+  /** Part AB — REQ-CHAT-009: whether the model options have arrived, which is not the same as there being any. */
+  readonly modelsLoaded?: boolean | undefined;
+  /**
+   * Part AB — REQ-CHAT-009: the chip is labelled `mode: <name>`, and with no session loaded the name is the
+   * CONFIGURED mode (REQ-CONFIG-288's "the next run starts from it"), not a placeholder — the chip chooses what
+   * the next run starts with, so it must name what that would be.
+   */
+  readonly configuredMode?: string | undefined;
+  /** Part AB — REQ-CHAT-006/009: the three chips that choose what the NEXT run starts with (Tier A, REQ-CONFIG-441). */
+  readonly onSetNextPersona?: ((persona: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly onSetNextModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly onSetNextReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** Part AB — REQ-CHAT-016: the workspace's prompt history, newest first (REQ-LIBRARY-137's list). */
+  readonly history?: readonly string[] | undefined;
+  /** Part AB — REQ-CHAT-014 (200 ms) and REQ-SHELL-159 (400 ms): two debounces over one keystroke stream, never chained. */
+  readonly draft?: string | undefined;
+  readonly onPublishDraft?: ((text: string) => void) | undefined;
+  readonly onWriteDraft?: ((text: string) => void) | undefined;
+  /** Part AB — REQ-CHAT-010 / REQ-SHELL-069: the transcript/composer divider, persisted per user under `panels/workspace`. */
+  readonly composerHeight?: number | undefined;
+  readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -186,16 +224,22 @@ function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name:
   );
 }
 
-/** REQ-CHAT-004: the four placeholders, first condition wins. */
-export function composerPlaceholder(session: SessionRecord | null, runActive: boolean): string {
-  if (runActive) return 'Run active — the composer unlocks when it ends…';
-  if (session && isBusy(session.executionStatus)) return 'Describe how to continue this session…';
-  if (session) return 'Message orchestrator — type / for commands, ↑ for history…';
-  return 'Describe the outcome you want…';
+/**
+ * REQ-CHAT-004: the four placeholders, first condition wins, each word for word.
+ *
+ * **Two defects of the built version are repaired here (Part AB) and the falsified readings kept beside them.**
+ * (1) String (1) read "Run active — the composer unlocks when it ends…", which is not one of the four the
+ * requirement lists AND says the opposite of REQ-CHAT-006 and REQ-CHAT-156 — the composer does not lock while a
+ * run is active; it queues. (2) The second condition was unreachable: both it and the first were computed from
+ * `session !== null && isBusy(status)`, so a session busy with no local run took branch (1). The distinction is
+ * REQ-CHAT-008's recovery condition, and it now comes in as `localRunActive` rather than being derived twice.
+ */
+export function composerPlaceholder(session: SessionRecord | null, localRunActive: boolean, busy = localRunActive): string {
+  return composerPlaceholderFor(session !== null, localRunActive, busy);
 }
-/** REQ-CHAT-005: the primary action states the mode. */
-export function composerAction(session: SessionRecord | null, runActive: boolean): 'Queue' | 'Continue run' | 'Start run' {
-  if (runActive) return 'Queue';
+/** REQ-CHAT-005: the primary action states the mode; `Queue` needs a LOCAL run, not merely a busy session. */
+export function composerAction(session: SessionRecord | null, localRunActive: boolean): 'Queue' | 'Continue run' | 'Start run' {
+  if (localRunActive) return 'Queue';
   return session ? 'Continue run' : 'Start run';
 }
 /** REQ-SESSION-186: the control says which of the two the next activation will do. */
@@ -212,11 +256,13 @@ export function intentStatusText(intent: SessionRecord['intent']): string | null
   ];
   return `Intent: ${intent.category}${extras.length > 0 ? ` (${extras.join('; ')})` : ''}`;
 }
-/** `m:ss` / `h:mm:ss` of a remaining span, never negative. */
+/**
+ * `m:ss` / `h:mm:ss` of a remaining span, never negative. Part AB moved the arithmetic to `composer.ts`, where
+ * REQ-CHAT-158's run-timing indicator also reads it: the two render the same shape and one implementation is
+ * what stops them drifting apart.
+ */
 export function formatRemaining(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+  return formatDuration(seconds);
 }
 /**
  * REQ-NOTIFY-263: the run header's wait text — the run is waiting on a provider limit; the provider and the model;
@@ -279,6 +325,68 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
  * (REQ-MONITOR-230) and searchable by REQ-CHAT-074 rather than invisible to it.
  */
 
+/**
+ * Part AB — REQ-CHAT-006/007: a control that is disabled MUST publish its reason through **both** its tooltip
+ * and its accessible description; "greying the control alone does not satisfy this". One component owns both,
+ * so a control cannot acquire one and not the other. The description is a `visually-hidden` element referenced
+ * by `aria-describedby`, which is the form every assistive technology in use reads; `title` is the tooltip.
+ */
+function ChipShell({ id, label, reason, testId, children }: { id: string; label: string; reason: string | null; testId: string; children?: ReactNode }) {
+  return (
+    <div className="chip-control" data-testid={testId} data-disabled={reason === null ? '0' : '1'}>
+      <span className="visually-hidden" id={`${id}-reason`}>{reason ?? ''}</span>
+      {children ?? <span className="chip-control__label">{label}</span>}
+    </div>
+  );
+}
+
+/**
+ * REQ-CHAT-009's selector chips. Each is a `select` so the chip both states the current choice in its label and
+ * offers the alternatives without a second surface; the label is the requirement's own (`mode: <name>`,
+ * `reasoning: <level>`). A disabled chip carries the reason twice (REQ-CHAT-006/007) through `ChipShell`.
+ */
+function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose }: {
+  id: string; testId: string; label: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
+  onChoose: (value: string) => void;
+}) {
+  return (
+    <ChipShell id={id} label={label} reason={reason} testId={testId}>
+      <label className="chip-control__label" htmlFor={id}>{label}</label>
+      <select
+        id={id} className="input select chip-control__select" aria-label={ariaLabel} value={value} disabled={reason !== null}
+        aria-disabled={reason !== null} title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
+        onChange={(e) => { const v = e.currentTarget.value; if (v !== '') onChoose(v); }}
+      >
+        {options.length === 0 && <option value="">—</option>}
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </ChipShell>
+  );
+}
+
+/**
+ * REQ-CHAT-158's run-timing indicator, and REQ-CHAT-008's run-state label, in the run header.
+ *
+ * The tick is the surface's own once-a-second interval and **writes nothing**: it sets no session state, sends
+ * no command and causes no transcript publication (REQ-MONITOR-108). The value it renders is a pure function of
+ * the record the surface already holds, so a tick that renders the same string changes nothing at all.
+ */
+function RunTiming({ session, busy, stepStartedAt }: { session: SessionRecord | null; busy: boolean; stepStartedAt: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
+  const seconds = session === null ? null : runTimingSeconds({ runStartedAt: session.runStartedAt, updatedAt: session.updatedAt, busy, stepStartedAt }, now);
+  const label = runTimingLabel(seconds);
+  return (
+    <span className="run-header__timing mono" data-testid="run-timing" data-seconds={seconds === null ? '' : String(Math.floor(seconds))} data-frozen={busy ? '0' : '1'}>
+      {label ?? ''}
+    </span>
+  );
+}
+
 /** REQ-TOOLS-077: strictest-first; `autonomous` needs an explicit confirmation; declining restores the previous selection. */
 function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
   const [confirming, setConfirming] = useState<PermissionPreset | null>(null);
@@ -289,8 +397,9 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
     setError(r.ok ? null : r.reason);
   };
   return (
-    <div className="mode" aria-label="Permission mode">
-      <span className="mode__label text-secondary">mode</span>
+    <div className="mode chip-control" data-testid="chip-mode" aria-label="Permission mode">
+      {/* REQ-CHAT-009: the chip is labelled `mode: <name>`. REQ-CHAT-006: it stays enabled in EVERY run state. */}
+      <span className="mode__label text-secondary" data-testid="chip-mode-label">mode: {current ?? 'default'}</span>
       <div className="seg" role="radiogroup" aria-label="Permission mode, strictest first">
         {PERMISSION_PRESETS.map((m) => (
           <button
@@ -321,8 +430,8 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false }: WorkspaceViewProps) {
-  const [text, setText] = useState('');
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight }: WorkspaceViewProps) {
+  const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
   const [error, setError] = useState<string | null>(null);
@@ -333,15 +442,82 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const [pausePending, setPausePending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
-  const runActive = session !== null && isBusy(session.executionStatus);
+  /**
+   * REQ-CHAT-004/005/006/008 (Part AB): `busy` is what the persisted session claims; `runActive` is a run this
+   * instance actually owns. They differ in exactly one case — REQ-CHAT-008's synthetic recovery state — and the
+   * composer's mode, its placeholder, its primary action and its chips all read the one they mean rather than
+   * both reading the same predicate, which is how the second placeholder became unreachable.
+   */
+  const sessionBusy = session !== null && isBusy(session.executionStatus);
+  const runActive = sessionBusy && !needsRecovery;
+  const runState: RunState = runStateOf(session?.executionStatus ?? null, needsRecovery);
   // A pending stop is one requested against the run that is still active; a new run begins from a submit, which resets it.
   const stopPending = runActive && stopRequested;
   const pending = session?.pendingApprovals ?? [];
+  /** REQ-CHAT-006: one reason, shown by all three chips, published through tooltip AND accessible description. */
+  const chipReason = composerChipReason(runState);
+  /** REQ-CHAT-007: the two refusals, decided before anything is sent. */
+  const refusal = sendRefusal(runState, projectSetupPending);
+
+  /**
+   * REQ-CHAT-016's shell recall. `null` is "not walking"; any keypress that is not Up or Down resets it, which is
+   * why nothing here persists it beyond the walk. The saved draft is the text the composer held at the first Up.
+   */
+  const [walk, setWalk] = useState<HistoryWalk | null>(null);
+  const caretToEnd = useCallback(() => {
+    const el = area.current;
+    if (!el) return;
+    requestAnimationFrame(() => { const end = el.value.length; el.focus(); el.setSelectionRange(end, end); });
+  }, []);
+
+  /**
+   * REQ-CHAT-014 and REQ-SHELL-159: 200 ms to application state, 400 ms to the preference store, both measured
+   * from the last keystroke and neither chained to the other (ADR-0042 consequence 5). REQ-SHELL-159's four flush
+   * points — focus loss, view change, workspace replacement, window close — are flushed without waiting the
+   * interval out; the last two reach here as the component unmounting, which is what a view change also does.
+   */
+  const publishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The text as the timers will find it when they fire, maintained in an effect (a ref is not written during render).
+  const latest = useRef(draft ?? '');
+  useEffect(() => { latest.current = text; }, [text]);
+  const flushDraft = useCallback((value?: string) => {
+    if (publishTimer.current !== null) { clearTimeout(publishTimer.current); publishTimer.current = null; }
+    if (writeTimer.current !== null) { clearTimeout(writeTimer.current); writeTimer.current = null; }
+    // A flush caused BY a change carries the new text with it: the effect that mirrors it has not run yet.
+    const now = value ?? latest.current;
+    onPublishDraft?.(now);
+    onWriteDraft?.(now);
+  }, [onPublishDraft, onWriteDraft]);
+  const noteKeystroke = useCallback(() => {
+    if (publishTimer.current !== null) clearTimeout(publishTimer.current);
+    if (writeTimer.current !== null) clearTimeout(writeTimer.current);
+    publishTimer.current = setTimeout(() => { publishTimer.current = null; onPublishDraft?.(latest.current); }, DRAFT_PUBLISH_MS);
+    writeTimer.current = setTimeout(() => { writeTimer.current = null; onWriteDraft?.(latest.current); }, DRAFT_WRITE_MS);
+  }, [onPublishDraft, onWriteDraft]);
+  // REQ-SHELL-159: the window closing and the workspace being replaced both end this component; the draft is flushed then.
+  useEffect(() => () => { flushDraft(); }, [flushDraft]);
+  /**
+   * REQ-CHAT-015: the stored draft reappears character for character. It arrives after the first paint (a command
+   * round trip), so it is adopted when it lands — derived during render rather than in an effect — and only into
+   * a composer the user has not already typed into, because a draft that overwrote live typing would lose text.
+   */
+  const [seenDraft, setSeenDraft] = useState(draft);
+  if (seenDraft !== draft) {
+    setSeenDraft(draft);
+    if (draft !== undefined && draft !== '' && text === '') setText(draft);
+  }
 
   const submit = async () => {
+    // REQ-CHAT-006: the text area stays editable while a submission is in flight, so a second Enter can arrive
+    // before the first is answered; one submission at a time, and the text is not sent twice.
+    if (busy) return;
     const value = text;
     // REQ-CHAT-003: empty or whitespace-only does nothing but return focus.
     if (value.trim().length === 0) { area.current?.focus(); return; }
+    // REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
+    if (refusal !== null) { setError(refusal); area.current?.focus(); return; }
+    setWalk(null);
     setBusy(true);
     setText('');
     setStatus(null);
@@ -349,9 +525,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       // REQ-CHAT-035: during a run an ordinary submission is queued for the running session.
       const q = await onQueue(value);
       setBusy(false);
-      // REQ-LIBRARY-137: "each sent or queued prompt and nothing else" — a queue that was refused queued nothing.
+      // REQ-CHAT-017 / REQ-LIBRARY-137: recorded on a SUCCESSFUL queue and on nothing else; the head dedupe is the list's.
       if (q.ok) { setError(null); setStatus('Message queued for the next iteration.'); onRecordPrompt?.(value); }
       else { setText(value); setError('Message could not be queued because the run is no longer active.'); }
+      flushDraft(q.ok ? '' : value);
       area.current?.focus();
       return;
     }
@@ -364,9 +541,12 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       setError(r.reason);
     } else {
       setError(null);
-      // REQ-LIBRARY-137: front-inserted once the prompt was actually sent; a refused submission sent nothing.
+      // REQ-CHAT-017 / REQ-LIBRARY-137: recorded on run start and on continue, once the prompt was actually sent.
       onRecordPrompt?.(value);
     }
+    // REQ-CHAT-014 / REQ-SHELL-159: submit is a flush point — an emptied composer empties the stored draft at once,
+    // and a restored one stores exactly what was restored rather than what was typed before it.
+    flushDraft(r.ok ? '' : value);
     area.current?.focus();
   };
 
@@ -377,6 +557,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     if (trimmed === '') { area.current?.focus(); return; }
     onStash(trimmed);
     setText('');
+    setWalk(null);
+    flushDraft('');
     area.current?.focus();
   };
 
@@ -401,12 +583,30 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   // REQ-MONITOR-064: the live descendants, by the one rule every agent surface applies.
   const descendantsOf = (id: string): string[] => liveDescendants(session?.agents ?? [], id).map((a) => a.name);
 
+  /**
+   * REQ-CHAT-001: Enter submits, Shift+Enter inserts a newline.
+   * REQ-CHAT-016: Up and Down walk the history; **every other keypress resets the walk**, which is why the reset
+   * is the last statement here rather than an arm of its own — a key that is not Up or Down has already ended it,
+   * whatever else it does. Every recall places the caret at the end of the text.
+   */
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // REQ-CHAT-001: Enter submits, Shift+Enter inserts a newline.
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); return; }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const step = e.key === 'ArrowUp' ? historyUp(walk, history, text) : historyDown(walk, history, text);
+      if (step.moved) {
+        e.preventDefault();
+        setWalk(step.walk);
+        setText(step.text);
+        noteKeystroke();
+        caretToEnd();
+      }
+      return;
+    }
+    if (walk !== null) setWalk(null);
   };
 
-  const mode = (session?.permissionMode ?? null) as PermissionPreset | null;
+  // REQ-CHAT-009: the effective mode of the loaded session, else the configured one the next run would start from.
+  const mode = ((session?.permissionMode ?? configuredMode) ?? null) as PermissionPreset | null;
   // REQ-MONITOR-042 (Part R): the selection is the shell's, shared by every surface; `run` is the run-level selection.
   const selectedAgent = useShellState((st) => st.selectedAgentId);
   const selectAgentShared = useShellState((st) => st.selectAgent);
@@ -453,10 +653,63 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
   );
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit');
-  const switchable = session !== null && (session.executionStatus === 'running' || session.executionStatus === 'waiting');
+  /**
+   * REQ-CHAT-078 / REQ-CHAT-006's closing sentence: the run header's own model and reasoning selectors change the
+   * LIVE run, and follow the opposite rule to the composer's chips — enabled only while a run is running and
+   * locally owned, and stating one of the four reason texts whenever they are not.
+   */
+  const headerReason = runHeaderControlReason(runState);
   const queued = session?.queuedPrompts ?? [];
+  // REQ-CHAT-158: the step the run is inside now, from the newest row it produced (live one first). See `composer.ts`.
+  const stepStartedAt = useMemo(() => modelCallStartedAt(rows), [rows]);
+
+  /**
+   * REQ-CHAT-010 / REQ-SHELL-069: the divider between transcript and composer. Its position is per USER, keyed
+   * `panels/workspace`, and the declared defaults are the requirement's own figures — 150 px, never below 110 px,
+   * and never so tall that the transcript falls below 180 px.
+   */
+  const shell = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState(720);
+  const [height, setHeight] = useState(composerHeight ?? COMPOSER_DEFAULT_HEIGHT);
+  const [seenHeight, setSeenHeight] = useState(composerHeight);
+  if (seenHeight !== composerHeight) { setSeenHeight(composerHeight); if (composerHeight !== undefined) setHeight(composerHeight); }
+  useEffect(() => {
+    const measure = () => setBox(shell.current?.clientHeight ?? 720);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  const commitHeight = useCallback((value: number) => {
+    const container = shell.current?.clientHeight ?? 720;
+    const next = clampComposerHeight(value, container);
+    setHeight(next);
+    onComposerHeight?.([Math.max(0, container - next - 8), next]);
+  }, [onComposerHeight]);
+  const dividerDrag = useRef<{ startY: number; startHeight: number } | null>(null);
+  const onDividerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dividerDrag.current = { startY: e.clientY, startHeight: height };
+    // A synthetic pointer id (a scripted click) has nothing to capture; the drag still works without the capture.
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+  };
+  const onDividerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dividerDrag.current) return;
+    setHeight(clampComposerHeight(dividerDrag.current.startHeight - (e.clientY - dividerDrag.current.startY), shell.current?.clientHeight ?? 720));
+  };
+  const onDividerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dividerDrag.current) return;
+    const value = dividerDrag.current.startHeight - (e.clientY - dividerDrag.current.startY);
+    dividerDrag.current = null;
+    commitHeight(value);
+  };
+  const onDividerKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 40 : 10;
+    if (e.key === 'ArrowUp') { e.preventDefault(); commitHeight(height + step); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); commitHeight(height - step); }
+    else if (e.key === 'Home') { e.preventDefault(); commitHeight(box); }
+    else if (e.key === 'End') { e.preventDefault(); commitHeight(COMPOSER_MIN_HEIGHT); }
+  };
   return (
-    <div className={`workspace${agents.length > 0 ? ' workspace--with-agents' : ''}${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
+    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace${agents.length > 0 ? ' workspace--with-agents' : ''}${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
       {narrow && (
         <div className="workspace__drawer-bar" aria-label="Panels">
           {agents.length > 0 && <button type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</button>}
@@ -477,6 +730,36 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
         </aside>
       )}
+      {/*
+        * Part AB — the run header. REQ-CHAT-008's run-state label in its own fixed vocabulary, REQ-CHAT-158's
+        * timing indicator, and REQ-CHAT-078's live-run selectors, which are the run header's own controls and
+        * follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
+        */}
+      <div className="run-header" role="group" aria-label="Run" data-state={runState} data-testid="run-header">
+        <span className="run-header__state" data-testid="run-state">{runStateLabel(runState)}</span>
+        <RunTiming session={session} busy={runActive} stepStartedAt={stepStartedAt} />
+        {(onSetModel || onSetReasoning) && (
+          <div className="run-controls" aria-label="Active run model and reasoning">
+            <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>
+            {onSetModel && models.length > 0 && (
+              <select className="input select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+                title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
+                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
+                <option value="">Switch model…</option>
+                {models.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
+            {onSetReasoning && (
+              <select className="input select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+                title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration.'} aria-describedby="run-controls-reason"
+                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
+                <option value="">Switch reasoning…</option>
+                {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            )}
+          </div>
+        )}
+      </div>
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
         {(onOpenStash || agents.length > 0) && (
@@ -523,6 +806,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       </div>
       {(!narrow || drawer === 'inspector') && inspector}
       <QueuePanel prompts={queued} onEdit={onEditQueued} onRemove={onRemoveQueued} onError={setError} />
+      {/* REQ-CHAT-010: the divider between transcript and composer — draggable, keyboard-reachable, position persisted. */}
+      <div className="composer__divider" role="separator" aria-orientation="horizontal" aria-label="Resize the composer" tabIndex={0}
+        aria-valuemin={COMPOSER_MIN_HEIGHT} aria-valuemax={Math.max(COMPOSER_MIN_HEIGHT, box - 188)} aria-valuenow={height} data-testid="composer-divider"
+        onPointerDown={onDividerDown} onPointerMove={onDividerMove} onPointerUp={onDividerUp} onKeyDown={onDividerKey} />
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         {error && <div className="composer__error" role="alert">{error}</div>}
         {status && !error && <div className="composer__hint" role="status">{status}</div>}
@@ -530,32 +817,50 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           ref={area}
           className="input composer__input"
           aria-label="Composer"
-          placeholder={runActive ? 'Queue a message for the next iteration…' : composerPlaceholder(session, runActive)}
+          /* REQ-CHAT-004: one of exactly four strings, chosen by the first condition that holds. */
+          placeholder={composerPlaceholder(session, runActive, sessionBusy)}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          /* REQ-CHAT-006 / REQ-CHAT-156: editable in EVERY run state — a running agent never locks the user out of typing. */
+          onChange={(e) => { setText(e.target.value); setWalk(null); noteKeystroke(); }}
           onKeyDown={onKey}
-          disabled={busy}
-          aria-disabled={busy}
+          /* REQ-SHELL-159: focus loss is one of the four flush points — the write does not wait the interval out. */
+          onBlur={() => flushDraft()}
           rows={3}
         />
         <div className="composer__actions">
-          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} />}
-          {switchable && (onSetModel || onSetReasoning) && (
-            <div className="run-controls" aria-label="Active run model and reasoning">
-              {onSetModel && models.length > 0 && (
-                <select className="input select" aria-label="Active run model" defaultValue="" onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
-                  <option value="">Switch model…</option>
+          {/*
+            * REQ-CHAT-009's four selector chips. The three that choose what the NEXT run starts with are disabled in
+            * exactly REQ-CHAT-006's six states and each publishes its reason through both its tooltip and its
+            * accessible description; the permission-mode chip and Stash are enabled in every state.
+            */}
+          <div className="composer__chips" aria-label="Next run">
+            {onSetNextPersona && (
+              <SelectorChip id="chip-persona" testId="chip-persona" label="persona" ariaLabel="Persona for the next run" reason={chipReason}
+                value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
+                onChoose={(v) => { void onSetNextPersona(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+            )}
+            {onSetNextModel && (
+              <ChipShell id="chip-model" testId="chip-model" label={modelChipLabel(modelsLoaded, models, entry?.model ?? null)} reason={modelsLoaded ? chipReason : 'Model options are still loading.'}>
+                <label className="chip-control__label" htmlFor="chip-model">{modelChipLabel(modelsLoaded, models, entry?.model ?? null)}</label>
+                <select id="chip-model" className="input select chip-control__select" aria-label="Model for the next run"
+                  value={entry?.model && models.includes(entry.model) ? entry.model : ''}
+                  /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
+                  disabled={!modelsLoaded || chipReason !== null} aria-disabled={!modelsLoaded || chipReason !== null}
+                  title={modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
+                  onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
+                  <option value="">—</option>
                   {models.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
-              )}
-              {onSetReasoning && (
-                <select className="input select" aria-label="Active run reasoning" defaultValue="" onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
-                  <option value="">Switch reasoning…</option>
-                  {['low', 'medium', 'high'].map((l) => <option key={l} value={l}>{l}</option>)}
-                </select>
-              )}
-            </div>
-          )}
+              </ChipShell>
+            )}
+            {onSetNextReasoning && (
+              <SelectorChip id="chip-reasoning" testId="chip-reasoning" label={reasoningChipLabel(entry?.reasoning ?? null)} ariaLabel="Reasoning effort for the next run"
+                reason={chipReason} value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
+                options={REASONING_LEVELS}
+                onChoose={(v) => { void onSetNextReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+            )}
+          </div>
+          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} />}
           {/* REQ-LIBRARY-140 / REQ-CHAT-042: a ghost control beside the composer; it stashes whatever is typed, run or no run. */}
           {onStash && <button type="button" className="btn btn-ghost" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}>Stash</button>}
           {runActive && onSteer && <button type="button" className="btn btn-secondary" onClick={() => setSteering({ id: 'run', name: 'the run' })}>Steer</button>}

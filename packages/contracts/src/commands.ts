@@ -22,8 +22,16 @@ import { PromptListSchema } from './library.js';
  * REQ-CHAT-167 names literally, default **off**; and **`display/autoCollapseTools`** (REQ-CHAT-067), default
  * **off**. REQ-CHAT-166's four tool-content caps are NOT here — those are workspace configuration, written to
  * the `display` section of `agents.yaml`, and are Part Z's.
+ *
+ * Part AB adds `panels/workspace` — REQ-CHAT-010's transcript/composer divider, an ordinary multi-pane divider
+ * under REQ-SHELL-069's key rule, keyed by the lower-cased view name for the same reason `panels/library` is.
+ * The **composer draft** is deliberately NOT here: REQ-SHELL-159 registers it as `workspaces/{workspace-key}/
+ * composerDraft`, a key parametrised by the open workspace, and a renderer that could name the parameter could
+ * name another workspace's draft — which is exactly what REQ-CHAT-015's last sentence forbids. It travels as
+ * `composer.readDraft` / `composer.writeDraft` below, which carry no key at all: main derives it from the
+ * workspace it has open, so the renderer cannot ask for a draft that is not its own.
  */
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'interface/agentPopOut', 'display/groupTools', 'display/showReasoning', 'display/autoCollapseTools'] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'panels/workspace', 'interface/agentPopOut', 'display/groupTools', 'display/showReasoning', 'display/autoCollapseTools'] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome
@@ -48,6 +56,15 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('prefs.get'), key: z.enum(PREFERENCE_COMMAND_KEYS) }),
   /** REQ-SHELL-069: a pane layout is a versioned record under `panels/`, per user. */
   z.object({ kind: z.literal('prefs.set'), key: z.enum(PREFERENCE_COMMAND_KEYS), value: z.union([z.boolean(), z.string(), PaneLayoutSchema]) }),
+  /**
+   * REQ-CHAT-015 / REQ-SHELL-159 / REQ-NOTIFY-066 (Part AB): the composer draft of the workspace this instance
+   * has open. Neither command names a key or a workspace — main resolves `workspaces/{workspace-key}/composerDraft`
+   * from the workspace it opened — so "a draft stored against one workspace MUST NOT appear in the composer of
+   * any other workspace" holds by construction rather than by the renderer being careful. The write carries the
+   * text verbatim, including the empty string, which is how a cleared composer is cleared in the store too.
+   */
+  z.object({ kind: z.literal('composer.readDraft') }),
+  z.object({ kind: z.literal('composer.writeDraft'), text: z.string() }),
   /**
    * REQ-CHAT-011: a submission with no session starts one; the text becomes row 0, kind `user`.
    * REQ-SHELL-125 / REQ-GIT-021/118/158 (Part O): the launch dialog's choices ride along — isolation with its branch

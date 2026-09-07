@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
-import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
+import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE } from '@rotaris/config';
@@ -1056,7 +1056,7 @@ async function main(): Promise<void> {
       case 'prefs.get':
         return { ok: true, value: { value: preferences.read(req.key) } };
       case 'prefs.set': {
-        if (req.key === 'panels/overview' || req.key === 'panels/git' || req.key === 'panels/library') {
+        if (req.key === 'panels/overview' || req.key === 'panels/git' || req.key === 'panels/library' || req.key === 'panels/workspace') {
           if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
           await preferences.write(req.key, req.value);
         } else if (req.key === 'ui/reduced_motion') {
@@ -1074,6 +1074,21 @@ async function main(): Promise<void> {
           if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
           await preferences.write(req.key, req.value);
         }
+        return { ok: true };
+      }
+      /**
+       * REQ-CHAT-015 / REQ-SHELL-159 (Part AB): the per-workspace composer draft. Main resolves the key from the
+       * workspace IT has open — the renderer names none — so a draft can only ever be read or written against the
+       * workspace whose window asked, and the isolation REQ-CHAT-015 requires is a property of this seam rather
+       * than of the caller. With no workspace open there is no draft: the read answers the empty default and the
+       * write is a silent no-op, which is the state a window is in before its first workspace opens.
+       */
+      case 'composer.readDraft':
+        if (currentWorkspace === '(no workspace)') return { ok: true, value: { text: '' } };
+        return { ok: true, value: { text: preferences.read(composerDraftKey(currentWorkspace)) } };
+      case 'composer.writeDraft': {
+        if (currentWorkspace === '(no workspace)') return { ok: true };
+        await preferences.write(composerDraftKey(currentWorkspace), req.text);
         return { ok: true };
       }
       case 'session.start': {

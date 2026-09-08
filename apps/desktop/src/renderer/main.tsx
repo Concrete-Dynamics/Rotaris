@@ -469,7 +469,15 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     models={models}
     onQueue={(text) => control('createQueuedPrompt', { text }, 'The run no longer accepts prompts.')}
     onEditQueued={(promptId, text) => control('editQueuedPrompt', { promptId, text }, 'Queued message was already picked up and cannot be edited.')}
-    onRemoveQueued={(promptId) => control('removeQueuedPrompt', { promptId }, 'Queued message was already picked up and cannot be deleted.')}
+      onRemoveQueued={(promptId) => control('removeQueuedPrompt', { promptId }, 'Queued message was already picked up and cannot be deleted.')}
+      onEditTodo={(edit) => control('editTodo', {
+        op: edit.op,
+        source: edit.source,
+        ...(edit.id === undefined ? {} : { id: edit.id }),
+        ...(edit.text === undefined ? {} : { text: edit.text }),
+        ...(edit.phaseId === undefined ? {} : { phaseId: edit.phaseId }),
+        ...(edit.ownerId === null ? {} : { ownerId: edit.ownerId }),
+      }, 'Todo editing is not ready for this active run yet.')}
     onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
     onContinue={() => continueSession('continue')}
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}

@@ -41,6 +41,7 @@
     "rows-proof": "node apps/desktop/scripts/rows-proof.mjs",
     "composer-proof": "node apps/desktop/scripts/composer-proof.mjs",
     "questions-proof": "node apps/desktop/scripts/questions-proof.mjs",
+    "todo-proof": "node apps/desktop/scripts/todo-proof.mjs",
     "settings-proof": "node apps/desktop/scripts/settings-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",

@@ -107,6 +107,24 @@ export const TranscriptRowSchema = z.object({
 });
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 
+/** REQ-CHAT-086/088: the normalized task-plan vocabulary published to every surface. */
+export const TaskDisplayStateSchema = z.enum(['done', 'active', 'open', 'abandoned']);
+export const TaskPlanSchema = z.object({
+  source: z.enum(['child', 'agent', 'planner']),
+  sourceLabel: z.string().min(1),
+  ownerId: z.string().nullable(),
+  phases: z.array(z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    tasks: z.array(z.object({
+      id: z.string().min(1),
+      text: z.string(),
+      state: TaskDisplayStateSchema,
+    })),
+  })),
+});
+export type TaskPlan = z.infer<typeof TaskPlanSchema>;
+
 export const TranscriptIncrementSchema = z.object({
   v: schemaVersion,
   sessionId,
@@ -171,6 +189,13 @@ export const SessionRecordSchema = z.object({
   intent: IntentStatusSchema.nullable(),
   /** REQ-CHAT-041 / REQ-MONITOR-141: exactly the QUEUED prompts of this session, on the whole-session update. */
   queuedPrompts: z.array(z.object({ id: z.string(), content: z.string(), createdAt: z.string() })),
+  /**
+   * REQ-CHAT-085..091: the run-level plan after the child > agent > planner priority has been resolved, plus
+   * child-owned plans keyed by the child's stable task id. A surface selects by scope and never decodes backend
+   * todo documents or maps their state vocabularies itself.
+   */
+  todo: TaskPlanSchema.nullable(),
+  childTodos: z.record(z.string(), TaskPlanSchema),
   /** REQ-ORCH-084/087: the message limit in force (null = disabled) and, while paused at it, the count reached. */
   messageLimit: z.number().int().nullable(),
   pausedAtCount: z.number().int().nullable(),

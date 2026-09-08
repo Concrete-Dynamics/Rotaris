@@ -135,3 +135,7 @@ toggle writes the flag on Save (REQ-CONFIG-323) and the strip's "● CB armed" f
 steer, a queued prompt's consumption and a todo edit each reset the consecutive counter (REQ-ORCH-105) — and
 `observeStuck()` its producer: an empty reply with no tool call is read as the runtime's "cannot make progress"
 report (REQ-ORCH-096). "Revisit if" clause one is met. **Found: nothing.**
+
+## Fourth execution — 2026-09-08, editable task-plan source routing
+
+Part AD exercised the planner todo through the desktop edit surface (REQ-CHAT-085..091). The first execution found a source-routing defect at the established `run.editTodo` seam: the visible agent-maintained document could take priority while edits always changed the loop planner document. The run now retains the planner and root-agent documents in one versioned JSON envelope inside the existing `sessions.todo` field, projects the source decision once, and routes edits through that decision. Child-owned documents remain on their child records. Every accepted edit still calls `noteUserInstruction()` and persists before projection. Temporary `local-<n>` ids live solely in the renderer; the run assigns the durable 8-hex id before any record or model-visible payload exists. The focused proof is `pnpm todo-proof` with evidence in `.todo-proof/results.json`.

@@ -292,7 +292,10 @@ export class IterationChildren implements DelegationOps {
     const cancelled = deps.runSignal.aborted;
     const toolCalls = outcome?.toolCallCount ?? 0;
     this.toolCalls.set(row.task_id, toolCalls);
-    deps.dal.setChildTodo(deps.sessionId, row.task_id, null, toolCalls);
+    // REQ-CHAT-088: the tool port may have persisted this child's own plan while it ran; settling updates the
+    // call count while preserving that document for the scoped transcript and later session refreshes.
+    const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;
+    deps.dal.setChildTodo(deps.sessionId, row.task_id, persistedTodo, toolCalls);
     const messages = outcome?.messages ?? [];
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
     const lastText = lastAssistant ? lastAssistant.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') : '';

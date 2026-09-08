@@ -18,6 +18,10 @@ export const hexId = (): string => randomBytes(4).toString('hex');
 export class TodoList {
   readonly phases: TodoPhase[] = [];
 
+  constructor(document?: { readonly phases: readonly { readonly id: string; readonly name: string; readonly tasks: readonly TodoTask[] }[] } | null) {
+    if (document) this.phases.push(...document.phases.map((phase) => ({ ...phase, tasks: phase.tasks.map((task) => ({ ...task })) })));
+  }
+
   findTask(id: string): { phase: TodoPhase; task: TodoTask } | undefined {
     for (const phase of this.phases) for (const task of phase.tasks) if (task.id === id) return { phase, task };
     return undefined;

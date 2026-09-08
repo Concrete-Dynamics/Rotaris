@@ -55,19 +55,23 @@ export class Todo {
     phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0 });
   }
 
-  /** REQ-MONITOR-004's todo edit — add/update/remove by id; false when the id is unknown or the task is no longer editable. */
+  /** REQ-CHAT-090/091: validated add/update/remove; every successful edit changes the document. */
   editTask(op: 'add' | 'update' | 'remove', id: string, text: string, phaseName = 'main'): boolean {
+    const body = text.trim();
     if (op === 'add') {
-      if (this.all().some((t) => t.id === id)) return false;
-      this.appendTask(phaseName, id, text);
+      if (body === '' || this.all().some((t) => t.id === id) || !this.phases.some((p) => p.name === phaseName)) return false;
+      this.appendTask(phaseName, id, body);
       return true;
     }
     for (const p of this.phases) {
       const at = p.tasks.findIndex((t) => t.id === id);
       if (at === -1) continue;
       const task = p.tasks[at]!;
-      if (task.state === 'in_progress' && op === 'remove') return false;
-      if (op === 'update') { p.tasks[at] = { ...task, text }; return true; }
+      if (op === 'update') {
+        if (body === '' || body === task.text) return false;
+        p.tasks[at] = { ...task, text: body };
+        return true;
+      }
       p.tasks.splice(at, 1);
       return true;
     }

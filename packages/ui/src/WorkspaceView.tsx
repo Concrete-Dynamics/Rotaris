@@ -14,6 +14,7 @@ import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './
 import { TranscriptPane } from './transcript/TranscriptPane.js';
 import type { DisplayCaps } from './transcript/project.js';
 import type { TrailerRow } from './transcript/types.js';
+import { TodoPane, type TodoEdit } from './TodoPane.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -47,6 +48,8 @@ export interface WorkspaceViewProps {
   readonly onQueue?: ((text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onEditQueued?: ((id: string, text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onRemoveQueued?: ((id: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-090: the optimistic pane writes through to the source named by the published plan. */
+  readonly onEditTodo?: ((edit: TodoEdit) => Promise<{ ok: true; value?: string } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-123/125: pause the whole run; continue a paused session from the composer. */
   readonly onPause?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onContinue?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
@@ -433,7 +436,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -617,12 +620,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const agents = session?.agents ?? [];
   const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
+  /** REQ-CHAT-088: the engine has already resolved each source; scope chooses the matching published plan. */
+  const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;
   // REQ-CHAT-069: "This task" keeps the run-owned kinds plus the selected agent's rows; with no agent selected it is
   // unavailable with that as its stated reason, so the transcript is never filtered to nothing.
   const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected) : rows), [scope, selected, rows]);
   // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
   const narrow = useNarrow();
-  const [drawer, setDrawer] = useState<'agents' | 'inspector' | null>(null);
+  const [drawer, setDrawer] = useState<'agents' | 'plan' | 'inspector' | null>(null);
   // REQ-SHELL-049/050 (Part W): Ctrl+Return is the window-wide fallback submit — the registration says whether the send control is enabled.
   const registerComposer = useShellState((st) => st.registerComposer);
   const registerOverlay = useShellState((st) => st.registerOverlay);
@@ -712,16 +717,17 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     else if (e.key === 'End') { e.preventDefault(); commitHeight(COMPOSER_MIN_HEIGHT); }
   };
   return (
-    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace${agents.length > 0 ? ' workspace--with-agents' : ''}${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
+    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
       {narrow && (
         <div className="workspace__drawer-bar" aria-label="Panels">
           {agents.length > 0 && <button type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</button>}
+          <button type="button" className={`btn btn-ghost btn-compact${drawer === 'plan' ? ' is-active' : ''}`} aria-pressed={drawer === 'plan'} onClick={() => setDrawer(drawer === 'plan' ? null : 'plan')}>Task plan</button>
           <button type="button" className={`btn btn-ghost btn-compact${drawer === 'inspector' ? ' is-active' : ''}`} aria-pressed={drawer === 'inspector'} onClick={() => setDrawer(drawer === 'inspector' ? null : 'inspector')}>Inspector</button>
         </div>
       )}
-      {agents.length > 0 && (!narrow || drawer === 'agents') && (
+      {(!narrow || drawer === 'agents' || drawer === 'plan') && (
         <aside className={`agents${narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
-          <div className="agents__header">
+          {(!narrow || drawer === 'agents') && <><div className="agents__header">
             <span className="agents__title">Agents</span>
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
               <button type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</button>
@@ -731,6 +737,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             )}
           </div>
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
+          </>}
+          {(!narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
         </aside>
       )}
       {/*

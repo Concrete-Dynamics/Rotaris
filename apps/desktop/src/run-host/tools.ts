@@ -97,7 +97,7 @@ function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, wa
 }
 
 /** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
-function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todo: TodoList): Map<string, ToolExecutor> {
+function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor): Map<string, ToolExecutor> {
   // REQ-CONFIG-468: the additional read-only roots reach the fence; the file-tool state is per workspace root and keeps the first fence it saw.
   const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots] };
   let state = deps.fileStates.get(root);
@@ -105,7 +105,7 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
   const list: ToolExecutor[] = [
     readFileTool(state) as ToolExecutor, writeFileTool(state) as ToolExecutor, haetReadTool(state) as ToolExecutor,
     haetEditTool(state, 'haet_edit') as ToolExecutor, haetEditTool(state, 'haet') as ToolExecutor,
-    grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, todoTool(todo) as ToolExecutor,
+    grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, todoExecutor,
     // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).
     fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }) as ToolExecutor,
   ];
@@ -134,8 +134,18 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // isolated run); the runtime and the personas are the BASE workspace's configuration.
   const root = realPathOf(ctx.effectiveRoot ?? ctx.workspaceRoot);
   const runtime = deps.runtime(ctx.workspaceRoot);
-  const todo = new TodoList();
-  const executors = executorsFor(root, deps, runtime, todo);
+  const todo = new TodoList(ctx.readTodo?.());
+  const rawTodo = todoTool(todo) as ToolExecutor;
+  const watchedTodo: ToolExecutor = {
+    ...rawTodo,
+    execute: async (args, toolContext) => {
+      const before = JSON.stringify(todo.toDocument());
+      const result = await rawTodo.execute(args, toolContext);
+      if (JSON.stringify(todo.toDocument()) !== before) ctx.writeTodo?.(todo.toDocument());
+      return result;
+    },
+  };
+  const executors = executorsFor(root, deps, runtime, watchedTodo);
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;

@@ -26,6 +26,7 @@ import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladd
 import { pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import { randomUUID } from 'node:crypto';
+import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
 /**
  * The run loop, in its first conformant slice: one root agent, one model
@@ -201,6 +202,8 @@ export class Run {
   private initialIterations = 0;
   private lastFailure: string | null = null;
   private todo: Todo;
+  /** REQ-CHAT-088: the root agent's tool-owned plan, kept alongside the loop planner in one stored envelope. */
+  private agentTodo: AgentTodoDocument | null;
   private aggregates: Aggregates;
   /** REQ-MONITOR-166: the token history, sampled every 10 s while live and once at the end; 120 kept, persisted with the session. */
   private tokenSamples: [string, number][];
@@ -239,6 +242,7 @@ export class Run {
     this.catalogue = deps.resilience?.catalogue ?? [];
     this.waits = new WaitRegistry({ clocks: deps.clocks, onChange: () => this.publishWait() });
     const stored = deps.readSession();
+    this.agentTodo = decodeStoredTodo(stored?.todo ?? null).agent;
     this.todo = deps.resumeTodo ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit) : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
@@ -604,14 +608,58 @@ export class Run {
     this.saveRunning({});
   }
 
-  /** REQ-MONITOR-004's todo edit; a todo correction counts as a user instruction for the supervisor (REQ-ORCH-105). */
-  editTodo(op: 'add' | 'update' | 'remove', id: string, text: string): boolean {
-    if (this.ended) return false;
-    if (!this.todo.editTask(op, id, text)) return false;
+  /** REQ-CHAT-088/090/091: edits follow the source the visible plan names. */
+  editTodo(op: 'add' | 'update' | 'remove', id: string, text: string, source: 'child' | 'agent' | 'planner' = 'planner', ownerId: string | null = null, phaseId = 'main'): { changed: boolean; id?: string } {
+    if (this.ended) return { changed: false };
+    let result: { changed: boolean; id?: string } = { changed: false };
+    if (source === 'planner') {
+      const assigned = op === 'add' ? (id || randomUUID().replaceAll('-', '').slice(0, 8)) : id;
+      result = this.todo.editTask(op, assigned, text, phaseId) ? { changed: true, ...(op === 'add' ? { id: assigned } : {}) } : { changed: false };
+    } else {
+      const current = source === 'agent' ? this.agentTodo : this.agentTodoFor(ownerId, false);
+      if (current !== null) {
+        const edited = editAgentTodo(current, op, id, text, phaseId, () => randomUUID().replaceAll('-', '').slice(0, 8));
+        if (edited.changed) {
+          result = { changed: true, ...(edited.id === undefined ? {} : { id: edited.id }) };
+          if (source === 'agent') this.agentTodo = edited.document;
+          else this.storeChildTodo(ownerId, edited.document);
+        }
+      }
+    }
+    if (!result.changed) return result;
     this.deps.writer.appendTimeline('todo_edited', 'user', `The user ${op === 'add' ? 'added' : op === 'update' ? 'updated' : 'removed'} todo item ${id}.`, { op, id });
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
+    return result;
+  }
+
+  /** The tool port calls these for the exact root or child conversation it belongs to. */
+  agentTodoFor(ownerId: string | null, root: boolean): AgentTodoDocument | null {
+    if (root) return this.agentTodo;
+    if (!ownerId || !this.deps.dal) return null;
+    const raw = this.deps.dal.childrenOf(this.sessionId).find((child) => child.task_id === ownerId)?.todo;
+    if (!raw) return null;
+    try { const value: unknown = JSON.parse(raw); return isAgentTodoDocument(value) ? value : null; } catch { return null; }
+  }
+
+  replaceAgentTodo(ownerId: string | null, root: boolean, document: AgentTodoDocument): boolean {
+    if (this.ended) return false;
+    if (root) this.agentTodo = document;
+    else if (!this.storeChildTodo(ownerId, document)) return false;
+    this.saveRunning({});
     return true;
+  }
+
+  private storeChildTodo(ownerId: string | null, document: AgentTodoDocument): boolean {
+    if (!ownerId || !this.deps.dal) return false;
+    const child = this.deps.dal.childrenOf(this.sessionId).find((candidate) => candidate.task_id === ownerId);
+    if (!child) return false;
+    this.deps.dal.setChildTodo(this.sessionId, ownerId, JSON.stringify(document), child.tool_calls);
+    return true;
+  }
+
+  private todoJson(): string {
+    return encodeStoredTodo({ planner: this.todo.toDocument(), agent: this.agentTodo })!;
   }
 
   /**
@@ -674,7 +722,7 @@ export class Run {
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);
-    writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: count, todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()) });
+    writer.pauseAtLimit(count, limit, { ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: count, todo: this.todoJson(), progress: JSON.stringify(this.progress()) });
     if (writer.failed) return this.teardown('agent_session_aborted');
     owner.flushPending();
     try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the pause failed on ${this.sessionId}: ${String(cause)}`); }
@@ -791,7 +839,7 @@ export class Run {
   private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
     const r = this.deps.writer.save(status, {
       ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: this.iterationsCompleted,
-      todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()),
+      todo: this.todoJson(), progress: JSON.stringify(this.progress()),
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),
       ...(extra.permission_mode === undefined ? {} : { permission_mode: extra.permission_mode }),
       ...(extra.sandboxed === undefined ? {} : { sandboxed: extra.sandboxed }),
@@ -848,7 +896,7 @@ export class Run {
         patch: {
           ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), stop_reason: stopReason, iterations_completed: this.iterationsCompleted,
           summary_status: summary.status, summary_severity: summary.severity, summary_text: summary.message,
-          todo: JSON.stringify(this.todo.toDocument()), progress: JSON.stringify(this.progress()),
+          todo: this.todoJson(), progress: JSON.stringify(this.progress()),
         },
         events: [
           { kind: 'session.end', payload: { status: result.status, stop_reason: stopReason, iterations_completed: this.iterationsCompleted, duration_seconds: elapsed, tokens: result.tokens, cost: result.cost } },

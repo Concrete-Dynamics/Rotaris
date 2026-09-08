@@ -25,10 +25,11 @@ import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
-import type { TodoDocument } from './run/todo.js';
+import { Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
+import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, projectSessionTodos, type AgentTodoDocument } from './todo-view.js';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -80,6 +81,9 @@ export interface ToolPortContext {
    * registry then removes the three tools with `artifact_store_absent` (REQ-TOOLS-004).
    */
   readonly artifacts?: ArtifactOps | undefined;
+  /** REQ-CHAT-088/090: the agent-owned todo for this exact conversation and its write-through. */
+  readonly readTodo?: (() => AgentTodoDocument | null) | undefined;
+  readonly writeTodo?: ((document: AgentTodoDocument) => boolean) | undefined;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -273,9 +277,9 @@ const cut = (text: string, cap: number): string => text.length <= cap ? text : `
 function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, ResumeFailure> {
   if (row.todo === null) return ok(undefined);
   try {
-    const value = JSON.parse(row.todo) as Partial<TodoDocument>;
-    if (value.schema_version !== 1 || !Array.isArray(value.phases) || value.phases.some((phase) => typeof phase !== 'object' || phase === null || !Array.isArray(phase.tasks))) throw new Error('todo must be a schema_version 1 document with phase task lists');
-    return ok(value as TodoDocument);
+    const decoded = decodeStoredTodo(row.todo);
+    if (decoded.planner === null && decoded.agent === null) throw new Error('todo must be a schema_version 1 document or a schema_version 2 planner/agent envelope');
+    return ok(decoded.planner ?? undefined);
   } catch (cause) {
     return err({ code: 'state-unreadable', reason: `session ${row.session_id} has unreadable stored state: ${String(cause instanceof Error ? cause.message : cause)}` });
   }
@@ -385,6 +389,8 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     backgroundSessions: 0,
     intent: null,
     queuedPrompts: [...queued],
+    todo: null,
+    childTodos: {},
     messageLimit: r.message_limit,
     pausedAtCount: r.paused_at_count,
     usageHistory: parseTokenSamples(r.token_samples),
@@ -634,7 +640,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -690,7 +696,7 @@ export class Sessions {
     const writer = created.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), agents: dal.childrenOf(sessionId).map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
     });
     entry.owner = owner;
@@ -739,7 +745,7 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }) }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false }),
         dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -854,7 +860,7 @@ export class Sessions {
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }) }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false }),
         dal: s.dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -874,6 +880,7 @@ export class Sessions {
   control(req: ControlRequest): ControlResult {
     const s = this.live.get(asSessionId(req.sessionId));
     const run = s?.run;
+    if (req.op === 'editTodo' && (!run || run.isEnded)) return this.editStoredTodo(s, req);
     if (!run || run.isEnded) return { ok: false };
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
@@ -931,10 +938,15 @@ export class Sessions {
       }
       case 'editTodo': {
         const op = text('op');
-        const id = text('id');
+        const id = text('id') ?? '';
         const body = typeof req.args['text'] === 'string' ? (req.args['text'] as string) : '';
-        if (id === null || (op !== 'add' && op !== 'update' && op !== 'remove') || (op !== 'remove' && body.trim() === '')) return { ok: false };
-        return run.editTodo(op, id, body) ? { ok: true } : { ok: false };
+        const requestedSource = req.args['source'];
+        const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
+        const ownerId = typeof req.args['ownerId'] === 'string' && req.args['ownerId'] !== '' ? req.args['ownerId'] : null;
+        const phaseId = typeof req.args['phaseId'] === 'string' ? req.args['phaseId'] : 'main';
+        if ((op !== 'add' && op !== 'update' && op !== 'remove') || (op !== 'add' && id === '') || (op !== 'remove' && body.trim() === '')) return { ok: false };
+        const edited = run.editTodo(op, id, body, source, ownerId, phaseId);
+        return edited.changed ? { ok: true, ...(requestedSource === undefined || edited.id === undefined ? {} : { value: edited.id }) } : { ok: false };
       }
       case 'setModel': {
         const key = text('model');
@@ -1004,6 +1016,53 @@ export class Sessions {
         // REQ-MONITOR-004's remaining operations have no mechanism behind them in this build (decision 9 of the plan) and answer false.
         return { ok: false };
     }
+  }
+
+  /** REQ-CHAT-090: a paused or completed session edits the validated stored source and republishes it. */
+  private editStoredTodo(s: Live | undefined, req: ControlRequest): ControlResult {
+    if (!s) return { ok: false };
+    const stored = s.dal.getSession(s.writer.sessionId);
+    if (!stored) return { ok: false };
+    const op = req.args['op'];
+    const requestedSource = req.args['source'];
+    const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
+    const id = typeof req.args['id'] === 'string' ? req.args['id'] : '';
+    const body = typeof req.args['text'] === 'string' ? req.args['text'] : '';
+    const ownerId = typeof req.args['ownerId'] === 'string' && req.args['ownerId'] !== '' ? req.args['ownerId'] : null;
+    const phaseId = typeof req.args['phaseId'] === 'string' ? req.args['phaseId'] : 'main';
+    if ((op !== 'add' && op !== 'update' && op !== 'remove') || (op !== 'add' && id === '') || (op !== 'remove' && body.trim() === '')) return { ok: false };
+    const mint = () => randomUUID().replaceAll('-', '').slice(0, 8);
+    let assigned: string | undefined;
+    if (source === 'child') {
+      const child = ownerId === null ? undefined : s.dal.childrenOf(s.writer.sessionId).find((candidate) => candidate.task_id === ownerId);
+      if (!child?.todo) return { ok: false };
+      try {
+        const current: unknown = JSON.parse(child.todo);
+        if (!isAgentTodoDocument(current)) return { ok: false };
+        const edited = editAgentTodo(current, op, id, body, phaseId, mint);
+        if (!edited.changed) return { ok: false };
+        s.dal.setChildTodo(s.writer.sessionId, child.task_id, JSON.stringify(edited.document), child.tool_calls);
+        assigned = edited.id;
+      } catch { return { ok: false }; }
+    } else {
+      const decoded = decodeStoredTodo(stored.todo);
+      if (source === 'agent') {
+        if (decoded.agent === null) return { ok: false };
+        const edited = editAgentTodo(decoded.agent, op, id, body, phaseId, mint);
+        if (!edited.changed) return { ok: false };
+        assigned = edited.id;
+        if (!s.writer.save(stored.execution_status, { todo: encodeStoredTodo({ ...decoded, agent: edited.document }) }).ok) return { ok: false };
+      } else {
+        if (decoded.planner === null) return { ok: false };
+        const planner = Todo.fromDocument(decoded.planner);
+        const nextId = op === 'add' ? mint() : id;
+        if (!planner.editTask(op, nextId, body, phaseId)) return { ok: false };
+        assigned = op === 'add' ? nextId : undefined;
+        if (!s.writer.save(stored.execution_status, { todo: encodeStoredTodo({ ...decoded, planner: planner.toDocument() }) }).ok) return { ok: false };
+      }
+    }
+    s.owner.reconcile();
+    return { ok: true, ...(assigned === undefined ? {} : { value: assigned }) };
   }
 
   /**

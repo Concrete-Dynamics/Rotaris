@@ -586,3 +586,80 @@ display**, not from token arithmetic.
 - Information architecture: `docs/spec/12-desktop-shell-windows.md` (`REQ-SHELL-023` is canonical),
   and the owning domain for each view's contents.
 - Provenance of this material: `docs/clean-room/provenance.md`, section "Design material".
+
+---
+
+## 7. Fidelity — consult before, maintain after
+
+> **Adopting the language is not the same as using it. Section 2 said what is adopted; this section says
+> what a change to the interface has to do about it.**
+
+Two obligations bind every change that draws, redraws or restyles a surface. They are stated in `CLAUDE.md`
+beside the architecture views' pair, and they are read the same way.
+
+1. **Consult before drawing.** Before writing or changing a component, look at the surface in the mockup.
+   `pnpm mockup` serves `mockup/rotaris-ui-mockup.dc.html` at `http://localhost:8791` with the icon font, the
+   two text faces and a picker that shows one screen at a time — the export's own runtime is not in this
+   repository, so without that shim every modal stacks on every screen and the glyphs come out as tofu. Read
+   what the language does with the thing you are about to draw: how much air it gets, whether it is a card or
+   a line, where the mono face is used and where it is not, what carries colour and what carries only text.
+2. **Match after drawing.** A surface that could have followed the design material and did not is a defect of
+   the change that drew it, on the same terms as a view that disagrees with the code. Where the specification
+   fixes the structure the design material may not have it (§2); where it fixes nothing, the design material
+   decides, and "I wrote a plausible box" is not a third option.
+
+**Where to look.** The screens sit in the second half of the file, each behind an `<!-- ═══ NAME ═══ -->`
+banner; the first half is the design system's own specimen cards, which are the same material as
+`system/guidelines/`.
+
+| Surface | Mockup section | Nearest built code |
+|---|---|---|
+| Title bar, nav rail | `title bar`, `nav rail` | `AppShell.tsx`, `NavRail.tsx` |
+| Overview | `HOME`, `expanded overview strip` | `OverviewView.tsx` |
+| Transcript rows, run header | `WORKSPACE` → `transcript column` | `transcript/Row.tsx`, `TranscriptSurface.tsx` |
+| Queue, composer, slash catalogue | `WORKSPACE` → `queue + composer` | `WorkspaceView.tsx`, `composer.ts` |
+| Agent list, context rings, inspector | `WORKSPACE` → `agents panel`, `inspector` | `AgentTree.tsx`, `ContextRing.tsx`, `Inspector.tsx` |
+| Approval card | `WORKSPACE` → the `approvalOn` block | `ApprovalDialog.tsx` |
+| Structured questions | `question stepper modal` | `QuestionStepper.tsx` |
+| Git worktrees, commits, diffs | `GIT` | `GitView.tsx` |
+| Library tabs and cards | `LIBRARY` | `library/LibraryView.tsx` |
+| Settings panes and save bar | `SETTINGS` | `SettingsView.tsx`, `settings/` |
+| Provider auth | `provider auth modal` | `ProviderDialog.tsx` |
+| First launch | `first-launch guide` | — not drawn |
+
+Mission and Requirements have no counterpart to consult; §3.2 is why.
+
+### 7.1 What the first reading of this obligation found — 2026-09-08
+
+*Recorded under GD-10 against §2, which has stood since 2026-09-01 and had never been measured against the
+built interface. The finding is that §2 is being kept at the level of tokens and broken at the level of
+composition, and that the two are not the same promise.*
+
+**The tokens hold.** `tools/check-theme-colours.mjs` fails the lint on a literal colour and no source file
+carries one; the renderer imports `@design/base.css`, `@design/components.css` and `@design/motif.css`; 59 of
+the 96 class names the design system's component CSS defines are named in a `className` in `packages/ui` or the
+renderer, and most of the 37 that are not belong to components no screen has needed yet (`toast`, `spinner`,
+`log-panel`, the diff washes). Nothing here is the drift.
+
+**The transcript is where it breaks, and the cause is not what it looks like.** The specification is *more*
+specific than the design material about the transcript, and where both speak they agree:
+`REQ-CHAT-060`'s monospace `▸ toolname args … ok · 3.2s` header, `REQ-CHAT-061`'s expansion into a card
+captioned `INPUT` and `OUTPUT`, and `REQ-CHAT-062`'s `▸ reasoning · <N>s · ~<T> tok` are the mockup's own
+one-liners, written as requirements, and `transcript/Row.tsx` implements them. `REQ-CHAT-057` then fixes a
+geometry the mockup does not draw — a 52 px timestamp column, a 112 px role column, attribution on the first
+row of a block and a 2 px persona bar on continuations — and by §2 it governs, so the mockup's right-aligned
+user bubble and its card-less assistant prose are **correctly** not built. That much is the rule working.
+
+**What neither source asked for is the container.** `shell.css`'s `.row` gives *every* row —
+user, agent, tool, system alike — `background: var(--rt-surface)`, a 1 px border and a radius, so the
+transcript reads as a stack of identical boxes. `REQ-CHAT-057` fixes columns, heights and margins and says
+nothing about a card, and in the mockup a bordered surface is *earned*: the user's own message (an
+accent-tinted bubble), an expanded tool call, an artifact preview, the live terminal block and the approval
+card have one, and nothing else does — an agent's prose and every one-liner sit directly on the background.
+`.row--user` then changes only the border colour, where that one tinted fill is what makes a person's own
+words findable while scrolling. This is the drift the owner reported, it is the only part of it that no
+requirement mandates, and it is a change to about six declarations.
+
+**Not repaired here.** This section records the reading; the repair is a change to the transcript's
+appearance and belongs to a change of its own, against `REQ-CHAT-046`, `REQ-CHAT-057` and this section. Left
+standing so the finding is not quietly absorbed into the fix.

@@ -851,6 +851,26 @@ was up. `packages/agent-tools/src/terminal/terminal.test.ts` fails under the ful
 again: the expensive failure of a proof suite is not the defect it misses but the one it invents. **Re-run a red
 proof, and measure HEAD, before attributing it to the change in your hand.**
 
+**The design language was adopted on 2026-09-01 and first measured against the built interface on 2026-09-08**,
+after the owner reported that the Workspace and the transcript do not look like the material. The reading is in
+`docs/design/README.md` §7.1 and the obligation it produced is in `CLAUDE.md` and §7: **consult the mockup before
+drawing a surface — `pnpm mockup` — and match it after.** What the reading found is worth carrying here, because
+it is not the shape the complaint suggested. The tokens hold: no source file carries a literal colour, the
+renderer imports the design system's three stylesheets, and 59 of the 96 class names its component CSS defines
+are named in a `className`, the rest belonging mostly to components no screen has needed yet. The transcript's *treatments* hold too, and for a reason the record had not stated plainly —
+`REQ-CHAT-060`, `REQ-CHAT-061` and `REQ-CHAT-062` write the mockup's own monospace one-liners and its
+`INPUT`/`OUTPUT` card as requirements, so specification and design agree there and `transcript/Row.tsx` follows
+both. Where they disagree — `REQ-CHAT-057`'s 52 px and 112 px columns against the mockup's right-aligned user
+bubble — §2's rule already decided it for the specification, and the build is correct. **What no source asked for
+is the container**: `shell.css`'s `.row` wraps every row, of every role, in a `--rt-surface` card with a border
+and a radius, which `REQ-CHAT-057` does not mention and which in the mockup is earned — the user's own tinted
+bubble, an expanded tool call, an artifact preview, the terminal block and the approval card have a surface, and
+an agent's prose and every one-liner sit directly on the background. That invention is the whole of the visible drift, and it is about six declarations.
+**Tokens are not compliance**, which is the lesson the obligation is written to carry: a change can cite every
+token by name and still invent the composition the language had already decided. The repair is not in this
+commit — it changes the transcript's appearance and belongs to a change against `REQ-CHAT-046`/`REQ-CHAT-057`
+of its own, so the finding is not absorbed into the fix that answers it.
+
 ## Where the next work lands
 
 | When the build reaches | It lands in | And owes |

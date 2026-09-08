@@ -2,9 +2,9 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -115,20 +115,40 @@ const openLink = (href: string): void => {
   });
 };
 /**
- * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`) — both default OFF, both
- * global to the transcript, both taking effect immediately on the rows already on screen. Module-scoped because
- * every transcript surface in the window reads the same two values, the persona window included.
+ * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools` and `display/groupTools`) —
+ * global to the transcript, taking effect immediately on the rows already on screen. Module-scoped because every
+ * transcript surface in the window reads the same values, the persona window included.
+ *
+ * Part AG moved `display/groupTools` in here from App's own state: REQ-CONFIG-403 gives the Display settings
+ * category a control over it, and a preference two components can set is a preference that must have one home.
+ * The first two default **off**, `groupTools` defaults **on** (REQ-CHAT-067), so an unset preference reads as on.
  */
-const displayPrefs = createStore<{ showReasoning: boolean; autoCollapseTools: boolean }>(() => ({ showReasoning: false, autoCollapseTools: false }));
+const displayPrefs = createStore<{ showReasoning: boolean; autoCollapseTools: boolean; groupTools: boolean }>(() => ({ showReasoning: false, autoCollapseTools: false, groupTools: true }));
 async function readDisplayPrefs(): Promise<void> {
-  const [reasoning, collapse] = await Promise.all([
+  const [reasoning, collapse, group] = await Promise.all([
     bridge.command({ kind: 'prefs.get', key: 'display/showReasoning' }),
     bridge.command({ kind: 'prefs.get', key: 'display/autoCollapseTools' }),
+    bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
   ]);
   displayPrefs.setState({
     showReasoning: reasoning.ok && (reasoning.value as { value?: boolean }).value === true,
     autoCollapseTools: collapse.ok && (collapse.value as { value?: boolean }).value === true,
+    groupTools: group.ok ? (group.value as { value?: boolean }).value !== false : true,
   });
+}
+/**
+ * REQ-CONFIG-472 (Part AG): the Display category's four tool-row fields are workspace configuration committed by
+ * Save, and they nevertheless take effect on the rows already on screen the moment a control moves. The settings
+ * screen publishes its pending values here and the transcript prefers them over the saved snapshot, so Save
+ * settles what the file says and never what is currently drawn. Null whenever no settings screen is mounted.
+ */
+const pendingDisplay = createStore<{ caps: DisplayView | null }>(() => ({ caps: null }));
+/** REQ-CONFIG-403: written the moment the control moves, and the transcript re-renders from the same store. */
+async function writeDisplayPref(key: 'display/autoCollapseTools' | 'display/groupTools', value: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const r = await bridge.command({ kind: 'prefs.set', key, value });
+  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+  displayPrefs.setState(key === 'display/groupTools' ? { groupTools: value } : { autoCollapseTools: value });
+  return { ok: true };
 }
 /**
  * REQ-NOTIFY-044's `focus-session`: opening a session is the App component's own callback (it owns the replica and the
@@ -410,6 +430,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const reachedOldest = useStore(replica, (s) => s.reachedOldest);
   const snapshot = useConfigSnapshot(workspace);
+  // REQ-CONFIG-472: what the settings screen currently holds wins over what the file says, until Save says otherwise.
+  const pendingCaps = useStore(pendingDisplay, (s) => s.caps);
   const personas = useMemo(() => personasOf(snapshot), [snapshot]);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
   const nowIso = useElapsedTick(session);
@@ -438,7 +460,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSetNextReasoning={(level) => setField({ personas: { [entryPersona]: { thinking: level } } })}
     onOpenTrailer={onOpenTrailer}
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
-    onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={snapshot?.display}
+    onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={pendingCaps ?? snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
     onRecordPrompt={(text) => prompts.push('history', text)}
     personas={personas} entry={entry} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60}
@@ -702,6 +724,9 @@ function useConfiguration(workspace: string | null) {
   const dirty = saved !== null && pending !== null && isDirty(saved, pending);
   const pendingRef = useRef<PendingSettings | null>(null);
   useEffect(() => { pendingRef.current = pending; }, [pending]);
+  // REQ-CONFIG-472: publish the pending caps for the transcript, and take them back down when the screen goes.
+  useEffect(() => { pendingDisplay.setState({ caps: pending?.display ?? null }); }, [pending]);
+  useEffect(() => () => { pendingDisplay.setState({ caps: null }); }, []);
   // REQ-CONFIG-419/425: a read repopulates from the file's values and marks the form clean; a change made elsewhere (the composer's write) lands in the pending state (decision 4 of the plan, REQ-CONFIG-423).
   const savedRef = useRef<PendingSettings | null>(null);
   useEffect(() => { savedRef.current = saved; }, [saved]);
@@ -765,6 +790,32 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
   const providers = useProviders();
   const mcp = useMcp();
   const providersCard = <ProvidersCard {...providers} />;
+  // REQ-CONFIG-403 (Part AG): the two transcript preferences the Display category owns, from their one home.
+  const display = useStore(displayPrefs, (s) => s);
+  /**
+   * REQ-SHELL-140 / REQ-CONFIG-398 (Part AG): the About page's four local facts, asked for once when Settings
+   * mounts. `shell.hello` answers with no workspace, no provider and no authentication, which is what lets the
+   * palette's "About & Legal" entry reach a complete page at any time (REQ-SHELL-138), and nothing here leaves
+   * the machine (REQ-SHELL-139).
+   */
+  const [about, setAbout] = useState<AboutInfo | null>(null);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void bridge.command({ kind: 'shell.hello' }).then((r) => {
+        if (!r.ok) return;
+        const v = r.value as { version?: string; build?: string | null; standalone?: boolean; thirdPartyLicenses?: boolean };
+        setAbout({ version: v.version ?? '?', build: v.build ?? null, standalone: v.standalone === true, thirdPartyLicenses: v.thirdPartyLicenses === true });
+      });
+    });
+  }, []);
+  const openExternal = useCallback(async (url: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const r = await bridge.command({ kind: 'shell.openExternal', url });
+    return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+  }, []);
+  const openThirdPartyLicenses = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const r = await bridge.command({ kind: 'shell.openThirdPartyLicenses' });
+    return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+  }, []);
   // ADR-0015: the Hooks category's data — re-read from the sources on every refresh (REQ-CONFIG-014); the tab starts no hook.
   const [summary, setSummary] = useState<HooksSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -810,6 +861,13 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
       config={{ ...config, providersCard }}
       mcp={mcp}
+      display={{
+        autoCollapseTools: display.autoCollapseTools,
+        groupTools: display.groupTools,
+        onAutoCollapseTools: (v) => writeDisplayPref('display/autoCollapseTools', v),
+        onGroupTools: (v) => writeDisplayPref('display/groupTools', v),
+      }}
+      about={{ info: about, onOpenExternal: openExternal, onOpenThirdPartyLicenses: openThirdPartyLicenses }}
       interfaceExtras={<AgentPopOutToggle on={popOut} onChange={onPopOut} />}
     />
     {guardDialog}
@@ -882,12 +940,13 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut, initialGroupTools }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean; initialGroupTools: boolean }) {
+function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
-  // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store.
-  const [groupTools] = useState(initialGroupTools);
+  // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store;
+  // owned by `displayPrefs` since Part AG, so the Display settings category and the transcript read one value.
+  const groupTools = useStore(displayPrefs, (s) => s.groupTools);
   const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
   const notice = useStore(notices, (s) => s.current);
@@ -1347,7 +1406,7 @@ async function bootPersona(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, groupToolsReply, workspaceLayoutReply] = await Promise.all([
+  const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, workspaceLayoutReply] = await Promise.all([
     bridge.command({ kind: 'theme.get' }),
     bridge.command({ kind: 'prefs.get', key: 'ui/reduced_motion' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/settingsTab' }),
@@ -1355,12 +1414,9 @@ async function boot(): Promise<void> {
     bridge.command({ kind: 'prefs.get', key: 'panels/git' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/library' }),
     bridge.command({ kind: 'prefs.get', key: 'interface/agentPopOut' }),
-    bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
     bridge.command({ kind: 'prefs.get', key: 'panels/workspace' }),
   ]);
   const initialPopOut = popOutReply.ok ? (popOutReply.value as { value?: boolean }).value === true : false;
-  // REQ-CHAT-067: the tool-grouping setting defaults ON, so an unset preference reads as on.
-  const initialGroupTools = groupToolsReply.ok ? (groupToolsReply.value as { value?: boolean }).value !== false : true;
   const initialLayout = layoutReply.ok ? ((layoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialGitLayout = gitLayoutReply.ok ? ((gitLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   const initialLibraryLayout = libraryLayoutReply.ok ? ((libraryLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
@@ -1391,7 +1447,7 @@ async function boot(): Promise<void> {
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} initialGroupTools={initialGroupTools} />
+      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

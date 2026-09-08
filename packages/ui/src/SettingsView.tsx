@@ -1,21 +1,37 @@
 import { useState, type ReactNode } from 'react';
 import { isBusy, type SessionRecord, type Theme, type ThemeName } from '@rotaris/contracts';
 import { HooksSettings, type HooksSettingsProps } from './HooksSettings.js';
-import { ModelsSettings, PersonasSettings, RuntimeSettings, type ConfigSettingsProps } from './settings/ConfigSettings.js';
+import { ModelsSettings, PersonasSettings, RuntimeSettings, SaveBar, type ConfigSettingsProps } from './settings/ConfigSettings.js';
+import { DisplaySettings, type DisplaySettingsProps } from './settings/DisplaySettings.js';
+import { InstructionsSettings, ToolsSettings } from './settings/Inventories.js';
+import { AboutSettings, type AboutSettingsProps } from './settings/About.js';
 import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 
 /**
- * The Settings view, at the point the mechanism has reached: the thirteen
- * categories in REQ-CONFIG-268's order with REQ-CONFIG-269's identifiers, as
- * a vertical navigation list (REQ-SHELL-153: the selected entry marked by a
- * rule down its left edge and described so in words), and the Project
- * category hosting REQ-SESSION-201's two actions — back up the session store,
- * restore one. The rest of the categories are drawing work against
- * docs/design/README.md §3.2. Structure from docs/spec; language from
- * docs/design/system. A disabled action names the condition that disables it
- * (REQ-NOTIFY-008).
+ * The Settings view: the thirteen categories in REQ-CONFIG-268's order with
+ * REQ-CONFIG-269's identifiers, as a vertical navigation list (REQ-SHELL-153:
+ * the selected entry marked by a rule down its left edge and described so in
+ * words), and the Project category hosting REQ-SESSION-201's two actions —
+ * back up the session store, restore one. Structure from docs/spec; language
+ * from docs/design/system. A disabled action names the condition that
+ * disables it (REQ-NOTIFY-008).
+ *
+ * REQ-CONFIG-270: Save, Discard and the save-status indicator are rendered
+ * **once, above the category body**, so no category's own content can push
+ * them out of view and every category shows them. Part AG moved them here
+ * from inside Models, Personas and Runtime.
+ *
+ * Part AG draws Display (REQ-CONFIG-403/472), Instructions and Tools
+ * (REQ-CONFIG-276/277) and About (REQ-CONFIG-398, REQ-SHELL-138..143). Two
+ * categories are still the placeholder and each waits on a mechanism, not on
+ * drawing: **Skills** on portable-skill discovery (REQ-WORKSPACE-056, 062,
+ * 063, 064 — cited nowhere in this tree), whose absence would make
+ * REQ-CONFIG-343's "no portable skills were discovered" a false statement
+ * rather than an empty state; and **Plugins** on REQ-TOOLS-161's loader
+ * (ADR-0025), without which REQ-TOOLS-165's rule that the tab list exactly
+ * what the loader accepts cannot be kept.
  */
 export const SETTINGS_CATEGORIES = [
   { id: 'models', label: 'Models' },
@@ -54,11 +70,15 @@ export interface SettingsViewProps {
   readonly config?: ConfigSettingsProps | undefined;
   /** ADR-0034 (Part S): the MCP Servers category, answered by the run host. */
   readonly mcp?: McpSettingsProps | undefined;
+  /** REQ-CONFIG-403 (Part AG): the Display category's two desktop preferences and their writers. */
+  readonly display?: Omit<DisplaySettingsProps, 'config'> | undefined;
+  /** REQ-SHELL-138..143 (Part AG): the About page's local data and its two openers. */
+  readonly about?: AboutSettingsProps | undefined;
   /** Part R: the Interface category's further preference controls (the agent pop-out toggle), supplied by the renderer root. */
   readonly interfaceExtras?: ReactNode;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, interfaceExtras }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -115,6 +135,8 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
         </ul>
       </nav>
       <section className="settings__body" aria-label={SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}>
+        {/* REQ-CONFIG-270: one bar, above every category's content, acting on the whole set of pending changes. */}
+        {config && <SaveBar dirty={config.dirty} serviceAvailable={config.serviceAvailable} onSave={config.onSave} onDiscard={config.onDiscard} />}
         {category === 'interface' ? (
           <div className="settings__section">
             <h1 className="display">Interface</h1>
@@ -177,6 +199,14 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
           <ModelsSettings {...config} />
         ) : category === 'runtime' && config ? (
           <RuntimeSettings {...config} />
+        ) : category === 'display' && display ? (
+          <DisplaySettings {...display} config={config} />
+        ) : category === 'instructions' ? (
+          <InstructionsSettings snapshot={config?.snapshot ?? null} workspace={workspace} />
+        ) : category === 'tools' ? (
+          <ToolsSettings />
+        ) : category === 'about' && about ? (
+          <AboutSettings {...about} />
         ) : category === 'personas' ? (
           <div className="settings__section">
             {config ? <PersonasSettings {...config} /> : <h1 className="display">Personas</h1>}
@@ -197,7 +227,14 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
         ) : (
           <div className="view__empty">
             <h1 className="display">{SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}</h1>
-            <p className="text-secondary">Not drawn yet. Structure from REQ-CONFIG-268; language from docs/design/system.</p>
+            {/* Each of the two says what it is waiting for, because neither is waiting to be drawn. */}
+            <p className="text-secondary">
+              {category === 'skills'
+                ? 'This build discovers no portable skills yet, so there is nothing here to list or to set a policy for. The category appears with skill discovery.'
+                : category === 'plugins'
+                  ? 'This build loads no tool plugins yet. The inventory lists what the host process would load, so it appears with the plugin loader — a list of files nothing can load would say less than nothing.'
+                  : 'Not drawn yet. Structure from REQ-CONFIG-268; language from docs/design/system.'}
+            </p>
           </div>
         )}
       </section>

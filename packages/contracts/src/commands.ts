@@ -132,6 +132,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * `file:`, `javascript:` or shell scheme reaching `shell.openExternal` would execute at the reader's expense.
    */
   z.object({ kind: z.literal('shell.openExternal'), url: z.string().min(1) }),
+  /**
+   * Part AG — REQ-SHELL-142: the About page's third-party licence bundle. It is a **local** file shipped with the
+   * build, so it cannot travel through `shell.openExternal`, which refuses every scheme but `http(s)` for the
+   * reason stated above. The renderer names no path: main knows where the build put the bundle and answers a
+   * refusal when there is none, which is the branch that reaches in a build that ships no notices file.
+   */
+  z.object({ kind: z.literal('shell.openThirdPartyLicenses') }),
   /** REQ-TOOLS-063: the approval dialog window asks main for the request it was opened for, and how many others wait. */
   z.object({ kind: z.literal('approval.payload') }),
   /**

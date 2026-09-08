@@ -190,6 +190,16 @@ image is ever loaded" is measured from **main** rather than from the page; `ROTA
 performs a real pointer selection across an element and logs what was selected (`REQ-CHAT-075`); `ROTARIS_ROWS_PROOF=1`
 loads the renderer in the `rows-proof` role, the row renderer over a fixture array in both surfaces at once.
 
+**The About page's two commands (Part AG).** Renderer → main: **`shell.openThirdPartyLicenses`** → `{path}` | a refusal.
+`REQ-SHELL-142`'s notices bundle is a **local file shipped with the build**, so it cannot travel through
+`shell.openExternal`, which refuses every scheme but `http(s)` for the reason above; it takes its own command, the
+renderer names no path, and main answers `licenses.absent` when the build carries no bundle — the ordinary case today,
+since nothing produces the asset (owed to ADR-0054). `shell.hello`'s reply gains three local facts beside the version
+for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier, null when the asset is missing or
+unreadable), `standalone` (`app.isPackaged`) and `thirdPartyLicenses` (whether a bundle exists). The About page issues
+no request of its own — `REQ-SHELL-139` requires zero network requests at render — and the same capture seam
+(`ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail`) covers both openers.
+
 **MCP (Part S; ADR-0033/0034's first execution).** Renderer → main: `mcp.list` (every configured server: name, type, the
 masked line, origin, enabled, overridden, available, unresolved placeholders, expected env keys), `mcp.probe {name?}` (one
 server per request so the category probes sequentially under main's bound), `mcp.setEnabled {name, enabled}` (the session

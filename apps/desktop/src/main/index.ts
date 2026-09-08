@@ -1,6 +1,7 @@
 // ADR-0035 (Part T): the pre-bootstrap branch is the FIRST import and must never be reordered — with the reserved token
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
+import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
 import { PersonaWindows } from './windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
@@ -1018,7 +1019,13 @@ async function main(): Promise<void> {
         const cb = currentWorkspaceId
           ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: currentWorkspaceId }, millis(5_000))
           : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
-        return { ok: true, value: { version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`), circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled } };
+        // REQ-SHELL-140 (Part AG): the About page's product card reads its four local facts from here; it makes no
+        // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398).
+        return { ok: true, value: {
+          version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
+          circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
+          build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
+        } };
       }
       /**
        * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER, the opening is
@@ -1046,6 +1053,22 @@ async function main(): Promise<void> {
         catch (cause) { return { ok: false, code: 'link.failed', headline: 'That link could not be opened', detail: cause instanceof Error ? cause.message : String(cause) }; }
         log(`opened externally: ${parsed.href}`);
         return { ok: true, value: { url: parsed.href } };
+      }
+      /**
+       * Part AG — REQ-SHELL-142: the third-party licence bundle opens as a **local** file, so it takes its own
+       * command rather than the scheme-guarded external opener beside it. Main resolves the path; the renderer
+       * never names one. With no bundle the refusal is the ordinary case for this build, not an error.
+       */
+      case 'shell.openThirdPartyLicenses': {
+        const path = thirdPartyLicensesPath();
+        if (path === null) return { ok: false, code: 'licenses.absent', headline: 'No third-party license bundle', detail: 'This build does not carry a third-party license bundle.' };
+        const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+        if (scripted === 'fail') { log(`capture: open-licenses REFUSED ${path}`); return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: 'The system refused to open it (scripted).' }; }
+        if (scripted === 'record') { log(`capture: open-licenses ${path}`); return { ok: true, value: { path } }; }
+        const failed = await shell.openPath(path);
+        if (failed !== '') return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: failed };
+        log(`opened licenses: ${path}`);
+        return { ok: true, value: { path } };
       }
       case 'theme.get':
         return { ok: true, value: { name: currentTheme.name } };

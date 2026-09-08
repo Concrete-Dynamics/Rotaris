@@ -108,7 +108,8 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
   'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
   'runtime:', '  permission_mode: autonomous',
   'rotaris:', '  delegation_strategy: single',
-  'display:', '  show_tool_results: true', '  show_tool_inputs: true', '  tool_result_lines: 10', '  tool_input_lines: 2',
+  // REQ-CONFIG-172's keys, corrected in Part AG: Part Z wrote `tool_result_lines`, which no requirement states.
+  'display:', '  show_tool_results: true', '  show_tool_inputs: true', '  tool_result_max_lines: 10', '  tool_input_max_lines: 2',
   '',
 ].join('\n'));
 const gitEnv = { ...process.env, GIT_AUTHOR_NAME: 'proof', GIT_AUTHOR_EMAIL: 'proof@rotaris.local', GIT_COMMITTER_NAME: 'proof', GIT_COMMITTER_EMAIL: 'proof@rotaris.local' };

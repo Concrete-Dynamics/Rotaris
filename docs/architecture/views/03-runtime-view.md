@@ -293,6 +293,17 @@ of §5 and none a channel: each is a request answered once.
   `config:changed`, where a change re-projects the resident window once (which is a settings change, not transcript
   update content, so it sits outside what REQ-MONITOR-223 measures). REQ-CHAT-067's grouping switch is **not** here:
   it is a desktop preference (`display/groupTools`, REQ-CONFIG-405), which is why the two live in different stores.
+  **Part AG added the surface over it** (REQ-CONFIG-472): the four fields join destination 1's pending state and are
+  committed by Save through Tier A, spelled in the file as REQ-CONFIG-172 fixes them (`tool_result_max_lines`,
+  `tool_input_max_lines`, unlimited written as `0`) and read back into the same view field names. They are **not** in
+  Tier B's live state — they change what is drawn, never what a run does — and the renderer publishes its pending
+  values to the transcript so what is drawn follows the screen rather than the file. What that last clause can be
+  observed to do is narrowed by the shell itself: Settings replaces the Workspace among REQ-SHELL-023's seven views,
+  and REQ-CONFIG-286's guard will not let a dirty form be left, so pending and file cannot be seen to disagree over a
+  visible transcript in the main window.
+- **The Instructions inventory rides the same snapshot** (REQ-CONFIG-277, Part AG): `readSnapshot` adds a presence
+  check over the workspace's `AGENTS.md` and `AGENTS.override.md`, so the settings screen reads one shape and no new
+  message crosses the boundary for it. It is a presence check and never a read of what those files say.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the

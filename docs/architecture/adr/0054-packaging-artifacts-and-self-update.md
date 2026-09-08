@@ -1078,3 +1078,13 @@ dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built.
 **IC-7 adopted 2026-09-06 (ESC-32, option 2):** the language servers are tools provisioned after installation;
 `REQ-STARTUP-142`'s section now lists them after Git and ripgrep, from the same manifest, and the generator that
 will write that section is the one still owed here — IC-7's second half is discharged when it does.
+
+## Two assets the About page asks this record for — 2026-09-08 (Part AG)
+
+`REQ-SHELL-140` reads the build identifier from **a bundled text asset** and `REQ-SHELL-142` opens **a bundled
+third-party notices file**. No build in this tree produces either, so the About page ships each requirement's own
+absent branch — an em dash for Build, and the caption "This build does not carry a third-party license bundle." Both
+branches are built and exercised (`pnpm settings-proof`, launch 1), so nothing here is a stub: what is owed is the two
+assets, not the surface. Main resolves them the way every other bundled resource is resolved — `process.resourcesPath`
+for a packaged build, else `apps/desktop/resources/` — in `apps/desktop/src/main/about.ts`, which is where a packaging
+change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent` until then.

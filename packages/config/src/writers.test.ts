@@ -228,3 +228,21 @@ describe('ADR-0037 Tier B — the live state over the merged document, resolved 
     expect(loaded.value.personas['tester']?.model).toBe('slow');
   });
 });
+
+describe('REQ-CONFIG-175/472 — the display round trip is a contract', () => {
+  it('writes the requirement’s key names, stores unlimited as 0, and reads all four back', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'display:\n  # a key this screen does not offer\n  show_thinking: true\n');
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { display: { show_tool_results: false, show_tool_inputs: true, tool_result_max_lines: 20, tool_input_max_lines: 0 } });
+    expect(r.ok).toBe(true);
+    const text = readFileSync(s.wsFile, 'utf8');
+    expect(text).toContain('tool_result_max_lines: 20');
+    // REQ-CONFIG-172: unlimited is 0 in the file, and the key this screen does not offer stays as the file states it.
+    expect(text).toContain('tool_input_max_lines: 0');
+    expect(text).toContain('show_thinking: true');
+    const loaded = loadConfiguration({ globalDir: s.globalDir, workspaceRoot: s.workspaceRoot });
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.value.display).toEqual({ show_tool_results: false, show_tool_inputs: true, tool_result_lines: 20, tool_input_lines: null });
+  });
+});

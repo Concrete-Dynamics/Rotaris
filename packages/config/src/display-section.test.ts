@@ -14,16 +14,28 @@ describe('REQ-CHAT-166 — the `display:` section', () => {
     expect(s.errors).toEqual([]);
   });
 
-  it('reads the four values, and `unlimited` and null both mean no cap', () => {
+  it('REQ-CONFIG-172: reads the keys the requirement fixes, and `0`, `unlimited` and null all mean no cap', () => {
     const s = sink();
-    expect(readDisplaySection({ show_tool_results: false, show_tool_inputs: true, tool_result_lines: 50, tool_input_lines: 1 }, s))
+    expect(readDisplaySection({ show_tool_results: false, show_tool_inputs: true, tool_result_max_lines: 50, tool_input_max_lines: 1 }, s))
       .toEqual({ show_tool_results: false, show_tool_inputs: true, tool_result_lines: 50, tool_input_lines: 1 });
-    expect(readDisplaySection({ tool_result_lines: 'unlimited' }, s).tool_result_lines).toBeNull();
-    expect(readDisplaySection({ tool_result_lines: null }, s).tool_result_lines).toBeNull();
-    expect(readDisplaySection({ tool_input_lines: 'UNLIMITED' }, s).tool_input_lines).toBeNull();
+    // The requirement's own spelling of unlimited, which the settings surface writes (REQ-CONFIG-472).
+    expect(readDisplaySection({ tool_result_max_lines: 0 }, s).tool_result_lines).toBeNull();
+    expect(readDisplaySection({ tool_input_max_lines: 0 }, s).tool_input_lines).toBeNull();
+    expect(readDisplaySection({ tool_result_max_lines: 'unlimited' }, s).tool_result_lines).toBeNull();
+    expect(readDisplaySection({ tool_result_max_lines: null }, s).tool_result_lines).toBeNull();
+    expect(readDisplaySection({ tool_input_max_lines: 'UNLIMITED' }, s).tool_input_lines).toBeNull();
     expect(s.errors).toEqual([]);
     // The values the settings surface offers, in its order; `null` is "unlimited".
     expect(DISPLAY_LINE_CAP_CHOICES).toEqual([1, 2, 5, 10, 20, 50, null]);
+  });
+
+  it('Part Z\'s falsified keys are unknown keys now, and warn like any other (REQ-CONFIG-233)', () => {
+    const s = sink();
+    // The reader used to answer these and no requirement ever stated them; a file carrying one gets the default
+    // and a warning, rather than a cap read from a key the product does not define.
+    expect(readDisplaySection({ tool_result_lines: 50, tool_input_lines: 1 }, s)).toEqual(DISPLAY_DEFAULTS);
+    expect(s.warnings.map((w) => w.path)).toEqual(['display.tool_result_lines', 'display.tool_input_lines']);
+    expect(s.errors).toEqual([]);
   });
 
   it('an unknown key warns and contributes nothing; a wrong type is a schema problem', () => {
@@ -35,8 +47,8 @@ describe('REQ-CHAT-166 — the `display:` section', () => {
     expect(readDisplaySection({ show_tool_results: 'yes' }, bad).show_tool_results).toBe(true);
     expect(bad.errors.map((e) => e.path)).toEqual(['display.show_tool_results']);
     const negative = sink();
-    readDisplaySection({ tool_result_lines: -1 }, negative);
-    expect(negative.errors.map((e) => e.path)).toEqual(['display.tool_result_lines']);
+    readDisplaySection({ tool_result_max_lines: -1 }, negative);
+    expect(negative.errors.map((e) => e.path)).toEqual(['display.tool_result_max_lines']);
     const notAMapping = sink();
     readDisplaySection('nonsense', notAMapping);
     expect(notAMapping.errors.map((e) => e.path)).toEqual(['display']);

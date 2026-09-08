@@ -17,6 +17,38 @@ export const PUBLIC_TOOL_NAME_SET: ReadonlySet<string> = new Set(PUBLIC_TOOL_NAM
 /** REQ-TOOLS-001: `haet` resolves to the same tool as `haet_edit`. */
 export const TOOL_ALIASES: Readonly<Record<string, PublicToolName>> = Object.freeze({ haet: 'haet_edit' });
 
+/**
+ * REQ-CONFIG-277 / REQ-TOOLS-165 (Part AG): the runtime target behind each public name, which the Tools
+ * inventory renders as the entry's description. It lives here rather than beside the declarations in
+ * `@rotaris/agent-tools` because the settings surface may reach `contracts` and nothing below it, and an
+ * inventory the surface cannot read is no inventory.
+ *
+ * `null` means this build registers no executor for the name — the registry then removes it from what an
+ * agent is offered (REQ-TOOLS-004), so the inventory says so rather than naming a symbol that does not exist.
+ * `git_commit` is the only one: it is a declared public name with no implementation anywhere in the tree, and
+ * the Tools inventory is the first surface in the product that makes that visible.
+ */
+export const TOOL_IMPLEMENTATIONS: Readonly<Record<PublicToolName, string | null>> = Object.freeze({
+  ask_questions: 'askQuestionsTool',
+  delegate: 'delegateTool',
+  background_output: 'backgroundOutputTool',
+  wait_for_tasks: 'waitForTasksTool',
+  haet: 'haetEditTool',
+  haet_edit: 'haetEditTool',
+  haet_read: 'haetReadTool',
+  read_file: 'readFileTool',
+  write_file: 'writeFileTool',
+  terminal: 'terminalTool',
+  git_commit: null,
+  todo: 'todoTool',
+  fetch: 'fetchTool',
+  grep: 'grepTool',
+  glob: 'globTool',
+  artifact_read: 'artifactReadTool',
+  artifact_list: 'artifactListTool',
+  artifact_write: 'artifactWriteTool',
+});
+
 /** REQ-TOOLS-012. */
 export const DECISIONS = ['allow', 'ask', 'deny'] as const;
 export type Decision = (typeof DECISIONS)[number];

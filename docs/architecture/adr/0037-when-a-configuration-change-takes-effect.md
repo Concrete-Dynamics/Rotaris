@@ -256,3 +256,31 @@ twelve slot keys as explicit nulls, and the editor read a written null as "the w
 value. A written null overrides nothing, so the editor now reads it as unstated and shows the value the lower layer
 supplies with that layer's origin — `discovered` for the snapshot's (REQ-CONFIG-341's vocabulary, added to the
 contract's origins; ADR-0036's loader now records which slots the snapshot supplied).
+
+## Second execution — 2026-09-08, a field that commits by Save and applies before it (Part AG)
+
+REQ-CONFIG-472's four tool-row fields are the first members of destination 1 that a user is meant to see take effect
+**before** Save: they are workspace configuration committed by Save (Tier A), and the requirement also says a change
+reaches the rows already on screen the moment the control moves. Both halves are built — the four join the pending
+state with the equality guard REQ-CONFIG-419 needs, and the renderer publishes its pending values to the transcript,
+which prefers them over the saved snapshot. They are deliberately **not** in Tier B's live state: they change what is
+drawn, never what a run does, so handing them to a run start would say something untrue about them.
+
+**What the mechanism cannot be shown to do, stated rather than implied.** In this shell Settings *replaces* the
+Workspace among REQ-SHELL-023's seven views, and REQ-CONFIG-286's guard refuses to let a dirty form be left without
+Save, Discard or Cancel. A state in which the pending value and the file disagree **while a transcript is visible** is
+therefore unreachable in the main window, and the proof's fifth launch exercises what does reach: the guard stands up,
+its Save writes the file, and the row already drawn takes the new value. The other window that draws a transcript (the
+persona pop-out, ADR-0048) is a separate renderer instance and does not see this window's pending state; making it do
+so would be a Tier-B-shaped broadcast, which no requirement asks for. The publication is kept because it is what makes
+Discard show immediately, and because a second surface in this window would read it.
+
+**A second defect, in this part's own new code, found by the same proof.** The Display controls first read the
+pending values field by field with a nullish fallback — `pending?.tool_input_lines ?? 2`. The view spells "unlimited"
+`null`, so a saved unlimited came back on the control as **2 lines** while the file said `0`: the fallback meant for
+"no configuration service yet" swallowed a real value. The controls now read the whole pending value or a whole
+default, telling absent configuration and a cap of unlimited apart. Two of this part's defects, then, are the same
+mistake in two places — a value whose meaning is carried by a null, read by code that treats null as absence.
+
+**The falsified spelling behind it is ADR-0036's third execution** — REQ-CONFIG-172's key names and `0` for unlimited.
+It is recorded there, beside the reader it belongs to, rather than repeated here.

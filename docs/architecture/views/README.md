@@ -24,7 +24,10 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-07** (Parts AB and AC — the composer and the structured questions:
+Last reconciled with the code: **2026-09-08** (Part AG — the undrawn Settings categories: `shell.openThirdPartyLicenses`
+and `shell.hello`'s three new local facts in the process view; the `display:` section's surface, its file spellings and
+the Instructions presence check riding the configuration snapshot in the runtime view's tier section. No package, edge,
+channel or store version changed, so the component view is unchanged. Before that, 2026-09-07, Parts AB and AC — the composer and the structured questions:
 `composer.readDraft`/`writeDraft` and the three `display/*` keys plus `panels/workspace` in the process view's
 command list, and the control channel's value space with the reason `answerQuestion` carries two flat maps rather
 than widening it; the two new control operations, the `ask_questions` executor and its registry, and store **v13**'s

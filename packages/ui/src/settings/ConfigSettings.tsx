@@ -5,9 +5,14 @@ import { clampForDisplay, type PendingChange, type PendingSettings } from './con
 /**
  * The three configuration categories (structure from docs/spec, language from docs/design/system):
  * Models (REQ-CONFIG-329..335), Personas (REQ-CONFIG-336..341), Runtime (REQ-CONFIG-320..328, 471), and the
- * save bar every category shows (REQ-CONFIG-270, 279..285). Every control defers to Save except the
- * advanced card's diagnostics toggle, which writes per field at once (REQ-CONFIG-471). Nothing here names
- * a file: the host commits (REQ-CONFIG-279).
+ * save bar (REQ-CONFIG-270, 279..285). Every control defers to Save except the advanced card's diagnostics
+ * toggle, which writes per field at once (REQ-CONFIG-471). Nothing here names a file: the host commits
+ * (REQ-CONFIG-279).
+ *
+ * **REQ-CONFIG-270 was met for three categories and asks for all thirteen.** The bar used to be rendered
+ * inside Models, Personas and Runtime, so it left the screen whenever the user did — and Part AG's Display
+ * category is a fourth that commits by Save. `SettingsView` now renders it once, above the category body,
+ * where no category's own content can push it out of view; that is the requirement's own wording.
  */
 export interface ConfigSettingsProps {
   readonly snapshot: ConfigSnapshot | null;
@@ -70,7 +75,6 @@ export function ModelsSettings(props: ConfigSettingsProps) {
   return (
     <div className="settings__section">
       <h1 className="display">Models</h1>
-      <SaveBar {...props} />
       {snapshot.referential.length > 0 && (
         <div className="card settings__referential" role="status">
           <div className="card-kicker">Unresolved references</div>
@@ -127,7 +131,6 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
   return (
     <div className="settings__section">
       <h1 className="display">Personas</h1>
-      <SaveBar {...props} />
       <div className="settings__action">
         <label htmlFor="persona-scope">Edit scope</label>
         <select id="persona-scope" className="input select settings__select" aria-label="Edit scope" aria-description="Settles whether edits to a role's model and reasoning are recorded for this workspace or for the user as a whole." value={scope} onChange={(e) => setScope(e.currentTarget.value as 'workspace' | 'global')}>
@@ -174,12 +177,12 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
   );
 }
 
-function Toggle({ id, label, hint, on, onChange, disabled }: { id: string; label: string; hint: string; on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+export function Toggle({ id, label, hint, on, onChange, disabled, testId }: { id: string; label: string; hint: string; on: boolean; onChange: (v: boolean) => void; disabled?: boolean; testId?: string }) {
   return (
     <div className="settings__action">
       <span id={`${id}-label`}>{label}</span>
       {/* REQ-CONFIG-323: the accessible description states enabled or disabled and is regenerated on every change. */}
-      <button type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby={`${id}-label`} aria-description={`${label} is ${on ? 'enabled' : 'disabled'}.`} aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} />
+      <button type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby={`${id}-label`} aria-description={`${label} is ${on ? 'enabled' : 'disabled'}.`} aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} {...(testId ? { 'data-testid': testId, 'data-on': on ? 'true' : 'false' } : {})} />
       <span className="text-secondary settings__hint">{hint}</span>
     </div>
   );
@@ -218,7 +221,6 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
   return (
     <div className="settings__section">
       <h1 className="display">Runtime</h1>
-      <SaveBar {...props} />
       <div className="settings__action">
         <label htmlFor="strategy">Delegation strategy</label>
         <select id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>

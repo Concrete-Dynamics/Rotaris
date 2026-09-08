@@ -68,6 +68,25 @@ export const DisplayViewSchema = z.object({
 });
 export type DisplayView = z.infer<typeof DisplayViewSchema>;
 
+/**
+ * REQ-CONFIG-172 fixes the `display:` keys **as the file spells them** and REQ-CONFIG-472 the caps the surface
+ * offers. The resolved view above keeps its own field names and spells "no cap" `null`; the file spells the same
+ * thing `0`. Both spellings are stated here, in one place, because the reader and the settings surface sit in
+ * different packages and a disagreement between them is unobservable until a file round-trips.
+ */
+export const DISPLAY_FILE_KEYS = ['show_tool_results', 'show_tool_inputs', 'tool_result_max_lines', 'tool_input_max_lines'] as const;
+export type DisplayFileKey = (typeof DISPLAY_FILE_KEYS)[number];
+/** REQ-CONFIG-472: the caps the Display category offers, in the order it offers them; `null` is "unlimited". */
+export const DISPLAY_LINE_CAP_CHOICES: readonly (number | null)[] = [1, 2, 5, 10, 20, 50, null];
+/** REQ-CONFIG-172: unlimited is stored as `0`. */
+export function displayCapToFile(cap: number | null): number {
+  return cap ?? 0;
+}
+/** REQ-CONFIG-172: `0` in the file is no limit, which the view carries as `null`. */
+export function displayCapFromFile(stored: number): number | null {
+  return stored === 0 ? null : stored;
+}
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -84,6 +103,12 @@ export const ConfigSnapshotSchema = z.object({
   compressorThresholdPercentage: z.number().int(),
   /** REQ-CHAT-166 (Part Z): the transcript's four display caps, resolved. */
   display: DisplayViewSchema,
+  /**
+   * REQ-CONFIG-277 (Part AG): the Instructions inventory — the workspace's `AGENTS.md` and `AGENTS.override.md`
+   * where they exist, in that order, each described by its absolute path. Empty with no workspace. A presence
+   * check, not a read: this says which files the agent's instructions would come from, never what they say.
+   */
+  instructions: z.array(z.object({ name: z.string(), path: z.string() })),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES),
   referential: z.array(z.string()),
   warnings: z.array(z.string()),
@@ -102,6 +127,18 @@ export const RoleEditSchema = z.object({
   unsetModel: z.boolean().optional(),
   unsetThinking: z.boolean().optional(),
 });
+/**
+ * REQ-CONFIG-256: the four `display:` fields, written per field and spelled as the file spells them
+ * (REQ-CONFIG-172), so a `display:` key this screen does not offer is left as the file states it.
+ */
+export const DisplaySaveSchema = z.object({
+  show_tool_results: z.boolean().optional(),
+  show_tool_inputs: z.boolean().optional(),
+  tool_result_max_lines: z.number().int().min(0).optional(),
+  tool_input_max_lines: z.number().int().min(0).optional(),
+});
+export type DisplaySavePayload = z.infer<typeof DisplaySaveSchema>;
+
 /** REQ-CONFIG-256: the desktop save's enumerable key set. */
 export const DesktopSaveSchema = z.object({
   slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
@@ -111,6 +148,8 @@ export const DesktopSaveSchema = z.object({
   compressorThresholdPercentage: z.number().int().optional(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES).optional(),
   roles: z.record(z.string(), RoleEditSchema).optional(),
+  /** REQ-CONFIG-472 (Part AG): destination 1's four tool-row display fields. */
+  display: DisplaySaveSchema.optional(),
 });
 export type DesktopSavePayload = z.infer<typeof DesktopSaveSchema>;
 

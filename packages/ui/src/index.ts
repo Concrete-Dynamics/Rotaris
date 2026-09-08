@@ -38,3 +38,6 @@ export * from './MissionView.js';
 export * from './PersonaWindow.js';
 export * from './markdown/index.js';
 export * from './library/index.js'; export * from './transcript/index.js';
+export * from './settings/DisplaySettings.js';
+export * from './settings/Inventories.js';
+export * from './settings/About.js';

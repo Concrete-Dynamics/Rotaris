@@ -829,3 +829,10 @@
 .question-stepper__freeform { max-height: 100px; min-height: 56px; resize: vertical; width: 100%; }
 .question-stepper__status { margin: 0; font-size: var(--rt-text-sm, 13px); color: var(--rt-danger-300); }
 .question-stepper__actions { margin-top: auto; }
+
+/* Part AG — REQ-SHELL-140/142: About's rows and its licence line are selectable text, since a user copies a
+   version, a build identifier or a security address out of them. Tokens by name (docs/design/system). */
+.about__value { user-select: text; color: var(--rt-text); font-size: var(--rt-text-sm, 13px); }
+/* REQ-SHELL-141: the five documents read as one row of links, in the order the requirement gives them. */
+.about__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-4, 16px); margin-top: var(--rt-space-2, 8px); }
+.about__links .btn-link { padding: 0; }

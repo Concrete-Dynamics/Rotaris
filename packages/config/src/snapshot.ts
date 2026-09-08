@@ -1,3 +1,5 @@
+import { statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { ConfigSnapshot, DesktopSavePayload } from '@rotaris/contracts';
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
@@ -12,7 +14,33 @@ import { saveDesktop, writeConfigFields, type DesktopSave, type RoleEdit, type W
 /**
  * ADR-0037 Tier A, the workspace service's side: read the projection the Settings screen consumes
  * (REQ-CONFIG-279, "the screen never names a file"), commit a save or a per-field write, and load again.
+ * The projection also carries the Instructions inventory (REQ-CONFIG-277), which is a presence check over the
+ * workspace rather than anything the configuration states — it rides here because the screen reads one shape.
  */
+
+/** REQ-CONFIG-277: the workspace instruction files, in the order the requirement names them. */
+export const INSTRUCTION_FILE_NAMES = ['AGENTS.md', 'AGENTS.override.md'] as const;
+
+/**
+ * REQ-CONFIG-277 (Part AG): the Instructions inventory — a presence check over those two names, each described by
+ * its absolute path, empty without a workspace. A directory carrying one of the names is not an instruction file
+ * and is not listed; anything unreadable reads as absent, which is what the empty state already says in words.
+ */
+export function instructionFiles(workspaceRoot: string): { name: string; path: string }[] {
+  if (workspaceRoot.trim() === '') return [];
+  const root = resolve(workspaceRoot);
+  const found: { name: string; path: string }[] = [];
+  for (const name of INSTRUCTION_FILE_NAMES) {
+    const path = join(root, name);
+    try {
+      if (statSync(path).isFile()) found.push({ name, path });
+    } catch {
+      // Absent, or unreadable: the same thing to a user looking at an inventory of what the agent would read.
+    }
+  }
+  return found;
+}
+
 export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
   const rawRuntimeOf = (raw: PlainMap | null): Record<string, unknown> | null => (raw && isPlainMap(raw['runtime']) ? (raw['runtime'] as Record<string, unknown>) : null);
   return {
@@ -33,6 +61,7 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
     compressorThresholdPercentage: cfg.compressor.threshold_percentage,
     // REQ-CHAT-166 (Part Z): the transcript reads its caps from the same snapshot the settings screen does.
     display: { ...cfg.display },
+    instructions: instructionFiles(cfg.workspaceRoot),
     delegationStrategy: cfg.delegationStrategy,
     referential: [...cfg.referential],
     warnings: [...cfg.warnings],
@@ -53,6 +82,8 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
     },
     rawRuntime: { workspace: null, global: null },
     circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
+    instructions: instructionFiles(workspaceRoot),
     files: { workspace: files.workspace.agents, global: files.global.agents },
   };
 }
@@ -73,6 +104,8 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.circuitBreakerEnabled !== undefined ? { circuitBreakerEnabled: save.circuitBreakerEnabled } : {}),
     ...(save.compressorThresholdPercentage !== undefined ? { compressorThresholdPercentage: save.compressorThresholdPercentage } : {}),
     ...(save.delegationStrategy !== undefined ? { delegationStrategy: save.delegationStrategy } : {}),
+    // REQ-CONFIG-256/472: the four `display:` fields, already spelled as the file spells them (REQ-CONFIG-172).
+    ...(save.display && Object.keys(save.display).length > 0 ? { display: save.display } : {}),
     ...(Object.keys(roles).length > 0 ? { roles } : {}),
   };
 }

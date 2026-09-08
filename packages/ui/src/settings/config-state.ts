@@ -1,4 +1,4 @@
-import { EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type LiveStatePayload, type ModelSlotName } from '@rotaris/contracts';
+import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type LiveStatePayload, type ModelSlotName } from '@rotaris/contracts';
 
 /**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
@@ -22,6 +22,12 @@ export interface PendingSettings {
   readonly circuitBreakerEnabled: boolean;
   readonly compressorThresholdPercentage: number;
   readonly delegationStrategy: 'orchestrator' | 'swarm' | 'single';
+  /**
+   * REQ-CONFIG-472: the Display category's four tool-row fields — workspace configuration, committed by Save
+   * like the rest of destination 1, and read from here by the transcript the moment a control moves, so what is
+   * drawn follows the pending value while Save decides what the file says.
+   */
+  readonly display: DisplayView;
   /** Role edits keyed by role, per field scoped (REQ-CONFIG-259); an entry exists only once the user touched the role. */
   readonly roles: Readonly<Record<string, { readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean }>>;
 }
@@ -47,6 +53,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     circuitBreakerEnabled: snapshot.circuitBreakerEnabled,
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,
     delegationStrategy: snapshot.delegationStrategy,
+    display: { ...snapshot.display },
     roles: {},
   };
 }
@@ -69,8 +76,10 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
   }
   const runtime = { ...fresh.runtime };
   for (const key of Object.keys(runtime) as (keyof PendingSettings['runtime'])[]) if (pending.runtime[key] !== previousSaved.runtime[key]) (runtime as Record<string, unknown>)[key] = pending.runtime[key];
+  const display = { ...fresh.display };
+  for (const key of Object.keys(display) as (keyof DisplayView)[]) if (pending.display[key] !== previousSaved.display[key]) (display as Record<string, unknown>)[key] = pending.display[key];
   return {
-    slots, slotThinking: thinking, runtime,
+    slots, slotThinking: thinking, runtime, display,
     circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
@@ -90,6 +99,7 @@ export type PendingChange =
   | { readonly kind: 'circuitBreaker'; readonly value: boolean }
   | { readonly kind: 'compressorThreshold'; readonly value: number }
   | { readonly kind: 'delegationStrategy'; readonly value: PendingSettings['delegationStrategy'] }
+  | { readonly kind: 'display'; readonly key: keyof DisplayView; readonly value: DisplayView[keyof DisplayView] }
   | { readonly kind: 'role'; readonly role: string; readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean };
 
 /** Apply one change; returns the same object when nothing changed (the equality guard). */
@@ -110,6 +120,9 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
       return pending.compressorThresholdPercentage === change.value ? pending : { ...pending, compressorThresholdPercentage: change.value };
     case 'delegationStrategy':
       return pending.delegationStrategy === change.value ? pending : { ...pending, delegationStrategy: change.value };
+    case 'display':
+      // REQ-CONFIG-419: repopulating a control from the stored value emits no change and cannot dirty the form.
+      return pending.display[change.key] === change.value ? pending : { ...pending, display: { ...pending.display, [change.key]: change.value } };
     case 'role': {
       const current = pending.roles[change.role] ?? { scope: change.scope };
       const next = { ...current, scope: change.scope, ...(change.model !== undefined ? { model: change.model, unsetModel: false } : {}), ...(change.thinking !== undefined ? { thinking: change.thinking, unsetThinking: false } : {}), ...(change.unsetModel ? { unsetModel: true } : {}), ...(change.unsetThinking ? { unsetThinking: true } : {}) };
@@ -139,6 +152,13 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   if (pending.circuitBreakerEnabled !== saved.circuitBreakerEnabled) out.circuitBreakerEnabled = pending.circuitBreakerEnabled;
   if (pending.compressorThresholdPercentage !== saved.compressorThresholdPercentage) out.compressorThresholdPercentage = pending.compressorThresholdPercentage;
   if (pending.delegationStrategy !== saved.delegationStrategy) out.delegationStrategy = pending.delegationStrategy;
+  // REQ-CONFIG-256/472: written per field and under the file's own key names, with unlimited stored as 0 (REQ-CONFIG-172).
+  const display: DisplaySavePayload = {};
+  if (pending.display.show_tool_results !== saved.display.show_tool_results) display.show_tool_results = pending.display.show_tool_results;
+  if (pending.display.show_tool_inputs !== saved.display.show_tool_inputs) display.show_tool_inputs = pending.display.show_tool_inputs;
+  if (pending.display.tool_result_lines !== saved.display.tool_result_lines) display.tool_result_max_lines = displayCapToFile(pending.display.tool_result_lines);
+  if (pending.display.tool_input_lines !== saved.display.tool_input_lines) display.tool_input_max_lines = displayCapToFile(pending.display.tool_input_lines);
+  if (Object.keys(display).length > 0) out.display = display;
   if (Object.keys(pending.roles).length > 0) {
     out.roles = Object.fromEntries(Object.entries(pending.roles).map(([role, e]) => [role, {
       scope: e.scope,

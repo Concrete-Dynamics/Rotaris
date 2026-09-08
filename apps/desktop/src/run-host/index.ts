@@ -81,7 +81,7 @@ function scriptedClient(c: Clocks): ModelClient {
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
   const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');
   const scripts: Record<string, string[]> = { orchestrator: loopScript ? Array.from({ length: Number(loopScript[2]) }, () => loopScript[1]!) : parse(process.env['ROTARIS_SCRIPT']), child: parse(process.env['ROTARIS_CHILD_SCRIPT']) };
-  const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0, 'loop-classifier': 0 };
+  const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0, compressor: 0, 'loop-classifier': 0 };
   let call = 0;
   const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
     glob: { name: 'glob', args: { pattern: '**/*.md' } },
@@ -99,7 +99,7 @@ function scriptedClient(c: Clocks): ModelClient {
     async *stream(req: ModelRequest) {
       await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
-      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
+      const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
       // Part S: every child instance follows the child script from its own first call (keyed by its TASK line), so a fan-out of
       // three children each takes the same steps; a single child reads exactly as before.
@@ -130,6 +130,20 @@ function scriptedClient(c: Clocks): ModelClient {
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }
+      if (who === 'compressor') {
+        // ROTARIS_COMPRESSOR_SCRIPT=fail — the compressing pass itself failing, so REQ-ORCH-093's "the original
+        // rejection is surfaced unchanged" has a producer. Verification only.
+        if ((process.env['ROTARIS_COMPRESSOR_SCRIPT'] ?? '').trim() === 'fail') {
+          yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted compressor failure (HTTP 500)', status: 500, transient: false } };
+          return;
+        }
+        // Part AH: the compressing pass's scripted answer. It states the three things REQ-MONITOR-082 asks for,
+        // so the proof can assert the summary reached the rebuilt conversation rather than a placeholder.
+        yield ok<StreamPart>({ kind: 'text', delta: ['Work performed: the scripted agent read the repository and wrote NOTES.md.', 'Findings reached: the transcript renderer draws one row per event.', 'Questions left open: none.'].join(String.fromCharCode(10)) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 40, output: 24 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
       if (who === 'summariser') {
         yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify({ summary: 'The child carried out its task (scripted summary).', key_findings: ['scripted'], tags: ['implementation'] }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 20, output: 10 } });
@@ -149,7 +163,23 @@ function scriptedClient(c: Clocks): ModelClient {
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
         return;
       }
+      if (step === 'fail:context') {
+        // Part AH (REQ-ORCH-093): the context-window rejection, in one of the eight phrasings `classifyFailure` knows.
+        yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted rejection: prompt is too long', status: 400, providerMessage: 'The maximum context length of this model is 8192 tokens; reduce the length of the messages.', transient: false } };
+        return;
+      }
       // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`;
+      // tokens:<n> — Part AH: a step that REPORTS n prompt tokens and then calls a tool so the turn goes round
+      // again. REQ-MONITOR-081 prefers the provider's own figure, so this is how a scripted run crosses the
+      // automatic threshold without composing a genuinely enormous conversation. Verification only.
+      const tokenStep = /^tokens:(\d+)$/.exec(step);
+      if (tokenStep) {
+        yield ok<StreamPart>({ kind: 'text', delta: 'Working, with a large reported prompt. ' });
+        if ((req.tools ?? []).some((t) => t.name === 'glob')) yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'glob', argsDelta: JSON.stringify({ pattern: '**/*.md' }) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: Number(tokenStep[1]), output: 12 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+        return;
+      }
       // `hang` streams nothing until the caller aborts (the unresponsive-model timer or the child timeout).
       const fault = /^fail:(429|quota|503|401)(?::retry-after=(\d+))?$/.exec(step);
       if (fault) {
@@ -358,6 +388,13 @@ const sessions = new Sessions({
     const r = configure(workspaceRoot, ctx.attended);
     return r.ok ? r : { ok: false as const, error: { reason: r.error.reason } };
   },
+  /**
+   * REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): a model's own maximum input tokens, from the configuration
+   * the last run of any open workspace resolved. Part R declared this lookup and left it unfilled, so every
+   * agent's meter read REQ-MONITOR-080's default whatever the model; REQ-MONITOR-078's capacity ladder needs
+   * the same figure, so it is filled here rather than a second time inside the compressor.
+   */
+  contextLimitFor: (modelKey) => { for (const c of configured.values()) { const n = c.contextLimits?.[modelKey]; if (n !== undefined) return n; } return null; },
   isProcessAlive: (pid) => probePid(pid) === 'alive',
   sessionFilesDir: (dal, sid) => join(dirname(dal.db.name), 'sessions', sid),
   publisher: {

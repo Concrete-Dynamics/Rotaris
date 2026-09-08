@@ -18,6 +18,8 @@ export * from './run/turn.js';
 export * from './run/supervisor.js';
 export * from './run/resilience.js';
 export * from './run/ladder.js';
+export * from './run/compression.js';
+export * from './run/conversation.js';
 export * from './run/waits.js';
 export * from './session-log.js';
 export * from './children/naming.js';

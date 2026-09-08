@@ -120,6 +120,12 @@ export const AgentRecordSchema = z.object({
    */
   contextUsed: z.number().int().nonnegative(),
   contextLimit: z.number().int().nonnegative(),
+  /**
+   * REQ-MONITOR-086/281 (Part AH): completed compressions of this agent's context. The durable record is the
+   * session's `context_compressed` timeline entries, which a resume counts once to seed this figure, so a
+   * completion already counted is never counted again (REQ-MONITOR-102's per-agent metrics).
+   */
+  compressions: z.number().int().nonnegative(),
   /** REQ-MONITOR-049: the granted native tool set as recorded at spawn; empty when no grant was recorded (the surface lets the persona's declared tools stand in). */
   grantedTools: z.array(z.string()),
   /** REQ-MONITOR-044/060: the distinct tool names this agent has called, in first-call order (maintained incrementally, REQ-MONITOR-038). */

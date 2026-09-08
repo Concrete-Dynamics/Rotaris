@@ -3,9 +3,9 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, type HeadlessPolicy, type ModelTier } from '@rotaris/contracts';
-import { isPlainMap, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, isPlainMap, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import type { PolicyRead } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -298,6 +298,42 @@ export function catalogueOf(cfg: LoadedConfiguration, scripted: boolean, leased:
   return out;
 }
 
+/**
+ * Part AH (ADR-0060) — REQ-MONITOR-080: the compressing model when `compressor.model` names one this run can
+ * reach; null means the agent's own model, which is reachable, authenticated and able to hold the context by
+ * construction. The name has already been substituted through the tier slots by the loader (REQ-CONFIG-073).
+ */
+export function compressorOf(cfg: LoadedConfiguration, scripted: boolean): { model: ModelRef; thinking: ThinkingLevel } | null {
+  const name = cfg.compressor.model;
+  const ref = modelRefOf(cfg, name, scripted);
+  if (!ref || !name) return null;
+  return { model: ref, thinking: thinkingOf(cfg.models[name]) };
+}
+
+/**
+ * REQ-CONFIG-134 / REQ-MONITOR-078: the trigger for the model an agent actually calls, resolved by the ONE
+ * implementation of the capacity ladder (`compressionTrigger`). A model this configuration does not name —
+ * a discovered one, or one reached by a mid-run switch — resolves against the configured default capacity,
+ * which is what REQ-MONITOR-078 (3) says to do when nothing better is known.
+ */
+export function compressionTriggerFor(cfg: LoadedConfiguration): (model: ModelRef) => ResolvedTrigger {
+  return (model) => {
+    const entry = Object.values(cfg.models).find((e) => e.model_id === model.modelId) ?? null;
+    return compressionTrigger(cfg.compressor, { context_compression_threshold: entry?.context_compression_threshold ?? null, max_input_tokens: entry?.max_input_tokens ?? null });
+  };
+}
+
+/**
+ * REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH, ADR-0060 decision 8): each configured model's own maximum input
+ * tokens by `models:` key — the figure an agent's context meter is measured against. Part R declared the
+ * lookup and recorded it unfilled because nothing carried these figures out of the configuration; this does.
+ */
+export function contextLimitsOf(cfg: LoadedConfiguration): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, entry] of Object.entries(cfg.models)) if (entry.max_input_tokens !== null && entry.max_input_tokens > 0) out[key] = entry.max_input_tokens;
+  return out;
+}
+
 /** REQ-CONFIG-065: the summariser's model, when `default_summary_model` names one this run can reach. */
 export function summariserOf(cfg: LoadedConfiguration, scripted: boolean): { model: ModelRef; thinking: ThinkingLevel } | null {
   const name = cfg.slots.default_summary_model;
@@ -376,6 +412,12 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
   const setup: ModelSetup = {
     backend,
     summariser: summariserOf(cfg, scripted),
+    // Part AH (ADR-0060): the compressing pass's model; the section's figures travel beside it on the setup.
+    compression: {
+      model: compressorOf(cfg, scripted), timeoutMs: cfg.compressor.timeout_seconds * 1000,
+      charsPerToken: cfg.compressor.chars_per_token, preserveRecentTurns: cfg.compressor.preserve_recent_turns,
+      triggerFor: compressionTriggerFor(cfg),
+    },
     config: {
       ...RUN_CONFIG_DEFAULTS,
       persona: cfg.defaultPersona,
@@ -410,5 +452,5 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
     if (!isScripted && e.auth_provider && !deps.bearers(workspaceRoot)[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
     return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
   };
-  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier, resilience: { catalogue, fallbackModel } });
+  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier, resilience: { catalogue, fallbackModel }, contextLimits: contextLimitsOf(cfg) });
 }

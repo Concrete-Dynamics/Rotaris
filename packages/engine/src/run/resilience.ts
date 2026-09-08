@@ -84,7 +84,7 @@ function textOf(err: ModelError): string {
 /**
  * REQ-ORCH-092's classes, REQ-ORCH-091's two limit conditions ahead of them, in this order: quota (REQ-NOTIFY-088,
  * never reported as rate limiting — REQ-NOTIFY-091), rate limit (status 429 or the three substrings, ignoring case),
- * the context-window rejection (routed to REQ-ORCH-093, which this part leaves unbuilt), validation (the port's
+ * the context-window rejection (routed to REQ-ORCH-093's condense-and-retry, built by Part AH), validation (the port's
  * code or the structured-output phrasings), transient (the port's fact, REQ-NOTIFY-094's phrases, an interrupted
  * stream), else fatal. An abort is fatal: the run is stopping and nothing is retried.
  */

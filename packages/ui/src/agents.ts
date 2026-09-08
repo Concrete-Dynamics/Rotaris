@@ -17,8 +17,9 @@ export function inspectorEnablement(state: AgentRecord['presentationState'] | nu
 /**
  * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
  * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
- * name is the entry persona and no child's. Nothing in the record carries its tool history or its latest prompt
- * reading (the reading is in the Part R handoff), so those read empty and the persona's declared tools stand in.
+ * name is the entry persona and no child's. Its tool history is still not carried; its latest prompt reading IS,
+ * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
+ * spawned no child, whatever the run had actually spent.
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
@@ -30,7 +31,9 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
     presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: entry.model, depth: 0, background: false, category: '',
     spawnedAt: session.runStartedAt, completedAt: busy ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
-    reasoning: entry.reasoning, contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, grantedTools: [...entry.tools], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: busy,
+    // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
+    compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
+    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: [...entry.tools], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
   };

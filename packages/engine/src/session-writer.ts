@@ -339,6 +339,20 @@ export class SessionWriter {
     this.status = s?.execution_status ?? 'idle';
     // Seeded ONCE from the ring (bounded by its cap); never re-read at projection time (REQ-MONITOR-038).
     this.activity.seed(dal.toolCallsOf(sessionId));
+    /**
+     * REQ-MONITOR-086 (Part AH): the compression count is seeded ONCE from the timeline's own record of the
+     * completions. It is a count of entries, not a sum of increments, so resuming the session or reading the
+     * recorded stream again can never inflate it — "a completion already counted must never be counted a
+     * second time" holds by the shape of the record rather than by a guard.
+     */
+    const compressions: Record<string, number> = {};
+    for (const t of dal.timelineOf(sessionId)) {
+      if (t.name !== 'context_compressed') continue;
+      let agent = '';
+      try { const meta: unknown = JSON.parse(t.metadata); if (typeof meta === 'object' && meta !== null && typeof (meta as Record<string, unknown>)['agent'] === 'string') agent = (meta as Record<string, string>)['agent']!; } catch { continue; }
+      if (agent !== '') compressions[agent] = (compressions[agent] ?? 0) + 1;
+    }
+    this.activity.seedCompressions(compressions);
   }
 
   get currentStatus(): string {

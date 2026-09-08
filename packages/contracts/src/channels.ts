@@ -245,6 +245,20 @@ export const SessionRecordSchema = z.object({
     agent: z.string(),
     rejection: z.string().nullable(),
   }).nullable(),
+  /**
+   * REQ-MONITOR-085 (Part AH, ADR-0060): the compression in flight — the agent whose context is being
+   * compressed and when it began — so a surface can state that compression is running without blocking.
+   * Derived from the live run at every snapshot, like `wait` above; null while none is running.
+   */
+  compression: z.object({ agent: z.string(), startedAt: z.string() }).nullable(),
+  /**
+   * REQ-MONITOR-089 (Part AH): "the run's synthetic root agent exposes the newest such reading so that
+   * root-level surfaces have a context figure to show". The entry role holds no `children` row, so its
+   * reading reached no surface and every root-level meter drew zero whatever the run had spent — found by
+   * the first live run against a real provider. `limit` is the model's own advertised maximum where the
+   * configuration states one, else REQ-MONITOR-080's default capacity.
+   */
+  entryContext: z.object({ used: z.number().int().nonnegative(), limit: z.number().int().nonnegative() }),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

@@ -1,4 +1,4 @@
-import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
+import { asSessionId, err, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
@@ -10,6 +10,7 @@ import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
+import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
@@ -50,6 +51,18 @@ export interface ModelSetup {
   readonly config: RunConfig;
   /** REQ-CONFIG-065: the model that summarises child work, when the configuration names one; else the entry model. */
   readonly summariser?: { readonly model: ModelRef; readonly thinking: ThinkingLevel } | null;
+  /**
+   * Part AH (ADR-0060): the configuration's half of context compression — the compressing model (null means
+   * the agent's own, REQ-MONITOR-080), the section's two figures and REQ-CONFIG-134's resolved trigger. The
+   * backend, the timers and the credential resolver are the session's and are joined to it at run start.
+   */
+  readonly compression?: {
+    readonly model: { readonly model: ModelRef; readonly thinking: ThinkingLevel } | null;
+    readonly timeoutMs: number;
+    readonly charsPerToken: number;
+    readonly preserveRecentTurns: number;
+    readonly triggerFor: (model: ModelRef) => ResolvedTrigger;
+  } | undefined;
 }
 
 /** What the run-host root hands a session's tool port factory. */
@@ -132,7 +145,11 @@ export interface SessionsDeps {
   readonly sessionLogAppender?: (dal: StoreDal, sessionId: SessionId) => (line: string) => void;
   /** REQ-TOOLS-184: background terminal sessions in the running state, for the strip. */
   readonly backgroundSessions?: () => number;
-  /** REQ-MONITOR-049 (Part R): a model's own maximum input tokens by key; absent or null falls back to REQ-MONITOR-080's default. Unfilled in this build — the run host's setup does not carry `max_input_tokens` (recorded in the Part R handoff). */
+  /**
+   * REQ-MONITOR-049: a model's own maximum input tokens by key; absent or null falls back to REQ-MONITOR-080's
+   * default. Part R recorded this as unfilled because the run host's setup did not carry `max_input_tokens`;
+   * Part AH fills it, because REQ-MONITOR-078's capacity ladder needs the same figure (ADR-0060 decision 8).
+   */
   readonly contextLimitFor?: ((modelKey: string) => number | null) | undefined;
   /** ADR-0015: the session's hook port, built by the root at run start (REQ-HOOKS-131); absent means no hooks. */
   readonly hooks?: (ctx: HookPortContext) => HookPort | null;
@@ -164,6 +181,8 @@ export interface RunSetup {
   readonly warnings?: readonly string[] | undefined;
   /** Part Q: the catalogue the same-tier rule reads (REQ-NOTIFY-082) and the run-level `fallback_model` slot (REQ-CONFIG-065). */
   readonly resilience?: { readonly catalogue: readonly CatalogueEntry[]; readonly fallbackModel: ModelChoice | null } | undefined;
+  /** REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): each configured model's own maximum input tokens, by `models:` key. */
+  readonly contextLimits?: Readonly<Record<string, number>> | undefined;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -370,6 +389,10 @@ export function costLabelOf(cost: string): SessionRecord['costLabel'] {
 
 export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = []): SessionRecord {
   return {
+    // REQ-MONITOR-085: derived from the live run at every snapshot; a record read from the store alone carries none.
+    compression: null,
+    // REQ-MONITOR-089: likewise the entry role's own reading; a stored record carries no live tracker.
+    entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY },
     id: r.session_id,
     executionStatus: r.execution_status,
     workspaceRoot: r.workspace_root,
@@ -514,6 +537,8 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
     reasoning: facts.reasoningFor?.(c.persona) ?? 'medium',
     contextUsed: activity?.contextUsed(c.canonical_name) ?? 0,
     contextLimit: facts.contextLimitFor?.(c.model_key) ?? DEFAULT_CONTEXT_CAPACITY,
+    // REQ-MONITOR-281 (Part AH): the per-agent compression count, live from the tracker and seeded from the timeline on open.
+    compressions: activity?.compressions(c.canonical_name) ?? 0,
     grantedTools: parseList(c.granted_tools),
     calledTools: activity?.calledTools(c.canonical_name) ?? [],
     // REQ-MONITOR-211/213: a settled agent presents no active tool, whatever a crash left in the ring.
@@ -642,7 +667,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -704,7 +729,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -748,6 +773,9 @@ export class Sessions {
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
+      // Part AH (ADR-0060): the configuration's half joined to the session's backend, timers and credentials. It sits
+      // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
+      ...(model.compression ? { compression: { backend: model.backend, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
       readSession: () => dal.getSession(sessionId), warn, hooks, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
@@ -865,6 +893,9 @@ export class Sessions {
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
+      // Part AH (ADR-0060): the configuration's half joined to the session's backend, timers and credentials. It sits
+      // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
+      ...(model.compression ? { compression: { backend: model.backend, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),

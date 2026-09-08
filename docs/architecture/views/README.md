@@ -24,7 +24,11 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-08** (Part AG — the undrawn Settings categories: `shell.openThirdPartyLicenses`
+Last reconciled with the code: **2026-09-08** (Part AH — context compression: the threshold's place in the turn's step
+order, the ladder's `context_window` arm, the `Conversation`, the reconstruction and the `context_compressed` timeline
+entry, `AgentRecord.compressions` and `contextLimit` now carrying the model's own maximum, and
+`SessionRecord.compression`, all in the runtime view. No package, edge, channel, command or store version changed, so
+the component and process views are unchanged. Earlier the same day, Part AG — the undrawn Settings categories: `shell.openThirdPartyLicenses`
 and `shell.hello`'s three new local facts in the process view; the `display:` section's surface, its file spellings and
 the Instructions presence check riding the configuration snapshot in the runtime view's tier section. No package, edge,
 channel or store version changed, so the component view is unchanged. Before that, 2026-09-07, Parts AB and AC — the composer and the structured questions:

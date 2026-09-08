@@ -18,6 +18,8 @@ import { withPlaybook } from '../run/run.js';
 import type { LoopSupervisor } from '../run/supervisor.js';
 import type { TurnResilience } from '../run/ladder.js';
 import { providerIdentity, type ModelChoice } from '../run/resilience.js';
+import type { TurnCompression } from '../run/compression.js';
+import { todoLinesFromStored } from '../todo-view.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -65,6 +67,11 @@ export interface ChildrenDeps {
   readonly shouldPause?: (() => boolean) | undefined;
   /** Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and waits. */
   readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number) => TurnResilience } | undefined;
+  /**
+   * Part AH (ADR-0060): compression for a child — the trigger resolved against the model THIS child calls, and
+   * the child's OWN task plan carried across (REQ-MONITOR-078, REQ-MONITOR-084 (4)).
+   */
+  readonly compressionFor?: ((current: ModelChoice, todoLines: () => readonly string[]) => TurnCompression | undefined) | undefined;
   /** Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports land in it and its two context blocks reach every child. */
   readonly artifacts?: ArtifactStore | undefined;
 }
@@ -222,6 +229,8 @@ export class IterationChildren implements DelegationOps {
     const childTimeoutMs = deps.childTimeoutMs ?? CHILD_TIMEOUT_MS;
     // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
+    // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
+    const compression = deps.compressionFor?.({ model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth);
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
@@ -246,7 +255,8 @@ export class IterationChildren implements DelegationOps {
       deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
       timedOut = false;
       const timer = deps.clocks.timers.after(childTimeoutMs, () => { timedOut = true; controller.abort(); });
-      const turn = (task: string, history: readonly ChatMessage[]) => runTurn({
+      let firstCall = true;
+      const turn = (task: string, history: readonly ChatMessage[]) => { const wasFirst = firstCall; firstCall = false; return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
         systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
         credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
@@ -254,7 +264,10 @@ export class IterationChildren implements DelegationOps {
         ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
         ...(deps.shouldPause ? { shouldPause: deps.shouldPause } : {}),
         ...(resilience ? { resilience } : {}),
-      }, task, history, controller.signal);
+        ...(compression ? { compression } : {}),
+        // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
+        parentResume: !wasFirst,
+      }, task, history, controller.signal); };
       try {
         outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks), controller.signal);
         // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer

@@ -141,3 +141,15 @@ export function editAgentTodo(document: AgentTodoDocument, op: 'add' | 'update' 
   }
   return { changed: false, document };
 }
+
+/**
+ * Part AH — REQ-MONITOR-084 (4): the agent's todo items as text, one line each, carried across a compression
+ * ONE FOR ONE. The agent-maintained document wins over the planner's exactly as `projectSessionTodos` decides
+ * it, so what the agent is told after a compression is what the surface was already showing it.
+ */
+export function todoLinesFromStored(json: string | null): string[] {
+  const stored = decodeStoredTodo(json);
+  if (stored.agent) return stored.agent.phases.flatMap((phase) => phase.tasks.map((task) => `[${displayTaskState(task.state)}] ${phase.name} — ${task.name}${task.description ? `: ${task.description}` : ''}`));
+  if (stored.planner) return stored.planner.phases.flatMap((phase) => phase.tasks.map((task) => `[${displayTaskState(task.state)}] ${phase.name} — ${task.text}`));
+  return [];
+}

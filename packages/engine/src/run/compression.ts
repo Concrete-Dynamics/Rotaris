@@ -1,0 +1,297 @@
+import { millis, type Clocks, type Millis, type Timers } from '@rotaris/kernel';
+import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
+import { transcriptText } from '../children/report.js';
+import type { SessionWriter } from '../session-writer.js';
+import { estimateTokens, preservedFrom, type Conversation } from './conversation.js';
+
+/**
+ * ADR-0060 — context compression: the bounded pass that writes the summary, and the reconstruction
+ * `REQ-MONITOR-084` fixes. Nothing here reads a clock or touches the store; `turn.ts` drives it at the
+ * threshold (`REQ-MONITOR-076`) and `ladder.ts` at a context-window rejection (`REQ-ORCH-093`).
+ *
+ * The compressing model is told ONLY the compressible slice — what lies between the original request and
+ * the preserved turns — because `REQ-MONITOR-082` states that the system prompt, the tool definitions and
+ * the original request survive character for character and that none of the three is sent to it.
+ */
+
+/** `REQ-MONITOR-083`: the bound applies to the generated summary ALONE and to nothing else. */
+export const SUMMARY_LINE_CAP = 300;
+/** `REQ-CONFIG-132`: `compressor.timeout_seconds`, default 120. */
+export const COMPRESSION_TIMEOUT_MS = millis(120_000);
+
+export interface CompressorDeps {
+  readonly backend: AgentBackend;
+  /** `REQ-MONITOR-080`: `compressor.model` when configured, else the agent's own — reachable by construction. */
+  readonly model: ModelRef;
+  readonly thinking: ThinkingLevel;
+  readonly timers: Timers;
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
+  readonly timeoutMs?: Millis;
+}
+
+export interface CompressionOutcome {
+  readonly ok: boolean;
+  /** Why it did not happen; empty when it did. */
+  readonly reason: string;
+  /**
+   * TRUE when there was simply nothing to compress — everything after the original request is inside the
+   * preserved turns. That is not a failure and is not recorded as one: the condition persists for as long as
+   * the count stays over the threshold, so recording it would put a warning issue on every remaining model
+   * step of the run. Found by the first live run against a real provider (ADR-0060's first execution).
+   */
+  readonly nothingToDo: boolean;
+  readonly beforeTokens: number;
+  readonly afterTokens: number;
+  /**
+   * The message counts either side. The TOKEN figures can rise on a very small conversation — the summary and
+   * its framing have a floor that a three-message history is already under — so what a reader should judge a
+   * compression by is how much history it removed, which is these two. Stated in ADR-0060's first execution.
+   */
+  readonly beforeMessages: number;
+  readonly afterMessages: number;
+  readonly summary: string;
+}
+
+const SYSTEM = 'You condense an agent conversation so the agent can carry on with a shorter history. Report only what already happened; never continue the task, never invent work, never address the user.';
+
+/** `REQ-MONITOR-083`: the summary, and only the summary, cut to 300 lines. */
+export function clampSummary(text: string): string {
+  const lines = text.split('\n');
+  if (lines.length <= SUMMARY_LINE_CAP) return text.trim();
+  return `${lines.slice(0, SUMMARY_LINE_CAP).join('\n').trim()}\n[the summary was cut at ${SUMMARY_LINE_CAP} lines; ${lines.length - SUMMARY_LINE_CAP} further line(s) omitted]`;
+}
+
+/**
+ * `REQ-MONITOR-084`: after compression the context holds exactly these parts, in exactly this order, and
+ * nothing else from the pre-compression history — (2) the user's original request, (3) the summary, (4) the
+ * todo items one for one, (5) the configured number of most recent turns, verbatim and in order. Part (1),
+ * the system prompt and the tool definitions, is not in the conversation at all: it travels on every request
+ * as `systemPrompt` and `tools`, so it survives character for character without being copied here.
+ */
+export function rebuild(original: ChatMessage, summary: string, todoLines: readonly string[], preserved: readonly ChatMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [original, { role: 'user', content: [{ kind: 'text', text: `[Context compression] The earlier part of this conversation was replaced by this summary.\n\n${summary}` }] }];
+  // REQ-MONITOR-084 (4): carried across ONE FOR ONE — never summarised, never cut to fit the summary's bound.
+  if (todoLines.length > 0) out.push({ role: 'user', content: [{ kind: 'text', text: `[Task plan] The items on your plan, unchanged:\n${todoLines.map((t) => `- ${t}`).join('\n')}` }] });
+  out.push(...preserved);
+  return out;
+}
+
+export interface CompressionInput {
+  readonly conversation: Conversation;
+  readonly preserveRecentTurns: number;
+  readonly charsPerToken: number;
+  readonly todoLines: readonly string[];
+}
+
+/**
+ * One compression: slice, ask the model, rebuild, install. The conversation is replaced only on success, so
+ * a failed pass leaves the agent exactly where it was — which is what lets `REQ-ORCH-093` surface the
+ * original rejection unchanged rather than a second, worse one.
+ */
+export async function compress(input: CompressionInput, deps: CompressorDeps, signal: AbortSignal): Promise<CompressionOutcome> {
+  const { conversation } = input;
+  const messages = conversation.snapshot();
+  const before = estimateTokens(messages, input.charsPerToken);
+  const original = conversation.originalRequest;
+  const fail = (reason: string, nothingToDo = false): CompressionOutcome => ({ ok: false, reason, nothingToDo, beforeTokens: before, afterTokens: before, beforeMessages: messages.length, afterMessages: messages.length, summary: '' });
+  if (original === null) return fail('the conversation carries no user request to preserve', true);
+  const from = preservedFrom(messages, input.preserveRecentTurns);
+  const start = messages.indexOf(original) + 1;
+  const compressible = messages.slice(start, from);
+  if (compressible.length === 0) return fail('nothing lies between the original request and the preserved turns', true);
+
+  const timeout = deps.timeoutMs ?? COMPRESSION_TIMEOUT_MS;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  if (signal.aborted) controller.abort(); else signal.addEventListener('abort', onAbort, { once: true });
+  const timer = deps.timers.after(timeout, () => controller.abort());
+  let text = '';
+  let failure = '';
+  try {
+    // REQ-MONITOR-082: the summary must state the work performed, the findings reached and the questions left open.
+    const ask = `Condense the agent activity below into a summary the agent can work from. State, in this order: the work performed, the findings reached, and the questions left open. Be specific about files, commands and results; a fact you drop is lost to the agent for good.\n\nActivity:\n${transcriptText(compressible)}`;
+    const r = await deps.backend.runTurn(
+      { persona: 'compressor', systemPrompt: SYSTEM, messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: deps.model, thinking: deps.thinking, timeoutMs: timeout, retries: 0, resolveCredential: deps.credentialFor(deps.model) },
+      { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },
+      controller.signal,
+    );
+    if (r.status === 'failed') failure = r.error.headline; else text = r.text.trim();
+  } catch (cause) {
+    failure = String(cause instanceof Error ? cause.message : cause);
+  } finally {
+    timer.cancel();
+    signal.removeEventListener('abort', onAbort);
+  }
+  if (signal.aborted) return fail('the run was cancelled during the compressing pass');
+  if (failure !== '') return fail(`the compressing pass failed: ${failure}`);
+  if (controller.signal.aborted) return fail(`the compressing pass exceeded ${Number(timeout) / 1000} s`);
+  if (text === '') return fail('the compressing pass produced no summary');
+
+  const summary = clampSummary(text);
+  const rebuilt = rebuild(original, summary, input.todoLines, messages.slice(from));
+  conversation.replace(rebuilt);
+  return { ok: true, reason: '', nothingToDo: false, beforeTokens: before, afterTokens: estimateTokens(rebuilt, input.charsPerToken), beforeMessages: messages.length, afterMessages: rebuilt.length, summary };
+}
+
+/** `REQ-CONFIG-134`/`REQ-CONFIG-135`: the resolved trigger for the agent's model, with the four inputs that produced it. */
+export interface ResolvedTrigger {
+  readonly tokens: number;
+  readonly thresholdPercentage: number;
+  readonly capacity: number;
+  readonly advertisedInputLimit: number | null;
+  readonly defaultThreshold: number;
+}
+
+/** What a turn is given so its agent can compress: the pass, the trigger, the section's two figures and the plan. */
+export interface TurnCompression {
+  readonly compressor: CompressorDeps;
+  readonly trigger: ResolvedTrigger;
+  /** `REQ-CONFIG-132`: `chars_per_token`, default 4. */
+  readonly charsPerToken: number;
+  /** `REQ-CONFIG-132`: `preserve_recent_turns`, default 4. */
+  readonly preserveRecentTurns: number;
+  /** `REQ-MONITOR-084` (4): the agent's todo items, carried across one for one. */
+  readonly todoLines: () => readonly string[];
+  /** `REQ-MONITOR-085`: the agent whose context is being compressed, or null when none is. */
+  readonly onState?: ((agent: string | null) => void) | undefined;
+}
+
+export interface CompressionRecorder {
+  readonly writer: SessionWriter;
+  readonly clocks: Clocks;
+  readonly warn: (m: string) => void;
+  readonly agent: string;
+}
+
+/**
+ * The two call sites' shared half: read the count `REQ-MONITOR-081` prefers, run the pass, and report it the
+ * three ways `REQ-CONFIG-135` fixes — the timeline entry carrying the four inputs as SEPARATE machine-readable
+ * fields, one transcript row rendered from those fields, and the log line. Which of the three venues is "the
+ * session's event stream" is OQ-53 (ADR-0060 decision 7): the wire catalogue is closed at 23 kinds
+ * (`REQ-EVENTS-041`) and none of them reports a compression, so the timeline carries it as Part Q's
+ * `model_exhausted` and `model_override` are carried.
+ */
+export class CompressionRunner {
+  private automatic = 0;
+  /** The no-op above is logged once per agent, not once per step. */
+  private noted = false;
+  /** The counted prompt that triggered the last successful automatic compression. */
+  private countedAtLastCompression: number | null = null;
+  /**
+   * Latched when compressing is proven not to help: the incompressible part of the prompt — the system prompt
+   * and the tool definitions, which `REQ-MONITOR-082` keeps character for character — already exceeds the
+   * threshold on its own, so no amount of compressing the conversation can bring the count under it.
+   */
+  private futile = false;
+
+  constructor(private readonly svc: TurnCompression, private readonly rec: CompressionRecorder) {}
+
+  /**
+   * `REQ-MONITOR-076`/`REQ-MONITOR-081`: the count is the provider's real last-prompt reading when there is
+   * one — the input count of this agent's latest model step, which the turn records after every step — and a
+   * character estimate otherwise, including when the history has already been condensed and the reading
+   * belongs to the pre-compression prompt.
+   */
+  count(conversation: Conversation, condensed: boolean): { tokens: number; source: 'provider' | 'estimate' } {
+    const provider = this.rec.writer.activity.contextUsed(this.rec.agent);
+    if (!condensed && provider > 0) return { tokens: provider, source: 'provider' };
+    return { tokens: estimateTokens(conversation.snapshot(), this.svc.charsPerToken), source: 'estimate' };
+  }
+
+  /**
+   * `REQ-MONITOR-076`: at or above the effective threshold, compression runs before the call.
+   *
+   * With one guard the requirement does not state and the code cannot do without. The count it names is the
+   * WHOLE prompt, but a compression can only shorten the conversation: the system prompt and the tool
+   * definitions survive character for character (`REQ-MONITOR-082`) and are not in the conversation at all,
+   * and the reconstruction has a floor of its own (the original request, the summary, the plan, the preserved
+   * turns). Where that incompressible remainder reaches the threshold by itself, every step is over it, every
+   * step compresses, and nothing gets smaller.
+   *
+   * The rule: **a compression must lower the counted prompt.** If the next provider-sourced count is not below
+   * the count that triggered the previous compression, compressing is not working and is latched off for this
+   * agent, with the figures and what to change. It cannot be fooled by arithmetic about how small the
+   * conversation might in principle become, which is where the first form of this guard went wrong — it
+   * compared the count less the conversation against the threshold, found 8,708 against 9,000, concluded a
+   * perfect compression could still get under, and compressed four more times. A compression is not perfect:
+   * it keeps four things. Measuring the outcome is the only test that holds.
+   *
+   * `REQ-ORCH-093`'s recovery path is NOT latched — a rejection must always be answered with an attempt.
+   */
+  due(conversation: Conversation, condensed: boolean): boolean {
+    if (this.svc.trigger.tokens <= 0 || this.futile) return false;
+    const counted = this.count(conversation, condensed);
+    if (counted.tokens < this.svc.trigger.tokens) return false;
+    // Only a provider figure can judge the previous compression: an estimate measures a different thing.
+    if (this.countedAtLastCompression === null || counted.source !== 'provider') return true;
+    if (counted.tokens < this.countedAtLastCompression) return true;
+    this.futile = true;
+    const conversationTokens = estimateTokens(conversation.snapshot(), this.svc.charsPerToken);
+    this.rec.warn(
+      `${this.rec.agent}: automatic context compression is switched off for this agent. The last compression left the counted prompt at ${counted.tokens} tokens against ${this.countedAtLastCompression} before it, still over the ${this.svc.trigger.tokens} trigger, while the conversation it can rewrite is only about ${conversationTokens} tokens — the rest is the system prompt and the tool definitions, which compression must keep character for character (REQ-MONITOR-082). Compressing again would cost a model call and shorten nothing. Raise compressor.threshold_percentage or compressor.default_threshold, or reduce the tool surface.`,
+    );
+    return false;
+  }
+
+  /** How many automatic compressions this turn has run — the figure the proof reads back. */
+  get automaticCount(): number {
+    return this.automatic;
+  }
+
+  async run(conversation: Conversation, kind: 'automatic' | 'rejection', condensed: boolean, signal: AbortSignal): Promise<boolean> {
+    const { writer, clocks, agent } = this.rec;
+    const counted = this.count(conversation, condensed);
+    const startedMs = clocks.monotonic.now();
+    this.svc.onState?.(agent);
+    let outcome;
+    try {
+      outcome = await compress({ conversation, preserveRecentTurns: this.svc.preserveRecentTurns, charsPerToken: this.svc.charsPerToken, todoLines: this.svc.todoLines() }, this.svc.compressor, signal);
+    } finally {
+      this.svc.onState?.(null);
+    }
+    const t = this.svc.trigger;
+    if (!outcome.ok) {
+      const message = `${agent}'s context was not compressed (${kind}): ${outcome.reason}`;
+      /**
+       * A no-op is not a failure. The automatic trigger is evaluated before EVERY step, so once the count is
+       * over the threshold a conversation with nothing between the original request and the preserved turns
+       * would record one warning issue per remaining step. It is logged once per agent instead, and the
+       * rejection path still fails the call because REQ-ORCH-093 surfaces the original rejection either way.
+       */
+      if (outcome.nothingToDo) {
+        if (!this.noted) { this.noted = true; this.rec.warn(`${message} (this is not a failure; it is not recorded again for this agent)`); }
+        return false;
+      }
+      // REQ-ORCH-093: a condensation that fails changes nothing — the caller surfaces the ORIGINAL rejection.
+      writer.recordIssue({ kind: 'compression_failed', severity: 'warning', actor: agent, message, metadata: { trigger: kind, reason: outcome.reason, counted_tokens: counted.tokens, count_source: counted.source } });
+      this.rec.warn(message);
+      return false;
+    }
+    if (kind === 'automatic') {
+      this.automatic += 1;
+      // What the NEXT provider-sourced count must beat for compressing to be judged worth repeating.
+      if (counted.source === 'provider') this.countedAtLastCompression = counted.tokens;
+    }
+    const latencyMs = clocks.monotonic.now() - startedMs;
+    // REQ-MONITOR-086: the completion is counted once, here, and the entry below is what a resume counts again from.
+    writer.activity.compressed(agent);
+    // REQ-CONFIG-135: the four inputs and the resulting token number as separate fields, never a sentence to parse.
+    const metadata = {
+      agent, trigger: kind, threshold_percentage: t.thresholdPercentage, capacity: t.capacity, advertised_input_limit: t.advertisedInputLimit,
+      default_threshold: t.defaultThreshold, trigger_tokens: t.tokens, counted_tokens: counted.tokens, count_source: counted.source,
+      before_tokens: outcome.beforeTokens, after_tokens: outcome.afterTokens, before_messages: outcome.beforeMessages, after_messages: outcome.afterMessages, latency_ms: Math.round(latencyMs),
+    };
+    const reason = compressionReason(t, counted.tokens, counted.source);
+    writer.appendTimeline('context_compressed', 'rotaris', `${agent}'s context was compressed (${kind}): ${outcome.beforeMessages} → ${outcome.afterMessages} messages, ${outcome.beforeTokens} → ${outcome.afterTokens} estimated tokens. ${reason}`, metadata);
+    // REQ-CONFIG-135's second venue: the transcript entry's reason line, RENDERED FROM THOSE FIELDS.
+    writer.appendRow('system', `Context compressed for ${agent} — ${reason}`, true);
+    this.rec.warn(`context compressed for ${agent} (${kind}): ${outcome.beforeMessages} → ${outcome.afterMessages} messages, ${outcome.beforeTokens} → ${outcome.afterTokens} estimated tokens in ${Math.round(latencyMs)} ms; ${reason}`);
+    return true;
+  }
+}
+
+/** `REQ-CONFIG-135`: the reason the user is given, rendered from the same fields the entry carries. */
+export function compressionReason(t: ResolvedTrigger, countedTokens: number, source: 'provider' | 'estimate'): string {
+  const advertised = t.advertisedInputLimit === null ? 'the model advertises no input limit' : `the model advertises ${t.advertisedInputLimit.toLocaleString('en-US')}`;
+  return `${t.thresholdPercentage} % of a capacity of ${t.capacity.toLocaleString('en-US')} is ${t.tokens.toLocaleString('en-US')} tokens (${advertised}; the configured default capacity is ${t.defaultThreshold.toLocaleString('en-US')}), and the ${source === 'provider' ? "provider's last prompt count" : 'estimate from character length'} was ${countedTokens.toLocaleString('en-US')}.`;
+}

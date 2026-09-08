@@ -21,6 +21,13 @@ Two design-reference dependencies. **Twenty-two numbered spikes**, one withdrawn
 one discharged for Windows only, leaving **twelve outstanding** — and see the spike section, which
 separates them into the three groups the gate actually turns on.
 
+**The specification-question count has moved since, and implementation is what moves it.** Four questions
+were raised by building the thing that met the requirement: **OQ-50** (Part K, the public model catalogue),
+**OQ-51** (Part AB, the unscoped queued prompt), **OQ-52** (Part AC, whether a delegated child may ask) and
+**OQ-53** (Part AH, which event reports a compression). That is **fifty-one specification questions**, eight
+resolved, leaving **forty-three open**, and **none blocks a named ADR**. Each of the four is stated where it
+was found, with what the build shipped meanwhile, so a ruling replaces an interim rather than filling a gap.
+
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
 not skim them.*** The seven escalations this register carried as open were **all ruled on that date** and
 all seven have landed in requirements; OQ-14 and OQ-44 were **closed by amendment** and their entries below
@@ -2203,6 +2210,32 @@ second trailer would extend a vocabulary REQ-CHAT-046 closes.
 
 Until it is answered the tool stays on the orchestrator, which is the narrow reading and refuses nothing a
 requirement grants.
+
+**OQ-53 — Which event reports a compression, given a closed catalogue?** *(No ADR beyond ADR-0060, which ships an
+interim; raised against `REQ-CONFIG-135` by context compression's first execution, Part AH, 2026-09-08.)*
+
+`REQ-CONFIG-135` says that whenever a compression trigger is resolved, the four inputs that produced it and the
+resulting token number are surfaced "in exactly two places", the first being: "emitted on the session's event
+stream as part of **the event that reports the compression**, carrying the four inputs and the resulting token
+number as **separate machine-readable fields** so a consumer never has to parse a sentence". The second is the
+transcript entry's reason line, rendered from those fields, and the same figures go to the per-session debug log.
+
+**There is no such event.** `REQ-EVENTS-041` closes the published catalogue at exactly 23 types and none of them
+reports a compression; `REQ-EVENTS-017` requires every event to carry an `event` value drawn from that catalogue,
+so no new kind may be added without amending it. The requirement names a venue the product has no way to reach.
+
+Two readings, and they differ in what a consumer of the recorded stream sees. Either **"the session's event
+stream" means the timeline**, and the interim below already satisfies the requirement — this is the reading Part Q
+took for `model_exhausted` and `model_override`, which are recorded facts the closed catalogue also has no kind
+for. Or **`REQ-EVENTS-041` is to be amended with a compression event**, in which case the catalogue's count and
+`REQ-EVENTS-017`'s payload table both change and an external consumer gains a type it must decode.
+
+Shipped meanwhile (ADR-0060 decision 7): a `context_compressed` **timeline entry** carrying `threshold_percentage`,
+`capacity`, `advertised_input_limit`, `default_threshold` and `trigger_tokens` as separate metadata fields beside
+`trigger`, `count_source`, `counted_tokens`, `before_tokens`, `after_tokens`, `before_messages`, `after_messages`
+and `latency_ms`; one `system` transcript row rendered from those fields; and the log line. What the requirement
+asks to be carried is carried, in a venue it did not name. If the second reading is ruled, the entry stays and an
+event joins it — the interim is not repaired quietly.
 
 ## Design-reference dependencies
 

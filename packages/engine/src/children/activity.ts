@@ -22,6 +22,8 @@ interface AgentEntry {
   readonly active: Map<string, string>;
   count: number;
   contextUsed: number;
+  /** REQ-MONITOR-086/281: completed compressions of this agent's context. */
+  compressions: number;
 }
 
 export class AgentActivity {
@@ -29,7 +31,7 @@ export class AgentActivity {
 
   private entry(agent: string): AgentEntry {
     let e = this.agents.get(agent);
-    if (!e) { e = { called: [], calledSet: new Set(), active: new Map(), count: 0, contextUsed: 0 }; this.agents.set(agent, e); }
+    if (!e) { e = { called: [], calledSet: new Set(), active: new Map(), count: 0, contextUsed: 0, compressions: 0 }; this.agents.set(agent, e); }
     return e;
   }
 
@@ -57,6 +59,22 @@ export class AgentActivity {
   /** REQ-MONITOR-211: a settled agent has no active call; its called history stays. */
   clearActive(agent: string): void {
     this.agents.get(agent)?.active.clear();
+  }
+  /**
+   * REQ-MONITOR-086 (Part AH): one completed compression, counted exactly once. The durable record is the
+   * `context_compressed` timeline entry the runner writes beside this call, and a session opened again seeds
+   * the figure by counting those entries (`seedCompressions`) — so a resume, or a second read of the recorded
+   * stream, can never inflate it.
+   */
+  compressed(agent: string): void {
+    this.entry(agent).compressions += 1;
+  }
+  /** One read at open, from the timeline's `context_compressed` entries; never additive with `compressed`. */
+  seedCompressions(counts: Readonly<Record<string, number>>): void {
+    for (const [agent, n] of Object.entries(counts)) if (Number.isFinite(n) && n > 0) this.entry(agent).compressions = Math.round(n);
+  }
+  compressions(agent: string): number {
+    return this.agents.get(agent)?.compressions ?? 0;
   }
 
   calledTools(agent: string): string[] {

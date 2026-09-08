@@ -1,6 +1,6 @@
-import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
+import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
-import type { ApprovalOption, PermissionPreset, QuestionAnswers, QuestionPrompt } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -25,6 +25,7 @@ import type { Persona, PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
 import { pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
+import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -85,6 +86,24 @@ export const RUN_CONFIG_DEFAULTS: Omit<RunConfig, 'model' | 'credentialFor'> = {
   maxStepsPerTurn: 100,
 };
 
+/**
+ * Part AH (ADR-0060) — what a run needs so any of its agents can compress its own context. The trigger is
+ * resolved by the CONFIGURATION for the model the agent calls (`compressionTrigger`, REQ-CONFIG-134), so the
+ * capacity ladder has one implementation and the engine never holds a second copy of REQ-MONITOR-080's figures.
+ */
+export interface RunCompression {
+  readonly backend: AgentBackend;
+  readonly timers: Timers;
+  readonly credentialFor: (model: ModelRef) => () => Promise<string>;
+  /** REQ-MONITOR-080: `compressor.model` when configured; null means the agent's own model, reachable by construction. */
+  readonly model: { readonly model: ModelRef; readonly thinking: ThinkingLevel } | null;
+  /** REQ-CONFIG-132: `compressor.timeout_seconds`, default 120 s. */
+  readonly timeoutMs: Millis;
+  readonly charsPerToken: number;
+  readonly preserveRecentTurns: number;
+  readonly triggerFor: (model: ModelRef) => ResolvedTrigger;
+}
+
 /** REQ-TOOLS-071: what the run announces at start about its permission posture. */
 export interface PermissionPosture {
   readonly requested: PermissionPreset;
@@ -122,6 +141,8 @@ export interface RunDeps {
   readonly budget?: ChildBudget | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
   readonly summariser?: SummariserDeps | null | undefined;
+  /** Part AH (ADR-0060): what an agent needs to compress its own context; null or absent means neither trigger fires. */
+  readonly compression?: RunCompression | null | undefined;
   readonly childTimeoutMs?: Millis | undefined;
   /** REQ-ORCH-080: default 120 s; 0 disables. */
   readonly drainTimeoutMs?: Millis | undefined;
@@ -235,6 +256,8 @@ export class Run {
   private readonly catalogue: readonly CatalogueEntry[];
   /** The root agent's ladder state for this run (one same-tier fallback, one role fallback — REQ-ORCH-091 b / REQ-ORCH-144). */
   private rootCell: AgentResilienceCell | null = null;
+  /** REQ-MONITOR-085 (Part AH): the agent whose context is being compressed right now; null while none is. */
+  private compressing: { agent: string; startedAt: string } | null = null;
   private appliedEntryModel: ModelRef | null = null;
 
   constructor(private readonly deps: RunDeps) {
@@ -287,6 +310,23 @@ export class Run {
   /** REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. */
   get currentWait(): WaitState | null {
     return this.waits.current();
+  }
+  /**
+   * REQ-MONITOR-085 (Part AH): the compression in flight, published with the snapshot exactly as `wait` is —
+   * derived from the live run and mirrored by no column, so a process that died holds none.
+   */
+  get currentCompression(): { readonly agent: string; readonly startedAt: string } | null {
+    return this.compressing;
+  }
+  /**
+   * REQ-MONITOR-089 (Part AH): the entry role's newest prompt-token reading and the limit it is measured
+   * against. The entry role has no `children` row, so `toAgentRecord` never projects it and the surface's
+   * synthetic root agent had nothing to read; the tracker has held the figure since Part R.
+   */
+  get entryContext(): { readonly used: number; readonly limit: number } {
+    const model = this.entryOverride.model ?? this.deps.config.model;
+    const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
+    return { used: this.deps.writer.activity.contextUsed(this.deps.config.persona), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -495,6 +535,35 @@ export class Run {
     return withSettings(this.catalogue, chosen);
   }
 
+  /**
+   * Part AH (ADR-0060): the per-agent compression services. The trigger is resolved for the model THIS agent
+   * calls, so a child on a small model compresses at its own capacity and not the run's (REQ-MONITOR-078).
+   * `onState` is REQ-MONITOR-085's visible status, published with the session snapshot like `wait`.
+   */
+  private readonly compressionFor = (choice: ModelChoice, todoLines: () => readonly string[]): TurnCompression | undefined => {
+    const c = this.deps.compression;
+    if (!c) return undefined;
+    const chosen = c.model ?? { model: choice.model, thinking: choice.thinking };
+    return {
+      compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs },
+      trigger: c.triggerFor(choice.model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
+      /**
+       * REQ-MONITOR-085: the status must be VISIBLE while the pass runs. A field derived from the live run is
+       * only as visible as the next publication, and a compressing pass writes nothing for as long as it lasts —
+       * so the change is published here rather than waiting for a commit that will not come until it is over.
+       */
+      onState: (agent) => {
+        this.compressing = agent === null ? null : { agent, startedAt: toIsoUtc(this.deps.clocks.wall.instant()) };
+        this.deps.owner.reconcile();
+      },
+    };
+  };
+
+  /** REQ-MONITOR-084 (4): the run-level plan as lines, for the entry agent's own compression. */
+  private plannerTodoLines(): readonly string[] {
+    return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${task.text}`));
+  }
+
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
   private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number): TurnResilience {
     const { config } = this.deps;
@@ -529,6 +598,8 @@ export class Run {
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
+        // Part AH (ADR-0060): each child compresses against its own model's capacity, with its own task plan.
+        compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
@@ -543,8 +614,10 @@ export class Run {
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
     let initial = true;
+    const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     const turnFn = (text: string, history: readonly ChatMessage[]) => {
       const content = initial ? this.deps.taskContent : undefined;
+      const initialCall = initial;
       initial = false;
       return runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
@@ -554,6 +627,10 @@ export class Run {
       ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
       resilience: this.rootResilience(),
+      // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.
+      ...(compression ? { compression } : {}),
+      // REQ-ORCH-093: after the first call this turn resumes the parent with its children's reports.
+      parentResume: !initialCall,
       }, text, history, this.abort.signal, content);
     };
     try {

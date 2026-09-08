@@ -9,6 +9,8 @@ import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.js';
 import type { ModelChoice } from './resilience.js';
+import { CompressionRunner, type TurnCompression } from './compression.js';
+import { Conversation } from './conversation.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -105,6 +107,14 @@ export interface TurnDeps {
   readonly shouldPause?: (() => boolean) | undefined;
   /** Part Q: the ladder over every model step of this agent (REQ-ORCH-090/091/092); absent means the bare step. */
   readonly resilience?: TurnResilience | undefined;
+  /**
+   * Part AH (ADR-0060): context compression for THIS agent — the threshold ahead of every step
+   * (REQ-MONITOR-076) and the condensation the ladder asks for on a context-window rejection (REQ-ORCH-093).
+   * Absent means neither happens and a rejection fails the step as it did before.
+   */
+  readonly compression?: TurnCompression | undefined;
+  /** REQ-ORCH-093: this turn resumes a parent with its children's reports, so a rejection on its FIRST call is `parent_resume_bad_request`. */
+  readonly parentResume?: boolean | undefined;
 }
 
 export interface SteeringPrompt {
@@ -114,7 +124,8 @@ export interface SteeringPrompt {
 
 export interface TurnOutcome {
   readonly report: TurnReport;
-  readonly messages: ChatMessage[];
+  /** ADR-0060: the conversation as it stands — a compression replaced the array, so this is never the one the turn began with. */
+  readonly messages: readonly ChatMessage[];
   readonly toolCallCount: number;
   readonly escalation?: SupervisorEscalation | undefined;
   /** REQ-MONITOR-123: the turn stopped for a pause; the task is left where it was. */
@@ -122,10 +133,10 @@ export interface TurnOutcome {
 }
 
 /** REQ-MONITOR-134: delivered as a message explicitly marked as a steering prompt; the supervisor counts it as a user instruction. */
-function injectSteering(deps: TurnDeps, messages: ChatMessage[]): number {
+function injectSteering(deps: TurnDeps, conversation: Conversation): number {
   const pending = deps.steering?.() ?? [];
   for (const s of pending) {
-    messages.push({ role: 'user', content: [{ kind: 'text', text: `[Steering prompt] ${s.text}` }] });
+    conversation.push({ role: 'user', content: [{ kind: 'text', text: `[Steering prompt] ${s.text}` }] });
     deps.writer.appendTimeline('steering_injected', 'user', `A steering prompt reached ${deps.agentName} (${s.id.slice(0, 8)}).`, { prompt_id: s.id, agent: deps.agentName });
     deps.supervisor?.noteUserInstruction();
   }
@@ -134,7 +145,8 @@ function injectSteering(deps: TurnDeps, messages: ChatMessage[]): number {
 
 export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
-  const messages: ChatMessage[] = [...history, { role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] }];
+  // ADR-0060: the history is an object whose array is SWAPPED by a compression, never spliced under a call in flight.
+  const conv = new Conversation([...history, { role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] }]);
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];
@@ -144,46 +156,71 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
   let steps = 0;
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
   let usage = { input: 0, output: 0 };
+  /**
+   * Part AH (ADR-0060). `condensed` says the history no longer matches the provider's last prompt count, so
+   * REQ-MONITOR-081's preference for the real figure falls back to the estimate until the next step reports one.
+   */
+  const compression = deps.compression ? new CompressionRunner(deps.compression, { writer, clocks, warn: deps.warn, agent: deps.agentName }) : null;
+  let condensed = false;
   for (;;) {
-    if (deps.shouldPause?.()) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages, toolCallCount, paused: true };
-    injectSteering(deps, messages);
+    if (deps.shouldPause?.()) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
+    injectSteering(deps, conv);
     const supervision = await deps.supervisor?.check();
     if (supervision?.kind === 'inject') {
-      messages.push({ role: 'user', content: [{ kind: 'text', text: supervision.message }] });
+      conv.push({ role: 'user', content: [{ kind: 'text', text: supervision.message }] });
       writer.appendTimeline('loop_supervisor_activation', deps.agentName, supervision.message, { trigger: supervision.activation.trigger, reason: supervision.activation.reason, activation_count: supervision.activation.activationCount });
     } else if (supervision?.kind === 'escalate') {
       const headline = 'child aborted after repeated activations';
       writer.recordIssue({ kind: 'circuit_breaker_escalation', severity: 'error', actor: deps.agentName, message: headline, metadata: { session_id: supervision.signal.sessionId, activation_count: supervision.signal.activationCount, reason: supervision.signal.reason } });
       writer.appendTimeline('loop_supervisor_activation', deps.agentName, headline, { trigger: supervision.activation.trigger, reason: supervision.signal.reason, activation_count: supervision.signal.activationCount });
-      return { report: { status: 'failed', text: lastReport.text, usage, error: { code: 'unknown', headline, transient: false } }, messages, toolCallCount, escalation: supervision.signal };
+      return { report: { status: 'failed', text: lastReport.text, usage, error: { code: 'unknown', headline, transient: false } }, messages: conv.snapshot(), toolCallCount, escalation: supervision.signal };
     }
     steps += 1;
     if (steps > deps.maxStepsPerTurn) {
       deps.warn(`the turn exceeded ${deps.maxStepsPerTurn} model steps and was ended as partial (the final step belt fired)`);
-      return { report: { status: 'partial', text: lastReport.text, usage }, messages, toolCallCount };
+      return { report: { status: 'partial', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount };
+    }
+    /**
+     * REQ-MONITOR-076: an agent that has reached the effective threshold compresses BEFORE the call, so the
+     * call goes out over the compressed context. This sits where ADR-0059's `check()` sits — between steps,
+     * with no request in flight, which is the only place the conversation may be replaced.
+     */
+    if (compression && !signal.aborted && compression.due(conv, condensed)) {
+      if (await compression.run(conv, 'automatic', condensed, signal)) condensed = true;
     }
     // REQ-CHAT-054: one stable message key per response SEGMENT. A tool boundary ends a segment, so the next step's
     // response is a distinct row; the ladder re-running THIS step on a fallback reuses the key and so persists once.
     const segment = `${deps.agentName}#${steps}`;
-    const report = deps.resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, deps.resilience, (choice, unresponsiveMs) => step(stepDeps, choice, messages, specs, signal, unresponsiveMs, segment), signal)
-      : (await step(stepDeps, { model: deps.model, thinking: deps.thinking }, messages, specs, signal, null, segment)).report;
+    /**
+     * REQ-ORCH-093: the ladder asks for a condensation and retries; at most twice for ONE call, which the ladder
+     * counts. The ladder holds no conversation of its own — this closure is the only thing that knows there is one.
+     * REQ-ORCH-093's parent-resume limb differs from a child's own call only in the issue kind, and a resumed
+     * turn's first call is the one that carries it.
+     */
+    const resilience: TurnResilience | undefined = deps.resilience && compression
+      ? { ...deps.resilience, condense: async () => { const ok = await compression.run(conv, 'rejection', condensed, signal); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
+      : deps.resilience;
+    const report = resilience
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
+      : (await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment)).report;
     lastReport = report;
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
+    // REQ-MONITOR-089: after a compression the reading FALLS, because the step that follows one reports the shorter prompt.
     writer.activity.usage(deps.agentName, report.usage.input);
+    if (report.usage.input > 0) condensed = false;
     usage = { input: usage.input + report.usage.input, output: usage.output + report.usage.output };
-    if (report.status === 'failed') return { report: { ...report, usage }, messages, toolCallCount };
+    if (report.status === 'failed') return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount };
     deps.supervisor?.observe({ kind: 'message', text: report.text });
     const calls = report.toolCalls ?? [];
-    messages.push({ role: 'assistant', content: [...(report.text ? [{ kind: 'text' as const, text: report.text }] : []), ...calls.map((c) => ({ kind: 'tool-call' as const, callId: c.callId, name: c.name, args: c.args }))] });
+    conv.push({ role: 'assistant', content: [...(report.text ? [{ kind: 'text' as const, text: report.text }] : []), ...calls.map((c) => ({ kind: 'tool-call' as const, callId: c.callId, name: c.name, args: c.args }))] });
     if (calls.length === 0 || !tools) {
       if (calls.length > 0) deps.warn(`the model requested ${calls.length} tool call(s) but this run has no tool port; the turn ends`);
       // REQ-ORCH-096: an empty reply with no call is the runtime's "cannot make progress" report — the stuck path of the supervisor.
       if (calls.length === 0 && report.text.trim() === '') deps.supervisor?.observeStuck();
       // REQ-MONITOR-136: a steer that arrived while the agent was finishing makes it take another round.
       // (First execution: a peek that drained the queue lost the steer and bought a spurious round; the injection is the one read.)
-      if (calls.length === 0 && !signal.aborted && injectSteering(deps, messages) > 0) continue;
-      return { report: { ...report, usage }, messages, toolCallCount };
+      if (calls.length === 0 && !signal.aborted && injectSteering(deps, conv) > 0) continue;
+      return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount };
     }
     const results: ChatMessage['content'] = [];
     const followUps: string[] = [];
@@ -210,10 +247,10 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       (results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[]).push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
       if (r.followUp !== undefined && r.followUp !== '') followUps.push(r.followUp);
     }
-    if (signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages, toolCallCount };
-    messages.push({ role: 'tool', content: results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[] });
+    if (signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages: conv.snapshot(), toolCallCount };
+    conv.push({ role: 'tool', content: results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[] });
     // REQ-HOOKS-074: nothing is placed between the assistant's calls and their results; feedback for an errored call follows as a user message.
-    if (followUps.length > 0) messages.push({ role: 'user', content: [{ kind: 'text', text: followUps.join('\n') }] });
+    if (followUps.length > 0) conv.push({ role: 'user', content: [{ kind: 'text', text: followUps.join('\n') }] });
     owner.flushPending();
   }
 }

@@ -95,7 +95,8 @@ is main's orchestration over the same three processes and is drawn in the proces
 Before every model step, in this order: `shouldPause()` (a graceful pause stops here, the task stays pending) →
 pending **steering** injected as a marked user message (`steering_injected`, the supervisor's counter reset) →
 the **loop supervisor**'s `check()` (`continue` | `inject` a corrective user message | `escalate` — the turn
-fails with `circuit_breaker_escalation`) → the 100-step belt → the model step (streamed into its own `agent`
+fails with `circuit_breaker_escalation`) → the 100-step belt → **context compression when the agent has reached
+its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).
 Both rows are written through `upsertMessageRow` under one stable key per response **segment**, which is what
@@ -128,8 +129,7 @@ choice (the session's override applied through `ResilienceMemory.effective`), it
 else the run-level `fallback_model` slot, never its own model), and three once-only marks — the role fallback (shared by the
 unresponsive-model route and the hard child timeout, REQ-ORCH-144), the same-tier fallback, the wait attempt. On a failed step,
 `classifyFailure` decides in this order: **quota** (structured `insufficient_quota`, "exceeded your current quota", "check your plan
-and billing") → **rate limit** (429 or the three substrings) → **context window** (REQ-ORCH-093, left unbuilt: the step fails as
-before) → **validation** → **transient** (the port's fact, REQ-NOTIFY-094's phrases) → **fatal**. Transient and validation take
+and billing") → **rate limit** (429 or the three substrings) → **context window** (REQ-ORCH-093: condense and retry, below) → **validation** → **transient** (the port's fact, REQ-NOTIFY-094's phrases) → **fatal**. Transient and validation take
 their own budgets (`auto_retries_transient`, `auto_retries_validation`) after min(2, n) s, each attempt a `transient_llm_error` /
 `validation_llm_error` issue. A limit never touches those budgets: (a) a quota response marks `provider|model` exhausted — in
 memory and as the `model_exhausted` timeline entry; (b) at most one same-tier candidate per agent (`sameTierCandidates` over the
@@ -148,6 +148,42 @@ on expiry with a role fallback untried, the child runs once more on it (`child_t
 `Child timed out after <N>s`. Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
+
+**Context compression (Part AH — ADR-0060; `run/conversation.ts`, `run/compression.ts`; REQ-ORCH-093,
+REQ-MONITOR-076..086, REQ-CONFIG-132..135).** The turn's history is a **`Conversation`** whose array is *swapped*,
+never spliced: `snapshot()` hands the live array to a step, `replace()` installs a new one, so a request in flight
+keeps what it was given. Two triggers reach the same mechanism. **Automatic** (REQ-MONITOR-076), between steps
+where the supervisor's `check()` sits: the count is the provider's own last-prompt reading when the history still
+matches it, else a character estimate at `chars_per_token`, and it is compared with `compressionTrigger()`'s
+resolution of REQ-CONFIG-134 — capacity from the model's `context_compression_threshold`, else min(its
+`max_input_tokens`, `compressor.default_threshold`), else the default — times `threshold_percentage`.
+**Recovery** (REQ-ORCH-093), in the ladder's `context_window` arm: condense and retry, **at most twice for one
+call**, the original rejection surfaced unchanged when the condensation itself fails; the issue is
+`llm_bad_request`, or `parent_resume_bad_request` on the first call of a turn resumed with child reports. A
+compression asks the `compressor.model` (else the agent's own, REQ-MONITOR-080) for a summary of **only** the slice
+between the original request and the preserved turns (REQ-MONITOR-082 forbids sending the three survivors), then
+rebuilds the conversation as REQ-MONITOR-084's five parts: the original request, the summary (clamped to 300 lines
+and nothing else is, REQ-MONITOR-083), the todo items one for one, and the most recent `preserve_recent_turns`
+turns verbatim — a **turn boundary being any message that is not a `tool` message**, so a cut can never orphan a
+tool result from the call that named it. The system prompt and the tool definitions are part (1) and are not in
+the conversation at all: they travel on every request. Each completion writes a **`context_compressed` timeline
+entry** carrying REQ-CONFIG-135's four inputs and the trigger token number as separate fields beside
+`count_source`, the before/after token and message counts and the latency; one `system` transcript row is rendered
+from those fields; the log takes the same figures. That venue is **OQ-53** — the wire catalogue is closed at 23
+kinds (REQ-EVENTS-041) and none reports a compression. `AgentActivity` counts completions and a session opened
+again seeds the count by counting those entries, so REQ-MONITOR-086's "never counted a second time" holds by the
+shape of the record. While a pass runs, `SessionRecord.compression` names the agent and is **published at once**
+(`owner.reconcile()`), because a compressing pass writes nothing and a derived field is otherwise invisible
+(REQ-MONITOR-085). A trigger that fires with **nothing between the original request and the preserved turns**
+is a no-op, not a failure: it is logged once per agent and records no issue, because the trigger is evaluated
+before every step and the condition persists (ADR-0060's second execution). **The trigger is also latched off**
+for an agent once a compression is measured not to help — where the provider's count less the conversation's own
+estimate (the system prompt and the tool definitions, which REQ-MONITOR-082 keeps whole) already reaches the
+threshold, no compression can bring the count under it, and the reason is stated once with both figures. The
+REQ-ORCH-093 recovery path is never latched. **`SessionRecord.entryContext`**
+carries the entry role's latest prompt reading and its model's advertised limit (REQ-MONITOR-089): the entry
+role has no `children` row, so this is the only route by which the synthetic root agent's meter gets a figure —
+before it, a run that spawned no child drew zero however much it had spent.
 
 **The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s
@@ -192,7 +228,9 @@ the parent resumes with the report. Every exit from an iteration leaves every ch
 
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
-model step) and `contextLimit` (REQ-MONITOR-080's default — the run host's setup does not carry a model's own maximum),
+model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one
+(`contextLimitsOf` → `contextLimitFor`), REQ-MONITOR-080's default otherwise; Part R declared that lookup and recorded it
+unfilled, and REQ-MONITOR-078's capacity ladder needed the same figure — plus **`compressions`** (REQ-MONITOR-281, Part AH),
 `grantedTools` (from `children.granted_tools`), `calledTools` and `activeTools` (kept incrementally by the writer's
 `AgentActivity` at `tool.start`/`tool.finish`, seeded once from the ring on load — never recomputed over the transcript,
 REQ-MONITOR-038), `delegationSessionId` (null: every child runs in the run's session) and `inheritedContext`. The projection
@@ -271,7 +309,7 @@ of §5 and none a channel: each is a request answered once.
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173) | `appendRow`, `settleRow`, `upsertMessageRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
-| `timeline` | ordered named entries with actor and metadata, each carrying **`id`** (12 hex) and **`severity`** (`debug` \| `info` \| `warning` \| `error`, default `info`) as their own columns since **v10** — REQ-SESSION-134's shape, which the table held neither of until the repair of Part U's thirty-second defect; a row written before v10 keeps an empty id and the export omits the field rather than minting one (REQ-SESSION-199) — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session_marked_interrupted`), the ladder |
+| `timeline` | ordered named entries with actor and metadata, each carrying **`id`** (12 hex) and **`severity`** (`debug` \| `info` \| `warning` \| `error`, default `info`) as their own columns since **v10** — REQ-SESSION-134's shape, which the table held neither of until the repair of Part U's thirty-second defect; a row written before v10 keeps an empty id and the export omits the field rather than minting one (REQ-SESSION-199) — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume, and Part AH's **`context_compressed`** (REQ-CONFIG-135's four inputs and the trigger token number as separate fields, the count source, the before/after token and message counts, the latency) which a session opened again counts to seed REQ-MONITOR-086's per-agent figure (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session_marked_interrupted`), the ladder |
 | `permission_audit`, `tool_calls`, `issues` (+ `ring_state`) | the three rings (ADR-0024); audit and issues refuse UPDATE by trigger | the gate's sink through the writer |
 | `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012); **`granted_mcp`** (Part S, no migration — the existing JSON column) now holds `{ granted: {server: [callable…]}, servers: [{name, transport, origin, fate: connected \| dropped, reason?}] }` written at spawn from the persona's memoised surface, projected as `AgentRecord.grantedMcp` / `mcpServers` (REQ-MCP-065/114) | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport` |
 | `queued_prompts` | QUEUED → TRIGGERED → COMPLETED, per session, plus **`context_snapshot`** (**v13**, Part AB): REQ-CHAT-038's optional snapshot as one JSON text, NULL when none was supplied. It is stored and **never published** — the panel of REQ-CHAT-036 never shows it and REQ-CHAT-153 keeps the panel's own content out of anything a model reads. The owner is `session_id`, the primary key's first column, and NO statement names it as a target, which is how REQ-CHAT-039's "ownership MUST be preserved across edit and trigger" is a property of the table rather than of a caller. REQ-CHAT-038's `QUEUED → TRIGGERED` move is ONE conditional UPDATE whose row count is the claim, so exactly one caller of any number wins (measured across two connections by `pnpm composer-proof`). An **unscoped** prompt cannot be represented and is not built: `session_id` is NOT NULL, and OQ-51 asks the owner whether one still exists | `queuePrompt`, `editQueuedPrompt`, `removeQueuedPrompt`, `triggerQueuedPrompts` |

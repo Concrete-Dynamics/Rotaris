@@ -14,8 +14,9 @@ import type { WaitRegistry } from './waits.js';
  * validation → the validation budget the same way; rate limit or quota → never the transient budget: the pair
  * marked exhausted on a quota response (session-wide, persisted), at most one same-tier fallback per agent, else
  * the suspended wait — the provider's retry-after or the local backoff, indefinite for an exhausted provider —
- * resolved by the timer, a cancel or a model chosen by the user; context-window rejection and every other
- * failure → the step fails as it did (REQ-ORCH-093 is left unbuilt). An unresponsive model — no event within
+ * resolved by the timer, a cancel or a model chosen by the user; context-window rejection → Part AH's
+ * condense-and-retry, at most twice for one call, the original rejection surfaced when the condensation itself
+ * fails (REQ-ORCH-093); every other failure → the step fails as it did. An unresponsive model — no event within
  * `llm_response_timeout`, armed only while a fallback is available and the threshold sits below the agent's
  * bound — closes the conversation and re-runs the step once on the role's fallback.
  */
@@ -47,7 +48,18 @@ export interface TurnResilience {
   readonly llmResponseTimeoutMs: number;
   /** REQ-ORCH-090: the threshold applies only below this — the child timeout, or the model timeout for the root. */
   readonly unresponsiveBoundMs: number;
+  /**
+   * Part AH (ADR-0060) — REQ-ORCH-093: condense the conversation this step calls over, and say whether it
+   * happened. The ladder holds no conversation of its own; the turn supplies this closing over one. Absent
+   * means no condensation exists and a context-window rejection fails the step, as it did before Part AH.
+   */
+  readonly condense?: (() => Promise<boolean>) | undefined;
+  /** REQ-ORCH-093: this call resumes a parent, so its rejection is recorded as `parent_resume_bad_request`. */
+  readonly resumeIssue?: boolean | undefined;
 }
+
+/** REQ-ORCH-093: at most twice for one call. */
+export const CONTEXT_CONDENSE_ATTEMPTS = 2;
 
 export interface StepOutcome {
   readonly report: TurnReport;
@@ -83,6 +95,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
   const { cell, memory, catalogue, waits } = r;
   let transient = 0;
   let validation = 0;
+  let condensations = 0;
   for (;;) {
     const { report, unresponsive } = await call(cell.model, unresponsiveThreshold(r));
     const provider = providerIdentity(catalogue, cell.model.model);
@@ -116,6 +129,24 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       writer.recordIssue({ kind: cls === 'transient' ? 'transient_llm_error' : 'validation_llm_error', severity: 'warning', actor: agent, message, metadata: { attempt, limit, delay_seconds: delayS, provider, model: modelId } });
       deps.warn(message);
       await pause(clocks, delayS * 1000, signal);
+      if (signal.aborted) return report;
+      continue;
+    }
+    if (cls === 'context_window') {
+      /**
+       * REQ-ORCH-093 / REQ-MONITOR-077 (Part AH): condense the conversation and retry the call, at most twice
+       * for ONE call. Where the condensation itself fails — no compressor, nothing left to compress, the
+       * compressing model failing — the ORIGINAL rejection is surfaced unchanged and the call fails; nothing
+       * here rewrites the error, because the requirement says what the user must see and it is this one.
+       */
+      const kind = r.resumeIssue === true ? 'parent_resume_bad_request' : 'llm_bad_request';
+      const attempt = condensations + 1;
+      const message = `${agent}'s model call was rejected for context on ${provider}/${modelId} (condensation ${attempt} of ${CONTEXT_CONDENSE_ATTEMPTS}): ${describeError(err)}`;
+      writer.recordIssue({ kind, severity: 'warning', actor: agent, message, metadata: { attempt, limit: CONTEXT_CONDENSE_ATTEMPTS, provider, model: modelId, parent_resume: r.resumeIssue === true } });
+      deps.warn(message);
+      if (!r.condense || condensations >= CONTEXT_CONDENSE_ATTEMPTS) return report;
+      condensations = attempt;
+      if (!(await r.condense())) return report;
       if (signal.aborted) return report;
       continue;
     }

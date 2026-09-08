@@ -3,7 +3,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
 import type { ApprovalOption, PermissionPreset, QuestionAnswers, QuestionPrompt } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
@@ -132,9 +132,9 @@ function injectSteering(deps: TurnDeps, messages: ChatMessage[]): number {
   return pending.length;
 }
 
-export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal): Promise<TurnOutcome> {
+export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
-  const messages: ChatMessage[] = [...history, { role: 'user', content: [{ kind: 'text', text: task }] }];
+  const messages: ChatMessage[] = [...history, { role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] }];
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];

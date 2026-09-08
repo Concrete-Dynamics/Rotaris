@@ -3,6 +3,7 @@ export * from './sequence.js';
 export * from './events.js';
 export * from './session-writer.js';
 export * from './todo-view.js';
+export * from './attachments.js';
 export * from './projection-owner.js';
 export * from './sessions.js';
 export * from './export.js';

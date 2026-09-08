@@ -95,6 +95,8 @@ export const ConfigSnapshotSchema = z.object({
   slots: z.array(SlotViewSchema),
   /** Configured model keys, synthetic entries excluded. */
   models: z.array(z.string()),
+  /** REQ-CHAT-171/172: model keys whose provider declaration accepts image input. */
+  imageInputModels: z.array(z.string()),
   roles: z.array(RoleViewSchema),
   runtime: RuntimeViewSchema,
   /** REQ-CONFIG-471: each scope's raw `runtime:` mapping as the file states it; null when the file states none. */

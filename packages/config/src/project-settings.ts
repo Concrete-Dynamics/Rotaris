@@ -169,6 +169,7 @@ export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | nu
       const output = m.limits['max_output_tokens'];
       if (typeof input === 'number') entry['max_input_tokens'] = input;
       if (typeof output === 'number') entry['max_output_tokens'] = output;
+      if (m.capabilities?.accepts_image_input === true) entry['accepts_image_input'] = true;
       const inCost = m.pricing['input_cost_per_token'];
       const outCost = m.pricing['output_cost_per_token'];
       if (typeof inCost === 'number' && typeof outCost === 'number') { entry['input_cost_per_token'] = inCost; entry['output_cost_per_token'] = outCost; }

@@ -6,6 +6,7 @@ import {
   CONTRACT_SCHEMA_VERSION,
   CONTROL_OPS,
   CONTROL_OPS_WITH_VALUE,
+  CommandRequestSchema,
   ControlRequestSchema,
   ProcessRequestEnvelopeSchema,
   SEQUENCED_CHANNELS,
@@ -43,6 +44,14 @@ function keysOf(schema: z.ZodType, acc: Set<string> = new Set()): Set<string> {
 describe('contracts — schema version', () => {
   it('is pinned; bumping it is a contract change that must update the renderer decline path (ADR-0044)', () => {
     expect(CONTRACT_SCHEMA_VERSION).toBe(1);
+  });
+});
+
+describe('attachment commands', () => {
+  const image = { name: 'renamed.txt', mediaType: 'image/png' as const, size: 8, base64: 'iVBORw0KGgo=' };
+  it('REQ-CHAT-169: accepts an attachment-only submission and refuses an empty submission', () => {
+    expect(CommandRequestSchema.safeParse({ kind: 'session.start', prompt: '', attachments: [image] }).success).toBe(true);
+    expect(CommandRequestSchema.safeParse({ kind: 'session.start', prompt: '' }).success).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import type { TranscriptRow } from '@rotaris/contracts';
+import type { ImageAttachment, TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -86,6 +86,8 @@ export interface TranscriptSurface {
   readonly openTerminal?: ((streamId: string) => void) | undefined;
   /** REQ-CHAT-076: a question row opens the stepper, an approval row the approval dialog. */
   readonly openTrailer?: ((trailer: TrailerRow) => void) | undefined;
+  /** REQ-CHAT-173: pane-owned verified thumbnail cache; rows remain pure. */
+  readonly attachmentUrl?: ((attachment: ImageAttachment) => string | null) | undefined;
   /** REQ-CHAT-167, the registered key `display/showReasoning`, default OFF. */
   readonly showReasoning: boolean;
   /** REQ-CHAT-067, the registered key `display/autoCollapseTools`, default OFF. */
@@ -600,6 +602,20 @@ export function Row(p: RowProps) {
           {markdown
             ? <Markdown source={row.body} onOpenLink={surface.openLink} className="row__body row__body--md" testId="row-markdown" />
             : <div className={`row__body${row.kind === 'diff' ? ' mono row__body--diff' : ''}`}><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}
+          {row.attachments && row.attachments.length > 0 && (
+            <ol className="row__attachments" aria-label="Image attachments">
+              {row.attachments.map((attachment, index) => (
+                <li key={`${attachment.digest}-${index}`} className="row__attachment" data-available={attachment.available ? '1' : '0'}>
+                  <details>
+                    <summary><span className="row__attachment-thumb" aria-hidden="true">▧</span> {attachment.name}</summary>
+                    {attachment.available
+                      ? <>{surface.attachmentUrl?.(attachment) && <img className="row__attachment-image" src={surface.attachmentUrl(attachment)!} alt={attachment.name} />}<div className="row__attachment-meta mono">{attachment.mediaType} · {Math.ceil(attachment.size / 1024)} KiB · {attachment.digest.slice(0, 12)}</div></>
+                      : <div className="row__attachment-unavailable" role="status">{attachment.unavailableReason ?? 'Image is no longer available.'}</div>}
+                  </details>
+                </li>
+              ))}
+            </ol>
+          )}
           {/* REQ-CHAT-164: the animated indicator is REPLACED by the stalled one, and reverts as soon as any output arrives. */}
           {live && stalled === null && <span ref={(element) => { if (element) markMotionStart(element); }} className="row__streaming" aria-label="still being written">…</span>}
           {live && stalled !== null && <span className="row__stalled" data-testid="row-stalled" aria-description={stalledLabel(stalled)}>{stalledLabel(stalled)}</span>}

@@ -28,6 +28,8 @@ export interface ModelRef {
   readonly dialect: Dialect;
   /** The entry's own endpoint (REQ-CONFIG-084 `base_url`); absent means the client's base URL. */
   readonly baseUrl?: string | undefined;
+  /** REQ-PROVIDER-149: the selected model's explicit image-input declaration. */
+  readonly acceptsImageInput?: boolean | undefined;
 }
 
 export type ContentPart =

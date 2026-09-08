@@ -40,13 +40,15 @@ export interface ModelEntry {
   readonly reasoning_effort_map: Readonly<Record<string, string>>;
   /** REQ-CONFIG-094/095/057: the effective cap, the provider default applied when the key is absent. */
   readonly max_parallel: number | null;
+  /** REQ-PROVIDER-149: explicit provider declaration consumed by the composer gate. */
+  readonly accepts_image_input: boolean;
 }
 
 export const MODEL_ENTRY_KEYS = [
   'provider', 'model_id', 'api_key', 'api_key_env', 'auth_provider', 'base_url', 'disable_streaming', 'disable_responses_api', 'api_mode',
   'max_input_tokens', 'max_output_tokens', 'context_compression_threshold', 'timeout', 'num_retries',
   'temperature', 'top_p', 'top_k', 'presence_penalty', 'repetition_penalty', 'seed', 'extra_body',
-  'input_cost_per_token', 'output_cost_per_token', 'thinking', 'reasoning_effort', 'reasoning_effort_map', 'max_parallel',
+  'input_cost_per_token', 'output_cost_per_token', 'thinking', 'reasoning_effort', 'reasoning_effort_map', 'max_parallel', 'accepts_image_input',
 ] as const;
 
 /** REQ-CONFIG-095: the provider-conditional default; explicit null defeats it (REQ-CONFIG-057). */
@@ -104,6 +106,7 @@ export function readModelEntry(name: string, value: unknown, sink: ProblemSink):
     reasoning_effort: r.stringOrNull('reasoning_effort'),
     reasoning_effort_map: r.stringMapOrNull('reasoning_effort_map') ?? {},
     max_parallel: r.has('max_parallel') ? r.intOrNull('max_parallel', { min: 1 }) : defaultMaxParallel(provider ?? ''),
+    accepts_image_input: r.bool('accepts_image_input', false),
   };
   return provider === null || modelId === null ? null : entry;
 }

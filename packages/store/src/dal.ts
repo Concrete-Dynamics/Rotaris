@@ -128,6 +128,7 @@ export interface TranscriptRowRecord {
   readonly output: string | null;
   readonly diff: string | null;
   readonly blocked_reason: string | null;
+  readonly attachments: string;
 }
 /** The tool-row fields a row may carry at append and at settle (REQ-CHAT-046). */
 export interface RowToolFields {
@@ -366,8 +367,8 @@ export class StoreDal {
       maxRowIndex: db.prepare('SELECT max(row_index) AS m FROM transcript_rows WHERE session_id = ?'),
       maxPage: db.prepare('SELECT max(page) AS m FROM transcript_rows WHERE session_id = ?'),
       appendRow: db.prepare(`INSERT INTO transcript_rows
-        (session_id, row_index, kind, settled, body, at, persona, name, ts, tool_name, tool_status, call_key, duration_ms, started_at, input, output, diff, blocked_reason)
-        VALUES (@session_id, @row_index, @kind, @settled, @body, @at, @persona, @name, @ts, @tool_name, @tool_status, @call_key, @duration_ms, @started_at, @input, @output, @diff, @blocked_reason)`),
+        (session_id, row_index, kind, settled, body, at, persona, name, ts, tool_name, tool_status, call_key, duration_ms, started_at, input, output, diff, blocked_reason, attachments)
+        VALUES (@session_id, @row_index, @kind, @settled, @body, @at, @persona, @name, @ts, @tool_name, @tool_status, @call_key, @duration_ms, @started_at, @input, @output, @diff, @blocked_reason, @attachments)`),
       // REQ-SESSION-131: the settle path can only reach a RESIDENT row; a released row has no statement that updates it.
       settleRow: db.prepare(`UPDATE transcript_rows SET body = @body, settled = 1,
         tool_status = coalesce(@tool_status, tool_status), duration_ms = coalesce(@duration_ms, duration_ms), output = coalesce(@output, output),
@@ -745,11 +746,12 @@ export class StoreDal {
     return this.stmts['deleteLocksNotOnHost']!.run(host).changes;
   }
 
-  appendRow(id: SessionId, index: number, kind: string, settled: boolean, body: string, at = '', extra: { persona?: string | null; name?: string | null; ts?: string } & RowToolFields = {}): void {
+  appendRow(id: SessionId, index: number, kind: string, settled: boolean, body: string, at = '', extra: { persona?: string | null; name?: string | null; ts?: string; attachments?: string } & RowToolFields = {}): void {
     this.stmts['appendRow']!.run({
       session_id: id, row_index: index, kind, settled: settled ? 1 : 0, body, at, persona: extra.persona ?? null, name: extra.name ?? null, ts: extra.ts ?? '',
       tool_name: extra.tool_name ?? null, tool_status: extra.tool_status ?? null, call_key: extra.call_key ?? null, duration_ms: extra.duration_ms ?? null,
       started_at: extra.started_at ?? null, input: extra.input ?? null, output: extra.output ?? null, diff: extra.diff ?? null, blocked_reason: extra.blocked_reason ?? null,
+      attachments: extra.attachments ?? '[]',
     });
   }
   /** False when the row is not resident — which REQ-SESSION-131 makes a refusal, not a repair. */

@@ -2,7 +2,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow } from '@rotaris/ui';
 import './design.css';
@@ -170,11 +170,11 @@ const sameWorkspace = (a: string, b: string): boolean =>
  * REQ-SHELL-125: the launch dialog's accepted choices, held in shell state, ride on the NEXT start and are consumed
  * by it — a refused start keeps them for the retry the composer offers.
  */
-async function submitPrompt(text: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+async function submitPrompt(text: string, attachments: readonly ImageAttachmentInput[]): Promise<{ ok: true } | { ok: false; reason: string }> {
   const s = replica.getState();
   if (!s.sessionId) {
     const options = useShellState.getState().launchOptions;
-    const r = await bridge.command({ kind: 'session.start', prompt: text, ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
+    const r = await bridge.command({ kind: 'session.start', prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }), ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     useShellState.getState().takeLaunchOptions();
     const { sessionId } = r.value as { sessionId: string };
@@ -184,7 +184,7 @@ async function submitPrompt(text: string): Promise<{ ok: true } | { ok: false; r
     if (!sub.ok) return { ok: false, reason: sub.detail ?? sub.headline };
     return { ok: true };
   }
-  const r = await bridge.command({ kind: 'session.prompt', sessionId: s.sessionId, prompt: text });
+  const r = await bridge.command({ kind: 'session.prompt', sessionId: s.sessionId, prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }) });
   return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
 }
 
@@ -451,7 +451,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   }, []);
   const entryPersona = entry.persona;
   return <WorkspaceView
-    onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
+    onOpenLink={openLink} onReadAttachment={async (attachment) => { if (!session) return null; const r = await bridge.command({ kind: 'session.readAttachment', sessionId: session.id, path: attachment.path, digest: attachment.digest }); return r.ok ? `data:${attachment.mediaType};base64,${(r.value as { base64: string }).base64}` : null; }} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
     needsRecovery={needsRecovery} modelsLoaded={modelsLoaded} history={prompts.history} configuredMode={snapshot?.runtime.permission_mode}
     draft={drafts.draft} onPublishDraft={drafts.publish} onWriteDraft={drafts.write}
     composerHeight={layout?.sizes[1]} onComposerHeight={(sizes) => onLayout({ version: 1, panes: 2, sizes: [...sizes] })}
@@ -466,7 +466,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     personas={personas} entry={entry} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60}
     onSelectAgent={(id, source) => { if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     onOpenPersona={(agent, focusSteer) => { void openPersona(agent, focusSteer); }}
-    models={models}
+    models={models} imageInputModels={snapshot?.imageInputModels ?? []}
     onQueue={(text) => control('createQueuedPrompt', { text }, 'The run no longer accepts prompts.')}
     onEditQueued={(promptId, text) => control('editQueuedPrompt', { promptId, text }, 'Queued message was already picked up and cannot be edited.')}
       onRemoveQueued={(promptId) => control('removeQueuedPrompt', { promptId }, 'Queued message was already picked up and cannot be deleted.')}

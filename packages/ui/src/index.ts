@@ -6,6 +6,7 @@ export * from './commands/index.js';
 export * from './composer.js';
 export * from './WorkspaceView.js';
 export * from './TodoPane.js';
+export * from './attachments.js';
 export * from './shell-state.js';
 export * from './SettingsView.js';
 export * from './ApprovalDialog.js';

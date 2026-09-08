@@ -481,6 +481,14 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE queued_prompts ADD COLUMN context_snapshot TEXT;
     `,
   },
+  {
+    to: 14,
+    // REQ-CHAT-046/173: ordered attachment metadata belongs to the user row. Bytes live under the session files
+    // directory; the JSON stores relative path, media type, size and SHA-256 digest only.
+    sql: `
+      ALTER TABLE transcript_rows ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

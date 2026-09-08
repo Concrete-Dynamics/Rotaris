@@ -1,5 +1,5 @@
 import { createElement, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
-import type { ApprovalPayload, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
+import type { ApprovalPayload, ImageAttachment, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import {
   LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
 } from './constants.js';
@@ -50,6 +50,7 @@ export interface TranscriptPaneProps {
   readonly autoCollapseTools?: boolean | undefined;
   /** REQ-CHAT-076: `http(s)` opens in the system browser; absent leaves a link inert (ADR-0051). */
   readonly onOpenLink?: ((href: string) => void) | undefined;
+  readonly onReadAttachment?: ((attachment: ImageAttachment) => Promise<string | null>) | undefined;
   /** REQ-CHAT-075: a copy or an open is acknowledged when it works and REPORTED when it does not (ADR-0049). */
   readonly onAcknowledge?: Acknowledger | undefined;
   /** REQ-CHAT-063: the instant live rows are drawn against; the pane's own tick advances it. */
@@ -79,7 +80,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
     rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent,
     onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer,
-    showReasoning = false, autoCollapseTools = false, onOpenLink, onAcknowledge, nowMs = 0,
+    showReasoning = false, autoCollapseTools = false, onOpenLink, onReadAttachment, onAcknowledge, nowMs = 0,
   } = props;
 
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -93,6 +94,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // measurement while laying out is an ordinary read of state rather than a ref read during render.
   const [measurements] = useState(createMeasurementCache);
   const [renderings] = useState(createRenderCache<ReactElement>);
+  const [attachmentBodies, setAttachmentBodies] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => {
+    if (!onReadAttachment) return;
+    for (const attachment of rows.flatMap((row) => row.attachments ?? [])) {
+      if (!attachment.available || attachmentBodies.has(attachment.digest)) continue;
+      void onReadAttachment(attachment).then((url) => { if (url !== null) setAttachmentBodies((current) => new Map(current).set(attachment.digest, url)); });
+    }
+  }, [rows, onReadAttachment, attachmentBodies]);
   const [slotNodes] = useState(() => new Map<number, HTMLDivElement>());
 
   /**
@@ -165,6 +174,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const surface: TranscriptSurface = {
     showReasoning, autoCollapseTools, runActive: running, nowMs: nowMs === 0 ? ticked : nowMs,
     openLink: onOpenLink, openMenu: (request) => setMenu(request), openTrailer: onOpenTrailer,
+    attachmentUrl: (attachment) => attachmentBodies.get(attachment.digest) ?? null,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
   };

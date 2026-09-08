@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { isLegalChildMove, isTerminalChildState, type ChildState, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -81,6 +81,7 @@ export interface RowExtra {
    * released" is unaffected. Nothing sets it in this build — ADR-0021's fan-out has no first execution.
    */
   readonly streamId?: string;
+  readonly attachments?: readonly Omit<ImageAttachment, 'available' | 'unavailableReason'>[];
 }
 /** What a settle may add to a tool row (REQ-CHAT-060: the outcome, the duration, the output, a blocked reason). */
 export interface RowSettle {
@@ -432,9 +433,9 @@ export class SessionWriter {
     const at = toIsoUtc(now);
     const ts = localHms(now);
     const index = this.nextIndex;
-    const { persona, name, ...tool } = extra;
+    const { persona, name, attachments, ...tool } = extra;
     const definedTool = Object.fromEntries(Object.entries(tool).filter(([, v]) => v !== undefined));
-    const row: TranscriptRow = withDerivedRowFields({ index, kind, settled, body, at, ts, ...(persona === undefined ? {} : { persona }), ...(name === undefined ? {} : { name }), ...definedTool });
+    const row: TranscriptRow = withDerivedRowFields({ index, kind, settled, body, at, ts, ...(persona === undefined ? {} : { persona }), ...(name === undefined ? {} : { name }), ...(attachments === undefined ? {} : { attachments: attachments.map((a) => ({ ...a, available: true })) }), ...definedTool });
     const ev = this.envelope('transcript.row', at, { index, row: maskRow(row) });
     const line = serializeEvent(ev);
     if (!line.ok) {
@@ -452,7 +453,7 @@ export class SessionWriter {
           this.residentCount -= moved;
           released = { fromIndex: oldest, toIndex: oldest + moved - 1 };
         }
-        dal.appendRow(sessionId, index, kind, settled, body, at, { persona: extra.persona ?? null, name: extra.name ?? null, ts, ...toolColumns(extra) });
+        dal.appendRow(sessionId, index, kind, settled, body, at, { persona: extra.persona ?? null, name: extra.name ?? null, ts, attachments: JSON.stringify(attachments ?? []), ...toolColumns(extra) });
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'transcript.row', at, EVENT_SCHEMA_VERSION, null, line.value);
         dal.touchSession(sessionId, this.status, at);
       });

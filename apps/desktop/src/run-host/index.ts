@@ -517,7 +517,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       // REQ-GIT-022 (Part O): the binding was made by the workspace service and the id minted in main before this
       // request; the session row records the binding and the run works in the effective root (REQ-GIT-019).
       if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${req.sessionId ?? '(host-minted)'} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
-      const r = sessions.start(s.dal, s.root, req.prompt, { ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }), ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) });
+      const r = sessions.start(s.dal, s.root, req.prompt, { ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }), ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }) });
       if (!r.ok) {
         // REQ-SESSION-082: a refusal before the run starts is reported at once, marked as such, with no session behind it.
         if ('failedBeforeStart' in r.error) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run was refused before it started', detail: r.error.reason };
@@ -534,9 +534,13 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
     }
     case 'session.prompt': {
-      const r = sessions.prompt(asSessionId(req.sessionId), req.prompt);
+      const r = sessions.prompt(asSessionId(req.sessionId), req.prompt, req.attachments ?? []);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : 'The prompt could not be recorded', detail: r.error.reason };
       return { kind: 'ack' };
+    }
+    case 'session.readAttachment': {
+      const r = sessions.readAttachment(asSessionId(req.sessionId), req.path, req.digest);
+      return r.ok ? { kind: 'session.attachment', base64: r.base64 } : { kind: 'refused', code: 'session.attachment-unavailable', headline: r.reason };
     }
     case 'session.control':
       return { kind: 'control.result', result: sessions.control(req.request) };

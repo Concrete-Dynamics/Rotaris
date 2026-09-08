@@ -2107,6 +2107,20 @@ no text because `REQ-SHELL-159`'s per-workspace composer draft is not built, and
 meets an empty composer. The append is reachable — and is measured by the proof — on the stash dialog's route,
 which is opened from the transcript toolbar with the Workspace view already showing. Nothing is wrong here; it is
 recorded so that whoever builds `REQ-SHELL-159` knows the rule becomes reachable on four more routes that day.
+## Part AE's execution — 2026-09-08, schema v14: image attachment metadata
+
+REQ-CHAT-046, REQ-CHAT-153 and REQ-CHAT-169..174 add one `attachments` JSON column to
+`transcript_rows`. Each ordered entry records the original name, content-derived media type, byte count,
+session-relative path and SHA-256 digest. Image bytes live below the existing per-session files directory
+from REQ-SESSION-002. A projection verifies the relative path and digest and publishes an explicit
+unavailable state while preserving the row and surrounding transcript. The command boundary carries
+base64 once to the run host; snapshots and the database retain metadata. Schema v14 is one append-only
+migration and changes no query or index.
+
+The selected model's REQ-PROVIDER-149 declaration reaches both the composer and the engine gate. Image
+parts use the existing model `ContentPart` boundary. REQ-PROVIDER-150 remains owed; the composer therefore
+counts every image as an unknown positive contribution and labels the displayed estimate as a lower bound.
+
 ## Part Y's first execution — 2026-09-07, schema v12: the session artifact store
 
 `REQ-LIBRARY-087` asks for "one full record per artifact together with a metadata entry in an index ordered by creation

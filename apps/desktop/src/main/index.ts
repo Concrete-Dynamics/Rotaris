@@ -1157,7 +1157,7 @@ async function main(): Promise<void> {
             binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
           }
         }
-        const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt, ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
+        const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
         if (r.kind !== 'session.started') {
           // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
           if (binding?.created_by_session && svc) {
@@ -1455,8 +1455,12 @@ async function main(): Promise<void> {
       case 'workspace.restore':
         return restoreFlow();
       case 'session.prompt': {
-        const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt }, millis(10_000));
+        const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
+      }
+      case 'session.readAttachment': {
+        const r = await runHost.request(req, millis(10_000));
+        return r.kind === 'session.attachment' ? { ok: true, value: r } : refusal(r, 'The image attachment could not be loaded');
       }
       case 'session.subscribe': {
         // Subscribe the relay FIRST so the attach's snapshot and transcript reach this window.

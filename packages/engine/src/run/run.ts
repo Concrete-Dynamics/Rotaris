@@ -1,7 +1,7 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
 import type { ApprovalOption, PermissionPreset, QuestionAnswers, QuestionPrompt } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
@@ -102,6 +102,8 @@ export interface RunDeps {
   /** REQ-GIT-019/022: the root the work happens in — the worktree of an isolated run; absent means the base. */
   readonly effectiveRoot?: string | undefined;
   readonly task: string;
+  /** REQ-CHAT-171: first-turn content, text followed by the ordered image parts. */
+  readonly taskContent?: readonly ContentPart[] | undefined;
   readonly taskId: string;
   readonly taskLabel?: string | undefined;
   readonly writer: SessionWriter;
@@ -540,7 +542,11 @@ export class Run {
       : null;
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
-    const turnFn = (text: string, history: readonly ChatMessage[]) => runTurn({
+    let initial = true;
+    const turnFn = (text: string, history: readonly ChatMessage[]) => {
+      const content = initial ? this.deps.taskContent : undefined;
+      initial = false;
+      return runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
@@ -548,7 +554,8 @@ export class Run {
       ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
       resilience: this.rootResilience(),
-    }, text, history, this.abort.signal);
+      }, text, history, this.abort.signal, content);
+    };
     try {
       const outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
       this.aggregates.addToolCalls(outcome.toolCallCount);

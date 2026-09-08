@@ -57,6 +57,26 @@ const schemaVersion = z.literal(CONTRACT_SCHEMA_VERSION);
 const sessionId = z.string().min(1);
 const seq = z.number().int().positive();
 
+/** REQ-CHAT-170/173: validated image bytes cross the command boundary once; transcript rows retain metadata only. */
+export const ImageAttachmentInputSchema = z.object({
+  name: z.string().min(1),
+  mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  base64: z.string().min(1),
+  size: z.number().int().positive(),
+});
+export type ImageAttachmentInput = z.infer<typeof ImageAttachmentInputSchema>;
+
+export const ImageAttachmentSchema = z.object({
+  name: z.string().min(1),
+  mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+  size: z.number().int().positive(),
+  path: z.string().min(1),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  available: z.boolean(),
+  unavailableReason: z.string().optional(),
+});
+export type ImageAttachment = z.infer<typeof ImageAttachmentSchema>;
+
 /** A transcript row as it travels. The full row vocabulary is domain 03's; this fixes the envelope. */
 export const TranscriptRowSchema = z.object({
   index: z.number().int().nonnegative(),
@@ -104,6 +124,8 @@ export const TranscriptRowSchema = z.object({
    * REQ-CHAT-063's live-row refresh rather than republished each second.
    */
   stalledSince: z.string().optional(),
+  /** REQ-CHAT-046/153/173: metadata only; stored image bytes stay in the session files directory. */
+  attachments: z.array(ImageAttachmentSchema).optional(),
 });
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 

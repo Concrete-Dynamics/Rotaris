@@ -123,11 +123,11 @@ export function modelRefOf(cfg: LoadedConfiguration, name: string | null, script
   if (name === null) return null;
   const entry = cfg.models[name];
   if (!entry) return null;
-  if (scripted || entry.provider === SCRIPTED_PROVIDER) return { providerId: entry.provider === '' ? SCRIPTED_PROVIDER : entry.provider, modelId: entry.model_id, dialect: 'chat' };
+  if (scripted || entry.provider === SCRIPTED_PROVIDER) return { providerId: entry.provider === '' ? SCRIPTED_PROVIDER : entry.provider, modelId: entry.model_id, dialect: 'chat', acceptsImageInput: entry.accepts_image_input };
   const baseUrl = entry.base_url ?? PROVIDER_BASE_URLS[entry.provider];
   if (!baseUrl) return null;
   const dialect = entry.api_mode === 'responses' && !entry.disable_responses_api ? 'responses' : 'chat';
-  return { providerId: entry.provider, modelId: entry.model_id, dialect, baseUrl };
+  return { providerId: entry.provider, modelId: entry.model_id, dialect, baseUrl, acceptsImageInput: entry.accepts_image_input };
 }
 
 /** REQ-CONFIG-083 / REQ-PROVIDER-092: an `auth_provider` reads the leased bearer; otherwise `api_key` outranks `api_key_env`. Read per request. */

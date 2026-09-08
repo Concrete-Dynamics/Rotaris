@@ -476,7 +476,7 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
   });
   it('the schema is v13; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -751,11 +751,11 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v13, and the migration list is append-only with nothing renumbered', () => {
-    // Part X reserved v11, Part Y v12 and Part AB v13 before any of them was written; the ladder is asserted whole
+  it('is v14, and the migration list is append-only with nothing renumbered', () => {
+    // Part X reserved v11, Part Y v12, Part AB v13 and Part AE v14 before any of them was written; the ladder is asserted whole
     // rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
   });
 });
 

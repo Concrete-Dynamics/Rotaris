@@ -7,6 +7,7 @@ import { PROVIDER_DIALOG_MODES } from './providers.js';
 import { PaneLayoutSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
+import { ImageAttachmentInputSchema } from './channels.js';
 
 /**
  * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -71,7 +72,7 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * (the id it was derived from is the one main minted through `session.newId`), or an attach path already checked,
    * never both (REQ-GIT-158 makes that refusal unreachable); and the sandbox mode.
    */
-  z.object({ kind: z.literal('session.start'), prompt: z.string().min(1), isolation: z.object({ branch: z.string().min(1) }).optional(), attach: z.object({ path: z.string().min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }),
+  z.object({ kind: z.literal('session.start'), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), isolation: z.object({ branch: z.string().min(1) }).optional(), attach: z.object({ path: z.string().min(1) }).optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-GIT-118: the id the launch dialog shows in its default branch; main mints it and uses it for the next isolated start. */
   z.object({ kind: z.literal('session.newId') }),
   z.object({ kind: z.literal('session.list') }),
@@ -104,7 +105,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoints.restore'), sessionId: z.string().min(1), sequence: z.number().int().nonnegative(), force: z.boolean() }),
   z.object({ kind: z.literal('session.resume'), sessionId: z.string().min(1) }),
   /** REQ-CHAT-011 again for a loaded session with no active run: append the user row. */
-  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string().min(1) }),
+  z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
+  z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
   /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS) }),
   /** REQ-SESSION-109: a surface attached to a session paused at the limit asks main for the dialog; the dialog window reads its payload. */

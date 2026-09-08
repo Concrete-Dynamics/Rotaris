@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type ImageAttachment, type ImageAttachmentInput, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, reasoningChipLabel,
@@ -15,6 +15,8 @@ import { TranscriptPane } from './transcript/TranscriptPane.js';
 import type { DisplayCaps } from './transcript/project.js';
 import type { TrailerRow } from './transcript/types.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
+import { addImageBytes, composerTokenEstimate } from './attachments.js';
+import './attachments.css';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -35,7 +37,7 @@ import { TodoPane, type TodoEdit } from './TodoPane.js';
 export interface WorkspaceViewProps {
   readonly session: SessionRecord | null;
   readonly rows: readonly TranscriptRow[];
-  readonly onSubmit: (text: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  readonly onSubmit: (text: string, attachments: readonly ImageAttachmentInput[]) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** REQ-SESSION-186: first activation graceful, the second forces. */
   readonly onStop: (force: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** REQ-TOOLS-077 / REQ-MONITOR-150: forwarded to the running session; applies from the next tool call. */
@@ -59,6 +61,8 @@ export interface WorkspaceViewProps {
   readonly onSetModel?: ((model: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onSetReasoning?: ((level: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly models?: readonly string[] | undefined;
+  /** REQ-CHAT-171/172: explicit capability declarations for the model selection surface. */
+  readonly imageInputModels?: readonly string[] | undefined;
   /** Part R — the inspector (REQ-MONITOR-050..067): the configured personas, the entry role's facts for the run-level agent, the compression threshold. */
   readonly personas?: readonly PersonaEntry[] | undefined;
   readonly entry?: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] } | undefined;
@@ -84,6 +88,7 @@ export interface WorkspaceViewProps {
   readonly displayCaps?: DisplayCaps | undefined;
   /** Part AA — REQ-CHAT-076: `http(s)` links open in the system browser through `shell.openExternal`; without an opener a link is inert (ADR-0051). */
   readonly onOpenLink?: ((href: string) => void) | undefined;
+  readonly onReadAttachment?: ((attachment: ImageAttachment) => Promise<string | null>) | undefined;
   /** Part AA — REQ-CHAT-075/076: a copy or an open is acknowledged when it works and reported when it does not; this window's own stack (ADR-0049). */
   readonly onAcknowledge?: Acknowledger | undefined;
   /** Part AA — REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools`), both default OFF. */
@@ -436,12 +441,14 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attachments, setAttachments] = useState<ImageAttachmentInput[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [stopRequested, setStopRequested] = useState(false);
   const [confirming, setConfirming] = useState<'stop' | { agent: { id: string; name: string }; descendants: string[] } | null>(null);
   const [steering, setSteering] = useState<{ id: string; name: string } | null>(null);
@@ -464,6 +471,21 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const chipReason = composerChipReason(runState);
   /** REQ-CHAT-007: the two refusals, decided before anything is sent. */
   const refusal = sendRefusal(runState, projectSetupPending);
+  const acceptsImages = entry !== undefined && imageInputModels.includes(entry.model);
+  const attachmentReason = acceptsImages ? null : 'The selected model does not declare image input support.';
+  const estimate = composerTokenEstimate(text, attachments);
+
+  const addFiles = async (files: readonly File[]) => {
+    if (!acceptsImages) { setError(attachmentReason); return; }
+    const next = [...attachments];
+    for (const file of files) {
+      const added = addImageBytes(next, file.name, new Uint8Array(await file.arrayBuffer()));
+      if (!added.ok) { setError(added.reason); return; }
+      next.push(added.value);
+    }
+    setAttachments(next);
+    setError(null);
+  };
 
   /**
    * REQ-CHAT-016's shell recall. `null` is "not walking"; any keypress that is not Up or Down resets it, which is
@@ -520,7 +542,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     if (busy) return;
     const value = text;
     // REQ-CHAT-003: empty or whitespace-only does nothing but return focus.
-    if (value.trim().length === 0) { area.current?.focus(); return; }
+    if (value.trim().length === 0 && attachments.length === 0) { area.current?.focus(); return; }
     // REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
     if (refusal !== null) { setError(refusal); area.current?.focus(); return; }
     setWalk(null);
@@ -528,6 +550,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     setText('');
     setStatus(null);
     if (runActive && onQueue) {
+      if (attachments.length > 0) { setBusy(false); setText(value); setError('Images can be sent when starting or continuing a session.'); area.current?.focus(); return; }
       // REQ-CHAT-035: during a run an ordinary submission is queued for the running session.
       const q = await onQueue(value);
       setBusy(false);
@@ -539,7 +562,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       return;
     }
     setStopRequested(false);
-    const r = await onSubmit(value);
+    const r = await onSubmit(value, attachments);
     setBusy(false);
     if (!r.ok) {
       // REQ-CHAT-012: the typed text is restored unchanged and the reason is raised.
@@ -547,6 +570,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       setError(r.reason);
     } else {
       setError(null);
+      setAttachments([]);
       // REQ-CHAT-017 / REQ-LIBRARY-137: recorded on run start and on continue, once the prompt was actually sent.
       onRecordPrompt?.(value);
     }
@@ -811,6 +835,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           showReasoning={showReasoning}
           autoCollapseTools={autoCollapseTools}
           onOpenLink={onOpenLink}
+          onReadAttachment={onReadAttachment}
           onAcknowledge={onAcknowledge}
           onOpenTrailer={onOpenTrailer}
           nowMs={nowIso === null ? 0 : Date.parse(nowIso)}
@@ -839,6 +864,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           onBlur={() => flushDraft()}
           rows={3}
         />
+        <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments">
+          <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
+          <button type="button" className="btn btn-ghost" disabled={!acceptsImages} title={attachmentReason ?? 'Attach images'} aria-describedby="attachment-capability" onClick={() => fileInput.current?.click()}>Attach images</button>
+          <span id="attachment-capability" className="composer__hint">{attachmentReason ?? 'Drop PNG, JPEG, WebP, or GIF images here.'}</span>
+          {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><button type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</button></li>)}</ol>}
+          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'}>{estimate.label}</span>
+        </div>
         <div className="composer__actions">
           {/*
             * REQ-CHAT-009's four selector chips. The three that choose what the NEXT run starts with are disabled in
@@ -859,7 +891,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
                   /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
                   disabled={!modelsLoaded || chipReason !== null} aria-disabled={!modelsLoaded || chipReason !== null}
                   title={modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
-                  onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
+                  onChange={(e) => { const v = e.currentTarget.value; if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
                   <option value="">—</option>
                   {models.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>

@@ -1,8 +1,8 @@
 import { asSessionId, err, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type PermissionPreset, type QuestionAnswers, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
-import type { AgentBackend } from '@rotaris/model';
+import type { AgentBackend, ContentPart } from '@rotaris/model';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
 import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
@@ -21,6 +21,7 @@ import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
+import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
@@ -351,6 +352,7 @@ export interface StartOptions {
   readonly sessionId?: string | undefined;
   readonly worktree?: WorktreeBinding | undefined;
   readonly sandboxMode?: string | undefined;
+  readonly attachments?: readonly ImageAttachmentInput[] | undefined;
 }
 
 /** REQ-SESSION-082 / REQ-EVENTS-021: a refusal before the run starts is one `result` of status error, marked as such. */
@@ -641,7 +643,7 @@ export class Sessions {
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
       readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
-      readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
+      readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
     const settled = settleStaleChildren(dal, writer, sessionId, warn);
@@ -666,6 +668,10 @@ export class Sessions {
     const setup = this.setupFor(workspaceRoot, attendedNow);
     if (!setup.ok) return err(setup.error);
     const { model, runtime } = setup.value;
+    const inputs = opts.attachments ?? [];
+    if (inputs.length > 0 && model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
+    const checkedAttachments = validateAttachmentInputs(inputs);
+    if (!checkedAttachments.ok) return err({ code: 'attachment-invalid', reason: checkedAttachments.reason });
     const sessionId = asSessionId(opts.sessionId ?? this.deps.mintSessionId());
     const effectiveRoot = opts.worktree?.worktree_path ?? workspaceRoot;
     const permission = postureAtStart(runtime, attendedNow);
@@ -694,15 +700,17 @@ export class Sessions {
         : { code: 'store', reason: created.error.reason });
     }
     const writer = created.value;
+    const storedAttachments = persistAttachments(this.deps.sessionFilesDir(dal, sessionId), inputs);
+    if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
       readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
-      readResident: () => dal.residentRows(sessionId).map(toTranscriptRow),
+      readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
     const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn) };
     this.live.set(sessionId, live);
-    const row = writer.appendRow('user', prompt, true);
+    const row = writer.appendRow('user', prompt, true, { attachments: storedAttachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
 
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
@@ -733,7 +741,7 @@ export class Sessions {
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
     const run = new Run({
-      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
+      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
       resilience: { memory: live.memory!, catalogue: setup.value.resilience?.catalogue ?? [], fallbackModel: setup.value.resilience?.fallbackModel ?? null },
@@ -764,13 +772,14 @@ export class Sessions {
   }
 
   /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
-  prompt(sessionId: SessionId, prompt: string): Result<TranscriptRow, { code: string; reason: string }> {
+  prompt(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[] = []): Result<TranscriptRow, { code: string; reason: string }> {
     let s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     const setup = this.setupFor(s.dal.getSession(sessionId)?.workspace_root ?? '', this.deps.attended?.() ?? false);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    if (inputs.length > 0 && setup.value.model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
@@ -785,9 +794,11 @@ export class Sessions {
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
     const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value);
-    const row = s.writer.appendRow('user', prompt, true);
+    const attachments = persistAttachments(this.deps.sessionFilesDir(s.dal, sessionId), inputs);
+    if (!attachments.ok) return err({ code: 'attachment-invalid', reason: attachments.reason });
+    const row = s.writer.appendRow('user', prompt, true, { attachments: attachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
-    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value);
+    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content);
     return ok(row.value);
   }
 
@@ -803,7 +814,7 @@ export class Sessions {
     return ok({ model: this.deps.model, ...(this.deps.runtime ? { runtime: this.deps.runtime } : { runtime: { permissionMode: '', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } }) });
   }
 
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup): void {
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = []): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const storedRow = s.dal.getSession(sessionId)!;
@@ -847,7 +858,7 @@ export class Sessions {
       if (s.memory.exhausted.size > 0 || s.memory.overrideCount > 0) s.log?.info(`resilience memory rehydrated: ${s.memory.exhausted.size} exhausted pair(s), ${s.memory.overrideCount} override(s)`);
     }
     const run = new Run({
-      sessionId, workspaceRoot, effectiveRoot, task: payload, taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
+      sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
       ...(setupIn.models ? { models: setupIn.models } : {}),
       resilience: { memory: s.memory, catalogue: setupIn.resilience?.catalogue ?? [], fallbackModel: setupIn.resilience?.fallbackModel ?? null },
@@ -1262,6 +1273,13 @@ export class Sessions {
     return this.deps.sessionFilesDir(dal, sessionId);
   }
 
+  /** REQ-CHAT-173: verified bytes for an on-demand thumbnail; the transcript channel remains metadata-only. */
+  readAttachment(sessionId: SessionId, path: string, digest: string): { ok: true; base64: string } | { ok: false; reason: string } {
+    const live = this.live.get(sessionId);
+    if (!live) return { ok: false, reason: 'The attachment session is not loaded.' };
+    return readAttachmentBody(this.deps.sessionFilesDir(live.dal, sessionId), path, digest);
+  }
+
   /**
    * Part Y (REQ-ORCH-149) — the session's artifact store. One per live session, shared across iterations and
    * continuations, holding no state of its own so every read is the stored state (REQ-LIBRARY-105's freshness
@@ -1390,7 +1408,7 @@ export class Sessions {
   pageOlder(sessionId: SessionId, beforeIndex: number): { rows: TranscriptRow[]; oldest: boolean } | undefined {
     const s = this.live.get(sessionId);
     if (!s) return undefined;
-    const rows = s.dal.rowsBefore(sessionId, beforeIndex, RELEASE_PAGE_SIZE).map(toTranscriptRow).reverse();
+    const rows = s.dal.rowsBefore(sessionId, beforeIndex, RELEASE_PAGE_SIZE).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(s.dal, sessionId), r.attachments) }) })).reverse();
     const oldestIndex = s.dal.oldestRowIndex(sessionId);
     const oldest = rows.length === 0 || (oldestIndex !== null && rows[0]!.index <= oldestIndex);
     return { rows, oldest };

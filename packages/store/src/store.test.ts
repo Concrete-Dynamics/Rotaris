@@ -476,7 +476,7 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
   });
   it('the schema is v15; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(15); // Part AK: v15, the delivery tables
+    expect(CURRENT_SCHEMA_VERSION).toBe(15); // Part AK: v15, the delivery tables (plan Reservations, ruled 2026-09-09: the store suite's pins ride with the v15 reservation)
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -628,7 +628,8 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     };
     const gone = plant('S-gone');
     const kept = plant('S-kept');
-    // Part AK (v15): `delivery_runs` carries a `session_id` as a FACT about the run and deliberately no foreign key — a
+    // Part AK (v15; plan Reservations, ruled 2026-09-09: this narrowed premise is accepted as ADR-0041's reading, no foreign key on
+    // `delivery_runs.session_id`): `delivery_runs` carries a `session_id` as a FACT about the run and deliberately no foreign key — a
     // requirement's run history outlives the session it names (REQ-TRACE-405/476: "no requirement SHALL be silently
     // reset"), so the dependants of the session row are the tables whose session_id column REFERENCES it.
     const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND (m.name = 'sessions' OR EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'))").all() as { name: string }[]).map((t) => t.name).sort();
@@ -756,7 +757,8 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   });
 
   it('is v15, and the migration list is append-only with nothing renumbered', () => {
-    // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 before any of them was written; the ladder is
+    // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
+    // the pin ride with the v15 reservation) before any of them was written; the ladder is
     // asserted whole rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
     expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
     expect(CURRENT_SCHEMA_VERSION).toBe(15);

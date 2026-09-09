@@ -84,13 +84,13 @@ export function lowerLightness(colour: string, floor: number, against: string): 
 /**
  * REQ-CHAT-027: "lightened or darkened until it reaches a contrast ratio of at least 4.5:1" — the direction is the theme's.
  *
- * **Defect forty-six, found on this part's first execution (ADR-0050's note):** `raiseLightness` bisects to the floor and
- * then ROUNDS the lightness to a thousandth of a percent, and the rounding can fall on the dark side of the floor — the
- * default theme's partial shade came back at 4.49997:1, which `themeContrastViolations`' own 1e-6 tolerance would
- * report as a violation. The corrector is `contracts`' and is not this part's to edit; the settle step below walks the
- * lightness one thousandth of a percent further from the surface until the measured ratio clears the floor, so nothing
- * this module returns is a hair short of what it claims. The same guard covers `lowerLightness`, whose rounding can
- * err the same way in the other direction.
+ * **Defect forty-six, found on this part's first execution (ADR-0050's note):** `raiseLightness` bisected to the floor
+ * and then ROUNDED the lightness to a thousandth of a percent, and the rounding could fall on the dark side of the
+ * floor — the default theme's partial shade came back at 4.49997:1, which `themeContrastViolations`' own 1e-6 tolerance
+ * would report as a violation. The corrector was repaired at its source in the same part (`colour.ts`, a `// Part AN`
+ * hunk with a regression test); the settle step below is kept as a measured guard — it covers `lowerLightness`, whose
+ * rounding could err the same way in the other direction, and it makes this module's promise hold whatever corrector
+ * sits behind it. On the repaired corrector it takes zero steps.
  */
 export function ensureContrast(colour: string, surface: string, dark: boolean, floor = 4.5): string {
   const corrected = dark ? raiseLightness(colour, floor, surface) : lowerLightness(colour, floor, surface);

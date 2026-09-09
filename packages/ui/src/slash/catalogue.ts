@@ -157,10 +157,10 @@ export function builtInCommands(options: CatalogueOptions): readonly SlashComman
      * button does". REQ-CHAT-019 has already cleared the composer when a command runs, and a slash command is one line,
      * so the composer's text at that moment is the command line itself: the prompt to stash is what follows the name.
      * `/stash <prompt>` therefore takes an argument and, by REQ-CHAT-159, fails with a usage message without one — the
-     * button's own no-text behaviour (focus, nothing pushed) would be a silent no-op here. The seam's `stash()` takes
-     * no text: the composer supplies the argument it parsed (see `WorkspaceView`), which is the deviation the handoff raises.
+     * button's own no-text behaviour (focus, nothing pushed) would be a silent no-op here. The seam's `stash(text)`
+     * takes that argument (the change was ruled into the plan on 2026-09-09).
      */
-    { name: 'stash', description: 'Stash the composer prompt', argumentHint: '<prompt>', kind: 'action', availability: () => ok, run: async (argument, ctx) => (argument === '' ? failed(usageMessage('stash', 'prompt')) : attempt(async () => ctx.stash())) },
+    { name: 'stash', description: 'Stash the composer prompt', argumentHint: '<prompt>', kind: 'action', availability: () => ok, run: async (argument, ctx) => (argument === '' ? failed(usageMessage('stash', 'prompt')) : attempt(async () => ctx.stash(argument))) },
     // REQ-CHAT-031 / REQ-LIBRARY-142: `/pop` opens the dialog and removes nothing itself; the user's Apply or Pop decides.
     { name: 'pop', description: 'Apply a stashed prompt', kind: 'action', availability: () => (options.stashCount > 0 ? ok : unavailable(STASH_EMPTY)), run: (_a, ctx) => attempt(async () => ctx.open('stash')) },
     /*

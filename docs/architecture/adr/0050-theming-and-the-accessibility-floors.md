@@ -178,9 +178,15 @@ fall on the dark side, and did: the default theme's partial shade came back at *
 because none of them is corrected to exactly the floor — the theme proof's corrections all overshoot by more than the
 rounding — which is why the first execution above did not see it. It is a defect of the corrector, not of the
 highlight, and the corrector is `packages/contracts/src/theme/colour.ts`; the highlight module settles the returned
-lightness one hundred-thousandth of a percent further from the surface until the measured ratio clears the floor, and
-the one-line repair in the corrector (round in the raising direction, or measure once more after rounding) is owed to
-the theme's owner and recorded here rather than made quietly from a consumer.
+lightness one hundred-thousandth of a percent further from the surface until the measured ratio clears the floor.
+**Repaired at the source the same day, ruled into the plan:** `raiseLightness` now measures the rounded value again and
+steps it up by a thousandth of a percent until the ratio it names is the ratio it clears (a `// Part AN` hunk beside
+the rounding, with the 4.49997 case as a regression test in `contracts.test.ts`); the highlight's settle step stays as a
+guard and takes zero steps on the repaired corrector. The adopted tokens are untouched — the zero-drift guard measures
+data, not the corrector — and `pnpm theme-proof` was re-run against the repaired corrector and, in the same hour, against
+HEAD with this change stashed: the same fifteen reds on both, `focus` on every run, the two disabled Mission labels at 2.90
+on every `rotaris-dim` scale (the finding `codebase.md` records under Part AI), and unsettled-frame ratios of 1.0 that sit
+at different scales in any two runs of the same tree — none of them this corrector's, which reaches no painted token.
 
 **A reading that turned out wrong.** The proof assumed Chromium would report a computed colour as `rgb()`; it reports
 a custom-property colour in the form the token declares it, `oklch(L C H)` with a unitless lightness, so the proof

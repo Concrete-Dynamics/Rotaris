@@ -144,7 +144,7 @@ function fakeContext(overrides: Partial<SlashContext> & { readonly refuse?: Part
     logout: async (provider) => { log.push(`logout ${provider}`); },
     control: async (op): Promise<Result<unknown, string>> => { log.push(`control ${op}`); const refusal = refuse[op]; return refusal === undefined ? ok(undefined) : err(refusal); },
     open: (dialog) => { log.push(`open ${dialog}`); },
-    stash: () => { log.push('stash'); },
+    stash: (text) => { log.push(`stash ${text}`); },
     notify: (text) => { log.push(`notify ${text}`); },
     submitAsPrompt: async (text) => { log.push(`prompt ${text}`); },
     ...rest,
@@ -237,7 +237,7 @@ describe('slash — REQ-CHAT-028..033, REQ-CHAT-159: the catalogue', () => {
     // /stash takes the prompt to stash (REQ-CHAT-159's usage message without one); /pop reflects the current stash.
     expect(await run(registry, 'stash', '', ctx)).toEqual({ kind: 'failed', message: 'Usage: /stash <prompt>' });
     expect(await run(registry, 'stash', 'keep this', ctx)).toEqual({ kind: 'executed' });
-    expect(ctx.log.at(-1)).toBe('stash');
+    expect(ctx.log.at(-1)).toBe('stash keep this');
     expect(buildCatalogue(options({ stashCount: 0 })).lookup('pop')!.availability(ctx)).toEqual({ ok: false, reason: STASH_EMPTY });
     // What the composer has not been given an opener for stays listed and unavailable with REQ-CHAT-020's default reason.
     const unwired = buildCatalogue(options({ reachable: {} }));

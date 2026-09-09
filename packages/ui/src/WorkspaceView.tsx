@@ -584,8 +584,6 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   /** REQ-CHAT-021's persistent notice, drawn by this composer while ADR-0049 offers a renderer no way into main's slot. */
   const [commandNotice, setCommandNotice] = useState<{ readonly id: number; readonly message: string } | null>(null);
   const noticeSerial = useRef(0);
-  /** REQ-LIBRARY-142: the argument `/stash` parsed, handed to the seam's argument-less `stash()` (see `catalogue.ts`). */
-  const slashArgument = useRef('');
   const reachable = useMemo<Readonly<Partial<Record<Reachable, boolean>>>>(() => ({
     'start-session': slash?.newSession !== undefined,
     sessions: slash?.openSessions !== undefined,
@@ -649,7 +647,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       }
     },
     // REQ-LIBRARY-142 / REQ-CHAT-042: the prompt after `/stash`, trimmed, onto the top of the stash — as the Stash button does.
-    stash: () => { if (!onStash) throw new Error('The stash is not available in this window.'); const trimmed = slashArgument.current.trim(); if (trimmed !== '') onStash(trimmed); },
+    stash: (prompt) => { if (!onStash) throw new Error('The stash is not available in this window.'); const trimmed = prompt.trim(); if (trimmed !== '') onStash(trimmed); },
     // REQ-CHAT-032's "Model set to <name>." is a notice: this window's transient stack where it exists (REQ-NOTIFY-013), else the composer's status line.
     notify: (message) => { if (onAcknowledge) onAcknowledge('ok', message); else setStatus(message); },
     submitAsPrompt: async (value) => { await submitPrompt(value); },
@@ -697,7 +695,6 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     setCommandNotice(null);
     flushDraft('');
     setBusy(true);
-    slashArgument.current = argument;
     const command = registry.lookup(name);
     let outcome: SlashOutcome;
     if (command === undefined) outcome = { kind: 'unknown', name };

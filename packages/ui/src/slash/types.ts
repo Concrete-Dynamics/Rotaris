@@ -37,7 +37,8 @@ export interface SlashContext {
   logout(provider: string): Promise<void>;
   control(op: ControlOp): Promise<Result<unknown, string>>;
   open(dialog: 'start-session' | 'sessions' | 'worktree' | 'stash' | 'search'): void;
-  stash(): void;
+  /** REQ-LIBRARY-142: the prompt to stash — `/stash`'s argument, since REQ-CHAT-019 has already cleared the composer (seam change ruled 2026-09-09). */
+  stash(text: string): void;
   notify(text: string): void;
   /** REQ-CHAT-161's delivery: the expanded body goes exactly where typed text would have gone. */
   submitAsPrompt(text: string): Promise<void>;

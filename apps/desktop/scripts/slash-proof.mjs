@@ -24,9 +24,12 @@
  *                  blank line (REQ-CHAT-031/043/044); `/pop` against an empty stash is listed but unavailable;
  *   `/model scripted-2`  the chip shows the new name and "Model set to scripted-2." is shown (REQ-CHAT-032);
  *   Escape         dismisses the popup and leaves `/mo` exactly as typed (REQ-CHAT-026);
+ *   `/theme NOCTURNE`  applies nocturne (case-insensitive), "Theme set to nocturne." shown; `/theme rotaris-dim` restores;
+ *   `/logout zzz`  names the rejected value and lists the providers in the catalog's order (or states none are configured);
+ *   `/sessions`    opens the session browser; `/new` the launch dialog; `/worktree` the worktree dialog (the scratch
+ *                  workspace is a git repository) — each closed again with Escape (REQ-CHAT-031, REQ-CHAT-159);
  *   `/ hello`      is a PROMPT: it starts a run and appears in the transcript as the user's row (REQ-CHAT-018);
- *   `/compress`    during the run: listed but unavailable with REQ-CHAT-020's default reason — no arm in the run host
- *                  until Part AO, and nothing passes the control to the composer yet (stated in `WorkspaceView`);
+ *   `/compress`    during the run: dispatched to the run host, whose refusal (no arm until Part AO) surfaces as `failed`;
  *   `/stop`        during the run: accepted, the run cancels, no notice (REQ-CHAT-029).
  *
  * Evidence under `.slash-proof/`: `catalogue.png` (the end), `popup.png` (the popup open), `catalogue.log`,
@@ -145,6 +148,9 @@ const AGENTS_YAML = [
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# slash proof workspace\n');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), AGENTS_YAML);
+// A git repository, so `/worktree` has a git service to be available against (REQ-CHAT-031) and the worktree dialog can open.
+const init = spawnSync('git', ['init', '-q'], { cwd: workspace, encoding: 'utf8', timeout: 30_000 });
+if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`);
 
 /** The composer's OWN change path — the native setter plus an `input` event — as the composer proof set its draft. */
 const setComposer = (text) => `(() => { const el = document.querySelector('.composer__input'); if (!el) return 'no composer'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(text)}); el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); return el.value.length; })()`;
@@ -162,15 +168,20 @@ const T = {
   stop: 7000, stopEnter: 7200, noRun: 7800, stash1: 8000, stash1Enter: 8200, count1: 8700, stash2: 8900, stash2Enter: 9100, count2: 9600,
   pop: 9800, popEnter: 10000, dialog: 10500, popClick: 10700, popped: 11300, toolbar: 11500, popClick2: 12000, appended: 12600,
   popEmpty: 12800, popEmptyEnter: 13000, stashEmpty: 13600, setModel: 13800, setModelEnter: 14000, modelSet: 14700,
-  clear: 15000, mo: 15200, escape: 15600, escaped: 15900, hello: 16200, helloEnter: 16400, running: 19000,
-  compress: 19200, compressEnter: 19400, compressFailed: 20000, stop2: 20200, stop2Enter: 20400, stopped: 21600, end: 22200,
+  clear: 15000, mo: 15200, escape: 15600, escaped: 15900,
+  // The renderer-wired commands (the lead's follow-up of 2026-09-09): the theme, a provider sign-out, the session browser, the launch dialog, the worktree dialog.
+  theme: 16200, themeEnter: 16400, themeApplied: 16900, themeBack: 17000, themeBackEnter: 17200, themeRestored: 17700,
+  logout: 17900, logoutEnter: 18100, logoutNotice: 18600, sessions: 18800, sessionsEnter: 19000, browser: 19500, browserEscape: 19700,
+  newSession: 19900, newEnter: 20100, launch: 20600, launchEscape: 20800, worktree: 21000, worktreeEnter: 21200, worktreeDialog: 21700, worktreeEscape: 21900,
+  hello: 22200, helloEnter: 22400, running: 25000,
+  compress: 25200, compressEnter: 25400, compressFailed: 26000, stop2: 26200, stop2Enter: 26400, stopped: 27600, end: 28200,
 };
 
 const run = launch('catalogue', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'wait:12000,answer',
   ROTARIS_CAPTURE_CHORDS: `Ctrl+L@${T.focus}`,
   ROTARIS_CAPTURE_TYPE_AT: `/@${T.slash};;mod@${T.mod};;el@${T.el};;/mo@${T.mo}`,
-  ROTARIS_CAPTURE_KEYS: `Tab@${T.tab};;Return@${T.modelEnter};;Return@${T.modelNopeEnter};;Return@${T.stopEnter};;Return@${T.stash1Enter};;Return@${T.stash2Enter};;Return@${T.popEnter};;Return@${T.popEmptyEnter};;Return@${T.setModelEnter};;Escape@${T.escape};;Return@${T.helloEnter};;Return@${T.compressEnter};;Return@${T.stop2Enter}`,
+  ROTARIS_CAPTURE_KEYS: `Tab@${T.tab};;Return@${T.modelEnter};;Return@${T.modelNopeEnter};;Return@${T.stopEnter};;Return@${T.stash1Enter};;Return@${T.stash2Enter};;Return@${T.popEnter};;Return@${T.popEmptyEnter};;Return@${T.setModelEnter};;Escape@${T.escape};;Return@${T.themeEnter};;Return@${T.themeBackEnter};;Return@${T.logoutEnter};;Return@${T.sessionsEnter};;Escape@${T.browserEscape};;Return@${T.newEnter};;Escape@${T.launchEscape};;Return@${T.worktreeEnter};;Escape@${T.worktreeEscape};;Return@${T.helloEnter};;Return@${T.compressEnter};;Return@${T.stop2Enter}`,
   ROTARIS_CAPTURE_CLICKS: `[data-testid="stash-dialog-pop"]@${T.popClick};;[data-testid="transcript-stash"]@${T.toolbar};;[data-testid="stash-dialog-pop"]@${T.popClick2}`,
   ROTARIS_CAPTURE_EVAL_AT: [
     `${readPopup}@${T.popup}`, `${readToken}@${T.partial}`, `${readPopup}@${T.partial + 100}`, `${readToken}@${T.resolved}`, `${readPopup}@${T.resolved + 100}`,
@@ -185,6 +196,12 @@ const run = launch('catalogue', workspace, local, preferences, {
     `${setComposer('/pop')}@${T.popEmpty}`, `${readNotice}@${T.stashEmpty}`,
     `${setComposer('/model scripted-2')}@${T.setModel}`, `${readNotice}@${T.modelSet}`,
     `${setComposer('')}@${T.clear}`, `${readComposer}@${T.escaped}`, `${readPopup}@${T.escaped + 100}`,
+    `${setComposer('/theme NOCTURNE')}@${T.theme}`, `document.documentElement.dataset.theme@${T.themeApplied}`, `${readNotice}@${T.themeApplied + 50}`,
+    `${setComposer('/theme rotaris-dim')}@${T.themeBack}`, `document.documentElement.dataset.theme@${T.themeRestored}`,
+    `${setComposer('/logout zzz')}@${T.logout}`, `${readNotice}@${T.logoutNotice}`,
+    `${setComposer('/sessions')}@${T.sessions}`, `${readActive}@${T.browser}`,
+    `${setComposer('/new')}@${T.newSession}`,
+    `${setComposer('/worktree')}@${T.worktree}`,
     `${setComposer('/ hello')}@${T.hello}`, `${readToken}@${T.hello + 100}`,
     `${setComposer('/compress')}@${T.compress}`, `${readNotice}@${T.compressFailed}`,
     `${setComposer('/stop')}@${T.stop2}`, `${readNotice}@${T.stopped}`,
@@ -193,10 +210,13 @@ const run = launch('catalogue', workspace, local, preferences, {
     `[data-testid="slash-popup"] [role="option"]@${T.popup + 100}`,
     `[data-testid="transcript-stash"]@${T.count1}`, `[data-testid="transcript-stash"]@${T.count2}`, `[data-testid="stash-dialog"]@${T.dialog}`,
     `[data-testid="transcript-stash"]@${T.popped}`, `[data-testid="transcript-stash"]@${T.appended}`,
-    `[data-testid="chip-model"] select@${T.modelSet}`, `[data-testid="run-state"]@${T.running}`, `[data-testid="run-state"]@${T.stopped}`,
+    `[data-testid="chip-model"] select@${T.modelSet}`,
+    `.session-browser@${T.browser}`, `.session-browser@${T.newSession}`, `[data-testid="start-session-dialog"]@${T.launch}`, `[data-testid="start-session-dialog"]@${T.worktree}`,
+    `[data-testid="worktree-dialog"]@${T.worktreeDialog}`, `[data-testid="worktree-dialog"]@${T.hello}`,
+    `[data-testid="run-state"]@${T.running}`, `[data-testid="run-state"]@${T.stopped}`,
     `[data-testid="composer-notice"]@${T.stopped}`,
   ].join(';;'),
-  ROTARIS_CAPTURE_TEXT_AT: `Model set to scripted-2.@${T.modelSet};;/ hello@${T.running}`,
+  ROTARIS_CAPTURE_TEXT_AT: `Model set to scripted-2.@${T.modelSet};;Theme set to nocturne.@${T.themeApplied};;/ hello@${T.running}`,
   ROTARIS_CAPTURE_PNG_AT: `${join(output, 'popup.png')}@${T.popup + 200}`,
   ROTARIS_CAPTURE_AFTER_MS: String(T.end),
 });
@@ -225,8 +245,9 @@ expect(stopRow && stopRow.text.startsWith('/stop — Cancel the active run') && 
 expect(stopRow.attrs['aria-disabled'] === 'true' && stopRow.attrs['title'] === 'No run is active.' && typeof stopRow.attrs['aria-describedby'] === 'string', `an unavailable row should be disabled with its reason as tooltip and description: ${JSON.stringify(stopRow.attrs)}`);
 const modelRow = rows.find((r) => r.attrs['data-command'] === 'model');
 expect(modelRow && modelRow.text.includes('/model — Switch the model [<name>]') && modelRow.attrs['aria-disabled'] === 'false', `the /model row should show its argument hint and be available: ${modelRow?.text} ${modelRow?.attrs['aria-disabled']}`);
+// The scratch workspace is a git repository, so /worktree is available once the repository read has landed; before it lands the row states the spec's reason.
 const worktreeRow = rows.find((r) => r.attrs['data-command'] === 'worktree');
-expect(worktreeRow?.attrs['title'] === 'No git service is available for this workspace.', `the /worktree reason: ${worktreeRow?.attrs['title']}`);
+expect(worktreeRow !== undefined && (worktreeRow.attrs['data-available'] === '1' || worktreeRow.attrs['title'] === 'No git service is available for this workspace.'), `the /worktree row: ${JSON.stringify(worktreeRow?.attrs)}`);
 results.popup = { rows: popup.rows, unavailable: popup.unavailable, rowHeightPx: popup.rowHeight, listClientPx: popup.listClient, listScrollPx: popup.listScroll, width: popup.popup.width, inputWidth: popup.input.width, gapPx: popup.input.top - popup.popup.bottom, names: popup.names };
 
 // ── `/mod` partial, `/model` resolved, `/zzz` unknown — colour AND weight, 4.5:1 on the input's ground, all distinct (REQ-CHAT-027) ──
@@ -305,6 +326,20 @@ expect(escaped?.value === '/mo', `Escape should leave the text as typed: ${JSON.
 expect(evalAt(run, T.escaped + 100)?.open === false, 'Escape should dismiss the popup');
 results.escape = escaped.value;
 
+// ── The renderer-wired commands: `/theme` (case-insensitive, applied), `/logout` (the provider domain's vocabulary), `/sessions`, `/new`, `/worktree` (REQ-CHAT-031, REQ-CHAT-159) ──
+expect(evalAt(run, T.themeApplied) === 'nocturne' && evalAt(run, T.themeApplied + 50) === null, `"/theme NOCTURNE" should apply nocturne with no failure notice: ${JSON.stringify(evalAt(run, T.themeApplied))} ${JSON.stringify(evalAt(run, T.themeApplied + 50))}`);
+expect(run.texts[`Theme set to nocturne.@${T.themeApplied}`] === true, '"Theme set to nocturne." was not shown');
+expect(evalAt(run, T.themeRestored) === 'rotaris-dim', `"/theme rotaris-dim" should restore the default theme: ${JSON.stringify(evalAt(run, T.themeRestored))}`);
+const logoutNotice = evalAt(run, T.logoutNotice);
+expect(logoutNotice?.title === 'Command not run' && (logoutNotice.message.startsWith("Unknown provider 'zzz'. Available: ") || logoutNotice.message === 'No providers are configured. Choose one in Settings.'), `"/logout zzz" should name the rejected value and list the providers, or state that none are configured: ${JSON.stringify(logoutNotice)}`);
+expect(match(run, '.session-browser', T.browser) !== null, '/sessions should open the session browser');
+expect(match(run, '.session-browser', T.newSession) === null, 'Escape should have closed the session browser');
+expect(match(run, '[data-testid="start-session-dialog"]', T.launch) !== null, '/new should open the launch dialog');
+expect(match(run, '[data-testid="start-session-dialog"]', T.worktree) === null, 'Escape should have closed the launch dialog');
+expect(match(run, '[data-testid="worktree-dialog"]', T.worktreeDialog) !== null, '/worktree should open the worktree dialog in a git workspace');
+expect(match(run, '[data-testid="worktree-dialog"]', T.hello) === null, 'Escape should have closed the worktree dialog');
+results.wired = { theme: evalAt(run, T.themeApplied), logout: logoutNotice.message, browser: true, launch: true, worktree: true };
+
 // ── `/ hello` is a prompt: no highlighting, and it starts a run whose transcript shows the user's row (REQ-CHAT-018/023) ──
 expect(evalAt(run, T.hello + 100)?.state === null, 'the "/ " escape must receive no highlighting');
 const runState = match(run, '[data-testid="run-state"]', T.running)?.text;
@@ -312,9 +347,9 @@ expect(runState === 'Run active', `"/ hello" should have started a run: run stat
 expect(run.texts[`/ hello@${T.running}`] === true, 'the prompt "/ hello" should appear in the transcript');
 results.escapePrompt = { runState };
 
-// ── `/compress` during the run: listed but unavailable until the control is connected (Part AO's arm; the renderer's wiring); `/stop` during the run: accepted, the run cancels, no notice ──
+// ── `/compress` during the run: dispatched, and the run host's refusal (no arm until Part AO) surfaces as `failed`; `/stop` during the run: accepted, the run cancels, no notice ──
 const compress = evalAt(run, T.compressFailed);
-expect(compress?.message === '/compress is not available right now.', `/compress should be unavailable with REQ-CHAT-020's default reason until the control is connected: ${JSON.stringify(compress)}`);
+expect(compress?.title === 'Command not run' && compress.message === 'The run host does not support forceCompression yet.', `/compress should fail with the run host's refusal until Part AO arms it: ${JSON.stringify(compress)}`);
 const stopped = match(run, '[data-testid="run-state"]', T.stopped)?.text;
 expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cancel on \S+ → ok/.test(run.log), `/stop during the run should be accepted and cancel it: run state ${JSON.stringify(stopped)}`);
 expect(evalAt(run, T.stopped) === null && match(run, '[data-testid="composer-notice"]', T.stopped) === null, 'an executed /stop raises no notice and clears the previous one');

@@ -4,7 +4,7 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -425,6 +425,11 @@ function useDraft(workspace: string): { draft: string | undefined; publish: (t: 
   };
 }
 
+// Part AN — the two openers the slash catalogue needs from App's own state: the launch dialog (REQ-SHELL-125, `/new`)
+// and the session browser (REQ-SHELL-126, `/resume` and `/sessions`). App registers them once mounted; Workspace calls
+// through them, so neither `Workspace`'s props nor App's view map changes for the catalogue's sake.
+const slashOpeners: { newSession?: () => Promise<{ ok: true } | { ok: false; reason: string }>; openSessions?: () => void } = {};
+
 function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenStash, groupTools, layout, onLayout, onOpenTrailer }: { models: readonly string[]; modelsLoaded: boolean; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; onOpenTrailer: (trailer: TrailerRow) => void }) {
   const session = useStore(replica, (s) => s.session);
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
@@ -450,7 +455,50 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }, []);
   const entryPersona = entry.persona;
-  return <WorkspaceView
+  /*
+   * Part AN — REQ-CHAT-028..033, REQ-CHAT-159, REQ-SHELL-048/056: what the slash catalogue needs that `WorkspaceView`
+   * cannot reach through its other props. The theme setter does what the Settings category's `changeTheme` does; the
+   * provider list and the sign-out are the Providers card's own commands; the two control ops go through `control` and
+   * surface the run host's answer as `failed` (no arm until Part AO); the launch dialog and the session browser are App's,
+   * reached through `slashOpeners`; the worktree dialog is the Git view's component drawn here over the same commands
+   * (REQ-GIT-074's template); `hasGit` is the repository read's verdict. `raiseNotice` is left unset on purpose: no
+   * `notice.report` command exists (ADR-0049 defect forty-seven), so the composer draws REQ-CHAT-021's notice itself.
+   */
+  const providerRows = useProviders().rows;
+  const git = useGitState(workspace);
+  const [worktreeOpen, setWorktreeOpen] = useState(false);
+  const slashHost = useMemo<SlashHost>(() => ({
+    themes: THEMES.map((t) => t.name),
+    setTheme: async (name) => {
+      const r = await bridge.command({ kind: 'theme.set', name: name as ThemeName });
+      if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+      runningTheme = resolveTheme(name);
+      applyTheme(runningTheme, document.documentElement);
+      for (const subscriber of themeSubscribers) subscriber(runningTheme);
+      return { ok: true };
+    },
+    providers: providerRows.map((row) => row.id),
+    logout: async (id) => {
+      const r = await bridge.command({ kind: 'providers.signOut', id });
+      if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
+      const outcome = r.value as { ok: boolean; message: string };
+      return outcome.ok ? { ok: true } : { ok: false, reason: outcome.message };
+    },
+    control: (op) => control(op, {}, `The run host does not support ${op} yet.`),
+    newSession: () => (slashOpeners.newSession ? slashOpeners.newSession() : Promise.resolve({ ok: false as const, reason: 'The launch dialog is not available in this window.' })),
+    openSessions: () => { slashOpeners.openSessions?.(); },
+    openWorktree: () => setWorktreeOpen(true),
+    hasGit: git.state?.gitAvailable === true && git.state.isRepository,
+  }), [providerRows, git.state]);
+  const worktrees = git.state?.worktrees ?? [];
+  return <>
+    {worktreeOpen && (
+      <WorktreeDialog workspaceRoot={workspace} existingBranches={worktrees.flatMap((r) => (r.branch === null ? [] : [r.branch]))} existingPaths={worktrees.map((r) => r.path)}
+        probePath={async (path) => { const r = await bridge.command({ kind: 'worktree.probePath', path }); return r.ok ? (r.value as { exists: boolean; nonEmpty: boolean }) : null; }}
+        onCreate={async (branch, path) => { const r = await bridge.command({ kind: 'worktree.create', branch, path }); if (r.ok) git.refresh(); return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline }; }}
+        onClose={() => setWorktreeOpen(false)} />
+    )}
+    <WorkspaceView slash={slashHost}
     onOpenLink={openLink} onReadAttachment={async (attachment) => { if (!session) return null; const r = await bridge.command({ kind: 'session.readAttachment', sessionId: session.id, path: attachment.path, digest: attachment.digest }); return r.ok ? `data:${attachment.mediaType};base64,${(r.value as { base64: string }).base64}` : null; }} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
     needsRecovery={needsRecovery} modelsLoaded={modelsLoaded} history={prompts.history} configuredMode={snapshot?.runtime.permission_mode}
     draft={drafts.draft} onPublishDraft={drafts.publish} onWriteDraft={drafts.write}
@@ -483,7 +531,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
     onSetReasoning={(level) => control('setReasoning', { level }, 'The run did not accept that reasoning level.')}
-  />;
+  /></>; // Part AN: the fragment closes the worktree dialog + view pair opened above.
 }
 
 /**
@@ -1054,6 +1102,12 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
     setBrowserSessions(rows);
     return rows;
   }, []);
+  // Part AN — see `slashOpeners`: the launch dialog and the session browser, reachable from the composer's catalogue.
+  useEffect(() => {
+    slashOpeners.newSession = openStartDialog;
+    slashOpeners.openSessions = () => { void loadSessions(); };
+    return () => { delete slashOpeners.newSession; delete slashOpeners.openSessions; };
+  }, [openStartDialog, loadSessions]);
   /** Part U: the browser's actions. Each is a command answered with a value or a reason; the list is read again afterwards. */
   const refreshSessions = useCallback(async (): Promise<void> => {
     const result = await bridge.command({ kind: 'session.list' });

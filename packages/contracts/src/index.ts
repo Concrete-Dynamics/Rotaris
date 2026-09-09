@@ -20,6 +20,6 @@ export * from './checkpoints.js';
 export * from './mcp.js';
 export * from './library.js';
 export * from './artifacts.js';
+// Part AM (terminal-keys.ts is AM's; terminal.ts is the seam copy — AL owns it, drop AM's at the merge)
 export * from './terminal-keys.js';
-// Part AM (seam; AL owns terminal.ts)
 export * from './terminal.js';

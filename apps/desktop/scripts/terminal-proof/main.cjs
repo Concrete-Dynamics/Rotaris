@@ -325,6 +325,8 @@ app.whenReady().then(async () => {
     const image = await capture('window-high-contrast');
     const sampled = pixelAt(image, Math.round(gridRect.x + 2), Math.round(gridRect.y + 2));
     expect('theme.gutterPaintedWithTermBg', sampled === s.termBg, { sampled, token: s.termBg, cssBackground: screenBg });
+    // The high-contrast ground, read from the resolved token (never a literal: tools/check-theme-colours.mjs walks this file).
+    const highContrastTermBg = s.termBg;
     const reportsBefore = Number(await attr('[data-testid="term-grid"]', 'data-geometry-reports'));
     await exec(`window.__terminalProof.font(16)`);
     await pause(400);
@@ -339,7 +341,7 @@ app.whenReady().then(async () => {
     const dimImage = await capture('window-rotaris-dim');
     const dimGridRect = await rect('[data-testid="term-grid"]');
     const dimSampled = pixelAt(dimImage, Math.round(dimGridRect.x + 2), Math.round(dimGridRect.y + 2));
-    expect('theme.gutterPaintedWithTermBgDim', dimSampled === s.termBg && s.termBg !== '#000000', { sampled: dimSampled, token: s.termBg });
+    expect('theme.gutterPaintedWithTermBgDim', dimSampled === s.termBg && s.termBg !== highContrastTermBg && dimSampled !== sampled, { sampled: dimSampled, token: s.termBg, highContrastTermBg });
 
     // ── REQ-SHELL-085: bringing forward only a retained stream; a new session clears everything ────────────
     await exec(`window.__terminalProof.focusStream(${JSON.stringify(STREAM_B)})`);

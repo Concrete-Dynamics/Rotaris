@@ -20,3 +20,6 @@ export * from './checkpoints.js';
 export * from './mcp.js';
 export * from './library.js';
 export * from './artifacts.js';
+export * from './terminal-keys.js';
+// Part AM (seam; AL owns terminal.ts)
+export * from './terminal.js';

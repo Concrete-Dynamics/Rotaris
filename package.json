@@ -46,6 +46,7 @@
     "todo-proof": "node apps/desktop/scripts/todo-proof.mjs",
     "attachments-proof": "node apps/desktop/scripts/attachments-proof.mjs",
     "settings-proof": "node apps/desktop/scripts/settings-proof.mjs",
+    "terminal-proof": "node apps/desktop/scripts/terminal-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

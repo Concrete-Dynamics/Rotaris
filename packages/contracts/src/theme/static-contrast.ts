@@ -1,5 +1,5 @@
 import { contrastRatio } from './colour.js';
-import type { Theme } from './themes.js';
+import { TERM_ANSI_NAMES, type Theme } from './themes.js';
 
 export interface ContrastViolation { readonly item: string; readonly ratio: number; readonly floor: number; }
 
@@ -36,6 +36,12 @@ export function themeContrastViolations(theme: Theme): readonly ContrastViolatio
   }
   for (const state of ['--rt-run', '--rt-wait', '--rt-done', '--rt-fail', '--rt-info-300'] as const) for (const background of textBackgrounds) check(`${state} boundary on ${background}`, state, background, 3);
   for (const background of ['--rt-accent-600', '--rt-primary-hover', '--rt-accent-700'] as const) checkValues(`primary label on ${background}`, 'oklch(97% 0.02 292)', resolved(theme, background), 4.5);
+  // Part AM — REQ-SHELL-098's terminal tokens (ADR-0047, ADR-0050 note): every ink at the text floor on the terminal
+  // ground, black at the boundary floor (it is used as a foreground only over a coloured cell, and as a grey it must
+  // still separate from the ground).
+  for (const name of TERM_ANSI_NAMES) check(`terminal ${name} on terminal ground`, `--rt-term-${name}`, '--rt-term-bg', name === 'black' ? 3 : 4.5);
+  check('terminal foreground on terminal ground', '--rt-term-fg', '--rt-term-bg', 4.5);
+  check('terminal cursor on terminal ground', '--rt-term-cursor', '--rt-term-bg', 3);
   check('disabled text on disabled surface', '--rt-text-disabled', '--rt-bg', 3);
   const enabled = contrastRatio(resolved(theme, '--rt-text'), resolved(theme, '--rt-bg'));
   const disabled = contrastRatio(resolved(theme, '--rt-text-disabled'), resolved(theme, '--rt-bg'));

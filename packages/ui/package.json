@@ -8,9 +8,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@rotaris/kernel": "workspace:*",
     "@rotaris/contracts": "workspace:*",
+    "@rotaris/kernel": "workspace:*",
     "@rotaris/ui-core": "workspace:*",
+    "@xterm/headless": "6.0.0",
+    "@xterm/xterm": "6.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.15"

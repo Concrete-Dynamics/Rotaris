@@ -5,6 +5,7 @@ import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
 import { PersonaWindows } from './windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
+import { FrameDeliveryLimiter, relayTerminalCommand } from './terminal.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
@@ -528,6 +529,10 @@ async function main(): Promise<void> {
     }
     else if (e.kind === 'log') log(`run host ${e.level}: ${e.message}`);
   });
+  // Part AL — channel 3 (ADR-0021 first executed): a terminal frame is delivered to each subscribed window under
+  // REQ-MONITOR-306's per-window bound, merged into larger steps rather than dropped (REQ-SHELL-103) — `main/terminal.ts`.
+  const terminalFrames = new FrameDeliveryLimiter({ relay, clocks, log });
+  runHost.onEvent((e) => { if (e.kind === 'publish.terminal') terminalFrames.deliver(e.payload); });
   const processes: ProcessKind[] = ['run-host'];
   let currentWorkspace = argvWorkspace ?? '(no workspace)';
 
@@ -1412,6 +1417,15 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'config.liveState', state: req.state }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The live settings could not be handed over');
       }
+      // Part AL — the seven `terminal.*` commands travel to the run host shape for shape (`main/terminal.ts`, REQ-TOOLS-128).
+      case 'terminal.streams':
+      case 'terminal.sendKeys':
+      case 'terminal.resize':
+      case 'terminal.interrupt':
+      case 'terminal.endInput':
+      case 'terminal.kill':
+      case 'terminal.audit':
+        return relayTerminalCommand(req, runHost, log);
       case 'session.control': {
         // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
         // Part AC's seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_QUESTION_STALE corrupts the request

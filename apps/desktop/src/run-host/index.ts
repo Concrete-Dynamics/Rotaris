@@ -3,8 +3,9 @@ import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type Works
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
 import { CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
-import { PresenterRegistry, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
+import { PresenterRegistry, STREAM_SETTINGS_DEFAULTS, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
+import { createTerminalHost } from './terminal.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
@@ -460,6 +461,19 @@ presenters.start();
 // Part U: the browser's actions over this registry, the clock ports and the ask channel.
 const sessionActions = { sessions, clocks, ask, log: (m: string, level?: 'info' | 'warn') => log(m, level ?? 'info') };
 
+// Part AL — the live terminal (ADR-0021 first executed): the stream publisher over the terminal manager, the run's
+// `runtime.terminal_stream_*` settings (REQ-TOOLS-126), and the seven `terminal.*` requests (`run-host/terminal.ts`).
+// The tool hands the registry its EFFECTIVE root, which an isolated run keys nowhere; the base workspace's run is the
+// fallback, then the defaults.
+const terminalHost = createTerminalHost({
+  ready: terminalReady, send, sessions, clocks, log: (m, level) => log(m, level ?? 'info'),
+  settings: (workspaceRoot) => {
+    const run = configured.get(workspaceRoot) ?? [...configured.values()].at(-1) ?? null;
+    const r = run?.cfg.runtime;
+    return r ? { enabled: r.terminal_stream_enabled, intervalMs: r.terminal_stream_interval_ms, bufferKb: r.terminal_stream_buffer_kb } : STREAM_SETTINGS_DEFAULTS;
+  },
+});
+
 async function handle(req: RunHostRequest): Promise<ProcessReply> {
   switch (req.kind) {
     case 'hello':
@@ -823,6 +837,15 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (!started.ok) return { kind: 'refused', code: 'mcp.setup.running', headline: started.reason };
       return { kind: 'mcp.setup', status: started.status };
     }
+    // Part AL — the live terminal's requests (ADR-0021, REQ-TOOLS-128, REQ-SHELL-106/107); the mechanism is `run-host/terminal.ts`.
+    case 'terminal.streams':
+    case 'terminal.sendKeys':
+    case 'terminal.resize':
+    case 'terminal.interrupt':
+    case 'terminal.endInput':
+    case 'terminal.kill':
+    case 'terminal.audit':
+      return terminalHost.handle(req);
     case 'shutdown': {
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their terminal results.
       presenters.stop();

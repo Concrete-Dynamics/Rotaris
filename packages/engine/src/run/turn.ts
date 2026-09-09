@@ -2,7 +2,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
-import type { ApprovalOption, PermissionPreset, QuestionAnswers, QuestionPrompt } from '@rotaris/contracts';
+import { terminalRowStreamId, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -235,7 +235,11 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
         continue;
       }
       const startedAt = toIsoUtc(clocks.wall.instant());
-      const rowResult = writer.appendRow('tool', `${c.name}`, false, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'running', callKey: c.callId, startedAt, input: c.args });
+      // Part AL — REQ-CHAT-046/063/066/076: a foreground `terminal` call's row carries its live stream id while it runs
+      // (ADR-0021; `terminalRowStreamId` is the one rule the tool shares). The settle rebuilds the row from the record,
+      // which never holds the id, so the settled row has none — cleared on exit by construction.
+      const streamId = terminalRowStreamId(c.name, c.args, deps.agentName);
+      const rowResult = writer.appendRow('tool', `${c.name}`, false, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'running', callKey: c.callId, startedAt, input: c.args, ...(streamId === undefined ? {} : { streamId }) });
       const rowIndex = rowResult.ok ? rowResult.value.index : null;
       const r = await tools.dispatch({ callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName }, signal);
       deps.dispatched.set(c.callId, r.text);

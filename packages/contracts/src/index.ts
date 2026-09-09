@@ -20,3 +20,5 @@ export * from './checkpoints.js';
 export * from './mcp.js';
 export * from './library.js';
 export * from './artifacts.js';
+export * from './terminal.js';
+export * from './terminal-keys.js';

@@ -8,6 +8,7 @@ import { PaneLayoutSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
 import { ImageAttachmentInputSchema } from './channels.js';
+import { TERMINAL_COMMAND_SCHEMAS } from './terminal.js';
 
 /**
  * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -223,6 +224,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('prompts.read') }),
   z.object({ kind: z.literal('prompts.push'), list: PromptListSchema, text: z.string() }),
   z.object({ kind: z.literal('prompts.take'), list: PromptListSchema, index: z.number().int().nonnegative(), remove: z.boolean() }),
+  // Part AL — the live terminal's control traffic (ADR-0021, REQ-TOOLS-128, REQ-SHELL-106/107); main relays each to the run host.
+  ...TERMINAL_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

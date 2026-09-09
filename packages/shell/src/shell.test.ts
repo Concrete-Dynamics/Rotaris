@@ -26,6 +26,20 @@ describe('shell — the relay (ADR-0044, ADR-0013)', () => {
     expect(got[3]).toEqual([]);
     expect(relay.counters[CHANNEL.sessionSnapshot]).toBe(1);
   });
+  it('Part AL: names the subscribers of a session for a delivery main bounds itself (channel 3), and counts it', () => {
+    const relay = new UpdateRelay();
+    for (const id of [1, 2, 3]) relay.attach({ id, send: () => undefined });
+    relay.subscribe(1, 's');
+    relay.subscribe(3, 's');
+    relay.subscribe(3, 't');
+    expect(relay.subscribersOf('s').map((s) => s.id)).toEqual([1, 3]);
+    expect(relay.subscribersOf('none')).toEqual([]);
+    relay.detach(3);
+    expect(relay.subscribersOf('s').map((s) => s.id)).toEqual([1]);
+    expect(relay.hasSink(3)).toBe(false);
+    relay.count(CHANNEL.terminalFrames, 2);
+    expect(relay.counters[CHANNEL.terminalFrames]).toBe(2);
+  });
 });
 
 describe('shell — the process link (ADR-0002 consequence 11)', () => {

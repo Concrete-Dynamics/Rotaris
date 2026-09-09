@@ -41,6 +41,8 @@ export class BackgroundSession {
   private cursor = 0;
   private timer: TimerHandle | null = null;
   private exited: Promise<void>;
+  /** Part AL: the live stream's taps (REQ-TOOLS-127: `bg:<id>` publishes what the pipe produces). */
+  private taps: ((chunk: string) => void)[] = [];
 
   constructor(readonly command: string, private readonly child: ChildProcess, id: string, startedAt: string, timeoutMs: number, private readonly deps: BackgroundDeps) {
     this.id = id;
@@ -59,7 +61,21 @@ export class BackgroundSession {
     this.timer = deps.timers.after(timeoutMs as Millis, () => { void this.end('timeout'); });
   }
 
+  onOutput(cb: (chunk: string) => void): () => void {
+    this.taps.push(cb);
+    return () => { this.taps = this.taps.filter((t) => t !== cb); };
+  }
+  /** Resolves once the process has exited — after `end`'s grace, or on its own. */
+  whenExited(): Promise<void> {
+    return this.exited;
+  }
+  /** REQ-TOOLS-128: interrupt for a background session is SIGINT — undeliverable to a pipe on Windows (OQ-10), so false there. */
+  interrupt(): boolean {
+    return this.signal('SIGINT');
+  }
+
   private append(text: string): void {
+    for (const t of this.taps) { try { t(text); } catch (cause) { this.deps.warn(`background session ${this.id}: an output tap raised: ${String(cause)}`); } }
     this.buffer += text;
     if (this.buffer.length > BACKGROUND_BUFFER) {
       const cut = this.buffer.length - BACKGROUND_BUFFER;

@@ -5,6 +5,7 @@ import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementKindSchema, NoticeSchema } from './notices.js';
+import { TerminalStreamMetaSchema } from './terminal.js';
 
 /**
  * REQ-SESSION-134's severity vocabulary for a timeline entry, ascending, `info` where an entry names none. It is the
@@ -112,9 +113,9 @@ export const TranscriptRowSchema = z.object({
   /**
    * REQ-CHAT-046's live-terminal stream id — what REQ-CHAT-066 (an unsettled live terminal row never folds) and
    * REQ-CHAT-076 (clicking a live preview requests the pop-out) key on. NOT `TerminalFrameSchema.streamId` below,
-   * which belongs to a frame; this one belongs to a row. Nothing publishes a terminal frame in this build
-   * (ADR-0021 has no first execution), so no row carries one yet — the field is added now because the clauses
-   * that read it are written now and would otherwise key on nothing.
+   * which belongs to a frame; this one belongs to a row. Set by Part AL (ADR-0021's first execution) on a foreground
+   * `terminal` tool row while its command runs — `terminalRowStreamId` in terminal.ts is the one rule — and absent
+   * once the row settles. Published, never recorded (the writer keeps it out of the `transcript.row` event).
    */
   streamId: z.string().optional(),
   /**
@@ -271,13 +272,29 @@ export const SessionSnapshotSchema = z.object({
 });
 export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
 
+/**
+ * Channel 3, extended in place by Part AL (ADR-0021 first executed). One frame of one stream:
+ *  - `delta`  — the VT bytes appended since the previous frame of this stream (REQ-TOOLS-127);
+ *  - `screen` — a serialisation of the current screen, emitted on attach and on resync so a late attacher can
+ *               never show a line twice (ADR-0021); with `closing: true` it is the CLOSING frame of REQ-TOOLS-127,
+ *               whose payload is the observation's final PLAIN text and a literal replacement — a display resets
+ *               and writes it verbatim (OQ-5's reading, recorded as a reading in ADR-0021's note);
+ *  - `meta`   — carries the whole `TerminalStreamMeta`; applying it twice is applying it once (REQ-SHELL-105).
+ * `seq` is per stream and monotonic (REQ-SHELL-104): the run host numbers contiguously; main may MERGE frames of
+ * one stream into a larger step under REQ-MONITOR-306's bound (REQ-SHELL-103), so a delivered `seq` may skip
+ * numbers but never runs backwards. `sessionId` is on the envelope so main routes to the session's subscribers
+ * without holding per-stream state. Nothing here is ever a credential (`contracts.test.ts`).
+ */
 export const TerminalFrameSchema = z.object({
   v: schemaVersion,
+  sessionId,
   streamId: z.string().min(1),
   /** Per-stream sequence, REQ-SHELL-104 — a DIFFERENT counter from the session's. */
-  streamSeq: z.number().int().positive(),
+  seq: z.number().int().positive(),
   kind: z.enum(['delta', 'screen', 'meta']),
   payload: z.string(),
+  meta: TerminalStreamMetaSchema.optional(),
+  closing: z.literal(true).optional(),
 });
 export type TerminalFrame = z.infer<typeof TerminalFrameSchema>;
 

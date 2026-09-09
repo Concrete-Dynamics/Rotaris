@@ -66,4 +66,24 @@ export class UpdateRelay {
     this.counters[channel] += 1;
     for (const sink of this.sinks.values()) sink.send(channel, payload);
   }
+
+  /**
+   * Part AL / ADR-0021: channel 3 is NOT relayed unchanged — REQ-MONITOR-306 bounds its delivery per window and
+   * REQ-SHELL-103 has main honour the bound by merging a stream's frames into larger steps — so the fan-out lives
+   * beside the bound (`main/terminal.ts`) and reads the subscription here. `count` keeps ADR-0052's per-channel
+   * counter honest for a delivery made outside `relaySequenced` and `broadcast`.
+   */
+  subscribersOf(sessionId: string): readonly RendererSink[] {
+    const subs = this.subscriptions.get(sessionId);
+    if (!subs) return [];
+    const out: RendererSink[] = [];
+    for (const id of subs) { const sink = this.sinks.get(id); if (sink) out.push(sink); }
+    return out;
+  }
+  hasSink(id: number): boolean {
+    return this.sinks.has(id);
+  }
+  count(channel: ChannelName, n = 1): void {
+    this.counters[channel] += n;
+  }
 }

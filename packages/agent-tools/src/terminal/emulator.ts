@@ -1,5 +1,5 @@
-import headless from '@xterm/headless';
-import serialize from '@xterm/addon-serialize';
+import { Terminal } from '@xterm/headless';
+import { SerializeAddon } from '@xterm/addon-serialize';
 
 /**
  * ADR-0021: the run host holds ONE headless emulator per live stream — the current screen, the retained
@@ -33,10 +33,9 @@ export interface EmulatorSpec {
 }
 export type EmulatorFactory = (spec: EmulatorSpec) => ScreenEmulator;
 
-const { Terminal } = headless;
-const { SerializeAddon } = serialize;
-
-/** The `@xterm/headless` adapter. The package is CommonJS, hence the default import and the destructure above. */
+/** The `@xterm/headless` adapter. Named imports: the package ships an ESM `module` entry beside its CommonJS `main`, and the
+ * bundler resolves the former, which has no default export — the default-import-and-destructure this file first shipped with
+ * passed vitest (CommonJS interop) and failed `electron-vite build` on the merged main (defect fifty-nine, ADR-0021's note). */
 export const xtermEmulatorFactory: EmulatorFactory = (spec) => {
   const term = new Terminal({ cols: spec.cols, rows: spec.rows, scrollback: spec.scrollback, allowProposedApi: true });
   const addon = new SerializeAddon();

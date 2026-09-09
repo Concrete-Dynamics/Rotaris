@@ -139,6 +139,7 @@ const sessionRow = (sid) => withDb((db) => db.prepare('SELECT * FROM sessions WH
 const latestSession = () => withDb((db) => db.prepare('SELECT * FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get());
 const countIn = (table, sid) => withDb((db) => db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid).c);
 const tablesWithSession = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all().map((t) => t.name));
+const tablesReferencingSessions = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"table\" = 'sessions')").all().map((t) => t.name));
 const machineId = () => readFileSync(join(local, 'rotaris', 'data', 'machine-id'), 'utf8').split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
 /** A session a dead process would have left: rows only. */
 const plantSession = (sid, status, opts = {}) => withDb((db) => {
@@ -400,8 +401,17 @@ plantSession('F-moved', 'completed', { worktree: JSON.stringify({ worktree_path:
 withDb((db) => db.prepare("INSERT INTO checkpoints (session_id, sequence, ref, commit_id, created_at, iteration, child_name, files, kind) VALUES ('F-moved', 1, 'refs/rotaris/checkpoints/F-moved/1', ?, 't', 1, '', '[]', 'iteration')").run(head));
 const filesA = join(dirname(dbFile()), 'sessions', A);
 const tables = tablesWithSession();
-// Part Y (v12) added `artifacts`: fifteen tables carry a session_id, and the cascade takes each of them.
-expect(tables.length === 15, `tables carrying session_id: ${tables.join(', ')}`);
+// Part Y (v12) added `artifacts`: fifteen tables carried a session_id, and the cascade took each of them. Part AK (v15)
+// added a sixteenth, `delivery_runs`, whose `session_id` names a session as a fact about the run and carries no foreign
+// key, because a requirement's run history outlives the session it names (REQ-TRACE-476; ADR-0041's first execution,
+// ruled 2026-09-09). The cascade premise is therefore "the tables whose session_id REFERENCES sessions", read from the
+// schema rather than pinned by count. The count pin that stood here was the sixtieth defect: the ruling narrowed the
+// premise in the store's own suite, and nothing carried it to this proof until the merge-1 proof pass ran it.
+const cascaded = ['sessions', ...tablesReferencingSessions()];
+const facts = tables.filter((t) => !cascaded.includes(t));
+expect(cascaded.length === 15, `tables whose session_id references sessions: ${cascaded.join(', ')}`);
+expect(JSON.stringify(facts) === '["delivery_runs"]', `tables carrying session_id as a fact: ${facts.join(', ')}`);
+withDb((db) => db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-PROOF-001', 'u1', ?, NULL, '', 'running', NULL, NULL, '2026-09-05T09:00:00.000Z', NULL)").run(A));
 const plantedBefore = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
 expect(refsOf(workspace, A).length === 2, `A's refs before: ${JSON.stringify(refsOf(workspace, A))}`);
 const del = launch('delete', {
@@ -418,7 +428,9 @@ const del = launch('delete', {
   expect(first.includes(`Deleted session ${A} permanently: 2 checkpoint refs removed; files removed.`), `A's delete report reads "${first}"`);
   expect(sessionRow(A) === undefined, 'A still exists');
   const after = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
-  expect(Object.values(after).every((c) => c === 0), `rows left for A: ${JSON.stringify(after)}`);
+  expect(cascaded.every((t) => after[t] === 0), `rows left for A: ${JSON.stringify(after)}`);
+  // REQ-TRACE-476: the run row that names A survives A's delete; the fact stands after the session is gone.
+  expect(plantedBefore.delivery_runs === 1 && after.delivery_runs === 1, `A's delivery run: ${plantedBefore.delivery_runs} before, ${after.delivery_runs} after`);
   expect(refsOf(workspace, A).length === 0, `A's refs after: ${JSON.stringify(refsOf(workspace, A))}`);
   expect(!existsSync(filesA), `A's files remain at ${filesA}`);
   expect(refsOf(workspace, 'B-nolock').length === 0 && sessionRow('B-nolock') !== undefined && countIn('permission_audit', 'B-nolock') === CAP, 'another session was touched');
@@ -430,7 +442,7 @@ const del = launch('delete', {
   expect(!rows.includes(A) && !rows.includes('F-moved') && rows.includes('B-nolock'), `rows after: ${JSON.stringify(rows)}`);
   const lines = [...del.log.matchAll(/session (\S+) deleted[^:]*: (\d+) checkpoint row\(s\) with the record, (\d+) ref\(s\) deleted, files (\w+); (\d+) ms/g)].map((m) => ({ sessionId: m[1], checkpointRows: Number(m[2]), refsDeleted: Number(m[3]), files: m[4], ms: Number(m[5]) }));
   expect(lines.length === 2 && lines[0].refsDeleted === 2 && lines[0].checkpointRows === 2, `delete lines: ${JSON.stringify(lines)}`);
-  results.delete = { plantedBefore, after, refsAfter: 0, filesRemoved: true, timings: lines, movedRepositoryWarned: true, dialogText: dialog, png: del.png, dialogPng: join(output, 'delete-confirm.png'), reportPng: join(output, 'delete-report.png') };
+  results.delete = { cascaded, facts, plantedBefore, after, refsAfter: 0, filesRemoved: true, timings: lines, movedRepositoryWarned: true, dialogText: dialog, png: del.png, dialogPng: join(output, 'delete-confirm.png'), reportPng: join(output, 'delete-report.png') };
 }
 
 // 9 + 10. isolated — E in a worktree with its ref in the shared repository; then deleted from the browser.

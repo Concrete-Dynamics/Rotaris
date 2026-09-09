@@ -30,22 +30,23 @@
 Each pass runs once cold (first read of the tree in the process) and once warm; the warm figure is the one
 compared against the budget, per `REQ-TRACE-088`'s reference conditions. `process.memoryUsage()` is sampled
 around the warm parse. Machine: Windows 11 Pro 26200, Intel i7-10875H @ 2.3 GHz, 16 GiB, NVMe SSD, Node 24.11.0,
-one thread (vitest, one file), no other load. Four proof runs were taken; the spread is given.
+one thread (vitest, one file), no other load. Six proof runs were taken; the spread is given.
 
 ## Results
 
 | Pass | Size | Warm | Cold | Budget | Half size | Ratio (full ÷ half) |
 |---|---|---|---|---|---|---|
-| store parse (`REQ-TRACE-501`) | 1,501 documents, 3.54 MB, 1,500 records | **448–599 ms** | 467–615 ms | ~1,000 ms | 701 documents: 213–272 ms | 1.86–2.25 (documents ×2.14, bytes ×2.1) |
-| repository sweep (`REQ-TRACE-088`) | 1,000 files, 10,000 sites (13,200 occurrences) | **244–359 ms** | 246–515 ms | ~1,000 ms | 500 files: 114–167 ms | 2.14–2.20 (files ×2.0) |
+| store parse (`REQ-TRACE-501`) | 1,501 documents, 3.54 MB, 1,500 records | **448–619 ms** | 467–688 ms | ~1,000 ms | 701 documents: 213–279 ms | 1.86–2.39 (documents ×2.14, bytes ×2.1) |
+| repository sweep (`REQ-TRACE-088`) | 1,000 files, 10,000 sites (13,200 occurrences) | **244–391 ms** | 246–515 ms | ~1,000 ms | 500 files: 114–167 ms | 1.92–2.57 (files ×2.0) |
 
-Memory around the warm parse: heap delta **18–25 MiB** (the 1,500 records, each carrying its prose for the
-canonical hash and the seam's `prose` field), process RSS 123–146 MiB (the vitest process). No phase holds more
+Memory around the warm parse: heap delta **6–25 MiB** across runs (the 1,500 records, each carrying its prose for
+the canonical hash and the seam's `prose` field; the spread is garbage-collection timing between the two samples),
+process RSS 123–167 MiB (the vitest process). No phase holds more
 than one document's text: the parse is a loop that reads, decodes, normalises, hashes, reduces and drops.
 
 Over the process boundary (stage 3 of the proof, a real `utilityProcess` and a real `worker_threads` worker):
-`check` over the fixture store 127–134 ms end to end, `regenerate` 13–15 ms, a `check` over the 1,500-document
-store **cancelled 49–50 ms after it began** through `traceability.cancel`, answered by the service's own loop while
+`check` over the fixture store 101–472 ms end to end (the first job spawns the worker), `regenerate` 11–18 ms, a `check` over the 1,500-document
+store **cancelled 49–56 ms after it began** through `traceability.cancel`, answered by the service's own loop while
 the worker was inside the parse.
 
 ## What it settled
@@ -54,16 +55,17 @@ the worker was inside the parse.
   ADR-0040 specific 1 requires — not read-all-then-parse-all. The margin is what lets the decision to leave
   alternative E (the validated index) unbuilt stand on measurement rather than on reasoning: no phase needs an
   accelerator at the stated scale.
-- **Growth is linear.** Doubling the documents costs 1.9–2.3×; doubling the files costs 2.1–2.2×. The spread across
+- **Growth is linear.** Doubling the documents costs 1.9–2.4×; doubling the files costs 1.9–2.6×. The spread across
   runs (±25 %) is disk-cache and scheduler noise, not shape.
 - **Where the time goes.** The parse is dominated by reading and hashing (SHA-256 over 3.5 MB is ~15 ms; the rest
   is `readFileSync` per document, UTF-8 decoding and the line-oriented grammar). The sweep is dominated by the two
   regular expressions per file over 1,000 files; the enumeration is under 30 ms. Neither is the phase an index
   could save (ADR-0040 consequence 10 — an index saves interpretation, never I/O), and interpretation is not where
   the time is.
-- **The worker boundary costs nothing measurable** at this scale: the `check` over the fixture is 127–134 ms
+- **The worker boundary costs nothing measurable** at this scale: the `check` over the fixture is 101–472 ms
   through the process protocol, the worker and back, against about 20 ms in-thread; the difference is the first
-  job's worker spawn and structured clone of the report, paid once per service process.
+  job's worker spawn (paid once per service process) and the structured clone of the report — a second `check`
+  in the same service answered in 7 ms.
 - **The cancel path works as REQ-TRACE-222 describes it**: a shared `Int32Array` flag, raised by the owner thread,
   observed at the pass's next per-document checkpoint inside a synchronous loop — no yield, no message the loop
   would have to return to read. Worst-case waste is one document.

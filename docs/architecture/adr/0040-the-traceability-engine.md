@@ -613,8 +613,8 @@ workspace service as a real `utilityProcess` and speaks the process protocol to 
 cancel flag and the single I/O owner executed before merge.
 
 - **Specific 1 (streaming parse):** one document resident at a time — read, decode with replacement, normalise,
-  hash, reduce, drop. Measured: 1,501 documents (3.54 MB) in 448–619 ms warm; heap delta 18–25 MiB, which is the
-  1,500 records; half the store in 213–272 ms. `REQ-TRACE-501` met with a ~2× margin and linear.
+  hash, reduce, drop. Measured: 1,501 documents (3.54 MB) in 448–619 ms warm; heap delta 6–25 MiB, which is the
+  1,500 records under garbage-collection timing; half the store in 213–279 ms. `REQ-TRACE-501` met with a ~2× margin and linear.
 - **Specific 2 (the hand-written reader):** `frontmatter.ts` shares nothing with ADR-0036's YAML library; the
   grammar of `REQ-TRACE-008..011` exactly, with an unterminated block yielding no frontmatter and no diagnostic.
 - **Specific 3 (a syntax-tree parser):** *not built, as this record left it* — `REQ-TRACE-104` rule 1 and

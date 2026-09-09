@@ -89,10 +89,12 @@
  */
 .workspace { display: grid; grid-template-rows: auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); height: 100%; min-height: 0; }
 .run-header { display: flex; align-items: center; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-5, 24px); border-bottom: var(--rt-hairline-width) solid var(--rt-border); background: var(--rt-chrome); }
-.run-header__state { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
-.run-header[data-state='running'] .run-header__state, .run-header[data-state='starting'] .run-header__state { color: var(--rt-run); }
-.run-header[data-state='failed'] .run-header__state { color: var(--rt-danger-300); }
-.run-header[data-state='recovery'] .run-header__state { color: var(--rt-warn); }
+/* The run state is a design Tag now (`RUN_STATE_TAGS` picks the tone), so the four colour overrides that used to
+   sit here are gone — the tone is the tag's, and restating it per state is how the two drift apart. The dot takes
+   the tag's own ink so it reads on every fill. */
+.run-header__state .status-dot { background: currentColor; }
+@media (prefers-reduced-motion: reduce) { .status-dot.is-pulsing { animation: none; } }
+.status-dot.is-pulsing[data-motion='reduced'] { animation: none; }
 .run-header__timing { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); min-width: 48px; }
 .run-header .run-controls { margin-left: auto; }
 /* REQ-CHAT-010: the divider is a real control — a pointer target with a keyboard tab stop, not a decorative rule. */
@@ -130,22 +132,43 @@
    SPECIFICATION values, written as the requirement writes them; every colour and every spacing CHOICE beside them
    is a token by name. The list wrapper carries the rows so the transcript's own gap cannot add to the 5 px. */
 .rowlist { display: flex; flex-direction: column; gap: 0; }
-.row { display: block; margin: 5px 10px; min-height: 30px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
+/*
+ * Part AI — the container, which no source ever asked for (docs/design/README.md §7.1).
+ *
+ * This rule used to paint `background: var(--rt-surface)` and a 1 px border on EVERY row, so the transcript
+ * read as a stack of identical boxes. That was invention: REQ-CHAT-057 fixes the columns, the height and the
+ * margins above and says nothing about a card, and in the design material a surface is EARNED — the user's own
+ * message, an expanded tool call, an artifact preview, the live terminal block and the approval card have one,
+ * and an agent's prose and every one-liner sit directly on the background. The falsified reason is kept here:
+ * a uniform card looks orderly in a screenshot of six rows and turns a thousand-row conversation into a list
+ * where nothing is findable, which is the opposite of what the borders were reached for.
+ *
+ * The border stays declared at `transparent` so the box model is identical to what `rows-proof` measures and
+ * so a variant that earns a border adds no layout shift.
+ */
+.row { display: block; margin: 5px 10px; min-height: 30px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 1px solid transparent; border-radius: var(--rt-radius-md, 6px); }
 .row__grid { display: grid; grid-template-columns: 52px 112px minmax(0, 1fr); align-items: baseline; column-gap: var(--rt-space-2, 8px); }
 .row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .row__attribution { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .row__task { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* REQ-CHAT-057: a continuation row shows a 2 px bar in the role gutter, coloured by the persona (the token comes from the element). */
 .row__bar { display: block; width: 2px; align-self: stretch; min-height: 14px; border-radius: 1px; }
-.row:hover { border-color: var(--rt-border-strong); }
+/* Without a border to darken, hover is the design's own list-row treatment: a wash, not an outline. */
+.row:hover { background: var(--rt-hover); }
 .row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .row__match { background: var(--rt-fill-accent); color: var(--rt-fill-accent-ink); border-radius: var(--rt-radius-sm, 4px); }
-.row--user { border-color: var(--rt-accent-tint-14); }
+/* The one fill a person's own words earn, so they stay findable while scrolling past a thousand rows. */
+.row--user { background: var(--rt-accent-tint-07); border-color: var(--rt-accent-800); }
+.row--user:hover { background: var(--rt-accent-tint-10); }
 .row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
 .row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow: hidden; text-overflow: ellipsis; }
 /* REQ-CHAT-057: timestamps in the monospace stack at 8 pt — the requirement's own unit, not a token's. */
 .row__time { font-family: var(--rt-font-mono); font-size: 8pt; color: var(--rt-text-tertiary); }
-.row__body { font-size: var(--rt-text-sm, 13px); color: var(--rt-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The design gives prose a measure — nothing in the mockup's transcript runs the full width of a wide window;
+   it caps a message at 78 % and every revealed block at 560–620 px. Data blocks opt out: a diff, a table and a
+   code fence are read by their columns, and wrapping them to a prose measure is what the cap is protecting. */
+.row__body { max-width: 78%; font-size: var(--rt-text-sm, 13px); color: var(--rt-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.row__body--diff, .row .md pre, .row .md table { max-width: none; }
 /* REQ-CHAT-075: selection must take exactly the characters the pointer covers, in EVERY category including Markdown bodies. */
 .row__body, .row .md, .row__delegation { user-select: text; }
 .row__body--md { white-space: normal; }
@@ -160,7 +183,8 @@
 .row__trailer:disabled { cursor: default; color: var(--rt-text); }
 /* REQ-CHAT-065: an expanded group reveals its members BENEATH the header, which stays where it is. */
 .row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px); }
-.row__members .row { margin-left: 0; margin-right: 0; background: var(--rt-bg); }
+/* Members are indented under the header and marked by the divider they hang from, not by a nested box. */
+.row__members .row { margin-left: 0; margin-right: 0; padding-left: var(--rt-space-3, 12px); border-left: 1px solid var(--rt-divider); border-radius: 0; }
 /* REQ-CHAT-068: the delegation-context header's expanded detail. */
 .row__delegation { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--rt-space-2, 8px); margin: var(--rt-space-2, 8px) 0 0; font-size: var(--rt-text-xs, 12px); }
 .row__delegation dt { color: var(--rt-text-tertiary); }
@@ -181,12 +205,17 @@
 /* REQ-CHAT-010: minimum 110 px for the block, 48 px for the widget; the block scrolls rather than clipping a control. */
 .composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; overflow: auto; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); background: var(--rt-chrome); }
 .composer__input { min-height: 48px; resize: none; flex: 1 1 auto; }
-.composer__actions { display: flex; justify-content: flex-end; }
+/* The chips wrap onto several lines when the transcript column is narrow; without this the send button, being a
+   flex item under the default `stretch`, grew to the height of all of them. The design draws it at button height
+   whatever sits beside it. */
+.composer__actions { display: flex; justify-content: flex-end; align-items: center; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 
-/* ── Rows by kind, and a row still being written (REQ-CHAT-011, REQ-MONITOR-219) ── */
-.row--agent { border-color: var(--rt-border); }
-.row--system { border-style: dashed; color: var(--rt-text-secondary); }
+/* ── Rows by kind, and a row still being written (REQ-CHAT-011, REQ-MONITOR-219) ──
+ * An agent's message is the transcript's ground state and carries no chrome at all; the design distinguishes it
+ * by the attribution line and the prose, which is what a reader scans by. A system notice takes the notice
+ * pattern the design already fixed (§1, G1: a rule and a glyph, never a filled background). */
+.row--system { border-left: var(--rt-notice-rule-width, 2px) solid var(--rt-border-strong); border-radius: 0; color: var(--rt-text-secondary); }
 .row--system .row__body { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
 .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
 @keyframes rt-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
@@ -273,7 +302,13 @@
 .tool__header { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); width: 100%; padding: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-sm, 13px); text-align: left; cursor: pointer; }
 .tool__header--static { cursor: default; }
 .tool__header:disabled { color: var(--rt-text); opacity: 1; }
+/* REQ-CHAT-060 puts the chevron and the tool name in "the tool accent colour" without naming a colour; the design
+   material names it, and it is not the product accent — the mockup draws a tool call on axis Y and keeps the accent
+   for the agent's own lines, reasoning and delegation, so the three kinds of one-liner are told apart by hue as well
+   as by wording (§1.3: colour never carries a fact alone, and here it never does). */
 .tool__chevron, .tool__name { color: var(--rt-accent-300); }
+.row--tool > .row__grid > .row__main > .tool__header > .tool__chevron,
+.row--tool > .row__grid > .row__main > .tool__header > .tool__name { color: var(--rt-axis-y-300); }
 .tool__outcome { margin-left: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .tool__outcome--running { color: var(--rt-accent-300); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
 /* REQ-CHAT-060: `blocked` in the theme's fail state text colour. `--rt-fail` is the state's BOUNDARY token, checked at
@@ -287,18 +322,28 @@
 .tool--blocked > .row__grid > .row__main > .tool__header > .tool__chevron,
 .tool--failed > .row__grid > .row__main > .tool__header > .tool__chevron { color: var(--rt-danger-300); }
 .tool__preview { font-size: var(--rt-text-xs, 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tool__card { display: flex; flex-direction: column; gap: 4px; margin-top: var(--rt-space-2, 8px); }
+/* REQ-CHAT-061's expansion IS the design's revealed card, and now carries the surface the row gave up: a panel
+   with a 2 px rail in the tool axis, which is where the design puts a border it means. */
+.tool__card { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); margin-top: var(--rt-space-2, 8px); max-width: 620px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-left: 2px solid var(--rt-axis-y-500); border-radius: var(--rt-radius-md, 6px); }
+.tool--failed .tool__card, .tool--blocked .tool__card { border-left-color: var(--rt-danger-300); }
 .tool__caption { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); color: var(--rt-text-tertiary); }
 .tool__pre { margin: 0; padding: var(--rt-space-2, 8px); max-height: 320px; overflow: auto; background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .tool__blocked { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
-.row--diff { border-style: dotted; }
+/* The two rows that DO earn a surface, because each reveals something rather than narrating it: an edit the user
+   made outside the run, and a call suspended waiting on a person. Both take the design's rail-on-a-panel form. */
+.row--diff { background: var(--rt-surface); border-color: var(--rt-border); border-left: 2px solid var(--rt-border-strong); }
 .row__body--diff { font-size: var(--rt-text-xs, 12px); }
-.row--approval { border-color: var(--rt-warn); }
+.row--approval { background: var(--rt-surface); border-color: var(--rt-border); border-left: 2px solid var(--rt-wait); }
+.row--approval:hover, .row--diff:hover { background: var(--rt-surface-2); }
 .row--approval .row__body { color: var(--rt-warn); }
 @media (prefers-reduced-motion: reduce) { .tool__outcome--running { animation: none; } }
 
 /* ── The permission-mode selector (REQ-TOOLS-077) ── */
 .mode { display: flex; align-items: center; gap: var(--rt-space-2, 8px); margin-right: auto; }
+/* The design's `.seg-opt` is `flex: 1` inside a `.seg` that is `overflow: hidden`, which is right for a control
+   sized to its content and wrong the moment a flex parent squeezes it — `autonomous` was being clipped to
+   `autonomo` in the composer. The control keeps its own width; nothing about the design component changes. */
+.seg { flex: none; }
 .mode__label { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; }
 .seg-opt { border: 0; background: transparent; font: inherit; }
 .seg-opt:disabled { cursor: default; opacity: 0.6; }
@@ -586,6 +631,9 @@
 .cmdk-item-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmdk-item-hint.kbd-seq { margin-left: auto; }
 .cmdk-empty { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); font-size: var(--rt-text-sm); }
+/* The design's foot is a fixed band under a scrolling list; inside REQ-SHELL-052's 420 px it must not be the part
+   that gives way. `.cmdk-foot` itself is the design system's, and nothing here restates what it already says. */
+.cmdk-foot { flex: none; }
 .keyboard-help { width: min(520px, 100%); }
 .keyboard-help__rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content max-content 1fr; column-gap: var(--rt-space-3, 12px); row-gap: var(--rt-space-2, 8px); align-items: center; }
 .keyboard-help__row { display: contents; }

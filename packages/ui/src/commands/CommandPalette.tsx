@@ -111,6 +111,13 @@ function PaletteDialog({ ctx, onClose, platform, commands }: { ctx: CommandConte
           ))}
           {results.length === 0 && <li className="cmdk-empty text-secondary" role="presentation" data-testid="command-palette-empty">No matching command.</li>}
         </ul>
+        {/* The design's `.cmdk-foot`: the three keys this dialog answers to, stated where they are needed. Hidden from
+            assistive technology — the listbox already announces its own navigation, and a second telling is noise. */}
+        <div className="cmdk-foot" aria-hidden="true" data-testid="command-palette-foot">
+          <span><span className="kbd">↑↓</span>navigate</span>
+          <span><span className="kbd">↵</span>activate</span>
+          <span><span className="kbd">Esc</span>close</span>
+        </div>
       </div>
     </div>
   );

@@ -660,6 +660,43 @@ card have one, and nothing else does — an agent's prose and every one-liner si
 words findable while scrolling. This is the drift the owner reported, it is the only part of it that no
 requirement mandates, and it is a change to about six declarations.
 
-**Not repaired here.** This section records the reading; the repair is a change to the transcript's
-appearance and belongs to a change of its own, against `REQ-CHAT-046`, `REQ-CHAT-057` and this section. Left
-standing so the finding is not quietly absorbed into the fix.
+**Deferred, then directed.** This section first said the repair belonged to a change of its own, so the finding
+would not be absorbed into the fix. The owner set compliance as the goal the same day and the repair followed
+immediately; the deferral is kept here rather than deleted, because the finding above is what the repair is
+answerable to and a section that only describes its own outcome cannot be checked against anything.
+
+### 7.2 The repair — 2026-09-09 (Part AI)
+
+Six changes, each traceable to a line of §7.1 or to the material it cites. Nothing in `docs/spec/` moved, and
+where a requirement fixes a geometry the geometry is untouched — `rows-proof` still measures 52 px, 112 px and
+30 px from the live layout.
+
+1. **`.row` gave up the card.** The universal `--rt-surface` background and 1 px border are gone; the border stays
+   declared at `transparent` so the box model `rows-proof` measures is unchanged and a variant that earns a border
+   adds no shift. Hover became a wash rather than an outline, since there is no longer a border to darken.
+2. **A surface is now earned.** `.row--user` takes the mockup's accent-tinted fill and accent border, which is what
+   makes a person's own words findable while scrolling; `.row--approval` and `.row--diff` take a panel with a 2 px
+   rail (`--rt-wait`, `--rt-border-strong`); `.tool__card` — REQ-CHAT-061's expansion — takes the surface the row
+   gave up, with the rail in the tool axis and the 620 px cap the material draws. Everything else sits on the
+   background: an agent's prose, every one-liner, and a group's members, which are marked by the divider they hang
+   from instead of a nested box.
+3. **`.row--system` took the notice pattern** the design already fixed (§1, G1: a rule and a glyph, never a filled
+   background) instead of a dashed box, and `.row--agent`'s border rule went away with nothing to replace it —
+   an agent message is the transcript's ground state.
+4. **Prose got a measure.** Nothing in the material's transcript runs the full width of a wide window; it caps a
+   message at 78 % and a revealed block at 560–620 px. Diffs, tables and code fences opt out, because they are read
+   by their columns and wrapping them is what the cap exists to prevent.
+5. **A tool one-liner moved to axis Y.** `REQ-CHAT-060` says "the tool accent colour" and names no colour; the
+   material names it, and it is not the product accent — a tool call sits on axis Y while reasoning and delegation
+   keep the accent, so the three kinds of one-liner differ by hue as well as by wording. `blocked` and `failed`
+   still win, at equal specificity and later in the file.
+6. **Two components stopped being hand-drawn.** The run header's state was coloured text with four per-state
+   overrides; it is now the design's `Tag` with a status dot, toned by `RUN_STATE_TAGS` and pulsing on exactly the
+   states where work is in flight. The command palette gained the `.cmdk-foot` the material draws, stating the
+   three keys the dialog answers to.
+
+**What was looked at and deliberately left.** `.agent-row__dot` duplicates the design's `.status-dot` in six call
+sites and renders identically to it; changing it is a refactor with no visible effect, and the obligation in §7 is
+about what the interface looks like, not about which class name reaches it. `REQ-CHAT-057`'s columns still win over
+the mockup's right-aligned user bubble and card-less assistant prose, exactly as §2 requires — the repair changed
+what neither source asked for and nothing that either one did.

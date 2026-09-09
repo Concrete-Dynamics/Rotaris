@@ -29,6 +29,26 @@ export const RUN_STATE_LABELS: Readonly<Record<PresentationStatus | 'recovery', 
 export type RunState = keyof typeof RUN_STATE_LABELS;
 
 /**
+ * The design draws a run's state as a Tag with a status dot, not as coloured text (`docs/design/README.md` §7,
+ * and the mockup's `tag tag-run` beside the session title). The tone is the design's own four-way vocabulary and
+ * the dot pulses for exactly the states where work is in flight, which is the same closed set the run controls
+ * key off — so one table, not a predicate restated at the header. `live` drives the pulse; `REQ-SHELL-121`'s
+ * reduced-motion setting is honoured by the caller, as everywhere else that animates.
+ */
+export const RUN_STATE_TAGS: Readonly<Record<RunState, { readonly tone: string; readonly live: boolean }>> = {
+  starting: { tone: 'tag-run', live: true },
+  running: { tone: 'tag-run', live: true },
+  pausing: { tone: 'tag-wait', live: true },
+  cancelling: { tone: 'tag-wait', live: true },
+  recovery: { tone: 'tag-wait', live: true },
+  paused: { tone: 'tag-wait', live: false },
+  failed: { tone: 'tag-fail', live: false },
+  completed: { tone: 'tag-done', live: false },
+  stopped: { tone: 'tag-neutral', live: false },
+  idle: { tone: 'tag-neutral', live: false },
+};
+
+/**
  * REQ-CHAT-008: the synthetic state is "the persisted session claims busy but no local run exists". With no
  * session loaded there is no run state to report and the composer is in its idle mode, which is what `Ready`
  * says. `needsRecovery` is decided upstream by the one liveness predicate (REQ-SESSION-171); this function

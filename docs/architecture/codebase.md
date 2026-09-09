@@ -832,6 +832,32 @@ that is until you measure it. All four were red on HEAD too, so none is Part AH'
 - **`theme-proof`** — `FAIL focus` on every theme at every scale and `rotaris-dim @ 2: FAIL contrast`. These are the
   two findings the 2026-09-08 theme measurement already recorded as undiagnosed and the owner's; **IC-2 is not
   re-discharged** and this is that state, not a new one.
+  *Corrected 2026-09-09 (Part AI), which had to measure this proof to attribute its own colour changes.* The
+  contrast failure is **not** `@ 2` — it is every scale, identically, and the note above understated it by reading
+  one line of the summary. It is **two labels on the Mission view**, `Pause` and `Cancel selection`, both at a ratio
+  of **2.90** against floors of 4.5 and 3; the figure does not move with scale because nothing about it is
+  scale-dependent. Measured on Part AI's tree and on clean HEAD in the same hour, byte for byte the same failures,
+  so it is neither Part AH's nor Part AI's — it is IC-2's, still open, and now diagnosed.
+
+  **The diagnosis, and why the arithmetic could not see it.** Both labels are disabled controls and both are painted
+  in `--rt-text-disabled`, which is why the two ratios are identical: `shell.css` already replaces the design's
+  `.btn:disabled { opacity: .42 }` with `opacity: 1; color: var(--rt-text-disabled)`, and Mission's `Pause` reaches
+  the same token through `[aria-disabled='true']`. In `rotaris-dim` that token is `oklch(52% 0 0)`, and against the
+  five grounds it is actually painted on it measures **3.22 on `--rt-bg`, 2.99 on `--rt-chrome`, 2.91 on
+  `--rt-surface`, 2.56 on `--rt-surface-2` and 2.56 on `--rt-hover`** — it clears 3:1 on exactly one of them.
+  `static-contrast.ts` checks it against **`--rt-bg` alone**, where it passes, while every other readable colour in
+  that file is checked against all five; so the gate is green, `contracts.test.ts` separately *asserts* the failure
+  on `--rt-surface` as a preserved finding of the adopted palette, and the two never meet. `theme-proof` reads
+  pixels and therefore sees it, which is the whole reason `REQ-SHELL-160` requires pixels.
+
+  **What would fix it, and why Part AI did not.** `REQ-SHELL-134` permits one correction — raise perceptual
+  lightness — and **59 %** is the lowest whole step clearing 3:1 on all five grounds (worst 3.32 on `--rt-hover`,
+  4.31 on `--rt-bg`, against a half-enabled ceiling of 7.43). `nocturne` (60 %) and `high-contrast` (55 %) already
+  clear theirs. Part AI made that change, found it red against `contracts.test.ts`'s two guards — the zero-drift
+  transcription of `docs/design/system/tokens/colors.css` and the line that *deliberately* preserves this failure —
+  and **reverted it**. Editing an adopted token and rewriting the test that records the finding is a decision about
+  IC-2, and IC-2 is the owner's; **no condition may be downgraded by the person doing the work**. The numbers are
+  left here so the decision can be made without repeating the measurement.
 - **`part-h-proof`** — "loop supervisor stop reason was absent": the scenario reached fewer activations than the
   three it needs. This is the same window-sizing shape that Part T's 4.5 s discovery cost produced above, repaired
   once on 2026-09-08 and red again on a loaded machine. The windows are sized for an idle one.
@@ -867,9 +893,18 @@ and a radius, which `REQ-CHAT-057` does not mention and which in the mockup is e
 bubble, an expanded tool call, an artifact preview, the terminal block and the approval card have a surface, and
 an agent's prose and every one-liner sit directly on the background. That invention is the whole of the visible drift, and it is about six declarations.
 **Tokens are not compliance**, which is the lesson the obligation is written to carry: a change can cite every
-token by name and still invent the composition the language had already decided. The repair is not in this
-commit — it changes the transcript's appearance and belongs to a change against `REQ-CHAT-046`/`REQ-CHAT-057`
-of its own, so the finding is not absorbed into the fix that answers it.
+token by name and still invent the composition the language had already decided.
+
+**Part AI carried out the repair the same day the reading deferred it**, the owner having set compliance as the
+goal; `docs/design/README.md` §7.2 lists the six changes and the deferral is kept above them. `.row` gave up the
+universal card and a surface became something a row earns — the user's own message, an expanded tool call, an
+approval, a user-made diff — while an agent's prose, every one-liner and a group's members sit on the background.
+Prose took the material's 78 % measure, a system row took the notice pattern, a tool one-liner moved to axis Y
+(`REQ-CHAT-060` names no colour and the material does), the run header's state became the design's `Tag` with a
+status dot rather than coloured text with four per-state overrides, and the command palette gained the
+`.cmdk-foot` the material draws. **`REQ-CHAT-057`'s geometry is untouched and `rows-proof` still measures it** —
+what changed is what neither the specification nor the design had asked for, which is the only part §7.1 said was
+free to change.
 
 ## Where the next work lands
 

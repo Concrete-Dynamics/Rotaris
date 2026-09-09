@@ -3,9 +3,10 @@ import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type ImageA
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, reasoningChipLabel,
-  REASONING_LEVELS, runHeaderControlReason, runStateLabel, runStateOf, runTimingLabel, runTimingSeconds, sendRefusal,
+  REASONING_LEVELS, runHeaderControlReason, RUN_STATE_TAGS, runStateLabel, runStateOf, runTimingLabel, runTimingSeconds, sendRefusal,
   type HistoryWalk, type RunState,
 } from './composer.js';
+import { markMotionStart } from './motion.js';
 import { AgentTree } from './AgentTree.js';
 import { liveDescendants, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
@@ -771,7 +772,12 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         * follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
         */}
       <div className="run-header" role="group" aria-label="Run" data-state={runState} data-testid="run-header">
-        <span className="run-header__state" data-testid="run-state">{runStateLabel(runState)}</span>
+        {/* The design's Tag with a status dot, which is how the material draws a run's state (README §7). */}
+        <span className={`tag ${RUN_STATE_TAGS[runState].tone} run-header__state`} data-testid="run-state">
+          <span ref={(element) => { if (element && RUN_STATE_TAGS[runState].live) markMotionStart(element); }}
+            className={`status-dot${RUN_STATE_TAGS[runState].live ? ' is-pulsing' : ''}`} aria-hidden="true" />
+          {runStateLabel(runState)}
+        </span>
         <RunTiming session={session} busy={runActive} stepStartedAt={stepStartedAt} />
         {(onSetModel || onSetReasoning) && (
           <div className="run-controls" aria-label="Active run model and reasoning">

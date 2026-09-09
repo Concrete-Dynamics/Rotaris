@@ -41,3 +41,5 @@ packages/kernel/src/generated/
 # ADR-0035 (Part T): the bundled code-intelligence runtime is built by `pnpm code-intel:bundle` from committed pins, never committed.
 apps/desktop/resources/code-intelligence/
 apps/desktop/.cache/
+# Part AJ
+.traceability-proof/

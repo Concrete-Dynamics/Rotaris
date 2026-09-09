@@ -1,0 +1,3 @@
+# Retired requirement identifiers (append-only).
+# Fixture: REQ-999 was retired before this store was written; nothing claims it.
+REQ-999	2026-01-01	Retired fixture requirement

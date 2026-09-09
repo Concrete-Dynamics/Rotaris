@@ -1,0 +1,19 @@
+{
+  "layout": {
+    "requirements_dir": "docs/requirements",
+    "id_prefix": "REQ",
+    "generated_path": "src/requirement_ids.ts",
+    "impl_roots": ["src"],
+    "test_roots": ["tests"],
+    "annotation_conventions": [
+      {
+        "name": "python",
+        "extensions": [".py"],
+        "reference_pattern": "(REQ-[0-9]+|[0-9]+)",
+        "annotation_pattern": "@(implements|covers)\\(([^()]*)\\)",
+        "test_pattern": "^def (test[A-Za-z0-9_]*)",
+        "exempt_module_pattern": "^# re-export only"
+      }
+    ]
+  }
+}

@@ -43,3 +43,5 @@ apps/desktop/resources/code-intelligence/
 apps/desktop/.cache/
 # Part AK
 .delivery-proof/
+# Part AJ
+.traceability-proof/

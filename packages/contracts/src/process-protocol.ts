@@ -278,6 +278,14 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   // Part AK — ADR-0041: the requirements command family, relayed whole; the ACTOR is stamped by main at the boundary
   // the action arrived through (REQ-CONFIG-198) and is the one field a renderer never sends.
   z.object({ kind: z.literal('requirements.command'), workspaceRoot: z.string(), command: RequirementsCommandSchema, actor: ActorSchema }),
+  // Part AJ
+  /**
+   * ADR-0040 (Part AJ): the four toolchain operations of REQ-TRACE-508..511 against the open workspace's root
+   * (REQ-TRACE-512 — resolved by the service, never nominated by a user), and the cancel of REQ-TRACE-220/226.
+   * The outcome is the seam's TypeScript value (`contracts/src/requirements.ts`), carried opaque here.
+   */
+  z.object({ kind: z.literal('traceability.operate'), workspaceRoot: z.string(), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), base: z.string().optional() }),
+  z.object({ kind: z.literal('traceability.cancel'), workspaceRoot: z.string(), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']) }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -395,6 +403,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   // transition result) and, after a write, the generation it moved to and the identifiers it touched, which main
   // publishes on channel 10 AFTER the reply (persist before publish, ADR-0041).
   z.object({ kind: z.literal('requirements.result'), value: z.unknown(), changed: z.object({ generation: z.number().int().nonnegative(), affected: z.array(z.string()).nullable() }).optional() }),
+  // Part AJ
+  /** ADR-0040 (Part AJ): one operation's `Result<…, TraceabilityFailure>` as the seam types it; `cancelled` is REQ-TRACE-226's boolean. */
+  z.object({ kind: z.literal('traceability.result'), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), root: z.string(), elapsedMs: z.number().nonnegative(), result: z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.unknown().optional() }) }),
+  z.object({ kind: z.literal('traceability.cancelled'), cancelled: z.boolean() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

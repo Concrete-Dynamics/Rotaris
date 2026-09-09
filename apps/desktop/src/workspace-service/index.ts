@@ -5,7 +5,7 @@ import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
-import { ENGINE_NOT_MERGED, deliveryServiceFor } from './delivery.js'; // Part AK
+import { deliveryServiceFor } from './delivery.js'; // Part AK
 
 /**
  * WORKSPACE SERVICE — one utilityProcess per open workspace, keyed by
@@ -227,10 +227,12 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       return r.detail === undefined ? { kind: 'checkpoint.namespaceDeleted', deleted: r.deleted } : { kind: 'checkpoint.namespaceDeleted', deleted: r.deleted, detail: r.detail };
     }
     // Part AK — ADR-0041's delivery store, served from the process that owns the store's writable connection. The
-    // engine is `ENGINE_NOT_MERGED` until Part AJ's factory replaces it here; the actor arrived stamped by main.
+    // engine was `ENGINE_NOT_MERGED` until Part AJ merged (2026-09-09); it is now the one engine `traceability.ts`
+    // holds for this process, so the board's pass and the four operations share one I/O owner (ADR-0040 specific 6).
     case 'requirements.command': {
       if (!open) return { kind: 'refused', code: 'workspace.none', headline: 'Open a workspace before reading its requirements' };
-      const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: ENGINE_NOT_MERGED, clocks, log }).handle(req.command, req.actor);
+      const { engineFor } = await import('./traceability.js');
+      const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: engineFor(clocks, log), clocks, log }).handle(req.command, req.actor);
       return { kind: 'requirements.result', value: r.value, ...(r.changed === undefined ? {} : { changed: r.changed }) };
     }
     // Part AJ

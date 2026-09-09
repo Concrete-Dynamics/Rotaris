@@ -21,7 +21,7 @@ const OPERATION: Readonly<Record<OperateRequest['operation'], OperationName>> = 
 
 let engine: TraceabilityEngineHandle | null = null;
 
-function engineFor(clocks: Clocks, log: (message: string, level?: 'info' | 'warn') => void): TraceabilityEngineHandle {
+export function engineFor(clocks: Clocks, log: (message: string, level?: 'info' | 'warn') => void): TraceabilityEngineHandle {
   if (engine) return engine;
   engine = createTraceabilityEngine({
     executor: createWorkerExecutor(() => createTraceabilityWorker({}), clocks.timers),

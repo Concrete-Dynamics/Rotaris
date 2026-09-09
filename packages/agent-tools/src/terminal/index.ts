@@ -137,7 +137,7 @@ export class TerminalManager {
   /**
    * Part AL — REQ-TOOLS-108 / REQ-CONFIG-116: the two registered background keys, `runtime.shell_max_background_sessions`
    * (default 20, minimum 1, no stated maximum) and `runtime.shell_background_timeout`, as the run's configuration set them.
-   * The loader had validated and defaulted both since Part I and nothing read them (defect forty-eight in ADR-0021's
+   * The loader had validated and defaulted both since Part I and nothing read them (defect fifty-two in ADR-0021's
    * note): every manager took `TERMINAL_DEFAULTS`. Applied to every background manager already open and to the next.
    */
   private backgroundLimits: { readonly maxSessions: number; readonly timeoutS: number } | null = null;

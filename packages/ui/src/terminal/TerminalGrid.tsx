@@ -68,7 +68,7 @@ export function TerminalGrid({ view, armed, running, onKey, onRejectedInput, onC
   useEffect(() => { latest.current = { armed, running, onKey, onRejectedInput, onCopy, onGeometry }; });
   // One reporter for the grid's life: it reports only on change (REQ-SHELL-100) and the count is what the proof reads.
   const reporter = useRef<GeometryReporter | null>(null);
-  // Defect forty-eight (ADR-0047 note): a theme change that alters the face also re-lays the tab's header in the SAME
+  // Defect fifty-five (ADR-0047 note): a theme change that alters the face also re-lays the tab's header in the SAME
   // frame, the host shrinks, and the resize observer measured it against the cell the library had painted with the OLD
   // face — one wrong geometry reached the process a frame before the right one. While a re-measure is pending, the
   // observer stays quiet; the frame after the library has repainted measures once, with the new cell.

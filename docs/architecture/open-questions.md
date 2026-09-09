@@ -24,8 +24,8 @@ separates them into the three groups the gate actually turns on.
 **The specification-question count has moved since, and implementation is what moves it.** Four questions
 were raised by building the thing that met the requirement: **OQ-50** (Part K, the public model catalogue),
 **OQ-51** (Part AB, the unscoped queued prompt), **OQ-52** (Part AC, whether a delegated child may ask) and
-**OQ-53** (Part AH, which event reports a compression). That is **fifty-one specification questions**, eight
-resolved, leaving **forty-three open**, and **none blocks a named ADR**. Each of the four is stated where it
+**OQ-53** (Part AH, which event reports a compression), **OQ-54** (Part AL, the user-terminal audit entry outside the closed permission vocabularies) and **OQ-55** (Part AL, `shell_max_background_sessions` without a maximum). That is **fifty-three specification questions**, eight
+resolved, leaving **forty-five open**, and **none blocks a named ADR**. Each of the four is stated where it
 was found, with what the build shipped meanwhile, so a ruling replaces an interim rather than filling a gap.
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
@@ -1517,6 +1517,8 @@ and `REQ-TRACE-109`'s test-function collection both require a **full syntax tree
 requires them in the same verification run. No budget is stated for them, and at the stated scale a
 full-fidelity parse is materially more expensive than a pattern pass.
 
+*Part AJ (2026-09-09), the first execution: unmeasured still, by design — wave 1 reports REQ-TRACE-104 rule 1 and 109/110 as `requires-parse` findings for the built-in convention and runs both checks fully for pattern-declared conventions. Spike 7's 1,000-file tree (`spikes/traceability-scale.md`) is the corpus for the measurement; the sweep itself is 244–391 ms, so the parse-requiring checks have about 600 ms of REQ-TRACE-088's budget if they are to share it, though no requirement says they must. AJ′ measures the TypeScript compiler API against it.*
+
 **OQ-25 — Project-supplied regular expressions run unbounded.** *(ADR-0040.)* `REQ-TRACE-073` compiles
 four patterns per project-declared convention and evaluates them against every claimed file;
 `REQ-TRACE-154` states that the absence of any time or resource limit on the scan is "a deliberate
@@ -1526,6 +1528,8 @@ the board stays usable, the last good board stays on screen — cover the **symp
 wedged. ADR-0002's worker-thread placement makes it terminable; **whether it should be terminated, and
 what the user is told, is not specified.** The pattern arrives with a checked-out repository, not from the
 user.
+
+*Part AJ (2026-09-09), the first execution's decision: no bound on the pattern (REQ-TRACE-154/225 forbid one). The pass runs on a worker thread; a cancel raises a shared flag the pass observes at its next checkpoint, and a worker that has not answered 2 s after the cancel is terminated and respawned for the next job. Termination happens only on the user's cancel, never on the engine's initiative, and the user is told only "cancelled". Whether the engine should ever terminate on its own, and what it says when it does, stays open.*
 
 **OQ-26 — Resolved.** See *Resolved, and closed with the reason* above.
 
@@ -1754,6 +1758,8 @@ work plus `REQ-TRACE-182`'s test session — and `REQ-TRACE-182` itself presuppo
 the product no longer has, which is its own amendment. C-11 records the narrowing and the residual
 conflict, now **split into its two halves with their two owners**, and does **not** report the property
 satisfied.
+
+*Part AJ (2026-09-09) measured one replace: every regeneration and baseline update in the proof replaced its files at attempt 1 through REQ-TRACE-061's ladder (5 attempts, 0.05/0.1/0.2/0.4 s), with the writer the workspace service's owner thread and no reader in the product holding a descriptor. The contended case — a test session in the same checkout on Windows — was not staged and the residue stands as ADR-0040 specific 6 records it.*
 
 **OQ-42 — CLOSED as a policy decision, 2026-09-06; implementation evidence updated 2026-09-07.**
 
@@ -2236,6 +2242,14 @@ Shipped meanwhile (ADR-0060 decision 7): a `context_compressed` **timeline entry
 and `latency_ms`; one `system` transcript row rendered from those fields; and the log line. What the requirement
 asks to be carried is carried, in a venue it did not name. If the second reading is ruled, the entry stays and an
 event joins it — the interim is not repaired quietly.
+
+**OQ-54 — The user-terminal audit entry's `decision` and `source` fall outside the closed permission vocabularies.** *(spec 12 Data & Formats, "Permission audit entries for user terminal actions"; REQ-TOOLS-012/028. Raised by the terminal stream's first execution, Part AL, 2026-09-09.)*
+
+REQ-SHELL-107 says a user's terminal action is written to the permission audit with `decision: user-input`, `source: user`. `DECISIONS` is the closed set `{allow, ask, deny}` (REQ-TOOLS-012) and `DECISION_SOURCES` the closed twelve (REQ-TOOLS-028); neither holds `user-input` or `user`. Part AL writes the entry as spec 12 words it (the writer takes the strings), so a decision-log reader that enumerates the closed vocabularies will not recognise it. Whether spec 12 mints two new members, or the audit entry is a different record from a permission decision, is the owner's call. Recorded, written as spec 12 says, not resolved.
+
+**OQ-55 — `runtime.shell_max_background_sessions` has no stated maximum.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+
+The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
 ## Design-reference dependencies
 

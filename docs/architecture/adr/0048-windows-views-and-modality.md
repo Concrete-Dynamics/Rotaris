@@ -269,7 +269,7 @@ then the search panel, then the drawers, in the order this record fixed. The pop
 (`REQ-CHAT-024`): the field's `aria-activedescendant` names the row, and the keys of `REQ-CHAT-026` are answered by
 the field's own handler, whose `preventDefault` is what keeps the window handler from acting a second time.
 
-**Defect forty-eight — a command that opened a dialog took focus back from it.** `/pop` opens the stash dialog. The
+**Defect fifty-eight — a command that opened a dialog took focus back from it.** `/pop` opens the stash dialog. The
 composer, on an executed command, refocused its own field; the dialog mounted and focused its primary action between
 the command's resolution and that line, and the field then stole focus back — measured on the proof's first run as
 the active element being the composer while the modal was on screen, exactly the state `REQ-SHELL-055`'s "the modal

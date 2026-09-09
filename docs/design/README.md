@@ -617,7 +617,7 @@ banner; the first half is the design system's own specimen cards, which are the 
 | Title bar, nav rail | `title bar`, `nav rail` | `AppShell.tsx`, `NavRail.tsx` |
 | Overview | `HOME`, `expanded overview strip` | `OverviewView.tsx` |
 | Transcript rows, run header | `WORKSPACE` → `transcript column` | `transcript/Row.tsx`, `TranscriptSurface.tsx` |
-| Queue, composer, slash catalogue | `WORKSPACE` → `queue + composer` | `WorkspaceView.tsx`, `composer.ts` |
+| Queue, composer, slash catalogue | `WORKSPACE` → `queue + composer` | `WorkspaceView.tsx`, `composer.ts`, `slash/SlashPopup.tsx`, `RunHeader.tsx` |
 | Agent list, context rings, inspector | `WORKSPACE` → `agents panel`, `inspector` | `AgentTree.tsx`, `ContextRing.tsx`, `Inspector.tsx` |
 | Approval card | `WORKSPACE` → the `approvalOn` block | `ApprovalDialog.tsx` |
 | Structured questions | `question stepper modal` | `QuestionStepper.tsx` |
@@ -625,9 +625,11 @@ banner; the first half is the design system's own specimen cards, which are the 
 | Library tabs and cards | `LIBRARY` | `library/LibraryView.tsx` |
 | Settings panes and save bar | `SETTINGS` | `SettingsView.tsx`, `settings/` |
 | Provider auth | `provider auth modal` | `ProviderDialog.tsx` |
+| Terminal window and transcript preview | — (no window mockup, §3.2); `WORKSPACE` → the live terminal preview block for the preview | `terminal/TerminalWindow.tsx`, `terminal/TerminalPreviewBlock.tsx` |
+| Requirements board, review, new requirement | `REQUIREMENTS`, `Review view` modal, `New requirement` dialog | — the board is Part AK′'s (wave 2); the projection and contracts exist since Part AK |
 | First launch | `first-launch guide` | — not drawn |
 
-Mission and Requirements have no counterpart to consult; §3.2 is why.
+Mission has no counterpart to consult; §3.2 is why. Requirements has one (§3.1 calls its coverage good) and the board is drawn against it — an earlier version of this line said otherwise and was wrong.
 
 ### 7.1 What the first reading of this obligation found — 2026-09-08
 

@@ -24,7 +24,7 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-08** (Part AH — context compression: the threshold's place in the turn's step
+Last reconciled with the code: **2026-09-09** (wave 1, Parts AJ–AN: store v15's `delivery*` tables and channel 10 `requirements:changed`; the `requirements.*`, `traceability.*` and `terminal.*` message families; channel 3's first producer and its per-window delivery bound; the workspace service's worker thread; `ui/terminal`, `ui/slash`, `workspace/traceability`, `workspace/delivery`); before that **2026-09-08** (Part AH — context compression: the threshold's place in the turn's step
 order, the ladder's `context_window` arm, the `Conversation`, the reconstruction and the `context_compressed` timeline
 entry, `AgentRecord.compressions` and `contextLimit` now carrying the model's own maximum, and
 `SessionRecord.compression`, all in the runtime view. No package, edge, channel, command or store version changed, so

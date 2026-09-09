@@ -84,7 +84,7 @@ export function lowerLightness(colour: string, floor: number, against: string): 
 /**
  * REQ-CHAT-027: "lightened or darkened until it reaches a contrast ratio of at least 4.5:1" — the direction is the theme's.
  *
- * **Defect forty-six, found on this part's first execution (ADR-0050's note):** `raiseLightness` bisected to the floor
+ * **Defect fifty-six, found on this part's first execution (ADR-0050's note):** `raiseLightness` bisected to the floor
  * and then ROUNDED the lightness to a thousandth of a percent, and the rounding could fall on the dark side of the
  * floor — the default theme's partial shade came back at 4.49997:1, which `themeContrastViolations`' own 1e-6 tolerance
  * would report as a violation. The corrector was repaired at its source in the same part (`colour.ts`, a `// Part AN`

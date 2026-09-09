@@ -194,7 +194,7 @@ at 10.19:1, partial `oklch(60.404% 0.05 292)` at 4.50:1, unknown `oklch(64% 0.2 
 `oklch(80% 0 0)` at 9.48:1, all on `oklch(21% 0 0)`. Two of the four needed no correction; the blend did — a 50 %
 blend of the accent toward the ground sits at 3.0:1 and is raised to 60.4 % lightness.
 
-**Defect forty-six — the corrector can stop a hair short of the floor it was asked for.** `raiseLightness` bisects
+**Defect fifty-six — the corrector can stop a hair short of the floor it was asked for.** `raiseLightness` bisects
 lightness until the ratio clears the floor and then rounds the result to a thousandth of a percent; the rounding can
 fall on the dark side, and did: the default theme's partial shade came back at **4.49997:1**, which
 `themeContrastViolations`' own tolerance of one millionth would report as a violation. No adopted token is affected,

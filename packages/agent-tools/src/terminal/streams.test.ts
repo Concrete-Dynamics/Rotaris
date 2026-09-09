@@ -146,7 +146,7 @@ describe('TerminalStreams — the sampling period is a ceiling (ADR-0021 Decisio
     ]);
   });
 
-  it('REQ-SHELL-106: a resize always resizes the emulated screen, and the real terminal whenever one is registered (defect forty-six)', () => {
+  it('REQ-SHELL-106: a resize always resizes the emulated screen, and the real terminal whenever one is registered (defect fifty)', () => {
     const h = harness();
     h.streams.begin(h.spec());
     expect(h.streams.resize('fg:orchestrator', 100, 30)).toEqual({ ok: true, value: undefined });
@@ -228,7 +228,7 @@ describe('TerminalStreams — the sampling period is a ceiling (ADR-0021 Decisio
   });
 });
 
-describe('TerminalManager — REQ-TOOLS-108: the configured background limits reach the manager (defect forty-eight)', () => {
+describe('TerminalManager — REQ-TOOLS-108: the configured background limits reach the manager (defect fifty-two)', () => {
   it('takes `shell_max_background_sessions` and `shell_background_timeout` from the run, applies them to open managers, and defaults until then', () => {
     const clock = new FakeClock();
     const factory = { spawn: () => { throw new Error('no PTY is spawned here'); } };

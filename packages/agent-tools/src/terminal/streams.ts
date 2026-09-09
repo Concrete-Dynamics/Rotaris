@@ -214,7 +214,7 @@ export class TerminalStreams {
   /**
    * The emulated screen is resized even when the backend is gone; then the real terminal when possible. "Possible"
    * is the control's presence, NOT the running flag — the first execution against a real PTY found the resize gated
-   * on `running` (defect forty-six): a foreground shell outlives its command, so a resize made between two commands
+   * on `running` (defect fifty): a foreground shell outlives its command, so a resize made between two commands
    * never reached the PTY and the next command reported the old size. A pipe-backed stream registers no resize.
    */
   resize(streamId: string, cols: number, rows: number): StreamResult {

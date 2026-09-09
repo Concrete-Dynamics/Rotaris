@@ -155,16 +155,16 @@ full-screen program repaints on each. Stated, not changed.
 
 **Defects found, none of which a reading had caught.**
 
-- **Forty-six — the grid host was a scroll container.** `.term-grid` clipped with `overflow: hidden`, which leaves an
+- **Fifty-three — the grid host was a scroll container.** `.term-grid` clipped with `overflow: hidden`, which leaves an
   element scrollable by script and by focus. Focusing the library's helper textarea, which it parks at the cursor
   cell, scrolled the host by the banner's height: the screen sat 49 px above its own gutter, the pointer's cell
   coordinates were off, and a drag selected nothing. `overflow: clip` — which cannot be scrolled — replaced it, with the
   reason beside the rule.
-- **Forty-seven — the initial-focus race.** `REQ-SHELL-085`'s "on show, focus goes to take-control" was written as a
+- **Fifty-four — the initial-focus race.** `REQ-SHELL-085`'s "on show, focus goes to take-control" was written as a
   `requestAnimationFrame` after the tick that first saw a stream, on the reading that the frame follows React's
   commit. It ran before it: the button did not exist yet and focus fell to the grid. It is now an effect keyed on the
   tabs, which runs after the commit that drew them.
-- **Forty-eight — a stale cell reported on a face change.** A theme change that alters the monospace face also
+- **Fifty-five — a stale cell reported on a face change.** A theme change that alters the monospace face also
   re-lays the tab's header in the same frame, so the grid's host shrinks before the library has repainted with the
   new face; the resize observer measured the new host against the OLD cell and one wrong geometry reached the
   process a frame before the right one (`118×25` then `89×19` in the proof, two reports where `REQ-SHELL-100` wants
@@ -188,4 +188,4 @@ after a switch; a hidden host reports no geometry.
 **Not executed here.** `REQ-SHELL-166` against a real pseudo-terminal and `REQ-SHELL-102`'s three-surface equality on
 a live stream (wave 2, AL′); the window's lifecycle, title and focus-on-auto-open (`REQ-SHELL-080/081/086/108..111`,
 `main/windows.ts`); the audit log's write (the renderer submits `terminal.audit`; the run host redacts and writes).
-The defect tally stands at **forty-eight**.
+The defect tally stands at **fifty-five**.

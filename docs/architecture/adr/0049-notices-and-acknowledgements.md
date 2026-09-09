@@ -231,7 +231,7 @@ agreed on the first run. Recorded because the finding is the absence: this chang
 titled "Command not run" — not a transient toast — carrying the outcome's message. The composer is a renderer surface;
 the outcome is decided in the renderer; nothing crosses to main.
 
-**Defect forty-seven — decision B has no entry for a renderer.** The record's two entry points, `report` and
+**Defect fifty-seven — decision B has no entry for a renderer.** The record's two entry points, `report` and
 `acknowledge`, are main's (`main/notices.ts`); the command surface carries `notice.acknowledge` and no `notice.report`,
 and `ui-core`'s store is a projection of what main last published. A renderer therefore has no way to publish into the
 one persistent slot, and the requirement's first surface to need one found the gap. The decision was written with

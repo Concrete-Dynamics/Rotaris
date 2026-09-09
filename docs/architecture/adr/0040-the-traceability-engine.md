@@ -642,20 +642,20 @@ cancel flag and the single I/O owner executed before merge.
   over the 1,500-document store cancelled 49–55 ms after it began, the cancel answered by the service's own loop
   while the worker was inside the parse (`REQ-TRACE-337`, `REQ-TRACE-497`).
 
-**Found — three, the forty-sixth to the forty-eighth, two in the engine and one in the harness that measured it:**
+**Found — three, the forty-seventh to the forty-ninth, two in the engine and one in the harness that measured it:**
 
-- **Defect forty-six — one file's occurrences came back in pass order, not text order.** The scan matched every
+- **Defect forty-seven — one file's occurrences came back in pass order, not text order.** The scan matched every
   annotation, then every `covers:` comment, and reported them in that order, so a consumer walking a file's sites
   "at its own line" (`REQ-TRACE-084`, `REQ-TRACE-508`) met a comment on line 2 after a call on line 3. No reading
   caught it: `REQ-TRACE-082`'s occurrence is a tuple with no stated order, and "sorted by path" was read as the
   whole ordering rule. The sweep now sorts each file's occurrences by offset before reporting.
-- **Defect forty-seven — a project convention's line-anchored pattern never matched.** The four patterns of
+- **Defect forty-eight — a project convention's line-anchored pattern never matched.** The four patterns of
   `REQ-TRACE-073` were compiled with the global flag only, so a `test_pattern` written `^def (test\w*)` — the
   natural declaration matcher — matched at the file's first character and nowhere else; the first Python fixture
   collected zero test functions. Patterns "evaluated against the file's normalized text" were read as a single
   string match. They are now compiled with the multiline flag, and that reading is recorded beside its replacement
   as R7 below.
-- **Defect forty-eight — the proof's cleanup failed one run in three on Windows.** The fixture drive commits a
+- **Defect forty-nine — the proof's cleanup failed one run in three on Windows.** The fixture drive commits a
   base for the change comparison inside a copy of the fixture under `.traceability-proof/`; removing that copy at
   the end answered `EPERM` on the directory itself, on the first run of a series, even with ten retries over two
   seconds. **The first explanation was wrong and is kept here:** Git's `commit` detaching `gc --auto` (ADR-0039
@@ -688,7 +688,7 @@ trees must remove them (the plan's `.traceability-proof/**` ignore lines are in 
   raised in the handoff, and the specifier is the one thing fixed now so the artifact's shape does not move.
 - R6 — the derived-from tuple in the metadata record is numbers (`REQ-TRACE-019`); the fingerprint's comma-joined
   list is identifiers (§Hashes).
-- R7 — project patterns run with the multiline flag (defect forty-seven).
+- R7 — project patterns run with the multiline flag (defect forty-eight).
 - R8 — a project convention's captured annotation kind is coverage when the capture contains `cover` or `test`
   (case-insensitive), implementation otherwise; the built-in names are exact.
 - R9 — `REQ-TRACE-160`'s `status` kind (equal hashes, differing lifecycle) is unreachable from the documents alone,
@@ -708,4 +708,4 @@ trees must remove them (the plan's `.traceability-proof/**` ignore lines are in 
 
 **Not exercised:** a contended replace (OQ-41's residue); a project pattern with catastrophic backtracking beyond
 the fake-worker test of the grace-and-terminate path (OQ-25); a real consuming project importing the artifact;
-macOS and Linux (IC-3). **The tally stands at forty-eight.**
+macOS and Linux (IC-3). **The tally stands at forty-nine.**

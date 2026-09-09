@@ -266,7 +266,7 @@ control surface; `REQ-SHELL-107`'s audit line is worded and redacted by the run 
 writer. A foreground `terminal` tool row carries its live stream id while the command runs and loses it
 on settle, the id kept out of the recorded `transcript.row` event.
 
-**Found — the FORTY-SIXTH first-execution defect: a resize gated on the running flag never reached a
+**Found — the FIFTIETH first-execution defect: a resize gated on the running flag never reached a
 foreground shell between commands.** The first draft only forwarded a grid resize to the real terminal
 `if (s.meta.running)`. But a foreground PTY session outlives each command — it is idle between them — so
 a resize made while no command ran resized the emulated screen and stopped there, and the next command
@@ -276,7 +276,7 @@ real terminal *whenever one is registered*, which for a foreground stream is its
 while a command runs. A pipe-backed background stream registers no resize and so takes only the emulated
 one, exactly as `REQ-TOOLS-128` and ADR-0020 consequence 3 anticipate.
 
-**Found — the FORTY-SEVENTH first-execution defect: a retained-stream cap that evicted live streams.**
+**Found — the FIFTY-FIRST first-execution defect: a retained-stream cap that evicted live streams.**
 Retention was written as a single per-session cap that, when reached, evicted the oldest stream — and
 with no ended stream to take, it took the oldest *live* one, whose emulator was still consuming. Opening
 the shipped concurrent count of forty streams in one session (this record's own obligation 2: twenty
@@ -319,7 +319,7 @@ is still `stream count × 50 frames/s` with only the delivered rate capped. The 
 merging, but that is relief at the surface, not a bound on production; a stated ceiling on the key
 remains the owner's to add (this record's "Revisit if").
 
-**Found on the same execution — the FORTY-EIGHTH defect: two registered keys nothing read.**
+**Found on the same execution — the FIFTY-SECOND defect: two registered keys nothing read.**
 `runtime.shell_max_background_sessions` and `runtime.shell_background_timeout` have been validated and
 defaulted by the configuration loader since Part I (`REQ-CONFIG-116`, `REQ-TOOLS-108`), and no code read
 either: the terminal manager took `TERMINAL_DEFAULTS` (20 / 3600 s) whatever the workspace configured,
@@ -329,4 +329,6 @@ far as the key allows: it has a minimum of 1 and **no stated maximum**, so the p
 still `stream count × 50 frames/s` with the count bounded only by what a user chooses to configure. The
 delivered rate is capped per window (above); the ceiling on the key itself is the owner's — raised as an
 open-question entry by handoff, not resolved here. Obligation 2 is therefore met at delivery and at the
-key's configured value, and open at the key's range.
+key's configured value, and open at the key's range.
+
+**Found at the merge — the FIFTY-NINTH defect: a default import that vitest tolerated and the bundler refused.** `emulator.ts` imported `@xterm/headless` and `@xterm/addon-serialize` as defaults and destructured `Terminal` and `SerializeAddon` from them, on the reading that both packages are CommonJS. Both ship an ESM `module` entry beside the CommonJS `main`; vitest resolved the latter and the interop supplied a default, so every test and the proof passed, while `electron-vite build` resolved the former, found no default export, and failed the run-host bundle on the merged main (2026-09-09). The gate's check 2 runs `pnpm check` and the proof, and a vitest-driven proof never builds the desktop, so the branch was green everywhere it was measured. Named imports now; the reading is corrected in the file. A gate that admits a Part touching a composition root must also build.

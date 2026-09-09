@@ -462,7 +462,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
    * surface the run host's answer as `failed` (no arm until Part AO); the launch dialog and the session browser are App's,
    * reached through `slashOpeners`; the worktree dialog is the Git view's component drawn here over the same commands
    * (REQ-GIT-074's template); `hasGit` is the repository read's verdict. `raiseNotice` is left unset on purpose: no
-   * `notice.report` command exists (ADR-0049 defect forty-seven), so the composer draws REQ-CHAT-021's notice itself.
+   * `notice.report` command exists (ADR-0049 defect fifty-seven), so the composer draws REQ-CHAT-021's notice itself.
    */
   const providerRows = useProviders().rows;
   const git = useGitState(workspace);

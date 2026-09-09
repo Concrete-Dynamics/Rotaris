@@ -84,7 +84,7 @@ export function raiseLightness(colour: string, floor: number, against: string): 
     else low = middle;
   }
   let l = Math.round(high * 100_000) / 1_000;
-  // Part AN — defect forty-six (ADR-0050, 2026-09-09): the rounding above can fall on the dark side of the floor
+  // Part AN — defect fifty-six (ADR-0050, 2026-09-09): the rounding above can fall on the dark side of the floor
   // (`oklch(52% 0.05 292)` on `oklch(21% 0 0)` came back at 4.49997:1), so the rounded value is measured again and
   // stepped up by one thousandth of a percent until the ratio it names is the ratio it clears.
   for (let i = 0; i < 100 && l < 98 && contrastRatio({ ...parsed, l: l / 100 }, against) < floor; i += 1) l = Math.round((l + 0.001) * 1_000) / 1_000;

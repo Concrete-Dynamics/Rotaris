@@ -9,7 +9,7 @@ import { isNavigationKey, type EncodedKey, type TerminalCommand } from '@rotaris
  * session writer; the renderer cannot reach the log). `text` carries the raw line for a `line` entry and `C-<letter>`
  * for a `control` entry.
  */
-export type AuditEntry = Extract<TerminalCommand, { name: 'terminal.audit' }>['entry'];
+export type AuditEntry = Extract<TerminalCommand, { kind: 'terminal.audit' }>['entry'];
 
 export class AuditBuffer {
   private pending = '';

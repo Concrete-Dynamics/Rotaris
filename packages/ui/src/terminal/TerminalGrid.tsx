@@ -68,6 +68,11 @@ export function TerminalGrid({ view, armed, running, onKey, onRejectedInput, onC
   useEffect(() => { latest.current = { armed, running, onKey, onRejectedInput, onCopy, onGeometry }; });
   // One reporter for the grid's life: it reports only on change (REQ-SHELL-100) and the count is what the proof reads.
   const reporter = useRef<GeometryReporter | null>(null);
+  // Defect forty-eight (ADR-0047 note): a theme change that alters the face also re-lays the tab's header in the SAME
+  // frame, the host shrinks, and the resize observer measured it against the cell the library had painted with the OLD
+  // face — one wrong geometry reached the process a frame before the right one. While a re-measure is pending, the
+  // observer stays quiet; the frame after the library has repainted measures once, with the new cell.
+  const remeasurePending = useRef(false);
 
   // Mount the library's container; name the element that actually takes focus (REQ-SHELL-095/099).
   useLayoutEffect(() => {
@@ -121,18 +126,19 @@ export function TerminalGrid({ view, armed, running, onKey, onRejectedInput, onC
 
   useLayoutEffect(() => {
     const root = document.documentElement;
+    remeasurePending.current = true;
     view.applyTheme(resolveTerminalColours(root), resolveTerminalFont(root));
     // The library re-measures its own cell on the font change; measure after it has painted with the new face.
-    const frame = requestAnimationFrame(() => measure());
+    const frame = requestAnimationFrame(() => { remeasurePending.current = false; measure(); });
     return () => cancelAnimationFrame(frame);
   }, [view, measure, themeVersion]);
 
   useEffect(() => {
     const element = host.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measure());
+    const observer = new ResizeObserver(() => { if (!remeasurePending.current) measure(); });
     observer.observe(element);
-    const onVisibility = () => measure();
+    const onVisibility = () => { if (!remeasurePending.current) measure(); };
     document.addEventListener('visibilitychange', onVisibility);
     return () => { observer.disconnect(); document.removeEventListener('visibilitychange', onVisibility); };
   }, [measure]);

@@ -69,7 +69,7 @@ export interface StreamDisplay {
 export type ApplyOutcome = 'applied' | 'stale' | 'wrong-stream';
 
 export function createStreamDisplay(frame: DisplayFrame, factory: EmulatorFactory): StreamDisplay {
-  const meta: TerminalStreamMeta = frame.meta ?? { ...UNKNOWN_STREAM_META, streamId: frame.streamId, sessionId: '' };
+  const meta: TerminalStreamMeta = frame.meta ?? { ...UNKNOWN_STREAM_META, streamId: frame.streamId, sessionId: frame.sessionId };
   return { streamId: frame.streamId, emulator: factory(meta.cols, meta.rows), meta, lastSeq: 0, closed: false, framesApplied: 0 };
 }
 

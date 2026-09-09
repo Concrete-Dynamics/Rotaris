@@ -21,7 +21,8 @@ const results = {};
 const expect = (name, condition, detail) => { results[name] = { pass: Boolean(condition), ...(detail === undefined ? {} : { detail }) }; if (!condition) failures.push(`${name}: ${JSON.stringify(detail)}`); };
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const frame = (streamId, streamSeq, kind, payload, extra = {}) => ({ streamId, streamSeq, kind, payload, ...extra });
+// The frame shape the manager ruled on 2026-09-09: `{ v, sessionId, streamId, seq, kind, payload, meta?, closing? }` (`v` is added by the page).
+const frame = (streamId, seq, kind, payload, extra = {}) => ({ sessionId: 'proof-session', streamId, seq, kind, payload, ...extra });
 // The run host's half of REQ-SHELL-100/106, scripted: the size the window last reported is the size the authoritative
 // screen takes, and every later meta frame carries it — which is what keeps the preview's and the grid's cells identical.
 let sizeA = { cols: 80, rows: 24 };

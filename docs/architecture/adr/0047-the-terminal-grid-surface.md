@@ -121,7 +121,7 @@ to survive a restart, which would make retention persistent and change both reco
 ## First execution — 2026-09-09 (Part AM)
 
 *Recorded under GD-10. Evidence: `pnpm terminal-proof` (`.terminal-proof/results.json`, ninety-two assertions, two
-consecutive green runs) and `packages/ui/src/terminal/terminal.test.ts` (thirty-seven tests).*
+consecutive green runs, then three more after the seam ruling of the same day) and `packages/ui/src/terminal/terminal.test.ts` (thirty-seven tests).*
 
 **Built.** Alternative B as decided, against a **scripted frame source** — no producer existed in this worktree; Part
 AL builds it beside. `contracts/src/terminal-keys.ts` is the one table: `encodeKey` (the closed vocabulary of
@@ -139,8 +139,10 @@ The sixteen ANSI colours, the ground, the ink, the cursor and the selection are 
 palettes, with a static floor check (ADR-0050's note).
 
 **Readings taken, stated as readings.** (1) OQ-5: the closing frame is a `screen` frame carrying `closing: true` and
-plain text; the display resets and writes it with each newline carried to column 0. (2) `channels.ts` spells the
-sequence field `streamSeq` where the plan's seam spells it `seq`; the display reads it in one function (`frameSeq`).
+plain text; the display resets and writes it with each newline carried to column 0. (2) the frame is the
+manager's ruled shape `{ v, sessionId, streamId, seq, kind, payload, meta?, closing? }` (`channels.ts` had spelt the counter
+`streamSeq` and carried no session; AL rewrites the schema); the display declares that shape itself and reads the
+counter in one function (`frameSeq`), so the merge is one type alias.
 (3) A display emulator follows the size a `meta` frame carries, so the run host must publish the size it took AFTER
 answering `terminal.resize` — a stale size in a later `meta` shrinks every display back (the proof's scripted host
 echoes each report, which is what the real one must do). (4) A theme switch that keeps the same monospace face
@@ -162,6 +164,12 @@ full-screen program repaints on each. Stated, not changed.
   `requestAnimationFrame` after the tick that first saw a stream, on the reading that the frame follows React's
   commit. It ran before it: the button did not exist yet and focus fell to the grid. It is now an effect keyed on the
   tabs, which runs after the commit that drew them.
+- **Forty-eight — a stale cell reported on a face change.** A theme change that alters the monospace face also
+  re-lays the tab's header in the same frame, so the grid's host shrinks before the library has repainted with the
+  new face; the resize observer measured the new host against the OLD cell and one wrong geometry reached the
+  process a frame before the right one (`118×25` then `89×19` in the proof, two reports where `REQ-SHELL-100` wants
+  one). Seen on the third consecutive run, not the first two — a race. The observer now stays quiet while a
+  re-measure is pending and the frame after the repaint measures once.
 
 **Harness findings, not product defects.** The scripted source's own sequence numbers were not monotonic at first and
 `REQ-SHELL-104`'s "never applied twice" silently dropped the later frames — the mechanism working, and a lesson for
@@ -180,4 +188,4 @@ after a switch; a hidden host reports no geometry.
 **Not executed here.** `REQ-SHELL-166` against a real pseudo-terminal and `REQ-SHELL-102`'s three-surface equality on
 a live stream (wave 2, AL′); the window's lifecycle, title and focus-on-auto-open (`REQ-SHELL-080/081/086/108..111`,
 `main/windows.ts`); the audit log's write (the renderer submits `terminal.audit`; the run host redacts and writes).
-The defect tally stands at **forty-seven**.
+The defect tally stands at **forty-eight**.

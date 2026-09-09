@@ -241,7 +241,7 @@ describe('labels — tab, header, tooltip, dialog and title text (REQ-SHELL-081/
 
 // ── REQ-SHELL-095/104/105: the display emulator over frames ──────────────────────────────────────────────────
 const META: TerminalStreamMeta = { streamId: 'fg:a', sessionId: 's', kind: 'agent', displayName: 'Coder 1', command: 'demo', running: true, truncated: false, cols: 40, rows: 6, acceptsInput: true, canKill: true };
-const frame = (streamSeq: number, kind: DisplayFrame['kind'], payload: string, extra: Partial<DisplayFrame> = {}): DisplayFrame => ({ v: CONTRACT_SCHEMA_VERSION, streamId: 'fg:a', streamSeq, kind, payload, ...extra });
+const frame = (seq: number, kind: DisplayFrame['kind'], payload: string, extra: Partial<DisplayFrame> = {}): DisplayFrame => ({ v: CONTRACT_SCHEMA_VERSION, sessionId: 's', streamId: 'fg:a', seq, kind, payload, ...extra });
 
 describe('emulator — a character grid, not a log (REQ-SHELL-095), applied by sequence (REQ-SHELL-104/105)', () => {
   it('cursor addressing overwrites the cells it addresses instead of appending', async () => {

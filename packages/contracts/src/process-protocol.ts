@@ -5,7 +5,8 @@ import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
-import { ImageAttachmentInputSchema, SessionSnapshotSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
+import { ImageAttachmentInputSchema, SessionSnapshotSchema, TerminalFrameSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
+import { TERMINAL_COMMAND_SCHEMAS, TerminalStreamMetaSchema } from './terminal.js';
 import { ControlRequestSchema, ControlResultSchema } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
 import { ArtifactsStateSchema } from './artifacts.js';
@@ -158,6 +159,14 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifacts.body'), workspaceId: z.string(), ref: z.string().min(1) }),
   z.object({ kind: z.literal('artifacts.save'), workspaceId: z.string(), ref: z.string().min(1), body: z.string() }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
+  /**
+   * Part AL — the live terminal (ADR-0021): main relays the seven `terminal.*` commands as they arrive, shape for shape,
+   * to the run host, which holds every stream's emulator and PTY (`run-host/terminal.ts`). `terminal.streams` is
+   * answered `terminal.streams {streams}` below and, for a late attacher, followed by one `screen` frame per stream on
+   * `publish.terminal`; the controls answer `ack` or `refused terminal.<TerminalRefusal>`; `terminal.audit` writes
+   * REQ-SHELL-107's entry through the live session writer, redacted, and answers `ack`.
+   */
+  ...TERMINAL_COMMAND_SCHEMAS,
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
 
@@ -407,6 +416,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   /** ADR-0040 (Part AJ): one operation's `Result<…, TraceabilityFailure>` as the seam types it; `cancelled` is REQ-TRACE-226's boolean. */
   z.object({ kind: z.literal('traceability.result'), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), root: z.string(), elapsedMs: z.number().nonnegative(), result: z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.unknown().optional() }) }),
   z.object({ kind: z.literal('traceability.cancelled'), cancelled: z.boolean() }),
+  /** Part AL: the streams of one session, live and retained (REQ-SHELL-082/085); an emptied list when streaming is off. */
+  z.object({ kind: z.literal('terminal.streams'), streams: z.array(TerminalStreamMetaSchema) }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 
@@ -442,6 +453,12 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('notice.publish'), severity: NoticeSeveritySchema, title: z.string(), message: z.string(), detail: z.string(), action: z.string().optional(), key: z.string().optional(), sessionId: z.string(), persistent: z.boolean() }),
   /** Part V / REQ-NOTIFY-003: a transient the run host raises on its own — main pushes it to the main window's stack. */
   z.object({ kind: z.literal('acknowledgement.publish'), kindOf: AcknowledgementKindSchema, title: z.string().min(1), body: z.string().optional() }),
+  /**
+   * Part AL / ADR-0021: one terminal frame, numbered per stream in the run host. Main does NOT relay it unchanged the
+   * way it relays channels 1 and 2: REQ-MONITOR-306 bounds delivery per window, and main honours the bound by merging a
+   * stream's frames into a larger step (REQ-SHELL-103) — never by dropping one (`main/terminal.ts`).
+   */
+  z.object({ kind: z.literal('publish.terminal'), payload: TerminalFrameSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

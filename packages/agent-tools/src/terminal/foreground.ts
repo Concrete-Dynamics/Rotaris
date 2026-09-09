@@ -86,7 +86,10 @@ export class ForegroundSession {
   private state: 'idle' | 'running' | 'resetting' = 'idle';
   private chain: Promise<unknown> = Promise.resolve();
   private listeners: ((chunk: string) => void)[] = [];
-  private active: { readonly start: string; readonly end: string; readonly onEnd: (code: number) => void } | null = null;
+  /** Part AL: the live stream's taps — every byte the PTY produces, before the capture reads it (REQ-TOOLS-127). */
+  private taps: ((chunk: string) => void)[] = [];
+  private size = { cols: 240, rows: 50 };
+  private active: { readonly start: string; readonly end: string; readonly onEnd: (code: number) => void; readonly onKill: (reset: boolean) => void } | null = null;
   private pendingText = '';
   private reinitialized = false;
   private pausedCommand: { readonly start: string; readonly end: string; onEnd: ((code: number) => void) | null; captured: string } | null = null;
@@ -103,6 +106,44 @@ export class ForegroundSession {
   get isRunning(): boolean {
     return this.state === 'running';
   }
+  get cols(): number {
+    return this.size.cols;
+  }
+  get rows(): number {
+    return this.size.rows;
+  }
+
+  /** Part AL: a tap on the PTY's output, in arrival order, ahead of the capture; the returned function removes it. */
+  onOutput(cb: (chunk: string) => void): () => void {
+    this.taps.push(cb);
+    return () => { this.taps = this.taps.filter((t) => t !== cb); };
+  }
+  /** REQ-SHELL-093/100/106: the real terminal follows the grid; a later spawn takes the last size asked for. */
+  resize(cols: number, rows: number): void {
+    this.size = { cols: Math.max(1, cols), rows: Math.max(1, rows) };
+    try { this.pty?.resize(this.size.cols, this.size.rows); } catch (cause) { this.deps.warn(`terminal session ${this.id}: resize refused: ${String(cause)}`); }
+  }
+  /** REQ-SHELL-093: interrupt is the Ctrl-C control byte, end-input Ctrl-D, both written to the PTY as is. */
+  interrupt(): void {
+    this.ensure().write('\x03');
+  }
+  endInput(): void {
+    this.ensure().write('\x04');
+  }
+  /**
+   * REQ-SHELL-092 / REQ-TOOLS-128: the user's kill. The process tree behind the running command is terminated and
+   * the session restarted — the same reset a hard timeout performs (REQ-TOOLS-099) — and the running call returns
+   * exit −1 (REQ-TOOLS-179: killed) with the reason stated. False when nothing is running.
+   */
+  killActive(): boolean {
+    const a = this.active;
+    if (!a || this.state !== 'running') return false;
+    this.active = null;
+    this.state = 'resetting';
+    const reset = this.resetNow();
+    a.onKill(reset);
+    return true;
+  }
 
   private ensure(): PtyLike {
     if (this.pty) return this.pty;
@@ -110,7 +151,7 @@ export class ForegroundSession {
     const args = backend.kind === 'powershell'
       ? ['-NoLogo', '-NoProfile', '-NoExit', '-Command', "Remove-Module PSReadLine -ErrorAction SilentlyContinue; function prompt { '' }; $ProgressPreference = 'SilentlyContinue'"]
       : ['-i'];
-    const p = this.deps.factory.spawn(backend.file, args, { cwd: this.deps.cwd, env: { ...this.deps.env, TERM: 'dumb', PSModuleAnalysisCachePath: '' }, cols: 240, rows: 50, name: 'dumb' });
+    const p = this.deps.factory.spawn(backend.file, args, { cwd: this.deps.cwd, env: { ...this.deps.env, TERM: 'dumb', PSModuleAnalysisCachePath: '' }, cols: this.size.cols, rows: this.size.rows, name: 'dumb' });
     p.onData((d) => this.onData(d));
     p.onExit(() => { if (this.pty === p) this.pty = null; });
     this.pty = p;
@@ -118,6 +159,7 @@ export class ForegroundSession {
   }
 
   private onData(chunk: string): void {
+    for (const t of this.taps) { try { t(chunk); } catch (cause) { this.deps.warn(`terminal session ${this.id}: an output tap raised: ${String(cause)}`); } }
     for (const l of this.listeners) l(chunk);
     if (!this.active && !this.pausedCommand) return;
     this.pendingText += chunk;
@@ -176,8 +218,8 @@ export class ForegroundSession {
       if (captured.length > FOREGROUND_CAP * 2) { captured = captured.slice(-FOREGROUND_CAP - 1000); truncated = true; }
     };
     this.listeners.push(listener);
-    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' }>((resolve) => {
-      this.active = { start, end, onEnd: (code) => resolve({ kind: 'exit', code }) };
+    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean }>((resolve) => {
+      this.active = { start, end, onEnd: (code) => resolve({ kind: 'exit', code }), onKill: (reset) => resolve({ kind: 'kill', reset }) };
       let hard: TimerHandle | null = null;
       let soft: TimerHandle | null = null;
       if (opts.timeoutMs !== null) hard = timers.after(opts.timeoutMs as Millis, () => resolve({ kind: 'timeout' }));
@@ -222,6 +264,10 @@ export class ForegroundSession {
       this.listeners.push(pausedListener);
       this.pausedCommand.onEnd = () => { this.listeners = this.listeners.filter((l) => l !== pausedListener); };
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null }, captured);
+    }
+    if (outcome.kind === 'kill') {
+      // Part AL / REQ-SHELL-092: killed from the terminal window; the tree is gone and the session was restarted by `killActive`.
+      return finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: 'the command was killed from the terminal window' }, captured);
     }
     // timeout or abort: REQ-TOOLS-097/099 — the whole tree goes, the session restarts, shell state is lost.
     this.active = null;

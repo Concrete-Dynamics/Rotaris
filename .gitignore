@@ -45,3 +45,6 @@ apps/desktop/.cache/
 .delivery-proof/
 # Part AJ
 .traceability-proof/
+
+# Part AL
+.terminal-stream-proof/

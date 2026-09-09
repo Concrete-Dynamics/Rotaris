@@ -48,6 +48,7 @@
     "settings-proof": "node apps/desktop/scripts/settings-proof.mjs",
     "delivery-proof": "node apps/desktop/scripts/delivery-proof.mjs",
     "traceability-proof": "node apps/desktop/scripts/traceability-proof.mjs",
+    "terminal-stream-proof": "node apps/desktop/scripts/terminal-stream-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

@@ -6,10 +6,15 @@ import { errorObservation, observation, type Observation, type ToolContext, type
 import { BackgroundManager, DEFAULT_BACKGROUND_TIMEOUT_S } from './background.js';
 import { classifyOutcome, diagnosticBlock, outputSection, outputWarnings, renderAction, type FailureKind } from './classify.js';
 import { ForegroundSession, keystroke, type PtyFactory, type ShellBackend } from './foreground.js';
+import { backgroundStreamId, foregroundStreamId, streamDisplayName } from '@rotaris/contracts';
+import { TerminalStreams } from './streams.js';
+import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 
 export * from './classify.js';
 export * from './foreground.js';
 export * from './background.js';
+export * from './streams.js';
+export * from './emulator.js';
 
 /**
  * The `terminal` tool (REQ-TOOLS-095..113, REQ-TOOLS-179, REQ-TOOLS-187): one executor over a manager
@@ -66,13 +71,49 @@ export interface TerminalManagerDeps {
   readonly config: TerminalConfig;
   readonly env: Record<string, string>;
   readonly warn: (m: string) => void;
+  /** Part AL / ADR-0021: the headless emulator behind every live stream; the `@xterm/headless` adapter unless a test supplies one. */
+  readonly emulator?: EmulatorFactory;
 }
 
-/** One foreground session per agent (REQ-TOOLS-187); the background sessions per workspace. */
+/** One foreground session per agent (REQ-TOOLS-187); the background sessions per workspace; the live streams (ADR-0021). */
 export class TerminalManager {
   private readonly foreground = new Map<string, ForegroundSession>();
   private readonly background = new Map<string, BackgroundManager>();
-  constructor(private readonly deps: TerminalManagerDeps) {}
+  /** One tap per foreground session key, held across a soft pause until the command's final result arrives. */
+  private readonly taps = new Map<string, () => void>();
+  readonly streams: TerminalStreams;
+  constructor(private readonly deps: TerminalManagerDeps) {
+    this.streams = new TerminalStreams({ clocks: deps.clocks, emulator: deps.emulator ?? xtermEmulatorFactory, warn: deps.warn });
+  }
+
+  /**
+   * Part AL: a foreground command begins on the agent's stream (`fg:<agent>`, REQ-TOOLS-127). The tap feeds the
+   * registry every byte the PTY produces ahead of the capture; the registry does nothing at all when streaming is
+   * off (REQ-TOOLS-126). Returns false when no stream was opened.
+   */
+  beginForeground(key: string, session: ForegroundSession, spec: { sessionId: string; agentId: string; persona: string; command: string; workspaceRoot: string }): boolean {
+    const streamId = foregroundStreamId(spec.agentId);
+    const opened = this.streams.begin({
+      sessionId: spec.sessionId, streamId, kind: 'agent', agentId: spec.agentId, displayName: streamDisplayName(streamId, spec.persona), command: spec.command,
+      cols: session.cols, rows: session.rows, workspaceRoot: spec.workspaceRoot,
+      control: {
+        write: (bytes) => { session.sendInput(bytes); return true; },
+        resize: (cols, rows) => session.resize(cols, rows),
+        interrupt: () => { session.interrupt(); return true; },
+        endInput: () => { session.endInput(); return true; },
+        kill: () => { session.killActive(); },
+      },
+    });
+    if (!opened) return false;
+    if (!this.taps.has(key)) this.taps.set(key, session.onOutput((chunk) => this.streams.data(streamId, chunk)));
+    return true;
+  }
+  /** The command's final result arrived (not a soft pause): the closing frame, the exit code, the tap released. */
+  endForeground(key: string, agentId: string, outcome: { exitCode: number; finalText: string }): void {
+    this.taps.get(key)?.();
+    this.taps.delete(key);
+    this.streams.end(foregroundStreamId(agentId), outcome);
+  }
 
   session(key: string, cwd: string): ForegroundSession {
     let s = this.foreground.get(key);
@@ -88,10 +129,28 @@ export class TerminalManager {
   backgroundFor(cwd: string): BackgroundManager {
     let b = this.background.get(cwd);
     if (!b) {
-      b = new BackgroundManager({ backend: this.deps.backend, cwd, env: this.deps.env, monotonic: this.deps.clocks.monotonic, wall: this.deps.clocks.wall, timers: this.deps.clocks.timers, maxSessions: this.deps.config.maxBackgroundSessions, warn: this.deps.warn });
+      b = new BackgroundManager({ backend: this.deps.backend, cwd, env: this.deps.env, monotonic: this.deps.clocks.monotonic, wall: this.deps.clocks.wall, timers: this.deps.clocks.timers, maxSessions: this.backgroundLimits?.maxSessions ?? this.deps.config.maxBackgroundSessions, warn: this.deps.warn });
       this.background.set(cwd, b);
     }
     return b;
+  }
+  /**
+   * Part AL — REQ-TOOLS-108 / REQ-CONFIG-116: the two registered background keys, `runtime.shell_max_background_sessions`
+   * (default 20, minimum 1, no stated maximum) and `runtime.shell_background_timeout`, as the run's configuration set them.
+   * The loader had validated and defaulted both since Part I and nothing read them (defect forty-eight in ADR-0021's
+   * note): every manager took `TERMINAL_DEFAULTS`. Applied to every background manager already open and to the next.
+   */
+  private backgroundLimits: { readonly maxSessions: number; readonly timeoutS: number } | null = null;
+  setBackgroundLimits(limits: { readonly maxSessions: number; readonly timeoutS: number }): void {
+    this.backgroundLimits = { maxSessions: Math.max(1, Math.floor(limits.maxSessions)), timeoutS: Math.max(1, Math.floor(limits.timeoutS)) };
+    for (const b of this.background.values()) b.setMax(this.backgroundLimits.maxSessions);
+  }
+  /** The configured background wall clock in seconds, or null when no run has configured one yet. */
+  get backgroundTimeoutS(): number | null {
+    return this.backgroundLimits?.timeoutS ?? null;
+  }
+  get maxBackgroundSessions(): number {
+    return this.backgroundLimits?.maxSessions ?? this.deps.config.maxBackgroundSessions;
   }
   /** REQ-TOOLS-184: background sessions in the running state, across the workspaces this host serves. */
   get runningBackground(): number {
@@ -105,6 +164,9 @@ export class TerminalManager {
     this.foreground.clear();
     await Promise.all([...this.background.values()].map((b) => b.dispose()));
     this.background.clear();
+    for (const untap of this.taps.values()) untap();
+    this.taps.clear();
+    this.streams.dispose();
   }
 }
 
@@ -131,7 +193,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
 
       // Session actions (REQ-TOOLS-110). `background` outranks `session_id` (REQ-TOOLS-120).
       if (!a.background && (a.session_action || a.session_id)) return sessionAction(a, manager.backgroundFor(cwd));
-      if (a.background) return startBackground(a, manager.backgroundFor(cwd), config);
+      if (a.background) return startBackground(a, manager, ctx, config);
 
       const key = `${ctx.sessionId}:${ctx.agentName}`;
       let session = manager.session(key, cwd);
@@ -147,12 +209,20 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
       }
       if (a.is_input) {
         session.sendInput(keystroke(a.command));
+        // Part AL: the agent's own keystroke arms the stream's next flush too, the same as the user's (ADR-0021 Decision).
+        manager.streams.keystroke(foregroundStreamId(ctx.agentName));
         const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: 'Input was written to the terminal session.', exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', warnings: [] });
         return observation(`Sent input to the terminal session.\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'success', exitCode: 0, warnings: [] });
       }
       const timeoutMs = a.timeout !== undefined ? a.timeout * 1000 : config.commandTimeoutS * 1000;
       const softEligible = a.timeout === undefined;
+      // Part AL / ADR-0021: the live stream. Opened before the command is written, fed by a tap on the PTY, closed with
+      // the observation's own final text once the command's FINAL result is in — a soft pause keeps it open, because
+      // the process keeps running (REQ-TOOLS-098) and the later poll is what ends it. The observation below reads
+      // nothing from the stream (REQ-TOOLS-127).
+      if (a.command !== '') manager.beginForeground(key, session, { sessionId: ctx.sessionId, agentId: ctx.agentName, persona: ctx.persona, command: a.command, workspaceRoot: cwd });
       const r = a.command === '' ? await session.poll() : await session.run(a.command, { timeoutMs: softEligible ? null : timeoutMs, signal: ctx.signal, ...(softEligible ? { hardMs: timeoutMs } : {}) } as { timeoutMs: number | null; signal?: AbortSignal });
+      if (!r.softPaused) manager.endForeground(key, ctx.agentName, { exitCode: r.exitCode, finalText: r.output });
       const label = `${resetNote ? '[RESET] ' : ''}${a.command}`;
       const warnings = r.exitCode === 0 || r.exitCode > 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];
       const failureKind: FailureKind | null = r.timedOut ? 'timeout' : r.error && !r.softPaused ? 'execution_error' : null;
@@ -182,13 +252,26 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
   };
 }
 
-function startBackground(a: TerminalArgs, bg: BackgroundManager, config: TerminalConfig): Observation {
-  const started = bg.start(a.command, a.timeout ?? config.backgroundTimeoutS);
+function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolContext, config: TerminalConfig): Observation {
+  const bg = manager.backgroundFor(ctx.workspaceRoot);
+  // The call's own timeout, else the configured `runtime.shell_background_timeout`, else the shipped default (REQ-TOOLS-108).
+  const started = bg.start(a.command, a.timeout ?? manager.backgroundTimeoutS ?? config.backgroundTimeoutS);
   if (!started.ok) {
     const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: started.error, error_class: 'ExecutionError', exit_code: null, failure_kind: 'execution_error', outcome_kind: 'execution_error', outcome_severity: 'error', warnings: [] });
     return errorObservation(`${started.error}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'execution_error', failureKind: 'execution_error', exitCode: null, warnings: [] });
   }
   const s = started.session;
+  // Part AL / REQ-TOOLS-107/127/128: its own `bg:<id>` stream — a pipe, so no real terminal to resize (ADR-0020 c.3),
+  // send-keys through stdin, interrupt as SIGINT where a pipe can take one, kill as the session's own termination.
+  const streamId = backgroundStreamId(s.id);
+  const opened = manager.streams.begin({
+    sessionId: ctx.sessionId, streamId, kind: 'background', displayName: streamDisplayName(streamId), command: a.command, cols: 80, rows: 24, workspaceRoot: ctx.workspaceRoot,
+    control: { write: (bytes) => s.sendInput(bytes), interrupt: () => s.interrupt(), kill: () => s.end('killed') },
+  });
+  if (opened) {
+    const untap = s.onOutput((chunk) => manager.streams.data(streamId, chunk));
+    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode ?? -1, finalText: s.readAll().replace(/\s+$/, '') }); });
+  }
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: `Background session started: ${s.id}`, exit_code: 0, outcome_kind: 'background_running', outcome_severity: 'info', session_id: s.id, session_status: 'running', warnings: [] });
   return observation(`Background session started: ${s.id}\ncommand: ${a.command}\nsession_status="running"\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'background_running', exitCode: 0, warnings: [] });
 }

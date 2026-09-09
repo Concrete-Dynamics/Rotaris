@@ -9,6 +9,7 @@ import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
 import { ImageAttachmentInputSchema } from './channels.js';
 import { RequirementsCommandSchema } from './requirements.js'; // Part AK
+import { TERMINAL_COMMAND_SCHEMAS } from './terminal.js';
 
 /**
  * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -227,6 +228,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // Part AK — the requirements family (spec 08; ADR-0041) travels as ONE envelope member carrying the seam's
   // `name`-discriminated command untouched; main stamps the actor and relays it to the workspace service.
   z.object({ kind: z.literal('requirements'), command: RequirementsCommandSchema }),
+  // Part AL — the live terminal's control traffic (ADR-0021, REQ-TOOLS-128, REQ-SHELL-106/107); main relays each to the run host.
+  ...TERMINAL_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

@@ -78,7 +78,8 @@ export interface RowExtra {
    * migration in this batch) and it does not need to be: a row carrying a live stream is by definition unsettled
    * and at the newest end of the resident window, and release takes whole pages from the OLDEST end
    * (REQ-SESSION-192), so no row is ever released while it carries one and REQ-CHAT-165's "identical to the row
-   * released" is unaffected. Nothing sets it in this build — ADR-0021's fan-out has no first execution.
+   * released" is unaffected. Set by Part AL (ADR-0021's first execution) on a foreground `terminal` row at append
+   * and kept out of the recorded event below; the settle rebuilds the row from the record, which never holds it.
    */
   readonly streamId?: string;
   readonly attachments?: readonly Omit<ImageAttachment, 'available' | 'unavailableReason'>[];
@@ -450,7 +451,11 @@ export class SessionWriter {
     const { persona, name, attachments, ...tool } = extra;
     const definedTool = Object.fromEntries(Object.entries(tool).filter(([, v]) => v !== undefined));
     const row: TranscriptRow = withDerivedRowFields({ index, kind, settled, body, at, ts, ...(persona === undefined ? {} : { persona }), ...(name === undefined ? {} : { name }), ...(attachments === undefined ? {} : { attachments: attachments.map((a) => ({ ...a, available: true })) }), ...definedTool });
-    const ev = this.envelope('transcript.row', at, { index, row: maskRow(row) });
+    // Part AL — the live-terminal stream id is a DISPLAY field, published on the row and never recorded (the same rule
+    // as `stalledSince`, REQ-CHAT-164): the `transcript.row` event carries the row without it, so a session read back
+    // from storage names no stream (REQ-SHELL-104) and the recorded row is the row released (REQ-CHAT-165).
+    const { streamId: _display, ...recorded } = row;
+    const ev = this.envelope('transcript.row', at, { index, row: maskRow(recorded as TranscriptRow) });
     const line = serializeEvent(ev);
     if (!line.ok) {
       // REQ-EVENTS-032: the row is recorded, its event alone is dropped, and every later event lands.

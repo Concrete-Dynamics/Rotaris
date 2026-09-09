@@ -29,6 +29,7 @@ export class UpdateRelay {
     [CHANNEL.configChanged]: 0,
     [CHANNEL.acknowledgementPublish]: 0,
     [CHANNEL.libraryChanged]: 0,
+    [CHANNEL.requirementsChanged]: 0, // Part AK — channel 10's counter; the record is total over ChannelName (plan Reservations, ruled 2026-09-09: a new channel's counter line rides with the channel reservation)
     [CHANNEL.command]: 0,
   };
 

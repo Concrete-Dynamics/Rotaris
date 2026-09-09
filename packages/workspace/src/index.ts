@@ -42,3 +42,4 @@ export * from './git/worktrees.js';
 export * from './git/checkpoints.js';
 export * from './backup.js';
 export * from './restore.js';
+export * from './delivery/index.js'; // Part AK

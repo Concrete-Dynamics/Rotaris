@@ -489,6 +489,120 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE transcript_rows ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    to: 15,
+    // v15 lands with the delivery store (Part AK; ADR-0041's first execution; REQ-CONFIG-192, REQ-TRACE-382..405,
+    // REQ-TRACE-464, REQ-TRACE-476). Every table is WORKSPACE-scoped and references `sessions` in no column: a delivery
+    // record outlives every session (REQ-CONFIG-192 "operational records only"), and a run row names its session by id
+    // as a fact about the run, not as a foreign key a session delete may cascade through (REQ-TRACE-476: "its worktree,
+    // its branch and its partial output SHALL all be kept").
+    //
+    // Three commitments of ADR-0041 §"Forward-tolerant records survive the move" are the SHAPE of the `delivery` table
+    // and not a preference: (1) `schema_version` is the RECORD's, carried on the row and read back as it was stored —
+    // the column has no NOT NULL, no DEFAULT and no CHECK, so a value below 1, absent or not an integer sits there and
+    // reads as "unreadable" (REQ-CONFIG-192) rather than being coerced into something the build can interpret; (2) the
+    // record body is ONE opaque serialised value (`body`), decoded only once the version is supported, so a record a
+    // later build wrote is storable, reportable and untouched; the columns beside it are exactly what the store must
+    // query on — the identifier and the delivery state — plus the two hashes REQ-TRACE-387/402 compare and the
+    // origin state REQ-TRACE-233 returns a blocked requirement to; (3) no write on read, anywhere: no statement in
+    // the DAL updates a row it did not transition.
+    //
+    // `transitions_ever` is ADR-0041 commitment 3 (consequence 8): a monotonic count of transitions ever recorded per
+    // requirement, incremented in the SAME transaction that appends the history entry and applies REQ-CONFIG-192's
+    // 200-entry prune (a DELETE), so REQ-TRACE-405's "how many were dropped" is the counter minus the retained rows
+    // and can never disagree with the rows it describes. An implementer who finds it unused will find this sentence.
+    //
+    // `delivery_audit` is append-only by trigger, on `permission_audit`'s terms (REQ-TRACE-405: "no state-changing
+    // action SHALL complete without leaving such a record"; REQ-TRACE-401: an override is marked as one and stays
+    // visible). It is one series for the workspace, ordered by its own rowid, and interleaves every requirement's
+    // transitions in the order they were admitted (ADR-0041 §"Ordering guarantees are still ours to state").
+    //
+    // NO new index: every reader names `req_id`, the first column of every composite primary key, and the history
+    // prune is `DELETE … WHERE req_id = ? AND seq <= ?`, which the same key serves. `delivery.test.ts` asserts both
+    // plans (spike 8's rule). NO queue table: REQ-TRACE-480's two persisted controls belong to the workspace
+    // configuration (`requirements.scheduling.*`, REQ-CONFIG-196), which Part AP registers; until then they are
+    // in-memory defaults in the service, and a stop is never persisted anywhere by requirement.
+    sql: `
+      CREATE TABLE delivery (
+        req_id           TEXT PRIMARY KEY,
+        schema_version,
+        state            TEXT NOT NULL,
+        return_to        TEXT,
+        accepted_hash    TEXT,
+        snapshot_hash    TEXT,
+        transitions_ever INTEGER NOT NULL DEFAULT 0,
+        updated_at       TEXT NOT NULL,
+        body             TEXT NOT NULL
+      );
+      CREATE TABLE delivery_history (
+        req_id     TEXT NOT NULL,
+        seq        INTEGER NOT NULL,
+        at         TEXT NOT NULL,
+        action     TEXT NOT NULL,
+        actor      TEXT NOT NULL,
+        from_state TEXT NOT NULL,
+        to_state   TEXT NOT NULL,
+        hash       TEXT NOT NULL,
+        reason     TEXT,
+        override   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (req_id, seq)
+      );
+      CREATE TABLE delivery_audit (
+        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+        at         TEXT NOT NULL,
+        req_id     TEXT NOT NULL,
+        action     TEXT NOT NULL,
+        actor      TEXT NOT NULL,
+        from_state TEXT NOT NULL,
+        to_state   TEXT NOT NULL,
+        hash       TEXT NOT NULL,
+        reason     TEXT,
+        override   INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TRIGGER delivery_audit_no_update BEFORE UPDATE ON delivery_audit
+        BEGIN SELECT RAISE(ABORT, 'delivery_audit is append-only (REQ-TRACE-405)'); END;
+      CREATE TABLE delivery_runs (
+        req_id       TEXT NOT NULL,
+        unit         TEXT NOT NULL,
+        session_id   TEXT,
+        worktree_ref TEXT,
+        permissions  TEXT NOT NULL DEFAULT '',
+        status       TEXT NOT NULL,
+        stage        TEXT,
+        outcome      TEXT,
+        started_at   TEXT NOT NULL,
+        ended_at     TEXT,
+        PRIMARY KEY (req_id, unit)
+      );
+      CREATE TABLE delivery_worktrees (
+        ref        TEXT PRIMARY KEY,
+        req_id     TEXT NOT NULL,
+        unit       TEXT NOT NULL,
+        path       TEXT NOT NULL,
+        branch     TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        kept       INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE delivery_blockers (
+        req_id       TEXT NOT NULL,
+        seq          INTEGER NOT NULL,
+        kind         TEXT NOT NULL,
+        reason       TEXT NOT NULL,
+        options      TEXT NOT NULL DEFAULT '[]',
+        blocking_ids TEXT NOT NULL DEFAULT '[]',
+        run_unit     TEXT,
+        raised_at    TEXT NOT NULL,
+        answered_at  TEXT,
+        answer       TEXT,
+        PRIMARY KEY (req_id, seq)
+      );
+      CREATE TABLE delivery_tombstones (
+        req_id     TEXT PRIMARY KEY,
+        retired_at TEXT NOT NULL,
+        last_hash  TEXT
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

@@ -8,6 +8,7 @@ import { PaneLayoutSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
 import { ImageAttachmentInputSchema } from './channels.js';
+import { RequirementsCommandSchema } from './requirements.js'; // Part AK
 
 /**
  * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -223,6 +224,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('prompts.read') }),
   z.object({ kind: z.literal('prompts.push'), list: PromptListSchema, text: z.string() }),
   z.object({ kind: z.literal('prompts.take'), list: PromptListSchema, index: z.number().int().nonnegative(), remove: z.boolean() }),
+  // Part AK — the requirements family (spec 08; ADR-0041) travels as ONE envelope member carrying the seam's
+  // `name`-discriminated command untouched; main stamps the actor and relays it to the workspace service.
+  z.object({ kind: z.literal('requirements'), command: RequirementsCommandSchema }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];
@@ -240,5 +244,7 @@ export interface RendererBridge {
   readonly onConfigChanged: (fn: (p: unknown) => void) => () => void;
   /** Part X: the library-change broadcast (REQ-LIBRARY-105) — a revision counter, so a surface that is off screen re-reads when it is next shown. */
   readonly onLibraryChanged: (fn: (p: unknown) => void) => () => void;
+  /** Channel 10 (Part AK): the requirements board's generation moved (REQ-TRACE-374) — the window re-reads the board. */
+  readonly onRequirementsChanged: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

@@ -5,6 +5,7 @@ import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementKindSchema, NoticeSchema } from './notices.js';
+import { RequirementsChangedSchema } from './requirements.js'; // Part AK
 
 /**
  * REQ-SESSION-134's severity vocabulary for a timeline entry, ascending, `info` where an entry names none. It is the
@@ -29,6 +30,8 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  *     (Part V; REQ-NOTIFY-003's transient half of a main-originated or run-host-originated event, REQ-MCP-044)
  *  9. library:changed      — main → every window: a revision counter, bumped for the four things
  *     REQ-LIBRARY-105 closes a "library change" to and for nothing else (Part X)
+ * 10. requirements:changed — main → every window: the board's generation moved, with the affected identifiers or
+ *     null for a whole pass (Part AK; REQ-TRACE-348/374 — the value is re-read, never carried)
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -49,6 +52,7 @@ export const CHANNEL = {
   configChanged: 'config:changed',
   acknowledgementPublish: 'acknowledgement:publish',
   libraryChanged: 'library:changed',
+  requirementsChanged: 'requirements:changed', // Part AK
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -331,6 +335,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.configChanged]: ConfigChangedSchema,
   [CHANNEL.acknowledgementPublish]: AcknowledgementPublishSchema,
   [CHANNEL.libraryChanged]: LibraryChangedSchema,
+  [CHANNEL.requirementsChanged]: RequirementsChangedSchema, // Part AK
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

@@ -1,0 +1,117 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { FakeClock, mintWorkspaceId, ok, err } from '@rotaris/kernel';
+import type { Actor, BoardProjection, TraceabilityEngine, TransitionOutcome, Refusal } from '@rotaris/contracts';
+import { forgetSpelling, openWorkspaceStore, type ResolvedStore } from '@rotaris/store';
+import { fixtureParse, fixtureReport } from '@rotaris/workspace';
+import { ENGINE_NOT_MERGED, createDeliveryService, deliveryServiceFor, type DeliveryService } from './delivery.js';
+
+/**
+ * The delivery service (Part AK): the composition check, the coalesced engine read, one value per generation,
+ * `changed` only after a committed write, and the stated refusals for what other parts build.
+ */
+const A = mintWorkspaceId('000000000000000000000000000000ae');
+const USER: Actor = { kind: 'user', person: 'owner' };
+let root: string;
+let r: ResolvedStore;
+let clock: FakeClock;
+let parses = 0;
+const engine: TraceabilityEngine = {
+  ...ENGINE_NOT_MERGED,
+  parseStore: async () => { parses += 1; return ok(fixtureParse()); },
+  sweep: async () => ok({ sites: [], modules: [], tests: [], durationMs: 1 }),
+  verify: async () => ok(fixtureReport()),
+};
+const service = (e: TraceabilityEngine = engine): DeliveryService => createDeliveryService({ db: r.db, workspaceRoot: 'C:\\ws', engine: e, clocks: clock, log: () => undefined });
+
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-svc-')); r = openWorkspaceStore(root, A, 'C:\\ws'); clock = new FakeClock(); parses = 0; });
+afterEach(() => { r.db.close(); forgetSpelling(r.dir); rmSync(root, { recursive: true, force: true }); });
+
+describe('createDeliveryService', () => {
+  it('REQ-TRACE-348/349: two board reads of one generation return the same value; a cold board reads the source once', async () => {
+    const s = service();
+    const [a, b] = await Promise.all([s.handle({ name: 'requirements.board', workspace: 'x' }, USER), s.handle({ name: 'requirements.board', workspace: 'x' }, USER)]);
+    expect(a.value).toBe(b.value);
+    expect(parses).toBe(1);
+    const board = a.value as BoardProjection;
+    expect(board.generation).toBe(1);
+    expect(board.workspace).toBe('C:\\ws');
+    expect(board.cards).toHaveLength(7);
+    expect(a.changed).toBeUndefined();
+  });
+  it('REQ-TRACE-388/405: an accepted action moves the generation and names the affected requirement; a refusal changes nothing', async () => {
+    const s = service();
+    const acted = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release' }, USER);
+    expect((acted.value as { ok: boolean; value: TransitionOutcome }).value).toMatchObject({ from: 'backlog', to: 'ready', historyEntry: 1 });
+    expect(acted.changed).toEqual({ generation: 2, affected: ['REQ-101'] });
+    const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER)).value as BoardProjection;
+    expect(board.generation).toBe(2);
+    expect(board.cards.find((c) => c.id === 'REQ-101')!.column).toBe('ready');
+    const refused = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'accept' }, USER);
+    expect((refused.value as { ok: boolean; error: Refusal }).ok).toBe(false);
+    expect(refused.changed).toBeUndefined();
+    expect(s.generation).toBe(2);
+    const unknown = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-999', action: 'release' }, USER);
+    expect((unknown.value as { error: Refusal }).error.reason).toBe('REQ-999 is not in this requirement store; nothing was written.');
+    const kept = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'keep-worktree' }, USER);
+    expect(kept.changed).toBeUndefined();
+  });
+  it('detail, reachable, refresh and the queue answer from the store; operations and source writes are stated refusals', async () => {
+    const s = service();
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release' }, USER);
+    const d = (await s.handle({ name: 'requirements.detail', workspace: 'x', id: 'REQ-101' }, USER)).value as { card: { column: string }; history: { action: string }[]; prose: string };
+    expect(d.card.column).toBe('ready');
+    expect(d.history.map((h) => h.action)).toEqual(['release']);
+    expect(d.prose).toBe('The prose of REQ-101.');
+    const reach = (await s.handle({ name: 'requirements.reachable', workspace: 'x', id: 'REQ-101', from: 'ready', to: 'backlog' }, USER)).value as { reachable: boolean; consequence?: string };
+    expect(reach.reachable).toBe(true);
+    expect(reach.consequence).toMatch(/^Returning/);
+    const refreshed = await s.handle({ name: 'requirements.refresh', workspace: 'x' }, USER);
+    expect(refreshed.changed).toEqual({ generation: 3, affected: null });
+    expect(parses).toBe(2);
+    const q = await s.handle({ name: 'requirements.queue.set', workspace: 'x', automatic: true, concurrency: 3 }, USER);
+    expect(q.value).toMatchObject({ automatic: true, concurrency: 3, stopped: false });
+    const stopped = await s.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    expect((stopped.value as { stopped: boolean }).stopped).toBe(true);
+    for (const cmd of [
+      { name: 'requirements.operation' as const, workspace: 'x', operation: 'check' as const },
+      { name: 'requirements.source.write' as const, workspace: 'x', document: '# x' },
+      { name: 'requirements.source.previewLocation' as const, workspace: 'x' },
+      { name: 'requirements.cancel' as const, workspace: 'x', operation: 'check' },
+    ]) {
+      const out = await s.handle(cmd, USER);
+      expect((out.value as { ok: boolean }).ok).toBe(false);
+      expect(out.changed).toBeUndefined();
+    }
+  });
+  it('an engine that is not merged yields a board with no source and the cause stated, and still opens (REQ-TRACE-231)', async () => {
+    const s = service(ENGINE_NOT_MERGED);
+    const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER)).value as BoardProjection;
+    expect(board.source).toEqual({ kind: 'none' });
+    expect(board.cards).toEqual([]);
+    expect(board.parseErrors[0]!.message).toBe('the traceability engine failed: Part AJ is not merged into this build');
+  });
+  it('REQ-TRACE-476: a run row left running by a previous instance is reaped on the first pass and reported interrupted, work retained', async () => {
+    r.db.prepare("INSERT INTO delivery (req_id, schema_version, state, return_to, accepted_hash, snapshot_hash, transitions_ever, updated_at, body) VALUES ('REQ-101', 1, 'running', NULL, NULL, ?, 1, 't', ?)").run('h'.repeat(32), JSON.stringify({ schemaVersion: 1, state: 'running', snapshotHash: 'h'.repeat(32), updatedAt: 't', units: 1 }));
+    r.db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-101', 'u1', 'sess-old', NULL, '', 'running', 'implementing', NULL, 't', NULL)").run();
+    const s = service();
+    const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER)).value as BoardProjection;
+    expect(s.reaped).toHaveLength(1);
+    expect(s.reaped[0]!.statement).toMatch(/^interrupted, work retained/);
+    const c = board.cards.find((x) => x.id === 'REQ-101')!;
+    expect(c.column).toBe('blocked');
+    expect(c.returnTo).toBe('ready');
+    expect(c.run?.interrupted).toBe(true);
+  });
+  it('deliveryServiceFor keeps one service per open store', () => {
+    const deps = { workspaceRoot: 'C:\\ws', engine, clocks: clock, log: () => undefined };
+    expect(deliveryServiceFor(r, deps)).toBe(deliveryServiceFor(r, deps));
+  });
+  it('REQ-TRACE-402: a writer without the declaration is refused with the comparison named — proven on the guard, not here, since the composition is fixed', () => {
+    // The service always composes the real writer; the guard test covers `assertWriterDeclares` against a bare object.
+    expect(() => service()).not.toThrow();
+    void err;
+  });
+});

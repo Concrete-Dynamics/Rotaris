@@ -222,3 +222,30 @@ processes and no unit test spans them. A workspace declaring one hook raises `RE
 offers `Review hooks` carrying `data-action="open-hook-review"`; activating it opened `REQ-HOOKS-106`'s review for
 that workspace and no other, one hook listed, and the renderer's mismatch branch was never taken. The two strings
 agreed on the first run. Recorded because the finding is the absence: this change held no defect.
+
+## Third execution — 2026-09-09 (Part AN), a persistent notice a renderer surface must raise
+
+*Recorded under GD-10; the proof is `pnpm slash-proof`.*
+
+**What was asked.** `REQ-CHAT-021`: any non-executed outcome of a slash submission raises a **persistent** notice
+titled "Command not run" — not a transient toast — carrying the outcome's message. The composer is a renderer surface;
+the outcome is decided in the renderer; nothing crosses to main.
+
+**Defect forty-seven — decision B has no entry for a renderer.** The record's two entry points, `report` and
+`acknowledge`, are main's (`main/notices.ts`); the command surface carries `notice.acknowledge` and no `notice.report`,
+and `ui-core`'s store is a projection of what main last published. A renderer therefore has no way to publish into the
+one persistent slot, and the requirement's first surface to need one found the gap. The decision was written with
+every persistent notice originating in main or the run host, which held until this part.
+
+**What was built, stated as a stopgap.** The composer draws the notice itself, with the shell's own `NoticeBanner`,
+above its field: one at a time, replaced by the next slash submission, dismissible, never on a timer — the design's
+notice component on a second surface, which `REQ-SHELL-113`'s one-transient-surface rule does not reach because this
+is not a transient, and which decision 4's one-persistent-slot rule is bent by, knowingly. `WorkspaceView` takes an
+optional `slash.raiseNotice` and routes the notice there when the host passes one, so the stopgap is removed by
+wiring, not by rewriting. **Owed:** a `notice.report` command (contracts and main — neither is this part's file) that
+carries the renderer's title and message into `report` with `sessionId` empty for the focused run, so the notice
+enters the record of `REQ-NOTIFY-268` and the single slot like every other; the renderer then passes `raiseNotice`
+and the composer's banner goes.
+
+**Measured.** Eleven non-executed submissions in the proof raised exactly one banner each — title, message, a Dismiss
+control, the previous one gone — and an executed command raised none and cleared the last.

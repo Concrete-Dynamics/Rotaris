@@ -1,14 +1,19 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /**
  * REQ-LIBRARY-141 / REQ-CHAT-043 — the prompt stash dialog, reached from the transcript toolbar's
- * "Apply stash (n)" (REQ-LIBRARY-140) and, once the composer's slash catalogue exists, from `/pop`
- * (REQ-LIBRARY-142, owed to that part).
+ * "Apply stash (n)" (REQ-LIBRARY-140) and, since Part AN, from the composer's `/pop` (REQ-LIBRARY-142): the command
+ * opens this dialog and removes nothing itself; Apply or Pop inside it decides whether the entry stays.
  *
  * Every string here is the requirement's own. The first row is pre-selected, so Pop is a two-gesture act and
  * never a one-gesture accident on the wrong entry; with an empty stash the list is disabled, carries the stated
  * sentence, and both actions are disabled. Apply copies and keeps; Pop copies and removes — the same pair of
  * deliberate acts the Prompts tab draws (REQ-LIBRARY-107).
+ *
+ * Part AN: the dialog takes keyboard focus when it opens (the primary action, or Close when there is nothing to
+ * pop) and gives it back to what had it when it closes, so `/pop` — typed, completed and submitted from the
+ * keyboard (REQ-CHAT-026) — continues on the keyboard, and a keystroke meant for the dialog never lands in the
+ * composer behind it. Pop and Apply already return focus to the composer through the load (REQ-CHAT-044).
  */
 export const STASH_DIALOG_TITLE = 'Prompt stash';
 export const STASH_DIALOG_INTRO = 'Apply copies the selected prompt into the composer and keeps it in the stash. Pop copies it and removes it from the stash.';
@@ -33,6 +38,14 @@ export function StashDialog({ stash, onTake, onClose }: StashDialogProps) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  // Part AN (REQ-LIBRARY-142 / REQ-CHAT-026): focus arrives with the dialog and leaves with it.
+  const primary = useRef<HTMLButtonElement>(null);
+  const closeControl = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    (primary.current?.disabled ? closeControl.current : primary.current)?.focus();
+    return () => { if (previous instanceof HTMLElement && previous.isConnected && document.activeElement === document.body) previous.focus(); };
+  }, []);
   const empty = stash.length === 0;
   const index = selected < stash.length ? selected : 0;
   const take = (remove: boolean) => { if (!empty) { onTake(index, remove); onClose(); } };
@@ -58,9 +71,9 @@ export function StashDialog({ stash, onTake, onClose }: StashDialogProps) {
           </ul>
         )}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-ghost" data-testid="stash-dialog-close" onClick={onClose}>Close</button>
+          <button ref={closeControl} type="button" className="btn btn-ghost" data-testid="stash-dialog-close" onClick={onClose}>Close</button>
           <button type="button" className="btn btn-secondary" disabled={empty} data-testid="stash-dialog-apply" onClick={() => take(false)}>Apply</button>
-          <button type="button" className="btn btn-primary" disabled={empty} data-testid="stash-dialog-pop" onClick={() => take(true)}>Pop</button>
+          <button ref={primary} type="button" className="btn btn-primary" disabled={empty} data-testid="stash-dialog-pop" onClick={() => take(true)}>Pop</button>
         </div>
       </div>
     </div>

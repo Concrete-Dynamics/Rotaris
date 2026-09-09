@@ -167,4 +167,16 @@ describe('contracts — theme data (REQ-SHELL-128..145)', () => {
     expect(raised.h).toBe(base.h);
     expect(contrastRatio(raisedText, 'oklch(18% 0 0)')).toBeGreaterThanOrEqual(4.5);
   });
+
+  // Part AN — defect forty-six (ADR-0050): the rounding after the bisection landed this input at 4.49997:1.
+  it('never settles a hair below the floor after rounding (ADR-0050 defect forty-six)', () => {
+    const raised = raiseLightness('oklch(52% 0.05 292)', 4.5, 'oklch(21% 0 0)');
+    expect(contrastRatio(raised, 'oklch(21% 0 0)')).toBeGreaterThanOrEqual(4.5);
+    expect(parseOklch(raised).l).toBeCloseTo(0.604, 3);
+    // The stated floor is exact: no tolerance is borrowed from the caller.
+    for (const [colour, against] of [['oklch(30% 0.1 292)', 'oklch(21% 0 0)'], ['oklch(40% 0.12 25)', 'oklch(25% 0 0)'], ['oklch(35% 0.12 165)', 'oklch(18% 0 0)']] as const) {
+      expect(contrastRatio(raiseLightness(colour, 4.5, against), against)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(raiseLightness(colour, 3, against), against)).toBeGreaterThanOrEqual(3);
+    }
+  });
 });

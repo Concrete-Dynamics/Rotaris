@@ -965,3 +965,40 @@
 .term-preview__screen:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .term-preview__lines { margin: 0; font: inherit; white-space: pre; overflow: hidden; user-select: text; }
 .term-preview__caption { font-size: var(--rt-text-2xs, 10px); }
+/* Part AN */
+/*
+ * The composer's slash catalogue (REQ-CHAT-024..027). Craft from the design's slash-catalogue popover
+ * (`docs/design/mockup` → WORKSPACE → queue + composer): a raised surface above the field, the palette's own
+ * `.cmdk-list` / `.cmdk-item` rows, the command name in the mono face at a fixed column, the description in tertiary
+ * text, the foot naming the keys. Tokens by name throughout; the only figure that is not a token is REQ-CHAT-024's
+ * eight rows, which the popup measures from one row rather than writing as a height.
+ */
+.slash-field { position: relative; display: flex; flex: 1 1 auto; min-height: 48px; }
+.slash-field > .composer__input { flex: 1 1 auto; width: 100%; }
+/* REQ-CHAT-027: while highlighted, the field's own glyphs are transparent and the overlay draws them; the caret stays the design's. */
+.composer__input.is-slash { color: transparent; caret-color: var(--rt-accent); }
+.composer__input.is-slash::selection { color: transparent; }
+.slash-overlay { position: absolute; inset: 0; pointer-events: none; background: transparent; border-color: transparent; overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; min-height: 0; color: var(--rt-text); }
+/* REQ-CHAT-027: three token states differing in colour AND weight; the argument in its own fourth colour. The four values are set on `.slash-field` by the view from the active theme. */
+.slash-token[data-state='resolved'] { color: var(--slash-resolved); font-weight: var(--rt-weight-display); }
+.slash-token[data-state='partial'] { color: var(--slash-partial); font-weight: var(--rt-weight-body); }
+.slash-token[data-state='unknown'] { color: var(--slash-unknown); font-weight: var(--rt-weight-display); }
+.slash-argument { color: var(--slash-argument); font-weight: var(--rt-weight-body); }
+/* REQ-CHAT-024: anchored directly above the field at its width (fixed, measured from the field, because the composer block scrolls). */
+.slash-popup { position: fixed; z-index: 30; display: flex; flex-direction: column; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-lg); box-shadow: var(--rt-shadow-lg); overflow: hidden; margin-bottom: var(--rt-space-2, 8px); animation: rt-rise var(--rt-duration-slow) var(--rt-ease-out); }
+.slash-popup__list { overflow: auto; }
+.slash-popup__row { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
+.slash-popup__name { flex: none; min-width: 130px; font-size: var(--rt-text-xs, 11px); color: var(--rt-accent-200); }
+.slash-popup__sep { flex: none; color: var(--rt-text-tertiary); }
+.slash-popup__desc { flex: 0 1 auto; min-width: 0; font-size: var(--rt-text-xs, 11px); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slash-popup__hint { flex: none; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+.slash-popup__kind { flex: none; margin-left: auto; font-family: var(--rt-font-mono); }
+/* REQ-CHAT-025: an unavailable command stays listed as disabled text; its reason is the tooltip, the description and, for a keyboard user, the row's tail. */
+.slash-popup__row.is-unavailable { color: var(--rt-text-disabled); cursor: default; }
+.slash-popup__row.is-unavailable .slash-popup__name, .slash-popup__row.is-unavailable .slash-popup__desc, .slash-popup__row.is-unavailable .slash-popup__hint { color: var(--rt-text-disabled); }
+.slash-popup__reason { flex: none; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+.slash-popup__foot { flex-wrap: wrap; }
+.slash-popup__escape { margin-left: auto; }
+/* REQ-CHAT-021: the composer's persistent notice sits above the field, in the shell's own banner. */
+.composer__notice { flex: none; }
+@media (prefers-reduced-motion: reduce) { .slash-popup { animation: none; } }

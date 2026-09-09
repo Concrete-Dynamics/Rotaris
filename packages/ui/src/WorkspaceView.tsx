@@ -1,12 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { isBusy, PERMISSION_PRESETS, RUN_AGENT_ID, type AgentRecord, type ImageAttachment, type ImageAttachmentInput, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, type Notice, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, reasoningChipLabel,
-  REASONING_LEVELS, runHeaderControlReason, RUN_STATE_TAGS, runStateLabel, runStateOf, runTimingLabel, runTimingSeconds, sendRefusal,
+  REASONING_LEVELS, runStateOf, sendRefusal,
   type HistoryWalk, type RunState,
 } from './composer.js';
-import { markMotionStart } from './motion.js';
+import { RunHeader } from './RunHeader.js';
+import { NoticeBanner } from './Notice.js';
+import { useCommandContext } from './AppShell.js';
+import { buildCatalogue, type Reachable } from './slash/catalogue.js';
+import { slashRoleColours, slashTokenSplit, slashTokenState } from './slash/highlight.js';
+import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameToken, slashOutcomeMessage, slashPopupShouldOpen } from './slash/parse.js';
+import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
+import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
 import { liveDescendants, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
@@ -129,6 +137,38 @@ export interface WorkspaceViewProps {
   readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
   /** Part AC — REQ-CHAT-098/103: clicking a trailer row opens the question stepper or raises the approval dialog. */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
+  /**
+   * Part AN — what the slash catalogue needs that this view cannot reach through its other props (REQ-CHAT-028..033,
+   * REQ-CHAT-159). Every member is optional: a command whose member is absent stays LISTED and is unavailable with the
+   * reason the catalogue states, so the composer never offers what the window cannot carry out (REQ-SHELL-048).
+   * Nothing passes it yet — the renderer is not this part's file — and the handoff carries the ready-to-paste block.
+   */
+  readonly slash?: SlashHost | undefined;
+}
+
+/** Part AN — see `WorkspaceViewProps.slash`. */
+export interface SlashHost {
+  /** REQ-CHAT-159 `/theme`: the registered theme names (default: the built-in three) and the settings domain's setter. */
+  readonly themes?: readonly string[] | undefined;
+  readonly setTheme?: ((name: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-159 `/logout`: the configured provider ids, in the catalog's order, and the provider domain's sign-out. */
+  readonly providers?: readonly string[] | undefined;
+  readonly logout?: ((provider: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-029/030 `/compress` and `/clear`: the two control ops with no arm in the run host until Part AO. */
+  readonly control?: ((op: 'forceCompression' | 'clearTranscript') => Promise<{ ok: true; value?: string } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-031 `/new`: the launch dialog (REQ-SHELL-125), refused with its own sentence while a run is active. */
+  readonly newSession?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-031 `/resume` and `/sessions`: the session browser (REQ-SHELL-126). */
+  readonly openSessions?: (() => void) | undefined;
+  /** REQ-CHAT-031 `/worktree`: the worktree dialog, and whether a git service exists for this workspace. */
+  readonly openWorktree?: (() => void) | undefined;
+  readonly hasGit?: boolean | undefined;
+  /**
+   * REQ-CHAT-021's persistent notice. ADR-0049 keeps the ONE persistent notice in main and offers a renderer no command
+   * to publish into it; while that command is owed, the composer draws the notice itself with the shell's own
+   * `NoticeBanner` (see `runSlash`). Given this, it is routed there instead.
+   */
+  readonly raiseNotice?: ((notice: { readonly title: string; readonly message: string }) => void) | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -376,27 +416,25 @@ function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, on
   );
 }
 
-/**
- * REQ-CHAT-158's run-timing indicator, and REQ-CHAT-008's run-state label, in the run header.
- *
- * The tick is the surface's own once-a-second interval and **writes nothing**: it sets no session state, sends
- * no command and causes no transcript publication (REQ-MONITOR-108). The value it renders is a pure function of
- * the record the surface already holds, so a tick that renders the same string changes nothing at all.
+/*
+ * Part AN: the run header — REQ-CHAT-158's timing indicator, REQ-CHAT-008's label and REQ-CHAT-078's live-run
+ * selectors — moved to `RunHeader.tsx` unchanged, so Part AO can add REQ-CHAT-078's "Compress context" there.
  */
-function RunTiming({ session, busy, stepStartedAt }: { session: SessionRecord | null; busy: boolean; stepStartedAt: string | null }) {
-  const [now, setNow] = useState(() => Date.now());
+
+/**
+ * Part AN — the active theme's name, read from the document root where `applyTheme` writes it, and re-read when it
+ * changes; REQ-CHAT-027's four colours are derived from the theme's own tokens (`slashRoleColours`) and so must follow it.
+ */
+function useThemeName(): string {
+  const read = () => (typeof document === 'undefined' ? 'rotaris-dim' : document.documentElement.dataset['theme'] ?? 'rotaris-dim');
+  const [name, setName] = useState(read);
   useEffect(() => {
-    if (!busy) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [busy]);
-  const seconds = session === null ? null : runTimingSeconds({ runStartedAt: session.runStartedAt, updatedAt: session.updatedAt, busy, stepStartedAt }, now);
-  const label = runTimingLabel(seconds);
-  return (
-    <span className="run-header__timing mono" data-testid="run-timing" data-seconds={seconds === null ? '' : String(Math.floor(seconds))} data-frozen={busy ? '0' : '1'}>
-      {label ?? ''}
-    </span>
-  );
+    if (typeof MutationObserver !== 'function' || typeof document === 'undefined') return;
+    const observer = new MutationObserver(() => setName(read()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+  return name;
 }
 
 /** REQ-TOOLS-077: strictest-first; `autonomous` needs an explicit confirmation; declining restores the previous selection. */
@@ -442,7 +480,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer, slash}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -537,6 +575,155 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     if (draft !== undefined && draft !== '' && text === '') setText(draft);
   }
 
+  // ── Part AN — the slash catalogue: REQ-CHAT-018..033, REQ-CHAT-159, REQ-LIBRARY-142 ──
+  const commandContext = useCommandContext();
+  const listId = useId();
+  /** REQ-CHAT-026: Escape dismisses the popup and leaves the text as typed; it stays dismissed until the text changes. */
+  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
+  const [rowIndex, setRowIndex] = useState(0);
+  /** REQ-CHAT-021's persistent notice, drawn by this composer while ADR-0049 offers a renderer no way into main's slot. */
+  const [commandNotice, setCommandNotice] = useState<{ readonly id: number; readonly message: string } | null>(null);
+  const noticeSerial = useRef(0);
+  /** REQ-LIBRARY-142: the argument `/stash` parsed, handed to the seam's argument-less `stash()` (see `catalogue.ts`). */
+  const slashArgument = useRef('');
+  const reachable = useMemo<Readonly<Partial<Record<Reachable, boolean>>>>(() => ({
+    'start-session': slash?.newSession !== undefined,
+    sessions: slash?.openSessions !== undefined,
+    worktree: slash?.openWorktree !== undefined,
+    // REQ-CHAT-074's panel is the pane's and opens on Ctrl+F at the window; `/search` presses that key (`openSearch`).
+    search: true,
+    theme: slash?.setTheme !== undefined,
+    logout: slash?.logout !== undefined,
+    compress: slash?.control !== undefined,
+    clear: slash?.control !== undefined,
+  }), [slash?.newSession, slash?.openSessions, slash?.openWorktree, slash?.setTheme, slash?.logout, slash?.control]);
+  /**
+   * REQ-CHAT-028: rebuilt when its inputs change — the stash (REQ-LIBRARY-142), what the host connected, the shell's
+   * command context (the palette mirror runs against it). Run state, rows and the configured models are read by each
+   * command's availability at the moment it is asked, so a change to those needs no rebuild.
+   */
+  const registry = useMemo(() => buildCatalogue({
+    stashCount,
+    reachable,
+    runPalette: (command) => command.run(commandContext),
+    paletteAvailable: (command) => command.available(commandContext),
+  }), [stashCount, reachable, commandContext]);
+  /** REQ-CHAT-074: the search panel is the transcript pane's and opens on Ctrl+F at the window; the composer presses that key. */
+  const openSearch = () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true })); };
+  const okOr = (r: { ok: true } | { ok: false; reason: string }): void => { if (!r.ok) throw new Error(r.reason); };
+  const slashContext: SlashContext = {
+    runState, rowCount: rows.length, hasGit: slash?.hasGit ?? false,
+    models, personas: personas.map((p) => p.role), themes: slash?.themes ?? [...THEME_NAMES], providers: slash?.providers ?? [],
+    // REQ-CHAT-032: the chip shows the new name (the next-run selection, written to configuration exactly as the chip
+    // writes it) and the selection becomes the session's active model — the live run's next iteration, where one is running.
+    setModel: async (name) => {
+      if (!onSetNextModel) throw new Error('The model cannot be changed from this composer.');
+      okOr(await onSetNextModel(name));
+      if (runActive && onSetModel) okOr(await onSetModel(name));
+    },
+    setPersona: async (name) => { if (!onSetNextPersona) throw new Error('The persona cannot be changed from this composer.'); okOr(await onSetNextPersona(name)); },
+    setTheme: async (name) => { if (!slash?.setTheme) throw new Error(defaultUnavailableReason('theme')); okOr(await slash.setTheme(name)); },
+    logout: async (provider) => { if (!slash?.logout) throw new Error(defaultUnavailableReason('logout')); okOr(await slash.logout(provider)); },
+    control: async (op: ControlOp) => {
+      // REQ-CHAT-029: `/stop` cancels the live run (graceful, the Stop control's first activation) and sends no text anywhere.
+      if (op === 'cancel') { setStopRequested(true); const r = await onStop(false); if (!r.ok) setStopRequested(false); return r.ok ? ok(undefined) : err(r.reason); }
+      if (op === 'pause') { if (!onPause) return err('Pause is unavailable because no active run exists.'); const r = await onPause(); if (r.ok) setPausePending(true); return r.ok ? ok(undefined) : err(r.reason); }
+      if (op === 'forceCompression' || op === 'clearTranscript') {
+        // Part AN: neither op has an arm in the run host until Part AO, and nothing passes `slash.control` yet, so the
+        // catalogue lists both commands as unavailable (REQ-CHAT-020's default reason) and this branch is not reached
+        // until the renderer connects the control — after which the run host's "unsupported" answer surfaces as `failed`.
+        if (!slash?.control) return err(defaultUnavailableReason(op === 'forceCompression' ? 'compress' : 'clear'));
+        const r = await slash.control(op);
+        return r.ok ? ok(r.value) : err(r.reason);
+      }
+      return err(`The composer does not dispatch ${op}.`);
+    },
+    open: (dialog) => {
+      switch (dialog) {
+        case 'stash': if (!onOpenStash) throw new Error('The stash is not available in this window.'); onOpenStash(); return;
+        case 'search': openSearch(); return;
+        case 'start-session': if (!slash?.newSession) throw new Error(defaultUnavailableReason('new')); void slash.newSession().then((r) => { if (!r.ok) setError(r.reason); }); return;
+        case 'sessions': if (!slash?.openSessions) throw new Error(defaultUnavailableReason('sessions')); slash.openSessions(); return;
+        case 'worktree': if (!slash?.openWorktree) throw new Error(defaultUnavailableReason('worktree')); slash.openWorktree(); return;
+        default: return;
+      }
+    },
+    // REQ-LIBRARY-142 / REQ-CHAT-042: the prompt after `/stash`, trimmed, onto the top of the stash — as the Stash button does.
+    stash: () => { if (!onStash) throw new Error('The stash is not available in this window.'); const trimmed = slashArgument.current.trim(); if (trimmed !== '') onStash(trimmed); },
+    // REQ-CHAT-032's "Model set to <name>." is a notice: this window's transient stack where it exists (REQ-NOTIFY-013), else the composer's status line.
+    notify: (message) => { if (onAcknowledge) onAcknowledge('ok', message); else setStatus(message); },
+    submitAsPrompt: async (value) => { await submitPrompt(value); },
+  };
+  /** REQ-CHAT-021: the persistent notice, routed to the host where it can publish one, else drawn by the composer. */
+  const raiseCommandNotice = (message: string) => {
+    if (slash?.raiseNotice) { slash.raiseNotice({ title: COMMAND_NOT_RUN_TITLE, message }); return; }
+    noticeSerial.current += 1;
+    setCommandNotice({ id: noticeSerial.current, message });
+  };
+  /** REQ-CHAT-024: the rows the popup shows for the text so far; REQ-CHAT-022's order. Zero rows is a closed popup. */
+  const suggestions = useMemo(() => (slashPopupShouldOpen(text) ? registry.filter(slashNameToken(text)) : []), [text, registry]);
+  const popupOpen = suggestions.length > 0 && dismissedFor !== text;
+  const current = Math.min(rowIndex, Math.max(0, suggestions.length - 1));
+  /** REQ-CHAT-027: the token's state and the four colours of the active theme, each cleared to 4.5:1 on the input's ground. */
+  const tokenState = useMemo(() => slashTokenState(text, registry), [text, registry]);
+  const themeName = useThemeName();
+  const roleColours = useMemo(() => slashRoleColours(resolveTheme(themeName)), [themeName]);
+  const roleStyle = { '--slash-resolved': roleColours.resolved, '--slash-partial': roleColours.partial, '--slash-unknown': roleColours.unknown, '--slash-argument': roleColours.argument } as CSSProperties;
+  const tokenSplit = slashTokenSplit(text);
+  /** REQ-CHAT-026: Tab, and Enter on a row the composer does not already hold exactly — `/name ` with one trailing space, caret after it, no submit. */
+  const complete = (command: SlashCommand) => {
+    setText(`/${command.name} `);
+    setWalk(null);
+    setRowIndex(0);
+    noteKeystroke();
+    caretToEnd();
+  };
+  /** REQ-CHAT-026: Enter on the highlighted row, or a click on a row — submit when the composer already holds exactly `/name`, else complete. */
+  const activate = (command: SlashCommand) => { if (text === `/${command.name}`) void submit(); else complete(command); };
+
+  /**
+   * REQ-CHAT-019/020/021/023: a recognised slash submission. The popup is hidden and the composer cleared BEFORE the
+   * command runs; exactly one outcome is reported; every outcome but `not-a-command` is handled here and the text never
+   * reaches an agent; a non-executed outcome restores the exact typed text with the caret at its end and raises the
+   * persistent "Command not run" notice. Nothing here records to prompt history (REQ-LIBRARY-137/142).
+   */
+  const runSlash = async (value: string, name: string, argument: string) => {
+    setDismissedFor(value);
+    setRowIndex(0);
+    setText('');
+    setWalk(null);
+    setError(null);
+    setStatus(null);
+    setCommandNotice(null);
+    flushDraft('');
+    setBusy(true);
+    slashArgument.current = argument;
+    const command = registry.lookup(name);
+    let outcome: SlashOutcome;
+    if (command === undefined) outcome = { kind: 'unknown', name };
+    else {
+      const availability = command.availability(slashContext);
+      if (!availability.ok) outcome = { kind: 'unavailable', reason: availability.reason };
+      else {
+        try { outcome = await command.run(argument, slashContext); }
+        catch (cause) { outcome = { kind: 'failed', message: cause instanceof Error ? cause.message : String(cause) }; }
+      }
+    }
+    setBusy(false);
+    if (outcome.kind === 'not-a-command') { await submitPrompt(value); return; }
+    if (outcome.kind === 'executed') {
+      // The composer keeps focus, unless the command opened a dialog that has already taken it (the stash dialog
+      // mounts and focuses Pop between the command's resolution and this line — measured on the first execution).
+      const active = document.activeElement;
+      if (active === null || active === document.body || active === area.current) area.current?.focus();
+      return;
+    }
+    setText(value);
+    flushDraft(value);
+    caretToEnd();
+    raiseCommandNotice(slashOutcomeMessage(outcome, name) ?? defaultUnavailableReason(name));
+  };
+
   const submit = async () => {
     // REQ-CHAT-006: the text area stays editable while a submission is in flight, so a second Enter can arrive
     // before the first is answered; one submission at a time, and the text is not sent twice.
@@ -544,8 +731,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     const value = text;
     // REQ-CHAT-003: empty or whitespace-only does nothing but return focus.
     if (value.trim().length === 0 && attachments.length === 0) { area.current?.focus(); return; }
+    // Part AN — REQ-CHAT-018: a slash command is handled locally and is never queued and never sent (REQ-CHAT-023).
+    const parsed = parseSlash(value);
+    if (parsed.kind === 'command') { await runSlash(value, parsed.name, parsed.argument); return; }
+    await submitPrompt(value);
+  };
+  /** The ordinary submission — a queue during a run, else a start or a continue — of `value`, which is the composer's text or a prompt file's expanded body. */
+  const submitPrompt = async (value: string) => {
     // REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
-    if (refusal !== null) { setError(refusal); area.current?.focus(); return; }
+    if (refusal !== null) { setText(value); setError(refusal); area.current?.focus(); return; }
     setWalk(null);
     setBusy(true);
     setText('');
@@ -621,6 +815,21 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
    * whatever else it does. Every recall places the caret at the end of the text.
    */
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    /*
+     * Part AN — REQ-CHAT-026: while the popup is showing these keys act on it and never reach the bindings below.
+     * Escape dismisses and leaves the text as typed; Up and Down move the highlight and stop at the ends without
+     * wrapping, and do NOT walk prompt history; Tab completes; Enter completes, or submits when the composer already
+     * holds exactly `/name`. Shift+Enter falls through and inserts a newline, whose second line closes the popup
+     * (REQ-CHAT-024). `preventDefault` is also what keeps the window-level Escape (REQ-SHELL-055) from acting twice.
+     */
+    if (popupOpen) {
+      const row = suggestions[current];
+      if (e.key === 'Escape') { e.preventDefault(); setDismissedFor(text); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setRowIndex(Math.min(current + 1, suggestions.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setRowIndex(Math.max(current - 1, 0)); return; }
+      if (e.key === 'Tab' && !e.shiftKey && row) { e.preventDefault(); complete(row); return; }
+      if (e.key === 'Enter' && !e.shiftKey && row) { e.preventDefault(); activate(row); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); return; }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       const step = e.key === 'ArrowUp' ? historyUp(walk, history, text) : historyDown(walk, history, text);
@@ -672,6 +881,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     registerOverlay('drawers', narrow ? () => { if (!drawerOpen) return false; setDrawer(null); return true; } : null);
     return () => registerOverlay('drawers', null);
   }, [registerOverlay, narrow, drawerOpen]);
+  // Part AN — REQ-CHAT-002 / REQ-SHELL-055 (1): the slash popup is the FIRST thing window-level Escape dismisses.
+  useEffect(() => {
+    registerOverlay('slashPopup', popupOpen ? () => { setDismissedFor(text); return true; } : null);
+    return () => registerOverlay('slashPopup', null);
+  }, [registerOverlay, popupOpen, text]);
   const [seenSelection, setSeenSelection] = useState(selectedAgent);
   if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (narrow && selectedAgent !== null) setDrawer('inspector'); }
   const inspectorCancel = (agent: AgentRecord) => {
@@ -686,12 +900,6 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
   );
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit');
-  /**
-   * REQ-CHAT-078 / REQ-CHAT-006's closing sentence: the run header's own model and reasoning selectors change the
-   * LIVE run, and follow the opposite rule to the composer's chips — enabled only while a run is running and
-   * locally owned, and stating one of the four reason texts whenever they are not.
-   */
-  const headerReason = runHeaderControlReason(runState);
   const queued = session?.queuedPrompts ?? [];
   // REQ-CHAT-158: the step the run is inside now, from the newest row it produced (live one first). See `composer.ts`.
   const stepStartedAt = useMemo(() => modelCallStartedAt(rows), [rows]);
@@ -767,40 +975,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         </aside>
       )}
       {/*
-        * Part AB — the run header. REQ-CHAT-008's run-state label in its own fixed vocabulary, REQ-CHAT-158's
-        * timing indicator, and REQ-CHAT-078's live-run selectors, which are the run header's own controls and
-        * follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
+        * Part AB's run header, extracted to `RunHeader.tsx` by Part AN (no behaviour change): REQ-CHAT-008's run-state
+        * label, REQ-CHAT-158's timing indicator, and REQ-CHAT-078's live-run selectors, which are the run header's own
+        * controls and follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
         */}
-      <div className="run-header" role="group" aria-label="Run" data-state={runState} data-testid="run-header">
-        {/* The design's Tag with a status dot, which is how the material draws a run's state (README §7). */}
-        <span className={`tag ${RUN_STATE_TAGS[runState].tone} run-header__state`} data-testid="run-state">
-          <span ref={(element) => { if (element && RUN_STATE_TAGS[runState].live) markMotionStart(element); }}
-            className={`status-dot${RUN_STATE_TAGS[runState].live ? ' is-pulsing' : ''}`} aria-hidden="true" />
-          {runStateLabel(runState)}
-        </span>
-        <RunTiming session={session} busy={runActive} stepStartedAt={stepStartedAt} />
-        {(onSetModel || onSetReasoning) && (
-          <div className="run-controls" aria-label="Active run model and reasoning">
-            <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>
-            {onSetModel && models.length > 0 && (
-              <select className="input select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
-                title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
-                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
-                <option value="">Switch model…</option>
-                {models.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            )}
-            {onSetReasoning && (
-              <select className="input select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
-                title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration.'} aria-describedby="run-controls-reason"
-                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
-                <option value="">Switch reasoning…</option>
-                {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
-            )}
-          </div>
-        )}
-      </div>
+      <RunHeader runState={runState} session={session} runActive={runActive} stepStartedAt={stepStartedAt} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
         {(onOpenStash || agents.length > 0) && (
@@ -809,8 +988,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               <button type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
                 data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</button>
             )}
+            {/* slot:clear (AO) */}
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
             {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
+            {/* slot:terminal-control (AL) */}
           </div>
         )}
         {intentStatusText(session?.intent ?? null) && (
@@ -854,22 +1035,54 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         aria-valuemin={COMPOSER_MIN_HEIGHT} aria-valuemax={Math.max(COMPOSER_MIN_HEIGHT, box - 188)} aria-valuenow={height} data-testid="composer-divider"
         onPointerDown={onDividerDown} onPointerMove={onDividerMove} onPointerUp={onDividerUp} onKeyDown={onDividerKey} />
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+        {/*
+          * Part AN — REQ-CHAT-021: the PERSISTENT notice titled "Command not run", not a transient toast. ADR-0049
+          * keeps the one persistent notice in main and gives a renderer no command to publish into it, so until that
+          * command exists (raised in the handoff) the composer draws the notice itself, with the shell's own banner,
+          * on its own column; it leaves only when dismissed or when the next slash submission replaces it.
+          */}
+        {commandNotice && (
+          <div className="composer__notice" data-testid="composer-notice">
+            <NoticeBanner notice={{ id: commandNotice.id, severity: 'warning', title: COMMAND_NOT_RUN_TITLE, message: commandNotice.message, detail: '', persistent: true, sessionId: '' } satisfies Notice} onAcknowledge={() => setCommandNotice(null)} />
+          </div>
+        )}
         {error && <div className="composer__error" role="alert">{error}</div>}
         {status && !error && <div className="composer__hint" role="status">{status}</div>}
-        <textarea
-          ref={area}
-          className="input composer__input"
-          aria-label="Composer"
-          /* REQ-CHAT-004: one of exactly four strings, chosen by the first condition that holds. */
-          placeholder={composerPlaceholder(session, runActive, sessionBusy)}
-          value={text}
-          /* REQ-CHAT-006 / REQ-CHAT-156: editable in EVERY run state — a running agent never locks the user out of typing. */
-          onChange={(e) => { setText(e.target.value); setWalk(null); noteKeystroke(); }}
-          onKeyDown={onKey}
-          /* REQ-SHELL-159: focus loss is one of the four flush points — the write does not wait the interval out. */
-          onBlur={() => flushDraft()}
-          rows={3}
-        />
+        {/*
+          * Part AN — REQ-CHAT-027: the field, the highlighting overlay and the popup share one box. While the text is a
+          * single-line slash command the textarea's own glyphs are transparent (its caret is not) and the overlay
+          * behind the caret draws the same text with the token and the argument in their roles; otherwise the
+          * textarea draws its text itself and there is no overlay at all. The four colours are the theme's, corrected
+          * to the floor by `slashRoleColours`, and reach the CSS as custom properties on this box.
+          */}
+        <div className="slash-field" style={roleStyle} data-testid="slash-field" data-token-state={tokenState ?? ''}>
+          <textarea
+            ref={area}
+            className={`input composer__input${tokenState !== null ? ' is-slash' : ''}`}
+            aria-label="Composer"
+            /* REQ-CHAT-004: one of exactly four strings, chosen by the first condition that holds. */
+            placeholder={composerPlaceholder(session, runActive, sessionBusy)}
+            value={text}
+            /* REQ-CHAT-024/026: the popup is a listbox the field controls; it never takes focus, the field's highlight names the row. */
+            aria-autocomplete="list"
+            aria-controls={popupOpen ? listId : undefined}
+            aria-expanded={popupOpen}
+            aria-activedescendant={popupOpen ? slashRowId(listId, current) : undefined}
+            /* REQ-CHAT-006 / REQ-CHAT-156: editable in EVERY run state — a running agent never locks the user out of typing. */
+            onChange={(e) => { setText(e.target.value); setWalk(null); setRowIndex(0); noteKeystroke(); }}
+            onKeyDown={onKey}
+            /* REQ-SHELL-159: focus loss is one of the four flush points — the write does not wait the interval out. */
+            onBlur={() => flushDraft()}
+            rows={3}
+          />
+          {tokenState !== null && (
+            <div className="input composer__input slash-overlay" aria-hidden="true" data-testid="slash-overlay">
+              <span className="slash-token" data-state={tokenState} data-testid="slash-token">{tokenSplit.token}</span>
+              <span className="slash-argument" data-testid="slash-argument">{tokenSplit.rest}</span>
+            </div>
+          )}
+          {popupOpen && <SlashPopup commands={suggestions} selected={current} ctx={slashContext} listId={listId} anchor={area} onHover={setRowIndex} onActivate={activate} />}
+        </div>
         <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments">
           <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
           <button type="button" className="btn btn-ghost" disabled={!acceptsImages} title={attachmentReason ?? 'Attach images'} aria-describedby="attachment-capability" onClick={() => fileInput.current?.click()}>Attach images</button>

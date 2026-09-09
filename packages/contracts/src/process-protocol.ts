@@ -274,6 +274,14 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
   /** Part U / REQ-GIT-069: every ref under `refs/rotaris/checkpoints/<sid>/` in the tree, best-effort; a missing tree is a detail, never a failure. */
   z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
+  // Part AJ
+  /**
+   * ADR-0040 (Part AJ): the four toolchain operations of REQ-TRACE-508..511 against the open workspace's root
+   * (REQ-TRACE-512 — resolved by the service, never nominated by a user), and the cancel of REQ-TRACE-220/226.
+   * The outcome is the seam's TypeScript value (`contracts/src/requirements.ts`), carried opaque here.
+   */
+  z.object({ kind: z.literal('traceability.operate'), workspaceRoot: z.string(), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), base: z.string().optional() }),
+  z.object({ kind: z.literal('traceability.cancel'), workspaceRoot: z.string(), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']) }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -387,6 +395,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifacts.state'), state: ArtifactsStateSchema }),
   z.object({ kind: z.literal('artifacts.body'), id: z.string(), slug: z.string(), title: z.string(), kind_: z.string(), status: z.string(), producer: z.string(), persona: z.string(), edited: z.boolean(), body: z.string(), fallback: z.boolean() }),
   z.object({ kind: z.literal('artifacts.saved'), id: z.string(), editedAt: z.string() }),
+  // Part AJ
+  /** ADR-0040 (Part AJ): one operation's `Result<…, TraceabilityFailure>` as the seam types it; `cancelled` is REQ-TRACE-226's boolean. */
+  z.object({ kind: z.literal('traceability.result'), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), root: z.string(), elapsedMs: z.number().nonnegative(), result: z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.unknown().optional() }) }),
+  z.object({ kind: z.literal('traceability.cancelled'), cancelled: z.boolean() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

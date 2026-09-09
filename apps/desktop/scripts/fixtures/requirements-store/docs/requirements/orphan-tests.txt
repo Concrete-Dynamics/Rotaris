@@ -1,0 +1,2 @@
+# Orphan-test baseline. This file may only SHRINK: entries may be removed and are never added.
+# Fixture: empty, so every orphan test is reported.

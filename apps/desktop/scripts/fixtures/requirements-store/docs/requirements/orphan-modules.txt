@@ -1,0 +1,2 @@
+# Orphan-module baseline. This file may only SHRINK: entries may be removed and are never added.
+# Fixture: empty, so every orphan module is reported.

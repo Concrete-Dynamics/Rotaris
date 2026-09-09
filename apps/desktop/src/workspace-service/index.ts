@@ -225,6 +225,17 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       log(`checkpoint namespace ${req.sessionId} in ${req.treeRoot}: ${r.deleted} ref(s) deleted${r.detail === undefined ? '' : ` — ${r.detail}`}`, r.detail === undefined ? 'info' : 'warn');
       return r.detail === undefined ? { kind: 'checkpoint.namespaceDeleted', deleted: r.deleted } : { kind: 'checkpoint.namespaceDeleted', deleted: r.deleted, detail: r.detail };
     }
+    // Part AJ
+    case 'traceability.operate': {
+      // ADR-0040 / REQ-TRACE-508..512: one of the four toolchain operations against this workspace's repository root,
+      // run by the one I/O owner with its passes on a worker thread; loaded on first use so this table gains one block.
+      const { traceabilityOperate } = await import('./traceability.js');
+      return traceabilityOperate(req, clocks, log);
+    }
+    case 'traceability.cancel': {
+      const { traceabilityCancel } = await import('./traceability.js');
+      return traceabilityCancel(req, clocks, log);
+    }
     case 'shutdown': {
       // REQ-GIT-101: an in-flight checkpoint Git operation finishes first; the wait is bounded by REQ-GIT-033's limits alone.
       if (inFlight.size > 0) { log(`shutdown: waiting for ${inFlight.size} in-flight checkpoint operation(s)`); await Promise.allSettled([...inFlight]); }

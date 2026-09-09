@@ -127,13 +127,19 @@ export class BackgroundSession {
 
 export class BackgroundManager {
   private readonly sessions = new Map<string, BackgroundSession>();
+  /** Part AL: the cap as the run's configuration set it (REQ-TOOLS-108); null means the construction-time value. */
+  private maxOverride: number | null = null;
   constructor(private readonly deps: BackgroundDeps) {}
 
   get running(): number {
     return [...this.sessions.values()].filter((s) => s.status === 'running').length;
   }
   get max(): number {
-    return Math.max(1, this.deps.maxSessions ?? DEFAULT_MAX_BACKGROUND);
+    return Math.max(1, this.maxOverride ?? this.deps.maxSessions ?? DEFAULT_MAX_BACKGROUND);
+  }
+  /** REQ-TOOLS-108 / REQ-CONFIG-116: `runtime.shell_max_background_sessions` (minimum 1) takes effect for the next start. */
+  setMax(n: number): void {
+    this.maxOverride = Math.max(1, Math.floor(n));
   }
 
   /** REQ-TOOLS-107/108. */

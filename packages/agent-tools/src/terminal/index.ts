@@ -129,10 +129,28 @@ export class TerminalManager {
   backgroundFor(cwd: string): BackgroundManager {
     let b = this.background.get(cwd);
     if (!b) {
-      b = new BackgroundManager({ backend: this.deps.backend, cwd, env: this.deps.env, monotonic: this.deps.clocks.monotonic, wall: this.deps.clocks.wall, timers: this.deps.clocks.timers, maxSessions: this.deps.config.maxBackgroundSessions, warn: this.deps.warn });
+      b = new BackgroundManager({ backend: this.deps.backend, cwd, env: this.deps.env, monotonic: this.deps.clocks.monotonic, wall: this.deps.clocks.wall, timers: this.deps.clocks.timers, maxSessions: this.backgroundLimits?.maxSessions ?? this.deps.config.maxBackgroundSessions, warn: this.deps.warn });
       this.background.set(cwd, b);
     }
     return b;
+  }
+  /**
+   * Part AL — REQ-TOOLS-108 / REQ-CONFIG-116: the two registered background keys, `runtime.shell_max_background_sessions`
+   * (default 20, minimum 1, no stated maximum) and `runtime.shell_background_timeout`, as the run's configuration set them.
+   * The loader had validated and defaulted both since Part I and nothing read them (defect forty-eight in ADR-0021's
+   * note): every manager took `TERMINAL_DEFAULTS`. Applied to every background manager already open and to the next.
+   */
+  private backgroundLimits: { readonly maxSessions: number; readonly timeoutS: number } | null = null;
+  setBackgroundLimits(limits: { readonly maxSessions: number; readonly timeoutS: number }): void {
+    this.backgroundLimits = { maxSessions: Math.max(1, Math.floor(limits.maxSessions)), timeoutS: Math.max(1, Math.floor(limits.timeoutS)) };
+    for (const b of this.background.values()) b.setMax(this.backgroundLimits.maxSessions);
+  }
+  /** The configured background wall clock in seconds, or null when no run has configured one yet. */
+  get backgroundTimeoutS(): number | null {
+    return this.backgroundLimits?.timeoutS ?? null;
+  }
+  get maxBackgroundSessions(): number {
+    return this.backgroundLimits?.maxSessions ?? this.deps.config.maxBackgroundSessions;
   }
   /** REQ-TOOLS-184: background sessions in the running state, across the workspaces this host serves. */
   get runningBackground(): number {
@@ -236,7 +254,8 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
 
 function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolContext, config: TerminalConfig): Observation {
   const bg = manager.backgroundFor(ctx.workspaceRoot);
-  const started = bg.start(a.command, a.timeout ?? config.backgroundTimeoutS);
+  // The call's own timeout, else the configured `runtime.shell_background_timeout`, else the shipped default (REQ-TOOLS-108).
+  const started = bg.start(a.command, a.timeout ?? manager.backgroundTimeoutS ?? config.backgroundTimeoutS);
   if (!started.ok) {
     const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: started.error, error_class: 'ExecutionError', exit_code: null, failure_kind: 'execution_error', outcome_kind: 'execution_error', outcome_severity: 'error', warnings: [] });
     return errorObservation(`${started.error}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'execution_error', failureKind: 'execution_error', exitCode: null, warnings: [] });

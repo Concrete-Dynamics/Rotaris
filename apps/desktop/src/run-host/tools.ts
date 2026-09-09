@@ -145,6 +145,13 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       return result;
     },
   };
+  // Part AL — REQ-TOOLS-108 / REQ-CONFIG-116: the registered `runtime.shell_max_background_sessions` and
+  // `runtime.shell_background_timeout` reach the terminal manager from the run's loaded configuration, per port
+  // creation, instead of `TERMINAL_DEFAULTS` (20 / 3600). The loader had validated both since Part I and nothing read
+  // them (ADR-0021's note, defect forty-eight). The key has a minimum of 1 and NO stated maximum — the owner's (OQ by
+  // handoff), and the production half of ADR-0021 obligation 2 stays open exactly that far.
+  const shellLimits = deps.configured?.(ctx.workspaceRoot)?.cfg.runtime;
+  if (deps.terminal && shellLimits) deps.terminal.setBackgroundLimits({ maxSessions: shellLimits.shell_max_background_sessions, timeoutS: shellLimits.shell_background_timeout });
   const executors = executorsFor(root, deps, runtime, watchedTodo);
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);

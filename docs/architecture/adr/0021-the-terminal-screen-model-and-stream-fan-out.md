@@ -318,3 +318,15 @@ ceiling — `runtime.shell_max_background_sessions` has a default of 20 and no m
 is still `stream count × 50 frames/s` with only the delivered rate capped. The limiter absorbs it by
 merging, but that is relief at the surface, not a bound on production; a stated ceiling on the key
 remains the owner's to add (this record's "Revisit if").
+
+**Found on the same execution — the FORTY-EIGHTH defect: two registered keys nothing read.**
+`runtime.shell_max_background_sessions` and `runtime.shell_background_timeout` have been validated and
+defaulted by the configuration loader since Part I (`REQ-CONFIG-116`, `REQ-TOOLS-108`), and no code read
+either: the terminal manager took `TERMINAL_DEFAULTS` (20 / 3600 s) whatever the workspace configured,
+so a user who set the cap set nothing. `run-host/tools.ts` now hands both to the manager from the run's
+loaded configuration at each port creation, applied to every background manager already open. That is as
+far as the key allows: it has a minimum of 1 and **no stated maximum**, so the produced frame rate is
+still `stream count × 50 frames/s` with the count bounded only by what a user chooses to configure. The
+delivered rate is capped per window (above); the ceiling on the key itself is the owner's — raised as an
+open-question entry by handoff, not resolved here. Obligation 2 is therefore met at delivery and at the
+key's configured value, and open at the key's range.

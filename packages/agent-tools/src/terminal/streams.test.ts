@@ -228,6 +228,26 @@ describe('TerminalStreams — the sampling period is a ceiling (ADR-0021 Decisio
   });
 });
 
+describe('TerminalManager — REQ-TOOLS-108: the configured background limits reach the manager (defect forty-eight)', () => {
+  it('takes `shell_max_background_sessions` and `shell_background_timeout` from the run, applies them to open managers, and defaults until then', () => {
+    const clock = new FakeClock();
+    const factory = { spawn: () => { throw new Error('no PTY is spawned here'); } };
+    const m = new TerminalManager({ factory, backend: { kind: 'powershell', file: 'pwsh' }, clocks: clock, config: TERMINAL_DEFAULTS, env: {}, warn: () => undefined, emulator: fakeEmulator });
+    const early = m.backgroundFor('D:/one');
+    expect(early.max).toBe(20);
+    expect(m.backgroundTimeoutS).toBeNull();
+    m.setBackgroundLimits({ maxSessions: 3, timeoutS: 90 });
+    expect(early.max).toBe(3);
+    expect(m.backgroundFor('D:/two').max).toBe(3);
+    expect(m.backgroundTimeoutS).toBe(90);
+    expect(m.maxBackgroundSessions).toBe(3);
+    // The minimum is 1 (REQ-TOOLS-108); a value below it is clamped, never zero.
+    m.setBackgroundLimits({ maxSessions: 0, timeoutS: 0 });
+    expect(early.max).toBe(1);
+    expect(m.backgroundTimeoutS).toBe(1);
+  });
+});
+
 describe('the xterm adapter — a screen, not a log (ADR-0021; REQ-SHELL-095)', () => {
   it('overwrites addressed cells, serialises a replayable screen, and reports truncation once a line leaves retention', async () => {
     const e = xtermEmulatorFactory({ cols: 10, rows: 3, scrollback: 2 });

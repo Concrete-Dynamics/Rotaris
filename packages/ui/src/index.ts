@@ -43,3 +43,5 @@ export * from './library/index.js'; export * from './transcript/index.js';
 export * from './settings/DisplaySettings.js';
 export * from './settings/Inventories.js';
 export * from './settings/About.js';
+// Part AM
+export * from './terminal/index.js';

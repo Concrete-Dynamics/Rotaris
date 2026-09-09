@@ -3,6 +3,8 @@ import type { ImageAttachment, TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
+import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
+import type { TerminalPreview } from '../terminal/streams.js';
 import { groupSeverity, groupSummary, type Severity } from './project.js';
 
 /**
@@ -82,8 +84,15 @@ export interface TranscriptSurface {
   readonly openLink?: ((href: string) => void) | undefined;
   /** REQ-CHAT-075: the surface raises the one context menu, so no row holds an open/closed flag. */
   readonly openMenu?: ((request: RowMenuRequest) => void) | undefined;
-  /** REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream. No producer publishes a frame yet (ADR-0021). */
+  /** REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (Part AM draws the preview; AL publishes the frames). */
   readonly openTerminal?: ((streamId: string) => void) | undefined;
+  /**
+   * Part AM — REQ-SHELL-079 / REQ-CHAT-063/066: the live preview's screen for a stream, read from this renderer's
+   * `TerminalStreamSet` at render time (REQ-CHAT-063's ≤ 250 ms live-row refresh re-renders it). `null` or absent means
+   * no retained screen exists for the stream and the row keeps its one-line `⤷` preview. The surface owns the
+   * registry; a row holds no emulator, so a rebound slot cannot carry one stream's screen to another row.
+   */
+  readonly terminalPreview?: ((streamId: string) => TerminalPreview | null) | undefined;
   /** REQ-CHAT-076: a question row opens the stepper, an approval row the approval dialog. */
   readonly openTrailer?: ((trailer: TrailerRow) => void) | undefined;
   /** REQ-CHAT-173: pane-owned verified thumbnail cache; rows remain pure. */
@@ -356,7 +365,7 @@ export function autoCollapsed(display: DisplayRow, prefs: Pick<TranscriptSurface
   return true;
 }
 
-/** REQ-CHAT-066 / REQ-CHAT-076: an unsettled row carrying a live terminal stream id. No producer publishes one yet (ADR-0021). */
+/** REQ-CHAT-066 / REQ-CHAT-076: an unsettled row carrying a live terminal stream id (published by the run host from Part AL on). */
 export function isLiveTerminalRow(row: TranscriptRow): boolean {
   const streamId = (row as { streamId?: string }).streamId;
   return typeof streamId === 'string' && streamId !== '' && !row.settled;
@@ -529,6 +538,9 @@ export function Row(p: RowProps) {
     const description = outcome.state === 'blocked' ? `Blocked: ${blockedReason}` : undefined;
     const stream = streamIdOf(row);
     const header = stripOutcomeGlyph(row.body);
+    // Part AM — REQ-SHELL-079 / REQ-CHAT-066: the live preview block, drawn whenever this renderer retains a screen
+    // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
+    const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     return (
       <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
@@ -549,8 +561,10 @@ export function Row(p: RowProps) {
                 <span ref={(element) => { if (element && outcome.state === 'running') markMotionStart(element); }} className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>
               )}
             </button>
-            {/* REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (unexercised — ADR-0021 owes the producer). */}
-            {!expanded && !collapsedToName && expandable && (
+            {/* Part AM — the live terminal preview: the emulator's screen text, the same cells the pop-out shows (REQ-SHELL-102). */}
+            {preview !== null && <TerminalPreviewBlock preview={preview} onOpen={surface.openTerminal} />}
+            {/* REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (the one-line form, until a screen is retained). */}
+            {preview === null && !expanded && !collapsedToName && expandable && (
               stream !== null && !row.settled
                 ? <button type="button" className="tool__preview tool__preview--terminal text-secondary mono" data-stream-id={stream} onClick={() => surface.openTerminal?.(stream)} disabled={surface.openTerminal === undefined}>⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</button>
                 : <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>

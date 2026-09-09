@@ -907,3 +907,61 @@
 /* REQ-SHELL-141: the five documents read as one row of links, in the order the requirement gives them. */
 .about__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-4, 16px); margin-top: var(--rt-space-2, 8px); }
 .about__links .btn-link { padding: 0; }
+
+/* Part AM — the terminal grid, the pop-out window and the transcript preview (ADR-0047 B over ADR-0021's frames;
+   REQ-SHELL-079..101, REQ-CHAT-063/066/076). The window has no mockup (docs/design/README.md §3.2) and is drawn from
+   the design language alone — the design's tabs, tags, buttons, notice and dialog; the preview follows the mockup's
+   live terminal block (Workspace → transcript column), one of the five surfaces that EARN a border (README §7.1).
+   Tokens by name; the literal figures are the requirement's (REQ-SHELL-100's 6 px gutter, REQ-SHELL-083's 460 px)
+   and the mockup's own craft (the block's 1.7 leading, the 620 px measure). */
+.term-window { display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; background: var(--rt-bg); color: var(--rt-text); }
+.term-window__tabs { flex: none; padding: 0 var(--rt-space-4, 16px); background: var(--rt-chrome); overflow-x: auto; }
+.term-window__tab { display: inline-flex; align-items: center; gap: var(--rt-space-2, 8px); background: none; border: 0; border-bottom: 1.5px solid transparent; white-space: nowrap; font-family: inherit; }
+.term-window__tab.is-active { border-bottom-color: var(--rt-accent); }
+.term-window__tab-dot { background: var(--rt-text-tertiary); }
+.term-window__tab-dot[data-state='running'] { background: var(--rt-run); }
+.term-window__tab-label { font-size: var(--rt-text-xs, 11px); }
+.term-window__panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.term-tab { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px) var(--rt-space-4, 16px) var(--rt-space-4, 16px); }
+.term-tab__header { display: flex; align-items: center; gap: var(--rt-space-3, 12px); min-height: 24px; }
+.term-tab__dot { background: var(--rt-text-tertiary); }
+.term-tab__dot[data-state='running'] { background: var(--rt-run); }
+/* REQ-SHELL-087: the command label is selectable text. */
+.term-tab__command { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; font-size: var(--rt-text-sm, 12px); color: var(--rt-text); }
+.term-tab__truncated, .term-tab__outcome { flex: none; }
+/* REQ-SHELL-088: the controls in order; the spacer keeps Kill on the far side. */
+.term-tab__controls { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
+.term-tab__spacer { flex: 1; }
+.term-tab__help { min-width: 28px; }
+.term-tab__help-note { margin: 0; font-size: var(--rt-text-xs, 11px); }
+.term-tab__banner:empty { display: none; }
+.term-banner[data-motion='reduced'] { animation: none; }
+/* REQ-SHELL-098/100: the terminal ground fills the whole widget through a resize; the fixed 6 px gutter; the focus
+   ring wholly within the bounds (ADR-0050). */
+/* `overflow: clip`, not `hidden`: a hidden overflow is still a scroll container, and focusing the library's helper textarea (which it parks at the cursor cell) scrolled the host by the banner's height on the proof's first run — the screen sat 49 px above its own gutter. A clipped box cannot be scrolled, by script or by focus. */
+.term-grid { position: relative; flex: 1; min-height: 0; padding: 6px; box-sizing: border-box; background: var(--rt-term-bg); border-radius: var(--rt-radius-sm); overflow: clip; }
+.term-grid:focus-within { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.term-grid__screen { position: relative; width: 100%; height: 100%; overflow: clip; }
+.term-grid .xterm { height: 100%; }
+.term-grid .xterm .xterm-viewport, .term-grid .xterm .xterm-screen { background: var(--rt-term-bg) !important; }
+/* REQ-SHELL-098: the cursor — a filled block while control is taken, a hollow outline while read-only. */
+.term-cursor { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; box-sizing: border-box; }
+.term-cursor[data-shape='filled'] { background: var(--rt-term-cursor); mix-blend-mode: difference; }
+.term-cursor[data-shape='hollow'] { box-shadow: inset 0 0 0 1px var(--rt-term-cursor); }
+/* REQ-SHELL-083: the empty state, centred, at most 460 px wide. */
+.term-empty { flex: 1; display: grid; place-items: center; padding: var(--rt-space-6, 24px); }
+.term-empty__block { max-width: 460px; width: 100%; }
+.term-empty__block .empty-state-hint { max-width: none; }
+.term-empty__block .btn { margin-top: var(--rt-space-2, 8px); }
+/* The transcript preview (REQ-SHELL-079, REQ-CHAT-066): the mockup's live terminal block. */
+.term-preview { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); max-width: 620px; margin-top: var(--rt-space-1, 4px); }
+.term-preview__head { display: flex; align-items: center; gap: var(--rt-space-2, 8px); min-height: 22px; font-size: var(--rt-text-xs, 11px); }
+.term-preview__dot { color: var(--rt-run); }
+.term-preview[data-running='false'] .term-preview__dot { color: var(--rt-text-tertiary); }
+.term-preview__state, .term-preview__truncated { flex: none; white-space: nowrap; }
+.term-preview__head .btn { flex: none; margin-left: auto; }
+.term-preview__screen { background: var(--rt-term-bg); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 11px); line-height: 1.7; cursor: pointer; overflow: hidden; }
+.term-preview__screen[aria-disabled='true'] { cursor: default; }
+.term-preview__screen:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.term-preview__lines { margin: 0; font: inherit; white-space: pre; overflow: hidden; user-select: text; }
+.term-preview__caption { font-size: var(--rt-text-2xs, 10px); }

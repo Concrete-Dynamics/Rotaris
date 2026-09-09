@@ -13,6 +13,7 @@ import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 import { PromptListSchema, PromptStateSchema } from './library.js';
+import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
 
 /**
  * The message protocols between main and its two utility processes
@@ -274,6 +275,9 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
   /** Part U / REQ-GIT-069: every ref under `refs/rotaris/checkpoints/<sid>/` in the tree, best-effort; a missing tree is a detail, never a failure. */
   z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
+  // Part AK — ADR-0041: the requirements command family, relayed whole; the ACTOR is stamped by main at the boundary
+  // the action arrived through (REQ-CONFIG-198) and is the one field a renderer never sends.
+  z.object({ kind: z.literal('requirements.command'), workspaceRoot: z.string(), command: RequirementsCommandSchema, actor: ActorSchema }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -387,6 +391,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifacts.state'), state: ArtifactsStateSchema }),
   z.object({ kind: z.literal('artifacts.body'), id: z.string(), slug: z.string(), title: z.string(), kind_: z.string(), status: z.string(), producer: z.string(), persona: z.string(), edited: z.boolean(), body: z.string(), fallback: z.boolean() }),
   z.object({ kind: z.literal('artifacts.saved'), id: z.string(), editedAt: z.string() }),
+  // Part AK — the requirements command's answer: the value the command names (a board, a detail, a reachability, a
+  // transition result) and, after a write, the generation it moved to and the identifiers it touched, which main
+  // publishes on channel 10 AFTER the reply (persist before publish, ADR-0041).
+  z.object({ kind: z.literal('requirements.result'), value: z.unknown(), changed: z.object({ generation: z.number().int().nonnegative(), affected: z.array(z.string()).nullable() }).optional() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

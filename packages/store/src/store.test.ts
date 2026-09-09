@@ -474,9 +474,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v13; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v15; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(14);
+    expect(CURRENT_SCHEMA_VERSION).toBe(15); // Part AK: v15, the delivery tables
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -628,9 +628,13 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     };
     const gone = plant('S-gone');
     const kept = plant('S-kept');
-    const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all() as { name: string }[]).map((t) => t.name).sort();
-    // Every table that carries a session_id is a dependant of the session row: fourteen today (Part Y's `artifacts`
-    // among them) plus `sessions` itself.
+    // Part AK (v15): `delivery_runs` carries a `session_id` as a FACT about the run and deliberately no foreign key — a
+    // requirement's run history outlives the session it names (REQ-TRACE-405/476: "no requirement SHALL be silently
+    // reset"), so the dependants of the session row are the tables whose session_id column REFERENCES it.
+    const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND (m.name = 'sessions' OR EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'))").all() as { name: string }[]).map((t) => t.name).sort();
+    // Every table whose session_id references the session row is a dependant of it: fourteen today (Part Y's `artifacts`
+    // among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
+    expect((r.db.prepare("SELECT count(*) AS c FROM pragma_table_info('delivery_runs') WHERE name = 'session_id'").get() as { c: number }).c).toBe(1);
     expect(tables).toEqual(['artifacts', 'checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
     const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
     for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
@@ -751,11 +755,11 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v14, and the migration list is append-only with nothing renumbered', () => {
-    // Part X reserved v11, Part Y v12, Part AB v13 and Part AE v14 before any of them was written; the ladder is asserted whole
-    // rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(14);
+  it('is v15, and the migration list is append-only with nothing renumbered', () => {
+    // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 before any of them was written; the ladder is
+    // asserted whole rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(15);
   });
 });
 

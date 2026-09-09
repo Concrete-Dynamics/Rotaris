@@ -20,3 +20,4 @@ export * from './checkpoints.js';
 export * from './mcp.js';
 export * from './library.js';
 export * from './artifacts.js';
+export * from './requirements.js'; // Part AK

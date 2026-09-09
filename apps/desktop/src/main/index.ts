@@ -5,6 +5,9 @@ import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
 import { PersonaWindows } from './windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
+// Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
+import { createRequirementsRelay } from './requirements.js';
+import { userInfo } from 'node:os';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
@@ -1507,6 +1510,19 @@ async function main(): Promise<void> {
       case 'session.pageOlder': {
         const r = await runHost.request({ kind: 'session.pageOlder', sessionId: req.sessionId, beforeIndex: req.beforeIndex }, millis(5_000));
         return r.kind === 'session.page' ? { ok: true, value: { rows: r.rows, oldest: r.oldest } } : refusal(r, 'Older messages could not be loaded');
+      }
+      // Part AK — the requirements family (spec 08; ADR-0041). The ACTOR is stamped here and nowhere else
+      // (REQ-CONFIG-198: a command from a window is the OS account main runs as); the workspace is the one this
+      // instance has open; the service answers from its store; a write broadcasts channel 10 AFTER the reply.
+      case 'requirements': {
+        return createRequirementsRelay({
+          currentWorkspace: () => (currentWorkspaceId && currentWorkspace !== '(no workspace)' ? canonicalPath(currentWorkspace) : undefined),
+          awaitWorkspace,
+          request: (root, r, bound) => services.get(root)?.link.request(r, bound),
+          person: () => { try { return userInfo().username; } catch { return process.env['USERNAME'] ?? process.env['USER'] ?? 'unknown'; } },
+          broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },
+          log,
+        }).handle(req.command, { kind: 'window', webContentsId: senderId });
       }
       default:
         return { ok: false, code: 'command.unimplemented', headline: `${req.kind} is not built yet` };

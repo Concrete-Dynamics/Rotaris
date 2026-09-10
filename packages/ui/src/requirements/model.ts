@@ -231,6 +231,56 @@ export function realisedBand(scrollTop: number, viewportHeight: number, itemHeig
   return { start, end: Math.max(start, end) };
 }
 
+// ---- the second dimension (REQ-TRACE-237/239/300; defect AK2-3) ----
+
+/**
+ * Defect `AK2-3`. REQ-TRACE-239 says the work of displaying a board "SHALL be bounded by what is on screen rather
+ * than by how many requirements the store holds", and REQ-TRACE-358 is the mechanism for it. The first build read
+ * that in ONE dimension: a column realised only the cards its own vertical viewport exposed. But REQ-TRACE-237 makes
+ * the COLUMNS area scroll sideways, and at REQ-TRACE-300's supported bound of a hundred populated columns the work
+ * of building a hundred column subtrees in the single commit that switches the grouping axis was itself over the
+ * budget — 150 to 180 ms of interface thread, measured five times, with 48 card widgets standing. Bounding the cards
+ * was necessary and not sufficient; so the board now realises COLUMNS the way a column realises cards.
+ *
+ * What REQ-TRACE-300 forbids is truncating, hiding or refusing a column on account of how many there are, so an
+ * unrealised column is not removed: it keeps a sized placeholder of exactly its own box, holding its label key, its
+ * count and nothing else. Its width, its place in the row, its share of the horizontal scroll range and every other
+ * column's position are therefore unchanged (REQ-TRACE-237/238/335), and the moment it enters the area's viewport it
+ * is built with its heading, its cards and its accessible description. A FOLDED column is never virtualised: a rail
+ * holds no card widgets already (REQ-TRACE-311) and its accessible name is what REQ-TRACE-320 asks a reader to find.
+ */
+export const COLUMN_OVERSCAN_PX = 340;
+/** The design's `--rt-space-3`, used ONLY to size the first band before any box has been laid out; every later band is read off the laid-out boxes. */
+export const COLUMN_GAP = 12;
+
+/** How many columns to build before anything has been measured: what the window could show, plus one column of margin either side. */
+export function initialColumnBandEnd(viewportWidth: number): number {
+  return Math.ceil(Math.max(0, viewportWidth) / (COLUMN_MIN + COLUMN_GAP)) + 2;
+}
+
+/** A laid-out box's horizontal extent. Named for the columns because `ui`'s barrel already exports a `Span` of the markdown renderer's. */
+export interface ColumnSpan { readonly left: number; readonly right: number }
+
+/**
+ * The columns lying within the area's own viewport, extended by one column of margin on either side, as a contiguous
+ * band of indices. Boxes are supplied by the caller (every column is in the document, realised or placeholder, so the
+ * geometry is exact and a rail's narrower box needs no arithmetic of its own). An area with no laid-out width yields
+ * the first column alone rather than all of them, so a board measured before layout does not build a hundred columns.
+ */
+export function visibleColumnBand(items: readonly ColumnSpan[], area: ColumnSpan, margin = COLUMN_OVERSCAN_PX): { readonly start: number; readonly end: number } {
+  if (items.length === 0) return { start: 0, end: 0 };
+  let start = -1;
+  let end = 0;
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i]!;
+    if (item.right >= area.left - margin && item.left <= area.right + margin) {
+      if (start === -1) start = i;
+      end = i + 1;
+    }
+  }
+  return start === -1 ? { start: 0, end: 1 } : { start, end };
+}
+
 // ---- folds (REQ-TRACE-303..316) ----
 
 const CLOSED_FOLD_KEYS: ReadonlySet<string> = new Set<string>([...DELIVERY_COLUMNS, 'blocked', ...HEALTH_TOKENS, 'draft', 'approved', 'deprecated', 'critical', 'high', 'normal', 'low', 'none', UNSET_BUCKET]);

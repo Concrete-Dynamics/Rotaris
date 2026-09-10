@@ -12,7 +12,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, mergeAffected, moveActionFor, moveControlState, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
 
 /**
  * Part AK2 — the Requirements view (spec 08 §Board Surface onwards; REQ-SHELL-023's fourth primary view; ADR-0041's
@@ -122,8 +122,14 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const [reveal, setReveal] = useState<{ readonly column: string; readonly index: number; readonly id: ReqId } | null>(null);
   const [realised, setRealised] = useState<ReadonlyMap<string, number>>(new Map());
   const [paintMs, setPaintMs] = useState<number | null>(null);
-  /** Defect AK2-2: bumped on every horizontal scroll and resize of the columns area, so each column re-decides whether it is on screen. */
-  const [areaRevision, setAreaRevision] = useState(0);
+  /**
+   * Defect AK2-3: the columns the area's own viewport exposes, as a contiguous band of indices into `columnKeys`.
+   * Every other column is a sized placeholder (REQ-TRACE-237/239/300 — see `visibleColumnBand`). Before anything is
+   * laid out the band is what the window could show plus a column of margin, so the first commit is bounded too.
+   */
+  const [columnBand, setColumnBand] = useState(() => ({ start: 0, end: initialColumnBandEnd(typeof window === 'undefined' ? 1280 : window.innerWidth) }));
+  /** REQ-TRACE-300/484: a column the keyboard has traversed to, focused once the band has realised it. */
+  const [columnFocus, setColumnFocus] = useState<string | null>(null);
   const [filterMs, setFilterMs] = useState<number | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [now, setNow] = useState(() => host.now());
@@ -184,19 +190,33 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     else setFilterMs(elapsed);
   }, [board, filter]);
 
-  // Defect AK2-2: the columns area's horizontal scroll and its resize re-decide which columns are on screen, once per frame.
-  const areaFrame = useRef<number | null>(null);
-  const bumpArea = useCallback(() => {
-    if (areaFrame.current !== null) return;
-    areaFrame.current = requestAnimationFrame(() => { areaFrame.current = null; setAreaRevision((r) => r + 1); });
+  /**
+   * Defect AK2-3: which columns the area's viewport exposes, read off the laid-out boxes — every column is in the
+   * document, realised or placeholder, so this is exact and needs no arithmetic over widths, gaps or rails. Once per
+   * frame on a horizontal scroll or a resize, and once after any commit that could have moved a column.
+   */
+  const measureBand = useCallback(() => {
+    const el = columnsRef.current;
+    if (el === null) return;
+    const area = el.getBoundingClientRect();
+    if (area.width <= 0) return; // not laid out yet; the band that is already set stands
+    const items = [...el.querySelectorAll<HTMLElement>(':scope > [data-column]')];
+    if (items.length === 0) return;
+    const next = visibleColumnBand(items.map((i) => i.getBoundingClientRect()), area);
+    setColumnBand((p) => (p.start === next.start && p.end === next.end ? p : next));
   }, []);
+  const bandFrame = useRef<number | null>(null);
+  const scheduleBand = useCallback(() => {
+    if (bandFrame.current !== null) return;
+    bandFrame.current = requestAnimationFrame(() => { bandFrame.current = null; measureBand(); });
+  }, [measureBand]);
   useEffect(() => {
     const el = columnsRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(bumpArea);
+    const ro = new ResizeObserver(scheduleBand);
     ro.observe(el);
-    return () => { ro.disconnect(); if (areaFrame.current !== null) cancelAnimationFrame(areaFrame.current); };
-  }, [bumpArea, board]);
+    return () => { ro.disconnect(); if (bandFrame.current !== null) { cancelAnimationFrame(bandFrame.current); bandFrame.current = null; } };
+  }, [scheduleBand, board]);
 
   const refreshDetail = useCallback((id: ReqId) => {
     void host.readDetail(id).then((r) => { if (r.ok && latest.current.detailId === id) setDetail(r.value); });
@@ -263,9 +283,13 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const generation = board?.generation ?? 0;
   const answersKey = selectedId === null ? '' : `${selectedId}@${selectedColumn}@${generation}`;
   const answersFor = answers.key !== '' && answers.key === answersKey ? answers.map : NO_ANSWERS;
-  const realisedTotal = useMemo(() => { let n = 0; for (const k of columnKeys) n += realised.get(k) ?? 0; return n; }, [realised, columnKeys]);
+  /** REQ-TRACE-366: only a realised column holds card widgets, so only the band contributes (defect AK2-3). */
+  const realisedTotal = useMemo(() => { let n = 0; for (let i = columnBand.start; i < Math.min(columnBand.end, columnKeys.length); i += 1) n += realised.get(columnKeys[i]!) ?? 0; return n; }, [realised, columnKeys, columnBand]);
 
   useLayoutEffect(() => { latest.current = { board, axis, chord, inFlight, detailId, decisions, columnKeys, members, confirm, cards, epics }; });
+  // Defect AK2-3: anything that can move a column's box — the axis, the membership, a fold, the blocked column, a
+  // drag widening the rails — re-decides the band before the frame paints.
+  useLayoutEffect(() => { measureBand(); }, [measureBand, columnKeys, members, decisions, blockedColumn, drag]);
 
   // ---- folds (REQ-TRACE-303..316) ----
   const onFold = useCallback((key: string, fold: boolean) => {
@@ -295,9 +319,24 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   }, [onFold]);
   useEffect(() => {
     if (reveal === null) return;
-    const t = requestAnimationFrame(() => { document.querySelector<HTMLElement>(`[data-req-card="${reveal.id}"]`)?.focus(); setReveal(null); });
+    // Defect AK2-3: the card's column may be a placeholder. Bring it into the area's viewport and let the band
+    // realise it; this effect re-runs on the band and then focuses the card.
+    const el = columnsRef.current?.querySelector<HTMLElement>(`:scope > [data-column="${CSS.escape(reveal.column)}"]`) ?? null;
+    if (el !== null && el.dataset['offscreen'] === 'true') { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
+    const t = requestAnimationFrame(() => { document.querySelector<HTMLElement>(`[data-req-card="${CSS.escape(reveal.id)}"]`)?.focus(); setReveal(null); });
     return () => cancelAnimationFrame(t);
-  }, [reveal]);
+  }, [reveal, columnBand]);
+  // REQ-TRACE-300/484: keyboard traversal reaches a column that is not realised — it is scrolled into view and takes
+  // the focus in the update that realises it, so a hundred columns are traversable and none is unreachable.
+  useEffect(() => {
+    if (columnFocus === null) return;
+    const el = columnsRef.current?.querySelector<HTMLElement>(`:scope > [data-column="${CSS.escape(columnFocus)}"]`) ?? null;
+    if (el === null) { setColumnFocus(null); return; }
+    const target = el.querySelector<HTMLElement>('[data-req-card]') ?? el.querySelector<HTMLElement>('[data-testid="req-heading"]') ?? (el.dataset['testid'] === 'req-rail' ? el : null);
+    if (target === null) return; // still a placeholder; the band update re-runs this effect
+    target.focus();
+    setColumnFocus(null);
+  }, [columnFocus, columnBand]);
 
   // ---- REQ-TRACE-366: the observable state a caller or the proof waits on ----
   useEffect(() => {
@@ -413,11 +452,17 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       next?.focus();
       return;
     }
-    const all = [...(columnsRef.current?.querySelectorAll<HTMLElement>('[data-testid="req-column"], [data-testid="req-rail"]') ?? [])];
+    // Defect AK2-3: the neighbour may be a placeholder, so traversal walks the columns the BOARD has — every one of
+    // them is a direct child of the area, realised or not — and where the neighbour is not built it is brought into
+    // the viewport and takes the focus in the update that builds it.
+    const all = [...(columnsRef.current?.querySelectorAll<HTMLElement>(':scope > [data-column]') ?? [])];
     const i = all.indexOf(column);
     const target = all[key === 'ArrowRight' ? i + 1 : i - 1];
     if (!target) return;
-    (target.querySelector<HTMLElement>('[data-req-card]') ?? target.querySelector<HTMLElement>('[data-testid="req-heading"]') ?? target).focus();
+    const focusable = target.querySelector<HTMLElement>('[data-req-card]') ?? target.querySelector<HTMLElement>('[data-testid="req-heading"]') ?? (target.dataset['testid'] === 'req-rail' ? target : null);
+    if (focusable !== null) { focusable.focus(); return; }
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    setColumnFocus(target.dataset['column'] ?? null);
   }, []);
 
   const reevaluate = useCallback(() => {
@@ -471,21 +516,29 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       return <div className="empty-state req-empty" data-testid="req-empty-store"><span className="empty-state-title">{EMPTY_STORE_SENTENCE}</span><span className="empty-state-hint">Source: <span className="mono">{board.source.dir}</span>. {EMPTY_SOURCE_HOW}</span></div>;
     }
     return (
-      <div ref={columnsRef} className="req-columns" data-testid="req-columns" data-axis={axis} data-dragging={drag !== null} onScroll={bumpArea}>
+      <div ref={columnsRef} className="req-columns" data-testid="req-columns" data-axis={axis} data-dragging={drag !== null} onScroll={scheduleBand}>
         {filtered.length === 0 && <p className="req-status" role="status" data-testid="req-filter-nothing">{FILTER_NOTHING} <button type="button" className="btn btn-link" onClick={() => { setFilter(EMPTY_FILTER); setTyped(''); }}>{FILTER_CLEAR}</button></p>}
-        {columnKeys.map((key) => {
+        {columnKeys.map((key, index) => {
           const list = members.get(key) ?? [];
           const label = columnLabel(key, projectSupplied);
           const fold = foldDecision(decisions[key], foldEmpty, list.length) && !(drag !== null && drag.hover === key);
           const emptySentence = axis === 'delivery' ? (EMPTY_COLUMN_SENTENCE[key as ColumnToken] ?? EMPTY_AXIS_SENTENCE) : EMPTY_AXIS_SENTENCE;
           const droppable = drag !== null && AXIS_DRAGGABLE[axis] && key !== drag.from;
+          // Defect AK2-3 (REQ-TRACE-239 read in both dimensions): an OPEN column outside the area's own viewport is
+          // not built. It keeps a placeholder of exactly its own box — its width, its place in the row, its share of
+          // the horizontal scroll range, its key and its count — so nothing is truncated, hidden or refused on
+          // account of how many columns there are (REQ-TRACE-300), and it is built the moment it comes into view. A
+          // FOLDED column is always built: a rail holds no card widgets already (REQ-TRACE-311) and its accessible
+          // name is what REQ-TRACE-320 asks a reader to find.
+          if (!fold && (index < columnBand.start || index >= columnBand.end)) {
+            return <div key={key} className="req-column req-column--offscreen" data-testid="req-column" data-column={key} data-count={list.length} data-realised={0} data-offscreen="true" aria-hidden="true" />;
+          }
           return (
             <Column
               key={key} colKey={key} label={label} count={list.length} members={list} folded={fold} emptySentence={emptySentence}
               deliveryWord={axis === 'delivery' ? `Delivery state ${key}` : `${axis} ${key}`}
               drag={drag === null ? null : { id: drag.id, answer: drag.answers.get(key as ColumnToken), droppable }}
               revealIndex={reveal !== null && reveal.column === key ? reveal.index : null}
-              container={columnsRef} revision={areaRevision}
               onFold={onFold} onDrop={onDrop} onDragHover={onDragHover} onRealised={onRealised} renderCard={renderCard}
             />
           );

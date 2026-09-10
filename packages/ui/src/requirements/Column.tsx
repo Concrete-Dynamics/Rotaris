@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { BoardCard, Reachability, ReqId } from '@rotaris/contracts';
 import { CARD_HEIGHT_ESTIMATE, PRIVATE_TRANSFER_TYPE, headingAccessibleName, railAccessibleName, realisedBand } from './model.js';
 
@@ -15,12 +15,16 @@ import { CARD_HEIGHT_ESTIMATE, PRIVATE_TRANSFER_TYPE, headingAccessibleName, rai
  * is what `onRealised` reports and the proof measures.
  *
  * Off screen: the columns area scrolls horizontally (REQ-TRACE-237), so "the cards lying within its own scroll
- * viewport" has a second dimension — a column whose box lies outside the area's visible width plus one column of
- * margin keeps its heading, its count and its full scroll-range spacer (so its scroll offset survives, REQ-TRACE-335)
- * and realises NO card. Defect AK2-2 (ADR-0041's second execution): with vertical virtualisation alone, grouping a
- * 1,500-requirement store by epic realised every one of a hundred columns' bands in one commit — about 1,300 card
- * widgets and a 1.7 s long task — for four columns in view. Visibility is decided in a layout effect against the
- * container the view passes in, before the first paint, and re-decided on every horizontal scroll and resize.
+ * viewport" has a second dimension. Defect AK2-2 (ADR-0041's second execution): with vertical virtualisation alone,
+ * grouping a 1,500-requirement store by epic realised every one of a hundred columns' bands in one commit — about
+ * 1,300 card widgets and a 1.7 s long task — for four columns in view. Three readings followed, each measured and
+ * each insufficient: a column decided against the area's box whether it was on screen and realised no card if it was
+ * not (151 ms), then an off-screen column read no geometry and registered no `ResizeObserver` (171 ms), then `Column`
+ * was memoised so the realised-count bookkeeping of the columns in view stopped re-rendering all hundred (158 ms).
+ * The cost that survived all three was building a hundred column subtrees at all. It is defect AK2-3 and it is
+ * settled where it belongs — in the VIEW, which builds a `Column` only for the columns lying within the area's own
+ * viewport and a sized placeholder for the rest (`visibleColumnBand` in `model.ts`). This component therefore has no
+ * visibility of its own to decide any more: a `Column` that exists is on screen, and it realises its band.
  *
  * Folded: a narrow rail 8 characters of its own font wide, margin 4 (310), text upright and never rotated (309),
  * the heading wrapping onto at most two lines then eliding with the whole text on its tooltip and accessible name,
@@ -41,10 +45,6 @@ export interface ColumnProps {
   /** A drag is in progress; on the delivery axis this column's answer, else undefined. */
   readonly drag: { readonly id: ReqId; readonly answer: Reachability | undefined; readonly droppable: boolean } | null;
   readonly revealIndex: number | null;
-  /** The horizontally scrolling columns area, against which this column decides whether it is on screen. */
-  readonly container: RefObject<HTMLDivElement | null>;
-  /** Bumped by the view on every horizontal scroll and resize of the area, so the decision is re-taken. */
-  readonly revision: number;
   readonly onFold: (key: string, folded: boolean) => void;
   readonly onDrop: (key: string, id: ReqId) => void;
   readonly onDragHover: (key: string, hovering: boolean) => void;
@@ -52,21 +52,15 @@ export interface ColumnProps {
   readonly renderCard: (card: BoardCard, index: number) => ReactNode;
 }
 
-/** One open column of margin on either side of the visible width, so a wheel notch lands on realised cards (REQ-TRACE-360's spirit, sideways). */
-const HORIZONTAL_MARGIN = 340;
-
 /**
- * Defect AK2-2, third reading. The two halves above bounded what a column REALISES; neither bounded how often a
- * column RE-RENDERS. Every visible column reports its realised count to the view, and the view holds that count in
- * state, so on an axis switch each of the columns in view caused a parent render that re-rendered all one hundred
- * columns — hundreds of column renders, each re-running its layout effects against a 28 820 px row, for six columns
- * of actual change. Memoised, a parent render whose bookkeeping did not change THIS column now costs it nothing.
- * Every prop is either a primitive compared by value, a stable callback, a ref, or null while no drag is running.
+ * Defect AK2-2, third reading, kept because it is right on its own terms. Bounding what a column REALISES did not
+ * bound how often a column RE-RENDERS: every column reports its realised count to the view, and the view holds that
+ * count in state, so each column in view caused a parent render that re-rendered every column then mounted.
+ * Memoised, a parent render whose bookkeeping did not change THIS column costs it nothing. Every prop is either a
+ * primitive compared by value, a stable callback, or null while no drag is running.
  */
-export const Column = memo(function Column({ colKey, label, count, members, folded, emptySentence, deliveryWord, drag, revealIndex, container, revision, onFold, onDrop, onDragHover, onRealised, renderCard }: ColumnProps) {
-  const rootRef = useRef<HTMLElement | null>(null);
+export const Column = memo(function Column({ colKey, label, count, members, folded, emptySentence, deliveryWord, drag, revealIndex, onFold, onDrop, onDragHover, onRealised, renderCard }: ColumnProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState(false);
   const railRef = useRef<HTMLButtonElement | null>(null);
   const headingRef = useRef<HTMLButtonElement | null>(null);
   const hadFocus = useRef(false);
@@ -75,18 +69,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
   const [viewport, setViewport] = useState(640);
   const [estimate, setEstimate] = useState(CARD_HEIGHT_ESTIMATE);
   const adoptedFor = useRef<readonly BoardCard[] | null>(null);
-  const band = folded || !visible ? { start: 0, end: 0 } : realisedBand(scrollTop, viewport, estimate, members.length);
-
-  // Defect AK2-2: on screen means within the columns area's visible width (plus the margin); decided before paint.
-  useLayoutEffect(() => {
-    const el = rootRef.current;
-    const area = container.current;
-    if (!el || !area || folded) return;
-    const a = area.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const v = r.right >= a.left - HORIZONTAL_MARGIN && r.left <= a.right + HORIZONTAL_MARGIN;
-    setVisible((p) => (p === v ? p : v));
-  }, [container, revision, folded, members.length]);
+  const band = folded ? { start: 0, end: 0 } : realisedBand(scrollTop, viewport, estimate, members.length);
 
   // REQ-TRACE-320: folding a column that holds the focus moves it to the rail; unfolding from the rail lands on the heading.
   useLayoutEffect(() => {
@@ -96,25 +79,23 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
     }
   }, [folded]);
 
-  // The viewport's real height, read after layout so the band is right on the first paint (REQ-TRACE-360).
-  // Defect AK2-2, second half: an OFF-SCREEN column reads no geometry and observes nothing. Bounding the realised
-  // cards was not enough — at REQ-TRACE-300's hundred populated columns the per-column work itself was the cost, and
-  // a viewport read plus a ResizeObserver registration on every one of a hundred lists is a hundred of each in the
-  // commit that switches axis. The column keeps its spacer either way, so its scroll offset still survives
-  // (REQ-TRACE-335); it simply costs nothing to be off screen. Both effects re-run when `visible` turns true, which
-  // is the frame the column scrolls into view, and the band is right before that frame paints.
+  // The viewport's real height, read after layout so the band is right on the first paint (REQ-TRACE-360). Defect
+  // AK2-2's second half guarded both of these on an off-screen column, because a viewport read plus a
+  // `ResizeObserver` registration on every one of a hundred lists is a hundred of each in the commit that switches
+  // axis. The guard was right and is now subsumed: under AK2-3 an off-screen column is not a `Column` at all, so
+  // there is nothing left to guard, and a column that exists pays both once because it is on screen.
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (!el || folded || !visible) return;
+    if (!el || folded) return;
     if (el.clientHeight > 0) setViewport((v) => (el.clientHeight === v ? v : el.clientHeight));
-  }, [folded, visible]);
+  }, [folded]);
   useEffect(() => {
     const el = listRef.current;
-    if (!el || folded || !visible || typeof ResizeObserver === 'undefined') return;
+    if (!el || folded || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => { if (el.clientHeight > 0) setViewport(el.clientHeight); });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [folded, visible]);
+  }, [folded]);
 
   // REQ-TRACE-361: the estimate stands until at least one card has genuinely completed layout; then the measured mean is adopted, once per membership.
   useLayoutEffect(() => {
@@ -173,13 +154,11 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
   const realised = members.slice(band.start, band.end);
   return (
     <section
-      ref={rootRef}
       className={`req-column${drag !== null && drag.droppable ? ` is-drop-${dragState}` : ''}`}
       data-testid="req-column"
       data-column={colKey}
       data-count={count}
       data-realised={realised.length}
-      data-visible={visible}
       aria-label={`${label} column`}
       aria-description={`${deliveryWord}. ${count} ${count === 1 ? 'requirement' : 'requirements'}.${count === 0 ? ` ${emptySentence}` : ''}`}
       onFocusCapture={() => { hadFocus.current = true; }}

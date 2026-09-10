@@ -29,12 +29,13 @@
  *               `DataTransfer` through the board's own handlers — the operating system's drag loop cannot be driven
  *               by injected input, so what is proved is the payload, the private type and the refusal path, not the
  *               pointer.
- *   scale     — the generated store grouped by epic: 100 populated columns, each at least 276 wide, the area
- *               scrollable to its end (REQ-TRACE-300); the delivery-axis column of 1,500 members realises fewer than
- *               a quarter of them and stays bounded across a ten-step scroll that reaches the last card
- *               (REQ-TRACE-365); the board's paint figure on that store (REQ-TRACE-239's "does not grow"); the
- *               axis switch itself within the budget, realising only the columns in view (defect AK2-2); the
- *               post-debounce filter recomputation within REQ-TRACE-367's 100 ms.
+ *   scale     — the generated store grouped by epic: 100 populated columns PRESENT, each at least 276 wide, the row
+ *               a hundred minimum-width columns long and the area scrollable to its end, while only the columns the
+ *               viewport exposes are BUILT (REQ-TRACE-300 with REQ-TRACE-239, defect AK2-3); the delivery-axis column
+ *               of 1,500 members realises fewer than a quarter of them and stays bounded across a ten-step scroll
+ *               that reaches the last card (REQ-TRACE-365); the board's paint figure on that store (REQ-TRACE-239's
+ *               "does not grow"); the axis switch itself within the budget; the post-debounce filter recomputation
+ *               within REQ-TRACE-367's 100 ms.
  *
  * Evidence under `.requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -376,7 +377,7 @@ stage2.drop = { revealed: dropped.revealed, transferTypes: dropped.types, feedba
 // ── scale: the generated 1,500-requirement store — 100 columns on the epic axis, virtualisation, the budget ──
 const scaleProfile = generatedProfile('scale');
 const SCROLL = `(async () => { const list = document.querySelector('[data-testid="req-column"][data-column="backlog"] [data-testid="req-list"]'); if (!list) return 'no list'; const seen = []; for (let i = 0; i <= 10; i += 1) { list.scrollTop = ((list.scrollHeight - list.clientHeight) * i) / 10; await new Promise((r) => setTimeout(r, 80)); const ids = [...list.querySelectorAll('[data-req-card]')].map((el) => el.getAttribute('data-req-card')); seen.push({ top: Math.round(list.scrollTop), realised: ids.length, first: ids[0] ?? null, last: ids.at(-1) ?? null }); } list.scrollTop = list.scrollHeight; await new Promise((r) => setTimeout(r, 120)); const endIds = [...list.querySelectorAll('[data-req-card]')].map((el) => el.getAttribute('data-req-card')); return { seen, scrollHeight: list.scrollHeight, clientHeight: list.clientHeight, atEnd: list.scrollTop + list.clientHeight >= list.scrollHeight - 1, endLast: endIds.at(-1) ?? null, endRealised: endIds.length }; })()`;
-const SCROLL_COLUMNS = `(() => { const el = document.querySelector('[data-testid="req-columns"]'); if (!el) return null; el.scrollLeft = el.scrollWidth; return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, scrollLeft: el.scrollLeft, columns: el.querySelectorAll('[data-testid="req-column"]').length, rails: el.querySelectorAll('[data-testid="req-rail"]').length }; })()`;
+const SCROLL_COLUMNS = `(() => { const el = document.querySelector('[data-testid="req-columns"]'); if (!el) return null; const present = el.querySelectorAll(':scope > [data-column]').length; const built = el.querySelectorAll(':scope > [data-column]:not([data-offscreen])').length; el.scrollLeft = el.scrollWidth; return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, scrollLeft: el.scrollLeft, columns: el.querySelectorAll('[data-testid="req-column"]').length, rails: el.querySelectorAll('[data-testid="req-rail"]').length, present, built, placeholders: present - built }; })()`;
 const scale = launch('scale', scaleProfile.workspace, scaleProfile.local, scaleProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@9000`, `${SCROLL}@9200`, `${ARM_LONGTASKS}@11000`, `${READ_LONGTASKS}@14500`, `${SCROLL_COLUMNS}@14600`, `${ARM_LONGTASKS}@16000`, `${READ_LONGTASKS}@19000`].join(';;'),
@@ -415,9 +416,16 @@ for (const m of epicAxis.matches) expect(m.rect.width >= 276, `REQ-TRACE-238 at 
 const scrolledColumns = scale.evals['14600'];
 expect(scrolledColumns && scrolledColumns.scrollWidth > scrolledColumns.clientWidth && scrolledColumns.scrollLeft > 0, `REQ-TRACE-300: the columns area did not scroll (${JSON.stringify(scrolledColumns)})`);
 const axisTasks = scale.evals['14500'];
-// REQ-TRACE-300: at the supported bound of 100 populated columns every guarantee holds, the interface budget included —
-// the switch realises only the columns on screen (defect AK2-2), so it is bounded by the viewport, not the store.
-expect(axisTasks && axisTasks.longest < BUDGET_MS, `REQ-TRACE-300/239: switching to 100 populated columns cost a ${axisTasks?.longest} ms long task`);
+// REQ-TRACE-300 and REQ-TRACE-239 together, which is the pair defect AK2-3 had to satisfy at once. 300 forbids
+// truncating, hiding or refusing a column on account of how many there are; 239 requires the work of putting the
+// board on screen to be bounded by what is on screen. So: all hundred columns are PRESENT — each in its place, at
+// its width, holding its share of a row a hundred minimum-width columns long — while only the ones the area's
+// viewport exposes are BUILT, and the switch that produces them stays inside the budget.
+expect(scrolledColumns.present >= 100, `REQ-TRACE-300: the columns area holds ${scrolledColumns.present} columns, not the hundred the board reports`);
+expect(scrolledColumns.scrollWidth >= 100 * 276, `REQ-TRACE-300/238: a hundred columns at the 276 minimum need ${100 * 276} px of row; the area reports ${scrolledColumns.scrollWidth}`);
+expect(scrolledColumns.built > 0 && scrolledColumns.built < 100, `defect AK2-3: ${scrolledColumns.built} of the ${scrolledColumns.present} columns were built for a viewport ${scrolledColumns.clientWidth} px wide`);
+expect(axisTasks && axisTasks.board && axisTasks.board.columns >= 100, `REQ-TRACE-300: the board's own model reports ${axisTasks?.board?.columns} columns on the epic axis, not a hundred`);
+expect(axisTasks.longest < BUDGET_MS, `REQ-TRACE-300/239: switching to 100 populated columns cost a ${axisTasks?.longest} ms long task`);
 const epicAxisColumns = columnsOf(scale.at['[data-testid="req-column"]@14400']);
 const realisedOnEpicAxis = epicAxisColumns.reduce((n, c) => n + c.realised, 0);
 expect(realisedOnEpicAxis > 0 && realisedOnEpicAxis < 100, `defect AK2-2: ${realisedOnEpicAxis} card widgets realised across 100 columns for a viewport four columns wide`);
@@ -428,7 +436,7 @@ expect(Number.isFinite(filterMs) && filterMs >= 0, `REQ-TRACE-367: no post-debou
 expect(filterMs < BUDGET_MS, `REQ-TRACE-367: the post-debounce recomputation over ${scaleProfile.requirements} requirements cost ${filterMs} ms`);
 expect(filterTotal === '15 / 1500', `the text filter "REQ-77" left ${JSON.stringify(filterTotal)}, not the fifteen identifiers that carry it`);
 const filterTasks = scale.evals['19000'];
-stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, axisSwitchLongestTaskMs: axisTasks.longest, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
+stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, columnsPresent: scrolledColumns.present, columnsBuilt: scrolledColumns.built, modelColumns: axisTasks.board?.columns ?? null, axisSwitchLongestTaskMs: axisTasks.longest, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
 
 results.stage2 = stage2;
 results.passed = true;

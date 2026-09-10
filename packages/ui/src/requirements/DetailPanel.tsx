@@ -6,6 +6,8 @@ import { HEALTH_DERIVATION_SENTENCE, HEALTH_GLOSS, RELATION_LABEL, absoluteMomen
 /**
  * Part AK2 — the requirement detail view (REQ-TRACE-271..280, 276/277): exactly five sections, every one built on
  * every render including when it holds nothing, each with its own empty message (271/272), degrading individually.
+ * The revision-history panel of REQ-TRACE-278/280 sits below them and is NOT a sixth section — see the note at its
+ * site; `DETAIL_SECTIONS` is the list, and `[data-testid="req-section"]` counts five.
  * The card and the detail report the same lifecycle, delivery state, health and evidence because the detail's card
  * IS the board's card for that generation (276; the service reads both against one projection, REQ-TRACE-348). The
  * description is rendered from the source (275): `prose` is what the engine read, never a local copy. Every related
@@ -153,7 +155,17 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
             </>)}
           <p className="card-meta">Test results, build results and the last successful verification are not reported by the projection in this build.</p>
         </section>
-        <section className="req-detail__section" data-testid="req-section" data-section="history" aria-label="Revision history">
+        {/*
+          * REQ-TRACE-271 fixes the detail at EXACTLY FIVE sections and spec 08's vocabulary list names them:
+          * requirement, relations, execution, traceability, verification. REQ-TRACE-278/280 separately require a
+          * revision-HISTORY PANEL with its three states. The first build drew the panel as a sixth peer of the five —
+          * same `data-testid`, same class, same kicker — so anything counting the detail's sections found six where
+          * the specification says five, and the file contradicted its own `DETAIL_SECTIONS`. The reading taken here
+          * is that REQ-TRACE-280's "history panel" is its own surface within the detail view and not a section of
+          * REQ-TRACE-271's five: it keeps its own test identifier and its own class, and the five sections stay five.
+          * (Defect AK2-4, ADR-0041's second execution.)
+          */}
+        <section className="req-detail__history-panel" data-testid="req-history-panel" data-section="history" aria-label="Revision history">
           <span className="card-kicker">History</span>
           {history === 'reading' ? <p className="req-detail__empty" data-testid="req-history-state" data-state="reading">{HISTORY_READING}</p>
             : history === 'unavailable' ? <p className="req-detail__empty" data-testid="req-history-state" data-state="unavailable">{HISTORY_UNAVAILABLE}</p>

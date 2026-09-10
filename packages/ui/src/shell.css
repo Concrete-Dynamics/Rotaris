@@ -1060,6 +1060,10 @@
 .req-empty__errors { margin: var(--rt-space-2) 0 0; padding: 0; list-style: none; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); text-align: left; }
 /* REQ-TRACE-238: an open column is at least 276 and at most 340 wide, spare width spent up to the cap; REQ-TRACE-310: its margin is 10 on every side. */
 .req-column { flex: 1 0 276px; min-width: 276px; max-width: 340px; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-radius: var(--rt-radius-md); }
+/* Defect AK2-3: a column outside the area's own viewport keeps its box and holds nothing — same width, same place in
+   the row, same share of the scroll range (REQ-TRACE-237/238/300), and no drop target, because a drop belongs to the
+   column that is built. */
+.req-column--offscreen { pointer-events: none; }
 .req-column.is-drop-reachable { outline: var(--rt-hairline-width) dashed var(--rt-ok); outline-offset: -1px; }
 .req-column.is-drop-refused { outline: var(--rt-hairline-width) dashed var(--rt-danger-300); outline-offset: -1px; }
 .req-column__heading { display: flex; align-items: center; gap: 7px; padding: 0 2px var(--rt-space-2); margin: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--rt-radius-sm); }
@@ -1132,6 +1136,10 @@
 .req-detail__actions { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; }
 .req-detail__body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--rt-space-3) var(--rt-space-4); display: flex; flex-direction: column; gap: var(--rt-space-3); font-size: var(--rt-text-xs); }
 .req-detail__section { display: flex; flex-direction: column; gap: 6px; }
+/* REQ-TRACE-278/280's revision-history panel: below the five sections of REQ-TRACE-271 and not one of them, so it
+   carries its own class and its own test identifier (defect AK2-4). It is set off by a rule rather than a kicker
+   alone, since it answers a different question from the five. */
+.req-detail__history-panel { display: flex; flex-direction: column; gap: 6px; padding-top: var(--rt-space-3); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-detail__prose { margin: 0; color: var(--rt-text-secondary); line-height: var(--rt-leading-body); font-size: var(--rt-text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .req-detail__empty { margin: 0; color: var(--rt-text-tertiary); line-height: var(--rt-leading-body); }
 .req-detail__grid { display: grid; grid-template-columns: 74px 1fr; gap: 4px 10px; margin: 0; }

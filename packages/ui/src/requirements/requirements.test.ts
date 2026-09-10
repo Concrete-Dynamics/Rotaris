@@ -3,10 +3,10 @@ import type { BoardCard, BoardProjection, EpicCard, Reachability } from '@rotari
 import { DELIVERY_COLUMNS } from '@rotaris/contracts';
 import { arcPath, segmentArcs } from './EvidenceIndicator.js';
 import { cardDescription } from './Card.js';
-import { DETAIL_SECTIONS } from './DetailPanel.js';
+import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
 import {
-  ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_MAX, COLUMN_MIN, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
-  alertSeverity, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand,
+  ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_GAP, COLUMN_MAX, COLUMN_MIN, COLUMN_OVERSCAN_PX, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
+  alertSeverity, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, visibleColumnBand,
 } from './model.js';
 
 /**
@@ -187,6 +187,39 @@ describe('virtualisation arithmetic (REQ-TRACE-358..365)', () => {
   });
 });
 
+describe('the columns band — the second dimension (REQ-TRACE-237/239/300, defect AK2-3)', () => {
+  /** A row of columns at the specification's minimum width and the design's gap; `from` is where the row starts, so a negative value is a row scrolled sideways. */
+  const row = (count: number, from = 0, width = COLUMN_MIN, gap = COLUMN_GAP) =>
+    Array.from({ length: count }, (_, i) => ({ left: from + i * (width + gap), right: from + i * (width + gap) + width }));
+  const AREA = { left: 0, right: 1264 };
+
+  it('realises the columns the area exposes plus a column of margin, and does not grow with the number of columns', () => {
+    const few = visibleColumnBand(row(7), AREA);
+    const hundred = visibleColumnBand(row(100), AREA);
+    expect(few.start).toBe(0);
+    expect(hundred.start).toBe(0);
+    expect(hundred.end - hundred.start).toBe(few.end - few.start);
+    expect(hundred.end).toBeGreaterThanOrEqual(Math.ceil((AREA.right - AREA.left) / (COLUMN_MIN + COLUMN_GAP)));
+    expect(hundred.end).toBeLessThan(10);
+  });
+  it('follows the row sideways: a band in the middle is disjoint from the band at the start, and the last column is reached at the end', () => {
+    const middle = visibleColumnBand(row(100, -14_400), AREA);
+    expect(middle.start).toBeGreaterThan(visibleColumnBand(row(100), AREA).end);
+    expect(middle.end - middle.start).toBeLessThan(12);
+    const end = visibleColumnBand(row(100, -(99 * (COLUMN_MIN + COLUMN_GAP) + COLUMN_MIN - 1264)), AREA);
+    expect(end.end).toBe(100);
+  });
+  it('realises the first column alone rather than all of them when nothing has been laid out', () => {
+    expect(visibleColumnBand([{ left: 0, right: 0 }, { left: 0, right: 0 }], { left: 5, right: 5 }, 0)).toEqual({ start: 0, end: 1 });
+    expect(visibleColumnBand([], AREA)).toEqual({ start: 0, end: 0 });
+  });
+  it('sizes the first band from the window before a box exists, and states the figures it assumes', () => {
+    expect(initialColumnBandEnd(1264)).toBe(Math.ceil(1264 / (COLUMN_MIN + COLUMN_GAP)) + 2);
+    expect(initialColumnBandEnd(0)).toBe(2);
+    expect([COLUMN_MIN, COLUMN_GAP, COLUMN_OVERSCAN_PX]).toEqual([276, 12, 340]);
+  });
+});
+
 describe('fold pruning (REQ-TRACE-316) and the fold controls\' names (REQ-TRACE-320)', () => {
   it('prunes only project-supplied keys, and only against the columns the store still has', () => {
     const decisions = { backlog: true, blocked: false, 'REQ-100': true, 'REQ-999': true, 'docs/old': false };
@@ -249,7 +282,14 @@ describe('alerts, evidence and the card description (REQ-TRACE-247, 263, 485)', 
     expect(description.startsWith('Needs Update. Health needs-update: ')).toBe(true);
     expect(description).toContain('specification that has since changed');
   });
-  it('builds exactly the five sections of REQ-TRACE-271, in order', () => {
+  it('builds exactly the five sections of REQ-TRACE-271, in order, each with its own empty message', () => {
     expect([...DETAIL_SECTIONS]).toEqual(['requirement', 'relations', 'execution', 'traceability', 'verification']);
+    expect(Object.keys(SECTION_EMPTY)).toEqual([...DETAIL_SECTIONS]);
+  });
+  it('keeps REQ-TRACE-278/280\'s history panel OUT of the five (defect AK2-4)', () => {
+    // The panel has three states of its own and is a different question from the five; spec 08's vocabulary list
+    // fixes the sections at five, so the panel is not one of them and carries its own identifier on the surface.
+    expect([...DETAIL_SECTIONS]).not.toContain('history');
+    expect(DETAIL_SECTIONS).toHaveLength(5);
   });
 });

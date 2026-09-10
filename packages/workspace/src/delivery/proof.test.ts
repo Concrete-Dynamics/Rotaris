@@ -101,7 +101,7 @@ describe('delivery-proof', () => {
     expect(accepted.ok && accepted.value.to).toBe('done');
   });
   it('a reader handle offers no write method (structural test over the module graph)', () => {
-    expect(Object.keys(reader).sort()).toEqual(['board', 'history', 'queue', 'reachable', 'requirement', 'runningRuns', 'runs']);
+    expect(Object.keys(reader).sort()).toEqual(['board', 'history', 'queue', 'reachable', 'requirement', 'runningRuns', 'runs', 'state', 'worktrees']); // Part AP: two queries joined the reader
     for (const k of Object.keys(reader)) expect(k).not.toMatch(/^(transition|record|answer|set|write)/);
     expect(writer.declares.comparesSpecificationHash).toBe(true);
   });

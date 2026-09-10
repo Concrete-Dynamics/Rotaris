@@ -7,6 +7,8 @@ import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
 import { createRequirementsRelay } from './requirements.js';
+// Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
+import { createRequirementsRuns } from './requirements-runs.js';
 import { userInfo } from 'node:os';
 import { FrameDeliveryLimiter, relayTerminalCommand } from './terminal.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
@@ -538,6 +540,24 @@ async function main(): Promise<void> {
   runHost.onEvent((e) => { if (e.kind === 'publish.terminal') terminalFrames.deliver(e.payload); });
   const processes: ProcessKind[] = ['run-host'];
   let currentWorkspace = argvWorkspace ?? '(no workspace)';
+  // Part AP — the board's run coordinator (REQ-TRACE-463..477): the SYSTEM actor of the `requirements.run.*` family. It claims
+  // the scheduler's dispatches from the workspace service, starts each through the run host's `session.start` with the
+  // elevation confined to that start (REQ-TRACE-470/471; the residues are stated in `requirements-runs.ts`), records the session
+  // id on the run row the moment the host answers (REQ-TRACE-464), settles the row from the host's `run.result` (REQ-TRACE-477),
+  // marks a run waiting on a person from its snapshots (REQ-TRACE-466), reaps after the host's exit (REQ-TRACE-476) and cancels
+  // the board's runs when the last window closes (REQ-TRACE-464). Channel 10 is broadcast only after the service's committed reply.
+  const requirementsRuns = createRequirementsRuns({
+    currentWorkspace: () => (currentWorkspaceId && currentWorkspace !== '(no workspace)' ? canonicalPath(currentWorkspace) : undefined),
+    currentWorkspaceId: () => currentWorkspaceId,
+    service: (root, r, bound) => services.get(root)?.link.request(r, bound),
+    runHost: { request: (r, bound) => runHost.request(r, bound), onEvent: (fn) => runHost.onEvent(fn) },
+    onRunHostExit: (fn) => { runHostChild.on('exit', (code) => fn(code ?? -1)); },
+    preferences: { read: (key) => preferences.read(key), write: (key, value) => preferences.write(key, value) },
+    mintSessionId: () => randomUUID(),
+    broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },
+    log,
+  });
+  app.on('window-all-closed', () => { void requirementsRuns.cancelAll('the last window closed'); });
 
   const win = new BrowserWindow({
     width: 1280, height: 820, show: false, backgroundColor: themeBackground(), title: 'Rotaris',
@@ -1420,6 +1440,10 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'config.liveState', state: req.state }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The live settings could not be handed over');
       }
+      // Part AP — the board's run coordinator answers the renderer's one command (spec 08 §Runs Started from the Board): a launch
+      // preview with the two preferences folded in, a dispatch after an act or a queue change, the permanent suppression, the live runs.
+      case 'requirements.runs':
+        return requirementsRuns.handle(req);
       // Part AL — the seven `terminal.*` commands travel to the run host shape for shape (`main/terminal.ts`, REQ-TOOLS-128).
       case 'terminal.streams':
       case 'terminal.sendKeys':

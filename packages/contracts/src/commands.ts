@@ -9,6 +9,7 @@ import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
 import { ImageAttachmentInputSchema } from './channels.js';
 import { RequirementsCommandSchema } from './requirements.js'; // Part AK
+import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
 import { TERMINAL_COMMAND_SCHEMAS } from './terminal.js';
 
 /**
@@ -230,6 +231,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('requirements'), command: RequirementsCommandSchema }),
   // Part AL — the live terminal's control traffic (ADR-0021, REQ-TOOLS-128, REQ-SHELL-106/107); main relays each to the run host.
   ...TERMINAL_COMMAND_SCHEMAS,
+  // Part AP — the board-run coordinator's one command (spec 08 §Runs Started from the Board; ADR-0041): a launch preview, a
+  // dispatch, the permanent suppression and the live board runs are main's to answer, not the workspace service's.
+  RequirementsRunsCommandSchema,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

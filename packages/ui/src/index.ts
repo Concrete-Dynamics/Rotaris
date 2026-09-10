@@ -45,3 +45,4 @@ export * from './settings/Inventories.js';
 export * from './settings/About.js';
 // Part AM
 export * from './terminal/index.js';
+export * from './requirements/panes/index.js'; // Part AP

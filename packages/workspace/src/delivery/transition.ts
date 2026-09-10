@@ -50,8 +50,13 @@ export interface TransitionOptions {
    * (REQ-TRACE-387/388): Part AP's worktree provisioning and the run start live here. A rejection here refuses the
    * action with its message and writes nothing.
    */
-  readonly beforeCommit?: () => Promise<void>;
+  readonly beforeCommit?: (decision: { readonly from: ColumnToken; readonly to: ColumnToken; readonly startsRun: boolean }) => Promise<void | BeforeCommitOutcome>;
 }
+/**
+ * Part AP — what `beforeCommit` hands back: the worktree a run-starting action provisioned (REQ-TRACE-464 "the run
+ * SHALL take over the worktree already provisioned for it"), written as its row the way `recordRunStarted` writes one.
+ */
+export interface BeforeCommitOutcome { readonly worktree?: { readonly ref: string; readonly unit: string; readonly path: string; readonly branch: string } }
 
 /** REQ-TRACE-383's four classifications, as data so a completeness sweep is over the closed set. */
 export const ACTION_CLASS: Readonly<Record<BoardAction, { readonly changesState: boolean; readonly transition: boolean; readonly startsRun: boolean; readonly confirm: boolean }>> = Object.freeze({
@@ -181,10 +186,15 @@ export function decide(state: DeliveryState, now: RequirementNow, action: BoardA
       return move(to, { returnTo: null }, { startsRun: to === RELEASED, answersBlockers: true, answer, reason: action === 'answer-blocker' ? answer : null });
     }
     case 'edit':
-    case 'create':
-      // REQ-TRACE-498 "Source read-only": the control explains why instead of appearing disabled. Part AP builds the write
-      // (`requirements.source.write`); the refusal names both, as ruled 2026-09-09, so the sentence says where the write lands.
-      return refuse(`${action === 'edit' ? 'Editing' : 'Creating'} a requirement writes into the project's own source through requirements.source.write, which Part AP builds and this build does not offer; nothing was written.`);
+    case 'create': {
+      // Part AP — REQ-TRACE-383: the two source-writing actions write a record and are not transitions. The write into the
+      // project's own artifact is `requirements.source.write`'s (REQ-TRACE-434/439); it records the action HERE, after the
+      // file is written, with the summary the audit keeps (REQ-TRACE-405). The wave-1 refusal ("… which Part AP builds and
+      // this build does not offer") is retired; its pin in transition.test.ts went with it.
+      const summary = (opts.payload?.['summary'] ?? '').trim();
+      if (summary === '') return refuse(`${action === 'edit' ? 'Editing' : 'Creating'} ${id} records a summary of what was written into the source; none was given, so nothing was recorded.`);
+      return move(from, {}, { reason: summary });
+    }
     case 'accept-proposal':
     case 'accept-change-work':
       // Stated refusal: OQ-45 — no decision owns the improvement store's write path; the plan lists both as refusals.
@@ -264,6 +274,10 @@ export interface DeliveryTransitions {
   recordRunStarted(id: ReqId, unit: string, sessionId: string | null, worktree: { readonly ref: string; readonly path: string; readonly branch: string } | null, permissions: string, ctx: TransitionContext): TransitionResult;
   /** The system's move out of `running`: `completed` → review; `failed` / `interrupted` → blocked (run-failure, returns to ready); `cancelled` → ready. */
   recordRunEnded(id: ReqId, unit: string, outcome: 'completed' | 'failed' | 'interrupted' | 'cancelled', detail: string, ctx: TransitionContext): TransitionResult;
+  /** Part AP — REQ-TRACE-407/437: the pass's own move OUT of the terminal state when the accepted hash no longer matches; nothing when it does. */
+  recordSpecificationMoved(id: ReqId, ctx: TransitionContext): TransitionResult;
+  /** Part AP — REQ-TRACE-466/477: the stage a live unit reports (`waiting on a person`, or null); a run-row fact, no delivery state. */
+  recordRunStage(id: ReqId, unit: string, stage: string | null): void;
   answerBlocker(id: ReqId, option: string, actor: Actor, ctx: TransitionContext): Promise<TransitionResult>;
   setQueue(automatic: boolean, concurrency: number): void;
   readonly inFlight: ReadonlySet<ReqId>;
@@ -332,7 +346,10 @@ export function createTransitions(db: StoreHandle, deps: { readonly wall: WallCl
       inFlight.add(id);
       try {
         if (opts.beforeCommit) {
-          try { await opts.beforeCommit(); } catch (e) { return { ok: false, error: { reason: e instanceof Error ? e.message : String(e) } }; }
+          let entailed: void | BeforeCommitOutcome;
+          try { entailed = await opts.beforeCommit({ from: d.value.from, to: d.value.to, startsRun: d.value.startsRun }); } catch (e) { return { ok: false, error: { reason: e instanceof Error ? e.message : String(e) } }; }
+          // Part AP: the provisioned worktree's row, written the way `recordRunStarted` writes its own (beside the transaction, keyed by ref).
+          if (entailed?.worktree) dal.upsertWorktree({ ref: entailed.worktree.ref, id, unit: entailed.worktree.unit, path: entailed.worktree.path, branch: entailed.worktree.branch, createdAt: stamp, kept: false });
         }
         return { ok: true, value: commit(id, d.value, action, actor, ctx.now.canonicalHash, stamp) };
       } finally {
@@ -370,6 +387,21 @@ export function createTransitions(db: StoreHandle, deps: { readonly wall: WallCl
     },
     answerBlocker(id, option, actor, ctx) {
       return transitions.transition(id, 'answer-blocker', actor, ctx, { payload: { option } });
+    },
+    // Part AP — REQ-TRACE-407: "a pass MAY, on its own, move a requirement out of the terminal state"; REQ-TRACE-437 routes an
+    // edit's needs-update through this same evaluation and not through a special case. The system is the actor.
+    recordSpecificationMoved(id, ctx) {
+      const state = currentState(id);
+      if (!state.ok) return state;
+      const s = state.value;
+      if (s.column !== TERMINAL || s.acceptedHash === null || s.acceptedHash === ctx.now.canonicalHash) return { ok: true, value: { id, from: s.column, to: s.column, startsRun: false, historyEntry: 0 } };
+      const stamp = at();
+      const detail = `Specification changed since it was accepted (accepted ${short(s.acceptedHash)}, now ${short(ctx.now.canonicalHash)}).`;
+      const d: Decision = { from: TERMINAL, to: 'needs-update', startsRun: false, writes: true, next: { ...s, column: 'needs-update' }, reason: detail, answersBlockers: false };
+      return { ok: true, value: commit(id, d, 'specification-moved', { kind: 'system' }, ctx.now.canonicalHash, stamp) };
+    },
+    recordRunStage(id, unit, stage) {
+      dal.setRunStage(id, unit, stage);
     },
     setQueue(automatic, concurrency) {
       // REQ-TRACE-480 names the workspace configuration; its keys are Part AP's (REQ-CONFIG-196). In memory until then.

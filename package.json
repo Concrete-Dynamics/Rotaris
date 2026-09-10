@@ -51,6 +51,7 @@
     "terminal-stream-proof": "node apps/desktop/scripts/terminal-stream-proof.mjs",
     "terminal-proof": "node apps/desktop/scripts/terminal-proof.mjs",
     "slash-proof": "node apps/desktop/scripts/slash-proof.mjs",
+    "requirements-runs-proof": "node apps/desktop/scripts/requirements-runs-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

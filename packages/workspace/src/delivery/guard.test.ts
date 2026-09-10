@@ -60,7 +60,7 @@ describe('REQ-TRACE-403 — read access alone offers no state-changing operation
 
   it('the reader carries exactly its query methods, none of which transitions, records, answers, sets or exposes the store', () => {
     const reader = createDeliveryReader(r.db, { workspaceKey: 'C:\\ws', queue: createQueueSettings() });
-    expect(Object.keys(reader).sort()).toEqual(['board', 'history', 'queue', 'reachable', 'requirement', 'runningRuns', 'runs']);
+    expect(Object.keys(reader).sort()).toEqual(['board', 'history', 'queue', 'reachable', 'requirement', 'runningRuns', 'runs', 'state', 'worktrees']); // Part AP: `worktrees`, `state` (queries)
     for (const k of Object.keys(reader)) expect(k, k).not.toMatch(/^(transition|record|answer|set|write|db|dal|store)/i);
     // No property of the reader is the database handle or the DAL — the reader is a closure over them.
     for (const v of Object.values(reader)) expect(typeof v).toBe('function');
@@ -69,7 +69,7 @@ describe('REQ-TRACE-403 — read access alone offers no state-changing operation
   it('the writer is built from the reader plus the transition function and exposes neither the reader nor the store', () => {
     const reader = createDeliveryReader(r.db, { workspaceKey: 'C:\\ws', queue: createQueueSettings() });
     const writer = createDeliveryWriter(reader, createTransitions(r.db, { wall: new FakeClock(), workspaceKey: 'C:\\ws', queue: createQueueSettings() }));
-    expect(Object.keys(writer).sort()).toEqual(['answerBlocker', 'declares', 'inFlight', 'recordRunEnded', 'recordRunStarted', 'setQueue', 'transition']);
+    expect(Object.keys(writer).sort()).toEqual(['answerBlocker', 'declares', 'inFlight', 'recordRunEnded', 'recordRunStage', 'recordRunStarted', 'recordSpecificationMoved', 'setQueue', 'transition']); // Part AP: the two system moves
     expect(Object.isFrozen(writer)).toBe(true);
     expect(Object.values(writer).includes(reader as never)).toBe(false);
     expect(Object.values(writer).includes(r.db as never)).toBe(false);

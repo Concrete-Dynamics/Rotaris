@@ -1,7 +1,8 @@
-import type { Actor, BoardAction, BoardProjection, ColumnToken, ReqId, Reachability, RequirementDetail, StoreParse, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { Actor, BoardAction, BoardProjection, ColumnToken, QueueEntry, ReqId, Reachability, RequirementDetail, StoreParse, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { BOARD_ACTIONS } from '@rotaris/contracts';
 import { DeliveryDal, type StoreHandle } from '@rotaris/store';
-import { projectBoard } from './projection.js';
+import { blockerOf, projectBoard } from './projection.js';
+import type { Blocker } from './blockers.js'; // Part AP
 import { parseActor, reachability, stateOf, type DeliveryTransitions, type RequirementNow, type TransitionContext, type TransitionOptions, type TransitionResult } from './transition.js';
 
 /**
@@ -19,13 +20,16 @@ export interface BoardInput {
   readonly parse: StoreParse | undefined;
   readonly parseFailure?: TraceabilityFailure;
   readonly report: VerificationReport | undefined;
-  readonly queue: { readonly automatic: boolean; readonly concurrency: number; readonly stopped: boolean };
+  /** Part AP: `entries` present = the scheduler's own order and reasons (REQ-TRACE-478), which the projection then never re-derives. */
+  readonly queue: { readonly automatic: boolean; readonly concurrency: number; readonly stopped: boolean; readonly entries?: readonly QueueEntry[] };
   readonly analysisEnabled: boolean;
   readonly inFlight: ReadonlyMap<ReqId, BoardAction>;
   readonly source: { readonly writable: boolean; readonly canCreate: boolean };
 }
 export interface HistoryEntry { readonly at: string; readonly action: BoardAction; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean; readonly reason: string | null; readonly override: boolean }
 export interface RunRecord { readonly id: ReqId; readonly unit: string; readonly sessionId: string | null; readonly status: string; readonly stage: string | null; readonly outcome: string | null; readonly startedAt: string; readonly endedAt: string | null; readonly branch: string | null; readonly worktreePath: string | null; readonly permissions: string }
+/** Part AP — a worktree row (REQ-TRACE-476: the worktrees belonging to a requirement survive a restart and are read back from here). */
+export interface WorktreeRecord { readonly ref: string; readonly unit: string; readonly path: string; readonly branch: string; readonly createdAt: string; readonly kept: boolean }
 export interface QueueSettings { readonly automatic: boolean; readonly concurrency: number }
 
 export interface DeliveryReader {
@@ -38,12 +42,19 @@ export interface DeliveryReader {
   reachable(id: ReqId, from: ColumnToken, to: ColumnToken, now: RequirementNow, actor: Actor, at: string): Reachability;
   /** Every run row still `running` — the reap's input (REQ-TRACE-476). A query, not a write. */
   runningRuns(): readonly RunRecord[];
+  /** Part AP — the worktrees provisioned for a requirement, the one a claim takes over (REQ-TRACE-464). A query. */
+  worktrees(id: ReqId): readonly WorktreeRecord[];
+  /** Part AP — the recorded state of one requirement (the return state of REQ-TRACE-453, the snapshot the review shows per REQ-TRACE-418) with its open blockers and the engine's fields on them (REQ-TRACE-449/452). A query. */
+  state(id: ReqId): { readonly column: ColumnToken; readonly returnTo: string | null; readonly snapshotHash: string | null; readonly snapshotAt: string | null; readonly acceptedHash: string | null; readonly openBlockers: readonly Blocker[] };
 }
 
 export interface DeliveryWriter {
   transition(id: ReqId, action: BoardAction, actor: Actor, ctx: TransitionContext, opts?: TransitionOptions): Promise<TransitionResult>;
   recordRunStarted: DeliveryTransitions['recordRunStarted'];
   recordRunEnded: DeliveryTransitions['recordRunEnded'];
+  /** Part AP — the pass's move out of the terminal state, and a run row's stage (REQ-TRACE-437, 466). */
+  recordSpecificationMoved: DeliveryTransitions['recordSpecificationMoved'];
+  recordRunStage: DeliveryTransitions['recordRunStage'];
   answerBlocker: DeliveryTransitions['answerBlocker'];
   setQueue: DeliveryTransitions['setQueue'];
   readonly inFlight: ReadonlySet<ReqId>;
@@ -116,6 +127,15 @@ export function createDeliveryReader(db: StoreHandle, deps: { readonly workspace
     runningRuns() {
       return dal.runsWithStatus('running').map(runOf);
     },
+    // Part AP
+    worktrees(id) {
+      return dal.worktreesOf(id).map((w) => ({ ref: w.ref, unit: w.unit, path: w.path, branch: w.branch, createdAt: w.created_at, kept: w.kept === 1 }));
+    },
+    state(id) {
+      const row = dal.read(id);
+      const r = row?.kind === 'record' ? row.record : undefined;
+      return { column: (r?.state as ColumnToken | undefined) ?? 'backlog', returnTo: r?.returnTo ?? null, snapshotHash: r?.snapshotHash ?? null, snapshotAt: r?.snapshotAt ?? null, acceptedHash: r?.acceptedHash ?? null, openBlockers: dal.openBlockersOf(id).map(blockerOf) };
+    },
   };
   return reader;
 }
@@ -132,6 +152,8 @@ export function createDeliveryWriter(reader: DeliveryReader, transitions: Delive
     transition: (id, action, actor, ctx, opts) => transitions.transition(id, action, actor, ctx, opts),
     recordRunStarted: (...args) => transitions.recordRunStarted(...args),
     recordRunEnded: (...args) => transitions.recordRunEnded(...args),
+    recordSpecificationMoved: (...args) => transitions.recordSpecificationMoved(...args), // Part AP
+    recordRunStage: (...args) => transitions.recordRunStage(...args), // Part AP
     answerBlocker: (...args) => transitions.answerBlocker(...args),
     setQueue: (...args) => transitions.setQueue(...args),
     inFlight: transitions.inFlight,

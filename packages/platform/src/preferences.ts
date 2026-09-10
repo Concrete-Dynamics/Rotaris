@@ -36,6 +36,10 @@ export const PREFERENCE_KEYS = {
   'display/showReasoning': { type: 'boolean', default: false, owner: 'REQ-CHAT-167', coerce: (value: unknown) => value === true || value === 'true' },
   /** REQ-CHAT-067: auto-collapse all but the most recent tool-call/result pair; default **off**; a desktop preference, not YAML. */
   'display/autoCollapseTools': { type: 'boolean', default: false, owner: 'REQ-CHAT-067', coerce: (value: unknown) => value === true || value === 'true' },
+  // Part AP — REQ-CONFIG-405 / spec 08 §Persisted state: the released-run elevation's two desktop preferences (REQ-TRACE-472/473).
+  // `fullPermissionRuns` is on by default (REQ-TRACE-473's recorded reasoning); the suppression is off. Both tolerate a text backend's spelling.
+  'requirements/fullPermissionRuns': { type: 'boolean', default: true, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => value !== false && value !== 'false' },
+  'requirements/fullPermissionNoticeSuppressed': { type: 'boolean', default: false, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => value === true || value === 'true' },
   /**
    * REQ-CHAT-010 / REQ-SHELL-069 (Part AB): the Workspace view's transcript/composer divider, keyed by the
    * lower-cased view name with no `{view}.{arrangement}` suffix — the Workspace carries ONE multi-pane

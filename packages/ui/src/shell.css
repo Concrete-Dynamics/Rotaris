@@ -1002,3 +1002,48 @@
 /* REQ-CHAT-021: the composer's persistent notice sits above the field, in the shell's own banner. */
 .composer__notice { flex: none; }
 @media (prefers-reduced-motion: reduce) { .slash-popup { animation: none; } }
+/* Part AP */
+/* The five requirement panes and the launch disclosure (spec 08 §Review Surface, §Editing and Creating Requirements, §Blockers,
+   §Delivery Queue, §Runs Started from the Board). Craft from the mockup's `Review view` modal and `New requirement` dialog
+   (docs/design/README.md §7): kickers name sections, identifiers, paths and hashes carry the mono face, evidence is dot-led
+   rows, a one-sentence footnote sits beside the actions. Every value is a token by name; the geometry the specification fixes
+   (twelve elements, three sides, six decisions, four controls) is structure, not styling. */
+.req-pane { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); min-width: 0; color: var(--rt-text); }
+.req-pane__header { display: flex; align-items: baseline; gap: var(--rt-space-3, 12px); padding-bottom: var(--rt-space-2, 8px); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-pane__id, .req-pane__mono { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs); color: var(--rt-text-secondary); overflow-wrap: anywhere; }
+.req-pane__title { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-medium); font-size: var(--rt-text-lg); flex: 1; min-width: 0; }
+.req-pane__state { text-transform: none; }
+.req-pane__close { margin-left: auto; }
+.req-pane__lead { margin: 0; font-size: var(--rt-text-sm); }
+.req-pane__kicker { margin: 0; font-size: var(--rt-text-2xs); font-weight: var(--rt-weight-medium); letter-spacing: var(--rt-tracking-label); text-transform: uppercase; color: var(--rt-text-tertiary); }
+.req-pane__attribution { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-pane__sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--rt-space-4, 16px); }
+.req-pane__side { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: 0; }
+.req-pane__element { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); padding: var(--rt-space-2, 8px) 0; border-top: var(--rt-hairline-width) solid var(--rt-divider); min-width: 0; }
+.req-pane__label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }
+.req-pane__lines { display: flex; flex-direction: column; gap: 2px; font-size: var(--rt-text-sm); }
+.req-pane__line { overflow-wrap: anywhere; }
+.req-pane__empty { font-size: var(--rt-text-sm); color: var(--rt-text-tertiary); }
+.req-pane__links { display: flex; flex-wrap: wrap; gap: var(--rt-space-2, 8px); }
+.req-pane__decisions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); padding-top: var(--rt-space-2, 8px); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-pane__footnote { flex: 1; min-width: 200px; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-pane__notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); margin: 0; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: var(--rt-hairline-width) solid var(--rt-border); border-left: var(--rt-notice-rule-width) solid var(--rt-info-300); border-radius: var(--rt-radius-md, 6px); background: var(--rt-surface); font-size: var(--rt-text-sm); overflow-wrap: anywhere; }
+.req-pane__notice--error { border-left-color: var(--rt-danger-300); }
+.req-pane__status { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.req-pane__reason { margin: 0; font-size: var(--rt-text-sm); overflow-wrap: anywhere; }
+.req-pane__textarea { min-height: 120px; resize: vertical; font: inherit; }
+.req-pane__version, .req-pane__location { margin: 0; }
+.req-pane__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--rt-space-3, 12px); }
+.req-pane__dialog { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); max-width: 640px; }
+.req-pane__disclosure-lines { margin: 0; padding-left: var(--rt-space-4, 16px); display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); }
+.req-pane__side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rt-space-3, 12px); }
+.req-pane__options, .req-pane__paths { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); }
+.req-pane__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px) var(--rt-space-3, 12px); }
+.req-pane__control { display: inline-flex; align-items: center; gap: var(--rt-space-1, 4px); font-size: var(--rt-text-sm); }
+.req-pane__number { width: 5em; }
+.req-pane__hint { flex-basis: 100%; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-pane__queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.req-pane__queue-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px) 0; border-top: var(--rt-hairline-width) solid var(--rt-divider); font-size: var(--rt-text-sm); }
+.req-pane__queue-row--executing { background: var(--rt-accent-tint-10); }
+.req-pane__unit { color: var(--rt-text-secondary); font-size: var(--rt-text-xs); }
+.req-pane__queue-row .req-pane__reason { flex-basis: 100%; color: var(--rt-text-secondary); font-size: var(--rt-text-xs); }

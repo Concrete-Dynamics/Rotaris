@@ -76,15 +76,22 @@ describe('createDeliveryService', () => {
     const stopped = await s.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
     expect((stopped.value as { stopped: boolean }).stopped).toBe(true);
     for (const cmd of [
-      { name: 'requirements.operation' as const, workspace: 'x', operation: 'check' as const },
       { name: 'requirements.source.write' as const, workspace: 'x', document: '# x' },
       { name: 'requirements.source.previewLocation' as const, workspace: 'x' },
-      { name: 'requirements.cancel' as const, workspace: 'x', operation: 'check' },
     ]) {
       const out = await s.handle(cmd, USER);
       expect((out.value as { ok: boolean }).ok).toBe(false);
       expect(out.changed).toBeUndefined();
     }
+    // Part AJ2 — the two operation arms run the injected engine now (REQ-TRACE-508..512) and answer in the operation
+    // reply's one shape: this fake's `check` fails as ENGINE_NOT_MERGED does, stated, with the generation unmoved; and a
+    // fake without a cancel has nothing to stop. (This test file is outside Part AJ′'s row: handoff §8, a ruling request.)
+    const op = await s.handle({ name: 'requirements.operation', workspace: 'x', operation: 'check' }, USER);
+    expect(op.value).toMatchObject({ kind: 'traceability.result', operation: 'check', root: 'C:\\ws', result: { ok: false, error: { kind: 'failed', cause: 'Part AJ is not merged into this build' } } });
+    expect(op.changed).toBeUndefined();
+    const cancel = await s.handle({ name: 'requirements.cancel', workspace: 'x', operation: 'check' }, USER);
+    expect(cancel.value).toEqual({ kind: 'traceability.cancelled', cancelled: false });
+    expect(cancel.changed).toBeUndefined();
   });
   it('an engine that is not merged yields a board with no source and the cause stated, and still opens (REQ-TRACE-231)', async () => {
     const s = service(ENGINE_NOT_MERGED);

@@ -44,7 +44,53 @@ export const PREFERENCE_KEYS = {
    * 180 px) and anything else reads as nothing stored.
    */
   'panels/workspace': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
+  // Part AK2
+  /**
+   * Spec 08 §Persisted state (Part AK′; REQ-TRACE-301): the requirements board's PERSON-level keys — "a property of
+   * the person" — registered here by name because REQ-SHELL-006 makes this table the only place a key exists. The
+   * filter's six dimensions (REQ-TRACE-290), the sort order (287), the grouping axis (293) and whether blocked cards
+   * gather into a column of their own (241) are all strings the board reads once at mount; a stored sort or axis
+   * this build no longer offers is reverted by `ui-core`'s `sortOrderOf`/`axisOf` (REQ-TRACE-302), not here, so the
+   * store stays a store. `requirements/blocked_column` reads as true for ANY value other than the string `false`,
+   * case-insensitively (the table's own rule), and boolean reads tolerate however the backend spelled them.
+   *
+   * The last three are REQ-CONFIG-405's — the released-run elevation switch, its silenced disclosure and the
+   * answer-wait budget (REQ-TRACE-467..474) — registered with this family because the plan reserves `requirements/*`
+   * for this part; Part AP reads them and this part never does. Column folds are the one PER-WORKSPACE key of the
+   * table and are the parametrised family below.
+   */
+  'requirements/filter/text': { type: 'string', default: '', owner: 'REQ-TRACE-290', coerce: (value: unknown) => (typeof value === 'string' ? value : '') },
+  'requirements/filter/epic': { type: 'string', default: '', owner: 'REQ-TRACE-290', coerce: (value: unknown) => (typeof value === 'string' ? value : '') },
+  'requirements/filter/source': { type: 'string', default: '', owner: 'REQ-TRACE-290', coerce: (value: unknown) => (typeof value === 'string' ? value : '') },
+  'requirements/filter/lifecycle': { type: 'string', default: '', owner: 'REQ-TRACE-290', coerce: (value: unknown) => (typeof value === 'string' ? value : '') },
+  'requirements/filter/health': { type: 'string', default: '', owner: 'REQ-TRACE-290', coerce: (value: unknown) => (typeof value === 'string' ? value : '') },
+  'requirements/filter/priority': { type: 'string', default: '', owner: 'REQ-TRACE-290', coerce: (value: unknown) => (typeof value === 'string' ? value : '') },
+  'requirements/sort': { type: 'string', default: 'priority', owner: 'REQ-TRACE-287', coerce: (value: unknown) => (typeof value === 'string' && value !== '' ? value : 'priority') },
+  'requirements/blocked_column': { type: 'boolean', default: true, owner: 'REQ-TRACE-241', coerce: (value: unknown) => !(value === false || (typeof value === 'string' && value.trim().toLowerCase() === 'false')) },
+  'requirements/axis': { type: 'string', default: 'delivery', owner: 'REQ-TRACE-293', coerce: (value: unknown) => (typeof value === 'string' && value !== '' ? value : 'delivery') },
+  'requirements/fullPermissionRuns': { type: 'boolean', default: true, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => !(value === false || (typeof value === 'string' && value.trim().toLowerCase() === 'false')) },
+  'requirements/fullPermissionNoticeSuppressed': { type: 'boolean', default: false, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true') },
+  'requirements/answerWaitSeconds': { type: 'number', default: 0, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => { const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN; return Number.isFinite(n) && n >= 0 ? n : 0; } },
 } as const;
+
+/**
+ * Part AK2 — REQ-TRACE-312/313 (spec 08 §Persisted state): `workspaces/<key>/requirementColumnFolds`, the board's
+ * column folds, "remembered per workspace, keyed by the workspace's resolved absolute path with a literal fallback
+ * key when the board has no workspace". The SECOND parametrised family of this table, shaped exactly like the
+ * composer draft's: `<key>` is `workspaceKey`'s digest of the path (a path carries both separators and REQ-SHELL-006's
+ * keys are slash-namespaced), or the literal `default` when no workspace is open. The value is ONE JSON object string
+ * mapping column key to boolean, keys sorted (REQ-TRACE-313), written whole so two windows resolve by last writer
+ * wins; the default `{}` is the table's own. Reading never raises: a non-string reads as `{}`, and `ui-core`'s
+ * `parseFolds` turns an unparseable string into no folds (REQ-TRACE-315).
+ */
+const REQUIREMENT_FOLDS = { type: 'string', default: '{}', owner: 'REQ-TRACE-312', coerce: (value: unknown) => (typeof value === 'string' ? value : '{}') } as const;
+const REQUIREMENT_FOLDS_KEY = /^workspaces\/(?:[0-9a-f]{16}|default)\/requirementColumnFolds$/;
+export type RequirementColumnFoldsKey = `workspaces/${string}/requirementColumnFolds`;
+/** REQ-TRACE-312's "literal fallback key when the board has no workspace". */
+export const REQUIREMENT_FOLDS_NO_WORKSPACE = 'default';
+export function requirementColumnFoldsKey(workspacePath: string | undefined, platform: NodeJS.Platform = process.platform): RequirementColumnFoldsKey {
+  return `workspaces/${workspacePath === undefined || workspacePath === '' ? REQUIREMENT_FOLDS_NO_WORKSPACE : workspaceKey(workspacePath, platform)}/requirementColumnFolds`;
+}
 
 /**
  * REQ-SHELL-159 / REQ-CHAT-015 / REQ-NOTIFY-066 (Part AB): the per-workspace composer draft. It is the FIRST
@@ -83,6 +129,7 @@ export function composerDraftKey(workspacePath: string, platform: NodeJS.Platfor
 export function preferenceEntry(key: PreferenceKey): { readonly coerce: (value: unknown) => unknown } {
   if (key in PREFERENCE_KEYS) return PREFERENCE_KEYS[key as keyof typeof PREFERENCE_KEYS];
   if (COMPOSER_DRAFT_KEY.test(key)) return COMPOSER_DRAFT;
+  if (REQUIREMENT_FOLDS_KEY.test(key)) return REQUIREMENT_FOLDS; // Part AK2 — the second family, registered above.
   throw new Error(`preference key ${key} is not registered (REQ-SHELL-006)`);
 }
 export interface PaneLayout { readonly version: 1; readonly panes: number; readonly sizes: readonly number[] }
@@ -92,7 +139,7 @@ export function coercePaneLayout(value: unknown, panes: number): PaneLayout | un
   if (v.version !== 1 || v.panes !== panes || !Array.isArray(v.sizes) || v.sizes.length !== panes || !v.sizes.every((n) => typeof n === 'number' && Number.isFinite(n))) return undefined;
   return { version: 1, panes, sizes: [...(v.sizes as number[])] };
 }
-export type PreferenceKey = keyof typeof PREFERENCE_KEYS | ComposerDraftKey;
+export type PreferenceKey = keyof typeof PREFERENCE_KEYS | ComposerDraftKey | RequirementColumnFoldsKey; // Part AK2: the folds family.
 export type PreferenceValue<K extends PreferenceKey> = K extends keyof typeof PREFERENCE_KEYS ? ReturnType<(typeof PREFERENCE_KEYS)[K]['coerce']> : string;
 
 export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonly env: Readonly<Record<string, string | undefined>>; readonly home: string; }

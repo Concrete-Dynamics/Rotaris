@@ -46,7 +46,7 @@
     "todo-proof": "node apps/desktop/scripts/todo-proof.mjs",
     "attachments-proof": "node apps/desktop/scripts/attachments-proof.mjs",
     "settings-proof": "node apps/desktop/scripts/settings-proof.mjs",
-    "delivery-proof": "node apps/desktop/scripts/delivery-proof.mjs",
+    "requirements-proof": "node apps/desktop/scripts/requirements-proof.mjs",
     "traceability-proof": "node apps/desktop/scripts/traceability-proof.mjs",
     "terminal-stream-proof": "node apps/desktop/scripts/terminal-stream-proof.mjs",
     "terminal-proof": "node apps/desktop/scripts/terminal-proof.mjs",

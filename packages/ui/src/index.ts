@@ -45,3 +45,5 @@ export * from './settings/Inventories.js';
 export * from './settings/About.js';
 // Part AM
 export * from './terminal/index.js';
+// Part AK2
+export * from './requirements/index.js';

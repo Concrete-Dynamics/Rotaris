@@ -7,6 +7,9 @@ import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
 import { createRequirementsRelay } from './requirements.js';
+// Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey` beside `currentWorkspace`).
+import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
+import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 import { userInfo } from 'node:os';
 import { FrameDeliveryLimiter, relayTerminalCommand } from './terminal.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
@@ -538,6 +541,13 @@ async function main(): Promise<void> {
   runHost.onEvent((e) => { if (e.kind === 'publish.terminal') terminalFrames.deliver(e.payload); });
   const processes: ProcessKind[] = ['run-host'];
   let currentWorkspace = argvWorkspace ?? '(no workspace)';
+  // Part AK2 — REQ-TRACE-312 (spec 08 §Persisted state): the board's column folds are keyed by the workspace this
+  // instance has open, and the renderer names them by the ONE placeholder `contracts` registers; main resolves it
+  // here, as `composer.readDraft` resolves the draft's key, so a window can only ever read or write its own
+  // workspace's folds. Every other key of the `prefs.*` enum passes through unchanged; with no workspace open the
+  // literal fallback key applies (`requirementColumnFoldsKey(undefined)`). The two `prefs.*` call sites below use it.
+  const requirementsPreferenceKey = (key: PreferenceKey | typeof REQUIREMENT_FOLDS_PREFERENCE_KEY): PreferenceKey =>
+    (key === REQUIREMENT_FOLDS_PREFERENCE_KEY ? requirementColumnFoldsKey(currentWorkspace === '(no workspace)' ? undefined : currentWorkspace) : key);
 
   const win = new BrowserWindow({
     width: 1280, height: 820, show: false, backgroundColor: themeBackground(), title: 'Rotaris',
@@ -1094,7 +1104,7 @@ async function main(): Promise<void> {
         return { ok: true, value: { name: currentTheme.name } };
       }
       case 'prefs.get':
-        return { ok: true, value: { value: preferences.read(req.key) } };
+        return { ok: true, value: { value: preferences.read(requirementsPreferenceKey(req.key)) } };
       case 'prefs.set': {
         if (req.key === 'panels/overview' || req.key === 'panels/git' || req.key === 'panels/library' || req.key === 'panels/workspace') {
           if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
@@ -1112,7 +1122,7 @@ async function main(): Promise<void> {
           await preferences.write(req.key, req.value);
         } else {
           if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
-          await preferences.write(req.key, req.value);
+          await preferences.write(requirementsPreferenceKey(req.key), req.value);
         }
         return { ok: true };
       }

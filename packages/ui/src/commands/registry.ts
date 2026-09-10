@@ -77,6 +77,12 @@ export const COMMANDS: readonly Command[] = [
   { id: 'help.keyboard', label: 'Show keyboard help', shortcut: 'F1', keywords: ['shortcuts', 'keys', 'hotkeys', 'bindings', 'keyboard'], available: always, run: (ctx) => ctx.openKeyboardHelp() },
   // REQ-SHELL-138 / REQ-SHELL-049: "About & Legal" is palette-only, no shortcut; it opens Settings on the About tab.
   { id: 'about.open', label: 'About & Legal', keywords: ['version', 'licence', 'license', 'legal', 'credits', 'notices', 'diagnostics'], available: always, run: (ctx) => ctx.openSettings('about') },
+  // Part AK2 — REQ-TRACE-390: the board's move control is reached by the platform's primary modifier with M, registered
+  // HERE rather than bound privately by the view, so a collision is settled in one place and the chord stays
+  // re-bindable; every sentence that names it reads `commandById('requirements.move').shortcut`. The command does
+  // nothing but place focus on the control: it shows the Requirements view (the control lives there) and focuses
+  // `[data-req-move]` now or two frames on, the way `focusComposer` waits for the Workspace view to mount.
+  { id: 'requirements.move', label: 'Move requirement', shortcut: 'Ctrl+M', keywords: ['move', 'requirement', 'board', 'release', 'column', 'transition'], available: always, run: (ctx) => { ctx.switchView('requirements'); if (typeof document === 'undefined') return; const focus = () => { const el = document.querySelector<HTMLElement>('[data-req-move]'); if (el) el.focus(); return el !== null; }; if (!focus()) requestAnimationFrame(() => requestAnimationFrame(() => { focus(); })); } },
 ];
 
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */

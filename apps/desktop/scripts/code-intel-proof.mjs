@@ -98,15 +98,36 @@ function cleanEnvironment() {
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
   return env;
 }
-function oneDatabase() {
+function databases() {
   const found = [];
   const walk = (dir) => { if (!existsSync(dir)) return; for (const e of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'workspace.db') found.push(p); } };
   walk(join(local, 'rotaris', 'data', 'workspaces'));
   if (found.length < 1) throw new Error(`no workspace database below ${local}`);
-  return found.sort().at(-1);
+  return found.sort();
 }
 const lines = (log, re) => log.split('\n').filter((l) => re.test(l));
-function latestSession(db) { return db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get(); }
+/**
+ * The session THIS launch produced, taken across every store rather than from one of them.
+ *
+ * The sixty-eighth defect: the proof drives two workspaces - `workspace`, which holds the TypeScript file, and
+ * `workspace-nocode`, which holds none - and the product keys a store directory by a hash of the workspace path.
+ * The read was "the last workspace.db by path sort", which names whichever hash sorts last and not the workspace the
+ * launch was given: `workspace` hashes to v1-08b5... and `workspace-nocode` to v1-fb8c..., so section 4 read the
+ * no-code store, found no `get_symbols_overview` row in it, and reported the call as unmade while its own run log
+ * held the language server's answer. Sorted hashes are stable within a checkout and arbitrary across checkouts,
+ * which is why the same bytes passed in the worktree they were written in and failed in the main tree.
+ */
+function sessionFrom(r) {
+  let best = null;
+  for (const path of databases()) {
+    const db = new Database(path, { readonly: true });
+    const session = db.prepare('SELECT session_id, created_at, execution_status, stop_reason FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    if (session && (best === null || session.created_at > best.session.created_at)) { best?.db.close(); best = { db, session, path }; } else db.close();
+  }
+  if (best === null) throw new Error(`no session in any workspace database below ${local}`);
+  if (best.session.created_at < r.startedAt) throw new Error(`the newest session (${best.session.created_at}, ${best.path}) predates the launch at ${r.startedAt}: this launch wrote none`);
+  return best;
+}
 function toolRows(db, sessionId, tool) { return db.prepare('SELECT ordinal, status, is_error, entry FROM tool_calls WHERE session_id = ? AND tool_name = ? ORDER BY ordinal').all(sessionId, tool).map((r) => ({ ...r, entry: JSON.parse(r.entry) })); }
 function eventOrdinals(db, sessionId, kind) { return db.prepare('SELECT ordinal, payload FROM events WHERE session_id = ? AND kind = ? ORDER BY ordinal').all(sessionId, kind); }
 
@@ -128,7 +149,7 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
-  return { log, elapsedMs, png };
+  return { log, elapsedMs, png, startedAt: new Date(started).toISOString() };
 }
 
 /** A raw JSON-RPC client over the branch (launch 1 and launch 7): the bytes before the first '{', the listing, one call, the exit status. */
@@ -243,8 +264,7 @@ if (want(2) || want(3)) {
   if (!/hook code_intelligence:ok/.test(connected)) throw new Error(`discovery: the binding probe did not succeed: ${connected || '(no connected line)'}\n${lines(r.log, /code_intelligence/).slice(-10).join('\n')}`);
   const discoveryMs = Number(/discovery of 'code_intelligence' listed (\d+) tool\(s\) in (\d+) ms/.exec(r.log)?.[2]);
   const listed = Number(/discovery of 'code_intelligence' listed (\d+) tool\(s\)/.exec(r.log)?.[1]);
-  const db = new Database(oneDatabase(), { readonly: true });
-  const s = latestSession(db);
+  const { db, session: s } = sessionFrom(r);
   const calls = toolRows(db, s.session_id, 'list_memories');
   const children = db.prepare('SELECT canonical_name, granted_mcp FROM children WHERE session_id = ?').all(s.session_id);
   db.close();
@@ -260,8 +280,7 @@ if (want(2) || want(3)) {
 // ---- 4. a real call against a TypeScript file -----------------------------------------------------------------------
 if (want(4)) {
   const r = launch('call', { ROTARIS_CAPTURE_PROMPT: 'overview of src/index.ts', ROTARIS_SCRIPT: 'mcp:code_intelligence.get_symbols_overview,answer', ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ get_symbols_overview: { relative_path: 'src/index.ts' } }), ROTARIS_CAPTURE_AFTER_MS: '240000' }, { timeout: 330_000 });
-  const db = new Database(oneDatabase(), { readonly: true });
-  const s = latestSession(db);
+  const { db, session: s } = sessionFrom(r);
   const calls = toolRows(db, s.session_id, 'get_symbols_overview');
   const starts = eventOrdinals(db, s.session_id, 'tool.start');
   const finishes = eventOrdinals(db, s.session_id, 'tool.finish');

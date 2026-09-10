@@ -134,7 +134,12 @@ function scriptedClient(c: Clocks): ModelClient {
       if (who === 'compressor') {
         // ROTARIS_COMPRESSOR_SCRIPT=fail — the compressing pass itself failing, so REQ-ORCH-093's "the original
         // rejection is surfaced unchanged" has a producer. Verification only.
-        if ((process.env['ROTARIS_COMPRESSOR_SCRIPT'] ?? '').trim() === 'fail') {
+        // Part AO: `fail-if:<text>` fails only the pass whose compressible slice mentions the text — one agent of a
+        // concurrent manual pass, so REQ-MONITOR-094's per-agent listing has a producer while the others succeed.
+        const compressorScript = (process.env['ROTARIS_COMPRESSOR_SCRIPT'] ?? '').trim();
+        const failIf = /^fail-if:(.+)$/.exec(compressorScript);
+        const slice = req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+        if (compressorScript === 'fail' || (failIf !== null && slice.includes(failIf[1]!))) {
           yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted compressor failure (HTTP 500)', status: 500, transient: false } };
           return;
         }
@@ -428,6 +433,10 @@ const sessions = new Sessions({
   checkpoints: (ctx) => createCheckpointPort(ctx, { clocks, ask, section: configuredFor(ctx.workspaceRoot)?.cfg.checkpoints ?? CHECKPOINTS_DEFAULTS, log: (m) => log(m) }),
   // Part V: the engine's headline is the title and its prose the message body (REQ-NOTIFY-005: the detail block is for diagnostic output, which none of the three run notices carries); every run notice is dismissible.
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.headline, message: n.detail, detail: '', ...(n.action === undefined ? {} : { action: n.action }), ...(n.key === undefined ? {} : { key: n.key }), sessionId: n.sessionId ?? '', persistent: true } }),
+  // Part AO — the two control arms' channels: the completion toast (REQ-CHAT-080/084) on the window's stack, and the two
+  // failure notices with a COPYABLE detail block (REQ-MONITOR-094, REQ-NOTIFY-037/038) through main's one persistent slot.
+  acknowledge: (kind, title, body) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: kind, title, ...(body === undefined ? {} : { body }) } }),
+  report: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.title, message: n.message, detail: n.detail, sessionId: n.sessionId, persistent: true } }),
   supervisor: (workspaceRoot) => {
     const run = configuredFor(workspaceRoot);
     if (!run) return null;
@@ -594,7 +603,8 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       return r.ok ? { kind: 'session.attachment', base64: r.base64 } : { kind: 'refused', code: 'session.attachment-unavailable', headline: r.reason };
     }
     case 'session.control':
-      return { kind: 'control.result', result: sessions.control(req.request) };
+      // Part AO: `forceCompression` settles once every live conversation has (REQ-MONITOR-092), so the control is awaited.
+      return { kind: 'control.result', result: await sessions.controlAsync(req.request) };
     // Part U — the session browser's actions (REQ-SESSION-182); `session-actions.ts` holds the mechanism.
     case 'session.repair': {
       const s = stores.get(req.workspaceId);

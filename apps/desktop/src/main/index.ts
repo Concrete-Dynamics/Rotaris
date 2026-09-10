@@ -1438,7 +1438,10 @@ async function main(): Promise<void> {
         const forwarded = capturing && process.env['ROTARIS_CAPTURE_QUESTION_STALE'] && req.request.op === 'answerQuestion'
           ? { ...req.request, args: { ...req.request.args, requestId: `${String(req.request.args['requestId'])}-stale` } }
           : req.request;
-        const r = await runHost.request({ kind: 'session.control', request: forwarded }, millis(10_000));
+        // Part AO: a manual compression settles only once every live conversation has (REQ-MONITOR-092), each pass bounded by
+        // `compressor.timeout_seconds` (120 s by default, ADR-0060), so the 10 s bound every other control keeps would time this
+        // reply out while the pass ran on; the default pass bound plus a margin is the reply's. A larger configured bound outlives it — stated, not hidden.
+        const r = await runHost.request({ kind: 'session.control', request: forwarded }, millis(forwarded.op === 'forceCompression' ? 130_000 : 10_000));
         if (req.request.op === 'answerApproval' && r.kind === 'control.result') {
           // REQ-TOOLS-063: a delivered answer marks its dialog answered (the run host's close follows); an undeliverable one leaves it open.
           const d = dialogs.get(senderId);
@@ -1453,6 +1456,22 @@ async function main(): Promise<void> {
         // leaves its successor standing; without one it clears whatever is current.
         await notices.dismiss(req.noticeId);
         return { ok: true };
+      // Part AO — `notice.report`: a renderer surface raising a persistent notice through the ONE store (ADR-0049 decision B's
+      // missing entry for a renderer, defect fifty-seven); the record of REQ-NOTIFY-268 and the scoping of REQ-NOTIFY-028 apply
+      // as to every other publication. And `prompts.roots.read`: REQ-CHAT-160's three roots, read by the workspace service.
+      case 'notice.report': {
+        const r = await notices.report({ severity: req.severity, title: req.title, ...(req.message === undefined ? {} : { message: req.message }), ...(req.detail === undefined ? {} : { detail: req.detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
+        log(`notice from the renderer: ${req.severity} "${req.title}" → #${r.id}`);
+        return { ok: true, value: { id: r.id } };
+      }
+      case 'prompts.roots.read': {
+        await awaitWorkspace();
+        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its prompt files' };
+        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        const r = await svc.link.request({ kind: 'prompts.roots.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(10_000));
+        return r.kind === 'prompts.roots' ? { ok: true, value: r.result } : refusal(r, 'The prompt files could not be read');
+      }
       case 'workspace.backup': {
         // REQ-SESSION-201: the destination is a file the user chooses; nothing is written until then.
         if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before backing up its session store' };

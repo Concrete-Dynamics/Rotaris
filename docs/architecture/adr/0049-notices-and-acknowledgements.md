@@ -249,3 +249,26 @@ and the composer's banner goes.
 
 **Measured.** Eleven non-executed submissions in the proof raised exactly one banner each — title, message, a Dismiss
 control, the previous one gone — and an executed command raised none and cleared the last.
+
+## Fourth execution — 2026-09-09 (Part AO), the entry for a renderer
+
+*Recorded under GD-10; the proof is `pnpm chat-controls-proof`.*
+
+**What was owed** (the third execution, above): a `notice.report` command so a renderer surface can publish into the one
+persistent slot, and the composer's own banner retired by wiring. **Built:** `notice.report {severity, title, message?,
+detail?, persistent, sessionId?}` in `contracts/src/commands.ts`, answered `{id}`; main's case calls `report` exactly
+as the run host's `notice.publish` does — the queue, the record of REQ-NOTIFY-268 and the scoping of REQ-NOTIFY-028
+apply unchanged, `sessionId` absent meaning the focused run; the renderer passes `slash.raiseNotice` and the composer's
+`NoticeBanner` branch is unreachable. **Measured:** `/compress` while idle raised "Command not run / No run is active."
+in the shell's slot (`inComposer: false`), and with no session loaded main recorded it to diagnostics ("no session
+applies"). The run host's two new notices of Part AO ("Context compression incomplete" with the per-agent list as the
+selectable detail, "Could not clear transcript") ride the existing `notice.publish` and were recorded in the session's
+timeline. **Found nothing** in this record's mechanism.
+
+**A reading, recorded because the third execution's proof asserted the opposite.** The composer-drawn banner was cleared
+by the next slash submission and by an executed command, because the composer owned it. The one slot has no such
+rule: a "Command not run" notice stands until dismissed, replaced, or cleared by a run start (REQ-NOTIFY-024/026/058),
+and this part does not invent one. An "executed clears the last refusal" behaviour would need the composer to tell the
+host that a command executed — a `SlashHost` member Part AN's interface does not have and this part may not add; it is
+raised in the handoff, not built. `slash-proof`'s four "no notice" reads are adjusted to "not a new notice" for the same
+reason.

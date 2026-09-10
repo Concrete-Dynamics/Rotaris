@@ -222,7 +222,9 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'ultra' } })).toEqual({ ok: false });
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'fast' } })).toEqual({ ok: true });
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'slow' } })).toEqual({ ok: false });
-    for (const op of ['forceCompression', 'clearTranscript', 'skipCheck', 'terminalInput', 'terminalResize', 'terminalInterrupt', 'terminalKill'] as const) {
+    // Part AO: `forceCompression` and `clearTranscript` have arms now (`run/chat-controls.test.ts`); the synchronous `control`
+    // answers the first with the pass's own refusal (`controlAsync` is its entry) and CLEARS on the second, so neither is unbacked.
+    for (const op of ['skipCheck', 'terminalInput', 'terminalResize', 'terminalInterrupt', 'terminalKill'] as const) {
       expect(sessions.control({ op, sessionId: sid, args: { streamId: 'x', text: 'y' } })).toEqual({ ok: false });
     }
     // Part AC — REQ-CHAT-096: the two question operations HAVE a mechanism behind them now, and both refuse the same

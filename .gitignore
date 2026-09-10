@@ -50,3 +50,6 @@ apps/desktop/.cache/
 
 # Part AL
 .terminal-stream-proof/
+
+# Part AO
+.chat-controls-proof/

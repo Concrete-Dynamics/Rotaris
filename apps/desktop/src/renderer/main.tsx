@@ -5,6 +5,9 @@ import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost } from '@rotaris/ui';
+// Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
+import { bindPromptRootsReader } from '@rotaris/ui';
+import type { PromptsRootsResult } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -425,6 +428,13 @@ function useDraft(workspace: string): { draft: string | undefined; publish: (t: 
   };
 }
 
+// Part AO — REQ-CHAT-160: the prompt roots are read through the bridge (main relays to the workspace service); the
+// composer's binder calls this on focus and on a configuration change. Bound once for the window.
+bindPromptRootsReader(async () => {
+  const r = await bridge.command({ kind: 'prompts.roots.read' });
+  return r.ok ? (r.value as PromptsRootsResult) : { files: [], skipped: [{ path: '', reason: r.detail ?? r.headline }] };
+});
+
 // Part AN — the two openers the slash catalogue needs from App's own state: the launch dialog (REQ-SHELL-125, `/new`)
 // and the session browser (REQ-SHELL-126, `/resume` and `/sessions`). App registers them once mounted; Workspace calls
 // through them, so neither `Workspace`'s props nor App's view map changes for the catalogue's sake.
@@ -489,6 +499,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     openSessions: () => { slashOpeners.openSessions?.(); },
     openWorktree: () => setWorktreeOpen(true),
     hasGit: git.state?.gitAvailable === true && git.state.isRepository,
+    // Part AO — REQ-CHAT-021's persistent notice through main's one slot (`notice.report`, ADR-0049 defect fifty-seven).
+    raiseNotice: (n) => { void bridge.command({ kind: 'notice.report', severity: 'warning', title: n.title, message: n.message, persistent: true }); },
   }), [providerRows, git.state]);
   const worktrees = git.state?.worktrees ?? [];
   return <>

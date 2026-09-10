@@ -6,6 +6,7 @@ import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAtta
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
 import { mkdirSync } from 'node:fs';
 import { deliveryServiceFor } from './delivery.js'; // Part AK
+import { promptsRootsRead } from './prompts.js'; // Part AO
 
 /**
  * WORKSPACE SERVICE — one utilityProcess per open workspace, keyed by
@@ -246,6 +247,9 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const { traceabilityCancel } = await import('./traceability.js');
       return traceabilityCancel(req, clocks, log);
     }
+    // Part AO — REQ-CHAT-160: the three prompt roots, read here because this is the process that reads the user's files.
+    case 'prompts.roots.read':
+      return promptsRootsRead({ workspaceRoot: req.workspaceRoot, configDir: dirs.config }, log);
     case 'shutdown': {
       // REQ-GIT-101: an in-flight checkpoint Git operation finishes first; the wait is bounded by REQ-GIT-033's limits alone.
       if (inFlight.size > 0) { log(`shutdown: waiting for ${inFlight.size} in-flight checkpoint operation(s)`); await Promise.allSettled([...inFlight]); }

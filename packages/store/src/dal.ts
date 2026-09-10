@@ -381,6 +381,8 @@ export class StoreDal {
       residentRows: db.prepare('SELECT * FROM transcript_rows WHERE session_id = ? AND page IS NULL ORDER BY row_index'),
       rowsBefore: db.prepare('SELECT * FROM transcript_rows WHERE session_id = ? AND row_index < ? ORDER BY row_index DESC LIMIT ?'),
       minRowIndex: db.prepare('SELECT min(row_index) AS m FROM transcript_rows WHERE session_id = ?'),
+      // Part AO — REQ-CHAT-084: every row of the session, whichever page holds it, in one statement.
+      clearTranscriptRows: db.prepare('DELETE FROM transcript_rows WHERE session_id = ?'),
 
       insertEvent: db.prepare('INSERT INTO events (session_id, ordinal, kind, at, schema_version, iteration, payload) VALUES (?, ?, ?, ?, ?, ?, ?)'),
       maxOrdinal: db.prepare('SELECT max(ordinal) AS m FROM events WHERE session_id = ?'),
@@ -782,6 +784,18 @@ export class StoreDal {
   }
   residentRows(id: SessionId): TranscriptRowRecord[] {
     return this.stmts['residentRows']!.all(id) as TranscriptRowRecord[];
+  }
+  // Part AO
+  /**
+   * REQ-CHAT-084 (Part AO): the atomic clear of a session's transcript — every row, resident or released to a page, in
+   * ONE statement the caller runs inside its own transaction beside the timeline entry that records the clear, so a
+   * reader sees the old rows or none and never a page boundary in between. The `events` history is untouched: the
+   * wire record of REQ-SESSION-147 is not the transcript, and REQ-EVENTS-052's contiguous indices stay contiguous
+   * there while the next row the run appends takes the next index rather than restarting at 0. Returns how many rows
+   * were removed.
+   */
+  clearTranscriptRows(id: SessionId): number {
+    return this.stmts['clearTranscriptRows']!.run(id).changes;
   }
   /** Up to `limit` rows older than `beforeIndex`, newest first; the caller reverses. Served from any page (REQ-SESSION-192). */
   rowsBefore(id: SessionId, beforeIndex: number, limit: number): TranscriptRowRecord[] {

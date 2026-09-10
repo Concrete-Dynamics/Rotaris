@@ -46,7 +46,8 @@ export type WriteFailure =
   | { readonly code: 'row-already-settled'; readonly index: number };
 
 export interface Committed {
-  readonly kind: 'row' | 'save' | 'event';
+  /** Part AO adds `clear`: every transcript row of the session removed in one transaction (REQ-CHAT-084); the owner drops what it holds and republishes. */
+  readonly kind: 'row' | 'save' | 'event' | 'clear';
   /** The row as recorded, when the unit of work carried one. */
   readonly row?: TranscriptRow;
   /** Rows released from the resident window in this transaction, by index range. */
@@ -619,6 +620,42 @@ export class SessionWriter {
     } catch (cause) {
       return this.fail(cause);
     }
+  }
+
+  // Part AO
+  /**
+   * REQ-CHAT-084 (Part AO): the transcript cleared — every row, resident or released, in ONE transaction with the
+   * `transcript_cleared` timeline entry that records it, so a reader sees the old rows or none. Both of
+   * REQ-CHAT-084's routes end here: a live run's writer and a loaded idle session's writer are the same object.
+   *
+   * "The run's own next write cannot resurrect old rows" is three resets beside the delete: the resident count goes
+   * to zero (a stale count would release "the oldest page" of rows that no longer exist on the next append), the
+   * open response rows are forgotten (an `upsertMessageRow` for a streaming step whose row is gone appends a new row
+   * rather than settling a deleted index), and the commit hand-off carries `clear` so the projection owner drops
+   * every row it holds and republishes — after which a growth tick for a deleted index finds nothing to grow. The
+   * row index counter is NOT reset: the `events` history keeps REQ-EVENTS-052's contiguous indices, and a row
+   * appended after the clear takes the next index rather than re-using one the wire record already named.
+   */
+  clearTranscript(): Result<{ removed: number }, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const id = timelineId();
+    let removed = 0;
+    try {
+      dal.transaction(() => {
+        removed = dal.clearTranscriptRows(sessionId);
+        const ordinal = dal.nextTimelineOrdinal(sessionId);
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex }), id, 'info');
+        dal.touchSession(sessionId, this.status, at);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.residentCount = 0;
+    this.messageRows.clear();
+    this.deps.onCommitted({ kind: 'clear' });
+    return ok({ removed });
   }
 
   /**

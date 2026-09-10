@@ -155,6 +155,21 @@ export interface SessionsDeps {
   readonly hooks?: (ctx: HookPortContext) => HookPort | null;
   /** The host's notice channel. */
   readonly notice?: (n: RunNotice) => void;
+  // Part AO
+  /**
+   * Part AO — the host's TRANSIENT channel (REQ-NOTIFY-003's other half), for what the two control arms of this part
+   * report on completion: the count REQ-CHAT-080 toasts, REQ-CHAT-084's "Transcript cleared." and its busy toast. The
+   * process that knows the figures reports them; the surface toasts what it knows locally (its own start message,
+   * the empty-transcript case) and nothing it would have to guess.
+   */
+  readonly acknowledge?: ((kind: 'info' | 'ok' | 'warn' | 'fail', title: string, body?: string) => void) | undefined;
+  /**
+   * Part AO — a PERSISTENT notice with a copyable detail block (REQ-NOTIFY-037/038), for the two failure notices of
+   * this part: "Context compression incomplete" listing each failing agent (REQ-MONITOR-094) and "Could not clear
+   * transcript" (REQ-CHAT-084). Beside `notice` rather than through it because the run notice's `detail` is the
+   * host's MESSAGE body (Part V's mapping) and REQ-MONITOR-094's list must be the selectable detail area.
+   */
+  readonly report?: ((n: { readonly severity: 'warning' | 'error'; readonly title: string; readonly message: string; readonly detail: string; readonly sessionId: string }) => void) | undefined;
   /** ADR-0039: the session's checkpoint port, built by the root at run start; absent or null means no capture (REQ-GIT-044). */
   readonly checkpoints?: (ctx: CheckpointPortContext) => CheckpointPort | null;
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
@@ -918,11 +933,91 @@ export class Sessions {
     s.running = run.start().finally(() => { if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });
   }
 
+  // Part AO
+  /**
+   * Part AO — the asynchronous entry the run host awaits. `forceCompression` settles only once every live conversation
+   * has (REQ-MONITOR-092), which no synchronous answer can express; every other operation is `control` below, answered
+   * at once. One entry rather than an async `control` so the forty-odd synchronous callers keep their shape.
+   */
+  async controlAsync(req: ControlRequest): Promise<ControlResult> {
+    if (req.op === 'forceCompression') return this.forceCompression(req);
+    return this.control(req);
+  }
+
+  /**
+   * REQ-CHAT-078..081, REQ-MONITOR-090..096 (Part AO): the manual pass over every live conversation. Refused with
+   * `no_run` when no run is executing (REQ-MONITOR-090/271's reason), with `no_active_conversations` when the run
+   * holds none (REQ-MONITOR-091, REQ-CHAT-079 — also the shape of a run configured without a compressor). Otherwise
+   * every live conversation compresses concurrently and the report carries the count and the per-agent failures
+   * (REQ-CHAT-080, REQ-MONITOR-094); the completion toast or the persistent incomplete notice is raised HERE, from the
+   * process that holds the figures, through the host's two channels. Threshold configuration is never read
+   * (REQ-CHAT-081, REQ-MONITOR-096) — the registry's pass calls the runner's `manual`, which does not consult it.
+   */
+  private async forceCompression(req: ControlRequest): Promise<ControlResult> {
+    const sessionId = asSessionId(req.sessionId);
+    const s = this.live.get(sessionId);
+    const run = s?.run;
+    if (!s || !run || run.isEnded) return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
+    const report = await run.forceCompression();
+    if (report === null) return { ok: false, refusal: { code: 'no_active_conversations', message: 'No active agent contexts are available to compress.' } };
+    const total = report.compressed + report.unchanged + report.failed.length;
+    if (report.failed.length > 0) {
+      // REQ-CHAT-080 / REQ-MONITOR-094: each failing agent with its reason, in the copyable detail block (REQ-NOTIFY-037/038).
+      this.deps.report?.({
+        severity: 'error', title: 'Context compression incomplete',
+        message: `${report.compressed} of ${total} active agent context(s) compressed; ${report.failed.length} failed.`,
+        detail: report.failed.map((f) => `${f.agent}: ${f.reason}`).join('\n'),
+        sessionId,
+      });
+    } else {
+      this.deps.acknowledge?.('ok', `Compressed context for ${report.compressed} active agent(s).`, report.unchanged > 0 ? `${report.unchanged} agent context(s) had nothing between the original request and the preserved turns and were left as they were.` : undefined);
+    }
+    s.log?.info(`manual compression: ${report.compressed} compressed, ${report.unchanged} unchanged, ${report.failed.length} failed${report.failed.length > 0 ? ` (${report.failed.map((f) => `${f.agent}: ${f.reason}`).join('; ')})` : ''}`);
+    return { ok: true, compression: { compressed: report.compressed, unchanged: report.unchanged, failed: [...report.failed] } };
+  }
+
+  /**
+   * REQ-CHAT-082..084 (Part AO): the confirmed clear, by run state. Both routes reach the writer's one transaction —
+   * with an active local run it is the run's own writer, so the run's next write lands on an emptied record; with a
+   * loaded idle session it is the same writer held for the session, and the owner re-projects the view. A session
+   * that is not loaded cannot be addressed by a control at all (REQ-MONITOR-007's `false`). The failure sentences
+   * are raised here, by the process that knows which of the two applies: a store failure is the persistent notice
+   * "Could not clear transcript"; a clear arriving while one is already in progress is the busy toast — which the
+   * store's synchronous transactions make unreachable in this build, stated rather than hidden.
+   */
+  private readonly clearing = new Set<SessionId>();
+  private clearTranscript(s: Live | undefined, req: ControlRequest): ControlResult {
+    if (!s) return { ok: false };
+    const sessionId = asSessionId(req.sessionId);
+    if (this.clearing.has(sessionId)) {
+      this.deps.acknowledge?.('warn', 'Transcript is busy and could not be cleared.');
+      return { ok: false, refusal: { code: 'transcript_busy', message: 'Transcript is busy and could not be cleared.' } };
+    }
+    this.clearing.add(sessionId);
+    try {
+      const r = s.writer.clearTranscript();
+      if (!r.ok) {
+        const reason = r.error.code === 'history-failed' ? r.error.reason : r.error.code;
+        this.deps.report?.({ severity: 'error', title: 'Could not clear transcript', message: 'The transcript rows were left as they were.', detail: reason, sessionId });
+        return { ok: false, refusal: { code: 'clear_failed', message: `Could not clear transcript: ${reason}` } };
+      }
+      s.log?.info(`transcript cleared: ${r.value.removed} row(s) removed${s.run && !s.run.isEnded ? ' during a live run' : ''}`);
+      this.deps.acknowledge?.('ok', 'Transcript cleared. Session artifacts and agent state were kept.');
+      return { ok: true };
+    } finally {
+      this.clearing.delete(sessionId);
+    }
+  }
+
   /** ADR-0010 channel 1: `{ok, value?}`; `false` when the run cannot honour it (REQ-MONITOR-007/011). */
   control(req: ControlRequest): ControlResult {
     const s = this.live.get(asSessionId(req.sessionId));
     const run = s?.run;
     if (req.op === 'editTodo' && (!run || run.isEnded)) return this.editStoredTodo(s, req);
+    // Part AO: the clear reaches a loaded session with or without a run (REQ-CHAT-084's two routes); the compression
+    // pass is asynchronous and answered by `controlAsync` — a synchronous caller gets the refusal it would get with no run.
+    if (req.op === 'clearTranscript') return this.clearTranscript(s, req);
+    if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
     if (!run || run.isEnded) return { ok: false };
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {

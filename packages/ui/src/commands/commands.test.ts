@@ -37,6 +37,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       ['run.submit', 'Start or continue run', 'Ctrl+Return'],
       ['help.keyboard', 'Show keyboard help', 'F1'],
       ['about.open', 'About & Legal', null],
+      ['run.compress', 'Compress context', null], // Part AO — REQ-MONITOR-097's palette entry, shortcut-less
     ]);
   });
 

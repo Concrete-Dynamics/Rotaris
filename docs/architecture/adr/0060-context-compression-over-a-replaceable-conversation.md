@@ -288,3 +288,75 @@ of this one, and it is the figure to watch if `preserve_recent_turns` or the sum
 are red there too, so this part falsified none of them. `checkpoint-proof` was red once, green on HEAD, then
 **green twice on the same tree that had just failed**. That measurement is recorded in `codebase.md`'s "verifying
 a part" section, because the thing worth carrying forward is the method rather than the four names.
+
+## Third execution — 2026-09-09 (Part AO): the manual arm, decision 1's second reader
+
+*Recorded under GD-10; the proof is `pnpm chat-controls-proof`. Defects are numbered `AO-n`; the manager assigns the
+ordinals at merge.*
+
+**What was asked.** §10's manual compression, which consequence 4 left unbuilt and decision 1 was written to make
+buildable: `forceCompression` reaching every live conversation concurrently (REQ-MONITOR-092), unconditionally
+(REQ-CHAT-081, REQ-MONITOR-096), settling once (REQ-CHAT-080), every failure listed per agent (REQ-MONITOR-094); the run
+header's control (REQ-CHAT-078..080), the palette entry (REQ-MONITOR-097) and `/compress`.
+
+**Built.** `run/conversations.ts` — the **`ConversationRegistry`**: a turn registers a handle (the agent's name and one
+operation, compress now through this agent's own `CompressionRunner`) on entry to `runTurn` and unregisters on every
+exit, so a handle never outlives its turn; `Run.forceCompression()` compresses every registered handle at once and
+reports `{compressed, unchanged, failed[]}`; `CompressionRunner.manual` is the same `compress()` call as the automatic
+pass, but neither `due()` nor the futility latch is consulted, and the `context_compressed` entry carries
+`trigger: manual` with **no threshold field** — a figure that was never read would be a false record, and the reason
+line says so instead. The runner gained a single-flight guard: a manual pass landing while the automatic trigger's pass
+runs, or the reverse, JOINS it rather than doubling it, and `due()` answers false meanwhile — two passes over one
+conversation would each slice the array they were given and the second `replace` would discard the first's work.
+`Sessions.controlAsync` is the one asynchronous control entry, awaited by the run host; the completion toast and the
+persistent "Context compression incomplete" notice are raised by the run host, which holds the figures. Decision 9's
+live field became a map, because several agents compress at once and one name could not say so. Engine tests cover the
+registry's concurrency and per-agent failure, the pass through `Sessions` against a real store with a held tool
+dispatch, both refusals, and the transcript clear on both of REQ-CHAT-084's routes.
+
+**Measured** (`pnpm chat-controls-proof`, four launches; two consecutive runs, both green, the figures identical):
+with a root in a `wait` model call after delegating and its child in a `wait` after one `read`, **one press compressed
+both** — `orchestrator` 7 → 3 messages and `child-a` 3 → 2, 5–6 ms each on the scripted compressor, the two compressor
+calls 12 ms after the click and the control's answer 23 ms after it; "Compressing…" with the control disabled was
+observed by a MutationObserver (the relabel lasts the pass, ~20 ms here); "Compressed context for 2 active agent(s)."
+was toasted; neither entry carries a threshold field. With the scripted compressor failing on the child's slice alone
+(`fail-if:CHILD-SLICE-MARKER` matches the README the child read and the root never did), `orchestrator` compressed,
+`child-a` did not, and the persistent notice read "1 of 2 active agent context(s) compressed; 1 failed." with
+`child-a: the compressing pass failed: scripted compressor failure (HTTP 500)` in its copyable detail block, recorded
+in the session's timeline (REQ-NOTIFY-268). Idle: the header control disabled with "Start or continue a run to enable
+run controls.", the palette's entry a toast "No run is active.", `/compress` "Command not run" through the shell's one
+slot.
+
+**Found — AO-1, in this part's own renderer code.** The catalogue's registry is rebuilt by its memo several times
+while a window settles (the stash count, the reachable set and the command context each arrive once), and the
+prompt-roots effect read the disk on every rebuild: five `prompts.roots.read` round trips in the first 200 ms of the
+first launch, each an IPC to the workspace service and three directory listings. A rebuild re-applies the last result
+to the new registry now; the disk is read on composer focus, on a configuration change, and once when nothing is
+cached. The reason is kept in `slash/controls.tsx` beside the fix.
+
+**Readings recorded.**
+
+- The scripted compressor answers in ~20 ms, so REQ-CHAT-079's "Compressing…" is invisible to any timed probe; the
+  proof arms a MutationObserver on the control before the click and reads what it recorded. On a real model the relabel
+  lasts seconds.
+- Main's `session.control` relay bounded every control at 10 s; a concurrent pass is bounded by
+  `compressor.timeout_seconds` (120 s by default, decision 4), so the reply would have timed out while the pass ran
+  on and the header would have reported a failure the run host never had. The relay bounds `forceCompression` at 130 s
+  now — one line in `main/index.ts` outside this part's permitted set, raised in the handoff as a ruling request. A
+  larger configured bound still outlives it; stated at the site, not hidden.
+- On this shared machine a scripted step took 2 s where an idle one takes 0.5 s, and a fixed click found the child with
+  one completed step and one preserved turn — nothing between its request and its tail, reported **unchanged**.
+  REQ-MONITOR-092's "however empty a context is" is honoured by that: the pass ran, and there was nothing to remove.
+  The proof runs with `preserve_recent_turns: 0` (consequence 5's accepted value) so one step suffices, and longer
+  waits; the schedule tolerates about five times the idle step time.
+- `REQ-MONITOR-091`'s refusal (`no_active_conversations`) is answered when the registry is empty — a run between
+  turns, or one whose configuration offers no compressor. The proof does not reach it: a scripted run always holds a
+  live turn while it runs. Stated.
+- REQ-CHAT-084's "Transcript is busy and could not be cleared." has no producer under the store's synchronous
+  transactions: a clear cannot interleave with another write. The toast and the refusal code exist; the condition is
+  stated unreachable in `sessions.ts`.
+
+**Not exercised.** A manual pass against a real provider (every figure above is the scripted client's); the single-flight
+join with the automatic trigger's pass in flight (implemented, the guard read, not measured — the automatic trigger is
+off in every proof launch); a pass during a parent resume; a run configured without a compressor answering
+`no_active_conversations`.

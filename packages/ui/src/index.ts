@@ -45,3 +45,5 @@ export * from './settings/Inventories.js';
 export * from './settings/About.js';
 // Part AM
 export * from './terminal/index.js';
+// Part AO
+export * from './slash/prompts.js';

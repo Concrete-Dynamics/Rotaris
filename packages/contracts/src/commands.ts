@@ -10,6 +10,8 @@ import { PromptListSchema } from './library.js';
 import { ImageAttachmentInputSchema } from './channels.js';
 import { RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { TERMINAL_COMMAND_SCHEMAS } from './terminal.js';
+import { PROMPTS_COMMAND_SCHEMAS } from './slash.js'; // Part AO
+import { NoticeSeveritySchema } from './notices.js'; // Part AO
 
 /**
  * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -230,6 +232,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('requirements'), command: RequirementsCommandSchema }),
   // Part AL — the live terminal's control traffic (ADR-0021, REQ-TOOLS-128, REQ-SHELL-106/107); main relays each to the run host.
   ...TERMINAL_COMMAND_SCHEMAS,
+  // Part AO — REQ-CHAT-160's read of the three prompt roots (relayed to the workspace service), and `notice.report`: a
+  // renderer surface raising a PERSISTENT notice through main's one slot (ADR-0049 defect fifty-seven; REQ-CHAT-021 first
+  // needed it). `sessionId` absent or empty means the focused run (REQ-NOTIFY-028); the record of REQ-NOTIFY-268 follows.
+  ...PROMPTS_COMMAND_SCHEMAS,
+  z.object({ kind: z.literal('notice.report'), severity: NoticeSeveritySchema, title: z.string().min(1), message: z.string().optional(), detail: z.string().optional(), persistent: z.boolean(), sessionId: z.string().optional() }),
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

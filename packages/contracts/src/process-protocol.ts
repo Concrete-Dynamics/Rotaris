@@ -15,6 +15,7 @@ import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 import { PromptListSchema, PromptStateSchema } from './library.js';
 import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
+import { PromptsRootsResultSchema } from './slash.js'; // Part AO
 
 /**
  * The message protocols between main and its two utility processes
@@ -295,6 +296,13 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('traceability.operate'), workspaceRoot: z.string(), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), base: z.string().optional() }),
   z.object({ kind: z.literal('traceability.cancel'), workspaceRoot: z.string(), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']) }),
+  // Part AO
+  /**
+   * REQ-CHAT-160 (Part AO): read the three prompt roots, in their order, for the prompt-file slash commands. The service
+   * reads the files and answers their bodies; the naming, the collision rule and REQ-CHAT-161's expansion are the
+   * renderer's. The home and the user-global configuration directory are the service's own resolution of them.
+   */
+  z.object({ kind: z.literal('prompts.roots.read'), workspaceRoot: z.string() }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -418,6 +426,9 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('traceability.cancelled'), cancelled: z.boolean() }),
   /** Part AL: the streams of one session, live and retained (REQ-SHELL-082/085); an emptied list when streaming is off. */
   z.object({ kind: z.literal('terminal.streams'), streams: z.array(TerminalStreamMetaSchema) }),
+  // Part AO
+  /** REQ-CHAT-160 (Part AO): the files of the three prompt roots and the ones skipped with their reasons. */
+  z.object({ kind: z.literal('prompts.roots'), result: PromptsRootsResultSchema }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

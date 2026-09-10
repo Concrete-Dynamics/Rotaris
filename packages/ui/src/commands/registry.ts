@@ -1,4 +1,5 @@
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
+import { compressFromPalette } from '../slash/host.js'; // Part AO
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
@@ -77,6 +78,10 @@ export const COMMANDS: readonly Command[] = [
   { id: 'help.keyboard', label: 'Show keyboard help', shortcut: 'F1', keywords: ['shortcuts', 'keys', 'hotkeys', 'bindings', 'keyboard'], available: always, run: (ctx) => ctx.openKeyboardHelp() },
   // REQ-SHELL-138 / REQ-SHELL-049: "About & Legal" is palette-only, no shortcut; it opens Settings on the About tab.
   { id: 'about.open', label: 'About & Legal', keywords: ['version', 'licence', 'license', 'legal', 'credits', 'notices', 'diagnostics'], available: always, run: (ctx) => ctx.openSettings('about') },
+  // Part AO — REQ-MONITOR-097 / REQ-MONITOR-271: the palette's `compress`, listed always and refused with "No run is active."
+  // when run while no run executes (the palette hides an unavailable entry, so "listed with its reason" is the refusal on
+  // activation); its slash mirror is `/compress-context`, beside the built-in `/compress` (REQ-CHAT-028's rule keeps both).
+  { id: 'run.compress', label: 'Compress context', keywords: ['compress', 'context', 'condense', 'compact', 'memory'], available: always, run: () => compressFromPalette() },
 ];
 
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */

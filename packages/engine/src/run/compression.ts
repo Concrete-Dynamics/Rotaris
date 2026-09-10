@@ -3,6 +3,7 @@ import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotari
 import { transcriptText } from '../children/report.js';
 import type { SessionWriter } from '../session-writer.js';
 import { estimateTokens, preservedFrom, type Conversation } from './conversation.js';
+import type { ConversationRegistry, ManualCompressionResult } from './conversations.js'; // Part AO
 
 /**
  * ADR-0060 — context compression: the bounded pass that writes the summary, and the reconstruction
@@ -152,8 +153,18 @@ export interface TurnCompression {
   readonly preserveRecentTurns: number;
   /** `REQ-MONITOR-084` (4): the agent's todo items, carried across one for one. */
   readonly todoLines: () => readonly string[];
-  /** `REQ-MONITOR-085`: the agent whose context is being compressed, or null when none is. */
-  readonly onState?: ((agent: string | null) => void) | undefined;
+  /**
+   * `REQ-MONITOR-085`: the agent whose context is being compressed, or null when none is. Part AO: the second argument
+   * names the agent on BOTH edges, because a manual pass compresses several agents at once (REQ-MONITOR-092) and a bare
+   * null could not say which one finished.
+   */
+  readonly onState?: ((agent: string | null, name: string) => void) | undefined;
+  // Part AO
+  /**
+   * ADR-0060 decision 1's registry (Part AO): the turn registers its conversation here for the span of the turn, so
+   * `forceCompression` can reach every live conversation. Absent means the run offers no manual compression.
+   */
+  readonly registry?: ConversationRegistry | undefined;
 }
 
 export interface CompressionRecorder {
@@ -183,8 +194,41 @@ export class CompressionRunner {
    * threshold on its own, so no amount of compressing the conversation can bring the count under it.
    */
   private futile = false;
+  // Part AO
+  /**
+   * Part AO — ONE pass per conversation at a time. The manual arm (REQ-MONITOR-092) runs concurrently across agents
+   * and may land while this agent's automatic trigger is due, or the other way round; two passes over one
+   * conversation would each slice the array they were given and the second `replace` would discard the first's
+   * work. A pass in flight is therefore joined rather than duplicated, and `due()` answers false while one runs.
+   */
+  private inFlight: Promise<boolean> | null = null;
+  private lastOutcome: CompressionOutcome | null = null;
 
   constructor(private readonly svc: TurnCompression, private readonly rec: CompressionRecorder) {}
+
+  // Part AO
+  /**
+   * REQ-CHAT-081 / REQ-MONITOR-092/096: the manual pass — unconditional. It reads neither the trigger nor the latch:
+   * `due()` is not consulted, `futile` is not read, and the entry it writes carries no threshold figure because none
+   * was used (REQ-MONITOR-096's "never read threshold configuration" is honoured by not touching `svc.trigger` here).
+   * The preserved-turn count and the characters-per-token ratio apply exactly as they do to the automatic pass
+   * (REQ-MONITOR-092's second sentence) — they are the same `compress()` call. A pass already in flight for this
+   * agent is joined (its outcome is this request's outcome), which is the single-flight rule above.
+   */
+  async manual(conversation: Conversation, condensed: boolean, signal: AbortSignal): Promise<ManualCompressionResult> {
+    if (this.inFlight !== null) {
+      const joined = await this.inFlight;
+      const last = this.lastOutcome;
+      if (joined) return { kind: 'compressed', beforeMessages: last?.beforeMessages ?? 0, afterMessages: last?.afterMessages ?? 0 };
+      if (last?.nothingToDo) return { kind: 'unchanged', reason: last.reason };
+      return { kind: 'failed', reason: last?.reason ?? 'a compression already in flight for this agent did not complete' };
+    }
+    const ok = await this.run(conversation, 'manual', condensed, signal);
+    const last = this.lastOutcome;
+    if (ok) return { kind: 'compressed', beforeMessages: last?.beforeMessages ?? 0, afterMessages: last?.afterMessages ?? 0 };
+    if (last?.nothingToDo) return { kind: 'unchanged', reason: last.reason };
+    return { kind: 'failed', reason: last?.reason ?? 'the compressing pass did not complete' };
+  }
 
   /**
    * `REQ-MONITOR-076`/`REQ-MONITOR-081`: the count is the provider's real last-prompt reading when there is
@@ -219,6 +263,8 @@ export class CompressionRunner {
    * `REQ-ORCH-093`'s recovery path is NOT latched — a rejection must always be answered with an attempt.
    */
   due(conversation: Conversation, condensed: boolean): boolean {
+    // Part AO: a pass in flight (manual or automatic) is never doubled.
+    if (this.inFlight !== null) return false;
     if (this.svc.trigger.tokens <= 0 || this.futile) return false;
     const counted = this.count(conversation, condensed);
     if (counted.tokens < this.svc.trigger.tokens) return false;
@@ -238,17 +284,26 @@ export class CompressionRunner {
     return this.automatic;
   }
 
-  async run(conversation: Conversation, kind: 'automatic' | 'rejection', condensed: boolean, signal: AbortSignal): Promise<boolean> {
+  async run(conversation: Conversation, kind: 'automatic' | 'rejection' | 'manual', condensed: boolean, signal: AbortSignal): Promise<boolean> {
+    // Part AO: the single-flight guard wraps the whole pass; `manual()` joins a pass in flight instead of starting one.
+    if (this.inFlight !== null) return this.inFlight;
+    const pass = this.runOnce(conversation, kind, condensed, signal);
+    this.inFlight = pass;
+    try { return await pass; } finally { this.inFlight = null; }
+  }
+
+  private async runOnce(conversation: Conversation, kind: 'automatic' | 'rejection' | 'manual', condensed: boolean, signal: AbortSignal): Promise<boolean> {
     const { writer, clocks, agent } = this.rec;
     const counted = this.count(conversation, condensed);
     const startedMs = clocks.monotonic.now();
-    this.svc.onState?.(agent);
+    this.svc.onState?.(agent, agent);
     let outcome;
     try {
       outcome = await compress({ conversation, preserveRecentTurns: this.svc.preserveRecentTurns, charsPerToken: this.svc.charsPerToken, todoLines: this.svc.todoLines() }, this.svc.compressor, signal);
     } finally {
-      this.svc.onState?.(null);
+      this.svc.onState?.(null, agent);
     }
+    this.lastOutcome = outcome;
     const t = this.svc.trigger;
     if (!outcome.ok) {
       const message = `${agent}'s context was not compressed (${kind}): ${outcome.reason}`;
@@ -275,13 +330,20 @@ export class CompressionRunner {
     const latencyMs = clocks.monotonic.now() - startedMs;
     // REQ-MONITOR-086: the completion is counted once, here, and the entry below is what a resume counts again from.
     writer.activity.compressed(agent);
-    // REQ-CONFIG-135: the four inputs and the resulting token number as separate fields, never a sentence to parse.
-    const metadata = {
-      agent, trigger: kind, threshold_percentage: t.thresholdPercentage, capacity: t.capacity, advertised_input_limit: t.advertisedInputLimit,
-      default_threshold: t.defaultThreshold, trigger_tokens: t.tokens, counted_tokens: counted.tokens, count_source: counted.source,
+    /**
+     * REQ-CONFIG-135: the four inputs and the resulting token number as separate fields, never a sentence to parse.
+     * Part AO: a MANUAL pass consulted none of them (REQ-CHAT-081, REQ-MONITOR-096), so its entry carries none — an
+     * entry naming a threshold that was never read would be a false record — and its reason says so instead.
+     * The entry itself is kept: REQ-MONITOR-086 counts every completion and REQ-MONITOR-281 shows the count, and
+     * "never read or mutate persisted session state" is read as the run's status and columns, not the record of
+     * what the compression did.
+     */
+    const figures = {
+      agent, trigger: kind, counted_tokens: counted.tokens, count_source: counted.source,
       before_tokens: outcome.beforeTokens, after_tokens: outcome.afterTokens, before_messages: outcome.beforeMessages, after_messages: outcome.afterMessages, latency_ms: Math.round(latencyMs),
     };
-    const reason = compressionReason(t, counted.tokens, counted.source);
+    const metadata = kind === 'manual' ? figures : { ...figures, threshold_percentage: t.thresholdPercentage, capacity: t.capacity, advertised_input_limit: t.advertisedInputLimit, default_threshold: t.defaultThreshold, trigger_tokens: t.tokens };
+    const reason = kind === 'manual' ? MANUAL_COMPRESSION_REASON : compressionReason(t, counted.tokens, counted.source);
     writer.appendTimeline('context_compressed', 'rotaris', `${agent}'s context was compressed (${kind}): ${outcome.beforeMessages} → ${outcome.afterMessages} messages, ${outcome.beforeTokens} → ${outcome.afterTokens} estimated tokens. ${reason}`, metadata);
     // REQ-CONFIG-135's second venue: the transcript entry's reason line, RENDERED FROM THOSE FIELDS.
     writer.appendRow('system', `Context compressed for ${agent} — ${reason}`, true);
@@ -289,6 +351,10 @@ export class CompressionRunner {
     return true;
   }
 }
+
+// Part AO
+/** REQ-CHAT-081: the reason a manual pass records — the threshold was not consulted, so no figure of it is quoted. */
+export const MANUAL_COMPRESSION_REASON = 'Requested by the user; the automatic-compression threshold was not consulted (REQ-CHAT-081).';
 
 /** `REQ-CONFIG-135`: the reason the user is given, rendered from the same fields the entry carries. */
 export function compressionReason(t: ResolvedTrigger, countedTokens: number, source: 'provider' | 'estimate'): string {

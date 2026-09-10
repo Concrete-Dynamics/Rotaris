@@ -162,6 +162,18 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
    */
   const compression = deps.compression ? new CompressionRunner(deps.compression, { writer, clocks, warn: deps.warn, agent: deps.agentName }) : null;
   let condensed = false;
+  // Part AO
+  /**
+   * Part AO (ADR-0060 decision 1, its second reader): this conversation is LIVE for the span of the turn, and the
+   * `forceCompression` arm reaches it through the run's registry. A manual pass replaces the array under whatever
+   * call is in flight — safe by ADR-0060's swap rule — and marks the history condensed so the next count falls back
+   * to the estimate until the next step reports a real prompt figure (REQ-MONITOR-081), exactly as an automatic pass
+   * does. The unregister runs on EVERY exit below, so a handle never outlives its turn.
+   */
+  const unregister = compression && deps.compression?.registry
+    ? deps.compression.registry.register({ agent: deps.agentName, compress: async (s) => { const r = await compression.manual(conv, condensed, s); if (r.kind === 'compressed') condensed = true; return r; } })
+    : null;
+  try {
   for (;;) {
     if (deps.shouldPause?.()) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
     injectSteering(deps, conv);
@@ -256,6 +268,9 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
     // REQ-HOOKS-074: nothing is placed between the assistant's calls and their results; feedback for an errored call follows as a user message.
     if (followUps.length > 0) conv.push({ role: 'user', content: [{ kind: 'text', text: followUps.join('\n') }] });
     owner.flushPending();
+  }
+  } finally {
+    unregister?.(); // Part AO
   }
 }
 

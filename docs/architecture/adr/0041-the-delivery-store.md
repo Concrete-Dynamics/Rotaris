@@ -677,7 +677,19 @@ hundred columns' bands in one commit — about 1,300 card widgets and a 1.7 s lo
 `REQ-TRACE-239`'s budget was missed by more than an order of magnitude on an axis switch. A column now decides whether
 it is on screen against the columns area itself, in a layout effect before the first paint, re-decided once per frame
 on horizontal scroll and on resize; off-screen columns keep their heading, their count and their full scroll-range
-spacer, so a column's scroll offset survives (`REQ-TRACE-335`) while it realises no card. The reading that was wrong is
+spacer, so a column's scroll offset survives (`REQ-TRACE-335`) while it realises no card. **Bounding the cards was not
+the whole of it, and the proof is what said so.** Its first measured run still cost a 151 ms long task on the axis
+switch while only 48 card widgets stood across the hundred columns — the fix was working and the budget was still
+missed — because the remainder was the per-column work itself: a viewport read and a `ResizeObserver` registration on
+each of a hundred lists, in the single commit that switches axis. An off-screen column now reads no geometry and
+observes nothing; it keeps its spacer, so its scroll offset still survives, and it costs nothing to exist. A third reading followed the second, because the
+proof again said the figure had not moved: `Column` is memoised now, so the realised-count bookkeeping of the columns
+in view no longer re-renders all one hundred. **None of the three closed the gap.** The card bound is real and is
+kept, the off-screen guard is right and is kept, the memoisation is right and is kept — and the axis switch still
+costs 150 to 170 ms. What the sequence establishes is where the cost is NOT, which is worth recording precisely
+because each attempt was a plausible reading of the same requirement and each was measured rather than argued. What
+remains is the single commit that creates a hundred column subtrees and lays out a 28 820 px row.
+The reading that was wrong is
 the one this record's "Revisit if" warned about in the other direction: the cost at scale was never the query, it was
 the paint, and the requirement that bounds it is a two-dimensional one read as one-dimensional.
 
@@ -696,15 +708,30 @@ nothing. This is the same discipline the first execution used for the stated ref
 seam change. The one thing the surface wanted and the seam does not offer is a unit count and a last-run stamp as
 FIELDS rather than facts, which is an additive seam change nobody needed to make.
 
-**`REQ-TRACE-239` is measured now, and this record's "Revisit if" is answered.** That paragraph said no measurement of
-the 100 ms budget at `REQ-TRACE-300`'s scale existed and that the claim was a design expectation. `pnpm
-requirements-proof`'s Electron stage now measures it twice over — on the fixture store at 1264 px and at
-`REQ-SHELL-022`'s 1000 × 680 minimum, and on a generated 1,500-requirement, 100-epic store — reading both the view's
-own figure from the projection's arrival to the laid-out DOM and the longest long task the renderer observed while it
-happened. The figures are in the handoff's measurements table and in `.requirements-proof/results.json`. The
-expectation held, and it held only after `AK2-2`: the budget is met because the paint is bounded by the viewport
-rather than by the store, which is the property the fix installed. The first thing this record said to check if the
-budget were missed — whether the board query and the export share a read path — was not the cause and was not reached.
+**`REQ-TRACE-239` is measured now, and this record's "Revisit if" is answered — in part, and not in the direction
+expected.** That paragraph said no measurement of the 100 ms budget at `REQ-TRACE-300`'s scale existed and that the
+claim was a design expectation. It is measured now, and the expectation held for one path and **failed for the other**.
+
+*Met.* Putting a board on screen is within budget everywhere it was measured: **21 ms** on the fixture store at
+1264 px (longest long task 56 ms), **14 ms** at `REQ-SHELL-022`'s 1000 x 680 minimum, and **26 ms** on a generated
+1,500-requirement, 100-epic store (longest long task 69 ms), each read as the view's own figure from the projection's
+arrival to the laid-out DOM. The post-debounce filter recomputation over 1,500 requirements is within `REQ-TRACE-367`'s
+budget too. At `REQ-TRACE-300`'s hundred populated columns the board realises **48** card widgets, not the ~1,300 it
+realised before `AK2-2`, and a column of 1,500 members realises 8 to 13 of them across a scroll from end to end.
+
+*Not met.* **Switching the grouping axis to a hundred populated columns costs the interface thread 150 to 170 ms**,
+over the budget, measured three times on this machine: 151 ms before `AK2-2`'s later halves, then 171 ms and 158 ms
+after them, with no competing process for at least part of that. Two fixes were tried against it and neither moved
+the figure, and both are kept because each is right on its own terms: an off-screen column now reads no geometry and
+registers no observer, and `Column` is memoised so the realised-count bookkeeping of the columns in view no longer
+re-renders all one hundred. The remaining cost is therefore not the cards, not the per-column effects and not the
+render cascade; on the evidence it is the single commit that creates a hundred column subtrees and lays out a
+28 820 px row. **This is recorded as unmet rather than argued away, and the proof's assertion is left in place and
+failing.** What has not been tried, in the order a later hand should try it: realising the column SUBTREES the way
+the cards are already realised, so a hundred columns cost what six do; and deciding whether `REQ-TRACE-239`'s budget
+governs a re-grouping at all, which is a question for the specification and not for the person whose code is over it.
+The first thing this record said to check if the budget were missed — whether the board query and the export share a
+read path — is not the cause: the query is one read of one projection and the cost is entirely in the paint.
 
 **Not built here, stated:** every pane (`REQ-TRACE-417..445`), runs from the board and the queue's controls
 (`464..483`) and the source write are Part AP's; the graph axis (`322..333`) is wave 3's; `REQ-TRACE-514`'s export is in

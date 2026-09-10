@@ -272,3 +272,15 @@ and this part does not invent one. An "executed clears the last refusal" behavio
 host that a command executed — a `SlashHost` member Part AN's interface does not have and this part may not add; it is
 raised in the handoff, not built. `slash-proof`'s four "no notice" reads are adjusted to "not a new notice" for the same
 reason.
+
+**The replacement reading was itself wrong in one place, and the falsified one is kept here beside it.** Three of those
+four reads became "not a NEW notice" (`sameNotice`); the fourth — after an executed `/stop` — was written `=== null`, on
+the reasoning that the run start had cleared the last refusal (REQ-NOTIFY-058, which it had: the read 1.6 s earlier is
+null) and that an executed command raises none. What that missed is that the run then comes to REST, and the run host
+raises the rest's own notice into the same one slot: measured, "The run came to rest because a person stopped it.",
+warning, dismissible, 1.2 s after the `/stop` was accepted. `=== null` was therefore asserting that a stopped run says
+nothing about itself, and `pnpm slash-proof` was red on this branch, deterministically, on a behaviour that is correct.
+The read asserts what it means now — an executed command raises no REFUSAL (`title !== 'Command not run'`) and the
+composer draws no banner of its own — and records the standing notice's title in `results.json` rather than demanding
+its absence.
+

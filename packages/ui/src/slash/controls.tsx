@@ -4,7 +4,7 @@ import { ConfirmDialog } from '../ConfirmDialog.js';
 import type { RunState } from '../composer.js';
 import { NO_RUN_ACTIVE, TRANSCRIPT_EMPTY } from './catalogue.js';
 import { bindChatControls, chatControls, CLEAR_DESCRIPTION, CLEAR_DIALOG_BODY, CLEAR_DIALOG_CONFIRM, CLEAR_DIALOG_IMPACT, CLEAR_DIALOG_TITLE, CLEAR_LABEL, compressNow, NOTHING_TO_COMPRESS_TOAST, TRANSCRIPT_ALREADY_EMPTY_TOAST, type ChatAcknowledger, type ControlAnswer } from './host.js';
-import { readPromptRoots, registerPromptCommands } from './prompts.js';
+import { cachedPromptRoots, readPromptRoots, registerPromptCommands } from './prompts.js';
 import type { Availability, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 
 /**
@@ -96,35 +96,47 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
    * REQ-CHAT-160 / REQ-CHAT-028: the prompt files, read through the renderer's reader when the composer takes focus
    * and when the configuration changes (`configKey` is derived from the snapshot every `config:changed` repopulates),
    * and registered on the catalogue's registry after the built-ins so a taken name stays with its holder. A registry
-   * rebuilt by its memo starts without them, so the last result is re-applied to the new registry at once. The popup's
-   * list is a memo of the text and the registry, so a file added while the popup is open shows at the next keystroke.
+   * rebuilt by its memo starts without them, so the last answer — kept beside the reader in `prompts.ts` — is re-applied
+   * to the new registry at once. The popup's list is a memo of the text and the registry, so a registration that lands
+   * after that list was built shows at the next keystroke, and the signal below says when one has landed.
    */
-  const lastRoots = useRef<PromptsRootsResult | null>(null);
-  const registered = useRef(new Set<string>());
+  const applied = useRef<{ registry: SlashRegistry | null; names: readonly string[] }>({ registry: null, names: [] });
+  const [registered, setRegistered] = useState<readonly string[]>([]);
   const apply = (result: PromptsRootsResult) => {
-    const r = registerPromptCommands(registry, result, registered.current);
-    registered.current = new Set(r.names);
+    // Only the names THIS registrar put on THIS registry may be replaced; on a rebuilt registry every held name is somebody else's.
+    const previous = applied.current.registry === registry ? new Set(applied.current.names) : new Set<string>();
+    const r = registerPromptCommands(registry, result, previous);
+    applied.current = { registry, names: r.names };
+    setRegistered(r.names);
   };
+  /**
+   * Defect AO-2 (`chat-controls-proof`'s controls launch, red in one run of three): a read in flight when the registry was
+   * rebuilt used to be applied through the closure that started it, so the answer landed on the registry the composer had
+   * already replaced and the live one kept nothing until something else rebuilt it. The newest `apply` is held here and
+   * every resolution calls that one.
+   */
+  const applyLatest = useRef(apply);
+  useEffect(() => { applyLatest.current = apply; });
   const reload = () => {
     const p = readPromptRoots();
     if (p === null) return;
-    void p.then((result) => { lastRoots.current = result; apply(result); }, () => undefined);
+    void p.then((result) => applyLatest.current(result), () => undefined);
   };
   /**
    * Defect AO-1 (the proof's first launch): the catalogue's registry is rebuilt by its memo several times while the window
    * settles (the stash count, the reachable set and the command context each arrive once), and this effect READ THE DISK on
    * every rebuild — five root reads in the first 200 ms, each an IPC round trip and three directory listings. A rebuild
-   * only needs the LAST result re-applied to the new registry; the disk is read on focus, on a configuration change and
-   * once when no result exists yet.
+   * only needs the LAST answer re-applied to the new registry; the disk is read on focus, on a configuration change and
+   * once when nothing is cached yet.
    */
-  useEffect(() => { registered.current = new Set(); if (lastRoots.current !== null) apply(lastRoots.current); else reload(); }, [registry]); // eslint-disable-line react-hooks/exhaustive-deps -- `apply`/`reload` close over refs.
-  useEffect(() => { reload(); }, [configKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const cached = cachedPromptRoots(); if (cached !== null) apply(cached); else reload(); }, [registry]); // eslint-disable-line react-hooks/exhaustive-deps -- `apply`/`reload` close over refs.
+  useEffect(() => { reload(); }, [configKey]);
   useEffect(() => {
     // The composer's `onFocus` is not this part's to add; the focus is observed as it bubbles.
     const onFocus = (e: FocusEvent) => { if (e.target instanceof HTMLElement && e.target.classList.contains('composer__input')) reload(); };
     document.addEventListener('focusin', onFocus);
     return () => document.removeEventListener('focusin', onFocus);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   const empty = rowCount === 0;
   return (
     <>
@@ -133,6 +145,11 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
         disabled={empty || busy} aria-disabled={empty || busy} aria-describedby="transcript-clear-reason"
         title={empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION} onClick={requestClear}>{CLEAR_LABEL}</button>
       <span className="visually-hidden" id="transcript-clear-reason">{empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION}</span>
+      {/* Defect AO-2 — what this registrar has put on the registry the composer currently holds, and whether the roots have
+        * been read at all. The popup's list is a memo of the text and that registry, so anything reading the popup must act
+        * after a registration rather than at a fixed millisecond. Hidden: evidence, not a surface — it draws nothing and
+        * reaches neither the accessibility tree nor the design. */}
+      <span hidden data-testid="prompt-commands" data-count={registered.length} data-roots={cachedPromptRoots() === null ? 'unread' : 'read'} />
       {confirming && (
         <ConfirmDialog title={CLEAR_DIALOG_TITLE} body={CLEAR_DIALOG_BODY} lines={[CLEAR_DIALOG_IMPACT]} confirmLabel={CLEAR_DIALOG_CONFIRM} destructive busy={busy} testId="clear-transcript-dialog"
           onCancel={() => { if (!busy) setConfirming(false); }} onConfirm={() => { void confirmClear(); }} />

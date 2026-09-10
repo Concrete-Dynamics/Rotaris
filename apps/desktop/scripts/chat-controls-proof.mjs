@@ -43,7 +43,10 @@ const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
 const output = resolve(repo, '.chat-controls-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
-rmSync(output, { recursive: true, force: true });
+// Part AO: Windows refuses this wipe with EPERM while a previous launch's run host or workspace service still holds the
+// scratch workspace as its working directory — the second of two runs started back to back died here, before a single
+// assertion. The retries are that settle, stated rather than left to luck.
+rmSync(output, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 mkdirSync(output, { recursive: true });
 
 if (!process.argv.includes('--skip-build')) {
@@ -159,6 +162,15 @@ const readRows = `(() => ({ rows: document.querySelectorAll('.transcript article
 const readDialog = `(() => { const d = document.querySelector('[data-testid="clear-transcript-dialog"]'); if (!d) return null; return { text: d.innerText, buttons: [...d.querySelectorAll('button')].map((b) => b.textContent.trim()) }; })()`;
 const readPopup = `(() => { const p = document.querySelector('[data-testid="slash-popup"]'); if (!p) return { open: false }; const rows = [...p.querySelectorAll('[role="option"]')]; const row = (name) => { const r = rows.find((x) => x.dataset.command === name); return r ? { kind: r.dataset.kind, text: r.textContent, available: r.dataset.available } : null; }; return { open: true, names: rows.map((r) => r.dataset.command), greet: row('greet-me'), prefixed: row('prompts:greet-me'), broken: row('broken') }; })()`;
 const readComposer = `(() => { const el = document.querySelector('.composer__input'); return el ? { value: el.value, focused: document.activeElement === el } : null; })()`;
+/**
+ * Defect AO-2 — `/` is typed only once the composer's prompt-file commands are on the registry the popup reads. The
+ * catalogue's registry is rebuilt while a window settles and the popup's list is a memo of the text and that registry, so a
+ * registration landing after the list was built shows only at the next keystroke: a fixed millisecond here measured the
+ * machine, and went red in one launch of three with the workspace service's answer already in the log. This waits for the
+ * registrar's own signal, types through the composer's own change path, and records what it waited.
+ */
+const typeSlashWhenRegistered = `(() => { const el = document.querySelector('.composer__input'); if (!el) return 'no composer'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; const started = Date.now(); const ready = () => Number(document.querySelector('[data-testid="prompt-commands"]')?.dataset.count ?? '0') > 0; const type = () => { window.__promptWaitMs = Date.now() - started; setter.call(el, '/'); el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); }; const tick = () => { if (ready() || Date.now() - started >= 3000) { type(); return; } setTimeout(tick, 25); }; tick(); return { readyAtOnce: ready() }; })()`;
+const readPromptSignal = `(() => { const s = document.querySelector('[data-testid="prompt-commands"]'); return { count: Number(s?.dataset.count ?? '-1'), roots: s?.dataset.roots ?? null, waitedMs: window.__promptWaitMs ?? null }; })()`;
 const readRunState = `document.querySelector('[data-testid="run-state"]')?.textContent ?? null`;
 
 const results = {};
@@ -248,17 +260,20 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
 const T3 = {
   idle: 1500, palette: 1800, paletteType: 2000, paletteEnter: 2300, paletteToast: 2700,
   slashCompress: 3200, slashEnter: 3400, slashNotice: 4000,
-  slash: 4400, popup: 4900, escape: 5100, cleared: 5200,
-  greet: 5500, greetEnter: 5700, running: 7600,
-  clear: 9500, dialog: 10000, confirm: 10300, emptied: 11000,
-  ended: 20500, clear2: 21000, confirm2: 21600, emptied2: 22300, end: 23000,
+  // Defect AO-2: `slash` is when the typer STARTS waiting for the prompt commands to be registered, not when it types;
+  // `popup` leaves it the whole wait it can take (3 s) and the popup's own settle, so the read measures the product and
+  // not the machine. Everything after it moved by the same 2900 ms — widened, never reordered.
+  slash: 4400, popup: 7800, escape: 8000, cleared: 8100,
+  greet: 8400, greetEnter: 8600, running: 10500,
+  clear: 12400, dialog: 12900, confirm: 13200, emptied: 13900,
+  ended: 23400, clear2: 23900, confirm2: 24500, emptied2: 25200, end: 25900,
 };
 const controls = scenario('controls');
 {
   const r = launch('controls', controls, {
     ROTARIS_SCRIPT: 'glob,wait:6000,answer', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000',
     ROTARIS_CAPTURE_CHORDS: `Ctrl+K@${T3.palette}`,
-    ROTARIS_CAPTURE_TYPE_AT: `compress@${T3.paletteType};;/@${T3.slash}`,
+    ROTARIS_CAPTURE_TYPE_AT: `compress@${T3.paletteType}`,
     ROTARIS_CAPTURE_KEYS: `Return@${T3.paletteEnter};;Return@${T3.slashEnter};;Escape@${T3.escape};;Return@${T3.greetEnter}`,
     ROTARIS_CAPTURE_CLICKS: [
       `[data-testid="transcript-clear"]@${T3.clear}`, `[data-testid="clear-transcript-dialog"] button>>Clear transcript@${T3.confirm}`,
@@ -269,7 +284,7 @@ const controls = scenario('controls');
       `${readNotice}@${T3.paletteToast}`,
       `${setComposer('/compress')}@${T3.slashCompress}`, `${readNotice}@${T3.slashNotice}`, `${readComposer}@${T3.slashNotice + 50}`,
       // REQ-CHAT-021 restored "/compress" after the refusal; the field is emptied before "/" is typed, so the popup's rule sees a bare slash.
-      `${setComposer('')}@${T3.slash - 100}`, `${readPopup}@${T3.popup}`, `${setComposer('')}@${T3.cleared}`,
+      `${setComposer('')}@${T3.slash - 100}`, `${typeSlashWhenRegistered}@${T3.slash}`, `${readPopup}@${T3.popup}`, `${readPromptSignal}@${T3.popup + 20}`, `${setComposer('')}@${T3.cleared}`,
       `${setComposer('/greet-me one "two words" NAME=v')}@${T3.greet}`,
       `${readRunState}@${T3.running}`, `${readCompress}@${T3.running + 50}`, `${readRows}@${T3.running + 100}`, `${readClear}@${T3.running + 150}`,
       `${readDialog}@${T3.dialog}`, `${readRows}@${T3.emptied}`, `${readDialog}@${T3.emptied + 50}`,
@@ -302,8 +317,12 @@ const controls = scenario('controls');
   expect(evalAt(r, T3.slashNotice + 50)?.value === '/compress', 'the exact text should be restored to the composer');
   expect(/diagnostics: notice #\d+ warning "Command not run" — No run is active\./.test(r.log), 'main should have recorded the renderer-raised notice (REQ-NOTIFY-268, no session applies)');
   // The prompt file in the catalogue (REQ-CHAT-160/025) and the malformed one skipped with a logged reason.
+  // Defect AO-2: the registrar's own signal says the two names are on the registry the popup reads, and the typer above waited
+  // for it — so a red below is the product's list, never the schedule's luck.
+  const signal = evalAt(r, T3.popup + 20);
   const popup = evalAt(r, T3.popup);
-  expect(popup?.open === true && popup.greet !== null && popup.prefixed !== null, `"/" should list the prompt file under both names: ${JSON.stringify(popup)}`);
+  expect(signal?.roots === 'read' && signal.count === 2, `both prompt-file commands should be registered before "/" was typed: ${JSON.stringify(signal)}`);
+  expect(popup?.open === true && popup.greet !== null && popup.prefixed !== null, `"/" should list the prompt file under both names (signal ${JSON.stringify(signal)}): ${JSON.stringify(popup)}`);
   expect(popup.greet.kind === 'prompt' && popup.prefixed.kind === 'prompt', `prompt-file rows carry the prompt badge: ${JSON.stringify(popup.greet)}`);
   expect(popup.greet.text.includes('/greet-me — Greets someone') && popup.greet.text.includes('<name> "<phrase>" NAME=value'), `the row reads the frontmatter's description and hint: ${JSON.stringify(popup.greet.text)}`);
   expect(popup.broken === null, 'the malformed file must not register');
@@ -349,7 +368,7 @@ const controls = scenario('controls');
   expect(JSON.parse(cleared[0].metadata).removed === beforeClear.rows, `the first entry should count the rows it removed (${beforeClear.rows}): ${cleared[0].metadata}`);
   expect(events.length > 0 && events.some((p) => p.includes(JSON.stringify(PROMPT_EXPANDED).slice(1, -1))), `the wire record should still hold the user row with the body expanded exactly once: ${events.slice(0, 2).join(' | ')}`);
   expect(!events.some((p) => p.includes('$1') || p.includes('$ARGUMENTS')), 'no unexpanded placeholder may reach the record');
-  results.controls = { idle: { compress: idleCompress, clear: idleClear }, slashNotice, popup: { greet: popup.greet, prefixed: popup.prefixed }, dialog: dialog.buttons, removedFirst: JSON.parse(cleared[0].metadata).removed, removedSecond: JSON.parse(cleared[1].metadata).removed, rowsAfterRun: afterRun.rows };
+  results.controls = { idle: { compress: idleCompress, clear: idleClear }, slashNotice, promptSignal: signal, popup: { greet: popup.greet, prefixed: popup.prefixed }, dialog: dialog.buttons, removedFirst: JSON.parse(cleared[0].metadata).removed, removedSecond: JSON.parse(cleared[1].metadata).removed, rowsAfterRun: afterRun.rows };
 }
 
 // ═══ 4. restart — the same store, the session resumed: the snapshot is empty ═════════════════════════════════════════

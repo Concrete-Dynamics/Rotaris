@@ -314,9 +314,15 @@ live field became a map, because several agents compress at once and one name co
 registry's concurrency and per-agent failure, the pass through `Sessions` against a real store with a held tool
 dispatch, both refusals, and the transcript clear on both of REQ-CHAT-084's routes.
 
-**Measured** (`pnpm chat-controls-proof`, four launches; two consecutive runs, both green, the figures identical):
+**Measured** (`pnpm chat-controls-proof`, four launches a run; **three green runs on the final build**, the figures
+identical. Stated plainly rather than smoothed: they were not three *in a row*. Two runs in between died mid-launch —
+`compress-partial exited 4294967295`, and `EPERM` on the proof's own output-directory wipe — because a second process
+outside this agent's control ran the same proof inside this worktree at the same time; the handoff's §10 records it, and
+the orphaned Electron processes it left had to be cleared before a run could start. The record before the repair was two
+consecutive runs, which was not enough, and is how AO-2 below was found):
 with a root in a `wait` model call after delegating and its child in a `wait` after one `read`, **one press compressed
-both** — `orchestrator` 7 → 3 messages and `child-a` 3 → 2, 5–6 ms each on the scripted compressor, the two compressor
+both** — `orchestrator` 7 → 3 messages and `child-a` 3 → 2 in every one of the three runs, 4–8 ms each on the scripted
+compressor (4/5/5 ms for the root and 5/5/8 ms for the child — the only figures that move), the two compressor
 calls 12 ms after the click and the control's answer 23 ms after it; "Compressing…" with the control disabled was
 observed by a MutationObserver (the relabel lasts the pass, ~20 ms here); "Compressed context for 2 active agent(s)."
 was toasted; neither entry carries a threshold field. With the scripted compressor failing on the child's slice alone
@@ -334,6 +340,33 @@ first launch, each an IPC to the workspace service and three directory listings.
 to the new registry now; the disk is read on composer focus, on a configuration change, and once when nothing is
 cached. The reason is kept in `slash/controls.tsx` beside the fix.
 
+**Found — AO-2, in AO-1's own fix and in the proof that read it.** The prompt-file commands are registered on the
+catalogue's registry from an effect, and the popup's list is a `useMemo` of the composer's text and that registry
+(`WorkspaceView.tsx`, a line this part may not edit) — so a registration landing after that list was built shows only at
+the next keystroke. Two things followed. A read still in flight when the registry was rebuilt was applied through the
+closure that had started it, so the answer landed on the registry the composer had already replaced and the live one kept
+nothing until something else rebuilt it; the newest applier is held in a ref now and every resolution calls that one, and
+the reader's last answer is kept beside the reader in `slash/prompts.ts`, so a rebuilt registrar takes it in the same tick
+instead of reading three directories again. And the proof typed `/` at a fixed millisecond, which measured the machine: it
+went red in one launch of three with the workspace service's answer already in that launch's log (the popup listed the 28
+built-ins and palette mirrors and neither `greet-me` nor `prompts:greet-me`). The registrar now publishes what it has put
+on the registry the composer currently holds — a hidden `[data-testid="prompt-commands"]` carrying the count and whether
+the roots have been read at all — and the proof waits for that signal before it types, then asserts it beside the popup, so
+a red there is the product's list and never the schedule's luck.
+
+**That repair was measured, was not enough, and the reason it was wrong is kept here beside its replacement.** It treated
+the registrar's registration as what the popup reads. The popup reads a `useMemo` of the composer's text and the
+registry, so a registry REBUILT after a registration is a registry without the prompt commands until an effect refills
+it — and the list the popup shows is the one built at that moment. The run measured straight after that repair was red
+with the new signal reading `{count: 2, roots: 'read', waitedMs: 0}`: the roots read, both names registered, the typer
+not waiting at all, and neither of them in a popup of 28. That is the verifier's one-in-three red, this time with the
+evidence that says why rather than a guess about the machine. **The fix belongs where the registry is made.** `buildCatalogue` now registers the
+cached answer as it builds, last, after the built-ins and the palette mirrors, so every registry carries the prompt
+commands from the moment it exists and a rebuild loses nothing; and a name held by a `kind: 'prompt'` command is
+replaceable by this module alone, so the build-time registration and the registrar's re-application compose instead of
+each skipping the other's work as a holder it must respect. One banner block and one import in `slash/catalogue.ts`,
+declared in the handoff as a ruling request.
+
 **Readings recorded.**
 
 - The scripted compressor answers in ~20 ms, so REQ-CHAT-079's "Compressing…" is invisible to any timed probe; the
@@ -349,6 +382,8 @@ cached. The reason is kept in `slash/controls.tsx` beside the fix.
   REQ-MONITOR-092's "however empty a context is" is honoured by that: the pass ran, and there was nothing to remove.
   The proof runs with `preserve_recent_turns: 0` (consequence 5's accepted value) so one step suffices, and longer
   waits; the schedule tolerates about five times the idle step time.
+- The proof's `controls` launch no longer types `/` on the clock. Everything after that step moved by 2900 ms to leave
+  the typer the whole wait it can take; the schedule was widened, never reordered (the rule wave 1 left for wave 2).
 - `REQ-MONITOR-091`'s refusal (`no_active_conversations`) is answered when the registry is empty — a run between
   turns, or one whose configuration offers no compressor. The proof does not reach it: a scripted run always holds a
   live turn while it runs. Stated.

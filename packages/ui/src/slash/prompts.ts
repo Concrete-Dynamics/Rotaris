@@ -93,11 +93,27 @@ export function expandPromptBody(body: string, argument: string): string {
  * on a configuration change. Absent (a test, a window without a workspace), no prompt command registers.
  */
 let promptRootsReader: (() => Promise<PromptsRootsResult>) | null = null;
+/**
+ * Defect AO-2 — the reader's LAST answer, kept beside the reader itself rather than in the registrar's state. The
+ * catalogue's registry is rebuilt by its memo while a window settles (defect AO-1) and the component that registers
+ * the prompt commands is mounted with the toolbar it draws, so a rebuild that found the answer only in that component
+ * read the disk again and registered late. Binding a reader is what says the window and its workspace changed, and is
+ * therefore what clears this.
+ */
+let lastRoots: PromptsRootsResult | null = null;
 export function bindPromptRootsReader(reader: (() => Promise<PromptsRootsResult>) | null): void {
   promptRootsReader = reader;
+  lastRoots = null;
+}
+/** What the reader last answered, for a caller that must register on a new registry without waiting; null until the first answer. */
+export function cachedPromptRoots(): PromptsRootsResult | null {
+  return lastRoots;
 }
 export function readPromptRoots(): Promise<PromptsRootsResult> | null {
-  return promptRootsReader === null ? null : promptRootsReader();
+  if (promptRootsReader === null) return null;
+  // Cached HERE, not by the caller: a read still in flight when the registrar is rebuilt is this window's answer all the
+  // same, and the rebuilt registrar takes it synchronously instead of reading three directories again.
+  return promptRootsReader().then((result) => { lastRoots = result; return result; });
 }
 
 /** What a prompt file registers as: the two names (the second only when free), the description, the hint. */
@@ -157,7 +173,12 @@ function promptCommand(name: string, file: PromptFile): SlashCommand {
  * skipped with its reason, for the log.
  */
 export function registerPromptCommands(registry: SlashRegistry, result: PromptsRootsResult, previouslyRegistered: ReadonlySet<string> = new Set()): { names: string[]; skipped: { path: string; reason: string }[] } {
-  const { registrations, skipped } = promptRegistrations(result.files, (name) => registry.lookup(name) !== undefined && !previouslyRegistered.has(name));
+  // Defect AO-2: a name held by a `kind: 'prompt'` command is one of OURS — this module is the only registrar of that
+  // kind — so a re-read REPLACES it in place (REQ-CHAT-022) instead of skipping it as somebody else's. That is what lets
+  // `buildCatalogue` register the cached answer as it builds a registry and this registrar re-apply a fresh answer to the
+  // same registry, without either mistaking the other's work for a holder it must respect. A built-in or a palette mirror
+  // keeps its name, which is REQ-CHAT-160's rule and unchanged.
+  const { registrations, skipped } = promptRegistrations(result.files, (name) => { const held = registry.lookup(name); return held !== undefined && held.kind !== 'prompt' && !previouslyRegistered.has(name); });
   for (const r of registrations) registry.register(promptCommand(r.name, r.file));
   return { names: registrations.map((r) => r.name), skipped: [...result.skipped, ...skipped] };
 }

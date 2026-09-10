@@ -356,9 +356,14 @@ const compress = evalAt(run, T.compressFailed);
 expect(compress === null && /control forceCompression on \S+ → ok/.test(run.log), `/compress during the run should be dispatched and accepted with no "Command not run" (Part AO): ${JSON.stringify(compress)}`);
 const stopped = match(run, '[data-testid="run-state"]', T.stopped)?.text;
 expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cancel on \S+ → ok/.test(run.log), `/stop during the run should be accepted and cancel it: run state ${JSON.stringify(stopped)}`);
-// Part AO: the run start cleared the unscoped "Command not run" (REQ-NOTIFY-058) and the executed /stop raised none; the composer draws no banner of its own.
-expect(evalAt(run, T.stopped) === null && match(run, '[data-testid="composer-notice"]', T.stopped) === null, 'an executed /stop raises no notice, the run start cleared the previous one, and the composer draws no banner');
-results.run = { compress: compress.message, afterStop: stopped };
+// Part AO: the run start cleared the unscoped "Command not run" (REQ-NOTIFY-058) — measured above at `T.compressFailed` — and the
+// executed /stop raises no refusal of its own. What the ONE slot holds once the run rests is the RUN's own notice, "The run came to
+// rest because a person stopped it.", raised by the run host through main's notice store. A first reading had this read `=== null`,
+// which is the composer banner's rule and never the slot's; the falsified reading is kept in ADR-0049's fourth-execution note.
+const atRest = evalAt(run, T.stopped);
+expect((atRest === null || atRest.title !== 'Command not run') && match(run, '[data-testid="composer-notice"]', T.stopped) === null,
+  `an executed /stop raises no refusal and the composer draws no banner of its own; the slot may hold the run's own rest notice: ${JSON.stringify(atRest)}`);
+results.run = { compress: compress === null ? null : compress.message, afterStop: stopped, atRest: atRest === null ? null : atRest.title };
 
 results.passed = true;
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));

@@ -738,6 +738,13 @@ proof passed, and the fourth and fifth failed together on one cause.
 revisions of `278..280` and the graph of `322..333`, which stay where the first execution left them; the improvement
 store's two actions (OQ-45); `REQ-TRACE-465`'s stop control, which is the existing session control and is reachable
 only once a board run has a surface to stop it from — the coordinator's `cancelAll` is the application-close half.
+`REQ-TRACE-469` rides on that same cancel, and is now cited where it does: `session.control {op: 'cancel'}` reaches
+`run.stop`, whose **first** act is to release whatever is blocked on a person (`REQ-MONITOR-012`), and every waiter
+finishes `cancelled` whatever its deadline, which is `REQ-TOOLS-055`'s rule and is measured in
+`packages/agent-tools/src/gate.test.ts`. An unlimited wait therefore ends with the stop instead of outliving it. What
+**this** branch measures is the coordinator's half — a board run blocked on an unlimited approval has the cancel
+issued at once, with nothing answering the approval first (`requirements-runs.test.ts`); a person pressing stop is
+unmeasured here, because that button is `REQ-TRACE-465`'s and no surface in this branch offers it.
 The five panes are **built and exported and nothing in this branch hosts them**: the board that mounts them is Part
 AK′'s, in a worktree of its own, so this row's proof drives the panes' pure halves and the mechanism beneath them,
 never a mounted pane. That is the seam the merge closes, and it is the one thing in this note that a reader should

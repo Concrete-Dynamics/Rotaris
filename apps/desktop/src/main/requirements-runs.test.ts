@@ -148,4 +148,19 @@ describe('the run\'s lifetime (REQ-TRACE-466/476/477)', () => {
     await h.runs.cancelAll('the window closed');
     expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'cancel', sessionId: 'sess-1', args: {} } });
   });
+  it('an unlimited approval wait is released by the stop, not by the budget (REQ-TRACE-469)', async () => {
+    // `approvalTimeoutSeconds: 0` is REQ-TRACE-467/468's unlimited wait, and the run is blocked on a person when the stop arrives.
+    const h = harness({ claims: [CLAIM], preview: { approvalTimeoutSeconds: 0 } });
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' })).toMatchObject({ ok: true, value: { approvalWait: { seconds: 0, unlimited: true } } });
+    await h.runs.dispatch();
+    h.event({ kind: 'publish.snapshot', payload: { v: 1, sessionId: 'sess-1', seq: 1, session: { pendingApprovals: [{ request_id: 'r0' }], pendingQuestions: [] } as never } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.runs.live()).toMatchObject([{ sessionId: 'sess-1', waitingOnPerson: true }]);
+    // Nothing ever answers that approval: the cancel goes out and returns on its own, rather than sitting out a budget with no end.
+    const at = Date.now();
+    await h.runs.cancelAll('the user stopped the run');
+    expect(Date.now() - at).toBeLessThan(5_000);
+    expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'cancel', sessionId: 'sess-1', args: {} } });
+    expect(h.sent.some((r) => r.kind === 'requirements.command' && r.command.name === 'requirements.run.ended')).toBe(false);
+  });
 });

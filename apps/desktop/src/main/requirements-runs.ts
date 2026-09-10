@@ -47,7 +47,10 @@ export interface RequirementsRuns {
   /** Claims and starts every dispatch the scheduler offers now; serialised, so two kicks never start one claim twice. */
   dispatch(): Promise<DispatchReport>;
   live(): readonly LiveBoardRun[];
-  /** REQ-TRACE-464: closing the application cancels the board's runs rather than orphaning them. Best effort, bounded. */
+  /**
+   * REQ-TRACE-464: closing the application cancels the board's runs rather than orphaning them. Best effort, bounded.
+   * REQ-TRACE-469: this same cancel is what releases an unlimited approval wait — see the note on the implementation.
+   */
   cancelAll(reason: string): Promise<void>;
 }
 
@@ -213,6 +216,18 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     },
     dispatch,
     live: () => [...runs.entries()].map(([sessionId, l]) => ({ sessionId, id: l.id, unit: l.unit, waitingOnPerson: l.waiting, permissions: l.permissions })),
+    /**
+     * REQ-TRACE-464 (closing the application) and REQ-TRACE-469 (an unlimited wait stays cancellable). The stop is the
+     * run host's existing `session.control {op: 'cancel'}`, one per board run this process owns, issued at once and
+     * bounded; it is never gated on what the run is doing, so a run blocked on an approval with no limit
+     * (`runtime.approval_timeout_seconds` = 0, REQ-TRACE-467/468) is stopped without sitting out a budget that has no
+     * end. The release itself is the engine's: `run.stop`'s FIRST act is to cancel whatever is blocked on a person
+     * (REQ-MONITOR-012, `packages/engine/src/run/run.ts`), and every waiter then finishes `cancelled` whatever its
+     * deadline (`approvals.cancelAll`) — REQ-TOOLS-055's "only an answer or a cancellation releases the wait", which is
+     * measured in `packages/agent-tools/src/gate.test.ts`. What this branch measures is the coordinator's half
+     * (`requirements-runs.test.ts`); what it does NOT offer is the button a person presses, which is REQ-TRACE-465's
+     * stop control on a board this branch does not host — stated as not built in the ADR note and the handoff.
+     */
     async cancelAll(reason) {
       const ids = [...runs.keys()];
       if (ids.length === 0) return;

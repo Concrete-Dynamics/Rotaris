@@ -407,10 +407,37 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           const g = rebuild();
           return { value: current!.queue, changed: { generation: g, affected: null } };
         }
-        case 'requirements.operation':
-          return { value: { ok: false, error: { reason: `The ${command.operation} operation is the traceability engine's (Part AJ′) and is not reachable from this build; nothing was run and nothing was written.` } } };
-        case 'requirements.cancel':
-          return { value: { ok: false, error: { reason: 'There is nothing to stop: no analysis or operation is in flight in this build.' } } };
+        // Part AJ2 — REQ-TRACE-508..511 reach the one engine (ADR-0040 specific 6) through the board's command family, on
+        // the route main's `traceability.operate` takes (`traceability.ts`), and the reply carries that route's shape so a
+        // surface reads one form. REQ-TRACE-512: the root is the open workspace's, the engine itself refuses a second
+        // operation of a kind as `busy`, and a layout or unanticipated failure comes back stated. A regeneration or a
+        // baseline update changes what the next verification reads, and a check IS the verification the board presents
+        // (REQ-TRACE-508: its findings reach the requirements view), so each of those three re-reads the projection and
+        // moves the generation — main publishes it after this reply; a comparison writes nothing the board shows.
+        case 'requirements.operation': {
+          const started = Number(clocks.monotonic.now());
+          // REQ-TRACE-212/216: the phases are logged by name; channel 10's `progress?` is where they would go (not built).
+          const options = { signal: new AbortController().signal, progress: (r: { kind: string; phase: string }) => { if (r.kind === 'phase') log(`requirements ${command.operation} (${workspaceRoot}): phase ${r.phase}`); } };
+          const r = command.operation === 'check' ? await engine.check(workspaceRoot, options)
+            : command.operation === 'regenerate' ? await engine.regenerate(workspaceRoot, options)
+              : command.operation === 'baselines' ? await engine.updateBaselines(workspaceRoot, options)
+                : await engine.compare(workspaceRoot, command.base, options);
+          const elapsedMs = Math.max(0, Math.round(Number(clocks.monotonic.now()) - started));
+          log(`requirements ${command.operation} (${workspaceRoot}): ${r.ok ? 'ok' : `refused: ${r.error.kind}`} in ${elapsedMs} ms`, r.ok ? 'info' : 'warn');
+          const value = { kind: 'traceability.result', operation: command.operation, root: workspaceRoot, elapsedMs, result: r.ok ? { ok: true, value: r.value } : { ok: false, error: r.error } };
+          if (!r.ok || command.operation === 'compare') return { value };
+          const g = await refresh();
+          return { value, changed: { generation: g, affected: null } };
+        }
+        case 'requirements.cancel': {
+          // The seam's engine offers no cancel; the process's handle does (`TraceabilityEngineHandle`), and a fake without
+          // one has nothing to stop. The board names the baseline update `baselines`; the engine names it `updateBaselines`.
+          const handle = engine as { cancel?: (root: string, operation: 'check' | 'regenerate' | 'updateBaselines' | 'compare') => boolean };
+          const op = command.operation === 'check' || command.operation === 'regenerate' || command.operation === 'compare' ? command.operation : command.operation === 'baselines' ? 'updateBaselines' : undefined;
+          const cancelled = op !== undefined && typeof handle.cancel === 'function' ? handle.cancel(workspaceRoot, op) : false;
+          log(`requirements cancel ${command.operation} (${workspaceRoot}): ${cancelled ? 'signalled' : 'nothing in flight'}`);
+          return { value: { kind: 'traceability.cancelled', cancelled } };
+        }
         // Part AP — the source write (REQ-TRACE-434..444, 498): the service composes and writes; the pane reports text and shows the result (REQ-TRACE-439).
         case 'requirements.source.write': {
           await ensure();

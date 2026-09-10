@@ -9,6 +9,7 @@ import type { ChangeEntry } from '@rotaris/contracts';
 import { createTraceabilityEngine, fsArtifactIo, type ArtifactIo } from './engine.js';
 import { createInThreadExecutor } from './executor.js';
 import { LAYOUT_CONFIG_FILE } from './layout.js';
+import { resetParserForTests } from './parser.js';
 
 /**
  * ADR-0040's owner side through the seam: one I/O owner, the writes in order, busy, cancel, byte-stable
@@ -21,7 +22,7 @@ let root: string;
 let gitPresent = true;
 try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { gitPresent = false; }
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-engine-')); });
-afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { rmSync(root, { recursive: true, force: true }); resetParserForTests(null); });
 const put = (rel: string, text: string): void => { mkdirSync(dirname(join(root, rel)), { recursive: true }); writeFileSync(join(root, rel), text); };
 const read = (rel: string): string | null => (existsSync(join(root, rel)) ? readFileSync(join(root, rel), 'utf8') : null);
 const doc = (id: string, status: string, extra = '', prose = 'prose') => `---\nreq-id: ${id}\nstatus: ${status}\ntitle: Title ${id}\n${extra}---\n# ${id}\n\n${prose}\n`;
@@ -52,7 +53,7 @@ describe('the engine (owner side)', () => {
     expect(swept.ok && swept.value.sites.length).toBe(2);
     if (!swept.ok) throw new Error('sweep');
     const verified = await engine.verify(parsed.value, swept.value, { signal: signal() });
-    expect(verified.ok && verified.value.findings.map((f) => f.code)).toEqual(['artifact', 'missing-trace', 'missing-coverage', 'requires-parse']);
+    expect(verified.ok && verified.value.findings.map((f) => f.code)).toEqual(['artifact', 'missing-trace', 'missing-coverage']);
     const checked = await engine.check(root, { signal: signal() });
     expect(checked.ok && checked.value.parseErrorsOnly).toBe(false);
     expect(checked.ok && checked.value.report.generation).toBe(2);
@@ -86,17 +87,20 @@ describe('the engine (owner side)', () => {
     expect(!broken.ok && broken.error.kind).toBe('parse');
     expect(read('src/requirement_ids.ts')).toBe(artifact);
   });
-  it('REQ-TRACE-510/123..129: the baselines bootstrap, then only ever shrink; the orphan-test baseline is preserved while .ts tests need the parser', async () => {
+  it('REQ-TRACE-510/123..129: the baselines bootstrap, then only ever shrink; the orphan-test ratchet is written now that the parser decides it (R11)', async () => {
     seed();
     put('src/orphan.ts', 'export const o = 1;\n');
     put('docs/requirements/orphan-tests.txt', '# kept\ntests/t.ts::test_old\n');
     const engine = createTraceabilityEngine({ executor: createInThreadExecutor(clocks), io: fsArtifactIo(clocks.timers), clocks });
     const first = await engine.updateBaselines(root, { signal: signal() });
-    expect(first.ok && first.value).toEqual([{ path: 'docs/requirements/debt-baseline.txt', entries: 1 }, { path: 'docs/requirements/orphan-modules.txt', entries: 1 }, { path: 'docs/requirements/orphan-tests.txt', entries: 1 }]);
+    // Part AJ2: tests/t.ts parses and declares no test function, so `test_old` is "removed" and the set intersection is empty (REQ-TRACE-125).
+    expect(first.ok && first.value).toEqual([{ path: 'docs/requirements/debt-baseline.txt', entries: 1 }, { path: 'docs/requirements/orphan-modules.txt', entries: 1 }, { path: 'docs/requirements/orphan-tests.txt', entries: 0 }]);
     const debt = read('docs/requirements/debt-baseline.txt')!;
     expect(debt.endsWith('REQ-102 test trace\n')).toBe(true);
     expect(read('docs/requirements/orphan-modules.txt')!.endsWith('src/orphan.ts\n')).toBe(true);
-    expect(read('docs/requirements/orphan-tests.txt')).toBe('# kept\ntests/t.ts::test_old\n');
+    const orphanTests = read('docs/requirements/orphan-tests.txt')!;
+    expect(orphanTests.startsWith('# Orphan-test baseline. This file may only SHRINK')).toBe(true);
+    expect(orphanTests).not.toContain('test_old');
     // REQ-TRACE-128: a second update over an unchanged repository is byte-identical
     await engine.updateBaselines(root, { signal: signal() });
     expect(read('docs/requirements/debt-baseline.txt')).toBe(debt);
@@ -109,6 +113,22 @@ describe('the engine (owner side)', () => {
     const checked = await engine.check(root, { signal: signal() });
     expect(checked.ok && checked.value.report.findings.filter((f) => f.id === 'REQ-103').map((f) => f.code)).toEqual(['missing-trace', 'missing-coverage']);
     expect(checked.ok && checked.value.report.statistics.debt).toEqual({ trace: 0, test: 1, orphan: 1, orphanTest: 0 });
+  });
+  it('Part AJ2: without the compiler API the orphan-test baseline is preserved as wave 1 left it, and the check says which two checks were not decided', async () => {
+    seed();
+    put('src/orphan.ts', 'export const o = 1;\n');
+    put('docs/requirements/orphan-tests.txt', '# kept\ntests/t.ts::test_old\n');
+    resetParserForTests({ available: false, reason: 'simulated: no compiler' });
+    const engine = createTraceabilityEngine({ executor: createInThreadExecutor(clocks), io: fsArtifactIo(clocks.timers), clocks });
+    // The check before the baseline update: an undecided candidate IS baselined by the update (pruning is the direction
+    // the ratchet allows, R11), and a baselined candidate is suppressed before the undecided branch is reached (REQ-TRACE-122).
+    const checked = await engine.check(root, { signal: signal() });
+    const parse = checked.ok ? checked.value.report.findings.filter((f) => f.code === 'requires-parse') : [];
+    expect(parse.map((f) => f.path)).toEqual(['src/orphan.ts', 'tests']);
+    expect(parse.every((f) => f.message.includes('simulated: no compiler'))).toBe(true);
+    const updated = await engine.updateBaselines(root, { signal: signal() });
+    expect(updated.ok && updated.value[2]).toEqual({ path: 'docs/requirements/orphan-tests.txt', entries: 1 });
+    expect(read('docs/requirements/orphan-tests.txt')).toBe('# kept\ntests/t.ts::test_old\n');
   });
   it('REQ-TRACE-512/226: a second operation of the same kind is refused busy; cancel signals it and answers false when nothing is in flight', async () => {
     seed();
@@ -136,7 +156,7 @@ describe('the engine (owner side)', () => {
     const engine = createTraceabilityEngine({ executor: createInThreadExecutor(clocks), io: fsArtifactIo(clocks.timers), clocks });
     await engine.regenerate(root, { signal: signal() });
     const clean = await engine.check(root, { signal: signal() });
-    expect(clean.ok && clean.value.report.findings.map((f) => f.code)).toEqual(['missing-trace', 'missing-coverage', 'requires-parse']);
+    expect(clean.ok && clean.value.report.findings.map((f) => f.code)).toEqual(['missing-trace', 'missing-coverage']);
     // another program edits a document, restores an older artifact, edits a baseline and the retired log
     put('docs/requirements/REQ-100-e/REQ-101.md', doc('REQ-101', 'approved', '', 'rewritten by another program'));
     put('docs/requirements/debt-baseline.txt', 'REQ-102 trace test\n');
@@ -146,7 +166,7 @@ describe('the engine (owner side)', () => {
     expect(next.ok && next.value.report.findings[0]!.message).toContain('REQ-102 was retired on 2020-01-01');
     rmSync(join(root, 'docs/requirements/retired-identifiers.tsv'));
     const after = await engine.check(root, { signal: signal() });
-    expect(after.ok && after.value.report.findings.map((f) => f.code)).toEqual(['artifact', 'requires-parse']);
+    expect(after.ok && after.value.report.findings.map((f) => f.code)).toEqual(['artifact']);
     expect(after.ok && after.value.report.statistics.debt).toEqual({ trace: 1, test: 1, orphan: 0, orphanTest: 0 });
   });
 });

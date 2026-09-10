@@ -1,4 +1,4 @@
-import type { AnnotationSite, Finding, RequirementEvidence, RequirementRecord, StoreParse, SweepResult, VerificationReport } from '@rotaris/contracts';
+import type { AnnotationSite, EvidenceState, Finding, RequirementEvidence, RequirementRecord, StoreParse, SweepResult, VerificationReport } from '@rotaris/contracts';
 import { DECLARATIONS_MODULE, ENUM_NAME, REGENERATE_ACTION, isArtifactUpToDate, renderArtifact } from './artifact.js';
 import { PRUNE_ACTION, parseDebtBaseline, parseOrphanModuleBaseline, parseOrphanTestBaseline, suppressed, type DebtFlag } from './baselines.js';
 import { COVERS_ANNOTATION, TRACE_ANNOTATION } from './conventions.js';
@@ -16,10 +16,12 @@ import type { SweepDetails, SweepOutput } from './sweep.js';
  * modules, orphan tests. Any parse error short-circuits to the parse errors alone (092). The empty-store warning of
  * 503 leads the list, since it describes the reading every check was made against.
  *
- * Two checks need a syntax tree this build does not carry (ADR-0040 #3 leaves the parser to be measured — wave 2):
- * REQ-TRACE-104 rule 1 (re-export-only modules) and REQ-TRACE-109/110 (test-function collection) for the built-in
- * TypeScript convention. Those are reported as `requires-parse` warnings stating why, never guessed at with a
- * pattern; a pattern-declared convention is regex by specification (073) and runs both checks in full.
+ * Two checks need a syntax tree: REQ-TRACE-104 rule 1 (re-export-only modules) and REQ-TRACE-109/110
+ * (test-function collection) for the built-in TypeScript convention. Wave 1 reported them as `requires-parse`
+ * warnings; since Part AJ2 the sweep decides them with the TypeScript compiler API (`parser.ts`, ADR-0040 #3's
+ * measured choice), and the `requires-parse` warning survives for exactly one case — a build in which that
+ * compiler cannot be loaded — stating the cause. A pattern-declared convention is regex by specification (073)
+ * and runs both checks in full either way.
  */
 export const FINDING_CODES = ['parse-error', 'empty-store', 'artifact', 'baseline-malformed', 'derived-from', 'missing-requirement', 'deprecated-reference', 'missing-trace', 'missing-coverage', 'baseline-stale', 'legacy-unresolved', 'orphan-module', 'orphan-test', 'requires-parse'] as const;
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -221,6 +223,7 @@ export function verify(input: VerifyInput): VerifyOutput {
   const marked = new Set(details?.markedModules ?? []);
   const exempt = new Set(details?.exemptModules ?? []);
   const conventionOf = details?.conventionOf ?? {};
+  const builtInOf = (m: string): boolean => (conventionOf[m] ?? 'typescript') === 'typescript';
   const candidates = modules.filter((m) => !index.tracedFiles.has(m) && !marked.has(m) && !exempt.has(m));
   const currentOrphanModules = new Set(candidates);
   for (const entry of [...orphanModules.entries].sort()) {
@@ -253,33 +256,57 @@ export function verify(input: VerifyInput): VerifyOutput {
     const alias = (parse as { details?: { legacyAliases?: Record<string, number | null> } }).details?.legacyAliases?.[token.toUpperCase()];
     findings.push(finding('warning', 'legacy-unresolved', `${at(s)}: ${JSON.stringify(token)} resolves to no requirement (${alias === null ? 'the legacy identifier is claimed by more than one requirement' : 'the legacy identifier is unknown'}); write the canonical identifier in its place`, { path: s.path, line: s.line }));
   }
-  // (10) REQ-TRACE-102..107: orphan modules, per file, sorted; the built-in convention's rule 1 needs the parser.
+  // (10) REQ-TRACE-102..107: orphan modules, per file, sorted. Part AJ2: the built-in convention's rule 1 was decided by
+  // the parser in the sweep (a re-export-only module is in `exemptModules` and never a candidate); a candidate that could
+  // not be parsed is an orphan, not an excuse (104's last sentence); only a build without the compiler leaves a candidate
+  // undecided, and that is the one `requires-parse` warning left, naming the cause.
   let orphanSuppressed = 0;
+  const undecidedModules = new Set(details?.undecidedModules ?? []);
+  const unparsable = new Set(details?.unparsableModules ?? []);
+  const disqualified = details?.disqualifiedBy ?? {};
+  const parserReason = details?.parser?.available === false ? details.parser.reason : 'the syntax-tree parser is not available';
+  const remedies = (builtIn: boolean): string => `trace it to the requirement it serves with ${builtIn ? `\`${TRACE_ANNOTATION}(...)\`` : "the convention's annotation"}, author a technical requirement with an origin if none fits, or mark it ${JSON.stringify(layout.exemptMarker)} if it is intentionally trace-free`;
   for (const m of candidates) {
-    const builtIn = (conventionOf[m] ?? 'typescript') === 'typescript';
     if (orphanModules.entries.has(m)) { orphanSuppressed += 1; continue; }
-    if (builtIn) {
+    if (undecidedModules.has(m)) {
       requiresParse.push({ check: 'orphan-module', path: m });
-      findings.push(finding('warning', 'requires-parse', `${m}: has no implementation trace and no ${JSON.stringify(layout.exemptMarker)} marker; whether it is a re-export-only module (REQ-TRACE-104 rule 1) needs a syntax tree this build does not yet carry, so it is reported as an orphan candidate rather than an orphan — trace it with \`${TRACE_ANNOTATION}(...)\`, author a technical requirement with an origin if none fits, or mark it ${JSON.stringify(layout.exemptMarker)} if it is intentionally trace-free`, { path: m }));
-    } else {
-      findings.push(finding('error', 'orphan-module', `${m}: has no implementation trace; trace it to the requirement it serves with the convention's annotation, author a technical requirement with an origin if none fits, or mark it ${JSON.stringify(layout.exemptMarker)} if it is intentionally trace-free`, { path: m }));
+      findings.push(finding('warning', 'requires-parse', `${m}: has no implementation trace and no ${JSON.stringify(layout.exemptMarker)} marker; whether it is a re-export-only module (REQ-TRACE-104 rule 1) could not be decided because ${parserReason}, so it is reported as an orphan candidate rather than an orphan — ${remedies(true)}`, { path: m }));
+      continue;
     }
+    const why = unparsable.has(m) ? ' and its text could not be parsed, so the re-export rule cannot vouch for it (REQ-TRACE-104)'
+      : disqualified[m] !== undefined ? ` and it is not a re-export-only module (it declares ${disqualified[m]!.kind} at line ${disqualified[m]!.line})` : '';
+    findings.push(finding('error', 'orphan-module', `${m}: has no implementation trace${why}; ${remedies(builtInOf(m))}`, { path: m }));
   }
-  // (11) REQ-TRACE-108..115: orphan tests; the built-in convention's collection needs the parser.
+  // (11) REQ-TRACE-108..115: orphan tests, each located at its function's line (REQ-TRACE-100/508: openable at its own line).
   let orphanTestSuppressed = 0;
+  const lineOfNode = new Map((details?.testFunctions ?? []).map((t) => [t.node, t.line] as const));
   for (const node of [...currentOrphanTests].sort()) {
     if (orphanTests.entries.has(node)) { orphanTestSuppressed += 1; continue; }
-    findings.push(finding('error', 'orphan-test', `${node}: no coverage annotation or comment reference is present; annotate the test with the requirement it covers, author a technical requirement with an origin if none fits, or mark it ${JSON.stringify(layout.exemptMarker)} within its window`, { path: node.slice(0, node.indexOf('::')) }));
+    const path = node.slice(0, node.indexOf('::'));
+    const line = lineOfNode.get(node);
+    findings.push(finding('error', 'orphan-test', `${path}:${line ?? '?'} (${node}): no coverage annotation or comment reference is present; annotate the test with the requirement it covers, author a technical requirement with an origin if none fits, or mark it ${JSON.stringify(layout.exemptMarker)} within its window`, { path, ...(line === undefined ? {} : { line }) }));
   }
   if (undecided.size > 0) {
     requiresParse.push({ check: 'orphan-test', path: layout.testRoots.join(', ') });
-    findings.push(finding('warning', 'requires-parse', `${layout.testRoots.join(', ')}: ${undecided.size} test file(s) under the built-in TypeScript convention were not checked for orphan tests; collecting test functions needs a syntax tree (REQ-TRACE-109/110) this build does not yet carry`, { path: layout.testRoots[0] ?? '' }));
+    findings.push(finding('warning', 'requires-parse', `${layout.testRoots.join(', ')}: ${undecided.size} test file(s) under the built-in TypeScript convention were not checked for orphan tests; collecting test functions needs a syntax tree (REQ-TRACE-109/110) and ${parserReason}`, { path: layout.testRoots[0] ?? '' }));
   }
   // Evidence (the seam's `RequirementEvidence`): presence is what a static scan can assert (175), never execution.
+  // Part AJ2 — the third obligation's state, `verification` (REQ-TRACE-258, REQ-TRACE-270), reading R16: this pass is
+  // the one verification the build performs (REQ-TRACE-181's layer 4), and its verdict on a requirement is the state
+  // the projection joins — `failed` when an error finding names the requirement; `stale` when the verdict was taken
+  // over a stale or missing artifact, or when the requirement rests on baselined debt (recorded in a ratchet, not
+  // paid); `satisfied` otherwise. It is recomputed by every pass and written nowhere (REQ-TRACE-508: the traceability
+  // check records none). REQ-TRACE-410's suite run — a verdict with the commit and the hash it was taken over — is
+  // NOT BUILT; when it is, its record supersedes this state for the requirements it verified. Wave 1 left the field
+  // undefined, which the projection read as "Missing evidence: verification." on every approved requirement.
+  const erroredIds = new Set(findings.filter((f) => f.severity === 'error' && f.id !== undefined).map((f) => f.id!));
   const evidence: Record<string, RequirementEvidence> = {};
   for (const r of records) {
     const sites = index.references.get(r.number) ?? [];
-    const e: { implementationTrace?: 'satisfied'; coveringTest?: 'stale'; sites: AnnotationSite[] } = { sites };
+    const e: { implementationTrace?: 'satisfied'; coveringTest?: 'stale'; verification: EvidenceState; sites: AnnotationSite[] } = {
+      verification: erroredIds.has(r.id) ? 'failed' : !artifactUpToDate || currentDebt.has(r.number) ? 'stale' : 'satisfied',
+      sites,
+    };
     if ((index.implementationTraces.get(r.number)?.length ?? 0) > 0) e.implementationTrace = 'satisfied';
     if ((index.coverage.get(r.number)?.length ?? 0) > 0) e.coveringTest = 'stale';
     evidence[r.id] = e;

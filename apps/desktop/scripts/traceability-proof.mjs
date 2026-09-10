@@ -21,7 +21,7 @@
  * `--skip-build` skips the desktop build. The scale tree and the fixture copies are removed at the end (they are
  * TypeScript the linter would otherwise parse); the numbers and texts stay in the JSON and log files.
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -37,6 +37,31 @@ rmSync(output, RM);
 mkdirSync(output, { recursive: true });
 const fixture = join(app, 'scripts', 'fixtures', 'requirements-store');
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
+/**
+ * Part AJ2: two files planted into each fixture COPY (never the fixture, which Parts AK and AP reuse) for the checks the
+ * syntax-tree parser decides — a re-export-only module that rule 1 of the orphan-module check excuses, and a test whose
+ * function was renamed while the orphan-test baseline still names the old one, so the check reports the stale entry and
+ * the renamed declaration at its own file and line.
+ */
+const plant = (copy) => {
+  writeFileSync(join(copy, 'src', 'barrel.ts'), [
+    '// Planted by the proof (Part AJ2): a re-export-only module — imports, re-exports and assignments naming exported',
+    '// symbols, nothing executable — which rule 1 of the orphan-module check excuses without a trace or a marker.',
+    "import { traced } from './traced';",
+    "export { traced } from './traced';",
+    "export * from './untraced';",
+    'export const alias = traced;',
+    '',
+  ].join('\n'));
+  writeFileSync(join(copy, 'tests', 'renamed.ts'), [
+    '// Planted by the proof (Part AJ2): the test below was renamed from testOriginal, which the orphan-test baseline',
+    '// still names; the parser locates the renamed declaration at its own line, and no annotation is in its window.',
+    '',
+    'export function testRenamed(): void {}',
+    '',
+  ].join('\n'));
+  appendFileSync(join(copy, 'docs', 'requirements', 'orphan-tests.txt'), 'tests/renamed.ts::testOriginal\n');
+};
 const run = (name, command, args, env = {}, timeout = 600_000) => {
   const r = process.platform === 'win32'
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', `${command} ${args.join(' ')}`], { cwd: repo, encoding: 'utf8', timeout, env: { ...process.env, ...env } })
@@ -60,6 +85,7 @@ try {
   const scratch = mkdtempSync(join(tmpdir(), 'rotaris-traceability-proof-'));
   const fixtureCopy = join(scratch, 'fixture');
   cpSync(fixture, fixtureCopy, { recursive: true });
+  plant(fixtureCopy);
   results.scratch = scratch;
   const test = run('vitest', 'pnpm', ['exec', 'vitest', 'run', 'packages/workspace/src/traceability/traceability.proof.test.ts'], { ROTARIS_TRACEABILITY_PROOF: output, ROTARIS_TRACEABILITY_FIXTURE: fixtureCopy });
   expect(test.status === 0, `the proof test file failed (see .traceability-proof/vitest.log):\n${(test.stdout ?? '').split('\n').filter((l) => /×|Error|expected/.test(l)).slice(0, 30).join('\n')}`);
@@ -72,11 +98,17 @@ try {
   expect(spike.sweep.files >= 1000 && spike.sweep.sites >= 10_000 && spike.sweep.warmMs < 1500, `sweep of ${spike.sweep.files} files / ${spike.sweep.sites} sites took ${spike.sweep.warmMs} ms`);
   expect(spike.parseHalf.ratio > 1.4 && spike.parseHalf.ratio < 3.0, `parse growth ratio ${spike.parseHalf.ratio} is not linear`);
   expect(spike.sweepHalf.ratio > 1.3 && spike.sweepHalf.ratio < 3.0, `sweep growth ratio ${spike.sweepHalf.ratio} is not linear`);
+  // Part AJ2 / OQ-24: the parse-requiring checks are timed over the same tree and recorded; no requirement fixes a budget
+  // for them, so the assertions are shape (every file parsed, every test function found) and linear growth, never a bound.
+  expect(spike.parser && spike.parser.files >= 1000 && spike.parser.functions === 2000, `the parser did not cover the tree: ${JSON.stringify(spike.parser)}`);
+  expect(spike.parser.ratio > 1.3 && spike.parser.ratio < 3.0, `parser growth ratio ${spike.parser.ratio} is not linear`);
   expect(fixtureResults.passed === true, 'the fixture drive did not pass');
+  expect(fixtureResults.checkCodes.every((c) => c !== 'requires-parse') && fixtureResults.exemptModules.includes('src/barrel.ts'), 'the parser did not decide the two checks over the fixture');
 
   // 3: the real process and the real worker thread.
   const processFixture = join(scratch, 'fixture-process');
   cpSync(fixture, processFixture, { recursive: true });
+  plant(processFixture);
   const local = join(output, 'local');
   mkdirSync(join(local, 'roaming'), { recursive: true });
   const driver = join(scratch, 'driver.cjs');
@@ -101,6 +133,30 @@ try {
   expect(proc.cancelledCheck.result.ok === false && proc.cancelledCheck.result.error.kind === 'cancelled', `the cancelled check answered ${JSON.stringify(proc.cancelledCheck.result).slice(0, 200)}`);
   expect(proc.cancelNothing.cancelled === false, 'a cancel with nothing in flight did not answer false');
   expect(proc.checkAfterCancel.result.ok === true, 'the worker did not run a job after the cancellation');
+  // Part AJ2: the operations through the board's command family answer in the operation reply's one shape (REQ-TRACE-508..512).
+  const viaBoard = (r) => (r && r.kind === 'requirements.result' && r.value && r.value.kind === 'traceability.result' ? r.value : null);
+  const bc = viaBoard(proc.boardCheck);
+  expect(bc !== null && bc.result.ok === true, `check through requirements.operation: ${JSON.stringify(proc.boardCheck).slice(0, 300)}`);
+  const boardCodes = bc.result.value.report.findings.map((f) => f.code);
+  expect(JSON.stringify(boardCodes) === JSON.stringify(codes.filter((c) => c !== 'artifact')), `the board-path check differs from the direct path after the regeneration:\n${boardCodes.join(',')}`);
+  expect(proc.boardCheck.changed && typeof proc.boardCheck.changed.generation === 'number', 'a check through the board did not move the generation');
+  expect(proc.boardCancelNothing.value && proc.boardCancelNothing.value.kind === 'traceability.cancelled' && proc.boardCancelNothing.value.cancelled === false, 'a board cancel with nothing in flight did not answer false');
+  const br = viaBoard(proc.boardRegenerate);
+  expect(br !== null && br.result.ok && br.result.value.outcome === 'already up to date' && proc.boardRegenerate.changed, 'regenerate through the board was not "already up to date" with the generation moved');
+  const bb = viaBoard(proc.boardBaselines);
+  expect(bb !== null && bb.result.ok && bb.result.value.length === 3 && proc.boardBaselines.changed, 'the baseline update through the board did not write three baselines with the generation moved');
+  expect(viaBoard(proc.boardCompare) !== null && proc.boardCompare.changed === undefined, 'compare through the board did not answer in the operation reply shape, or moved the generation');
+  const busy = proc.boardBusy.map(viaBoard);
+  expect(busy.filter((b) => b && b.result.ok === false && b.result.error.kind === 'busy').length === 1 && busy.filter((b) => b && b.result.ok === true).length === 1, `two concurrent checks did not yield exactly one busy refusal (REQ-TRACE-512): ${JSON.stringify(busy.map((b) => b && b.result.ok))}`);
+  const boardValue = proc.board.value;
+  expect(boardValue && boardValue.source.kind === 'store' && boardValue.cards.length === fixtureResults.records.length, `the board after the operations: ${JSON.stringify(boardValue).slice(0, 200)}`);
+  // REQ-TRACE-258/270: the projection joins the verification state the pass now supplies — no card without one.
+  expect(boardValue.cards.every((c) => ['satisfied', 'stale', 'failed'].includes(c.evidence.verification)), `a card lacks its verification evidence state: ${JSON.stringify(boardValue.cards.map((c) => [c.id, c.evidence.verification]))}`);
+  results.boardPath = { checkMs: bc.elapsedMs, regenerateMs: br.elapsedMs, baselinesMs: bb.elapsedMs, generation: proc.boardCheck.changed.generation, verification: Object.fromEntries(boardValue.cards.map((c) => [c.id, c.evidence.verification])) };
+
+  // 4: the Settings card's sentences (§1481) over those real replies — the same pure mapping the card renders.
+  const ui = run('vitest-ui', 'pnpm', ['exec', 'vitest', 'run', 'packages/ui/src/settings/ProjectSettings.test.ts'], { ROTARIS_TRACEABILITY_PROCESS_RESULTS: processOut });
+  expect(ui.status === 0, `the card's sentence test failed over the real replies (see .traceability-proof/vitest-ui.log):\n${(ui.stdout ?? '').split('\n').filter((l) => /×|Error|expected/.test(l)).slice(0, 30).join('\n')}`);
   results.passed = true;
 } finally {
   // The generated trees and the two fixture copies hold TypeScript the linter would otherwise parse; the numbers,
@@ -113,7 +169,9 @@ if (!results.passed) { console.error(JSON.stringify(results, null, 2)); process.
 console.log(`traceability-proof PASSED ${join(output, 'results.json')}`);
 console.log(`  parse ${results.spike.parse.documents} documents: ${results.spike.parse.warmMs} ms warm (${results.spike.parse.coldMs} ms cold); half-size ratio ${results.spike.parseHalf.ratio}`);
 console.log(`  sweep ${results.spike.sweep.files} files / ${results.spike.sweep.sites} sites: ${results.spike.sweep.warmMs} ms warm (${results.spike.sweep.coldMs} ms cold); half-size ratio ${results.spike.sweepHalf.ratio}`);
+console.log(`  parser (TypeScript ${results.spike.parser.version}) over ${results.spike.parser.files} files: ${results.spike.parser.warmMs} ms warm (${results.spike.parser.coldMs} ms cold), ${results.spike.parser.perFileMs} ms/file, load ${results.spike.parser.loadMs} ms; inside the sweep ${results.spike.parser.sweepParsedFiles} files in ${results.spike.parser.sweepParseMs} ms; half-size ratio ${results.spike.parser.ratio}`);
 console.log(`  process path: check ${results.process.check.elapsedMs} ms, regenerate ${results.process.regenerate1.elapsedMs} ms, cancelled check ${results.process.cancelledCheck.elapsedMs} ms`);
+console.log(`  board path (requirements.operation): check ${results.boardPath.checkMs} ms, regenerate ${results.boardPath.regenerateMs} ms, baselines ${results.boardPath.baselinesMs} ms; generation ${results.boardPath.generation}; the card's sentences asserted over the real replies`);
 
 /** The Electron driver: fork the built workspace service as a utilityProcess and speak the process protocol to it. */
 function driverSource() {
@@ -142,6 +200,15 @@ app.whenReady().then(async () => {
     setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error('no answer to ' + request.kind + ' within ' + timeoutMs + ' ms')); } }, timeoutMs);
   });
   const results = {};
+  // Part AJ2: a service that exits before it is asked to fails the drive at once, instead of leaving the driver to wait
+  // out the harness's timeout (the first run in a never-built worktree found the bundle absent and stalled 180 s).
+  let shuttingDown = false;
+  child.on('exit', (code) => {
+    if (shuttingDown) return;
+    console.error('the workspace service exited with ' + code + ' before the drive finished');
+    fs.writeFileSync(outFile, JSON.stringify({ ...results, failed: 'service exited ' + code }, null, 2));
+    app.exit(1);
+  });
   try {
     await isReady;
     results.hello = await request({ kind: 'hello' });
@@ -155,6 +222,18 @@ app.whenReady().then(async () => {
     results.cancelledCheck = await inFlight;
     results.cancelNothing = await request({ kind: 'traceability.cancel', workspaceRoot: scaleRoot, operation: 'check' });
     results.checkAfterCancel = await request({ kind: 'traceability.operate', workspaceRoot: fixtureRoot, operation: 'check' });
+    // Part AJ2: the same four operations and the cancel through the board's command family, which is how the Settings
+    // card reaches them (REQ-TRACE-508..512) — against an OPEN workspace, since the delivery service serves that case.
+    results.opened = await request({ kind: 'workspace.open', workspaceRoot: fixtureRoot });
+    const board = (command) => request({ kind: 'requirements.command', workspaceRoot: fixtureRoot, command: { workspace: fixtureRoot, ...command }, actor: { kind: 'system' } });
+    results.boardCheck = await board({ name: 'requirements.operation', operation: 'check' });
+    results.boardCancelNothing = await board({ name: 'requirements.cancel', operation: 'check' });
+    results.boardRegenerate = await board({ name: 'requirements.operation', operation: 'regenerate' });
+    results.boardBaselines = await board({ name: 'requirements.operation', operation: 'baselines' });
+    results.boardCompare = await board({ name: 'requirements.operation', operation: 'compare' });
+    results.boardBusy = await Promise.all([board({ name: 'requirements.operation', operation: 'check' }), board({ name: 'requirements.operation', operation: 'check' })]);
+    results.board = await board({ name: 'requirements.board' });
+    shuttingDown = true;
     await request({ kind: 'shutdown', deadlineMs: 5000 }, 10000);
     fs.writeFileSync(outFile, JSON.stringify(results, null, 2));
     app.exit(0);

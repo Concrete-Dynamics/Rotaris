@@ -6,6 +6,7 @@ import { DisplaySettings, type DisplaySettingsProps } from './settings/DisplaySe
 import { InstructionsSettings, ToolsSettings } from './settings/Inventories.js';
 import { AboutSettings, type AboutSettingsProps } from './settings/About.js';
 import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
+import { TraceabilitySettings, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 
@@ -76,9 +77,11 @@ export interface SettingsViewProps {
   readonly about?: AboutSettingsProps | undefined;
   /** Part R: the Interface category's further preference controls (the agent pop-out toggle), supplied by the renderer root. */
   readonly interfaceExtras?: ReactNode;
+  /** Part AJ2: the Project category's traceability card (REQ-TRACE-508..511), its two commands supplied by the renderer root. */
+  readonly traceability?: TraceabilitySettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */ }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -190,6 +193,8 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
               </div>
             </div>
             {message && <div className="composer__error" role="alert">{message}</div>}
+            {/* Part AJ2 — the traceability card (REQ-TRACE-508..511), a card of this category as REQ-CONFIG-390 shapes one. */}
+            {traceability ? <TraceabilitySettings {...traceability} /> : null}
           </div>
         ) : category === 'hooks' && hooks ? (
           <HooksSettings {...hooks} />

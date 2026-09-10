@@ -7,6 +7,7 @@ import { annotationKindOf, registerConventions, type ConventionRegistry, type Re
 import { decodeUtf8, normaliseLineEndings } from './hashes.js';
 import { LEGACY_TOKEN, identifierOf, identifierPattern } from './identifiers.js';
 import { isUnderRoot, type ResolvedLayout } from './layout.js';
+import { loadParser, parserLoadMs, type Parser } from './parser.js';
 import { reportPhase, type ProgressHost } from './progress.js';
 import { isSkipped } from './store.js';
 
@@ -59,13 +60,13 @@ export interface SweepDetails {
   readonly tracedFiles: readonly string[];
   /** Files whose text contains the exempt marker anywhere — a plain substring test (105). */
   readonly markedModules: readonly string[];
-  /** Files a project convention's `exempt_module_pattern` matched (104, rule 1 for a pattern-declared convention). */
+  /** Files a project convention's `exempt_module_pattern` matched, and — Part AJ2 — built-in modules the parser found re-export-only (104, rule 1). */
   readonly exemptModules: readonly string[];
   /** For test files: the 1-based lines on which the exempt marker occurs (113). */
   readonly markerLines: Readonly<Record<string, readonly number[]>>;
-  /** Collected test functions — pattern-declared conventions only in wave 1 (073); the built-in convention's need a syntax tree (109). */
+  /** Collected test functions: pattern-declared conventions by their `test_pattern` (073), the built-in convention from the syntax tree (109; Part AJ2). */
   readonly testFunctions: readonly TestFunction[];
-  /** Built-in-convention files under a test root, whose test functions this build cannot collect (REQ-TRACE-109/110 — wave 2). */
+  /** Built-in-convention files under a test root whose test functions could NOT be collected because the parser is unavailable (Part AJ2: empty when it is; REQ-TRACE-109/110). */
   readonly undecidedTestFiles: readonly string[];
   /** Files under an excused test root (047). */
   readonly excusedTestFiles: readonly string[];
@@ -73,6 +74,19 @@ export interface SweepDetails {
   /** The extensions the toolchain swept, each once (074). */
   readonly extensions: readonly string[];
   readonly files: number;
+  // Part AJ2 — what the syntax-tree parser decided (REQ-TRACE-104 rule 1, 109, 110) and what it cost (OQ-24).
+  /** Built-in implementation modules with no trace and no marker whose re-export test could not be made because the parser is unavailable. */
+  readonly undecidedModules: readonly string[];
+  /** Built-in implementation modules whose text did not parse: never excused (104's last sentence). */
+  readonly unparsableModules: readonly string[];
+  /** Built-in test files whose text did not parse: an empty function list, no orphans (110). */
+  readonly unparsableTests: readonly string[];
+  /** For a parsed candidate that is not re-export-only: the first statement that disqualified it, for the finding. */
+  readonly disqualifiedBy: Readonly<Record<string, { readonly kind: string; readonly line: number }>>;
+  /** The parser's availability, and the parse time inside `durationMs` (REQ-TRACE-088 budgets the sweep without it; OQ-24 measures this). */
+  readonly parser: { readonly available: true; readonly version: string; readonly loadMs: number } | { readonly available: false; readonly reason: string };
+  readonly parseMs: number;
+  readonly parsedFiles: number;
 }
 
 export interface SweepOutput extends SweepResult { readonly details: SweepDetails }
@@ -85,6 +99,8 @@ export interface SweepInput {
   readonly clock: MonotonicClock;
   readonly token?: CancelToken;
   readonly progress?: ProgressHost;
+  /** Part AJ2: the syntax-tree parser; the process's one, loaded on first need, unless a test supplies another. */
+  readonly parser?: Parser;
 }
 
 /** Offsets at which each line starts; line 1 starts at 0. */
@@ -259,6 +275,19 @@ export function sweepRepository(input: SweepInput): SweepOutput {
   const conventionOf: Record<string, string> = {};
   const modules: string[] = [];
   const tests: string[] = [];
+  // Part AJ2 — the parser is asked only where the patterns cannot decide: a built-in implementation module with no
+  // trace and no marker (REQ-TRACE-104's rules 2 and 3 already excuse the rest, and the outcome is the same whichever
+  // rule is named first), and every built-in test file that is not excused (109). It is loaded on the first such file,
+  // so a repository with nothing to decide never pays for it; the parse time is kept apart from the matching time.
+  const undecidedModules: string[] = [];
+  const unparsableModules: string[] = [];
+  const unparsableTests: string[] = [];
+  const disqualifiedBy: Record<string, { kind: string; line: number }> = {};
+  let parser: Parser | undefined = input.parser;
+  let parseMs = 0;
+  let parsedFiles = 0;
+  const parserOf = (): Parser => { parser ??= loadParser(input.clock); return parser; };
+  const timed = <T>(fn: () => T): T => { const t0 = Number(input.clock.now()); try { return fn(); } finally { parseMs += Number(input.clock.now()) - t0; parsedFiles += 1; } };
   for (const { path, direction } of ordered) {
     checkpoint(input.token, `before ${path}`);
     const convention = registry.claims.get(extname(path))!;
@@ -270,25 +299,50 @@ export function sweepRepository(input: SweepInput): SweepOutput {
     const scan = scanFile(text, path, direction, convention, layout.idPrefix, input.aliases, layout.exemptMarker);
     const base = annotations.length;
     for (const a of scan.annotations) annotations.push(a);
+    let traced = false;
     for (const o of scan.occurrences) {
       occurrences.push(o.annotation === undefined ? o : { ...o, annotation: o.annotation + base });
-      if (o.kind === 'trace' && direction === 'implementation' && o.number !== null) tracedFiles.add(path);
+      if (o.kind === 'trace' && direction === 'implementation' && o.number !== null) { tracedFiles.add(path); traced = true; }
     }
     if (direction === 'implementation') {
       modules.push(path);
       if (scan.marked) markedModules.push(path);
       if (scan.exemptByPattern) exemptModules.push(path);
+      if (convention.builtIn && !traced && !scan.marked) {
+        const p = parserOf();
+        if (!p.available) undecidedModules.push(path);
+        else {
+          const a = timed(() => p.analyseModule(text, path));
+          if (!a.parsed) unparsableModules.push(path);
+          else if (a.reExportOnly) exemptModules.push(path);
+          else if (a.disqualifiedBy) disqualifiedBy[path] = a.disqualifiedBy;
+        }
+      }
     } else {
       tests.push(path);
       if (scan.markerLines.length > 0) markerLines[path] = scan.markerLines;
-      if (convention.builtIn) undecidedTestFiles.push(path); else testFunctions.push(...scan.testFunctions);
+      if (!convention.builtIn) testFunctions.push(...scan.testFunctions);
+      else if (!excused) {
+        const p = parserOf();
+        if (!p.available) undecidedTestFiles.push(path);
+        else {
+          const c = timed(() => p.collectTests(text, path));
+          if (!c.parsed) unparsableTests.push(path); else testFunctions.push(...c.functions);
+        }
+      }
     }
   }
-  const nodeAt = (o: Occurrence): string | undefined => testFunctions.find((t) => t.path === o.path && o.line >= t.windowStart && o.line <= t.windowEnd)?.node;
+  const functionsByPath = new Map<string, TestFunction[]>();
+  for (const t of testFunctions) { const l = functionsByPath.get(t.path) ?? []; l.push(t); functionsByPath.set(t.path, l); }
+  const nodeAt = (o: Occurrence): string | undefined => functionsByPath.get(o.path)?.find((t) => o.line >= t.windowStart && o.line <= t.windowEnd)?.node;
   const sites = occurrences.map((o) => siteOf(o, layout.idPrefix, o.direction === 'test' ? nodeAt(o) : undefined));
+  const parserState: SweepDetails['parser'] = parser === undefined ? { available: true, version: 'not needed', loadMs: 0 } : parser.available ? { available: true, version: parser.version, loadMs: parserLoadMs() } : { available: false, reason: parser.reason };
   return {
     sites, modules, tests, durationMs: Math.max(0, Math.round(Number(input.clock.now()) - started)),
-    details: { occurrences, annotations, tracedFiles: [...tracedFiles], markedModules, exemptModules, markerLines, testFunctions, undecidedTestFiles, excusedTestFiles, conventionOf, extensions: registry.extensions, files: ordered.length },
+    details: {
+      occurrences, annotations, tracedFiles: [...tracedFiles], markedModules, exemptModules, markerLines, testFunctions, undecidedTestFiles, excusedTestFiles, conventionOf, extensions: registry.extensions, files: ordered.length,
+      undecidedModules, unparsableModules, unparsableTests, disqualifiedBy, parser: parserState, parseMs: Math.round(parseMs), parsedFiles,
+    },
   };
 }
 

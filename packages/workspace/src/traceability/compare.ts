@@ -1,5 +1,5 @@
 import { millis, type Clocks } from '@rotaris/kernel';
-import type { AnnotationSite, ChangeEntry, StoreParse, SweepResult } from '@rotaris/contracts';
+import { compareReqIds, type AnnotationSite, type ChangeEntry, type StoreParse, type SweepResult } from '@rotaris/contracts';
 import { invokeGit, type GitResult } from '../git/invoke.js';
 import { recoverEntries, type RecoveredEntry } from './artifact.js';
 import { identifierOf } from './identifiers.js';
@@ -71,7 +71,8 @@ export function classifyChanges(parse: StoreParse, base: readonly RecoveredEntry
     const sites = sitesOf(b.number);
     entries.push({ kind: 'removed', id: identifierOf(layout.idPrefix, b.number), title: b.title, from: b.status, obligation: CHANGE_OBLIGATIONS.removed, drift: untouched(sites), sites });
   }
-  return entries.sort((a, b) => Number(a.id.slice(a.id.indexOf('-') + 1)) - Number(b.id.slice(b.id.indexOf('-') + 1)));
+  // REQ-TRACE-289/494 (Part AJ2): change-comparison entries by identifier, through contracts' one comparator.
+  return entries.sort((a, b) => compareReqIds(a.id, b.id));
 }
 
 export async function compareAgainstBase(input: CompareInput): Promise<CompareOutput> {

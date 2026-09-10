@@ -70,8 +70,8 @@ describe('the verification pass', () => {
       'error:missing-coverage', 'error:missing-coverage', 'error:missing-coverage',
       'warning:baseline-stale', 'warning:baseline-stale', 'warning:baseline-stale', 'warning:baseline-stale', 'warning:baseline-stale',
       'warning:legacy-unresolved',
-      'error:orphan-module', 'warning:requires-parse',
-      'error:orphan-test', 'warning:requires-parse',
+      'error:orphan-module', 'error:orphan-module',
+      'error:orphan-test',
     ]);
     const m = report.findings.map((f) => f.message);
     expect(m[0]).toBe('src/requirement_ids.ts: the generated requirement-symbol artifact is missing; regenerate it with the requirements view’s "Regenerate requirement symbols" action (REQ-TRACE-509)');
@@ -98,21 +98,28 @@ describe('the verification pass', () => {
     ]);
     expect(m[20]).toBe('tests/covers.ts:2: "NOPE-1" resolves to no requirement (the legacy identifier is unknown); write the canonical identifier in its place');
     expect(m[21]).toMatch(/^src\/legacy\/tool\.py: has no implementation trace; trace it/);
-    expect(m[22]).toMatch(/^src\/untraced\.ts: has no implementation trace and no "trace-exempt" marker; whether it is a re-export-only module \(REQ-TRACE-104 rule 1\) needs a syntax tree/);
-    expect(m[23]).toMatch(/^tests\/legacy\/test_tool\.py::test_orphan: no coverage annotation or comment reference is present/);
-    expect(m[24]).toMatch(/^tests: 1 test file\(s\) under the built-in TypeScript convention were not checked for orphan tests; collecting test functions needs a syntax tree \(REQ-TRACE-109\/110\)/);
+    // Part AJ2: the parser decided both — untraced.ts declares a literal-initialised variable, so rule 1 does not excuse it.
+    expect(m[22]).toBe('src/untraced.ts: has no implementation trace and it is not a re-export-only module (it declares a variable initialised with something other than a named symbol at line 1); trace it to the requirement it serves with `traces(...)`, author a technical requirement with an origin if none fits, or mark it "trace-exempt" if it is intentionally trace-free');
+    expect(m[23]).toMatch(/^tests\/legacy\/test_tool\.py:5 \(tests\/legacy\/test_tool\.py::test_orphan\): no coverage annotation or comment reference is present/);
+    expect(report.findings[23]).toMatchObject({ path: 'tests/legacy/test_tool.py', line: 5 });
+    expect(m.length).toBe(24);
     // REQ-TRACE-101/122: the statistics, with every suppressed item counted (REQ-103's trace, the baselined orphan test)
     expect(report.statistics).toEqual({ total: 9, approved: 7, traced: 2, testCovered: 2, debt: { trace: 1, test: 0, orphan: 0, orphanTest: 1 } });
     // the current (unsuppressed) debt the baseline update ratchets against
     expect([...report.current.debt].map(([n, f]) => [n, [...f].sort()])).toEqual([[102, ['test', 'trace']], [103, ['test', 'trace']], [105, ['test', 'trace']]]);
     expect([...report.current.orphanModules]).toEqual(['src/legacy/tool.py', 'src/untraced.ts']);
     expect([...report.current.orphanTests].sort()).toEqual(['tests/legacy/test_tool.py::test_baselined', 'tests/legacy/test_tool.py::test_orphan']);
-    expect(report.current.orphanTestsDecidable).toBe(false);
+    expect(report.current.orphanTestsDecidable).toBe(true);
     // evidence: presence, never execution (175)
     expect(report.evidence['REQ-101']).toMatchObject({ implementationTrace: 'satisfied', coveringTest: 'stale' });
     expect(report.evidence['REQ-101']!.sites.map((s) => `${s.path}:${s.line}`)).toEqual(['src/traced.ts:1', 'tests/covers.ts:1', 'tests/legacy/test_tool.py:1']);
-    expect(report.evidence['REQ-102']).toEqual({ sites: [] });
+    expect(report.evidence['REQ-102']).toEqual({ verification: 'failed', sites: [] });
     expect(report.evidence['REQ-101']!.sites[2]!.testNode).toBe('tests/legacy/test_tool.py::test_ok');
+    // Part AJ2 (R16, REQ-TRACE-258/270): the verification state is this pass's verdict — an error naming the requirement
+    // is `failed`; with the artifact missing every other verdict was taken over a stale reading and is `stale`.
+    expect(Object.fromEntries(Object.entries(report.evidence).map(([id, e]) => [id, e.verification]))).toEqual({
+      'REQ-100': 'stale', 'REQ-101': 'stale', 'REQ-102': 'failed', 'REQ-103': 'failed', 'REQ-104': 'stale', 'REQ-105': 'failed', 'REQ-106': 'failed', 'REQ-107': 'failed', 'REQ-300': 'stale',
+    });
     // REQ-TRACE-100: every diagnostic about a requirement carries the location prefix
     for (const f of report.findings) if (f.id !== undefined && f.code !== 'missing-requirement' && f.code !== 'baseline-stale') expect(f.message).toMatch(/^[^ ]+\.md \([A-Z]+-\d+\): /);
     expect(CHECK_ORDER.length).toBe(13);
@@ -130,6 +137,8 @@ describe('the verification pass', () => {
     const clean = run();
     expect(clean.report.findings.map((f) => f.code)).toEqual(['missing-trace', 'missing-coverage']);
     expect(clean.report.findings.every((f) => f.id === 'REQ-1')).toBe(true);
+    // Part AJ2 (R16): over a fresh artifact a requirement with no error against it is `satisfied`, whatever its lifecycle; the projection decides what is owed.
+    expect(Object.fromEntries(Object.entries(clean.report.evidence).map(([id, e]) => [id, e.verification]))).toEqual({ 'REQ-1': 'failed', 'REQ-3': 'satisfied', 'REQ-4': 'satisfied' });
   });
   it('REQ-TRACE-503: an empty store is a warning that names the directory and the finding; the statistics report zero', () => {
     const { report } = run();

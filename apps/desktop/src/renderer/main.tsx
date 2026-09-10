@@ -899,6 +899,20 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
     onClear: () => { void act({ kind: 'hooks.clearDecision' }); },
     onToggle: (agent: HookAgentId, hookId: string | null, on: boolean) => { void act({ kind: 'hooks.setToggle', agent, hookId, on }); },
   };
+  // Part AJ2 — REQ-TRACE-508..511 from the Project category's traceability card, through the board's command family
+  // (`requirements.operation` / `requirements.cancel`, REQ-TRACE-512): main replaces the workspace with the open root
+  // and stamps the actor; the reply is the service's `traceability.result` value, which the card maps to §1481's sentences.
+  const traceability = useMemo(() => ({
+    workspace,
+    onOperate: async (operation: 'check' | 'regenerate' | 'baselines' | 'compare', base?: string) => {
+      const r = await bridge.command({ kind: 'requirements', command: { name: 'requirements.operation', workspace: workspace ?? '', operation, ...(base === undefined ? {} : { base }) } });
+      return r.ok ? { ok: true as const, reply: r.value } : { ok: false as const, reason: r.detail ?? r.headline };
+    },
+    onCancel: async (operation: 'check' | 'regenerate' | 'baselines' | 'compare') => {
+      const r = await bridge.command({ kind: 'requirements', command: { name: 'requirements.cancel', workspace: workspace ?? '', operation } });
+      return r.ok ? { ok: true as const, cancelled: (r.value as { cancelled?: boolean } | null)?.cancelled === true } : { ok: false as const, reason: r.detail ?? r.headline };
+    },
+  }), [workspace]);
   const initialCategory = settingsCategory === 'models' || settingsCategory === 'personas' || settingsCategory === 'runtime' || settingsCategory === 'interface' || settingsCategory === 'display' || settingsCategory === 'skills' || settingsCategory === 'instructions' || settingsCategory === 'hooks' || settingsCategory === 'mcp' || settingsCategory === 'plugins' || settingsCategory === 'tools' || settingsCategory === 'project' || settingsCategory === 'about' ? settingsCategory : 'models';
   return (<>
     <SettingsView
@@ -925,6 +939,7 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       }}
       about={{ info: about, onOpenExternal: openExternal, onOpenThirdPartyLicenses: openThirdPartyLicenses }}
       interfaceExtras={<AgentPopOutToggle on={popOut} onChange={onPopOut} />}
+      traceability={traceability /* Part AJ2 */}
     />
     {guardDialog}
   </>);

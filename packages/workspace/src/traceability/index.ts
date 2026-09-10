@@ -18,6 +18,7 @@ export * from './tombstones.js';
 export * from './store.js';
 export * from './probe.js';
 export * from './conventions.js';
+export * from './parser.js';
 export * from './sweep.js';
 export * from './artifact.js';
 export * from './baselines.js';

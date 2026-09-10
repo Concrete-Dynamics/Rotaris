@@ -75,7 +75,7 @@ the worker was inside the parse.
 - **OQ-24 — the parse-requiring checks.** `REQ-TRACE-104` (re-export-only modules) and `REQ-TRACE-109/110`
   (test-function collection) need a syntax tree; this build reports them as `requires-parse` and no parser was
   timed. That measurement is wave 2's (AJ′), against this same 1,000-file tree, and it is the number ADR-0040 #3
-  says decides between the compiler API and a native parser.
+  says decides between the compiler API and a native parser. **Measured 2026-09-09 (Part AJ′) — see below.**
 - A project-declared convention's patterns at scale (`REQ-TRACE-073`): the tree carries only the built-in
   convention. A pathological pattern's cost is unbounded by requirement (OQ-25); the worker placement makes it
   terminable, and that termination was exercised in `worker.test.ts` against a fake worker, not timed.
@@ -87,3 +87,36 @@ the worker was inside the parse.
   baseline update in the proof (five files, no contention, no retry needed: attempts = 1 every time). The
   contended case — a test session in the same checkout holding the artifact open on Windows — was not staged;
   ADR-0040 specific 6's residue stands as recorded.
+
+## Second measurement — 2026-09-09 (Part AJ′): the parse-requiring checks (OQ-24)
+
+- **Question:** ADR-0040 specific 3 left the syntax-tree parser open between the TypeScript compiler API (correct,
+  heavy, already in the build) and a native parser (fast, a native-module burden), and said the first thing to do
+  was to measure. `REQ-TRACE-104` rule 1 and `REQ-TRACE-109/110` need a full syntax tree; no requirement budgets
+  them (OQ-24). What does the compiler API cost over this same tree, and does the sweep still meet `REQ-TRACE-088`?
+- **Method:** `pnpm traceability-proof`, stage 1's third test. Every file of the tree is read once outside the
+  timing; then `analyseModule` runs over the 800 implementation files and `collectTests` over the 200 test files,
+  once cold and once warm, on one thread; the half-size tree the same way. Separately, the sweep reports how many
+  files it parsed and how long, since it consults the parser only where the patterns cannot decide. The compiler's
+  one-time load is timed by the clock the loader is given. Same machine as above, four other agents' builds and
+  proofs running on it (the spread is load); six proof runs.
+
+| Measurement | Result |
+|---|---|
+| compiler API (TypeScript 5.9.3), one-time load per process | **329–627 ms** |
+| the two checks over 1,000 files (800 modules analysed, 200 test files collected → 2,000 functions) | **183–218 ms warm**, 252–312 ms cold; **0.18–0.22 ms per file** |
+| half-size tree (500 files) | 86–115 ms; ratio 1.76–2.17 (linear) |
+| parsed inside the sweep (only the 200 test files: every module here is traced, so rules 2 and 3 excuse it before rule 1) | **35–45 ms** |
+| the board path over the process (`requirements.operation`, warm worker): check / regenerate / baselines | 13–17 ms / 6–7 ms / 20–26 ms (the direct path's first check, which spawns the worker, 470–798 ms) |
+| sweep, matching alone (`REQ-TRACE-088`'s figure, now reported net of the parse time the sweep keeps apart) | 279–413 ms warm (unchanged from the first measurement's 244–391 under an idle machine) |
+
+- **What it settled.** The compiler API is the parser: two tenths of a second over 10³ files after a load paid once
+  per service process, and inside a real sweep a fraction of that because the parser is asked only where rules 2
+  and 3 have not already excused a module. Even the worst case — a repository with no trace anywhere, every module
+  parsed — adds about 0.2 s to a 0.3 s sweep, inside `REQ-TRACE-088`'s one second though no requirement says the
+  checks must share it. A native parser could save at most a fraction of the load and would reintroduce the
+  native-module burden ADR-0040 names; there is no number here that justifies it. OQ-24 is answered by handoff.
+- **What it did not measure.** A repository of very large single files (the per-file figure is over 2–3 KB
+  files); the parser under `REQ-TRACE-073`'s pattern-declared conventions (they never reach it, by specification);
+  a packaged build in which `typescript` is absent beside the service — that path degrades to the `requires-parse`
+  finding and is unit-tested with a simulated load failure, not packaged (handoff §8).

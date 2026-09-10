@@ -216,7 +216,7 @@ describe('the columns band — the second dimension (REQ-TRACE-237/239/300, defe
   it('sizes the first band from the window before a box exists, and states the figures it assumes', () => {
     expect(initialColumnBandEnd(1264)).toBe(Math.ceil(1264 / (COLUMN_MIN + COLUMN_GAP)) + 2);
     expect(initialColumnBandEnd(0)).toBe(2);
-    expect([COLUMN_MIN, COLUMN_GAP, COLUMN_OVERSCAN_PX]).toEqual([276, 12, 340]);
+    expect([COLUMN_MIN, COLUMN_GAP, COLUMN_OVERSCAN_PX]).toEqual([276, 12, 138]);
   });
 });
 

@@ -222,9 +222,22 @@ function generatedProfile(name) {
   return { workspace, local, preferences, requirements };
 }
 
-/** A long-task observer armed in the renderer before the view is shown; read back as the longest task seen (ms), or 0. */
-const ARM_LONGTASKS = `(() => { window.__rotarisLongTasks = []; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__rotarisLongTasks.push(Math.round(e.duration)); }).observe({ type: 'longtask', buffered: true }); } catch (e) { return String(e); } return true; })()`;
-const READ_LONGTASKS = `({ longest: Math.max(0, ...(window.__rotarisLongTasks ?? [])), count: (window.__rotarisLongTasks ?? []).length, board: window.__rotarisBoard ? { paintMs: window.__rotarisBoard.paintMs, ready: window.__rotarisBoard.ready, pending: window.__rotarisBoard.pending, realised: window.__rotarisBoard.realised, cards: window.__rotarisBoard.cards, columns: window.__rotarisBoard.columns } : null })`;
+/**
+ * A long-task observer armed in the renderer before the view is shown; read back as the longest task in the window
+ * that began at the LAST arming.
+ *
+ * Defect `AK2-5`, found by this proof's own evidence. The first version cleared the array and registered a fresh
+ * observer with `buffered: true` on every arming — and `buffered` replays the entries recorded before the observer
+ * existed, so a re-armed window reported the longest task since start-up rather than the longest in the window. Every
+ * figure past the first was therefore `max(what this window cost, what every earlier window cost)`: the axis switch
+ * was reading the board's arrival back as its own, and a 102 ms arrival made a 92 ms switch print 102. The observer
+ * is registered ONCE with `buffered: true` (so the first window still sees what happened before it was created),
+ * every entry keeps its start time, and a read takes only the entries that began at or after the arming. The 150 to
+ * 180 ms breaches recorded before this fix stand: arrival never cost more than 71 ms, so nothing at that scale can
+ * be explained by the replay.
+ */
+const ARM_LONGTASKS = `(() => { window.__rotarisArmedAt = performance.now(); if (window.__rotarisObserver) return true; window.__rotarisLongTasks = []; try { window.__rotarisObserver = new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__rotarisLongTasks.push({ at: Math.round(e.startTime), ms: Math.round(e.duration) }); }); window.__rotarisObserver.observe({ type: 'longtask', buffered: true }); } catch (e) { return String(e); } return true; })()`;
+const READ_LONGTASKS = `(() => { const since = window.__rotarisArmedAt ?? 0; const tasks = (window.__rotarisLongTasks ?? []).filter((t) => t.at >= since).map((t) => t.ms); const b = window.__rotarisBoard; return { longest: Math.max(0, ...tasks), count: tasks.length, tasks, board: b ? { paintMs: b.paintMs, ready: b.ready, pending: b.pending, realised: b.realised, cards: b.cards, columns: b.columns } : null }; })()`;
 const BUDGET_MS = 100;
 const stage2 = {};
 
@@ -290,12 +303,21 @@ for (const m of minHeader.matches) expect(m.rect.x >= 0 && m.rect.x + m.rect.wid
 stage2.minimum = { viewport: minColumns.viewport, columnWidths: minColumns.matches.map((m) => Math.round(m.rect.width)), scroll: range, paintMs: minPaint };
 
 // ── fold: heading → rail with the focus; persists across a relaunch; not across workspaces ────────
+// Defect AK2-3: Done is the sixth of seven columns and at this window width it lies outside the columns area's own
+// viewport, so it is a placeholder and holds no heading — a control that is not on screen cannot be clicked, by a
+// person or by this proof. The proof scrolls to it first, exactly as a person would, and that is the other half of
+// REQ-TRACE-300 proved: a column that was not built becomes fully operable — heading, count, fold, accessible name —
+// in the update that brings it into view, so nothing was truncated, hidden or refused, only deferred.
+const SCROLL_TO_DONE = `(() => { const el = document.querySelector('[data-testid="req-columns"] > [data-column="done"]'); if (!el) return 'absent'; const offscreen = el.getAttribute('data-offscreen') === 'true'; el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return { offscreen }; })()`;
 const folded = launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_EVAL_AT: `${SCROLL_TO_DONE}@3200`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-column"][data-column="done"] [data-testid="req-heading"]@3600',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-rail"]@4400',
   ROTARIS_CAPTURE_AFTER_MS: '5000',
 });
+const doneColumn = folded.evals['3200'];
+expect(doneColumn !== undefined && doneColumn !== 'absent', `REQ-TRACE-300: the Done column is not among the columns area's children (${JSON.stringify(doneColumn)})`);
 const railInspect = folded.inspects['[data-testid="req-rail"]@4400'];
 expect(railInspect && railInspect.matches.length === 1 && railInspect.matches[0].attrs['data-column'] === 'done', `clicking the Done heading left ${railInspect?.matches.length ?? 0} rail(s) (${JSON.stringify(railInspect?.matches.map((m) => m.attrs['data-column']))})`);
 expect(railInspect.active?.testId === 'req-rail', `REQ-TRACE-320: after folding, the focus is on ${JSON.stringify(railInspect.active)}, not the rail`);
@@ -307,7 +329,7 @@ const otherProfile = profile('other', boardProfile.preferences);
 const other = launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const otherRails = (other.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(otherRails.length === 0, `REQ-TRACE-312: a fold made in one workspace reached another (${JSON.stringify(otherRails)})`);
-stage2.fold = { folded: 'done', focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails };
+stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails };
 
 // ── filter: an epic filter survives the axis switch (REQ-TRACE-299) ───────────────────────────────
 const filterProfile = profile('filter');
@@ -428,7 +450,7 @@ expect(axisTasks && axisTasks.board && axisTasks.board.columns >= 100, `REQ-TRAC
 expect(axisTasks.longest < BUDGET_MS, `REQ-TRACE-300/239: switching to 100 populated columns cost a ${axisTasks?.longest} ms long task`);
 const epicAxisColumns = columnsOf(scale.at['[data-testid="req-column"]@14400']);
 const realisedOnEpicAxis = epicAxisColumns.reduce((n, c) => n + c.realised, 0);
-expect(realisedOnEpicAxis > 0 && realisedOnEpicAxis < 100, `defect AK2-2: ${realisedOnEpicAxis} card widgets realised across 100 columns for a viewport four columns wide`);
+expect(realisedOnEpicAxis > 0 && realisedOnEpicAxis < 100, `defects AK2-2/AK2-3: ${realisedOnEpicAxis} card widgets realised across 100 columns for a viewport four columns wide`);
 const filterState = boardData(scale.probes);
 const filterMs = Number(filterState?.['data-filter-ms']);
 const filterTotal = first(scale.probes, '[data-testid="req-total"]')?.text;
@@ -436,7 +458,10 @@ expect(Number.isFinite(filterMs) && filterMs >= 0, `REQ-TRACE-367: no post-debou
 expect(filterMs < BUDGET_MS, `REQ-TRACE-367: the post-debounce recomputation over ${scaleProfile.requirements} requirements cost ${filterMs} ms`);
 expect(filterTotal === '15 / 1500', `the text filter "REQ-77" left ${JSON.stringify(filterTotal)}, not the fifteen identifiers that carry it`);
 const filterTasks = scale.evals['19000'];
-stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, columnsPresent: scrolledColumns.present, columnsBuilt: scrolledColumns.built, modelColumns: axisTasks.board?.columns ?? null, axisSwitchLongestTaskMs: axisTasks.longest, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
+// Every long task is recorded, not only the longest: a budget missed by one task of its own reads differently from
+// a budget missed while the machine was doing something else, and REQ-TRACE-088's reference conditions are "timing
+// the work alone". A red that names the shape can be attributed; a red that names one number cannot.
+stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, arrivalTasks: scaleTasks.tasks, observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, columnsPresent: scrolledColumns.present, columnsBuilt: scrolledColumns.built, modelColumns: axisTasks.board?.columns ?? null, axisSwitchLongestTaskMs: axisTasks.longest, axisSwitchTasks: axisTasks.tasks, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
 
 results.stage2 = stage2;
 results.passed = true;

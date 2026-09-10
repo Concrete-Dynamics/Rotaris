@@ -651,7 +651,8 @@ still says no such measurement exists.
 
 *Recorded under GD-10, the standing policy that a mechanism's first execution reports back into the record that
 decided it. The first execution built the store, the transition and the projection; this one draws them. Two defects
-of ADR-0058 consequence 17's pattern, `AK2-1` and `AK2-2`; the manager assigns the ordinals at merge.*
+of ADR-0058 consequence 17's pattern, `AK2-1` to `AK2-5` — three of them found after this note was first written, by
+the verification it invited; the manager assigns the ordinals at merge.*
 
 **What the board is, against this record's decisions.** The view reads ONE immutable projection per generation over
 the `requirements.*` command family and assembles nothing locally (`REQ-TRACE-378/379`), which is the renderer half of
@@ -693,6 +694,61 @@ The reading that was wrong is
 the one this record's "Revisit if" warned about in the other direction: the cost at scale was never the query, it was
 the paint, and the requirement that bounds it is a two-dimensional one read as one-dimensional.
 
+**Defect `AK2-3` — a hundred columns were built to show five.** The fourth reading, and the one that closed it. The
+three above all left the hundred `Column` components standing and tried to make each cheaper; what was over the
+budget was building a hundred of anything at all. So the board now realises COLUMNS the way a column realises cards:
+the view decides, from the laid-out boxes, which columns the area's own viewport exposes, and builds only those.
+`REQ-TRACE-239` asks for exactly this — "the work of displaying it SHALL be bounded by what is on screen rather than
+by how many requirements the store holds" — and `REQ-TRACE-358` is its mechanism; reading that in one dimension when
+the area scrolls in two was the whole of the error.
+
+What made this look impossible from inside the third reading was a **tension with `REQ-TRACE-300`**, which forbids
+truncating, hiding or refusing a column on account of how many there are, and which the proof asserted by counting a
+hundred columns in the document. Virtualising columns by removing them would have failed that assertion, and the
+handoff recorded the two as irreconcilable — either 300 means a hundred columns must EXIST, or the assertion should
+read the count off the board's model. **Both readings were unnecessary.** An unbuilt column is not removed: it keeps a
+placeholder of exactly its own box, carrying its key and its count. Its width, its place in the row, its share of the
+horizontal scroll range and every other column's position are unchanged, so a hundred columns are present, the row is
+still 28 820 px, `REQ-TRACE-237/238/335` hold as literally as before, and the column is built — heading, cards,
+accessible description — in the update that brings it into view. The proof asserts BOTH halves now, which is stronger
+than either reading would have been: a hundred columns present, the row a hundred minimum-width columns long, and
+fewer than a hundred built. A folded column is never virtualised, because a rail holds no card widgets already
+(`REQ-TRACE-311`) and its accessible name is what `REQ-TRACE-320` asks a reader to find.
+
+Two further costs were found and removed while measuring it. The margin either side of the viewport was one whole
+column, chosen by analogy with `REQ-TRACE-360`'s five cards; measured, it builds a sixth column to cover a wheel notch
+the band re-decides within the frame anyway, so it is half a column now. And a newly built column began from the
+built-in 128 px card estimate, built eleven cards for a column of fifteen, adopted the measured mean in the layout
+effect that followed and discarded three — fifty-five widgets built to keep forty, inside the same update. A card is
+the same widget in every column, so a mean this board has actually measured is now what the next column starts from;
+`REQ-TRACE-361` requires a column to keep using an estimate until one of its own cards has completed layout, and it
+does not require that estimate to be a constant.
+
+**The keyboard was the thing this could have quietly broken, and it did not.** `REQ-TRACE-300` requires a hundred
+columns to stay keyboard-operable. Traversal used to walk the built columns in the document; it walks the board's
+columns now — every one is a child of the area, built or not — and where the neighbour is not built it is scrolled
+into view and takes the focus in the update that builds it. `REQ-TRACE-364`'s reveal does the same for a card whose
+column is not built. The proof's fold section is where this is exercised end to end: at 1264 px the Done column lies
+outside the area's viewport, so it holds no heading and cannot be clicked — by a person or by a proof — and the proof
+scrolls to it first and then folds it, which is the other half of `REQ-TRACE-300` demonstrated rather than argued.
+
+**Defect `AK2-4` — the detail drew six sections where the specification fixes five.** `REQ-TRACE-271` says exactly
+five and spec 08's vocabulary list names them; `REQ-TRACE-278/280` separately require a revision-history panel with
+three states. The first build drew the panel as a sixth peer — same test identifier, same class, same kicker — so the
+file contradicted its own `DETAIL_SECTIONS` constant and anything counting the detail's sections found six. The
+reading taken, and stated at the site: 280's "history panel" is its own surface within the detail view and not one of
+271's five. It keeps its own identifier and its own class, the five stay five, and a test pins both.
+
+**Defect `AK2-5` — the proof's own instrument measured the wrong window.** The long-task observer was re-armed before
+each measurement by clearing its array and registering a fresh `PerformanceObserver` with `buffered: true` — and
+`buffered` replays the entries recorded before that observer existed. Every window after the first therefore reported
+the longest task since start-up, not the longest task in the window: the axis switch was reading the board's own
+arrival back as its own cost, and one run printed a 102 ms arrival as a 102 ms switch. The observer is registered
+once, every entry keeps its start time, and a read takes only the entries that began at or after the arming. This is
+recorded because a measurement that cannot be attributed is not a measurement — and because it cuts the other way
+too: arrival never cost more than 74 ms in any run, so nothing at the 150 to 180 ms scale can be explained by the
+replay and the breach those figures recorded was real.
+
 **What the first execution left for the board to state, and how it states it.** Four things the projection cannot carry
 are printed in the section that would have shown them rather than left blank or invented: the current requirement hash
 (`REQ-TRACE-256` puts it on the card value; `BoardCard` has no field, and the detail says the engine compares it on
@@ -732,6 +788,24 @@ the cards are already realised, so a hundred columns cost what six do; and decid
 governs a re-grouping at all, which is a question for the specification and not for the person whose code is over it.
 The first thing this record said to check if the budget were missed — whether the board query and the export share a
 read path — is not the cause: the query is one read of one projection and the cost is entirely in the paint.
+
+*Met, after `AK2-3`, and the paragraph above is kept as it stood rather than rewritten.* On the repaired tree the axis
+switch to a hundred populated columns costs **72 ms and 89 ms** in two consecutive green runs of the proof, one long
+task each, against the same proof's 151 / 171 / 158 ms before it. Five runs after the repair read 87, 89, **134**, 72
+and 89 ms; the 134 is named rather than dropped, and it was taken while four other builds were launching Electron on
+this machine. `REQ-TRACE-088`'s reference conditions — "one execution thread on a contemporary developer workstation
+… timing the work alone" — are not those conditions, which is why a red on a timing budget is re-run alone before it
+is read; the same machine's board arrival moved from 21 ms to 64 ms over the same period without a line of the board
+changing. The margin at the bound is real but it is not large, and that is stated rather than smoothed.
+
+Around it, on the same two runs: putting the board on screen costs **45 to 64 ms** on the fixture at 1264 px (longest
+long task 0 to 67 ms — 0 meaning no task reached the 50 ms threshold at all), **40 to 47 ms** at `REQ-SHELL-022`'s
+1000 × 680 minimum, and **60 to 73 ms** on the generated 1 500-requirement, 100-epic store. At `REQ-TRACE-300`'s bound
+the board holds **100 columns present** of which **5 are built**, carrying **40 card widgets**, in a row 28 820 px
+wide against a 1 134 px viewport, with the board's own model reporting a hundred columns; the post-debounce filter
+recomputation over 1 500 requirements costs 7 to 9 ms against `REQ-TRACE-367`'s 100 ms. The proof's `scale` section is
+the regression for all of it, and it now asserts the presence and the boundedness together, so neither can be met by
+giving up the other.
 
 **Not built here, stated:** every pane (`REQ-TRACE-417..445`), runs from the board and the queue's controls
 (`464..483`) and the source write are Part AP's; the graph axis (`322..333`) is wave 3's; `REQ-TRACE-514`'s export is in

@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { BoardCard, Reachability, ReqId } from '@rotaris/contracts';
-import { CARD_HEIGHT_ESTIMATE, PRIVATE_TRANSFER_TYPE, headingAccessibleName, railAccessibleName, realisedBand } from './model.js';
+import { PRIVATE_TRANSFER_TYPE, headingAccessibleName, railAccessibleName, realisedBand } from './model.js';
 
 /**
  * Part AK2 — one column of the board, open or folded (REQ-TRACE-232..238, 303..321, 358..367).
@@ -45,6 +45,17 @@ export interface ColumnProps {
   /** A drag is in progress; on the delivery axis this column's answer, else undefined. */
   readonly drag: { readonly id: ReqId; readonly answer: Reachability | undefined; readonly droppable: boolean } | null;
   readonly revealIndex: number | null;
+  /**
+   * REQ-TRACE-361: the board's best measured card height, for a column that has measured none of its own yet. The
+   * requirement says a column keeps using its estimate until one of ITS cards has genuinely completed layout; it does
+   * not say the estimate must be a constant. A card is the same widget in every column, so a mean already measured on
+   * this board is a better estimate than the built-in one — and a materially better one: at the built-in 128 a column
+   * of fifteen builds eleven cards, adopts the measured mean in the layout effect that follows and throws three away,
+   * inside the same update. Five columns of that is fifty-five widgets built to keep forty (defect AK2-3).
+   */
+  readonly estimateHint: number;
+  /** Reports a genuinely measured mean up, so the next column to be built starts from it. */
+  readonly onMeasured: (estimate: number) => void;
   readonly onFold: (key: string, folded: boolean) => void;
   readonly onDrop: (key: string, id: ReqId) => void;
   readonly onDragHover: (key: string, hovering: boolean) => void;
@@ -59,7 +70,7 @@ export interface ColumnProps {
  * Memoised, a parent render whose bookkeeping did not change THIS column costs it nothing. Every prop is either a
  * primitive compared by value, a stable callback, or null while no drag is running.
  */
-export const Column = memo(function Column({ colKey, label, count, members, folded, emptySentence, deliveryWord, drag, revealIndex, onFold, onDrop, onDragHover, onRealised, renderCard }: ColumnProps) {
+export const Column = memo(function Column({ colKey, label, count, members, folded, emptySentence, deliveryWord, drag, revealIndex, estimateHint, onMeasured, onFold, onDrop, onDragHover, onRealised, renderCard }: ColumnProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const railRef = useRef<HTMLButtonElement | null>(null);
   const headingRef = useRef<HTMLButtonElement | null>(null);
@@ -67,7 +78,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
   const wasFolded = useRef(folded);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(640);
-  const [estimate, setEstimate] = useState(CARD_HEIGHT_ESTIMATE);
+  const [estimate, setEstimate] = useState(estimateHint);
   const adoptedFor = useRef<readonly BoardCard[] | null>(null);
   const band = folded ? { start: 0, end: 0 } : realisedBand(scrollTop, viewport, estimate, members.length);
 
@@ -107,8 +118,8 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
     for (const n of nodes) total += n.offsetHeight + 8; // the list's gap rides with the card
     const mean = total / nodes.length;
     adoptedFor.current = members;
-    if (mean > 0) setEstimate((e) => (Math.abs(mean - e) > 4 ? mean : e));
-  }, [members, folded, band.start, band.end]);
+    if (mean > 0) { setEstimate((e) => (Math.abs(mean - e) > 4 ? mean : e)); onMeasured(mean); }
+  }, [members, folded, band.start, band.end, onMeasured]);
 
   useEffect(() => { onRealised(colKey, folded ? 0 : band.end - band.start); }, [colKey, folded, band.start, band.end, onRealised]);
 

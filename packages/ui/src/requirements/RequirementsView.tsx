@@ -12,7 +12,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
 
 /**
  * Part AK2 — the Requirements view (spec 08 §Board Surface onwards; REQ-SHELL-023's fourth primary view; ADR-0041's
@@ -121,6 +121,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const [notice, setNotice] = useState<string | null>(null);
   const [reveal, setReveal] = useState<{ readonly column: string; readonly index: number; readonly id: ReqId } | null>(null);
   const [realised, setRealised] = useState<ReadonlyMap<string, number>>(new Map());
+  /** REQ-TRACE-360/361 (defect AK2-3): the best card height this board has actually measured, so a column built later starts from it instead of the built-in estimate. */
+  const [cardEstimate, setCardEstimate] = useState(CARD_HEIGHT_ESTIMATE);
   const [paintMs, setPaintMs] = useState<number | null>(null);
   /**
    * Defect AK2-3: the columns the area's own viewport exposes, as a contiguous band of indices into `columnKeys`.
@@ -488,6 +490,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   }, [epicIds, epics, cards, selected, select, open, filterToEpic, onKeyNavigate, now, host.localOffsetMinutes, axis, inFlight, feedback, openEvidence, clearFeedback, onDragStart, onDragRefused, onDragEnd]);
 
   const onRealised = useCallback((key: string, n: number) => setRealised((m) => (m.get(key) === n ? m : withEntry(m, key, n))), []);
+  /** REQ-TRACE-361 (defect AK2-3): a card is the same widget in every column, so a mean measured in one is the estimate the next column is built from. */
+  const onMeasured = useCallback((mean: number) => setCardEstimate((e) => (Math.abs(mean - e) > 4 ? mean : e)), []);
 
   const moveState = moveControlState(selectedId === null ? undefined : selectedCard, answersFor, chord);
   const dropOptions = dropTargetOptions(answersFor);
@@ -539,6 +543,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
               deliveryWord={axis === 'delivery' ? `Delivery state ${key}` : `${axis} ${key}`}
               drag={drag === null ? null : { id: drag.id, answer: drag.answers.get(key as ColumnToken), droppable }}
               revealIndex={reveal !== null && reveal.column === key ? reveal.index : null}
+              estimateHint={cardEstimate} onMeasured={onMeasured}
               onFold={onFold} onDrop={onDrop} onDragHover={onDragHover} onRealised={onRealised} renderCard={renderCard}
             />
           );

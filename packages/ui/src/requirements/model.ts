@@ -248,8 +248,14 @@ export function realisedBand(scrollTop: number, viewportHeight: number, itemHeig
  * column's position are therefore unchanged (REQ-TRACE-237/238/335), and the moment it enters the area's viewport it
  * is built with its heading, its cards and its accessible description. A FOLDED column is never virtualised: a rail
  * holds no card widgets already (REQ-TRACE-311) and its accessible name is what REQ-TRACE-320 asks a reader to find.
+ *
+ * The margin is HALF a column, and that figure is measured rather than assumed. REQ-TRACE-360 fixes the vertical
+ * margin at five cards; nothing fixes a horizontal one, and a full column of margin was the first guess, by analogy.
+ * Measured at 1264 px it builds a sixth column whose cards are the sixth of the widgets an axis switch pays for, to
+ * cover a wheel notch of about a hundred points that the band re-decides within the frame anyway. Half a column
+ * still covers the notch and does not pay for the column.
  */
-export const COLUMN_OVERSCAN_PX = 340;
+export const COLUMN_OVERSCAN_PX = COLUMN_MIN / 2;
 /** The design's `--rt-space-3`, used ONLY to size the first band before any box has been laid out; every later band is read off the laid-out boxes. */
 export const COLUMN_GAP = 12;
 

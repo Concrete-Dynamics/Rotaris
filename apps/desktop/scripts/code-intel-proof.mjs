@@ -318,6 +318,11 @@ if (want(5)) {
 if (want(5)) {
   const r = launch('setup-again', SETUP_ENV(60_000), { timeout: 150_000 });
   const steps = setupSteps(r.log);
+  // Say what was found rather than indexing into nothing. A launch that emits no setup line at all — the 150 s
+  // timeout reached on a loaded machine, or the window dying before the first step — used to fail here as
+  // `Cannot read properties of undefined (reading 'status')`, which names neither the scenario nor the cause. The
+  // assertions below are unchanged; only the silence is given words (merge 2's proof pass, the same shape as AJ2-2).
+  if (steps.length === 0) throw new Error(`setup-again: the launch logged no setup step within its window; exit ${r.status ?? 'unknown'}, ${r.log.length} log bytes`);
   if (steps[0].status !== 'succeeded' || !/creation skipped/.test(steps[0].text)) throw new Error(`setup-again: creation was not skipped: ${JSON.stringify(steps[0])}`);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,succeeded,succeeded') throw new Error(`setup-again: ${JSON.stringify(steps)}`);
   results.setup.again = { steps: steps.map((s) => s.status), creation: steps[0].text.slice(0, 160) };

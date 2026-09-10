@@ -285,8 +285,14 @@ async function control(op: Parameters<typeof bridge.command>[0] extends infer R 
   if (!sessionId) return { ok: false, reason: 'No run is active.' };
   const r = await bridge.command({ kind: 'session.control', request: { op, sessionId, args } });
   if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  const v = r.value as { ok: boolean; value?: string };
-  return v.ok ? { ok: true, ...(v.value === undefined ? {} : { value: v.value }) } : { ok: false, reason: refusal };
+  // A refusal carries the ENGINE's words; the caller's sentence is only the fallback for a reply that states none.
+  // `ControlResult` has carried `refusal` since Part AC and this helper discarded it, substituting the caller's string.
+  // Harmless while the ops it names were unimplemented, and a lie the moment Part AO armed them: a `/compress` the
+  // engine refused because no agent context was live reported that the host "does not support forceCompression yet".
+  // Part AO saw this and raised it as a ruling request rather than widen a file it did not own (the note beside
+  // `ControlRefusalSchema` in `contracts/src/control.ts`); the ruling, at merge 2, is to prefer the engine's message.
+  const v = r.value as { ok: boolean; value?: string; refusal?: { code?: string; message?: string } };
+  return v.ok ? { ok: true, ...(v.value === undefined ? {} : { value: v.value }) } : { ok: false, reason: v.refusal?.message ?? refusal };
 }
 
 /**

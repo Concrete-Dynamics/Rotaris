@@ -148,7 +148,10 @@ const s1 = scenario('palette');
   const heading = inspectAt(r.log, 3600, '.cmdk-heading');
   expect(heading?.matches[0]?.text === 'Commands', `the heading reads ${JSON.stringify(heading?.matches[0]?.text)} (REQ-SHELL-051)`);
   const all = inspectAt(r.log, 3600, '.cmdk-item')?.matches ?? [];
-  expect(all.length === 13, `an empty query listed ${all.length} commands, not the registry's 13 (REQ-SHELL-052)`);
+  // Wave 2 added exactly three commands to the registry, one per Part: `requirements.move` (AK'), `terminal.open` (AL')
+  // and `run.compress` (AO), taking `COMMANDS` from six to nine and this list from thirteen to sixteen. The count was
+  // pinned as a literal and nothing carried the growth to it, which is the sixtieth defect's shape a second time.
+  expect(all.length === 16, `an empty query listed ${all.length} commands, not the registry's 16 (REQ-SHELL-052)`);
   expect(all[0].attrs['aria-selected'] === 'true' && all.slice(1).every((m) => m.attrs['aria-selected'] === 'false'), 'the first row was not the auto-selected one (REQ-SHELL-052)');
   const filtered = inspectAt(r.log, 4800, '.cmdk-item')?.matches ?? [];
   const filteredIds = filtered.map((m) => m.attrs['data-command']);
@@ -191,7 +194,10 @@ const s2 = scenario('help');
   expect(help.matches[0].attrs['aria-modal'] === 'true', 'keyboard help is not application-modal (ADR-0048)');
   const rows = inspectAt(r.log, 3600, '.keyboard-help__row')?.matches ?? [];
   const chords = rows.map((m) => m.attrs['data-chord']);
-  expect(rows.length === 12, `the help lists ${rows.length} rows; the registry has 12 shortcut-bearing commands (REQ-SHELL-054)`);
+  // Twelve became fourteen because wave 2 added two SHORTCUT-BEARING commands, `requirements.move` on Ctrl+M (AK')
+  // and `terminal.open` on Ctrl+Shift+T (AL'). The third command it added, `run.compress` (AO), carries no chord and
+  // so adds no row. The count of rows beyond the registry's own is unchanged at seven, which is why the delta is two.
+  expect(rows.length === 14, `the help lists ${rows.length} rows; the registry has 14 shortcut-bearing rows (REQ-SHELL-054)`);
   expect(!chords.some((c) => /escape/i.test(c ?? '')), `an Escape row is present: ${JSON.stringify(chords)} (REQ-SHELL-048/054)`);
   expect(!rows.some((m) => /close current overlay/i.test(m.text ?? '')), 'the Escape entry is offered as a command (REQ-SHELL-048)');
   const prose = inspectAt(r.log, 3600, '[data-testid="keyboard-help-escape"]')?.matches[0]?.text ?? '';
@@ -303,7 +309,9 @@ const s5 = scenario('minimum');
   const box = dialog.matches[0].rect;
   expect(box.x >= 0 && box.y >= 0 && box.x + box.width <= 1000 && box.y + box.height <= 680, `the palette lies outside a 1000×680 content area: ${JSON.stringify(box)} (REQ-SHELL-022)`);
   const rows = inspectAt(r.log, 4000, '.cmdk-item')?.matches ?? [];
-  expect(rows.length === 13, `only ${rows.length} rows at the minimum size`);
+  // The same list as the empty-query assertion above, at the minimum window size: sixteen since wave 2 added
+  // `requirements.move`, `terminal.open` and `run.compress`. Pinned as a literal, and stale for the same reason.
+  expect(rows.length === 16, `only ${rows.length} rows at the minimum size`);
   results.minimum = { rect: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) }, rows: rows.length, png: join(output, 'palette-minimum.png'), elapsedMs: r.elapsedMs };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Lifecycle, ParseError, ReqKind, RequirementRecord, StoreParse } from '@rotaris/contracts';
+import { compareReqIds, type Lifecycle, type ParseError, type ReqKind, type RequirementRecord, type StoreParse } from '@rotaris/contracts';
 import { checkpoint, type CancelToken } from './cancel.js';
 import { fieldValue, readFrontmatter, stripOuterQuotes, type Frontmatter } from './frontmatter.js';
 import { canonicalHash, contentHash, decodeUtf8, fingerprintOf, normaliseLineEndings } from './hashes.js';
@@ -277,7 +277,8 @@ export function parseStore(input: StoreParseInput): StoreParseOutput {
     }
     documents.push({ path, hash: parsed.hash, kind: parsed.kind, ids });
   }
-  drafts.sort((a, b) => a.number - b.number);
+  // REQ-TRACE-289 (Part AJ2): the one digit-run-aware comparator the board sorts by as well — never two that agree by luck.
+  drafts.sort((a, b) => compareReqIds(a.id, b.id));
   const records: RequirementRecord[] = drafts.map((d) => {
     const index = indexDocumentOf(d.sourcePath, layout.requirementsDir);
     const lowest = lowestByDocument.get(index);

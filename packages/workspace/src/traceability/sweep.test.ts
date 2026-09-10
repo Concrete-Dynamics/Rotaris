@@ -6,6 +6,7 @@ import { FakeClock } from '@rotaris/kernel';
 import { CancelledError, freshToken } from './cancel.js';
 import { builtInConvention, registerConventions } from './conventions.js';
 import { defaultLayout, parseLayout } from './layout.js';
+import type { Parser } from './parser.js';
 import { annotationAt, lineOf, lineStarts, occurrenceAt, scanFile, sweepRepository } from './sweep.js';
 
 /** REQ-TRACE-070 to REQ-TRACE-087: the built-in convention, the language seam, and the sweep. */
@@ -108,7 +109,12 @@ describe('sweepRepository (REQ-TRACE-080..082, 088)', () => {
     expect(s.modules).toEqual(['src/a.ts', 'src/b.ts']);
     expect(s.tests).toEqual(['tests/excused/e.ts', 'tests/t.ts']);
     expect(s.details.excusedTestFiles).toEqual(['tests/excused/e.ts']);
-    expect(s.details.undecidedTestFiles).toEqual(['tests/excused/e.ts', 'tests/t.ts']);
+    // Part AJ2: the syntax tree decides the built-in files — nothing is left undecided when the compiler loads.
+    expect(s.details.undecidedTestFiles).toEqual([]);
+    expect(s.details.undecidedModules).toEqual([]);
+    expect(s.details.parser.available).toBe(true);
+    expect(s.details.parsedFiles).toBe(2); // src/a.ts (a candidate: no trace, no marker) and tests/t.ts; the excused file is not parsed
+    expect(s.details.disqualifiedBy).toEqual({ 'src/a.ts': { kind: 'an executable statement', line: 1 } });
     expect(s.details.tracedFiles).toEqual(['src/b.ts']);
     expect(s.sites.map((x) => [x.path, x.line, x.kind, x.ids[0]])).toEqual([
       ['src/a.ts', 1, 'test', 'REQ-2'], ['src/b.ts', 1, 'implementation', 'REQ-1'], ['tests/excused/e.ts', 1, 'test', 'REQ-1'],
@@ -117,6 +123,35 @@ describe('sweepRepository (REQ-TRACE-080..082, 088)', () => {
     expect(s.details.files).toBe(4);
     expect(s.details.extensions).toEqual(['.ts']);
     expect(s.durationMs).toBe(0);
+  });
+  it('Part AJ2: without the compiler API the two parse-requiring checks are left undecided and said so, never guessed', () => {
+    put('src/b.ts', `${T}(REQ_1);\n`);
+    put('src/a.ts', 'export const a = 1;\n');
+    put('tests/t.ts', `${C}(REQ_1);\nexport function testA(): void {}\n`);
+    const parser: Parser = { available: false, reason: 'no compiler in this test' };
+    const s = sweepRepository({ root, layout: defaultLayout(), aliases: {}, clock, parser });
+    expect(s.details.parser).toEqual({ available: false, reason: 'no compiler in this test' });
+    expect(s.details.undecidedModules).toEqual(['src/a.ts']);
+    expect(s.details.undecidedTestFiles).toEqual(['tests/t.ts']);
+    expect(s.details.testFunctions).toEqual([]);
+    expect(s.details.parsedFiles).toBe(0);
+  });
+  it('REQ-TRACE-104/109/110 through the sweep: a re-export-only module is exempt, an unparsable one is not, a test file with a syntax error contributes no functions, and every collected function names its window', () => {
+    put('src/index.ts', `export { a } from './a';\nexport * from './b';\n`);
+    put('src/a.ts', 'export const a = 1;\n');
+    put('src/broken.ts', 'export function (\n');
+    put('tests/t.ts', `// ${C}: REQ-1\nexport function testOne(): void {}\n\n@${C}(REQ_2)\nexport async function testTwo(): Promise<void> {\n  return;\n}\nclass Suite { testM(): void {} helper(): void {} }\n`);
+    put('tests/broken.ts', 'function testBroken( {\n');
+    const s = sweepRepository({ root, layout: defaultLayout(), aliases: {}, clock });
+    expect(s.details.exemptModules).toEqual(['src/index.ts']);
+    expect(s.details.unparsableModules).toEqual(['src/broken.ts']);
+    expect(s.details.unparsableTests).toEqual(['tests/broken.ts']);
+    expect(s.details.testFunctions.map((t) => [t.node, t.line, t.windowStart, t.windowEnd])).toEqual([
+      ['tests/t.ts::testOne', 2, 1, 2], ['tests/t.ts::testTwo', 4, 2, 7], ['tests/t.ts::Suite::testM', 8, 6, 8],
+    ]);
+    // the covering site of each function is attributed to it (the seam's `testNode`)
+    expect(s.sites.filter((x) => x.path === 'tests/t.ts').map((x) => [x.line, x.testNode])).toEqual([[1, 'tests/t.ts::testOne'], [4, 'tests/t.ts::testTwo']]);
+    expect(s.details.parsedFiles).toBe(5);
   });
   it('REQ-TRACE-075: a repository written in a language no convention claims reports no traces at all', () => {
     put('src/main.rs', `${T}(REQ_1);\n`);

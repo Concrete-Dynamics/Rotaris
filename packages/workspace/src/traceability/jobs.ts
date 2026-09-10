@@ -121,9 +121,11 @@ async function run(job: Job, ctx: JobContext): Promise<JobOutcome> {
         writes.push({ path: job.layout.testOrphanBaselinePath, text: renderOrphanTestBaseline(tests, job.layout.exemptMarker) });
         written.push({ path: job.layout.testOrphanBaselinePath, entries: tests.size });
       } else {
-        // NOT BUILT in wave 1 (stated, not downgraded): the built-in convention's test functions need a syntax tree
-        // (REQ-TRACE-109/110). Writing this shrink-only ratchet from an undecided set would record an empty baseline
-        // that could never regain the orphans wave 2 will find, so the file is PRESERVED, its existing count reported.
+        // Part AJ2 (R11, decided): the orphan-test ratchet is written whenever every built-in test file was decided by
+        // the syntax-tree parser — its first real write happened in the second execution. The preserving branch stays
+        // for the one case still undecided, a build in which the compiler API cannot be loaded (parser.ts): a shrink-only
+        // file written from an undecided set would record an empty baseline that could never regain the orphans a later
+        // build finds, so there the file is PRESERVED and its existing count reported.
         const existing = parseOrphanTestBaseline(job.bytes.orphanTestBaseline, job.layout.testOrphanBaselinePath).entries;
         written.push({ path: job.layout.testOrphanBaselinePath, entries: existing.size });
         preserved.push(job.layout.testOrphanBaselinePath);

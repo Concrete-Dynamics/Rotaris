@@ -50,3 +50,5 @@ apps/desktop/.cache/
 
 # Part AL
 .terminal-stream-proof/
+# Part AP
+.requirements-runs-proof/

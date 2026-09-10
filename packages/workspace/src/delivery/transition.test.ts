@@ -107,13 +107,22 @@ describe('decide — the pure decision (REQ-TRACE-384/385/386)', () => {
     expect(k.ok && k.value.writes).toBe(false);
     expect(k.ok && k.value.to).toBe('review');
   });
-  it('edit, create, accept-proposal and accept-change-work are stated refusals in this build (REQ-TRACE-498)', () => {
-    for (const a of ['edit', 'create', 'accept-proposal', 'accept-change-work'] as const) {
+  it('accept-proposal and accept-change-work are stated refusals in this build (REQ-TRACE-498); edit and create record a summary and move nothing (Part AP)', () => {
+    for (const a of ['accept-proposal', 'accept-change-work'] as const) {
       const r = decide(state('backlog'), now(), a, USER, { at });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error.reason).toMatch(/nothing was written/);
-      // Ruled 2026-09-09: the source-write refusals name Part AP and `requirements.source.write`; the improvement-store refusals name OQ-45.
-      if (!r.ok) expect(r.error.reason).toMatch(a === 'edit' || a === 'create' ? /requirements\.source\.write.*Part AP/ : /OQ-45/);
+      if (!r.ok) expect(r.error.reason).toMatch(/OQ-45/);
+    }
+    // Part AP retired the wave-1 pin ("… requirements.source.write, which Part AP builds …"): REQ-TRACE-383's two
+    // source-writing actions write a record without a transition; an empty summary is refused.
+    for (const a of ['edit', 'create'] as const) {
+      const refused = decide(state('done'), now(), a, USER, { at });
+      expect(refused.ok).toBe(false);
+      const r = decide(state('done'), now(), a, USER, { at, payload: { summary: 'title changed' } });
+      expect(r.ok && r.value.writes).toBe(true);
+      expect(r.ok && r.value.to).toBe('done');
+      expect(r.ok && r.value.reason).toBe('title changed');
     }
   });
 });

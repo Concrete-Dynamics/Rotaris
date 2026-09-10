@@ -119,9 +119,20 @@ export type RequirementsCommand =
   | { readonly name: 'requirements.act'; readonly workspace: string; readonly id: ReqId; readonly action: BoardAction; readonly target?: ColumnToken; readonly payload?: Readonly<Record<string, string>> }  // → Result<TransitionOutcome, Refusal>
   | { readonly name: 'requirements.operation'; readonly workspace: string; readonly operation: 'check' | 'regenerate' | 'baselines' | 'compare'; readonly base?: string }
   | { readonly name: 'requirements.cancel'; readonly workspace: string; readonly operation: string }
-  | { readonly name: 'requirements.queue.set'; readonly workspace: string; readonly automatic?: boolean; readonly concurrency?: number; readonly stop?: true; readonly hold?: ReqId; readonly release?: ReqId }
+  | { readonly name: 'requirements.queue.set'; readonly workspace: string; readonly automatic?: boolean; readonly concurrency?: number; readonly stop?: true; readonly start?: true; readonly hold?: ReqId; readonly release?: ReqId; readonly disclosure?: DisclosureState }   // Part AP: `start` (the seam addition the plan accepted) and `disclosure` with a release (REQ-TRACE-472)
   | { readonly name: 'requirements.source.write'; readonly workspace: string; readonly id?: ReqId; readonly document: string; readonly location?: string }   // AP: edit/create
-  | { readonly name: 'requirements.source.previewLocation'; readonly workspace: string; readonly epic?: ReqId };
+  | { readonly name: 'requirements.source.previewLocation'; readonly workspace: string; readonly epic?: ReqId }
+  // Part AP — the run family (spec 08 §Runs Started from the Board; ADR-0041): main's coordinator speaks these to the service as the SYSTEM; a person's copy is refused (REQ-TRACE-392).
+  | { readonly name: 'requirements.run.preview'; readonly workspace: string; readonly id: ReqId; readonly action: BoardAction }   // → RunLaunchPreview (REQ-TRACE-472/474: the disclosure's facts, nothing provisioned)
+  | { readonly name: 'requirements.run.claim'; readonly workspace: string }                                                   // → RunClaim | null (the scheduler's next dispatch, claimed)
+  | { readonly name: 'requirements.run.started'; readonly workspace: string; readonly id: ReqId; readonly unit: string; readonly sessionId: string; readonly permissions: string }   // → Result<TransitionOutcome, Refusal> (REQ-TRACE-464)
+  | { readonly name: 'requirements.run.ended'; readonly workspace: string; readonly sessionId: string; readonly outcome: RunOutcome; readonly detail: string }   // → RunSettled
+  | { readonly name: 'requirements.run.abandon'; readonly workspace: string; readonly id: ReqId; readonly unit: string; readonly reason: string }   // → { released: boolean } (REQ-TRACE-463: the reason nothing started is reported on the queue)
+  | { readonly name: 'requirements.run.waiting'; readonly workspace: string; readonly sessionId: string; readonly waiting: boolean }   // → { noted: boolean } (REQ-TRACE-466)
+  | { readonly name: 'requirements.run.reap'; readonly workspace: string; readonly live: readonly string[] }   // → RunReaped[] (REQ-TRACE-476 with the run host's real live set)
+  // Part AP — the two pane reads: the review's twelve elements (REQ-TRACE-417..420) and a blocker with its engine fields (REQ-TRACE-449/452).
+  | { readonly name: 'requirements.review'; readonly workspace: string; readonly id: ReqId }    // → ReviewPayload
+  | { readonly name: 'requirements.blocker'; readonly workspace: string; readonly id: ReqId };  // → BlockerPayload
 /** channel 10 */
 export interface RequirementsChanged { readonly workspace: string; readonly generation: number; readonly affected: readonly ReqId[] | null; readonly progress?: ProgressReport }
 
@@ -177,9 +188,19 @@ export const RequirementsCommandSchema = z.discriminatedUnion('name', [
   z.object({ name: z.literal('requirements.act'), workspace, id: ReqIdSchema, action: BoardActionSchema, target: ColumnTokenSchema.optional(), payload: z.record(z.string(), z.string()).optional() }),
   z.object({ name: z.literal('requirements.operation'), workspace, operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), base: z.string().optional() }),
   z.object({ name: z.literal('requirements.cancel'), workspace, operation: z.string().min(1) }),
-  z.object({ name: z.literal('requirements.queue.set'), workspace, automatic: z.boolean().optional(), concurrency: z.number().int().positive().max(64).optional(), stop: z.literal(true).optional(), hold: ReqIdSchema.optional(), release: ReqIdSchema.optional() }),
+  z.object({ name: z.literal('requirements.queue.set'), workspace, automatic: z.boolean().optional(), concurrency: z.number().int().positive().max(64).optional(), stop: z.literal(true).optional(), start: z.literal(true).optional(), hold: ReqIdSchema.optional(), release: ReqIdSchema.optional(), disclosure: z.enum(['accepted', 'suppressed', 'off']).optional() }),   // Part AP: `start`, `disclosure`
   z.object({ name: z.literal('requirements.source.write'), workspace, id: ReqIdSchema.optional(), document: z.string(), location: z.string().optional() }),
   z.object({ name: z.literal('requirements.source.previewLocation'), workspace, epic: ReqIdSchema.optional() }),
+  // Part AP — the run family.
+  z.object({ name: z.literal('requirements.run.preview'), workspace, id: ReqIdSchema, action: BoardActionSchema }),
+  z.object({ name: z.literal('requirements.run.claim'), workspace }),
+  z.object({ name: z.literal('requirements.run.started'), workspace, id: ReqIdSchema, unit: z.string().min(1), sessionId: z.string().min(1), permissions: z.string() }),
+  z.object({ name: z.literal('requirements.run.ended'), workspace, sessionId: z.string().min(1), outcome: z.enum(['completed', 'failed', 'cancelled']), detail: z.string() }),
+  z.object({ name: z.literal('requirements.run.abandon'), workspace, id: ReqIdSchema, unit: z.string().min(1), reason: z.string() }),
+  z.object({ name: z.literal('requirements.run.waiting'), workspace, sessionId: z.string().min(1), waiting: z.boolean() }),
+  z.object({ name: z.literal('requirements.run.reap'), workspace, live: z.array(z.string()) }),
+  z.object({ name: z.literal('requirements.review'), workspace, id: ReqIdSchema }),
+  z.object({ name: z.literal('requirements.blocker'), workspace, id: ReqIdSchema }),
 ]);
 /** The command as it arrives off the wire (zod's `optional` admits an explicit `undefined`; the seam's type does not). */
 export type RequirementsCommandPayload = z.infer<typeof RequirementsCommandSchema>;
@@ -226,3 +247,124 @@ export function splitReqId(id: string): { readonly prefix: string; readonly numb
   const dash = id.lastIndexOf('-');
   return { prefix: id.slice(0, dash), number: Number(id.slice(dash + 1)) };
 }
+
+// ---- Part AP — runs from the board, the queue and the panes (spec 08 §Runs Started from the Board, §Delivery Queue, §Review Surface, §Blockers; ADR-0041) ----
+
+/** How a board-started run ended, as main's coordinator classifies the run host's terminal result (REQ-TRACE-477). */
+export type RunOutcome = 'completed' | 'failed' | 'cancelled';
+/** REQ-TRACE-470/472: what a run was granted, written onto its run row so the disclosure and the audit cannot differ. */
+export type RunPermissions = 'permissive' | 'workspace';
+/** The `payload.disclosure` values a run-starting `requirements.act` (or a queue release) carries from the surface that showed it (REQ-TRACE-472). */
+export const DISCLOSURE_STATES = ['accepted', 'suppressed', 'off'] as const;
+export type DisclosureState = (typeof DISCLOSURE_STATES)[number];
+/**
+ * REQ-TRACE-472/474: the facts the disclosure states BEFORE the first action of a launch — the worktree the run is
+ * confined to (derived, never provisioned by a preview), the branch, the unit, whether the workspace already opted
+ * in to unattended work (then REQ-TRACE-474 says nothing), and whether the repository can host a run at all
+ * (REQ-TRACE-498's two repository rows). The workspace service answers it; main adds the preference half (`LaunchPreview`).
+ */
+export interface RunLaunchPreview {
+  readonly id: ReqId;
+  readonly action: BoardAction;
+  readonly unit: string;
+  readonly branch: string;
+  readonly worktreePath: string;
+  /** `true` when `runtime.permission_mode` is already `autonomous` — no redundant disclosure (REQ-TRACE-474). */
+  readonly workspaceUnattended: boolean;
+  /** Whether the scheduler would begin the run at once, or defer it — with the scheduler's reason (REQ-TRACE-463). */
+  readonly startsNow: boolean;
+  readonly deferredReason?: string;
+  /** `ok`, or the stated reason a run has nothing to branch from (REQ-TRACE-498: not a repository; no commit). */
+  readonly repository: { readonly ok: true } | { readonly ok: false; readonly reason: string; readonly offerSetup: boolean };
+  /** REQ-TRACE-467/468: `runtime.approval_timeout_seconds` as the layered configuration resolves it (zero = no limit), read by the service that loads the configuration. */
+  readonly approvalTimeoutSeconds: number;
+}
+/** Main's answer to `requirements.runs {op: 'preview'}`: the service's facts plus the two desktop preferences and the effective wait (REQ-TRACE-467/468). */
+export interface LaunchPreview extends RunLaunchPreview {
+  /** `due`: the dialog must be shown; `suppressed`: accepted permanently before; `off`: the elevation is switched off; `unattended`: REQ-TRACE-474's silence. */
+  readonly disclosure: 'due' | 'suppressed' | 'off' | 'unattended';
+  readonly permissions: RunPermissions;
+  /** `runtime.approval_timeout_seconds` as the layered configuration resolves it; zero is an unlimited wait and is never shown as "0 seconds" (REQ-TRACE-468). */
+  readonly approvalWait: { readonly seconds: number; readonly unlimited: boolean };
+}
+/** The scheduler's next dispatch: the worktree the release provisioned (REQ-TRACE-464 "take over the worktree already provisioned"), the prompt, and what the launch was disclosed for. */
+export interface RunClaim {
+  readonly id: ReqId;
+  readonly unit: string;
+  readonly worktree: { readonly ref: string; readonly path: string; readonly branch: string; readonly baseBranch: string; readonly baseRevision: string };
+  readonly prompt: string;
+  /** REQ-TRACE-472: what the launch's disclosure covered; the coordinator grants exactly that and writes it onto the run row. */
+  readonly permissions: RunPermissions;
+}
+export interface RunSettled { readonly settled: boolean; readonly id?: ReqId; readonly unit?: string; readonly to?: ColumnToken; readonly reason?: string }
+export interface RunReaped { readonly id: ReqId; readonly unit: string; readonly sessionId: string | null; readonly statement: string; readonly held: boolean }
+/** The names only the system may speak; a `user` actor is refused (REQ-TRACE-392: the system is the sole actor that places a requirement into a run). */
+export const SYSTEM_ONLY_REQUIREMENTS_COMMANDS: ReadonlySet<string> = new Set(['requirements.run.claim', 'requirements.run.started', 'requirements.run.ended', 'requirements.run.abandon', 'requirements.run.waiting', 'requirements.run.reap']);
+/** REQ-TRACE-375: the closed pane-key namespace. `create` is spec 08's token for the creation pane (the prose says "creation"). */
+export const PANE_KEYS = ['review', 'queue', 'editor', 'create', 'blockers'] as const;
+export type PaneKey = (typeof PANE_KEYS)[number];
+
+/** REQ-TRACE-420's twelve element keys in their fixed order, and the three sides. */
+export const REVIEW_ELEMENTS = ['agent-summary', 'reported-risks', 'completion-claim', 'checks-run', 'verification', 'changed-files', 'traceability-changes', 'unmet-conditions', 'specification-version', 'execution-units', 'branch-and-worktree', 'proposals'] as const;
+export type ReviewElementKey = (typeof REVIEW_ELEMENTS)[number];
+export const REVIEW_SIDES = ['claim', 'measurement', 'work'] as const;
+export type ReviewSide = (typeof REVIEW_SIDES)[number];
+/** REQ-TRACE-422: the six decisions, held as data in this fixed order. */
+export const REVIEW_DECISIONS = ['accept', 'rerun', 'send-back', 'edit', 'reject', 'keep-worktree'] as const satisfies readonly BoardAction[];
+/**
+ * What the review shows (REQ-TRACE-417/418/420): every element either has content or is explicitly unavailable, and the
+ * three "always states something" elements carry a sentence in every case. Read by the workspace service from the run
+ * rows, the session record, Git and the run's `proposed-requirements.json` (REQ-TRACE-427) — the pane composes nothing.
+ */
+export interface ReviewPayload {
+  readonly id: ReqId;
+  readonly title: string;
+  readonly column: ColumnToken;
+  /** REQ-TRACE-424: not awaiting review (the state named), or awaiting review with no finished run. Present ⇒ the elements are empty. */
+  readonly refusal?: string;
+  readonly claim: {
+    readonly summary: string | null;
+    readonly risks: readonly string[];
+    /** REQ-TRACE-419: the top-of-surface sentence — the claim stands unmeasured, or measurement contradicted it. */
+    readonly completion: { readonly claimed: boolean; readonly statement: string };
+  };
+  readonly measurement: {
+    readonly checks: readonly { readonly name: string; readonly outcome: string }[];
+    readonly verification: string;
+    readonly changedFiles: readonly { readonly path: string; readonly added: number | null; readonly removed: number | null }[];
+    readonly traceabilityChanges: readonly string[];
+    readonly unmetConditions: readonly string[];
+  };
+  readonly work: {
+    readonly specification: { readonly snapshotHash: string | null; readonly snapshotAt: string | null; readonly currentHash: string; readonly diverged: boolean };
+    readonly units: readonly { readonly unit: string; readonly sessionId?: string; readonly status: string; readonly outcome?: string; readonly startedAt: string; readonly endedAt?: string; readonly permissions: string }[];
+    readonly branch: string | null;
+    readonly worktree: string | null;
+    readonly proposals: readonly { readonly title: string; readonly description: string; readonly derivedFrom: ReqId; readonly unit: string }[];
+    readonly proposalsState: 'none' | 'present' | 'unreadable';
+  };
+}
+/** REQ-TRACE-445/449/452: the blocker as the engine recorded it — options, blocking identifiers, the unit — with the recorded return state (REQ-TRACE-453). */
+export interface BlockerPayload {
+  readonly id: ReqId;
+  readonly blocker: { readonly kind: BlockerKind; readonly reason: string; readonly options: readonly { readonly key: string; readonly label?: string; readonly consequence?: string }[]; readonly blockingIds: readonly ReqId[]; readonly runUnit: string | null; readonly runSessionId: string | null; readonly raisedAt: string } | null;
+  readonly returnTo: DeliveryColumn | null;
+  readonly answerPaths: readonly ('choose' | 'navigate' | 'resume' | 'inspect')[];
+}
+/**
+ * The one renderer → main command of this Part (one spread in `commands.ts`, under the Part AP banner): the coordinator
+ * in main owns the disclosure preferences, the session start and the run's lifetime, so a renderer asks it — never the
+ * service — for a launch preview, a dispatch after an act or a queue change, the permanent suppression (REQ-TRACE-472),
+ * and the live board runs (REQ-TRACE-466/475).
+ */
+export const RequirementsRunsCommandSchema = z.object({
+  kind: z.literal('requirements.runs'),
+  op: z.enum(['preview', 'dispatch', 'suppress', 'live']),
+  id: ReqIdSchema.optional(),
+  action: BoardActionSchema.optional(),
+  suppressed: z.boolean().optional(),
+});
+export type RequirementsRunsCommand = z.infer<typeof RequirementsRunsCommandSchema>;
+/** `requirements.runs {op: 'live'}` → the board runs this process owns, by session (REQ-TRACE-475: "a session that originated from a requirement SHALL declare which requirement and which unit"). */
+export interface LiveBoardRun { readonly sessionId: string; readonly id: ReqId; readonly unit: string; readonly waitingOnPerson: boolean; readonly permissions: RunPermissions }
+export interface DispatchReport { readonly started: readonly { readonly id: ReqId; readonly unit: string; readonly sessionId: string }[]; readonly abandoned: readonly { readonly id: ReqId; readonly unit: string; readonly reason: string }[] }

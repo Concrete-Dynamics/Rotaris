@@ -347,6 +347,17 @@ of §5 and none a channel: each is a request answered once.
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the
   overlaid document. The session enable-override is a third input to the persona surface, held in the run host only.
+- **The `requirements:` block (Part AP)** — registered for the first time (`packages/config/src/sections/requirements.ts`)
+  and read at load onto `LoadedConfiguration.requirements`. It is **Tier C with one Tier A writer**: the delivery queue's
+  two persisted controls (`scheduling.mode` and `scheduling.max_concurrent_units`, REQ-TRACE-480) are written by the
+  workspace service through `commitConfigFields(…, 'workspace', …)`, which loads again at once, so a change takes effect
+  without a restart; the queue's stop is persisted nowhere, by requirement. REQ-CONFIG-183 makes every unknown key under
+  `requirements:` a **hard load failure** — the opposite of the top level's silent drop — with one exception:
+  `execution.worktree_subpath`, which REQ-CONFIG-194 names as not a key of this domain and which is reported and ignored
+  so the workspace still opens. `evidence`, `delivery` and `board` are accepted as mappings and carried opaque until the
+  part that consumes them validates them. `execution.branch_template` is checked at load against REQ-GIT-138's two
+  forbidden namespaces on a **rendered** example rather than a literal prefix, so a template that would collide by
+  construction is refused before anything is created from it.
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
   next fetch of a running session with no restart, an unsaved settings edit reaches nothing.

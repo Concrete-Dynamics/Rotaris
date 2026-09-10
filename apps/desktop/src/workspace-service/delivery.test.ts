@@ -6,7 +6,7 @@ import { FakeClock, mintWorkspaceId, ok, err } from '@rotaris/kernel';
 import type { Actor, BoardProjection, TraceabilityEngine, TransitionOutcome, Refusal } from '@rotaris/contracts';
 import { forgetSpelling, openWorkspaceStore, type ResolvedStore } from '@rotaris/store';
 import { fixtureParse, fixtureReport } from '@rotaris/workspace';
-import { ENGINE_NOT_MERGED, createDeliveryService, deliveryServiceFor, type DeliveryService } from './delivery.js';
+import { ENGINE_NOT_MERGED, createDeliveryService, deliveryServiceFor, type DeliveryService, type RunGitPort } from './delivery.js'; // Part AP: `RunGitPort`
 
 /**
  * The delivery service (Part AK): the composition check, the coalesced engine read, one value per generation,
@@ -24,7 +24,9 @@ const engine: TraceabilityEngine = {
   sweep: async () => ok({ sites: [], modules: [], tests: [], durationMs: 1 }),
   verify: async () => ok(fixtureReport()),
 };
-const service = (e: TraceabilityEngine = engine): DeliveryService => createDeliveryService({ db: r.db, workspaceRoot: 'C:\\ws', engine: e, clocks: clock, log: () => undefined });
+// Part AP: a release now provisions a worktree inside the writer's `beforeCommit` (REQ-TRACE-464); this suite's workspace is no repository, so Git is faked here.
+const FAKE_GIT: RunGitPort = { checkRepository: async () => ({ ok: true, head: 'abc123' }), provision: async (a) => ok({ ref: `${a.id}/${a.unit}`, path: `C:\\ws\\.rotaris\\requirements\\worktrees\\${a.unit}`, branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' }) };
+const service = (e: TraceabilityEngine = engine): DeliveryService => createDeliveryService({ db: r.db, workspaceRoot: 'C:\\ws', engine: e, clocks: clock, log: () => undefined, configDir: root, git: FAKE_GIT });
 
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-svc-')); r = openWorkspaceStore(root, A, 'C:\\ws'); clock = new FakeClock(); parses = 0; });
 afterEach(() => { r.db.close(); forgetSpelling(r.dir); rmSync(root, { recursive: true, force: true }); });

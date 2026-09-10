@@ -1,7 +1,15 @@
-import type { Actor, BoardAction, BoardProjection, Reachability, ReqId, RequirementDetail, RequirementsCommandPayload, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
-import { err, toIsoUtc, type Clocks } from '@rotaris/kernel';
-import type { ResolvedStore } from '@rotaris/store';
+import type { Actor, BlockerPayload, BoardAction, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import { SYSTEM_ONLY_REQUIREMENTS_COMMANDS } from '@rotaris/contracts'; // Part AP
+import { asSessionId, err, millis, toIsoUtc, type Clocks } from '@rotaris/kernel';
+import { StoreDal, type ResolvedStore } from '@rotaris/store';
 import { assertWriterDeclares, createDeliveryReader, createDeliveryWriter, createQueueSettings, createTransitions, reapStaleRuns, type BoardInput, type DeliveryReader, type DeliveryWriter, type ReapResult, type RequirementNow } from '@rotaris/workspace';
+// Part AP — runs from the board, the queue and the source write (spec 08 §Runs Started from the Board, §Delivery Queue, §Editing and Creating Requirements; ADR-0041's second execution).
+import { ACTION_CLASS, appendEpicIndexRow, checkRepositoryForRuns, composeRequirementDocument, createLocation, documentWritable, editRequirementDocument, epicIndexLink, invokeGit, nextIdentifier, probeSourceWritability, provisionUnitWorktree, readOnlySentence, readSourceText, renderBranch, requirementWorktreePath, runPromptFor, scheduleQueue, slugOf, unitIdFor, WAITING_ON_PERSON, writeSourceDocument, type ProvisionArgs, type ProvisionedWorktree, type RepositoryForRuns } from '@rotaris/workspace';
+import type { Result } from '@rotaris/kernel';
+import { loadConfiguration, commitConfigFields, REQUIREMENTS_DEFAULTS, validateRequirementsPatch, type RequirementsSection } from '@rotaris/config';
+import { resolveUserDirs } from '@rotaris/platform';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Part AK — the delivery store's service side (ADR-0041's first execution; ADR-0040 specific 5). Lives in the
@@ -34,6 +42,15 @@ export interface DeliveryServiceDeps {
   readonly engine: TraceabilityEngine;
   readonly clocks: Clocks;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
+  /** Part AP — the global configuration directory (`resolveUserDirs().config` when absent; a test names its own). */
+  readonly configDir?: string;
+  /** Part AP — the two Git units a launch needs (REQ-TRACE-498's repository rows, REQ-GIT-137/140's provisioning); the real ones through ADR-0038's helper when absent, a fake in a test. */
+  readonly git?: RunGitPort;
+}
+/** Part AP — what the service asks of Git for a launch; both are `runs.ts` units over ADR-0038's one helper. */
+export interface RunGitPort {
+  checkRepository(root: string): Promise<RepositoryForRuns>;
+  provision(args: ProvisionArgs): Promise<Result<ProvisionedWorktree, string>>;
 }
 
 const NOT_MERGED = Object.freeze({ kind: 'failed', what: 'the traceability engine', cause: 'Part AJ is not merged into this build' } as const);
@@ -47,6 +64,12 @@ export const ENGINE_NOT_MERGED: TraceabilityEngine = {
   updateBaselines: async () => err(NOT_MERGED),
   compare: async () => err(NOT_MERGED),
 };
+
+/** Part AP — the `requirements.act` payload keys this service reads: the disclosure state of a launch and a send-back's instructions. */
+export const UNDISCLOSED_REASON = (id: ReqId): string => `The permissions of the run for ${id} have not been disclosed and accepted; open it from the queue to see the disclosure and start it.`;
+/** Part AP — what `requirements.source.write` carries in `document` (the seam's one string): a JSON draft the service composes into the artifact (REQ-TRACE-439/440). */
+export interface SourceEditDraft { readonly title: string; readonly prose: string }
+export interface SourceCreateDraft { readonly title: string; readonly prose: string; readonly kind: 'product' | 'technical'; readonly derivedFrom?: readonly ReqId[]; readonly epic?: ReqId; readonly priority?: string }
 
 export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryService {
   const { db, workspaceRoot, engine, clocks, log } = deps;
@@ -67,19 +90,197 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const inFlight = new Map<ReqId, BoardAction>();
   const now = () => toIsoUtc(clocks.wall.instant());
 
+  // ---- Part AP — the configuration read, the scheduler's state, the launches (one contiguous block; the arms below delegate here) ----
+  /**
+   * REQ-TRACE-480/483: the two persisted queue controls ARE `requirements.scheduling.mode` and `max_concurrent_units`
+   * (REQ-CONFIG-196), read from the layered configuration here and written back through the service's own Tier A
+   * writer; the in-memory holder AK left is now the cache of the configured values, refreshed on every reload. The
+   * elevation's second half (`runtime.permission_mode`, `approval_timeout_seconds`) is read from the same load for the
+   * disclosure (REQ-TRACE-467/468/474).
+   */
+  const configDir = deps.configDir ?? resolveUserDirs().config;
+  const git: RunGitPort = deps.git ?? { checkRepository: (root) => checkRepositoryForRuns(root, { clocks }), provision: (a) => provisionUnitWorktree(a, { clocks }) };
+  let requirements: RequirementsSection = REQUIREMENTS_DEFAULTS;
+  let permissionMode = 'ask';
+  let approvalTimeoutSeconds = 300;
+  const loadConfig = (): void => {
+    const r = loadConfiguration({ globalDir: configDir, workspaceRoot, keepIgnored: false, now: () => clocks.monotonic.now() });
+    if (!r.ok) { log(`requirements: the configuration did not load (${r.error.file}: ${r.error.path} ${r.error.message}); the queue keeps its last values`, 'warn'); return; }
+    requirements = r.value.requirements;
+    permissionMode = r.value.runtime.permission_mode;
+    approvalTimeoutSeconds = r.value.runtime.approval_timeout_seconds;
+    queue.set(requirements.scheduling.mode === 'automatic', requirements.scheduling.max_concurrent_units);
+  };
+  loadConfig();
+  /** The scheduler's in-memory facts (REQ-TRACE-479's hold, the arming under `manual`, a claim in flight, REQ-TRACE-463's stated stall). A restart clears them all, by requirement for the stop and by reading for the rest. */
+  const held = new Set<ReqId>();
+  const armed = new Set<ReqId>();
+  const claimed = new Set<ReqId>();
+  const stalled = new Map<ReqId, string>();
+  const since = new Map<ReqId, string>();
+  interface Launch { readonly unit: string; readonly disclosure: DisclosureState | 'undisclosed'; readonly instructions?: string; readonly worktree?: ProvisionedWorktree; readonly action: BoardAction }
+  const launches = new Map<ReqId, Launch>();
+  const recordOf = (id: ReqId): RequirementRecord | undefined => parse?.records.find((x) => x.id === id);
+  const workspaceUnattended = (): boolean => permissionMode === 'autonomous';
+  /** REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one is not claimable. */
+  const disclosed = (l: Launch | undefined): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || workspaceUnattended());
+  const permissionsOf = (l: Launch | undefined): RunPermissions => (l === undefined || l.disclosure === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
+  /** The scheduler over the store's current state (REQ-TRACE-478): the base projection supplies the candidates, then the queue is the scheduler's own order and reasons. */
+  const schedule = (base: BoardProjection) => {
+    const stamp = now();
+    const candidates = base.cards.filter((c) => c.column === 'ready').map((c) => {
+      if (!since.has(c.id)) since.set(c.id, stamp);
+      const l = launches.get(c.id);
+      return { id: c.id, unit: l?.unit ?? unitIdFor(Number(c.facts.find((f) => f.label === 'Units')?.value ?? '0')), priority: c.priority, since: since.get(c.id)! };
+    });
+    for (const id of [...since.keys()]) if (!candidates.some((c) => c.id === id)) since.delete(id);
+    // Defect AP-4: the undisclosed condition is its OWN input, not a stall folded in. Folded in it was escaped by
+    // arming — a resume that returns to `ready` provisions and arms — and the queue then called `next` a candidate
+    // `claim()` refuses, so nothing started and the slot it held was denied to candidates that could have used it.
+    const undisclosed = new Map<ReqId, string>();
+    for (const c of candidates) if (!disclosed(launches.get(c.id))) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
+    return scheduleQueue({
+      candidates, executing: reader.runningRuns().map((r) => ({ id: r.id, unit: r.unit })),
+      settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed,
+    });
+  };
+  const source = () => (parse === undefined ? { writable: false, canCreate: false, reason: 'No requirement store is open.' } : probeSourceWritability(workspaceRoot, parse.layout.storeDir));
+  /** REQ-TRACE-464's provisioning, inside the writer's `beforeCommit` slot: a refusal here writes nothing (REQ-TRACE-472's declined disclosure, REQ-TRACE-498's repository rows); a resume's failure never stops the blocker clearing (REQ-TRACE-463). */
+  const beforeCommit = async (id: ReqId, action: BoardAction, decision: { readonly startsRun: boolean }, payload: Readonly<Record<string, string>> | undefined) => {
+    if (!decision.startsRun) return undefined;
+    const record = recordOf(id);
+    const card = current?.cards.find((c) => c.id === id);
+    const unitsStarted = Number(card?.facts.find((f) => f.label === 'Units')?.value ?? '0');
+    const unit = unitIdFor(unitsStarted);
+    const d = payload?.['disclosure'];
+    const disclosure: Launch['disclosure'] = d === 'accepted' || d === 'suppressed' || d === 'off' ? d : 'undisclosed';
+    const instructions = payload?.['instructions'];
+    const softFailure = !ACTION_CLASS[action].startsRun; // resume / answer-blocker returning to ready: the blocker clears whatever happens (REQ-TRACE-463)
+    const fail = (reason: string) => { if (softFailure) { stalled.set(id, reason); launches.set(id, { unit, disclosure, action, ...(instructions === undefined ? {} : { instructions }) }); return undefined; } throw new Error(reason); };
+    const repo = await git.checkRepository(workspaceRoot);
+    if (!repo.ok) return fail(repo.reason);
+    const made = await git.provision({ workspaceRoot, id, unit, title: record?.title ?? id, branchTemplate: requirements.execution.branch_template, cycle: unitsStarted + 1 });
+    if (!made.ok) return fail(made.error);
+    launches.set(id, { unit, disclosure, action, worktree: made.value, ...(instructions === undefined ? {} : { instructions }) });
+    stalled.delete(id);
+    armed.add(id); // REQ-TRACE-482: the person released it (from the board); under `manual` that is the release the wording names
+    log(`requirements: ${id} unit ${unit} provisioned at ${made.value.path} on ${made.value.branch} (disclosure ${disclosure})`);
+    return { worktree: { ref: made.value.ref, unit, path: made.value.path, branch: made.value.branch } };
+  };
+  const claim = (): RunClaim | null => {
+    if (current === undefined) return null;
+    const out = schedule(current);
+    for (const id of out.dispatch) {
+      const l = launches.get(id);
+      // The invariant defect AP-4 broke: what the scheduler offers, the claim takes. A mismatch is a defect of the
+      // scheduler's inputs, so it is logged rather than passed over in silence.
+      if (l?.worktree === undefined || !disclosed(l)) { log(`requirements: the scheduler offered ${id} but its launch is ${l === undefined ? 'absent' : l.worktree === undefined ? 'unprovisioned' : 'undisclosed'}; nothing was claimed for it`, 'warn'); continue; }
+      const record = recordOf(id);
+      if (record === undefined) continue;
+      claimed.add(id);
+      return { id, unit: l.unit, worktree: { ref: l.worktree.ref, path: l.worktree.path, branch: l.worktree.branch, baseBranch: l.worktree.baseBranch, baseRevision: l.worktree.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions), permissions: permissionsOf(l) };
+    }
+    return null;
+  };
+  const runBySession = (sessionId: string) => reader.runningRuns().find((r) => r.sessionId === sessionId);
+  /** REQ-TRACE-417/418/420: every element shown or explicitly unavailable, read from the rows, the session record, Git and the run's `proposed-requirements.json` (REQ-TRACE-427). */
+  const review = async (id: ReqId, board: BoardProjection): Promise<ReviewPayload> => {
+    const card = board.cards.find((c) => c.id === id);
+    const record = recordOf(id);
+    const runs = reader.runs(id);
+    const finished = [...runs].reverse().find((r) => r.status !== 'running');
+    const latest = runs[runs.length - 1];
+    const empty: ReviewPayload = {
+      id, title: record?.title ?? id, column: card?.column ?? 'backlog',
+      claim: { summary: null, risks: [], completion: { claimed: false, statement: 'No run has reported a completion claim.' } },
+      measurement: { checks: [], verification: 'Nothing was verified for this requirement.', changedFiles: [], traceabilityChanges: [], unmetConditions: [] },
+      work: { specification: { snapshotHash: null, snapshotAt: null, currentHash: record?.canonicalHash ?? '', diverged: false }, units: [], branch: null, worktree: null, proposals: [], proposalsState: 'none' },
+    };
+    if (card === undefined) return { ...empty, refusal: `${id} is not on this board.` };
+    // REQ-TRACE-424's two sentences, worded apart.
+    if (card.column !== 'review') return { ...empty, refusal: `${id} is not awaiting a review decision: it is in ${card.column}.` };
+    if (finished === undefined) return { ...empty, refusal: `${id} is awaiting review, but no finished run was recorded for it: there is nothing to review yet.` };
+    const dal = new StoreDal(db);
+    const session = finished.sessionId === null ? undefined : dal.getSession(asSessionId(finished.sessionId));
+    const summary = session?.summary_text ?? null;
+    const claimed = session?.execution_status === 'completed';
+    const measured = card.evidence.verification;
+    const unmet: string[] = [];
+    const n = nowOf(id);
+    if (n !== undefined) { const r = reader.reachable(id, 'review', 'done', n, { kind: 'system' }, now()); if (!r.reachable && r.reason !== undefined) unmet.push(r.reason); }
+    const contradicted = claimed && (measured === 'failed' || unmet.length > 0);
+    const changedFiles = await changedFilesOf(finished.worktreePath, launches.get(id)?.worktree?.baseRevision ?? null);
+    const proposals = readProposals(finished.worktreePath);
+    const units = runs.map((r) => ({ unit: r.unit, ...(r.sessionId === null ? {} : { sessionId: r.sessionId }), status: r.status, ...(r.outcome === null ? {} : { outcome: r.outcome }), startedAt: r.startedAt, ...(r.endedAt === null ? {} : { endedAt: r.endedAt }), permissions: r.permissions }));
+    const st = reader.state(id);
+    const snapshot = { snapshotHash: st.snapshotHash, snapshotAt: st.snapshotAt };
+    return {
+      id, title: record?.title ?? id, column: card.column,
+      claim: {
+        summary, risks: risksOf(summary),
+        completion: { claimed, statement: !claimed ? `The agent made no completion claim: the run ended ${finished.outcome ?? finished.status}.` : contradicted ? 'The agent claimed completion; measurement contradicted it.' : 'The agent claimed completion; the claim stands unmeasured.' },
+      },
+      measurement: {
+        checks: session === undefined ? [] : [{ name: 'run', outcome: `${session.execution_status}${session.stop_reason ? ` (${session.stop_reason})` : ''}` }],
+        verification: measured === undefined ? 'No verification has been recorded for this requirement.' : `Verification recorded: ${measured}.`,
+        changedFiles, traceabilityChanges: card.evidence.sites.map((s) => `${s.kind} at ${s.path}:${s.line}`), unmetConditions: unmet,
+      },
+      work: { specification: { ...snapshot, currentHash: record?.canonicalHash ?? '', diverged: snapshot.snapshotHash !== null && snapshot.snapshotHash !== (record?.canonicalHash ?? '') }, units, branch: latest?.branch ?? null, worktree: latest?.worktreePath ?? null, ...proposals },
+    };
+  };
+  /** The files the work modified: the unit's commits against the base it branched from where that is still known, plus what is uncommitted in its tree; each path once. */
+  const changedFilesOf = async (worktree: string | null, baseRevision: string | null): Promise<ReviewPayload['measurement']['changedFiles']> => {
+    if (worktree === null || !existsSync(worktree)) return [];
+    const run = async (args: readonly string[]) => { const r = await invokeGit({ args, workspaceRoot: worktree, timeoutMs: millis(15_000), timers: clocks.timers, clock: clocks.monotonic }).catch(() => null); return r !== null && r.outcome === 'exited' && r.status === 0 ? r.stdout : ''; };
+    const parseNumstat = (text: string) => text.split(/\r?\n/).filter((l) => l.trim() !== '').map((l) => { const [a, d, ...p] = l.split('\t'); return { path: p.join('\t'), added: a === '-' ? null : Number(a), removed: d === '-' ? null : Number(d) }; });
+    const byPath = new Map<string, { path: string; added: number | null; removed: number | null }>();
+    for (const f of parseNumstat(baseRevision === null ? '' : await run(['diff', '--numstat', baseRevision, 'HEAD']))) byPath.set(f.path, f);
+    for (const f of parseNumstat(await run(['diff', '--numstat', 'HEAD']))) { const seen = byPath.get(f.path); byPath.set(f.path, seen === undefined ? f : { path: f.path, added: seen.added === null || f.added === null ? null : seen.added + f.added, removed: seen.removed === null || f.removed === null ? null : seen.removed + f.removed }); }
+    for (const l of (await run(['ls-files', '--others', '--exclude-standard'])).split(/\r?\n/)) if (l.trim() !== '' && !byPath.has(l)) byPath.set(l, { path: l, added: null, removed: null });
+    return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  };
+  const readProposals = (worktree: string | null): Pick<ReviewPayload['work'], 'proposals' | 'proposalsState'> => {
+    if (worktree === null) return { proposals: [], proposalsState: 'none' };
+    const file = join(worktree, '.rotaris', 'proposed-requirements.json');
+    if (!existsSync(file)) return { proposals: [], proposalsState: 'none' };
+    try {
+      const v = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      if (!Array.isArray(v)) return { proposals: [], proposalsState: 'unreadable' };
+      const list = v.filter((p): p is { title: string; description: string; derivedFrom: string; unit: string } => typeof p === 'object' && p !== null && typeof (p as { title?: unknown }).title === 'string');
+      return { proposals: list.map((p) => ({ title: p.title, description: p.description ?? '', derivedFrom: p.derivedFrom ?? '', unit: p.unit ?? '' })), proposalsState: list.length === 0 ? 'none' : 'present' };
+    } catch { return { proposals: [], proposalsState: 'unreadable' }; }
+  };
+  const risksOf = (summary: string | null): string[] => (summary ?? '').split(/\r?\n/).filter((l) => /^\s*[-*]?\s*risk\b/i.test(l)).map((l) => l.replace(/^\s*[-*]?\s*/, ''));
+  const blockerPayload = (id: ReqId): BlockerPayload => {
+    const st = reader.state(id);
+    const open = st.openBlockers[st.openBlockers.length - 1];
+    const run = open === undefined || open.runUnit === null ? undefined : reader.runs(id).find((r) => r.unit === open.runUnit);
+    // REQ-TRACE-449's precedence, with `resume` always offered (REQ-TRACE-454; no "no way forward" path, REQ-TRACE-448).
+    const paths = (o: NonNullable<typeof open>): BlockerPayload['answerPaths'] => (o.options.length > 0 ? ['choose', 'resume'] : o.blockingIds.length > 0 ? ['navigate', 'resume'] : o.kind === 'run-failure' ? ['inspect', 'resume'] : ['resume']);
+    return {
+      id, returnTo: (st.returnTo as BlockerPayload['returnTo']) ?? null,
+      blocker: open === undefined ? null : { kind: open.kind, reason: open.reason, options: open.options, blockingIds: open.blockingIds, runUnit: open.runUnit, runSessionId: run?.sessionId ?? null, raisedAt: open.raisedAt },
+      answerPaths: open === undefined ? ['resume'] : paths(open),
+    };
+  };
+  const decodeDraft = <T,>(document: string): T | undefined => { try { const v = JSON.parse(document) as unknown; return typeof v === 'object' && v !== null ? (v as T) : undefined; } catch { return undefined; } };
+  // ---- end of the Part AP block ----
+
   const input = (): BoardInput => ({
     workspace: workspaceRoot, generation, producedAt: now(), parse, ...(parseFailure === undefined ? {} : { parseFailure }), report,
     queue: { ...reader.queue(), stopped },
     // REQ-TRACE-346: reported by the pass, never deduced. No pass in this build analyses anything, so it is false and said so.
     analysisEnabled: false,
     inFlight,
-    // REQ-TRACE-498 "Source read-only": no source write exists in this build (Part AP); the read-only sentence is the honest one.
-    source: { writable: false, canCreate: false },
+    source: (({ writable, canCreate }) => ({ writable, canCreate }))(source()), // Part AP: REQ-TRACE-435/444 — the store directory's writability by this account, probed at every projection
   });
   /** REQ-TRACE-348: one immutable value per generation; the generation moves BEFORE the value is computed so the value carries it. */
   const rebuild = (): number => {
     generation += 1;
-    current = reader.board(input());
+    // Part AP: the base projection supplies the scheduler's candidates; the published value carries the scheduler's own queue (REQ-TRACE-478).
+    const base = reader.board(input());
+    const scheduled = schedule(base);
+    current = reader.board({ ...input(), queue: { ...reader.queue(), stopped, entries: scheduled.queue.entries } });
     return generation;
   };
   const nowOf = (id: ReqId): RequirementNow | undefined => {
@@ -108,6 +309,8 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         reaped = reapStaleRuns(reader, writer, new Set(), (id) => nowOf(id)?.canonicalHash);
         for (const r of reaped) log(`requirements reap: ${r.id} unit ${r.unit} ${r.statement}${r.held ? ' (held, returns to ready)' : ''}`, 'warn');
       }
+      // Part AP — REQ-TRACE-407/437: a delivered requirement whose text moved is moved out of the terminal state by the pass, through the normal evaluation.
+      if (parse !== undefined) for (const r of parse.records) { const n = nowOf(r.id); if (n !== undefined) { const m = writer.recordSpecificationMoved(r.id, { now: n }); if (m.ok && m.value.historyEntry !== 0) log(`requirements: ${r.id} moved ${m.value.from} → ${m.value.to} (specification changed since it was accepted)`); } }
       return rebuild();
     })().finally(() => { refreshing = undefined; });
     return refreshing;
@@ -136,6 +339,8 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     get reaped() { return reaped ?? []; },
     get generation() { return generation; },
     async handle(command, actor) {
+      // Part AP — REQ-TRACE-392: the system is the sole actor that places a requirement into a run; a person's copy of a run command is refused.
+      if (SYSTEM_ONLY_REQUIREMENTS_COMMANDS.has(command.name) && actor.kind !== 'system') return { value: { ok: false, error: { reason: `${command.name} is the run coordinator's to speak, not a person's; nothing changed.` } } };
       switch (command.name) {
         case 'requirements.board':
           return { value: await ensure() };
@@ -163,14 +368,17 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           if (n === undefined) return { value: { ok: false, error: { reason: `${command.id} is not in this requirement store; nothing was written.` } } };
           inFlight.set(command.id, command.action);
           try {
-            const r = await writer.transition(command.id, command.action, actor, { now: n }, { ...(command.target === undefined ? {} : { target: command.target }), ...(command.payload === undefined ? {} : { payload: command.payload }) });
+            // Part AP: the writer's `beforeCommit` slot — the worktree and the disclosure of a run-starting action (REQ-TRACE-387/464/472).
+            const r = await writer.transition(command.id, command.action, actor, { now: n }, { ...(command.target === undefined ? {} : { target: command.target }), ...(command.payload === undefined ? {} : { payload: command.payload }), beforeCommit: (d) => beforeCommit(command.id, command.action, d, command.payload) });
             inFlight.delete(command.id);
             if (!r.ok) return { value: r };
             if (r.value.historyEntry === 0) return { value: r };
             // Persist before publish: the commit is behind us; the generation moves now and main publishes after this reply.
             const g = rebuild();
             log(`requirements: ${command.id} ${command.action} ${r.value.from} → ${r.value.to} by ${actor.kind === 'user' ? `user ${actor.person}` : 'system'} (entry ${r.value.historyEntry}, generation ${g})`);
-            return { value: r, changed: { generation: g, affected: [command.id] } };
+            // Part AP — REQ-TRACE-463: the reason nothing started rides on the action's result rather than being dropped.
+            const stall = stalled.get(command.id);
+            return { value: stall === undefined ? r : { ...r, value: { ...r.value, dispatch: stall } }, changed: { generation: g, affected: [command.id] } };
           } finally {
             inFlight.delete(command.id);
           }
@@ -178,10 +386,23 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         case 'requirements.queue.set': {
           await ensure();
           const q = reader.queue();
-          if (command.automatic !== undefined || command.concurrency !== undefined) writer.setQueue(command.automatic ?? q.automatic, command.concurrency ?? q.concurrency);
+          // Part AP — REQ-TRACE-480: the two persisted controls are written into the workspace configuration and take effect without a restart; the stop is never persisted.
+          if (command.automatic !== undefined || command.concurrency !== undefined) {
+            const patch = { requirements: { scheduling: { mode: (command.automatic ?? q.automatic) ? 'automatic' : 'manual', max_concurrent_units: command.concurrency ?? q.concurrency } } };
+            const problems = validateRequirementsPatch(patch.requirements);
+            if (problems.length > 0) return { value: { ok: false, error: { reason: problems.map((p) => `${p.path} ${p.message}`).join('; ') } } };
+            const w = await commitConfigFields(configDir, workspaceRoot, 'workspace', patch, clocks.timers);
+            if (!w.ok) return { value: { ok: false, error: { reason: `The queue setting could not be written to the workspace configuration: ${w.refusal.file}: ${w.refusal.fault}` } } };
+            loadConfig();
+            writer.setQueue(command.automatic ?? q.automatic, command.concurrency ?? q.concurrency);
+          }
           if (command.stop === true) stopped = true;
-          if (command.hold !== undefined || command.release !== undefined) {
-            return { value: { ok: false, error: { reason: 'Holding or releasing a queued requirement needs the scheduler, which this build does not run (Part AP); nothing changed.' } } };
+          if (command.start === true) stopped = false;
+          if (command.hold !== undefined) { held.add(command.hold); armed.delete(command.hold); }
+          if (command.release !== undefined) {
+            held.delete(command.release); stalled.delete(command.release); armed.add(command.release);
+            const l = launches.get(command.release);
+            if (command.disclosure !== undefined && l !== undefined) launches.set(command.release, { ...l, disclosure: command.disclosure });
           }
           const g = rebuild();
           return { value: current!.queue, changed: { generation: g, affected: null } };
@@ -190,9 +411,150 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           return { value: { ok: false, error: { reason: `The ${command.operation} operation is the traceability engine's (Part AJ′) and is not reachable from this build; nothing was run and nothing was written.` } } };
         case 'requirements.cancel':
           return { value: { ok: false, error: { reason: 'There is nothing to stop: no analysis or operation is in flight in this build.' } } };
-        case 'requirements.source.write':
-        case 'requirements.source.previewLocation':
-          return { value: { ok: false, error: { reason: "Writing a requirement into the project's own source is not built in this version (Part AP); the source is read-only here and nothing was written." } } };
+        // Part AP — the source write (REQ-TRACE-434..444, 498): the service composes and writes; the pane reports text and shows the result (REQ-TRACE-439).
+        case 'requirements.source.write': {
+          await ensure();
+          if (parse === undefined) return { value: { ok: false, error: { reason: 'No requirement store is open, so nothing can be written.' } } };
+          const s = source();
+          if (!s.writable) return { value: { ok: false, error: { reason: s.reason ?? 'The requirement store is read-only here; nothing was written.' } } };
+          if (command.id !== undefined) {
+            const record = recordOf(command.id);
+            if (record === undefined) return { value: { ok: false, error: { reason: `${command.id} is not in this requirement store; nothing was written.` } } };
+            if (!documentWritable(workspaceRoot, record.sourcePath)) return { value: { ok: false, error: { reason: readOnlySentence(command.id, record.sourcePath) } } };
+            const draft = decodeDraft<SourceEditDraft>(command.document);
+            if (draft === undefined || typeof draft.title !== 'string' || typeof draft.prose !== 'string') return { value: { ok: false, error: { reason: 'The edit carried no title and description to write; nothing was written.' } } };
+            if (draft.title.trim() === '') return { value: { ok: false, error: { reason: 'A requirement needs a title; nothing was written.' } } };
+            const text = readSourceText(workspaceRoot, record.sourcePath);
+            if (text === null) return { value: { ok: false, error: { reason: `${record.sourcePath} could not be read; nothing was written.` } } };
+            const edited = editRequirementDocument(text, command.id, { title: draft.title, prose: draft.prose });
+            if (!edited.ok) return { value: { ok: false, error: { reason: edited.error } } };
+            const w = await writeSourceDocument(workspaceRoot, record.sourcePath, edited.value, { clocks });
+            if (!w.ok) return { value: { ok: false, error: { reason: w.error } } };
+            // REQ-TRACE-405/383: the record of the action, then the re-evaluation that picks the hash change up (REQ-TRACE-434/437).
+            const n = nowOf(command.id)!;
+            await writer.transition(command.id, 'edit', actor, { now: n }, { payload: { summary: `title and description written to ${record.sourcePath}` } });
+            const g = await refresh();
+            log(`requirements: ${command.id} edited in ${record.sourcePath} by ${actor.kind === 'user' ? `user ${actor.person}` : 'system'} (generation ${g})`);
+            return { value: { ok: true, value: { id: command.id, path: record.sourcePath } }, changed: { generation: g, affected: null } };
+          }
+          const draft = decodeDraft<SourceCreateDraft>(command.document);
+          if (draft === undefined || typeof draft.title !== 'string' || draft.title.trim() === '') return { value: { ok: false, error: { reason: 'A new requirement needs a title; nothing was written.' } } };
+          if (draft.kind === 'technical' && (draft.derivedFrom === undefined || draft.derivedFrom.length === 0)) return { value: { ok: false, error: { reason: 'A technical requirement is not creatable without an origin: name the requirement it derives from (REQ-TRACE-444).' } } };
+          const tombstoned = new Set<number>((parse as { details?: { tombstoned?: readonly number[] } }).details?.tombstoned ?? []);
+          const id = nextIdentifier(parse, tombstoned, draft.epic);
+          if (!id.ok) return { value: { ok: false, error: { reason: id.error } } };
+          const location = command.location !== undefined ? { ok: true as const, value: command.location } : createLocation(parse, id.value, draft.title, draft.epic);
+          if (!location.ok) return { value: { ok: false, error: { reason: location.error } } };
+          const text = composeRequirementDocument({ id: id.value, title: draft.title, prose: draft.prose ?? '', kind: draft.kind ?? 'product', derivedFrom: draft.derivedFrom ?? [], ...(draft.priority === undefined ? {} : { priority: draft.priority }), date: now().slice(0, 10) });
+          const w = await writeSourceDocument(workspaceRoot, location.value, text, { clocks });
+          if (!w.ok) return { value: { ok: false, error: { reason: w.error } } };
+          if (draft.epic !== undefined) {
+            const epic = recordOf(draft.epic);
+            const epicText = epic === undefined ? null : readSourceText(workspaceRoot, epic.sourcePath);
+            const appended = epic === undefined || epicText === null ? null : appendEpicIndexRow(epicText, { id: id.value, title: draft.title, priority: draft.priority, lifecycle: 'draft', relativeLink: epicIndexLink(epic.sourcePath, location.value) });
+            if (epic !== undefined && appended !== null) { const e = await writeSourceDocument(workspaceRoot, epic.sourcePath, appended, { clocks }); if (!e.ok) log(`requirements: the index of ${epic.id} was not updated (${e.error})`, 'warn'); }
+          }
+          const g = await refresh();
+          const n = nowOf(id.value);
+          if (n !== undefined) await writer.transition(id.value, 'create', actor, { now: n }, { payload: { summary: `created at ${location.value}` } });
+          log(`requirements: ${id.value} created at ${location.value} by ${actor.kind === 'user' ? `user ${actor.person}` : 'system'} (generation ${g})`);
+          return { value: { ok: true, value: { id: id.value, path: location.value } }, changed: { generation: rebuild(), affected: null } };
+        }
+        case 'requirements.source.previewLocation': {
+          await ensure();
+          if (parse === undefined) return { value: { ok: false, error: { reason: 'No requirement store is open, so no location can be previewed.' } } };
+          // REQ-TRACE-444: a workspace with no writable store gets a board and no editor — and no previewed location either (REQ-TRACE-443 reports the inability rather than a path).
+          const writable = source();
+          if (!writable.canCreate) return { value: { ok: false, error: { reason: writable.reason ?? 'The requirement store cannot be created into here; no location can be previewed.' } } };
+          const id = nextIdentifier(parse, new Set(), command.epic);
+          if (!id.ok) return { value: { ok: false, error: { reason: id.error } } };
+          const location = createLocation(parse, id.value, '', command.epic);
+          // REQ-TRACE-443: the location the write produces, with the slug of the title still to come — the pane substitutes the title's slug into the same rule (`slugOf`).
+          if (!location.ok) return { value: { ok: false, error: { reason: location.error } } };
+          return { value: { ok: true, value: { id: id.value, location: location.value.replace(/-x\.md$/, '-<slug>.md'), confirmSourceWrites: requirements.human_in_the_loop.confirm_source_writes, storeDir: parse.layout.storeDir, epics: parse.records.filter((r) => r.isEpic).map((r) => ({ id: r.id, title: r.title })) } } };
+        }
+        // Part AP — the run family: main's coordinator speaks these as the system (REQ-TRACE-392); the guard above refuses a person's copy.
+        case 'requirements.run.preview': {
+          const board = await ensure();
+          const record = recordOf(command.id);
+          if (record === undefined) return { value: { ok: false, error: { reason: `${command.id} is not in this requirement store.` } } };
+          const card = board.cards.find((c) => c.id === command.id);
+          const unitsStarted = Number(card?.facts.find((f) => f.label === 'Units')?.value ?? '0');
+          const unit = unitIdFor(unitsStarted);
+          const branch = renderBranch(requirements.execution.branch_template, { requirementId: command.id, unitId: unit, slug: record.title }, { cycle: unitsStarted + 1 });
+          const repo = await git.checkRepository(workspaceRoot);
+          const simulated = schedule(board);
+          const entry = simulated.queue.entries.find((e) => e.id === command.id);
+          const free = Math.max(0, reader.queue().concurrency - reader.runningRuns().length) > simulated.dispatch.length;
+          const preview: RunLaunchPreview = {
+            id: command.id, action: command.action, unit, branch: branch.ok ? branch.value : `(${branch.error})`,
+            worktreePath: branch.ok ? requirementWorktreePath(workspaceRoot, branch.value) : requirementWorktreePath(workspaceRoot, slugOf(command.id)),
+            workspaceUnattended: workspaceUnattended(),
+            startsNow: !stopped && free && (entry === undefined || entry.state === 'next'),
+            ...(stopped ? { deferredReason: 'The queue is stopped: nothing new begins until it is started again, while work already dispatched continues and completes as usual.' } : entry?.reason !== undefined ? { deferredReason: entry.reason } : !free ? { deferredReason: `Waiting for a unit slot: ${reader.runningRuns().length} of ${reader.queue().concurrency} in use.` } : {}),
+            repository: repo.ok ? { ok: true } : { ok: false, reason: repo.reason, offerSetup: repo.offerSetup },
+            approvalTimeoutSeconds,
+          };
+          return { value: preview };
+        }
+        case 'requirements.run.claim': {
+          await ensure();
+          return { value: claim() };
+        }
+        case 'requirements.run.started': {
+          await ensure();
+          const n = nowOf(command.id);
+          if (n === undefined) return { value: { ok: false, error: { reason: `${command.id} is not in this requirement store.` } } };
+          const l = launches.get(command.id);
+          const wt = l?.worktree ?? reader.worktrees(command.id).find((w) => w.unit === command.unit);
+          const r = writer.recordRunStarted(command.id, command.unit, command.sessionId, wt === undefined ? null : { ref: wt.ref, path: wt.path, branch: wt.branch }, command.permissions, { now: n });
+          claimed.delete(command.id); armed.delete(command.id); stalled.delete(command.id);
+          if (!r.ok) return { value: r };
+          const g = rebuild();
+          log(`requirements: ${command.id} unit ${command.unit} running as session ${command.sessionId} with ${command.permissions} permissions (generation ${g})`);
+          return { value: r, changed: { generation: g, affected: [command.id] } };
+        }
+        case 'requirements.run.ended': {
+          await ensure();
+          const run = runBySession(command.sessionId);
+          if (run === undefined) return { value: { settled: false, reason: `No running unit is recorded for session ${command.sessionId}.` } satisfies RunSettled };
+          const n = nowOf(run.id) ?? { id: run.id, canonicalHash: '', lifecycle: 'approved' as const, isEpic: false };
+          const r = writer.recordRunEnded(run.id, run.unit, command.outcome, command.detail, { now: n });
+          const g = rebuild();
+          log(`requirements: ${run.id} unit ${run.unit} ended ${command.outcome}: ${command.detail} (generation ${g})`);
+          return { value: { settled: r.ok, id: run.id, unit: run.unit, ...(r.ok ? { to: r.value.to } : { reason: r.error.reason }) } satisfies RunSettled, changed: { generation: g, affected: [run.id] } };
+        }
+        case 'requirements.run.abandon': {
+          await ensure();
+          claimed.delete(command.id); armed.delete(command.id);
+          stalled.set(command.id, command.reason);
+          const g = rebuild();
+          log(`requirements: the start of ${command.id} unit ${command.unit} did not begin: ${command.reason}`, 'warn');
+          return { value: { released: true }, changed: { generation: g, affected: [command.id] } };
+        }
+        case 'requirements.run.waiting': {
+          await ensure();
+          const run = runBySession(command.sessionId);
+          if (run === undefined) return { value: { noted: false } };
+          const stage = command.waiting ? WAITING_ON_PERSON : null;
+          if ((run.stage === WAITING_ON_PERSON) === command.waiting) return { value: { noted: true } };
+          writer.recordRunStage(run.id, run.unit, stage);
+          const g = rebuild();
+          return { value: { noted: true }, changed: { generation: g, affected: [run.id] } };
+        }
+        case 'requirements.run.reap': {
+          await ensure();
+          const out = reapStaleRuns(reader, writer, new Set(command.live), (id) => nowOf(id)?.canonicalHash);
+          for (const r of out) { log(`requirements reap: ${r.id} unit ${r.unit} ${r.statement}${r.held ? ' (held, returns to ready)' : ''}`, 'warn'); launches.delete(r.id); claimed.delete(r.id); }
+          const g = rebuild();
+          return { value: out satisfies RunReaped[], ...(out.length === 0 ? {} : { changed: { generation: g, affected: out.map((r) => r.id) } }) };
+        }
+        case 'requirements.review':
+          return { value: await review(command.id, await ensure()) };
+        case 'requirements.blocker': {
+          await ensure();
+          return { value: blockerPayload(command.id) };
+        }
       }
     },
   };

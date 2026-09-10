@@ -13,6 +13,7 @@ import { readModelsSection, type ModelEntry } from './sections/models.js';
 import { readPersonasSection, type PersonaEntry } from './sections/personas.js';
 import { readCompressorSection, type CompressorSection } from './sections/compressor.js';
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
+import { readRequirementsSection, type RequirementsSection } from './sections/requirements.js'; // Part AP
 import { readDisplaySection, type DisplaySection } from './display-section.js';
 import { readMcpServersSection } from './sections/mcp-servers.js';
 import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
@@ -66,6 +67,8 @@ export interface LoadedConfiguration {
   readonly circuitBreaker: CircuitBreakerSection;
   /** REQ-GIT-070..072 (Part P): the three checkpoint keys, `max_per_session` rejected at load below 1 (REQ-GIT-071). */
   readonly checkpoints: CheckpointsSection;
+  /** REQ-CONFIG-183/190..198 (Part AP): the strict `requirements:` block — spec 08's queue, change and human-in-the-loop keys, and the run branch template. */
+  readonly requirements: RequirementsSection;
   /** REQ-CHAT-166 (Part Z): the transcript's four display caps — the reader `SECTION_KEYS` declared and nothing stood behind. */
   readonly display: DisplaySection;
   readonly hooks: HooksResolved;
@@ -319,6 +322,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const compressor = readCompressorSection(top['compressor'], sink);
   const circuitBreaker = readCircuitBreakerSection(top['circuit_breaker'], sink);
   const checkpoints = readCheckpointsSection(top['checkpoints'], sink);
+  const requirements = readRequirementsSection(top['requirements'], sink); // Part AP
   const display = readDisplaySection(top['display'], sink);
   // REQ-MCP-002: every defect of a YAML-scope server entry is fatal and every one is reported (the discovered entries were validated before the merge).
   const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
@@ -357,6 +361,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     compressor: { ...compressor, model: draft.compressorModel },
     circuitBreaker: { ...circuitBreaker, model: draft.circuitBreakerModel },
     checkpoints,
+    requirements, // Part AP
     display,
     hooks,
     worktreeStorageSubpath: worktree,

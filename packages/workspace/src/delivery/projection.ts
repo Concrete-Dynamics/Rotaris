@@ -22,7 +22,7 @@ export interface ProjectionInput {
   readonly rows: readonly DeliveryReadRow[];
   readonly runs: readonly DeliveryRunRow[];
   readonly openBlockers: readonly DeliveryBlockerRow[];
-  readonly queue: { readonly automatic: boolean; readonly concurrency: number; readonly stopped: boolean };
+  readonly queue: { readonly automatic: boolean; readonly concurrency: number; readonly stopped: boolean; readonly entries?: readonly QueueEntry[] }; // Part AP: `entries`
   readonly analysisEnabled: boolean;
   readonly inFlight: ReadonlyMap<ReqId, BoardAction>;
   readonly source: { readonly writable: boolean; readonly canCreate: boolean };
@@ -159,7 +159,7 @@ export function projectBoard(input: ProjectionInput): BoardProjection {
       sourcePath: r.sourcePath, sourceKey: r.source ?? parse?.layout.storeDir ?? '',
       evidence, alerts: dedupeAlerts(alerts), relations,
       ...(latestBlocker ? { blocker: cardBlocker(latestBlocker) } : {}),
-      ...(latestRun ? { run: { ...(latestRun.session_id === null ? {} : { sessionId: latestRun.session_id }), unit: latestRun.unit, waitingOnPerson: false, ...(latestRun.stage === null ? {} : { stage: latestRun.stage }), interrupted: latestRun.status === 'interrupted' } } : {}),
+      ...(latestRun ? { run: { ...(latestRun.session_id === null ? {} : { sessionId: latestRun.session_id }), unit: latestRun.unit, waitingOnPerson: latestRun.status === 'running' && latestRun.stage === WAITING_ON_PERSON, ...(latestRun.stage === null ? {} : { stage: latestRun.stage }), interrupted: latestRun.status === 'interrupted' } } : {}), // Part AP: REQ-TRACE-466's fact is the run row's stage
       ...(inFlightAction === undefined ? {} : { inFlight: { action: inFlightAction, label: inFlightLabel(inFlightAction) } }),
       facts,
     };
@@ -198,6 +198,8 @@ export function projectBoard(input: ProjectionInput): BoardProjection {
 
 /** REQ-TRACE-478: executing now, the next candidate, and every deferred candidate with the scheduler's reason, in the order the scheduler applies. */
 function queueOf(cards: readonly BoardCard[], runs: readonly DeliveryRunRow[], q: ProjectionInput['queue'], byId: ReadonlyMap<ReqId, RequirementRecord>): DeliveryQueue {
+  // Part AP: the service's scheduler supplies the entries once it runs (`runs.ts`); the derivation below is the wave-1 stand-in for a board read with no scheduler.
+  if (q.entries !== undefined) return { entries: [...q.entries], automatic: q.automatic, concurrency: q.concurrency, stopped: q.stopped };
   const entries: QueueEntry[] = [];
   const executing = runs.filter((r) => r.status === 'running');
   for (const r of executing) entries.push({ id: r.req_id, unit: r.unit, state: 'executing' });
@@ -212,6 +214,9 @@ function queueOf(cards: readonly BoardCard[], runs: readonly DeliveryRunRow[], q
   }
   return { entries, automatic: q.automatic, concurrency: q.concurrency, stopped: q.stopped };
 }
+
+/** Part AP — REQ-TRACE-466: the one stage token a run row carries while its run waits on a person (an approval or a question). */
+export const WAITING_ON_PERSON = 'waiting on a person';
 
 /** REQ-TRACE-388: the per-action progress label naming what is happening. */
 export function inFlightLabel(action: BoardAction): string {

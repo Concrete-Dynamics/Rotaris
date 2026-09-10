@@ -5,8 +5,6 @@ import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost } from '@rotaris/ui';
-import type { BoardProjection, RequirementDetail, ReqId } from '@rotaris/contracts';
-import { RequirementsView } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -688,74 +686,6 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
 }
 
 /**
- * REQ-TRACE-348/351/353/374: one immutable board projection per generation. Reads are coalesced, stale workspace
- * results are discarded, and channel 10 announces a generation change so the active renderer can fetch the value.
- */
-function useRequirementsBoard(workspace: string) {
-  const [board, setBoard] = useState<BoardProjection | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const requestSequence = useRef(0);
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const workspaceRef = useRef(workspace);
-  workspaceRef.current = workspace;
-  const hasWorkspace = workspace !== '(no workspace)';
-
-  const read = useCallback(async function readBoard(): Promise<void> {
-    if (!hasWorkspace) { setBoard(null); setError(null); return; }
-    const sequence = ++requestSequence.current;
-    setLoading(true);
-    setError(null);
-    const requestedWorkspace = workspace;
-    const result = await bridge.command({ kind: 'requirements', command: { name: 'requirements.board', workspace } });
-    if (workspaceRef.current === requestedWorkspace && requestSequence.current === sequence) {
-      if (result.ok) setBoard(result.value as BoardProjection);
-      else setError(result.detail ?? result.headline);
-      setLoading(false);
-    }
-  }, [hasWorkspace, workspace]);
-
-  const scheduleRead = useCallback(() => {
-    if (pending.current) clearTimeout(pending.current);
-    pending.current = setTimeout(() => { pending.current = null; void read(); }, 60);
-  }, [read]);
-
-  useEffect(() => {
-    queueMicrotask(scheduleRead);
-    const unsubscribe = bridge.onRequirementsChanged((payload) => {
-      const changed = payload as { workspace?: string };
-      if (changed.workspace?.replace(/\\/g, '/').toLowerCase() === workspace.replace(/\\/g, '/').toLowerCase()) scheduleRead();
-    });
-    return () => { unsubscribe(); if (pending.current) { clearTimeout(pending.current); pending.current = null; } };
-  }, [scheduleRead, workspace]);
-
-  const refresh = useCallback(async () => {
-    if (!hasWorkspace) return;
-    setLoading(true);
-    setError(null);
-    const result = await bridge.command({ kind: 'requirements', command: { name: 'requirements.refresh', workspace } });
-    if (!result.ok) { setError(result.detail ?? result.headline); setLoading(false); return; }
-    await read();
-  }, [hasWorkspace, read, workspace]);
-
-  return { board, loading, error, refresh };
-}
-
-/** REQ-SHELL-023's fourth primary view, backed by the workspace service requirements family (ADR-0041). */
-function Requirements({ workspace }: { workspace: string }) {
-  const requirements = useRequirementsBoard(workspace);
-  const open = useCallback(async (id: ReqId) => {
-    const result = await bridge.command({ kind: 'requirements', command: { name: 'requirements.detail', workspace, id } });
-    if (!result.ok) return { ok: false as const, reason: result.detail ?? result.headline };
-    const value = result.value as RequirementDetail | { error: string };
-    if ('error' in value) return { ok: false as const, reason: value.error };
-    return { ok: true as const, detail: value };
-  }, [workspace]);
-  return <RequirementsView workspaceRoot={workspace} board={requirements.board} loading={requirements.loading} error={requirements.error}
-    onRefresh={() => { void requirements.refresh(); }} onOpenRequirement={open} />;
-}
-
-/**
  * REQ-GIT-082/102: the Git view's state, held above the view so the status strip reads it too. Rebuilds are coalesced
  * with a 120 ms trailing debounce; a result naming a workspace no longer open is discarded; exactly one refresh runs
  * at application start (after the window painted; main awaits the workspace open in flight).
@@ -1255,7 +1185,6 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
         workspace: <Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer} />,
         mission: <Mission workspace={workspace} popOut={popOut} />,
-        requirements: <Requirements workspace={workspace} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
         settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,

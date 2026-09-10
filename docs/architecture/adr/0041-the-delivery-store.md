@@ -643,17 +643,6 @@ the seam's `requirements.queue.set` has no field for (raised in the handoff, add
 `REQ-TRACE-239`'s 100 ms is not measured here — no board is drawn until Part AK′, and this record's "Revisit if"
 still says no such measurement exists.
 
-## Second execution — 2026-09-10 (primary Requirements view)
-
-`packages/ui/src/RequirementsView.tsx` now draws REQ-SHELL-023's fourth primary view from the immutable
-`BoardProjection`. Search, all six grouping axes, the priority/identifier/health sort order, all six filters,
-evidence wording and epic progress delegate to `@rotaris/ui-core`; the view adds horizontally scrollable columns
-and an on-demand detail pane. `apps/desktop/src/renderer/main.tsx` owns one coalesced `requirements.board` read,
-refreshes from channel 10's `requirements:changed` generation notification, and discards replies belonging to a
-workspace that has since changed. This executes the renderer side of the process boundary recorded above without
-changing ADR-0041's ownership or transaction decisions. REQ-TRACE-239's scale measurement remains a separate
-verification obligation.
-
 **What the merge must do:** replace `ENGINE_NOT_MERGED` in `apps/desktop/src/workspace-service/index.ts`'s
 `requirements.command` case with Part AJ's factory; until then the board reports `source: none` with the cause in
 `parseErrors`, and the tests fake the engine around `fixture-store.ts`.

@@ -1,5 +1,6 @@
 import { COMMANDS, slashDescription, slashName, type Command } from '../commands/registry.js';
 import { defaultUnavailableReason } from './parse.js';
+import { cachedPromptRoots, registerPromptCommands } from './prompts.js'; // Part AO
 import { createSlashRegistry } from './registry.js';
 import type { Availability, SlashCommand, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 
@@ -225,5 +226,14 @@ export function buildCatalogue(options: CatalogueOptions): SlashRegistry {
   const registry = createSlashRegistry();
   for (const command of builtInCommands(options)) registry.register(command);
   mirrorPalette(registry, options);
+  // Part AO — defect AO-2: the prompt-file commands (REQ-CHAT-160) join the catalogue HERE, from the answer kept beside
+  // the reader in `slash/prompts.ts`, and not only from the registrar's effect. The composer's popup list is a memo of the
+  // text and THIS registry, and this registry is rebuilt whenever the stash count, the reachable set or the command
+  // context changes: a command registered after that memo ran is invisible until the next keystroke, which is what made
+  // `chat-controls-proof` red with the roots already read and both names registered. Registered LAST, so a name a built-in
+  // or a mirror holds stays with its holder (REQ-CHAT-160); `slash/controls.tsx` still reads the roots, re-registers when
+  // they change, and is what fills the cache this line reads.
+  const prompts = cachedPromptRoots();
+  if (prompts !== null) registerPromptCommands(registry, prompts);
   return registry;
 }

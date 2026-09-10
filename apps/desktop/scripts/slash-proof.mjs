@@ -157,7 +157,11 @@ const setComposer = (text) => `(() => { const el = document.querySelector('.comp
 const readComposer = `(() => { const el = document.querySelector('.composer__input'); return el ? { value: el.value, start: el.selectionStart, end: el.selectionEnd, focused: document.activeElement === el } : null; })()`;
 const readToken = `(() => { const t = document.querySelector('[data-testid="slash-token"]'); const a = document.querySelector('[data-testid="slash-argument"]'); const input = document.querySelector('.composer__input'); if (!t || !input) return { state: null }; const s = getComputedStyle(t); return { state: t.dataset.state, text: t.textContent, color: s.color, weight: s.fontWeight, argument: a ? getComputedStyle(a).color : null, argumentText: a ? a.textContent : null, surface: getComputedStyle(input).backgroundColor, inputColor: getComputedStyle(input).color, caret: getComputedStyle(input).caretColor, popup: document.querySelector('[data-testid="slash-popup"]') !== null }; })()`;
 const readPopup = `(() => { const p = document.querySelector('[data-testid="slash-popup"]'); if (!p) return { open: false }; const l = p.querySelector('[data-testid="slash-popup-list"]'); const rows = [...l.querySelectorAll('[role="option"]')]; const pr = p.getBoundingClientRect(); const ir = document.querySelector('.composer__input').getBoundingClientRect(); return { open: true, rows: rows.length, unavailable: rows.filter((r) => r.dataset.available === '0').length, first: rows[0]?.dataset.command, active: rows.findIndex((r) => r.getAttribute('aria-selected') === 'true'), rowHeight: rows[0]?.offsetHeight, listClient: l.clientHeight, listScroll: l.scrollHeight, popup: { left: pr.left, width: pr.width, bottom: pr.bottom }, input: { left: ir.left, width: ir.width, top: ir.top }, focusInPopup: p.contains(document.activeElement), focusInComposer: document.activeElement === document.querySelector('.composer__input'), kinds: [...new Set(rows.map((r) => r.dataset.kind))], names: rows.map((r) => r.dataset.command) }; })()`;
-const readNotice = `(() => { const n = document.querySelector('[data-testid="composer-notice"] [data-testid="notice"]'); if (!n) return null; return { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent, dismiss: n.querySelector('.notice__dismiss') !== null, severity: n.dataset.severity }; })()`;
+// Part AO: the notice is the shell's ONE persistent slot now (`notice.report`, ADR-0049's fourth execution) — the composer draws none of its own.
+const readNotice = `(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; return { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent, dismiss: n.querySelector('.notice__dismiss') !== null, severity: n.dataset.severity }; })()`;
+// Part AO: the one slot keeps a notice until it is dismissed, replaced or cleared by a run start (REQ-NOTIFY-024/026/058); an executed
+// command raises none and clears none, so "no notice" reads as "not a NEW notice" — the slot still holds the last refusal.
+const sameNotice = (a, b) => (a === null && b === null) || (a !== null && b !== null && a.title === b.title && a.message === b.message);
 const readActive = `(() => { const a = document.activeElement; return a ? { tag: a.tagName.toLowerCase(), testId: a.getAttribute('data-testid'), className: a.className } : null; })()`;
 /** The configured catalogue as the model chip offers it — the source REQ-CHAT-032's "Available:" clause must follow, in its order. */
 const readModels = `[...document.querySelectorAll('#chip-model option')].map((o) => o.value).filter((v) => v !== '')`;
@@ -298,7 +302,7 @@ expect(evalAt(run, T.noRun + 100)?.value === '/stop', 'the /stop text should be 
 results.stopIdle = noRun;
 
 // ── `/stash <prompt>` twice, `/pop` into the emptied composer, the toolbar's Pop into the non-empty one (REQ-LIBRARY-142, REQ-CHAT-042..044) ──
-expect(evalAt(run, T.count1)?.value === '' && evalAt(run, T.count1 + 100) === null, `after /stash the composer is empty and no notice is raised: ${JSON.stringify(evalAt(run, T.count1))} ${JSON.stringify(evalAt(run, T.count1 + 100))}`);
+expect(evalAt(run, T.count1)?.value === '' && sameNotice(evalAt(run, T.count1 + 100), noRun), `after /stash the composer is empty and no NEW notice is raised (Part AO: the last refusal stands in the one slot): ${JSON.stringify(evalAt(run, T.count1))} ${JSON.stringify(evalAt(run, T.count1 + 100))}`);
 expect(match(run, '[data-testid="transcript-stash"]', T.count1)?.attrs['data-count'] === '1', 'the stash count should be 1 after the first /stash');
 expect(match(run, '[data-testid="transcript-stash"]', T.count2)?.attrs['data-count'] === '2', 'the stash count should be 2 after the second /stash');
 expect(match(run, '[data-testid="stash-dialog"]', T.dialog) !== null, '/pop should open the stash dialog');
@@ -316,7 +320,7 @@ results.stash = { popped: popped.value, appended: appended.value, emptyReason: s
 
 // ── `/model scripted-2` succeeds: the chip shows the new name and the notice is shown ──
 const chip = match(run, '[data-testid="chip-model"] select', T.modelSet);
-expect(chip?.text?.includes('scripted-2') && evalAt(run, T.modelSet) === null, `the model chip should offer scripted-2 and no failure notice remain: ${JSON.stringify(chip?.text)} ${JSON.stringify(evalAt(run, T.modelSet))}`);
+expect(chip?.text?.includes('scripted-2') && sameNotice(evalAt(run, T.modelSet), stashEmpty), `the model chip should offer scripted-2 and no NEW failure notice be raised (Part AO): ${JSON.stringify(chip?.text)} ${JSON.stringify(evalAt(run, T.modelSet))}`);
 expect(run.texts[`Model set to scripted-2.@${T.modelSet}`] === true, '"Model set to scripted-2." was not shown');
 results.modelSet = true;
 
@@ -327,7 +331,7 @@ expect(evalAt(run, T.escaped + 100)?.open === false, 'Escape should dismiss the 
 results.escape = escaped.value;
 
 // ── The renderer-wired commands: `/theme` (case-insensitive, applied), `/logout` (the provider domain's vocabulary), `/sessions`, `/new`, `/worktree` (REQ-CHAT-031, REQ-CHAT-159) ──
-expect(evalAt(run, T.themeApplied) === 'nocturne' && evalAt(run, T.themeApplied + 50) === null, `"/theme NOCTURNE" should apply nocturne with no failure notice: ${JSON.stringify(evalAt(run, T.themeApplied))} ${JSON.stringify(evalAt(run, T.themeApplied + 50))}`);
+expect(evalAt(run, T.themeApplied) === 'nocturne' && sameNotice(evalAt(run, T.themeApplied + 50), stashEmpty), `"/theme NOCTURNE" should apply nocturne with no NEW failure notice (Part AO): ${JSON.stringify(evalAt(run, T.themeApplied))} ${JSON.stringify(evalAt(run, T.themeApplied + 50))}`);
 expect(run.texts[`Theme set to nocturne.@${T.themeApplied}`] === true, '"Theme set to nocturne." was not shown');
 expect(evalAt(run, T.themeRestored) === 'rotaris-dim', `"/theme rotaris-dim" should restore the default theme: ${JSON.stringify(evalAt(run, T.themeRestored))}`);
 const logoutNotice = evalAt(run, T.logoutNotice);
@@ -347,13 +351,19 @@ expect(runState === 'Run active', `"/ hello" should have started a run: run stat
 expect(run.texts[`/ hello@${T.running}`] === true, 'the prompt "/ hello" should appear in the transcript');
 results.escapePrompt = { runState };
 
-// ── `/compress` during the run: dispatched, and the run host's refusal (no arm until Part AO) surfaces as `failed`; `/stop` during the run: accepted, the run cancels, no notice ──
+// ── `/compress` during the run: Part AO armed it — the pass runs and raises no refusal (the count is a toast, measured in `chat-controls-proof`); `/stop` during the run: accepted, the run cancels, no notice ──
 const compress = evalAt(run, T.compressFailed);
-expect(compress?.title === 'Command not run' && compress.message === 'The run host does not support forceCompression yet.', `/compress should fail with the run host's refusal until Part AO arms it: ${JSON.stringify(compress)}`);
+expect(compress === null && /control forceCompression on \S+ → ok/.test(run.log), `/compress during the run should be dispatched and accepted with no "Command not run" (Part AO): ${JSON.stringify(compress)}`);
 const stopped = match(run, '[data-testid="run-state"]', T.stopped)?.text;
 expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cancel on \S+ → ok/.test(run.log), `/stop during the run should be accepted and cancel it: run state ${JSON.stringify(stopped)}`);
-expect(evalAt(run, T.stopped) === null && match(run, '[data-testid="composer-notice"]', T.stopped) === null, 'an executed /stop raises no notice and clears the previous one');
-results.run = { compress: compress.message, afterStop: stopped };
+// Part AO: the run start cleared the unscoped "Command not run" (REQ-NOTIFY-058) — measured above at `T.compressFailed` — and the
+// executed /stop raises no refusal of its own. What the ONE slot holds once the run rests is the RUN's own notice, "The run came to
+// rest because a person stopped it.", raised by the run host through main's notice store. A first reading had this read `=== null`,
+// which is the composer banner's rule and never the slot's; the falsified reading is kept in ADR-0049's fourth-execution note.
+const atRest = evalAt(run, T.stopped);
+expect((atRest === null || atRest.title !== 'Command not run') && match(run, '[data-testid="composer-notice"]', T.stopped) === null,
+  `an executed /stop raises no refusal and the composer draws no banner of its own; the slot may hold the run's own rest notice: ${JSON.stringify(atRest)}`);
+results.run = { compress: compress === null ? null : compress.message, afterStop: stopped, atRest: atRest === null ? null : atRest.title };
 
 results.passed = true;
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));

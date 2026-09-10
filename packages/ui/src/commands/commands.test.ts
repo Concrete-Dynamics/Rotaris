@@ -40,6 +40,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       // Part AK2 — REQ-TRACE-390's move control, registered here rather than bound privately by the board (the pin rides with the entry).
       ['requirements.move', 'Move requirement', 'Ctrl+M'],
       ['terminal.open', 'Open terminal', 'Ctrl+Shift+T'], // Part AL2 — the sixth chord, back from the omitted list
+      ['run.compress', 'Compress context', null], // Part AO — REQ-MONITOR-097's palette entry, shortcut-less
     ]);
   });
 

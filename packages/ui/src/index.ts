@@ -48,3 +48,5 @@ export * from './terminal/index.js';
 // Part AK2
 export * from './requirements/index.js';
 export * from './requirements/panes/index.js'; // Part AP
+// Part AO
+export * from './slash/prompts.js';

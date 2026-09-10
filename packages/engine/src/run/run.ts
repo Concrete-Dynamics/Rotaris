@@ -26,6 +26,7 @@ import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladd
 import { pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
+import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -256,8 +257,16 @@ export class Run {
   private readonly catalogue: readonly CatalogueEntry[];
   /** The root agent's ladder state for this run (one same-tier fallback, one role fallback — REQ-ORCH-091 b / REQ-ORCH-144). */
   private rootCell: AgentResilienceCell | null = null;
-  /** REQ-MONITOR-085 (Part AH): the agent whose context is being compressed right now; null while none is. */
-  private compressing: { agent: string; startedAt: string } | null = null;
+  /**
+   * REQ-MONITOR-085 (Part AH): the agents whose context is being compressed right now, by name, with the instant each
+   * began. Part AO made this a map: a manual pass compresses every live conversation CONCURRENTLY (REQ-MONITOR-092),
+   * and one agent name with one instant could not say so — the record's field names them all, comma-joined, from the
+   * earliest start.
+   */
+  private readonly compressing = new Map<string, string>();
+  // Part AO
+  /** ADR-0060 decision 1's registry (Part AO): every conversation live in this run, for the `forceCompression` arm. */
+  readonly conversations = new ConversationRegistry();
   private appliedEntryModel: ModelRef | null = null;
 
   constructor(private readonly deps: RunDeps) {
@@ -316,7 +325,21 @@ export class Run {
    * derived from the live run and mirrored by no column, so a process that died holds none.
    */
   get currentCompression(): { readonly agent: string; readonly startedAt: string } | null {
-    return this.compressing;
+    if (this.compressing.size === 0) return null;
+    const startedAt = [...this.compressing.values()].sort()[0]!;
+    return { agent: [...this.compressing.keys()].join(', '), startedAt };
+  }
+
+  // Part AO
+  /**
+   * REQ-CHAT-080/081, REQ-MONITOR-090..096 (Part AO): the manual pass — every live conversation, concurrently,
+   * settling once all have, unconditionally. `null` is REQ-MONITOR-091's refusal: no agent conversation is active,
+   * which is also what a run whose configuration offers no compressor reports (no turn could register). The run's
+   * own abort signal bounds it, so a cancel during the pass ends it as it ends any model call.
+   */
+  async forceCompression(): Promise<ManualCompressionReport | null> {
+    if (this.ended || this.conversations.size === 0) return null;
+    return this.conversations.compressAll(this.abort.signal);
   }
   /**
    * REQ-MONITOR-089 (Part AH): the entry role's newest prompt-token reading and the limit it is measured
@@ -547,13 +570,17 @@ export class Run {
     return {
       compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs },
       trigger: c.triggerFor(choice.model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
+      // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
+      registry: this.conversations,
       /**
        * REQ-MONITOR-085: the status must be VISIBLE while the pass runs. A field derived from the live run is
        * only as visible as the next publication, and a compressing pass writes nothing for as long as it lasts —
        * so the change is published here rather than waiting for a commit that will not come until it is over.
        */
-      onState: (agent) => {
-        this.compressing = agent === null ? null : { agent, startedAt: toIsoUtc(this.deps.clocks.wall.instant()) };
+      onState: (agent, name) => {
+        // Part AO: the map holds every agent compressing at once; the null edge names the agent it clears.
+        if (agent === null) this.compressing.delete(name);
+        else this.compressing.set(agent, toIsoUtc(this.deps.clocks.wall.instant()));
         this.deps.owner.reconcile();
       },
     };

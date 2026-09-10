@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SessionRecord } from '@rotaris/contracts';
 import { REASONING_LEVELS, RUN_STATE_TAGS, runHeaderControlReason, runStateLabel, runTimingLabel, runTimingSeconds, type RunState } from './composer.js';
 import { markMotionStart } from './motion.js';
+import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js'; // Part AO
 
 /**
  * Part AN — the run header, extracted from `WorkspaceView.tsx` as a pure move of Part AB's markup so that Part AO can
@@ -48,6 +49,41 @@ function RunTiming({ session, busy, stepStartedAt }: { session: SessionRecord | 
   );
 }
 
+/**
+ * Part AO — REQ-CHAT-078..081 / REQ-MONITOR-090..094: "Compress context". Enabled only while a run is running and
+ * locally owned, disabled with the same four reason texts as the selectors beside it (`runHeaderControlReason`);
+ * on activation it relabels "Compressing…" and disables until the run host settles the concurrent pass
+ * (REQ-CHAT-079/080), then restores the label. The start toast, the nothing-to-compress toast and the idle refusal
+ * are `compressNow`'s; the count and the per-agent failures are the run host's. It reaches the run host through the
+ * host `slash/host.ts` describes, because this header's prop list is not this part's to widen.
+ *
+ * Craft: the mockup's transcript column header carries "Compress context" as a quiet control in the row after the run
+ * tag, beside pause and stop (`docs/design/README.md` §7, WORKSPACE → transcript column), drawn there as an icon with a
+ * tooltip. The product draws this row's controls as compact ghost TEXT buttons — Part X's stash opener set that reading
+ * of the same row, and a label the specification fixes is not hidden behind a tooltip (the icon font exists, `ph ph-*`,
+ * and is not the reason) — so it is that button, in the header's `run-controls` region with the two selectors; no
+ * container of its own.
+ */
+function CompressControl({ runState, runActive }: { runState: RunState; runActive: boolean }) {
+  const host = useChatControls();
+  const [pending, setPending] = useState(false);
+  const reason = runHeaderControlReason(runState) ?? (runActive ? null : runHeaderControlReason('idle'));
+  const disabled = reason !== null || host === null || pending;
+  const activate = () => {
+    if (host === null || pending) return;
+    setPending(true);
+    void compressNow(host).finally(() => setPending(false));
+  };
+  return (
+    <>
+      <button type="button" className="btn btn-ghost btn-compact run-header__compress" data-testid="run-compress" data-pending={pending ? '1' : '0'}
+        disabled={disabled} aria-disabled={disabled} aria-describedby="run-compress-reason"
+        title={reason ?? COMPRESS_DESCRIPTION} onClick={activate}>{pending ? COMPRESSING_LABEL : COMPRESS_LABEL}</button>
+      <span className="visually-hidden" id="run-compress-reason">{reason ?? COMPRESS_DESCRIPTION}</span>
+    </>
+  );
+}
+
 export function RunHeader({ runState, session, runActive, stepStartedAt, models, onSetModel, onSetReasoning, onError }: RunHeaderProps) {
   /**
    * REQ-CHAT-078 / REQ-CHAT-006's closing sentence: the run header's own model and reasoning selectors change the
@@ -64,6 +100,10 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
         {runStateLabel(runState)}
       </span>
       <RunTiming session={session} busy={runActive} stepStartedAt={stepStartedAt} />
+      {/* Part AO: the header's third live-run control, in the same region as the two selectors (REQ-CHAT-078). */}
+      <div className="run-controls" aria-label="Active run controls">
+        <CompressControl runState={runState} runActive={runActive} />
+      </div>
       {(onSetModel || onSetReasoning) && (
         <div className="run-controls" aria-label="Active run model and reasoning">
           <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>

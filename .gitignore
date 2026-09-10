@@ -55,3 +55,6 @@ apps/desktop/.cache/
 .terminal-stream-proof/
 # Part AP
 .requirements-runs-proof/
+
+# Part AO
+.chat-controls-proof/

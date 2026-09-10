@@ -10,6 +10,7 @@ import {
 import { RunHeader } from './RunHeader.js';
 import { NoticeBanner } from './Notice.js';
 import { useCommandContext } from './AppShell.js';
+import { ClearTranscriptControl } from './slash/controls.js'; // Part AO
 import { buildCatalogue, type Reachable } from './slash/catalogue.js';
 import { slashRoleColours, slashTokenSplit, slashTokenState } from './slash/highlight.js';
 import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameToken, slashOutcomeMessage, slashPopupShouldOpen } from './slash/parse.js';
@@ -986,7 +987,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               <button type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
                 data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</button>
             )}
-            {/* slot:clear (AO) */}
+            {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
+              * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
+              * the catalogue's registry here. The toolbar's own condition is not widened: the renderer always passes `onOpenStash`. */}
+            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} onError={setError} />
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
             {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
             {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}

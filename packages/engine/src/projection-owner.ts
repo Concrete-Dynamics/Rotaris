@@ -90,6 +90,23 @@ export class ProjectionOwner {
       return;
     }
     if (c.kind === 'save') { this.publishSnapshot(); return; }
+    // Part AO
+    if (c.kind === 'clear') {
+      /**
+       * REQ-CHAT-084 (Part AO): the transcript was cleared in the store. Every held row goes — the durable copies too,
+       * since a freeze after this must not restore rows the store no longer has — the lowest index resets, a pending
+       * growth tick is cancelled (its rows are gone), and the view is re-projected: an increment from index 0 carrying
+       * no rows, which the replica applies as "nothing from 0 onward" (REQ-EVENTS-052's upsert-by-index rule), then the
+       * whole-session update. The counters, the sequence and the publisher are untouched.
+       */
+      this.cancelGrowth();
+      this.rows.clear();
+      this.durableRows.clear();
+      this.lowestHeld = Number.POSITIVE_INFINITY;
+      this.publishIncrement(0, []);
+      this.publishSnapshot();
+      return;
+    }
     // Part R found the twenty-eighth defect here: the record was published on a SAVE only, because when this owner was built
     // (2026-09-03) the run's status saves were the only thing that changed it. From Part B on the ledger changes it too —
     // a child spawned, claimed or settled, a tool started or finished — with no save, so every agent surface showed a

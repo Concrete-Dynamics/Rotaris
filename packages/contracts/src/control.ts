@@ -54,9 +54,33 @@ export const ControlRequestSchema = z.object({
 });
 export type ControlRequest = z.infer<typeof ControlRequestSchema>;
 
+// Part AO
+/**
+ * Part AO — the result shapes of the two arms this part built (`forceCompression`, `clearTranscript`), beside the
+ * boolean. REQ-MONITOR-005 fixes the STRING VALUE: populated for exactly the two prompt-creating operations and
+ * never on a `false` outcome — and both arms leave it absent. What they add are two separate, optional fields,
+ * because the sentences REQ-CHAT-079/080/084 and REQ-MONITOR-091/094 put in front of the user name facts only the
+ * run host holds: how many agents settled, which failed and why (`compression`), and which of the two failure
+ * channels a refusal belongs to (`refusal` — a busy transcript is a toast, a failed clear a persistent notice).
+ * The renderer-facing `control()` helper that pre-dates these fields passes `ok` and `value` only; carrying
+ * `refusal.message` through it is raised in Part AO's handoff as a ruling request rather than done in a file
+ * this part does not own.
+ */
+export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed'] as const;
+export type ControlRefusalCode = (typeof CONTROL_REFUSAL_CODES)[number];
+export const ControlRefusalSchema = z.object({ code: z.enum(CONTROL_REFUSAL_CODES), message: z.string() });
+export type ControlRefusal = z.infer<typeof ControlRefusalSchema>;
+/** REQ-CHAT-080 / REQ-MONITOR-094: one settled concurrent pass — how many compressed, how many had nothing between the original request and the preserved turns, and every failure with its agent and reason. */
+export const CompressionReportSchema = z.object({
+  compressed: z.number().int().nonnegative(),
+  unchanged: z.number().int().nonnegative(),
+  failed: z.array(z.object({ agent: z.string(), reason: z.string() })),
+});
+export type CompressionReport = z.infer<typeof CompressionReportSchema>;
+
 export const ControlResultSchema = z.union([
-  z.object({ ok: z.literal(true), value: z.string().optional() }),
-  z.object({ ok: z.literal(false) }),
+  z.object({ ok: z.literal(true), value: z.string().optional(), compression: CompressionReportSchema.optional() }),
+  z.object({ ok: z.literal(false), refusal: ControlRefusalSchema.optional() }),
 ]);
 export type ControlResult = z.infer<typeof ControlResultSchema>;
 

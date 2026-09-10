@@ -1,5 +1,6 @@
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
 import { openTerminalWindow } from '../terminal/host.js'; // Part AL2
+import { compressFromPalette } from '../slash/host.js'; // Part AO
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
@@ -89,6 +90,10 @@ export const COMMANDS: readonly Command[] = [
   // Workspace's provider registers; in a window with no host (an auxiliary window) it does nothing, and is still listed
   // because REQ-SHELL-108 keeps the feature discoverable from a cold start.
   { id: 'terminal.open', label: 'Open terminal', shortcut: 'Ctrl+Shift+T', keywords: ['terminal', 'shell', 'console', 'pty', 'command', 'output'], available: always, run: () => { openTerminalWindow(); } },
+  // Part AO — REQ-MONITOR-097 / REQ-MONITOR-271: the palette's `compress`, listed always and refused with "No run is active."
+  // when run while no run executes (the palette hides an unavailable entry, so "listed with its reason" is the refusal on
+  // activation); its slash mirror is `/compress-context`, beside the built-in `/compress` (REQ-CHAT-028's rule keeps both).
+  { id: 'run.compress', label: 'Compress context', keywords: ['compress', 'context', 'condense', 'compact', 'memory'], available: always, run: () => compressFromPalette() },
 ];
 
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */

@@ -625,8 +625,8 @@ banner; the first half is the design system's own specimen cards, which are the 
 | Library tabs and cards | `LIBRARY` | `library/LibraryView.tsx` |
 | Settings panes and save bar | `SETTINGS` | `SettingsView.tsx`, `settings/` |
 | Provider auth | `provider auth modal` | `ProviderDialog.tsx` |
-| Terminal window and transcript preview | — (no window mockup, §3.2); `WORKSPACE` → the live terminal preview block for the preview | `terminal/TerminalWindow.tsx`, `terminal/TerminalPreviewBlock.tsx` |
-| Requirements board, review, new requirement | `REQUIREMENTS`, `Review view` modal, `New requirement` dialog | — the board is Part AK′'s (wave 2); the projection and contracts exist since Part AK |
+| Terminal window and transcript preview | — (no window mockup, §3.2); `WORKSPACE` → the live terminal preview block for the preview | `terminal/TerminalWindow.tsx`, `terminal/TerminalPreviewBlock.tsx` — **drawn and wired 2026-09-10** (Parts AM, AL′): the window has no design and is built from the language alone; the preview follows the mockup's block |
+| Requirements board, review, new requirement | `REQUIREMENTS`, `Review view` modal, `New requirement` dialog | **drawn 2026-09-10**: `requirements/` (Part AK′) and `requirements/panes/` (Part AP). The Kanban/List/Graph tabs are craft; the axes, the columns and the detail's five sections are `REQ-TRACE`'s and govern where they differ |
 | First launch | `first-launch guide` | — not drawn |
 
 Mission has no counterpart to consult; §3.2 is why. Requirements has one (§3.1 calls its coverage good) and the board is drawn against it — an earlier version of this line said otherwise and was wrong.

@@ -114,6 +114,10 @@ export function TerminalWindow({ streams, actions, onGoToWorkspace, focusStream,
         if (lastRunning.current.get(t.id) === true && !t.running) {
           // Exited: disarm, the exit notice once, the read-only banner re-enabled by the state change.
           patch(t.id, (s) => ({ armed: false, readOnlySpent: false, banner: s.exitedShown ? s.banner : BANNERS.exited(outcomeLabel(t.meta)), exitedShown: true }));
+        } else if (lastRunning.current.get(t.id) === false && t.running) {
+          // Part AL2 (defect AL2-4): the agent's next command re-opened the same stream — the exit notice leaves the slot,
+          // and the once-per-lifetime notices are re-enabled by the exited state changing (REQ-SHELL-090/091).
+          patch(t.id, (s) => ({ readOnlySpent: false, exitedShown: false, banner: s.banner?.title === 'Process exited' ? null : s.banner }));
         }
         lastRunning.current.set(t.id, t.running);
       }

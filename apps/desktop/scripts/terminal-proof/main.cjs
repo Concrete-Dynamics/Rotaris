@@ -5,7 +5,7 @@
  * `executeJavaScript`. Every assertion is collected, never thrown, so one run reports every finding; the outcome and
  * every measurement go to `results.json` and the exit code is 0 only when nothing failed.
  */
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { writeFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 
@@ -41,7 +41,8 @@ app.whenReady().then(async () => {
     // preview in a column BESIDE it, so the Electron window is wider than the box it measures and no taller — a
     // display's work area clamps a taller window and the proof would measure the clamp, not the box.
     width: 1540, height: 620, show: true, useContentSize: true,
-    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: true },
+    // Part AL2: the proof's preload gives the page the product's two verbs (a frame subscription, a command) for the live section.
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: true, ...(process.env.TERMINAL_PROOF_PRELOAD ? { preload: process.env.TERMINAL_PROOF_PRELOAD } : {}) },
   });
   const wc = win.webContents;
   const consoleErrors = [];
@@ -357,6 +358,202 @@ app.whenReady().then(async () => {
     await capture('window-empty');
   } catch (error) {
     failures.push(`harness: ${error && error.stack ? error.stack : String(error)}`);
+  }
+
+  // ── Part AL2 — REQ-SHELL-166 against a REAL pseudo-terminal, through the window ──────────────────────────────
+  // The run-host half is `harness.cjs` (a Node child: the real terminal manager over a real PowerShell PTY, the real
+  // `createTerminalHost`, the real `FrameDeliveryLimiter` over a real `UpdateRelay`); this process relays its frames to
+  // the page on the proof's preload channel and the page's `terminal.*` requests back to it — one hop each way, as in
+  // the product. Every key below is a REAL input event; every reading is the page's own. The echo program is a Node
+  // script in raw mode: it echoes what it receives, and acts on Ctrl-C (exit 130) and Ctrl-D (exit 0), so the two
+  // controls REQ-SHELL-166 names are observable on Windows, where a shell's own Ctrl-C ends the wrapped line and its
+  // exit marker with it.
+  const LIVE = 'fg:live-1';
+  const harnessPath = process.env.TERMINAL_PROOF_HARNESS;
+  const live = {};
+  results.live = live;
+  let child = null;
+  try {
+    if (!harnessPath) throw new Error('TERMINAL_PROOF_HARNESS is not set');
+    const { spawn } = require('node:child_process');
+    const { createInterface } = require('node:readline');
+    child = spawn(process.execPath, [harnessPath], { cwd: process.env.TERMINAL_PROOF_REPO ?? process.cwd(), env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    const pendingReplies = new Map();
+    const harnessLog = [];
+    let nextId = 1;
+    let readyResolve = null;
+    const ready = new Promise((resolve) => { readyResolve = resolve; });
+    const frameLog = [];
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      let m;
+      try { m = JSON.parse(line); } catch { harnessLog.push(`unparsed: ${line.slice(0, 200)}`); return; }
+      if (m.ready) { readyResolve(m); return; }
+      if (m.log) { harnessLog.push(m.log); return; }
+      if (m.fatal) { harnessLog.push(`fatal: ${m.fatal}`); return; }
+      if (m.frame) { frameLog.push({ seq: m.frame.seq, kind: m.frame.kind, streamId: m.frame.streamId, at: Date.now() }); if (!wc.isDestroyed()) wc.send('proof:frame', m.frame); return; }
+      const p = pendingReplies.get(m.id);
+      if (!p) return;
+      if (m.started) { p.started(m); return; }
+      pendingReplies.delete(m.id);
+      if (m.error) p.reject(new Error(m.error)); else p.resolve(m);
+    });
+    createInterface({ input: child.stderr }).on('line', (line) => harnessLog.push(`stderr: ${line.slice(0, 300)}`));
+    const ask = (op, body = {}) => new Promise((resolve, reject) => { const id = nextId++; pendingReplies.set(id, { resolve, reject, started: () => undefined }); child.stdin.write(`${JSON.stringify({ id, op, ...body })}\n`); });
+    /** A command in the PTY: `started` resolves when the run host took it, `done` with the tool's result. */
+    const run = (command, extra = {}) => {
+      const id = nextId++;
+      let started;
+      const startedP = new Promise((resolve) => { started = resolve; });
+      const done = new Promise((resolve, reject) => { pendingReplies.set(id, { resolve, reject, started }); });
+      child.stdin.write(`${JSON.stringify({ id, op: 'run', command, ...extra })}\n`);
+      return { started: startedP, done };
+    };
+    // The page's requests, shape for shape, to the real run-host handler; the reply as the product's `CommandOutcome`.
+    ipcMain.handle('proof:command', async (_event, request) => {
+      const r = await ask('terminal', { request });
+      const reply = r.reply;
+      if (reply.kind === 'refused') return { ok: false, code: reply.code, headline: reply.headline };
+      if (reply.kind === 'terminal.streams') return { ok: true, value: reply.streams };
+      return { ok: true };
+    });
+    const until = async (pred, ms, every = 10) => { const t0 = Date.now(); for (;;) { const v = await pred(); if (v) return v; if (Date.now() - t0 > ms) return null; await pause(every); } };
+    // No pause between the three events, and Shift held for a capital (Electron lower-cases a `char` sent without it).
+    const burst = (keyCode, char = null) => { const modifiers = /^[A-Z]$/.test(keyCode) ? ['shift'] : []; wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); if (char !== null) wc.sendInputEvent({ type: 'char', keyCode: char, modifiers }); wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
+    const trimmed = (lines) => { const out = [...(lines ?? [])]; while (out.length > 0 && out[out.length - 1] === '') out.pop(); return out; };
+
+    const readyMessage = await until(() => ready.then((m) => m).catch(() => null), 30_000, 50);
+    if (!readyMessage) throw new Error(`the harness did not become ready: ${harnessLog.join(' | ')}`);
+    live.shell = readyMessage.shell;
+    const { writeFileSync: writeEcho } = require('node:fs');
+    // Under `out/`, which the lint's ignore list covers (`**/out/**`): the script is proof output, not source.
+    const echoScript = join(out, 'out', 'echo.cjs');
+    writeEcho(echoScript, [
+      "const stdin = process.stdin; stdin.setRawMode(true); stdin.resume(); stdin.setEncoding('utf8');",
+      "process.stdout.write('READY\\r\\n');",
+      "stdin.on('data', (d) => { for (const ch of d) {",
+      "  if (ch === '\\x03') { process.stdout.write('\\r\\nINTERRUPTED\\r\\n'); process.exit(130); }",
+      "  if (ch === '\\x04') { process.stdout.write('\\r\\nEOF\\r\\n'); process.exit(0); }",
+      "  process.stdout.write(ch === '\\r' ? '\\r\\n' : ch);",
+      '} });',
+    ].join('\n'));
+    const echoCommand = `node "${echoScript}"`;
+
+    await exec(`window.__terminalProof.live(${JSON.stringify(LIVE)})`);
+    await exec(`window.__terminalProof.focusStream(${JSON.stringify(LIVE)})`);
+    // ── The window fills from the real stream; the row preview follows (REQ-SHELL-079/104) ──────────────────
+    const first = run(echoCommand);
+    await first.started;
+    const tabUp = await until(() => attr(`[data-testid="term-tab-button"][data-stream-id="${LIVE}"]`, 'data-running'), 8_000);
+    expect('live.tabFromRealStream', tabUp === 'true', { tabUp, frames: frameLog.slice(0, 5), log: harnessLog.slice(-5) });
+    const readyOnGrid = await until(async () => { const st = await state(LIVE); return st.stream.grid && st.stream.grid.lines.some((l) => l.startsWith('READY')) ? st : null; }, 8_000);
+    expect('live.readyPainted', readyOnGrid !== null, readyOnGrid ? readyOnGrid.stream.grid.lines.slice(0, 3) : null);
+    expect('live.previewFollows', readyOnGrid !== null && readyOnGrid.stream.preview && readyOnGrid.stream.preview.lines.some((l) => l.startsWith('READY')) && (await attr('[data-testid="term-preview"]', 'data-stream-id')) === LIVE, readyOnGrid ? readyOnGrid.stream.preview : null);
+    expect('live.headerCommand', (await text('[data-testid="term-command"]')) === `$ ${echoCommand}` && (await text('[data-testid="term-outcome"]')) === 'running', await text('[data-testid="term-command"]'));
+    // ── REQ-SHELL-100/106: the grid's geometry reached the PTY and came back in the stream's meta ──────────────
+    const reported = await until(async () => { const st = await state(LIVE); const last = st.log.resize.filter((r) => r.streamId === LIVE).at(-1); return last && st.stream.meta && st.stream.meta.cols === last.cols && st.stream.meta.rows === last.rows ? { last, meta: [st.stream.meta.cols, st.stream.meta.rows], grid: [st.stream.grid.cols, st.stream.grid.rows] } : null; }, 5_000);
+    expect('live.metaFollowsReportedGeometry', reported !== null && reported.grid[0] === reported.last.cols && reported.grid[1] === reported.last.rows, reported ?? (await state(LIVE)).log.resize);
+    live.geometry = reported;
+    // ── Take control (REQ-SHELL-089), then REQ-SHELL-166's echo: key press to painted frame ─────────────────────
+    await click('[data-testid="term-take-control"]');
+    expect('live.armed', (await text('[data-testid="term-take-control"]')) === 'Release control' && (await active())?.testid === 'term-grid-input', await active());
+    const echoes = [];
+    for (const sentinel of ['q', 'w', 'e']) {
+      await exec(`window.__terminalProof.echoProbe(${JSON.stringify(sentinel)})`);
+      await key(sentinel, [], sentinel);
+      const probe = await until(async () => { const st = await state(LIVE); return st.echo && st.echo.paintedAt !== null ? st.echo : null; }, 3_000, 5);
+      echoes.push(probe ? { sentinel, keyToFrameMs: Number((probe.frameAt - probe.pressedAt).toFixed(1)), keyToPaintMs: Number((probe.paintedAt - probe.pressedAt).toFixed(1)) } : { sentinel, keyToFrameMs: null, keyToPaintMs: null });
+      await pause(60);
+    }
+    await exec('window.__terminalProof.echoProbe(null)');
+    live.echo = echoes;
+    const worstEcho = Math.max(...echoes.map((e) => e.keyToPaintMs ?? Number.POSITIVE_INFINITY));
+    expect('live.echoUnder100ms', echoes.every((e) => e.keyToPaintMs !== null) && worstEcho < 100, echoes);
+    await key('Enter');
+    // ── REQ-SHELL-096/166: order and fidelity — a burst of keys, two unmapped keys inside it, nothing invented ────
+    const typed = 'abc123XYZ';
+    const sentBefore = (await state(LIVE)).log.sendKeys.length;
+    for (const [i, ch] of [...typed].entries()) { burst(ch, ch); if (i === 3) burst('F5'); if (i === 6) burst('Insert'); }
+    const echoedLine = await until(async () => { const st = await state(LIVE); const line = st.stream.grid.lines.find((l) => l.startsWith(typed)); return line ? st : null; }, 5_000);
+    expect('live.orderAndFidelityOnGrid', echoedLine !== null && echoedLine.stream.grid.lines.some((l) => l === typed), echoedLine ? echoedLine.stream.grid.lines.slice(0, 6) : null);
+    const sentBurst = (await state(LIVE)).log.sendKeys.slice(sentBefore);
+    expect('live.unmappedTransmitNothing', sentBurst.length === typed.length && sentBurst.map((k) => k.keys[0].text).join('') === typed, sentBurst.map((k) => k.keys[0]));
+    await key('Enter');
+    // ── REQ-SHELL-166: end input within 500 ms; the command's output is exactly what was typed (REQ-SHELL-096) ───
+    const t0End = Date.now();
+    await click('[data-testid="term-end-input"]');
+    const firstDone = await Promise.race([first.done, pause(5_000).then(() => null)]);
+    const endInputMs = Date.now() - t0End;
+    live.endInput = { ms: endInputMs, exitCode: firstDone?.result.exitCode ?? null, output: firstDone?.result.output ?? null };
+    expect('live.endInputUnder500ms', firstDone !== null && endInputMs < 500 && /EOF\s*$/.test(firstDone.result.output) && firstDone.result.exitCode === 0, live.endInput);
+    const outLines = (firstDone?.result.output ?? '').split('\n').map((l) => l.trim());
+    expect('live.fidelityInProcess', outLines.includes(typed) && outLines.filter((l) => l === 'qwe').length === 1 && outLines.filter((l) => l === typed).length === 1, outLines);
+    // Defect AL2-3, measured and NOT repaired here: a PTY resize while a command runs makes ConPTY repaint its viewport,
+    // and the observation captured from the raw bytes carries the repainted text a second time ("READY" twice, the
+    // start marker inside the body, a screen's worth of blank lines). The capture is ADR-0020's VT-strip over raw
+    // bytes; the repair is an observation derived from the screen model, an ADR-0020 revision — recorded, not made.
+    live.resizeRepaint = { readyLines: outLines.filter((l) => l === 'READY').length, markerInBody: outLines.some((l) => /^__rot_[0-9a-f]+_s$/.test(l)), lines: outLines.length };
+    // The window shows the exit (REQ-SHELL-091) and the previews agree (REQ-SHELL-102).
+    const exited = await until(async () => ((await text('[data-testid="term-outcome"]')) === 'exit 0' ? true : null), 3_000);
+    expect('live.exitShown', exited === true && (await text('[data-testid="term-preview-state"]')) === 'exit 0', await text('[data-testid="term-outcome"]'));
+    // ── REQ-SHELL-166: interrupt within 500 ms; REQ-SHELL-107's audit entries as spec 12 words them ─────────────
+    const second = run(echoCommand);
+    await second.started;
+    const readyAgain = await until(async () => ((await text('[data-testid="term-outcome"]')) === 'running' ? true : null), 8_000);
+    expect('live.secondCommandReopensStream', readyAgain === true, await text('[data-testid="term-outcome"]'));
+    await pause(300);
+    const t0Int = Date.now();
+    await click('[data-testid="term-interrupt"]');
+    const secondDone = await Promise.race([second.done, pause(5_000).then(() => null)]);
+    const interruptMs = Date.now() - t0Int;
+    live.interrupt = { ms: interruptMs, exitCode: secondDone?.result.exitCode ?? null, output: secondDone?.result.output ?? null };
+    expect('live.interruptUnder500ms', secondDone !== null && interruptMs < 500 && /INTERRUPTED/.test(secondDone.result.output) && secondDone.result.exitCode === 130, live.interrupt);
+    const stats = await ask('stats');
+    const audits = stats.audits;
+    live.audits = audits.map((a) => ({ decision: a.decision, source: a.source, tool_name: a.tool_name, summary: a.summary, reason: a.reason }));
+    const auditOk = audits.length >= 4
+      && audits.every((a) => a.decision === 'user-input' && a.source === 'user' && a.tool_name === 'terminal' && a.reason === 'The user acted in the terminal directly; no policy applies.' && a.summary.startsWith(`terminal ${LIVE}: `) && a.summary.endsWith(`(in: ${echoCommand})`))
+      && audits.some((a) => a.summary.includes('took control of the terminal'))
+      && audits.some((a) => a.summary.includes(`typed ${JSON.stringify(typed)}`))
+      && audits.some((a) => a.summary.includes('sent C-d'))
+      && audits.some((a) => a.summary.includes('sent C-c'));
+    expect('live.auditEntriesAsSpec12', auditOk, live.audits);
+    // ── REQ-SHELL-166: the size the process reports equals the grid's last report ────────────────────────────────
+    const lastGeometry = (await state(LIVE)).log.resize.filter((r) => r.streamId === LIVE).at(-1);
+    const sizeRun = run('Write-Output "cols=$($Host.UI.RawUI.WindowSize.Width) rows=$($Host.UI.RawUI.WindowSize.Height)"');
+    const sizeDone = await Promise.race([sizeRun.done, pause(15_000).then(() => null)]);
+    live.resize = { reported: lastGeometry, process: sizeDone?.result.output ?? null };
+    expect('live.processReportsGridSize', sizeDone !== null && lastGeometry && sizeDone.result.output.includes(`cols=${lastGeometry.cols} rows=${lastGeometry.rows}`), live.resize);
+    // ── REQ-SHELL-102 / REQ-SHELL-075 (b): three surfaces over one live stream, at rest after the closing frame ──
+    await pause(400);
+    const rest = await state(LIVE);
+    const gridLines = trimmed(rest.stream.grid.lines);
+    const three = { grid: gridLines, preview: rest.stream.preview?.lines ?? null, persona: rest.stream.persona?.lines ?? null, state: [rest.stream.meta?.running, rest.stream.previewMeta?.running, rest.stream.personaMeta?.running], truncated: [rest.stream.meta?.truncated, rest.stream.previewMeta?.truncated, rest.stream.personaMeta?.truncated], exit: [rest.stream.meta?.exitCode, rest.stream.previewMeta?.exitCode, rest.stream.personaMeta?.exitCode] };
+    live.threeSurfaces = { lines: gridLines.length, state: three.state, exit: three.exit };
+    expect('live.threeSurfacesIdentical', JSON.stringify(three.grid) === JSON.stringify(three.preview) && JSON.stringify(three.grid) === JSON.stringify(three.persona) && gridLines.length > 0 && new Set(three.state).size === 1 && new Set(three.truncated).size === 1 && new Set(three.exit).size === 1, three);
+    // ── REQ-SHELL-103/166: throughput — the same output and exit status with the window closed and open ──────────
+    const flood = '1..10000 | ForEach-Object { "line $_" }; cmd /c "exit 3"';
+    await ask('deliver', { on: false });
+    const closedRun = run(flood);
+    const closed = await Promise.race([closedRun.done, pause(60_000).then(() => null)]);
+    await ask('deliver', { on: true });
+    const openRun = run(flood);
+    const open = await Promise.race([openRun.done, pause(60_000).then(() => null)]);
+    await pause(500);
+    const closedLines = (closed?.result.output ?? '').split('\n');
+    const openLines = (open?.result.output ?? '').split('\n');
+    const firstDiff = closedLines.findIndex((l, i) => l !== openLines[i]);
+    live.throughput = { closedMs: closed?.result.elapsedMs ?? null, openMs: open?.result.elapsedMs ?? null, closedExit: closed?.result.exitCode ?? null, openExit: open?.result.exitCode ?? null, closedLines: closedLines.length, lines: openLines.length, outputEqual: closed !== null && open !== null && closed.result.output === open.result.output, ...(firstDiff >= 0 ? { firstDiff: { at: firstDiff, closed: closedLines.slice(firstDiff, firstDiff + 3), open: openLines.slice(firstDiff, firstDiff + 3) } } : {}) };
+    expect('live.throughputEqualWindowClosedOrOpen', closed !== null && open !== null && closed.result.output === open.result.output && closed.result.exitCode === open.result.exitCode && open.result.exitCode === 3 && open.result.output.split('\n').length === 10000, live.throughput);
+    const afterFlood = await state(LIVE);
+    expect('live.floodPainted', afterFlood.stream.grid.lines.some((l) => l.includes('line 10000')) && afterFlood.stream.preview.lines.some((l) => l.includes('line 10000')), afterFlood.stream.grid.lines.slice(-3));
+    const finalStats = await ask('stats');
+    live.delivery = { delivered: finalStats.delivered, limiter: finalStats.limiter, counters: finalStats.counters };
+    live.harnessLog = harnessLog.slice(-20);
+  } catch (error) {
+    failures.push(`live harness: ${error && error.stack ? error.stack : String(error)}`);
+  } finally {
+    ipcMain.removeHandler('proof:command');
+    if (child) { try { child.stdin.write('{"id":0,"op":"quit"}\n'); } catch { /* gone */ } await pause(300); try { child.kill(); } catch { /* gone */ } }
   }
 
   results.consoleErrors = consoleErrors;

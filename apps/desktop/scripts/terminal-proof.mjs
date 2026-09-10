@@ -31,7 +31,8 @@ const results = { generatedAt: new Date().toISOString(), platform: process.platf
 
 // ── 1. The unit suite ──────────────────────────────────────────────────────────────────────────────────────────
 if (!process.argv.includes('--skip-tests')) {
-  const args = ['exec', 'vitest', 'run', 'packages/ui/src/terminal/terminal.test.ts', 'packages/contracts/src/contracts.test.ts'];
+  // Part AL2 adds main's two suites: the delivery limiter (with defect AL2-1's regression) and the window registry.
+  const args = ['exec', 'vitest', 'run', 'packages/ui/src/terminal/terminal.test.ts', 'packages/contracts/src/contracts.test.ts', 'apps/desktop/src/main/terminal.test.ts', 'apps/desktop/src/main/terminal-window.test.ts'];
   const test = process.platform === 'win32'
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', `pnpm ${args.join(' ')}`], { cwd: repo, encoding: 'utf8', timeout: 240_000 })
     : spawnSync('pnpm', args, { cwd: repo, encoding: 'utf8', timeout: 240_000 });
@@ -71,6 +72,17 @@ writeFileSync(join(page, 'index.html'), [
   '</head><body><div id="root"></div><script type="module" src="./proof.js"></script></body></html>',
 ].join('\n'));
 
+// ── 2b. Part AL2: the run-host half of the REQ-SHELL-166 section, bundled for Node ─────────────────────────────
+// The product's own modules (the terminal manager over node-pty, the run host's terminal handler, main's delivery
+// limiter, the relay) in one CommonJS bundle the Electron half spawns as a Node child; node-pty and every other
+// package stay external and resolve from the repository's `node_modules`, so the native binary is the one the tests use.
+const nodeAlias = Object.fromEntries(['kernel', 'contracts', 'platform', 'shell', 'agent-tools', 'engine', 'config', 'store', 'model', 'hooks', 'providers', 'mcp', 'workspace'].map((name) => [`@rotaris/${name}`, join(repo, 'packages', name, 'src', 'index.ts')]));
+await esbuild.build({
+  entryPoints: [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'harness.mjs')],
+  bundle: true, platform: 'node', format: 'cjs', target: 'node24', sourcemap: 'inline',
+  outfile: join(page, 'harness.cjs'), alias: nodeAlias, packages: 'external', logLevel: 'warning',
+});
+
 // ── 3. Electron ────────────────────────────────────────────────────────────────────────────────────────────────
 function cleanEnvironment() {
   const env = { ...process.env };
@@ -78,8 +90,12 @@ function cleanEnvironment() {
   return env;
 }
 const run = spawnSync(electron, [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'main.cjs')], {
-  cwd: repo, encoding: 'utf8', timeout: 180_000, windowsHide: true,
-  env: { ...cleanEnvironment(), TERMINAL_PROOF_OUT: output, TERMINAL_PROOF_PAGE: join(page, 'index.html'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
+  cwd: repo, encoding: 'utf8', timeout: 400_000, windowsHide: true,
+  env: {
+    ...cleanEnvironment(), TERMINAL_PROOF_OUT: output, TERMINAL_PROOF_PAGE: join(page, 'index.html'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    // Part AL2: the live section's two halves.
+    TERMINAL_PROOF_HARNESS: join(page, 'harness.cjs'), TERMINAL_PROOF_PRELOAD: join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'preload.cjs'), TERMINAL_PROOF_REPO: repo,
+  },
 });
 writeFileSync(join(output, 'electron.log'), `${run.stdout ?? ''}\n${run.stderr ?? ''}`);
 const resultsFile = join(output, 'results.json');
@@ -89,6 +105,9 @@ writeFileSync(join(output, 'summary.json'), `${JSON.stringify(results, null, 2)}
 
 const items = Object.entries(electronResults.results ?? {}).filter(([, v]) => v && typeof v === 'object' && 'pass' in v);
 console.log(`terminal-proof: ${items.filter(([, v]) => v.pass).length}/${items.length} assertions passed`);
+// Part AL2: REQ-SHELL-166's figures, in the log as well as in results.json.
+const live = electronResults.results?.live ?? {};
+console.log(`terminal-proof live (REQ-SHELL-166): ${JSON.stringify({ echo: live.echo, endInput: live.endInput && { ms: live.endInput.ms, exitCode: live.endInput.exitCode }, interrupt: live.interrupt && { ms: live.interrupt.ms, exitCode: live.interrupt.exitCode }, resize: live.resize, throughput: live.throughput, threeSurfaces: live.threeSurfaces, delivery: live.delivery })}`);
 if (!electronResults.passed || run.status !== 0) {
   console.error(JSON.stringify(electronResults.failures, null, 2));
   console.error((run.stderr ?? '').slice(-2000));

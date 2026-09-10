@@ -357,23 +357,25 @@ export function GitView(props: GitViewProps) {
               <button type="button" className="btn btn-secondary" disabled={restoreReason !== null || flow !== null} title={restoreReason ?? undefined} data-testid="git-restore" data-reason={restoreReason ?? ''} onClick={() => { void startRestore(); }}>Restore checkpoint</button>
             </div>
           )}>
-            <table className="table git__table" aria-label="Checkpoints" aria-description="Rows are ordered oldest first." data-testid="git-checkpoint-table" data-state={listing.state}>
-              <thead><tr><th>Checkpoint</th><th>Created</th><th>Iteration</th><th>Files changed</th><th>Kind</th></tr></thead>
-              <tbody>
-                {listedRows.map((c) => {
-                  const isSelected = selectedSeq === c.sequence;
-                  return (
-                    <tr key={c.sequence} className={isSelected ? 'git__ckpt-row is-selected' : 'git__ckpt-row'} data-testid="git-checkpoint-row" data-sequence={c.sequence} data-kind={c.kind} aria-selected={isSelected} onClick={() => setSelectedSeq(c.sequence)}>
-                      <td className="mono">{c.sequence}</td>
-                      <td className="mono">{c.createdLabel}</td>
-                      <td className="mono">{c.iteration}</td>
-                      <td className="mono">{c.files}</td>
-                      <td>{c.kind}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="git__table-scroll" tabIndex={0} aria-label="Checkpoint columns" aria-description="Scroll horizontally when the checkpoint columns exceed the card width.">
+              <table className="table git__table git__checkpoint-table" aria-label="Checkpoints" aria-description="Rows are ordered oldest first." data-testid="git-checkpoint-table" data-state={listing.state}>
+                <thead><tr><th>Checkpoint</th><th>Created</th><th>Iteration</th><th>Files changed</th><th>Kind</th></tr></thead>
+                <tbody>
+                  {listedRows.map((c) => {
+                    const isSelected = selectedSeq === c.sequence;
+                    return (
+                      <tr key={c.sequence} className={isSelected ? 'git__ckpt-row is-selected' : 'git__ckpt-row'} data-testid="git-checkpoint-row" data-sequence={c.sequence} data-kind={c.kind} aria-selected={isSelected} onClick={() => setSelectedSeq(c.sequence)}>
+                        <td className="mono">{c.sequence}</td>
+                        <td className="mono">{c.createdLabel}</td>
+                        <td className="mono">{c.iteration}</td>
+                        <td className="mono">{c.files}</td>
+                        <td>{c.kind}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             {emptyText !== null && <div className="empty-state git__empty" data-testid="git-checkpoints-empty" aria-live="polite"><span className="empty-state-hint">{emptyText}</span></div>}
           </Card>
         </div>

@@ -124,7 +124,7 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
           )}
         </main>
       </div>
-      <footer className="status-strip" aria-label="Status">
+      <footer className="status-strip" aria-label="Status" aria-description="Scroll horizontally to view every status item." tabIndex={0}>
         {statusItems.map((s, i) => (typeof s === 'string'
           ? <span key={i} className="status-strip__item">{s}</span>
           : <span key={i} className="status-strip__item" aria-label={s.name} title={s.title} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>

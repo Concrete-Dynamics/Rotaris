@@ -330,7 +330,7 @@ of §5 and none a channel: each is a request answered once.
   is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over
   `config:changed`, where a change re-projects the resident window once (which is a settings change, not transcript
   update content, so it sits outside what REQ-MONITOR-223 measures). REQ-CHAT-067's grouping switch is **not** here:
-  it is a desktop preference (`display/groupTools`, REQ-CONFIG-405), which is why the two live in different stores.
+  it is a desktop preference (`display/groupTools`, REQ-CONFIG-405), which is why the two live in different stores. The requirements board's display state is the same kind of thing (Part AK′, spec 08 §Persisted state): the filter, the sort order, the grouping axis and the blocked-column setting are person-level desktop preferences (`requirements/*`), the column folds a per-workspace one (`workspaces/<digest>/requirementColumnFolds`, resolved by main), while `requirements.scheduling.*` and `requirements.change.*` are workspace configuration the board reads only as the projection reports them (REQ-TRACE-301/346).
   **Part AG added the surface over it** (REQ-CONFIG-472): the four fields join destination 1's pending state and are
   committed by Save through Tier A, spelled in the file as REQ-CONFIG-172 fixes them (`tool_result_max_lines`,
   `tool_input_max_lines`, unlimited written as `0`) and read back into the same view field names. They are **not** in

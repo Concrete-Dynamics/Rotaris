@@ -34,7 +34,18 @@ import { TERMINAL_COMMAND_SCHEMAS } from './terminal.js';
  * `composer.readDraft` / `composer.writeDraft` below, which carry no key at all: main derives it from the
  * workspace it has open, so the renderer cannot ask for a draft that is not its own.
  */
-const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'panels/workspace', 'interface/agentPopOut', 'display/groupTools', 'display/showReasoning', 'display/autoCollapseTools'] as const;
+// Part AK2
+/**
+ * Spec 08 §Persisted state (Part AK′; REQ-TRACE-301): the requirements board's person-level keys, reachable from a
+ * window through `prefs.get` / `prefs.set` like every other key of that table, and ONE placeholder for the
+ * per-workspace fold key. `workspaces/{workspace}/requirementColumnFolds` is written literally by the renderer and
+ * resolved by MAIN to `workspaces/<digest of the open workspace>/requirementColumnFolds` (REQ-TRACE-312), the same
+ * discipline the composer draft takes above: a renderer names no workspace, so a fold recorded in one workspace
+ * cannot be read into another (REQ-TRACE-497's "a fold made in one workspace taking effect in another").
+ */
+export const REQUIREMENT_FOLDS_PREFERENCE_KEY = 'workspaces/{workspace}/requirementColumnFolds';
+export const REQUIREMENTS_PREFERENCE_KEYS = ['requirements/filter/text', 'requirements/filter/epic', 'requirements/filter/source', 'requirements/filter/lifecycle', 'requirements/filter/health', 'requirements/filter/priority', 'requirements/sort', 'requirements/blocked_column', 'requirements/axis', 'requirements/fullPermissionRuns', 'requirements/fullPermissionNoticeSuppressed', 'requirements/answerWaitSeconds', REQUIREMENT_FOLDS_PREFERENCE_KEY] as const;
+const PREFERENCE_COMMAND_KEYS = ['ui/reduced_motion', 'interface/settingsTab', 'panels/overview', 'panels/git', 'panels/library', 'panels/workspace', 'interface/agentPopOut', 'display/groupTools', 'display/showReasoning', 'display/autoCollapseTools', ...REQUIREMENTS_PREFERENCE_KEYS] as const;
 
 /**
  * Channel 5: request/response. Every command returns an explicit outcome

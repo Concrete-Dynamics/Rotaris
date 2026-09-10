@@ -646,3 +646,68 @@ still says no such measurement exists.
 **What the merge must do:** replace `ENGINE_NOT_MERGED` in `apps/desktop/src/workspace-service/index.ts`'s
 `requirements.command` case with Part AJ's factory; until then the board reports `source: none` with the cause in
 `parseErrors`, and the tests fake the engine around `fixture-store.ts`.
+
+## Second execution — 2026-09-09 (Part AK′), the board
+
+*Recorded under GD-10, the standing policy that a mechanism's first execution reports back into the record that
+decided it. The first execution built the store, the transition and the projection; this one draws them. Two defects
+of ADR-0058 consequence 17's pattern, `AK2-1` and `AK2-2`; the manager assigns the ordinals at merge.*
+
+**What the board is, against this record's decisions.** The view reads ONE immutable projection per generation over
+the `requirements.*` command family and assembles nothing locally (`REQ-TRACE-378/379`), which is the renderer half of
+the "one value, one generation" decision. The write path is single: `requirements.act` with an action from the closed
+set, and no card comes to rest anywhere the engine did not put it — an optimistic label is shown for the round trip
+and the resting state is the next projection's (`REQ-TRACE-387/388/399`). Live refresh is channel 10, and a change
+that names the requirements it affects replaces only those cards, so the memoised card of an unnamed requirement keeps
+its element (`REQ-TRACE-374`). The clock is injected and read once per board arrival and once a minute after, never
+per render (`REQ-TRACE-250`).
+
+**Defect `AK2-1` — the filter selects tore the window down.** The five `<select>` handlers read
+`event.currentTarget.value` INSIDE the deferred `setFilter` updater. React had already pooled the event by the time the
+updater ran, `currentTarget` was `null`, and the first filter a person chose threw inside a state updater — which React
+answers by unmounting the whole tree, so choosing a filter blanked the window rather than filtering the board. The
+value is read in the handler now and the updater closes over it. No reading of this record was wrong; the surface was.
+Recorded at the site in `RequirementsView.tsx`.
+
+**Defect `AK2-2` — virtualising one dimension left the other unbounded.** `REQ-TRACE-358` speaks of the cards within a
+column's own scroll viewport, and the first build virtualised exactly that: each column realised the band its own
+vertical scroll exposed. But `REQ-TRACE-237` makes the COLUMNS area scroll horizontally too, and `REQ-TRACE-300`'s
+supported bound is a hundred populated columns. Grouped by epic, a 1,500-requirement store therefore realised a
+hundred columns' bands in one commit — about 1,300 card widgets and a 1.7 s long task — for four columns in view, and
+`REQ-TRACE-239`'s budget was missed by more than an order of magnitude on an axis switch. A column now decides whether
+it is on screen against the columns area itself, in a layout effect before the first paint, re-decided once per frame
+on horizontal scroll and on resize; off-screen columns keep their heading, their count and their full scroll-range
+spacer, so a column's scroll offset survives (`REQ-TRACE-335`) while it realises no card. The reading that was wrong is
+the one this record's "Revisit if" warned about in the other direction: the cost at scale was never the query, it was
+the paint, and the requirement that bounds it is a two-dimensional one read as one-dimensional.
+
+**What the first execution left for the board to state, and how it states it.** Four things the projection cannot carry
+are printed in the section that would have shown them rather than left blank or invented: the current requirement hash
+(`REQ-TRACE-256` puts it on the card value; `BoardCard` has no field, and the detail says the engine compares it on
+every action instead); eight of `REQ-TRACE-274`'s twelve relation tokens, which the requirement document format
+declares nowhere, named in the Relations section as tokens the projection cannot emit; `superseded` health, which no
+store datum can reach, so no card can ever carry it; and `run.waitingOnPerson`, which is carried and always false
+because no signal for it exists yet. `REQ-TRACE-346`'s analysis flag is stated as the pass reports it and deduced from
+nothing. This is the same discipline the first execution used for the stated refusals, applied to a drawn surface.
+
+**Found in the store and the projection: nothing.** Every value the board needed was on the projection or derivable by
+`ui-core`'s pure display mapping; no query was added, no table was touched, no transition rule was changed, and the
+`facts` channel the first execution chose (`Units`, `Last run`, `Last change`) carried what the card needs without a
+seam change. The one thing the surface wanted and the seam does not offer is a unit count and a last-run stamp as
+FIELDS rather than facts, which is an additive seam change nobody needed to make.
+
+**`REQ-TRACE-239` is measured now, and this record's "Revisit if" is answered.** That paragraph said no measurement of
+the 100 ms budget at `REQ-TRACE-300`'s scale existed and that the claim was a design expectation. `pnpm
+requirements-proof`'s Electron stage now measures it twice over — on the fixture store at 1264 px and at
+`REQ-SHELL-022`'s 1000 × 680 minimum, and on a generated 1,500-requirement, 100-epic store — reading both the view's
+own figure from the projection's arrival to the laid-out DOM and the longest long task the renderer observed while it
+happened. The figures are in the handoff's measurements table and in `.requirements-proof/results.json`. The
+expectation held, and it held only after `AK2-2`: the budget is met because the paint is bounded by the viewport
+rather than by the store, which is the property the fix installed. The first thing this record said to check if the
+budget were missed — whether the board query and the export share a read path — was not the cause and was not reached.
+
+**Not built here, stated:** every pane (`REQ-TRACE-417..445`), runs from the board and the queue's controls
+(`464..483`) and the source write are Part AP's; the graph axis (`322..333`) is wave 3's; `REQ-TRACE-514`'s export is in
+no part yet; `REQ-TRACE-486`'s evidence chord is bound on the focused card rather than registered on the command
+registry, because the row allows this part one registry entry and `REQ-TRACE-390`'s move control takes it. The
+`edit`, `create`, `accept-proposal` and `accept-change-work` refusals stand exactly as the first execution left them.

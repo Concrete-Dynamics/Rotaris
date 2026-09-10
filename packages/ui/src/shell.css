@@ -1002,3 +1002,153 @@
 /* REQ-CHAT-021: the composer's persistent notice sits above the field, in the shell's own banner. */
 .composer__notice { flex: none; }
 @media (prefers-reduced-motion: reduce) { .slash-popup { animation: none; } }
+/* Part AK2 */
+/*
+ * The Requirements board (spec 08 §Board Surface onwards; ADR-0041's second execution). Craft from the design's
+ * `REQUIREMENTS` screen (`docs/design/mockup` → REQUIREMENTS): a 48 px header row with the display-face title and a
+ * mono count; kicker-headed columns whose count sits in the mono face at the smallest size; cards on `--rt-surface`
+ * with a hairline border and the medium radius, the identifier in the mono face, the lifecycle as an outline tag,
+ * the evidence ring at the head's right, the title at the small size in medium weight, alert lines at the extra-small
+ * size carrying their own colour, the selected card on the accent tint with the accent border; an epic card's thin
+ * progress bar over `--rt-surface-2`; the detail as a 400 px aside on the chrome ground behind a panel border, its
+ * sections kicker-headed on a 74 px label grid. Where the specification fixes the geometry the figure is the
+ * specification's and is said so at the line: REQ-TRACE-238 (an open column 276 to 340 wide), REQ-TRACE-310 (an
+ * open column's 10 margin, a rail 8 characters of its own font wide with a 4 margin), REQ-TRACE-309 (a rail's
+ * heading wraps to two lines, upright — the mockup rotates it and the specification governs), REQ-TRACE-318 (a rail
+ * grows 1.5 lines and takes an open column's minimum width during a drag, unanimated), REQ-TRACE-491 (the one
+ * primary control 32 high, every other 24), REQ-TRACE-490 (the drop-down bounds are set by the view, 240 / 150).
+ * Colour never carries a fact alone: every state that paints also prints a word or a glyph (REQ-TRACE-241/247/398).
+ */
+.req { flex: 1 1 auto; min-height: 0; height: 100%; display: flex; flex-direction: column; }
+.req-header { flex: none; display: flex; flex-direction: column; gap: var(--rt-space-2); padding: 0 var(--rt-space-4) var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-header__row { display: flex; align-items: center; gap: var(--rt-space-3); min-height: 48px; flex-wrap: wrap; }
+.req-header__controls, .req-header__filters, .req-header__move { min-height: 0; }
+.req-header__title { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-medium); font-size: var(--rt-text-md); }
+.req-header__count { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-header__spacer { flex: 1 1 auto; }
+.req-header__evaluated { white-space: nowrap; }
+/* REQ-TRACE-491: exactly one primary action, 32 high; every other header control is 24. */
+.req-header .btn, .req-header .input, .req-header .select { min-height: 24px; height: 24px; padding-top: 0; padding-bottom: 0; font-size: var(--rt-text-xs); }
+.req-header .btn.req-header__primary { min-height: 32px; height: 32px; font-size: var(--rt-text-sm); }
+.req-header__field { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; }
+.req-header__field .field-label { white-space: nowrap; }
+.req-header__check { cursor: pointer; }
+.req-header__check input { margin: 0; accent-color: var(--rt-accent); }
+.req-header__filter { min-width: 0; }
+.req-header__analysis { margin: 0; }
+.req-status { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-status--error { color: var(--rt-danger-300); }
+/* The move control (REQ-TRACE-390..392): the sentence stays on screen beside the control, never only in a tooltip. */
+.req-move { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 100%; }
+.req-header .btn.req-move__control { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 100%; height: auto; min-height: 24px; white-space: normal; text-align: left; }
+.req-move__control.is-refused { color: var(--rt-text-secondary); }
+.req-move__glyph { flex: none; font-family: var(--rt-font-mono); }
+.req-move__sentence { min-width: 0; }
+/* The blocked summary (REQ-TRACE-240/241): above the columns, a rule and a glyph, never a filled ground. */
+.req-blocked { flex: none; padding: var(--rt-space-2) var(--rt-space-4); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-blocked__heading { margin: 0 0 var(--rt-space-1); display: flex; align-items: center; gap: var(--rt-space-2); font-family: var(--rt-font-body); font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); color: var(--rt-wait); }
+.req-blocked__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.req-blocked__row { display: flex; align-items: center; gap: var(--rt-space-2); font-size: var(--rt-text-xs); min-width: 0; }
+.req-blocked__id { flex: none; color: var(--rt-text-tertiary); }
+.req-blocked__reason { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rt-text-secondary); }
+.req-blocked__row .btn { flex: none; }
+/* The body: the columns area scrolls horizontally (REQ-TRACE-237); the detail is an aside beside it, never over it. */
+.req-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.req-columns { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: var(--rt-space-3) var(--rt-space-4); display: flex; gap: var(--rt-space-3); align-items: stretch; }
+.req-columns > .req-status { align-self: flex-start; position: sticky; left: var(--rt-space-4); }
+.req-empty { margin: var(--rt-space-6) auto; max-width: 560px; }
+.req-empty__errors { margin: var(--rt-space-2) 0 0; padding: 0; list-style: none; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); text-align: left; }
+/* REQ-TRACE-238: an open column is at least 276 and at most 340 wide, spare width spent up to the cap; REQ-TRACE-310: its margin is 10 on every side. */
+.req-column { flex: 1 0 276px; min-width: 276px; max-width: 340px; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-radius: var(--rt-radius-md); }
+.req-column.is-drop-reachable { outline: var(--rt-hairline-width) dashed var(--rt-ok); outline-offset: -1px; }
+.req-column.is-drop-refused { outline: var(--rt-hairline-width) dashed var(--rt-danger-300); outline-offset: -1px; }
+.req-column__heading { display: flex; align-items: center; gap: 7px; padding: 0 2px var(--rt-space-2); margin: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--rt-radius-sm); }
+.req-column__heading:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: 2px; }
+.req-column__count { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+/* Craft: the mockup colours the running and needs-update kickers on the two accent axes; the word still carries the state. */
+.req-column[data-column='running'] .req-column__label { color: var(--rt-axis-y-300); }
+.req-column[data-column='needs-update'] .req-column__label { color: var(--rt-axis-x-300); }
+.req-column[data-column='blocked'] .req-column__label { color: var(--rt-wait); }
+.req-column__drag { margin: 0 0 var(--rt-space-2); font-size: var(--rt-text-xs); }
+.req-column__drag--reachable { color: var(--rt-ok); }
+.req-column__drag--refused { color: var(--rt-danger-300); }
+.req-column__drag--idle { color: var(--rt-text-tertiary); }
+.req-column__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.req-column__slot, .req-column__spacer { flex: none; }
+.req-column__empty { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); line-height: var(--rt-leading-body); }
+/* The folded rail (REQ-TRACE-303..321): upright text, 8 characters of its own font wide, margin 4; a button. */
+.req-rail { flex: none; width: calc(8ch + 8px); padding: 4px; display: flex; flex-direction: column; align-items: center; gap: var(--rt-space-2); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); color: var(--rt-text-tertiary); font: inherit; font-size: var(--rt-text-2xs); cursor: pointer; text-align: center; }
+.req-rail:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: 2px; }
+.req-rail__glyph { font-family: var(--rt-font-mono); font-size: var(--rt-text-sm); }
+.req-rail__heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; letter-spacing: var(--rt-tracking-label); text-transform: uppercase; font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-tight); max-width: 100%; }
+.req-rail__count { font-size: var(--rt-text-2xs); }
+/* REQ-TRACE-318/319: during a drag every rail states its answer in the engine's words, takes an open column's minimum width and 1.5 lines more height, unanimated. */
+.req-rail.is-dragging { min-width: 276px; padding-block: calc(4px + 0.75em); transition: none; }
+.req-rail__hint { font-size: var(--rt-text-xs); text-transform: none; letter-spacing: normal; color: var(--rt-text-secondary); line-height: var(--rt-leading-body); }
+.req-rail[data-drag='reachable'] .req-rail__glyph, .req-rail[data-drag='reachable'] .req-rail__hint { color: var(--rt-ok); }
+.req-rail[data-drag='refused'] .req-rail__glyph, .req-rail[data-drag='refused'] .req-rail__hint { color: var(--rt-danger-300); }
+/* The card (REQ-TRACE-242..257): the mockup's surface card; the selected card on the accent tint with the accent border. */
+.req-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); cursor: pointer; min-width: 0; }
+.req-card:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: 1px; }
+.req-card.is-selected { background: var(--rt-accent-tint-07); border-color: var(--rt-accent-500); }
+.req-card.is-in-flight { border-style: dashed; }
+.req-card[draggable='true'] { cursor: grab; }
+.req-card__head { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; flex-wrap: wrap; }
+.req-card__id { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+.req-card__title { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); line-height: var(--rt-leading-body); overflow-wrap: anywhere; }
+.req-card__health { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); }
+.req-card__selected { font-size: var(--rt-text-2xs); color: var(--rt-accent-200); }
+.req-card__in-flight { align-self: flex-start; }
+.req-card__facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--rt-space-2); margin: 0; font-size: var(--rt-text-xs); }
+.req-card__fact { display: contents; }
+.req-card__facts dt { color: var(--rt-text-tertiary); }
+.req-card__facts dd { margin: 0; color: var(--rt-text-secondary); min-width: 0; overflow-wrap: anywhere; }
+.req-card__alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* REQ-TRACE-247: three severities, each a glyph AND a colour; alert lines are words and meet the text floor. */
+.req-alert { display: flex; align-items: baseline; gap: 6px; margin: 0; font-size: var(--rt-text-xs); line-height: var(--rt-leading-body); }
+.req-alert__glyph { flex: none; font-family: var(--rt-font-mono); }
+.req-alert--failure { color: var(--rt-danger-300); }
+.req-alert--stopped { color: var(--rt-wait); }
+.req-alert--attention { color: var(--rt-axis-x-300); }
+/* REQ-TRACE-397: refusal feedback persists on the card until dismissed — a rule and words, not a filled ground. */
+.req-card__feedback { display: flex; flex-direction: column; gap: var(--rt-space-1); padding-top: var(--rt-space-1); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-card__feedback-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--rt-text-xs); color: var(--rt-danger-300); }
+.req-card__feedback .btn { align-self: flex-start; }
+.req-card__foot { display: flex; gap: var(--rt-space-2); margin-top: 2px; }
+.req-card__foot .btn { padding-left: 0; padding-right: 0; }
+/* The epic card (REQ-TRACE-281..286): the mockup's thin bar over surface-2. */
+.req-epic__bar { height: 4px; border-radius: var(--rt-radius-sm); background: var(--rt-surface-2); overflow: hidden; }
+.req-epic__fill { height: 100%; border-radius: var(--rt-radius-sm); background: var(--rt-accent); }
+/* The evidence ring (REQ-TRACE-258..264): 16 px at the head's right, its own tab stop, the focus ring outside the segments. */
+.req-evidence { margin-left: auto; flex: none; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; background: none; border: 0; border-radius: var(--rt-radius-pill); cursor: pointer; color: inherit; }
+.req-evidence:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: 1px; }
+.req-evidence__ring { display: block; }
+/* The detail (REQ-TRACE-271..280): the mockup's 400 px aside on the chrome ground, a 74 px label grid. */
+.req-detail { flex: none; width: 400px; max-width: 45%; display: flex; flex-direction: column; min-height: 0; border-left: var(--rt-hairline-width) solid var(--rt-border-panel); background: var(--rt-chrome); }
+.req-detail__head { flex: none; padding: var(--rt-space-3) var(--rt-space-4) 10px; display: flex; flex-direction: column; gap: 7px; border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
+.req-detail__ids { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; }
+.req-detail__spacer { flex: 1 1 auto; }
+.req-detail__title { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-medium); font-size: var(--rt-text-md); overflow-wrap: anywhere; }
+.req-detail__actions { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; }
+.req-detail__body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--rt-space-3) var(--rt-space-4); display: flex; flex-direction: column; gap: var(--rt-space-3); font-size: var(--rt-text-xs); }
+.req-detail__section { display: flex; flex-direction: column; gap: 6px; }
+.req-detail__prose { margin: 0; color: var(--rt-text-secondary); line-height: var(--rt-leading-body); font-size: var(--rt-text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.req-detail__empty { margin: 0; color: var(--rt-text-tertiary); line-height: var(--rt-leading-body); }
+.req-detail__grid { display: grid; grid-template-columns: 74px 1fr; gap: 4px 10px; margin: 0; }
+.req-detail__grid dt { color: var(--rt-text-tertiary); }
+.req-detail__grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--rt-text-secondary); }
+.req-detail__row { display: contents; }
+.req-detail__relation { font-size: inherit; margin-right: var(--rt-space-2); }
+.req-detail__dangling { color: var(--rt-text-tertiary); margin-right: var(--rt-space-2); }
+.req-detail__runs, .req-detail__sites, .req-detail__findings, .req-detail__history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.req-detail__run { display: flex; align-items: center; gap: var(--rt-space-2); flex-wrap: wrap; padding: 6px 9px; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
+.req-detail__history li.is-current { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.req-foot { flex: none; margin: 0; padding: var(--rt-space-1) var(--rt-space-4); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+/* The evidence view and the reason dialog reuse the shell's dialog; only their bodies are sized here. */
+.req-evidence-pane { width: min(720px, 90vw); max-height: 85vh; display: flex; flex-direction: column; }
+.req-evidence-pane__body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--rt-space-3); font-size: var(--rt-text-xs); }
+.req-evidence-pane__group { display: flex; flex-direction: column; gap: 4px; }
+.req-evidence-pane__site { display: flex; align-items: baseline; gap: var(--rt-space-2); flex-wrap: wrap; }
+.req-reason { width: min(560px, 90vw); }
+.req-reason__consequence { color: var(--rt-text-secondary); }
+.req-reason__refusal { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-danger-300); }

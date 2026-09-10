@@ -44,7 +44,7 @@ packages/kernel/src/generated/
 apps/desktop/resources/code-intelligence/
 apps/desktop/.cache/
 # Part AK
-.delivery-proof/
+.requirements-proof/
 # Part AJ
 .traceability-proof/
 

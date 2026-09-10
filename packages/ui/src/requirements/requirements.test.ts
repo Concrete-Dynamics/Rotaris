@@ -1,0 +1,255 @@
+import { describe, expect, it } from 'vitest';
+import type { BoardCard, BoardProjection, EpicCard, Reachability } from '@rotaris/contracts';
+import { DELIVERY_COLUMNS } from '@rotaris/contracts';
+import { arcPath, segmentArcs } from './EvidenceIndicator.js';
+import { cardDescription } from './Card.js';
+import { DETAIL_SECTIONS } from './DetailPanel.js';
+import {
+  ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_MAX, COLUMN_MIN, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
+  alertSeverity, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand,
+} from './model.js';
+
+/**
+ * Part AK2 — the board's pure model, measured where a browser is not needed. What the board DRAWS is
+ * `requirements-proof`'s (Electron, the fixture store); what it DECIDES — the naming table of REQ-TRACE-385, the
+ * run-starting rule of 386, the confirmation set of 383, the affected-only merge of 374, the band arithmetic of
+ * 358..365, the fold pruning of 316, the epic counts of 282, the move control's three states of 391 — is here.
+ */
+function card(id: string, over: Partial<BoardCard> = {}): BoardCard {
+  return {
+    id, title: `Title ${id}`, column: 'backlog', health: 'healthy', lifecycle: 'approved', kind: 'product', sourcePath: `docs/${id}.md`, sourceKey: 'docs/requirements',
+    evidence: { sites: [] }, alerts: [], relations: [], facts: [{ label: 'Source', value: 'docs/requirements' }, { label: 'Units', value: '0' }],
+    ...over,
+  };
+}
+function projection(cards: readonly BoardCard[], generation = 1): BoardProjection {
+  return { workspace: 'w', generation, producedAt: '2026-09-09T10:00:00Z', source: { kind: 'store', dir: 'docs/requirements', writable: false, canCreate: false }, cards, epics: [], queue: { entries: [], automatic: false, concurrency: 2, stopped: false }, blocked: [], analysisEnabled: false, parseErrors: [] };
+}
+const reachable = (consequence: string, confirm = true): Reachability => ({ reachable: true, consequence, confirm, glyph: '→', reachableFromSource: ['ready'] });
+const refused = (reason: string, from: readonly ('backlog' | 'ready' | 'running' | 'review' | 'needs-update' | 'done')[] = []): Reachability => ({ reachable: false, confirm: false, reason, glyph: '⊘', reachableFromSource: from });
+
+describe('the naming table (REQ-TRACE-385) and the run-starting rule (REQ-TRACE-386)', () => {
+  it('names exactly the five user moves and the two overriding rules, and nothing else', () => {
+    expect(moveActionFor('backlog', 'ready')).toBe('release');
+    expect(moveActionFor('needs-update', 'ready')).toBe('release');
+    expect(moveActionFor('ready', 'backlog')).toBe('return');
+    expect(moveActionFor('review', 'done')).toBe('accept');
+    expect(moveActionFor('review', 'ready')).toBe('send-back');
+    for (const from of DELIVERY_COLUMNS) expect(moveActionFor(from, 'blocked')).toBe('hold');
+    for (const to of DELIVERY_COLUMNS) expect(moveActionFor('blocked', to)).toBe('resume');
+    // An empty source or target, an equal pair, or a pair that means nothing yield NO action — not a refusal.
+    expect(moveActionFor('', 'ready')).toBeUndefined();
+    expect(moveActionFor('ready', '')).toBeUndefined();
+    expect(moveActionFor('ready', 'ready')).toBeUndefined();
+    expect(moveActionFor('backlog', 'done')).toBeUndefined();
+    expect(moveActionFor('done', 'backlog')).toBeUndefined();
+    expect(moveActionFor('running', 'review')).toBeUndefined();
+  });
+  it('starts agent work for the three run-starting actions unconditionally, for resume only into ready, and for nothing else', () => {
+    expect(moveStartsRun('release', 'ready')).toBe(true);
+    expect(moveStartsRun('rerun', undefined)).toBe(true);
+    expect(moveStartsRun('send-back', 'ready')).toBe(true);
+    expect(moveStartsRun('resume', 'ready')).toBe(true);
+    expect(moveStartsRun('resume', 'backlog')).toBe(false);
+    expect(moveStartsRun('resume', 'review')).toBe(false);
+    expect(moveStartsRun('accept', 'done')).toBe(false);
+    expect(moveStartsRun('hold', 'blocked')).toBe(false);
+  });
+  it('confirms exactly the three run-starting actions together with the three acceptances (REQ-TRACE-383)', () => {
+    expect([...CONFIRM_ACTIONS].sort()).toEqual(['accept', 'accept-change-work', 'accept-proposal', 'release', 'rerun', 'send-back']);
+  });
+  it('asks the person for a hold\'s reason and a send-back\'s instructions before the engine is asked (REQ-TRACE-389/423)', () => {
+    expect(payloadFieldFor('hold')?.field).toBe('reason');
+    expect(payloadFieldFor('send-back')?.field).toBe('instructions');
+    expect(payloadFieldFor('release')).toBeUndefined();
+    expect(payloadFieldFor('send-back')?.refusal).toContain('repeat the previous run unaltered');
+  });
+  it('names what is happening for every one of the fourteen actions while it is in flight (REQ-TRACE-388)', () => {
+    for (const a of ['release', 'return', 'accept', 'rerun', 'send-back', 'reject', 'hold', 'resume', 'answer-blocker', 'edit', 'create', 'accept-proposal', 'accept-change-work', 'keep-worktree'] as const) {
+      expect(inFlightLabelFor(a).endsWith('…'), a).toBe(true);
+    }
+  });
+});
+
+describe('the move control (REQ-TRACE-390..393)', () => {
+  const chord = 'Ctrl+M';
+  it('prompts for a selection naming the chord in force when nothing is selected', () => {
+    const s = moveControlState(undefined, new Map(), chord);
+    expect(s.kind).toBe('none');
+    expect(s.sentence).toBe(nothingSelectedSentence(chord));
+    expect(s.sentence).toContain('Ctrl+M');
+  });
+  it('aims at the FIRST delivery state the engine reports reachable and puts the consequence in the sentence', () => {
+    const c = card('REQ-1');
+    const answers = new Map<'ready' | 'done', Reachability>([['ready', reachable('Releasing takes a snapshot.')], ['done', refused('not from backlog', ['ready'])]]);
+    const s = moveControlState(c, answers, chord);
+    expect(s.kind).toBe('reachable');
+    if (s.kind !== 'reachable') throw new Error('unreachable');
+    expect(s.to).toBe('ready');
+    expect(s.sentence).toBe(moveReachableSentence('REQ-1', 'backlog', 'ready', 'Releasing takes a snapshot.'));
+    expect(s.sentence).toContain('Releasing takes a snapshot.');
+    expect(s.confirm).toBe(true);
+  });
+  it('states the refusal with the engine\'s own words unchanged when nothing is reachable', () => {
+    const c = card('REQ-2', { column: 'done' });
+    const answers = new Map<'ready', Reachability>([['ready', refused('REQ-2 cannot be re-run from done: the engine said so.', [])]]);
+    const s = moveControlState(c, answers, chord);
+    expect(s.kind).toBe('refused');
+    expect(s.sentence).toBe(moveRefusedSentence('REQ-2', 'done', 'ready', 'REQ-2 cannot be re-run from done: the engine said so.'));
+    expect(s.sentence.endsWith('the engine said so.')).toBe(true);
+  });
+  it('builds one drop-target option per delivery column from the engine\'s answers, a refused entry carrying reason and glyph', () => {
+    const answers = new Map<'ready', Reachability>([['ready', reachable('Releases.')]]);
+    const options = dropTargetOptions(answers);
+    expect(options.map((o) => o.target)).toEqual([...DELIVERY_COLUMNS]);
+    expect(options.find((o) => o.target === 'ready')).toMatchObject({ reachable: true, consequence: 'Releases.', confirm: true, glyph: '→' });
+    const done = options.find((o) => o.target === 'done')!;
+    expect(done.reachable).toBe(false);
+    expect(done.reason).toBeTruthy();
+    expect(done.glyph).toBeTruthy();
+  });
+  it('refuses a drag in words on a non-delivery axis, naming the chord (REQ-TRACE-297)', () => {
+    expect(dragRefusedOnAxisSentence('health', chord)).toContain('health axis');
+    expect(dragRefusedOnAxisSentence('health', chord)).toContain('Ctrl+M');
+  });
+  it('withdraws a stale confirmation in a sentence naming the requirement and the state it left (REQ-TRACE-506)', () => {
+    expect(promptWithdrawnSentence('REQ-3', 'send-back', 'review')).toContain('REQ-3 is no longer in Review');
+  });
+  it('carries the drag payload under a private type, never plain text (REQ-TRACE-396)', () => {
+    expect(PRIVATE_TRANSFER_TYPE.startsWith('application/x-')).toBe(true);
+    expect(PRIVATE_TRANSFER_TYPE).not.toBe('text/plain');
+  });
+});
+
+describe('the affected-only merge (REQ-TRACE-374)', () => {
+  it('keeps the identity of every card not named and takes the named ones from the new value', () => {
+    const a = card('REQ-1'); const b = card('REQ-2'); const c = card('REQ-3');
+    const previous = projection([a, b, c], 1);
+    const next = projection([card('REQ-1', { column: 'ready' }), card('REQ-2'), card('REQ-3')], 2);
+    const merged = mergeAffected(previous, next, ['REQ-1']);
+    expect(merged.generation).toBe(2);
+    expect(merged.cards[0]).toBe(next.cards[0]);
+    expect(merged.cards[0]!.column).toBe('ready');
+    expect(merged.cards[1]).toBe(b);
+    expect(merged.cards[2]).toBe(c);
+  });
+  it('takes the whole value when nothing is named, or when there was no board', () => {
+    const next = projection([card('REQ-1')], 2);
+    expect(mergeAffected(null, next, ['REQ-1'])).toBe(next);
+    expect(mergeAffected(projection([card('REQ-1')], 1), next, null)).toBe(next);
+  });
+  it('drops a card the new value no longer holds and admits one it gained', () => {
+    const previous = projection([card('REQ-1'), card('REQ-2')], 1);
+    const next = projection([card('REQ-2'), card('REQ-9')], 2);
+    const merged = mergeAffected(previous, next, ['REQ-9']);
+    expect(merged.cards.map((x) => x.id)).toEqual(['REQ-2', 'REQ-9']);
+    expect(merged.cards[0]).toBe(previous.cards[1]);
+  });
+});
+
+describe('virtualisation arithmetic (REQ-TRACE-358..365)', () => {
+  it('realises one contiguous band beginning at the top, bounded by the viewport and the five-card margin', () => {
+    const band = realisedBand(0, 640, 128, 300);
+    expect(band.start).toBe(0);
+    // 640 / 128 = 5 visible + 1 partial + 5 overscan below.
+    expect(band.end).toBe(11);
+    expect(band.end - band.start).toBeLessThan(300 / 4);
+  });
+  it('keeps the realised count bounded as the column is scrolled end to end, and reaches the last card', () => {
+    const sizes: number[] = [];
+    let last = 0;
+    for (let step = 0; step <= 10; step += 1) {
+      const scrollTop = (step / 10) * (300 * 128 - 640);
+      const band = realisedBand(scrollTop, 640, 128, 300);
+      sizes.push(band.end - band.start);
+      last = band.end;
+    }
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(1 + Math.ceil(640 / 128) + 2 * OVERSCAN_CARDS);
+    expect(last).toBe(300);
+    const top = realisedBand(0, 640, 128, 300);
+    const bottom = realisedBand(300 * 128 - 640, 640, 128, 300);
+    expect(bottom.start).toBeGreaterThanOrEqual(top.end);
+  });
+  it('does not grow with the column\'s length', () => {
+    const small = realisedBand(0, 640, 128, 30);
+    const large = realisedBand(0, 640, 128, 3000);
+    expect(large.end - large.start).toBe(small.end - small.start);
+  });
+  it('realises nothing for an empty column and states the figures the specification fixes', () => {
+    expect(realisedBand(0, 640, 128, 0)).toEqual({ start: 0, end: 0 });
+    expect(OVERSCAN_CARDS).toBe(5);
+    expect(RELEASED_POOL_CAP).toBe(20);
+    expect(SEARCH_DEBOUNCE_MS).toBe(150);
+    expect([COLUMN_MIN, COLUMN_MAX]).toEqual([276, 340]);
+    expect([RAIL_CHARS, RAIL_MARGIN]).toEqual([8, 4]);
+    expect([CLOSED_DROPDOWN_WIDTH, OPEN_DROPDOWN_WIDTH]).toEqual([240, 150]);
+    expect([PRIMARY_CONTROL_HEIGHT, OTHER_CONTROL_HEIGHT]).toEqual([32, 24]);
+  });
+});
+
+describe('fold pruning (REQ-TRACE-316) and the fold controls\' names (REQ-TRACE-320)', () => {
+  it('prunes only project-supplied keys, and only against the columns the store still has', () => {
+    const decisions = { backlog: true, blocked: false, 'REQ-100': true, 'REQ-999': true, 'docs/old': false };
+    const pruned = pruneUserFolds(decisions, 'epic', ['REQ-100', 'docs/requirements']);
+    expect(pruned).toEqual({ backlog: true, blocked: false, 'REQ-100': true });
+  });
+  it('retains every decision while a closed axis is showing', () => {
+    const decisions = { backlog: true, 'REQ-999': true };
+    expect(pruneUserFolds(decisions, 'delivery', ['backlog'])).toEqual(decisions);
+  });
+  it('names the label, the count and the fold action on the heading, and the unfold action on the rail', () => {
+    expect(headingAccessibleName('Needs Update', 2)).toBe('Needs Update · 2, fold column');
+    expect(railAccessibleName('Done', 0)).toBe('Unfold Done · 0');
+  });
+});
+
+describe('epic counts (REQ-TRACE-282)', () => {
+  it('counts children, their distribution, the traced proportion over the non-deprecated population, runs and blockers', () => {
+    const epic: EpicCard = { id: 'REQ-100', title: 'Epic', done: 1, total: 3, children: ['REQ-101', 'REQ-102', 'REQ-103', 'REQ-104'] };
+    const cards = [
+      card('REQ-101', { column: 'done', evidence: { implementationTrace: 'satisfied', sites: [] } }),
+      card('REQ-102', { column: 'running', evidence: { sites: [] } }),
+      card('REQ-103', { column: 'blocked', blocker: { kind: 'stated', reason: 'held', answerPaths: ['resume'] }, evidence: { implementationTrace: 'stale', sites: [] } }),
+      card('REQ-104', { column: 'backlog', lifecycle: 'deprecated', evidence: { implementationTrace: 'satisfied', sites: [] } }),
+    ];
+    const s = epicSummary(epic, cards);
+    expect(s.children).toBe(4);
+    expect(s.distribution).toEqual([{ column: 'backlog', count: 1 }, { column: 'running', count: 1 }, { column: 'done', count: 1 }, { column: 'blocked', count: 1 }]);
+    expect([s.tracedOf, s.tracedTotal]).toEqual([2, 3]);
+    expect(s.running).toBe(1);
+    expect(s.blockers).toBe(1);
+    expect(epicSummaryLine(s)).toBe('4 children · 1 backlog, 1 running, 1 done, 1 blocked · 2 of 3 traced · 1 running · 1 blocker');
+  });
+});
+
+describe('alerts, evidence and the card description (REQ-TRACE-247, 263, 485)', () => {
+  it('classifies an alert into one of three severities, each with its own glyph', () => {
+    expect(alertSeverity('Verification failing: covering-test.')).toBe('failure');
+    expect(alertSeverity('Blocked (stated): held')).toBe('stopped');
+    expect(alertSeverity('Missing evidence: implementation-trace.')).toBe('attention');
+    expect(alertSeverity('Specification changed since it was accepted.')).toBe('attention');
+    expect(new Set(Object.values(ALERT_GLYPH)).size).toBe(3);
+  });
+  it('lays segments from twelve o\'clock, gapped, closing the ring, never overlapping', () => {
+    for (const n of [1, 2, 3]) {
+      const arcs = segmentArcs(n);
+      expect(arcs).toHaveLength(n);
+      expect(arcs[0]!.start).toBeGreaterThanOrEqual(0);
+      expect(arcs[0]!.start).toBeLessThan(360 / n);
+      for (let i = 1; i < n; i += 1) expect(arcs[i]!.start).toBeGreaterThan(arcs[i - 1]!.start + arcs[i - 1]!.sweep);
+      const last = arcs[n - 1]!;
+      expect(last.start + last.sweep).toBeLessThanOrEqual(360);
+      for (const a of arcs) expect(a.sweep).toBeGreaterThan(0);
+    }
+    expect(segmentArcs(0)).toEqual([]);
+    expect(arcPath(8, 8, 5.5, 7, 346)).toMatch(/^M [\d.]+ [\d.]+ A 5.5 5.5 0 1 1 [\d.]+ [\d.]+$/);
+  });
+  it('describes a card with the delivery-state word, the health token and its rendered gloss', () => {
+    const description = cardDescription(card('REQ-1', { column: 'needs-update', health: 'needs-update' }), 'No execution units yet · never run');
+    expect(description.startsWith('Needs Update. Health needs-update: ')).toBe(true);
+    expect(description).toContain('specification that has since changed');
+  });
+  it('builds exactly the five sections of REQ-TRACE-271, in order', () => {
+    expect([...DETAIL_SECTIONS]).toEqual(['requirement', 'relations', 'execution', 'traceability', 'verification']);
+  });
+});

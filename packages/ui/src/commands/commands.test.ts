@@ -37,6 +37,8 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       ['run.submit', 'Start or continue run', 'Ctrl+Return'],
       ['help.keyboard', 'Show keyboard help', 'F1'],
       ['about.open', 'About & Legal', null],
+      // Part AK2 — REQ-TRACE-390's move control, registered here rather than bound privately by the board (the pin rides with the entry).
+      ['requirements.move', 'Move requirement', 'Ctrl+M'],
     ]);
   });
 
@@ -70,6 +72,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       'switchView:workspace', 'focusComposer',
       'switchView:workspace', 'submitRun',
       'openKeyboardHelp', 'openSettings:about',
+      'switchView:requirements', // Part AK2 — the chord shows the view and places focus on the move control (REQ-TRACE-390).
     ]);
   });
 });

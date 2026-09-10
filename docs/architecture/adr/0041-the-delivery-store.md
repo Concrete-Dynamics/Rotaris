@@ -657,3 +657,15 @@ verification obligation.
 **What the merge must do:** replace `ENGINE_NOT_MERGED` in `apps/desktop/src/workspace-service/index.ts`'s
 `requirements.command` case with Part AJ's factory; until then the board reports `source: none` with the cause in
 `parseErrors`, and the tests fake the engine around `fixture-store.ts`.
+
+**Merge 1's proof pass — 2026-09-09, the sixtieth defect.** The narrowing above — the cascade premise is "the tables
+whose `session_id` REFERENCES `sessions`" — was applied to the store's own suite and ruled into the plan, and nothing
+carried it to the proof that executes the cascade against the running product: `pnpm sessions-proof` (Part U) pinned
+the count of tables carrying a `session_id` at fifteen and asserted every one of them empty after the delete, so v15's
+`delivery_runs` failed the pin on the merged main while every branch and the store's tests were green — the same class
+as the fifty-ninth, a bound only the merged arrangement exercises. The proof now reads the premise from the schema
+(`pragma_foreign_key_list`: the fourteen that reference `sessions`, plus the parent), asserts that `delivery_runs` is
+the ONE table carrying the column as a fact, plants a run row naming the session about to be deleted and asserts it
+survives — REQ-TRACE-476 executed against the product rather than against the DAL alone: `pnpm sessions-proof` alone on the merged main, 146 s, PASS — fifteen cascaded, `delivery_runs` the one fact-table, the planted run row 1 before and 1 after the delete. The reading
+stands; what it omitted is that a premise narrowed in one suite is a pin left standing in every other, so a ruling that
+narrows a premise must name the proofs that pinned the old one, and the merge's proof pass is where such pins are found.

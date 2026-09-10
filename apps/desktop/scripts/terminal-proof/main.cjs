@@ -453,6 +453,29 @@ app.whenReady().then(async () => {
     const reported = await until(async () => { const st = await state(LIVE); const last = st.log.resize.filter((r) => r.streamId === LIVE).at(-1); return last && st.stream.meta && st.stream.meta.cols === last.cols && st.stream.meta.rows === last.rows ? { last, meta: [st.stream.meta.cols, st.stream.meta.rows], grid: [st.stream.grid.cols, st.stream.grid.rows] } : null; }, 5_000);
     expect('live.metaFollowsReportedGeometry', reported !== null && reported.grid[0] === reported.last.cols && reported.grid[1] === reported.last.rows, reported ?? (await state(LIVE)).log.resize);
     live.geometry = reported;
+    // ── REQ-SHELL-166: a resize WHILE the command runs — the window's box shrinks, as under a user's drag ───────
+    // The grid re-measures its host, reports the new geometry (REQ-SHELL-100) and the run host resizes the real
+    // pseudo-terminal (REQ-SHELL-106). This is defect AL2-3's remaining trigger, and the proof drives it on purpose:
+    // with the banner slot's height reserved nothing else on this path resizes mid-command, so without this the
+    // evidence recorded below (`live.resizeRepaint`) would not be produced by the runs the records quote.
+    const reportsBeforeResize = (await state(LIVE)).log.resize.filter((r) => r.streamId === LIVE).length;
+    const boxHeight = await exec(`(() => { const box = document.querySelector('[data-testid="proof-window"]'); box.style.height = '460px'; return box.getBoundingClientRect().height; })()`);
+    const midResize = await until(async () => {
+      const st = await state(LIVE);
+      const reports = st.log.resize.filter((r) => r.streamId === LIVE);
+      const last = reports.at(-1);
+      return reports.length > reportsBeforeResize && last && st.stream.meta && st.stream.grid && st.stream.meta.cols === last.cols && st.stream.meta.rows === last.rows
+        ? { reports: reports.length, last, meta: [st.stream.meta.cols, st.stream.meta.rows], grid: [st.stream.grid.cols, st.stream.grid.rows] }
+        : null;
+    }, 8_000);
+    live.midCommandResize = { boxHeight, before: reported ? reported.last : null, after: midResize ? midResize.last : null, meta: midResize ? midResize.meta : null, grid: midResize ? midResize.grid : null, reports: midResize ? midResize.reports : null };
+    expect('live.midCommandResizeReachedProcess', midResize !== null && reported !== null && midResize.last.rows !== reported.last.rows && midResize.grid[1] === midResize.last.rows, live.midCommandResize);
+    // ConPTY answers the resize with a repaint (defect AL2-3, below), which is a burst of frames. REQ-SHELL-166's
+    // echo budget is for a keystroke, not for a keystroke queued behind a screen repaint, so the probes wait for the
+    // stream to go quiet first — the same rest the criterion is stated at.
+    const quietFrom = Date.now();
+    await until(() => (frameLog.length > 0 && Date.now() - frameLog[frameLog.length - 1].at > 250 ? true : null), 4_000, 25);
+    live.midCommandResize.quietMs = Date.now() - quietFrom;
     // ── Take control (REQ-SHELL-089), then REQ-SHELL-166's echo: key press to painted frame ─────────────────────
     await click('[data-testid="term-take-control"]');
     expect('live.armed', (await text('[data-testid="term-take-control"]')) === 'Release control' && (await active())?.testid === 'term-grid-input', await active());

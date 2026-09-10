@@ -354,19 +354,22 @@ and the Workspace toolbar's control carries the running count (REQ-SHELL-108). `
 have spec 12's shape (`user-input`, `user`, `terminal`, the reason sentence, `terminal fg:live-1: typed "abc123XYZ"
 (in: node …)`, `sent C-d`, `sent C-c`, `took control of the terminal`).
 
-**REQ-SHELL-166, measured against the real pseudo-terminal through the window.** Echo latency, take-control armed, key
-press to the painted frame: **20.3–21.3 ms** over three keystrokes on the first of the two runs recorded below, and
-**19.5–66.7 ms** on the second, which shared the machine with four other agents’ builds (key to the frame’s arrival
-11.0–61.0 ms; the budget is 100 ms, and the worst of the six readings is 66.7 ms). Order and fidelity: a burst of nine
-keys with `F5` and `Insert` inside it reached the process as exactly `abc123XYZ` — nothing dropped, duplicated,
-reordered or invented, and the two unmapped keys transmitted nothing. Interrupt: **67 ms** and **66 ms** from the
-control to the command’s end (exit 130, the process’s own `INTERRUPTED`); end input: **73 ms** and **65 ms** (exit 0,
-`EOF`). Resize: the size the process reports (`cols=118 rows=26`) equals the grid’s last report. Throughput: a
-10,000-line command finished with the same 10,000 lines and the same exit status (3) with the window’s delivery off and
-on — 8.1 s against 5.8 s on the first run and 4.3 s against 3.5 s on the second, the machine’s load moving both
-together. Three surfaces — the grid, the row preview, the persona card’s preview — held identical cells, running state,
-truncation and exit code at rest (REQ-SHELL-102). The limiter delivered every frame unmerged at these rates (85 and 67
-delivered, 0 merged).
+**REQ-SHELL-166, measured against the real pseudo-terminal through the window.** The figures are the two consecutive
+green runs this note rests on (112 assertions each), both taken with four other agents building on the same machine.
+Echo latency, take-control armed, key press to the painted frame: **12.4 / 23.1 / 18.1 ms** over three keystrokes on
+the first run and **21.5 / 25.0 / 16.0 ms** on the second (key to the frame's arrival 3.9–16.1 ms and 12.0–15.9 ms;
+the budget is 100 ms, and the worst of the six readings is 25.0 ms). Order and fidelity: a burst of nine keys with
+`F5` and `Insert` inside it reached the process as exactly `abc123XYZ` — nothing dropped, duplicated, reordered or
+invented, and the two unmapped keys transmitted nothing. Interrupt: **69 ms** and **73 ms** from the control to the
+command's end (exit 130, the process's own `INTERRUPTED`); end input: **69 ms** and **64 ms** (exit 0, `EOF`). Resize:
+the proof shrinks the window's box from 620 px to 460 px **while the first command runs**, the grid re-measures and
+reports 118×26 → 118×16, the run host resizes the pseudo-terminal, and the size the process reports (`cols=118
+rows=16`) equals the grid's last report — an assertion of its own (`live.midCommandResizeReachedProcess`) and the
+trigger for the repaint below. Throughput: a 10,000-line command finished with the same 10,000 lines and the same
+exit status (3) with the window's delivery off and on — 3.4 s against 2.7 s on the first run and 3.3 s against 2.7 s
+on the second. Three surfaces — the grid, the row preview, the persona card's preview — held identical cells, running
+state, truncation and exit code at rest (REQ-SHELL-102). The limiter delivered every frame unmerged at these rates
+(59 delivered, 0 merged, on both runs).
 
 **Found — defect AL2-1: the delivery limiter re-ordered a stream's metadata under saturation.** The first draft kept
 ONE concatenated delta and ONE latest meta per stream and drained delta-then-meta, so a `meta` that arrived between two
@@ -382,13 +385,19 @@ applies it idempotently, REQ-SHELL-105). Unseen in wave 1 because nothing attach
 
 **Found — defect AL2-3, measured and NOT repaired: a resize during a command repaints into the observation.** A grid
 resize while a command runs resizes the pseudo-terminal (REQ-SHELL-166 requires it), and ConPTY answers a resize by
-repainting its viewport — the visible text again, with cursor addressing. The observation the agent reads is ADR-0020's
-VT-strip over the raw bytes, so the repainted text appears a second time in it: the proof's first command shows `READY`
-twice, the start marker inside the body and a screen's worth of blank lines. The repair is an observation derived from
-the screen model rather than from the bytes — a revision of ADR-0020's capture, not this record's — and it is raised,
-not made. What IS removed is the commonest trigger: a banner appearing or leaving in the terminal window changed the
-grid's host, so every banner cost the process a resize (AM's handoff §9 named it); the banner slot now reserves the
-notice's own height, so a banner costs no resize, and the throughput criterion holds with the window open.
+repainting its viewport — the visible text again, with cursor addressing. The observation the agent reads is
+ADR-0020's VT-strip over the raw bytes, so the repainted text appears in it a second time. **The commonest trigger is
+removed**: a banner appearing or leaving in the terminal window changed the grid's host, so every banner cost the
+process a resize (AM's handoff §9 named it); the banner slot now reserves the notice's own height, so a banner costs
+no resize, and the throughput criterion holds with the window open. What is left in the product is a **user resizing
+the window** — and since nothing else on the proof's path resizes mid-command any more, the proof performs that resize
+itself (the window's box from 620 px to 460 px, 26 rows to 16, in the middle of the first command), so the defect is
+measured by the runs this note rests on and not by a trigger that has since gone. Both runs observe the same thing:
+the echo program printed five lines and the agent read sixteen — `READY`, the start marker `__rot_…_s`, `READY`
+again, ten blank lines, then `qwe`, `abc123XYZ`, a blank and `EOF` (`results.json`: `live.resizeRepaint` =
+`{ readyLines: 2, markerInBody: true, lines: 16 }`, and `live.endInput.output` is the whole observation). The repair
+is an observation derived from the screen model rather than from the bytes — a revision of ADR-0020's capture, not
+this record's — and it is raised, not made.
 
 **Found — defect AL2-4: the display closed a stream for good, but the registry re-opens it.** ADR-0047's display read
 REQ-SHELL-105's "running → closed exactly once" over the stream's whole life; this record's registry (Part AL) re-opens

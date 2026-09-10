@@ -169,6 +169,13 @@ export interface ScheduleInput {
   readonly armed: ReadonlySet<ReqId>;
   /** A dispatch main holds and has not settled (`run.started` or `run.abandon`). */
   readonly claimed: ReadonlySet<ReqId>;
+  /**
+   * Defect AP-4 — REQ-TRACE-472/497: a candidate whose launch has no accepted disclosure CANNOT be claimed, so the
+   * queue must never call it `next`. It is kept apart from `stalled` because arming does not clear it: arming is the
+   * queue's release (REQ-TRACE-482), and the disclosure is the user's acceptance of what the run receives, which no
+   * release can stand in for. Keyed by the sentence to state, which is the caller's, unaltered (REQ-TRACE-478).
+   */
+  readonly undisclosed: ReadonlyMap<ReqId, string>;
   /** REQ-TRACE-463: the reason the last start did not begin, reported on the entry until the next release of it. */
   readonly stalled: ReadonlyMap<ReqId, string>;
 }
@@ -192,6 +199,11 @@ export function scheduleQueue(input: ScheduleInput): ScheduleOutput {
     if (input.claimed.has(c.id)) { entries.push({ id: c.id, unit: c.unit, state: 'next' }); free -= 1; continue; }
     if (input.settings.stopped) { deferred(QUEUE_STOPPED_REASON); continue; }
     if (input.held.has(c.id)) { deferred(heldReason(c.id)); continue; }
+    // Defect AP-4: before the stall, and never escaped by arming — the claim refuses an undisclosed launch, so a
+    // queue that called it `next` would promise a start that silently never came, and it would hold a unit slot
+    // against candidates that could have used it.
+    const undisclosed = input.undisclosed.get(c.id);
+    if (undisclosed !== undefined) { deferred(undisclosed); continue; }
     const stalledCause = input.stalled.get(c.id);
     if (stalledCause !== undefined && !input.armed.has(c.id)) { deferred(stalledReason(c.id, stalledCause)); continue; }
     if (!input.settings.automatic && !input.armed.has(c.id)) { deferred(manualReason(c.id)); continue; }

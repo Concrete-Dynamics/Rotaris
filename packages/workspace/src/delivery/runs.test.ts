@@ -61,7 +61,7 @@ describe('REQ-TRACE-478..483, 463: the scheduler', () => {
       { id: 'REQ-102', unit: 'u2', priority: 'High', since: '2026-09-09T10:00:01Z' },
     ],
     executing: [], settings: { automatic: true, concurrency: 2, stopped: false },
-    held: new Set(), armed: new Set(), claimed: new Set(), stalled: new Map(),
+    held: new Set(), armed: new Set(), claimed: new Set(), stalled: new Map(), undisclosed: new Map(),
     ...over,
   });
   it('orders by priority, then the time the requirement entered the released column, then identifier, and dispatches within the free slots', () => {

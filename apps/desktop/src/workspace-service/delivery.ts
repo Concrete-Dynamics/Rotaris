@@ -134,11 +134,14 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       return { id: c.id, unit: l?.unit ?? unitIdFor(Number(c.facts.find((f) => f.label === 'Units')?.value ?? '0')), priority: c.priority, since: since.get(c.id)! };
     });
     for (const id of [...since.keys()]) if (!candidates.some((c) => c.id === id)) since.delete(id);
-    const undisclosedStall = new Map(stalled);
-    for (const c of candidates) if (!undisclosedStall.has(c.id) && !disclosed(launches.get(c.id))) undisclosedStall.set(c.id, UNDISCLOSED_REASON(c.id));
+    // Defect AP-4: the undisclosed condition is its OWN input, not a stall folded in. Folded in it was escaped by
+    // arming — a resume that returns to `ready` provisions and arms — and the queue then called `next` a candidate
+    // `claim()` refuses, so nothing started and the slot it held was denied to candidates that could have used it.
+    const undisclosed = new Map<ReqId, string>();
+    for (const c of candidates) if (!disclosed(launches.get(c.id))) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
     return scheduleQueue({
       candidates, executing: reader.runningRuns().map((r) => ({ id: r.id, unit: r.unit })),
-      settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled: undisclosedStall,
+      settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed,
     });
   };
   const source = () => (parse === undefined ? { writable: false, canCreate: false, reason: 'No requirement store is open.' } : probeSourceWritability(workspaceRoot, parse.layout.storeDir));
@@ -169,7 +172,9 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     const out = schedule(current);
     for (const id of out.dispatch) {
       const l = launches.get(id);
-      if (l?.worktree === undefined || !disclosed(l)) continue;
+      // The invariant defect AP-4 broke: what the scheduler offers, the claim takes. A mismatch is a defect of the
+      // scheduler's inputs, so it is logged rather than passed over in silence.
+      if (l?.worktree === undefined || !disclosed(l)) { log(`requirements: the scheduler offered ${id} but its launch is ${l === undefined ? 'absent' : l.worktree === undefined ? 'unprovisioned' : 'undisclosed'}; nothing was claimed for it`, 'warn'); continue; }
       const record = recordOf(id);
       if (record === undefined) continue;
       claimed.add(id);

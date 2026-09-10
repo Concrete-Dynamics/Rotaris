@@ -9,6 +9,7 @@ import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAn
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
 import { Row, TranscriptSurfaceProvider, isReasoningRow, placements, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
+import { useTerminalHost } from '../terminal/host.js'; // Part AL2 — the renderer's terminal host, read for the two terminal fields of the surface
 import type { DisplayRow, RowRenderProps, TrailerRow } from './types.js';
 
 /**
@@ -171,9 +172,15 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * second gap in the seam, found when the two halves met. The map is the same one, keyed by the member's own
    * display key, which never collides with its group's: `project.ts` keys a group `group:<first member's key>`.
    */
+  // Part AL2 — REQ-SHELL-079 / REQ-CHAT-063/076: the live preview and the click that requests the pop-out come from the
+  // renderer's terminal host (`terminal/host.tsx`), a context and not a prop, so this pane's props and the view above it
+  // do not change for the terminal's sake; with no host mounted a row keeps its one-line `⤷` preview, as before.
+  const terminalHost = useTerminalHost();
   const surface: TranscriptSurface = {
     showReasoning, autoCollapseTools, runActive: running, nowMs: nowMs === 0 ? ticked : nowMs,
     openLink: onOpenLink, openMenu: (request) => setMenu(request), openTrailer: onOpenTrailer,
+    openTerminal: terminalHost ? (streamId) => terminalHost.open(streamId) : undefined,
+    terminalPreview: terminalHost ? (streamId) => terminalHost.streams.previewOf(streamId) : undefined,
     attachmentUrl: (attachment) => attachmentBodies.get(attachment.digest) ?? null,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),

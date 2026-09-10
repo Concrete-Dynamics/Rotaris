@@ -21,6 +21,7 @@ import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
 import { TranscriptPane } from './transcript/TranscriptPane.js';
+import { TerminalToolbarControl } from './terminal/host.js'; // Part AL2 — the slot's control (one import line; the slot rule names the slot line only, reported in the handoff)
 import type { DisplayCaps } from './transcript/project.js';
 import type { TrailerRow } from './transcript/types.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
@@ -988,7 +989,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             {/* slot:clear (AO) */}
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
             {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
-            {/* slot:terminal-control (AL) */}
+            {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}
+            <TerminalToolbarControl />
           </div>
         )}
         {intentStatusText(session?.intent ?? null) && (

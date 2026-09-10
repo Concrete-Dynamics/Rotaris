@@ -128,3 +128,44 @@ export function terminalRowStreamId(toolName: string, argsJson: string, agentId:
   if (typeof args['command'] !== 'string' || args['command'] === '') return undefined;
   return foregroundStreamId(agentId);
 }
+
+// Part AL2 — the terminal WINDOW's commands (REQ-SHELL-080/081/083/086/108..111; ADR-0048's window registry, the
+// terminal's lifecycle being rebuild-not-hide). Main answers every one; none reaches the run host. Spread into
+// `CommandRequestSchema` beside the seven `terminal.*` commands.
+//  - `window.openTerminal`     → open the main window's one terminal window or raise it (a request, REQ-SHELL-161);
+//                                 `streamId` brings that stream forward when retained (REQ-SHELL-085). From any window
+//                                 of the family: the toolbar, the palette, a transcript row's preview, a persona card's.
+//  - `window.terminalPayload`  → the terminal window asks what it was opened onto: the followed session, the stream
+//                                 to bring forward, and the auto-open preference it draws a control for.
+//  - `window.terminalSession`  → the main window's renderer reports the session it follows (null: none). REQ-SHELL-110/111:
+//                                 the window closes; it reopens without focus for the new session only when it had been
+//                                 open on a session before (see `main/windows.ts` for the reading).
+//  - `window.terminalAutoOpen` → REQ-SHELL-109's preference, written by the terminal window's own control (the
+//                                 preference is `terminal/autoOpen`, registered in `platform`; key-less here like the
+//                                 composer draft, Part AB, so no renderer spells the store's key).
+//  - `window.showWorkspace`    → REQ-SHELL-083's "Go to Workspace": the main window switches to the Workspace view and
+//                                 is raised, as a request.
+export const TERMINAL_WINDOW_COMMAND_SCHEMAS = [
+  z.object({ kind: z.literal('window.openTerminal'), streamId: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('window.terminalPayload') }),
+  z.object({ kind: z.literal('window.terminalSession'), sessionId: z.string().min(1).nullable() }),
+  z.object({ kind: z.literal('window.terminalAutoOpen'), value: z.boolean() }),
+  z.object({ kind: z.literal('window.showWorkspace') }),
+] as const;
+export type TerminalWindowCommand = z.infer<(typeof TERMINAL_WINDOW_COMMAND_SCHEMAS)[number]>;
+export type TerminalWindowCommandKind = TerminalWindowCommand['kind'];
+export const TERMINAL_WINDOW_COMMAND_KINDS: readonly TerminalWindowCommandKind[] = ['window.openTerminal', 'window.terminalPayload', 'window.terminalSession', 'window.terminalAutoOpen', 'window.showWorkspace'];
+export function isTerminalWindowCommand(req: { readonly kind: string }): req is TerminalWindowCommand {
+  return (TERMINAL_WINDOW_COMMAND_KINDS as readonly string[]).includes(req.kind);
+}
+/** `window.terminalPayload`'s answer. */
+export interface TerminalWindowPayload {
+  readonly sessionId: string | null;
+  readonly focusStream: string | null;
+  /** REQ-SHELL-109, default off. */
+  readonly autoOpen: boolean;
+}
+/** `window.openTerminal`'s answer: whether a window exists afterwards, and whether it was the one already open. */
+export interface TerminalWindowOpened { readonly opened: boolean; readonly reused: boolean }
+/** REQ-SHELL-109's preference key, registered in `platform`'s `PREFERENCE_KEYS`; spelt once. */
+export const TERMINAL_AUTO_OPEN_PREFERENCE = 'terminal/autoOpen' as const;

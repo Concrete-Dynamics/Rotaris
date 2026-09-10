@@ -4,6 +4,10 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
+// Part AL2 — the terminal in this window (ADR-0021's subscription point, ADR-0047's window; REQ-SHELL-079..111): the
+// preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
+import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
+import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
 import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost } from '@rotaris/ui';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
@@ -95,6 +99,59 @@ Object.assign(window as unknown as Record<string, unknown>, {
 });
 bridge.onNotice((p) => notices.getState().apply(p));
 bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
+/**
+ * Part AL2 — the terminal in THIS window (REQ-SHELL-079..111; ADR-0021 first executed through a window, ADR-0047's
+ * surfaces mounted over the real frames).
+ *
+ * Every renderer that draws transcript rows — the main window and each persona window — holds ONE `TerminalStreamSet`
+ * over the headless emulator: the subscription point the row previews read (REQ-SHELL-079, REQ-CHAT-063/066/076) and
+ * the persona card's parity with the main window's preview (REQ-SHELL-075 b, REQ-SHELL-102: the same frames, the same
+ * parser, from the same point). Frames arrive on channel 3 for the sessions this window subscribed to; a frame of a
+ * session the replica no longer follows is not applied (REQ-SHELL-105: attaching to another session supersedes the
+ * earlier attachment). The terminal window is a different renderer (`bootTerminal`) with its own registry whose
+ * emulators paint, and it does not run this one.
+ *
+ * REQ-SHELL-110/111 in the main window: a change of the followed session — to another, to none, to a new one — clears
+ * every screen and the counts here, and is REPORTED to main (`window.terminalSession`), which closes the terminal
+ * window and reopens it for the new session without focus only when it had been open on a session before (the reading
+ * is on `TerminalWindows.onSessionChange`). The re-attach ("streams re-attach to the newly focused session") is the
+ * resync: after the new session's first whole-session update — which the subscribe's attach delivers, so channel 3
+ * reaches this window by then — `terminal.streams` asks the run host for one `screen` frame per retained stream
+ * (REQ-SHELL-104). A persona window resyncs again each time it is shown, because it unsubscribes while hidden.
+ */
+const windowRole = new URLSearchParams(window.location.search).get('role') ?? 'main';
+const terminalStreams = new TerminalStreamSet(headlessEmulator);
+let terminalFollowed: string | null = replica.getState().sessionId;
+let terminalResynced: string | null = null;
+if (windowRole !== TERMINAL_WINDOW_ROLE) {
+  bridge.onTerminalFrame((p) => {
+    const frame = p as TerminalFrame;
+    if (frame.sessionId !== replica.getState().sessionId) return;
+    terminalStreams.apply(frame);
+  });
+  replica.subscribe(() => {
+    const sessionId = replica.getState().sessionId;
+    if (sessionId === terminalFollowed) return;
+    terminalFollowed = sessionId;
+    terminalResynced = null;
+    terminalStreams.clear();
+    if (windowRole === 'main') void bridge.command({ kind: 'window.terminalSession', sessionId });
+  });
+  bridge.onSessionSnapshot((p) => {
+    const sessionId = (p as { sessionId?: string }).sessionId;
+    if (!sessionId || sessionId !== replica.getState().sessionId || terminalResynced === sessionId) return;
+    terminalResynced = sessionId;
+    void bridge.command({ kind: 'terminal.streams', sessionId });
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) terminalResynced = null; });
+}
+/** What the surfaces read: the registry, and the way to the pop-out (REQ-SHELL-080; a raise is a request, REQ-SHELL-161). */
+const terminalHost: TerminalHost = {
+  streams: terminalStreams,
+  open: (streamId) => { void bridge.command({ kind: 'window.openTerminal', ...(streamId === undefined ? {} : { streamId }) }); },
+};
+/** REQ-SHELL-083's "Go to Workspace" from the terminal window: main asks this window to switch the view, then surfaces it. */
+(window as unknown as { __rotarisShowWorkspace?: () => boolean }).__rotarisShowWorkspace = () => { useShellState.getState().switchView('workspace'); return true; };
 /**
  * Part AA — REQ-CHAT-075/076. Every transcript surface in this window acknowledges what it did: a copy that
  * worked and one the platform refused, an open that worked and one that failed. Both go to THIS window's stack
@@ -1183,7 +1240,8 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
-        workspace: <Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer} />,
+        // Part AL2: the terminal host around the Workspace — the row previews, the pop-out click and the toolbar control read it (REQ-SHELL-079/080/108).
+        workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer} /></TerminalHostProvider>,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
@@ -1444,6 +1502,8 @@ function PersonaApp({ persona, initialSelect }: { persona: string; initialSelect
   return (<>
     <PersonaWindow
       onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
+      // Part AL2 — REQ-SHELL-075 (b): this window's own preview registry, and the pop-out request (REQ-CHAT-076).
+      terminalPreview={(streamId) => terminalStreams.previewOf(streamId)} openTerminal={(streamId) => terminalHost.open(streamId)}
       persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
@@ -1465,6 +1525,82 @@ async function bootPersona(): Promise<void> {
     await bridge.command({ kind: 'session.subscribe', sessionId: payload.sessionId });
   }
   root.render(<StrictMode><PersonaApp persona={payload.persona} initialSelect={payload.select} /></StrictMode>);
+}
+
+/**
+ * Part AL2 — the terminal window's renderer (`role=terminal`; REQ-SHELL-079..111): ADR-0047's window component mounted
+ * over ADR-0021's frames, in a window `main/windows.ts` builds once per main window and rebuilds on every open
+ * (REQ-SHELL-086). It asks main what it was opened onto (`window.terminalPayload`: the followed session, the stream to
+ * bring forward, the auto-open preference), subscribes to that session FOR ITSELF so channel 3 reaches it (the sender
+ * is the subscriber, ADR-0043's note), asks the run host for the resync (REQ-SHELL-104: the retained output at once),
+ * and binds the window's six actions to the `terminal.*` commands. The title is REQ-SHELL-081's; the auto-open control
+ * (REQ-SHELL-109) sits in a slim bar under the window's content — the specification names no surface for the
+ * preference, and the window the preference is about is where a user looks for it; stated as a reading.
+ */
+const terminalRefusalOf = (r: CommandOutcome): TerminalRefusal => {
+  if (r.ok) return 'unknown-stream';
+  const code = r.code.startsWith('terminal.') ? r.code.slice('terminal.'.length) : r.code;
+  return (TERMINAL_REFUSALS as readonly string[]).includes(code) ? (code as TerminalRefusal) : 'unknown-stream';
+};
+const terminalResult = (r: CommandOutcome): Awaited<TerminalActionResult> => (r.ok ? { ok: true, value: undefined } : { ok: false, error: terminalRefusalOf(r) });
+const terminalActions: TerminalActions = {
+  sendKeys: async (streamId, keys) => terminalResult(await bridge.command({ kind: 'terminal.sendKeys', streamId, keys: [...keys] })),
+  interrupt: async (streamId) => terminalResult(await bridge.command({ kind: 'terminal.interrupt', streamId })),
+  endInput: async (streamId) => terminalResult(await bridge.command({ kind: 'terminal.endInput', streamId })),
+  kill: async (streamId) => terminalResult(await bridge.command({ kind: 'terminal.kill', streamId })),
+  resize: (streamId, cols, rows) => bridge.command({ kind: 'terminal.resize', streamId, cols, rows }),
+  audit: (streamId, entry) => { void bridge.command({ kind: 'terminal.audit', streamId, entry }); },
+};
+function TerminalApp({ streams, sessionId, initialFocus, initialAutoOpen }: { streams: TerminalStreamSet; sessionId: string | null; initialFocus: string | null; initialAutoOpen: boolean }) {
+  const [focusStream, setFocusStream] = useState<string | null>(initialFocus);
+  const [autoOpen, setAutoOpen] = useState(initialAutoOpen);
+  const [label, setLabel] = useState<string | null>(sessionId);
+  useEffect(() => {
+    // REQ-SHELL-085: a later open names a stream to bring forward; the same stream twice must still reach the tick.
+    (window as unknown as { __rotarisTerminalFocus?: (id: string) => boolean }).__rotarisTerminalFocus = (id) => { setFocusStream(null); setTimeout(() => setFocusStream(id), 0); return true; };
+    return () => { delete (window as unknown as { __rotarisTerminalFocus?: unknown }).__rotarisTerminalFocus; };
+  }, []);
+  // REQ-SHELL-081: "Rotaris · Terminal — {session label}" — the session's name, or its identifier when unnamed.
+  useEffect(() => {
+    // The session is fixed for this window's life (a change of session rebuilds the window), so the label is only ever refined here.
+    if (!sessionId) return;
+    let live = true;
+    void bridge.command({ kind: 'session.list' }).then((r) => {
+      if (!live || !r.ok) return;
+      const entry = (r.value as { sessions: SessionListItemPayload[] }).sessions.find((s) => s.sessionId === sessionId);
+      if (entry && entry.label.trim() !== '') setLabel(entry.label);
+    });
+    return () => { live = false; };
+  }, [sessionId]);
+  useEffect(() => { document.title = terminalWindowTitle(label); }, [label]);
+  const changeAutoOpen = (value: boolean) => { setAutoOpen(value); void bridge.command({ kind: 'window.terminalAutoOpen', value }); };
+  return (
+    <div className="term-shell" data-testid="term-shell">
+      <TerminalWindow streams={streams} actions={terminalActions} onGoToWorkspace={() => { void bridge.command({ kind: 'window.showWorkspace' }); }} focusStream={focusStream} acknowledge={acknowledge} />
+      {/* REQ-SHELL-109: the auto-open preference, default off, persisted user-wide by main under `terminal/autoOpen`. */}
+      <div className="term-shell__bar" data-testid="term-auto-open">
+        <span id="term-auto-open-label">Open this window automatically</span>
+        <button type="button" className={`toggle${autoOpen ? ' is-on' : ''}`} role="switch" aria-labelledby="term-auto-open-label" aria-checked={autoOpen} aria-description={`Automatic opening is ${autoOpen ? 'on' : 'off'}. On, the terminal window opens without taking focus when an agent's terminal starts while it is closed.`} data-testid="term-auto-open-toggle" onClick={() => changeAutoOpen(!autoOpen)} />
+        <span className="text-secondary">When an agent's terminal starts while this window is closed, it opens without taking focus.</span>
+      </div>
+      {/* ADR-0049's fourth decision: the acknowledgement stack is per window (a copy's outcome, REQ-SHELL-101). */}
+      <Acknowledgements store={acknowledgements} />
+    </div>
+  );
+}
+async function bootTerminal(): Promise<void> {
+  const r = await bridge.command({ kind: 'window.terminalPayload' });
+  const root = createRoot(document.getElementById('root')!);
+  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
+  const payload = r.value as TerminalWindowPayload;
+  const streams = createTerminalWindowStreams();
+  bridge.onTerminalFrame((p) => { const frame = p as TerminalFrame; if (payload.sessionId !== null && frame.sessionId === payload.sessionId) streams.apply(frame); });
+  document.title = terminalWindowTitle(payload.sessionId);
+  if (payload.sessionId !== null) {
+    await bridge.command({ kind: 'session.subscribe', sessionId: payload.sessionId });
+    void bridge.command({ kind: 'terminal.streams', sessionId: payload.sessionId });
+  }
+  root.render(<StrictMode><TerminalApp streams={streams} sessionId={payload.sessionId} initialFocus={payload.focusStream} initialAutoOpen={payload.autoOpen} /></StrictMode>);
 }
 
 async function boot(): Promise<void> {
@@ -1498,6 +1634,7 @@ async function boot(): Promise<void> {
   if (role === 'provider') { await bootProvider(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   if (role === 'persona') { await bootPersona(); return; }
+  if (role === TERMINAL_WINDOW_ROLE) { await bootTerminal(); return; } // Part AL2 — the terminal window (REQ-SHELL-079..111)
   // Part AA's proof harness (verification only; main serves this role only under ROTARIS_CAPTURE_PNG + ROTARIS_ROWS_PROOF).
   if (role === 'rows-proof') {
     createRoot(document.getElementById('root')!).render(<StrictMode><RowProof onOpenLink={openLink} onAcknowledge={acknowledge} /><Acknowledgements store={acknowledgements} /></StrictMode>);

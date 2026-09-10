@@ -16,3 +16,4 @@ export * from './TerminalGrid.js';
 export * from './TerminalTab.js';
 export * from './TerminalWindow.js';
 export * from './TerminalPreviewBlock.js';
+export * from './host.js';

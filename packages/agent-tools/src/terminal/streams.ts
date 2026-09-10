@@ -185,16 +185,24 @@ export class TerminalStreams {
     return [...streams.values()].map((s) => ({ ...s.meta, truncated: s.emulator.truncated }));
   }
 
-  /** A late attacher is given the output accumulated so far: one `screen` frame per stream (REQ-SHELL-104, ADR-0021). */
+  /**
+   * A late attacher is given the output accumulated so far: one `screen` frame per stream (REQ-SHELL-104, ADR-0021).
+   *
+   * Part AL2 (defect AL2-2, found the first time a window attached to a stream that already existed): the resync
+   * frame carried no `meta`, so a display created from it took the unknown-stream defaults — "Terminal", running, 80×24,
+   * no command — and an ENDED stream was shown as running for ever, since no later meta was coming. The screen frame
+   * now carries the stream's metadata (a frame of any kind may; the display applies it idempotently, REQ-SHELL-105).
+   */
   async resync(sessionId: string): Promise<number> {
     const streams = this.bySession.get(sessionId);
     if (!streams) return 0;
     let n = 0;
     for (const s of [...streams.values()]) {
-      if (s.finalText !== null && !s.meta.running) { this.emit(s, { kind: 'screen', payload: s.finalText, closing: true }); n += 1; continue; }
+      const meta: TerminalStreamMeta = { ...s.meta, truncated: s.emulator.truncated };
+      if (s.finalText !== null && !s.meta.running) { this.emit(s, { kind: 'screen', payload: s.finalText, closing: true, meta }); n += 1; continue; }
       await s.writes;
       this.flushNow(s);
-      this.emit(s, { kind: 'screen', payload: s.emulator.serialize() });
+      this.emit(s, { kind: 'screen', payload: s.emulator.serialize(), meta });
       n += 1;
     }
     return n;

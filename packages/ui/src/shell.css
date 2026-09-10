@@ -1002,3 +1002,10 @@
 /* REQ-CHAT-021: the composer's persistent notice sits above the field, in the shell's own banner. */
 .composer__notice { flex: none; }
 @media (prefers-reduced-motion: reduce) { .slash-popup { animation: none; } }
+/* Part AL2 — the terminal window's shell around the window component (REQ-SHELL-109's auto-open control in a slim bar
+   under the content). The component's own rule is `height: 100vh`; inside the shell it takes the column's remainder.
+   Tokens by name; the bar is the one container the preference needs and nothing else is added. */
+.term-shell { display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; background: var(--rt-bg); color: var(--rt-text); }
+.term-shell .term-window { height: auto; flex: 1 1 auto; min-height: 0; }
+.term-shell__bar { flex: none; display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-top: 1px solid var(--rt-border); font-size: var(--rt-text-xs, 11px); }
+.term-shell__bar .toggle { flex: none; }

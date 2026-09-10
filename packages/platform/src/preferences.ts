@@ -44,6 +44,13 @@ export const PREFERENCE_KEYS = {
    * 180 px) and anything else reads as nothing stored.
    */
   'panels/workspace': { type: 'object', default: undefined, owner: 'REQ-SHELL-069', coerce: (value: unknown) => coercePaneLayout(value, 2) },
+  /**
+   * Part AL2 — REQ-SHELL-109: the terminal window's auto-open preference, default **off**, persisted user-wide like every
+   * desktop preference (REQ-CONFIG-405) and never YAML. Written by the terminal window's own control through
+   * `window.terminalAutoOpen` (main resolves the key, as it does for the composer draft) and read by main's frame
+   * observer: a stream that changes while running and the window is closed opens it without taking focus.
+   */
+  'terminal/autoOpen': { type: 'boolean', default: false, owner: 'REQ-SHELL-109', coerce: (value: unknown) => value === true || value === 'true' },
 } as const;
 
 /**

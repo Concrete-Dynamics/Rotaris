@@ -1011,7 +1011,7 @@
 .req-pane { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); min-width: 0; color: var(--rt-text); }
 .req-pane__header { display: flex; align-items: baseline; gap: var(--rt-space-3, 12px); padding-bottom: var(--rt-space-2, 8px); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-pane__id, .req-pane__mono { font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-xs); color: var(--rt-text-secondary); overflow-wrap: anywhere; }
-.req-pane__title { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-medium); font-size: var(--rt-text-lg); flex: 1; min-width: 0; }
+.req-pane__title { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-medium); font-size: var(--rt-h5); flex: 1; min-width: 0; }
 .req-pane__state { text-transform: none; }
 .req-pane__close { margin-left: auto; }
 .req-pane__lead { margin: 0; font-size: var(--rt-text-sm); }

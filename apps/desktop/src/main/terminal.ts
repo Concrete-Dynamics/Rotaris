@@ -10,8 +10,8 @@ import type { RendererSink, UpdateRelay } from '@rotaris/shell';
  *     point of delivery is `webContents.send`, so the bound is enforced HERE, per window, over a one-second sliding
  *     window on the monotonic clock. It is honoured the way REQ-SHELL-103 requires — "by delivering the same output
  *     in larger steps rather than by dropping any of it": a frame that would exceed the bound is MERGED into the
- *     window's pending state for its stream (deltas concatenated, a `screen` superseding the deltas before it, the
- *     latest `meta` kept, a closing frame kept) and delivered when the oldest instant leaves the window. Order
+ *     window's pending state for its stream (adjacent deltas concatenated, a `screen` superseding the deltas before it, a
+ *     `meta` keeping its place in the order, a closing frame kept) and delivered when the oldest instant leaves the window. Order
  *     within a stream is kept; `seq` on a merged frame is the last one merged, so it never runs backwards.
  *     ADR-0021's per-stream floor (≤ 50 frames/s) is the first line; this is the aggregate one obligation 2 asked for.
  *  2. THE COMMAND RELAY: the seven `terminal.*` commands travel to the run host shape for shape; a refusal's code
@@ -21,12 +21,19 @@ import type { RendererSink, UpdateRelay } from '@rotaris/shell';
  */
 const WINDOW_MS = 1_000;
 
+/**
+ * A window's undelivered frames for one stream, IN ORDER. Adjacent deltas merge into one larger step (REQ-SHELL-103);
+ * a screen supersedes the deltas and screens before it; a meta after a meta supersedes it (idempotent, REQ-SHELL-105);
+ * a meta between two deltas KEEPS ITS PLACE, so what goes out is delta, meta, delta with the sequence numbers climbing.
+ *
+ * Part AL2 found the first draft's shape wrong on its first execution through the window (defect AL2-1): it held ONE
+ * concatenated delta string and ONE latest meta per stream and drained delta-then-meta, so a meta that arrived between
+ * two deltas went out AFTER the merged delta carrying a LOWER `seq`, and every display dropped it as already applied
+ * (REQ-SHELL-104's own rule) — under saturation a stream's running→closed transition, or its resize, could be lost.
+ * The regression test in `terminal.test.ts` pins the order.
+ */
 interface PendingStream {
-  screen: TerminalFrame | null;
-  deltas: string;
-  deltaSeq: number;
-  meta: TerminalFrame | null;
-  base: TerminalFrame;
+  segments: TerminalFrame[];
 }
 interface WindowState {
   readonly sink: RendererSink;
@@ -98,21 +105,32 @@ export class FrameDeliveryLimiter {
   }
   private merge(w: WindowState, frame: TerminalFrame): void {
     let p = w.pending.get(frame.streamId);
-    if (!p) { p = { screen: null, deltas: '', deltaSeq: 0, meta: null, base: frame }; w.pending.set(frame.streamId, p); }
+    if (!p) { p = { segments: [] }; w.pending.set(frame.streamId, p); }
     else w.merged += 1;
-    if (frame.kind === 'delta') { p.deltas += frame.payload; p.deltaSeq = frame.seq; return; }
-    if (frame.kind === 'screen') { p.screen = frame; p.deltas = ''; p.deltaSeq = 0; return; }
-    p.meta = frame;
+    const last = p.segments[p.segments.length - 1];
+    if (frame.kind === 'delta') {
+      if (last && last.kind === 'delta') { p.segments[p.segments.length - 1] = { ...last, payload: last.payload + frame.payload, seq: frame.seq }; return; }
+      p.segments.push(frame);
+      return;
+    }
+    if (frame.kind === 'screen') {
+      // The screen resets and rewrites the display, so the deltas and screens before it are superseded; the metas before it
+      // stay — they carry state a screen without `meta` does not, and they are idempotent.
+      p.segments = p.segments.filter((segment) => segment.kind === 'meta');
+      p.segments.push(frame);
+      return;
+    }
+    if (last && last.kind === 'meta') { p.segments[p.segments.length - 1] = frame; return; }
+    p.segments.push(frame);
   }
-  /** Deliver what the budget allows, oldest stream first, up to three frames per stream, in stream order. */
+  /** Deliver what the budget allows, oldest stream first, each stream's segments in order; a stream is left when the budget ends. */
   private drain(w: WindowState): void {
     const now = this.deps.clocks.monotonic.now();
     this.prune(w, now);
     if (!this.deps.relay.hasSink(w.sink.id)) { this.forget(w.sink.id); return; }
     for (const [streamId, p] of w.pending) {
-      if (p.screen) { if (w.times.length >= this.bound) break; this.send(w, p.screen, now); p.screen = null; }
-      if (p.deltas.length > 0) { if (w.times.length >= this.bound) break; this.send(w, { ...p.base, kind: 'delta', payload: p.deltas, seq: p.deltaSeq, ...({ meta: undefined, closing: undefined }) } as TerminalFrame, now); p.deltas = ''; }
-      if (p.meta) { if (w.times.length >= this.bound) break; this.send(w, p.meta, now); p.meta = null; }
+      while (p.segments.length > 0 && w.times.length < this.bound) this.send(w, p.segments.shift()!, now);
+      if (p.segments.length > 0) break;
       w.pending.delete(streamId);
     }
     if (w.pending.size === 0) { w.timer?.cancel(); w.timer = null; return; }

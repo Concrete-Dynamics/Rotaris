@@ -4,6 +4,7 @@ import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf 
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
+import type { TerminalPreview } from './terminal/streams.js'; // Part AL2
 import { personaColourToken } from './transcript/Row.js';
 import { markMotionStart } from './motion.js';
 
@@ -17,8 +18,8 @@ import { markMotionStart } from './motion.js';
  * `{n} tool calls · {elapsed}`; (d) "Instance controls" read-only (REQ-MONITOR-059); (e) "Current activity";
  * (f) "Tools and artifacts" — native tools and the active ones, one muted line per MCP server (REQ-MCP-100, wired at the merge); (g) "Steer agent"
  * with the placeholder, "Send steer" (empty or whitespace sends nothing; accepted clears; refused keeps the text,
- * REQ-MONITOR-070) and the danger "Cancel" for that instance. The terminal-preview parity of REQ-SHELL-075 (b) is
- * owed with ADR-0021: no terminal stream reaches any window yet.
+ * REQ-MONITOR-070) and the danger "Cancel" for that instance. The terminal-preview parity of REQ-SHELL-075 (b) was
+ * owed with ADR-0021 until Part AL2: the window now draws the live preview from its own stream set (`terminalPreview`).
  */
 export interface PersonaWindowProps {
   readonly persona: string;
@@ -41,6 +42,14 @@ export interface PersonaWindowProps {
   /** Part AA — REQ-CHAT-167 / REQ-CHAT-067: the two display preferences, read once by the root and passed down. */
   readonly showReasoning?: boolean | undefined;
   readonly autoCollapseTools?: boolean | undefined;
+  /**
+   * Part AL2 — REQ-SHELL-075 (b) / REQ-SHELL-079 / REQ-SHELL-102: the live terminal preview in this window's transcript
+   * card, read from THIS renderer's own `TerminalStreamSet` (ADR-0021: a separate renderer runs its own display emulator
+   * over the same frames from the same subscription point; ADR-0047 consequence 2), and the click that requests the
+   * pop-out (REQ-CHAT-076) — the same two surface fields the main window's pane carries, so the row draws the same block.
+   */
+  readonly terminalPreview?: ((streamId: string) => TerminalPreview | null) | undefined;
+  readonly openTerminal?: ((streamId: string) => void) | undefined;
 }
 
 export const TRANSCRIPT_EMPTY = 'No transcript activity for this agent yet.';
@@ -56,7 +65,7 @@ export const ACTIVITY_EMPTY = 'No activity text has been recorded for this agent
 export { personaColourToken };
 
 export function PersonaWindow(props: PersonaWindowProps) {
-  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false } = props;
+  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, terminalPreview, openTerminal } = props;
   const agents = session?.agents ?? [];
   const instances = instancesOf(persona, agents, runLevel);
   const shown = instances.find((a) => a.id === selectedAgentId) ?? instances[0] ?? null;
@@ -110,11 +119,11 @@ export function PersonaWindow(props: PersonaWindowProps) {
                     rows={own}
                     label={`${shown.name} transcript`}
                     acknowledge={onAcknowledge}
-                    surface={{ showReasoning, autoCollapseTools, runActive: shown.live, nowMs: nowIso === null ? 0 : Date.parse(nowIso), openLink: onOpenLink }}
+                    surface={{ showReasoning, autoCollapseTools, runActive: shown.live, nowMs: nowIso === null ? 0 : Date.parse(nowIso), openLink: onOpenLink, terminalPreview, openTerminal }}
                   />
                 )}
             </div>
-            <div className="text-secondary persona-window__note">Terminal output previews are not streamed to this window yet (ADR-0021 owed).</div>
+            {/* Part AL2: the terminal preview streams into this window now (REQ-SHELL-075 b); the note that said it did not is gone with the reason. */}
           </section>
           <section className="card persona-window__context" aria-label="Context">
             <div className="ov-card__head"><span className="card-kicker">Context</span></div>

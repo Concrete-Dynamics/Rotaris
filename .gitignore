@@ -45,6 +45,9 @@ apps/desktop/resources/code-intelligence/
 apps/desktop/.cache/
 # Part AK
 .requirements-proof/
+# Part AK' renamed `delivery-proof` to `requirements-proof` and moved this line with it, which left the old
+# evidence directory on disk and unignored; a blanket `git add -A` at merge 2 then tracked it.
+.delivery-proof/
 # Part AJ
 .traceability-proof/
 

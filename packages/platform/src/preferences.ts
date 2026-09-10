@@ -75,6 +75,13 @@ export const PREFERENCE_KEYS = {
   'requirements/fullPermissionRuns': { type: 'boolean', default: true, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => !(value === false || (typeof value === 'string' && value.trim().toLowerCase() === 'false')) },
   'requirements/fullPermissionNoticeSuppressed': { type: 'boolean', default: false, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true') },
   'requirements/answerWaitSeconds': { type: 'number', default: 0, owner: 'REQ-CONFIG-405', coerce: (value: unknown) => { const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN; return Number.isFinite(n) && n >= 0 ? n : 0; } },
+  /**
+   * Part AL2 — REQ-SHELL-109: the terminal window's auto-open preference, default **off**, persisted user-wide like every
+   * desktop preference (REQ-CONFIG-405) and never YAML. Written by the terminal window's own control through
+   * `window.terminalAutoOpen` (main resolves the key, as it does for the composer draft) and read by main's frame
+   * observer: a stream that changes while running and the window is closed opens it without taking focus.
+   */
+  'terminal/autoOpen': { type: 'boolean', default: false, owner: 'REQ-SHELL-109', coerce: (value: unknown) => value === true || value === 'true' },
 } as const;
 
 /**

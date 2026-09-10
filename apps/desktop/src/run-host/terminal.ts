@@ -81,8 +81,13 @@ export function createTerminalHost(deps: TerminalHostDeps): TerminalHost {
           return { kind: 'terminal.streams', streams: list };
         }
         case 'terminal.sendKeys': {
-          // Wave 1: text verbatim, named keys through the seam table (`terminal-keys.ts`, AM's in wave 2). Receipt order is write order (REQ-SHELL-166).
-          const bytes = req.keys.map((k) => decoder.decode(bytesFor(k))).join('');
+          // Part AL2: every key is AM's `EncodedKey`, and `bytesFor` (contracts `terminal-keys.ts`, the ONE table) gives its
+          // bytes — text verbatim, a named key its CSI form, a chord its control byte (REQ-SHELL-096/166). A key the table
+          // has no bytes for transmits NOTHING and is skipped, never substituted (REQ-SHELL-096's last sentence; the
+          // encoder never produces one, so this is the guard for a request that did not come from the grid). Receipt
+          // order is write order (REQ-SHELL-166's ordering criterion); one request's keys are written as one string.
+          const bytes = req.keys.map((k) => { try { return decoder.decode(bytesFor(k)); } catch { return ''; } }).join('');
+          if (bytes === '') { const meta = streams.metaOf(req.streamId); return meta ? (meta.running && meta.acceptsInput ? ack : refused('ended')) : refused('unknown-stream'); }
           const r = streams.sendKeys(req.streamId, bytes);
           return r.ok ? ack : refused(r.error);
         }

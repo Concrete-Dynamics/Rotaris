@@ -39,6 +39,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       ['about.open', 'About & Legal', null],
       // Part AK2 — REQ-TRACE-390's move control, registered here rather than bound privately by the board (the pin rides with the entry).
       ['requirements.move', 'Move requirement', 'Ctrl+M'],
+      ['terminal.open', 'Open terminal', 'Ctrl+Shift+T'], // Part AL2 — the sixth chord, back from the omitted list
     ]);
   });
 
@@ -57,7 +58,9 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
 
   it('offers no Escape entry, and records every omitted entry of REQ-SHELL-049 with its reason (REQ-SHELL-048)', () => {
     expect(COMMANDS.some((c) => /escape|close current overlay/i.test(c.label))).toBe(false);
-    expect(OMITTED_COMMANDS.map((o) => o.label)).toEqual(['Search transcript', 'Open terminal', 'Open demo window', 'Toggle reasoning bodies']);
+    // Part AL2: "Open terminal" (Ctrl+Shift+T) left the omitted list — the window exists (REQ-SHELL-080/108).
+    expect(OMITTED_COMMANDS.map((o) => o.label)).toEqual(['Search transcript', 'Open demo window', 'Toggle reasoning bodies']);
+    expect(COMMANDS.find((c) => c.id === 'terminal.open')).toMatchObject({ label: 'Open terminal', shortcut: 'Ctrl+Shift+T' });
     for (const o of OMITTED_COMMANDS) expect(o.reason.length, o.label).toBeGreaterThan(20);
     // What is omitted is not also offered: the two vocabularies are disjoint.
     for (const o of OMITTED_COMMANDS) expect(COMMANDS.some((c) => c.label === o.label)).toBe(false);
@@ -162,7 +165,9 @@ describe('chords — REQ-SHELL-057, REQ-SHELL-058, REQ-SHELL-165', () => {
     expect(commandForEvent(chord('k', { ctrlKey: true }))?.id).toBe('palette.open');
     expect(commandForEvent(chord('3', { ctrlKey: true }))?.id).toBe(`view.${PRIMARY_VIEWS[2]!.id}`);
     expect(commandForEvent(chord(',', { ctrlKey: true }))?.id).toBe('settings.open');
-    expect(commandForEvent(chord('t', { ctrlKey: true, shiftKey: true }))).toBeNull();
+    // Part AL2: Ctrl+Shift+T is bound now (REQ-SHELL-080); Ctrl+T alone and Ctrl+F stay unbound.
+    expect(commandForEvent(chord('T', { ctrlKey: true, shiftKey: true }))?.id).toBe('terminal.open');
+    expect(commandForEvent(chord('t', { ctrlKey: true }))).toBeNull();
     expect(commandForEvent(chord('f', { ctrlKey: true }))).toBeNull();
   });
 });

@@ -300,10 +300,19 @@ describe('emulator — a character grid, not a log (REQ-SHELL-095), applied by s
     expect(set.get('fg:a')!.closed).toBe(true);
     expect(set.get('fg:a')!.meta.exitCode).toBe(2);
     expect(set.running()).toBe(0);
-    // A late `running: true` cannot reopen it (REQ-SHELL-105: running → closed exactly once).
-    set.apply(frame(4, 'meta', '', { meta: { ...META, running: true } }));
-    expect(set.get('fg:a')!.meta.running).toBe(false);
-    expect(set.get('fg:a')!.meta.exitCode).toBe(2);
+    // Part AL2 (defect AL2-4): a LATER meta with `running: true` is the agent's next command re-opening the same stream
+    // (ADR-0021's registry re-opens `fg:<agent>` in place) — running → closed happens exactly once PER COMMAND, and the
+    // exit code goes with the re-open. An OLDER frame still cannot reopen anything (the sequence rule refuses it).
+    set.apply(frame(4, 'meta', '', { meta: { ...META, running: true, command: 'next' } }));
+    expect(set.get('fg:a')!.meta.running).toBe(true);
+    expect(set.get('fg:a')!.closed).toBe(false);
+    expect(set.get('fg:a')!.meta.exitCode).toBeUndefined();
+    expect(set.running()).toBe(1);
+    set.apply(frame(3, 'meta', '', { meta: { ...META, running: false, exitCode: 9 } }));
+    expect(set.get('fg:a')!.meta.running).toBe(true);
+    set.apply(frame(5, 'meta', '', { meta: { ...META, running: false, exitCode: 4 } }));
+    expect(set.get('fg:a')!.closed).toBe(true);
+    expect(set.get('fg:a')!.meta.exitCode).toBe(4);
   });
   it('the closing frame is a literal replacement (OQ-5 reading): plain text, newlines carried to column 0', async () => {
     const set = new TerminalStreamSet(headlessEmulator);

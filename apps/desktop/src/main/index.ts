@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
-import { PersonaWindows } from './windows.js';
+import { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding } from '@rotaris/contracts';
+import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
@@ -643,6 +643,94 @@ async function main(): Promise<void> {
         else if (Date.now() - shownAt > 5_000) { done = true; poll.cancel(); log(`capture: persona "${persona}" first paint after show: not observed within 5 s`); }
       }).catch(() => { poll.cancel(); });
     });
+  };
+
+  /**
+   * Part AL2 — the terminal window (REQ-SHELL-079..111; ADR-0021's and ADR-0047's window, first executed together here).
+   * ONE per main window, a full renderer of the one bundle (`role=terminal`), attached to the relay like a persona window;
+   * it subscribes to the followed session ITSELF (the sender is the subscriber, ADR-0043's note) and asks the run host for
+   * a resync, so it is given the output accumulated so far (REQ-SHELL-104). A close DESTROYS it and the next open rebuilds
+   * it (REQ-SHELL-086) — the deliberate difference from the persona window above (ADR-0047 consequence 3; not unified).
+   * Everything the window needs from main sits in this one block: the registry (`main/windows.ts`), its five commands
+   * (`terminalWindowCommand`, dispatched from the `terminal.*` case block below), REQ-SHELL-109's auto-open observer over
+   * the frames the run host publishes, and the ownership by this main window. The main window's renderer reports the
+   * session it follows through `window.terminalSession` (REQ-SHELL-110/111: the window closes, and reopens without focus
+   * only when it had been open on a session before — the reading is stated on `TerminalWindows.onSessionChange`).
+   */
+  const terminalWindows = new TerminalWindows({
+    create: () => {
+      const dlg = new BrowserWindow({
+        // REQ-SHELL-081: 900×620 initially; the title is seeded here and the renderer sets the final one (`terminalWindowTitle`).
+        width: 900, height: 620, minWidth: 560, minHeight: 360, show: false, title: 'Rotaris · Terminal', backgroundColor: themeBackground(),
+        webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+      });
+      dlg.setMenuBarVisibility(false);
+      // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
+      if (capturing) dlg.webContents.setBackgroundThrottling(false);
+      return dlg;
+    },
+    load: async (dlg) => {
+      const query = { role: TERMINAL_WINDOW_ROLE };
+      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+    },
+    focusStream: (dlg, streamId) => dlg.webContents.executeJavaScript(`typeof window.__rotarisTerminalFocus === 'function' ? window.__rotarisTerminalFocus(${JSON.stringify(streamId)}) : false`).then(() => undefined),
+    onCreated: (dlg) => {
+      const id = dlg.webContents.id;
+      relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
+      if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: terminal window renderer console: ${message} (${sourceId}:${line})`); });
+    },
+    onDestroyed: (id) => { relay.detach(id); terminalFrames.forget(id); },
+    log,
+  });
+  // REQ-SHELL-081's "per main window": the terminal window goes with the main window that owns it.
+  win.on('closed', () => terminalWindows.destroyWithOwner());
+  /**
+   * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,
+   * the terminal window opens without taking keyboard focus. The window is never auto-opened for a stream that has
+   * already exited." A stream's changes are its `meta` frames (REQ-SHELL-105); the running flag on the frame is what
+   * decides, and only the followed session's streams count — a frame of another session's stream is not this window's.
+   */
+  runHost.onEvent((e) => {
+    if (e.kind !== 'publish.terminal' || e.payload.kind !== 'meta' || e.payload.meta?.running !== true) return;
+    if (terminalWindows.isOpen() || e.payload.sessionId !== (terminalWindows.followed() ?? followedSessionId)) return;
+    if (preferences.read(TERMINAL_AUTO_OPEN_PREFERENCE) !== true) return;
+    log(`terminal window auto-opening for ${e.payload.streamId} (REQ-SHELL-109)`);
+    void terminalWindows.open({ automatic: true, streamId: e.payload.streamId }).catch((cause: unknown) => log(`terminal window auto-open failed: ${String(cause)}`));
+  });
+  /** The five `window.*` commands of the terminal window (contracts `terminal.ts`); dispatched from `runCommand`'s terminal case block. */
+  const terminalWindowCommand = async (req: TerminalWindowCommand, senderId: number): Promise<CommandOutcome> => {
+    switch (req.kind) {
+      case 'window.openTerminal': {
+        // REQ-SHELL-080/081/085: open or raise, as a request (REQ-SHELL-161); the stream is brought forward when retained.
+        const r = await terminalWindows.open({ automatic: false, streamId: req.streamId ?? null });
+        const value: TerminalWindowOpened = { opened: true, reused: r.reused };
+        return { ok: true, value };
+      }
+      case 'window.terminalPayload': {
+        if (!terminalWindows.bySender(senderId)) return { ok: false, code: 'window.unknown', headline: 'This window is not the terminal window' };
+        const value: TerminalWindowPayload = { sessionId: terminalWindows.followed() ?? followedSessionId, focusStream: terminalWindows.takeFocus(senderId), autoOpen: preferences.read(TERMINAL_AUTO_OPEN_PREFERENCE) === true };
+        return { ok: true, value };
+      }
+      case 'window.terminalSession': {
+        // Only the main window follows a session; a terminal or persona window reporting one is refused.
+        if (senderId !== wcId) return { ok: false, code: 'window.notMain', headline: 'Only the main window reports the session it follows' };
+        const reopened = await terminalWindows.onSessionChange(req.sessionId);
+        return { ok: true, value: { reopened } };
+      }
+      case 'window.terminalAutoOpen': {
+        await preferences.write(TERMINAL_AUTO_OPEN_PREFERENCE, req.value);
+        log(`terminal auto-open preference ${req.value ? 'on' : 'off'} (REQ-SHELL-109)`);
+        return { ok: true };
+      }
+      case 'window.showWorkspace': {
+        // REQ-SHELL-083's "Go to Workspace": the main window switches to the Workspace view and is surfaced, as a request (REQ-SHELL-161).
+        void win.webContents.executeJavaScript('typeof window.__rotarisShowWorkspace === "function" ? window.__rotarisShowWorkspace() : false').catch(() => undefined);
+        if (win.isMinimized()) win.restore();
+        if (!win.isVisible()) win.show(); else win.focus();
+        return { ok: true };
+      }
+    }
   };
 
   /**
@@ -1463,6 +1551,13 @@ async function main(): Promise<void> {
       case 'terminal.kill':
       case 'terminal.audit':
         return relayTerminalCommand(req, runHost, log);
+      // The same block's second half (wave 2): the terminal WINDOW's five commands, answered by the registry built above `runCommand`.
+      case 'window.openTerminal':
+      case 'window.terminalPayload':
+      case 'window.terminalSession':
+      case 'window.terminalAutoOpen':
+      case 'window.showWorkspace':
+        return terminalWindowCommand(req, senderId);
       case 'session.control': {
         // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
         // Part AC's seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_QUESTION_STALE corrupts the request

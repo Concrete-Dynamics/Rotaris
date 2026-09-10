@@ -87,10 +87,23 @@ export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { reado
   let closed = display.closed;
   if (frame.meta) {
     const incoming = frame.meta;
-    // The transition runs one way: once closed, a later `running: true` cannot reopen it (REQ-SHELL-105).
+    /*
+     * Part AL2 (defect AL2-4, found the first time a second command ran on a live stream through the window): the
+     * transition was written one way — once closed, a later `running: true` could not reopen the display — on the
+     * reading that REQ-SHELL-105's "exactly once" bounds the stream's whole life. The run host's registry (ADR-0021,
+     * Part AL) re-opens an agent's ONE foreground stream (`fg:<agent>`, REQ-TOOLS-127's scope) in place for each next
+     * command: same id, the counter continuing, `running` true again with the new command. Under the old reading the
+     * window showed "exit 0" over a command that was running, disabled every control, and the toolbar counted nothing.
+     * The reading now: running → closed happens exactly once PER COMMAND; a later meta with `running: true` and a
+     * higher `seq` is the next command opening the same stream (the exit code goes with it). An older frame can never
+     * reopen anything — the sequence rule above already refuses it — so idempotence is intact.
+     */
+    const reopened = closed && incoming.running;
+    if (reopened) closed = false;
     const running = closed ? false : incoming.running;
     if (!closed && meta.running && !incoming.running) closed = true;
     meta = { ...incoming, running, ...(closed && incoming.exitCode === undefined && meta.exitCode !== undefined ? { exitCode: meta.exitCode } : {}) };
+    if (reopened && incoming.exitCode === undefined) delete (meta as { exitCode?: number }).exitCode;
     if (meta.cols !== display.emulator.cols || meta.rows !== display.emulator.rows) display.emulator.resize(meta.cols, meta.rows);
   }
   if (frame.kind === 'screen') {

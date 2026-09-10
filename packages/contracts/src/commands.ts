@@ -10,7 +10,7 @@ import { PromptListSchema } from './library.js';
 import { ImageAttachmentInputSchema } from './channels.js';
 import { RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
-import { TERMINAL_COMMAND_SCHEMAS } from './terminal.js';
+import { TERMINAL_COMMAND_SCHEMAS, TERMINAL_WINDOW_COMMAND_SCHEMAS } from './terminal.js';
 
 /**
  * REQ-SHELL-069: the pane-layout keys registered so far — the Overview's, the Git view's (REQ-GIT-153) and,
@@ -245,6 +245,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // Part AP — the board-run coordinator's one command (spec 08 §Runs Started from the Board; ADR-0041): a launch preview, a
   // dispatch, the permanent suppression and the live board runs are main's to answer, not the workspace service's.
   RequirementsRunsCommandSchema,
+  // Part AL2 — the terminal WINDOW's five commands (REQ-SHELL-080/081/108..111), answered by main's window registry.
+  ...TERMINAL_WINDOW_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

@@ -1,4 +1,5 @@
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
+import { openTerminalWindow } from '../terminal/host.js'; // Part AL2
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
@@ -83,12 +84,16 @@ export const COMMANDS: readonly Command[] = [
   // nothing but place focus on the control: it shows the Requirements view (the control lives there) and focuses
   // `[data-req-move]` now or two frames on, the way `focusComposer` waits for the Workspace view to mount.
   { id: 'requirements.move', label: 'Move requirement', shortcut: 'Ctrl+M', keywords: ['move', 'requirement', 'board', 'release', 'column', 'transition'], available: always, run: (ctx) => { ctx.switchView('requirements'); if (typeof document === 'undefined') return; const focus = () => { const el = document.querySelector<HTMLElement>('[data-req-move]'); if (el) el.focus(); return el !== null; }; if (!focus()) requestAnimationFrame(() => requestAnimationFrame(() => { focus(); })); } },
+  // Part AL2 — REQ-SHELL-049 / REQ-SHELL-080: Ctrl+Shift+T "Open terminal". The context is the shell's and carries no
+  // terminal, so the entry opens through the terminal host's module-level opener (`terminal/host.tsx`), which the
+  // Workspace's provider registers; in a window with no host (an auxiliary window) it does nothing, and is still listed
+  // because REQ-SHELL-108 keeps the feature discoverable from a cold start.
+  { id: 'terminal.open', label: 'Open terminal', shortcut: 'Ctrl+Shift+T', keywords: ['terminal', 'shell', 'console', 'pty', 'command', 'output'], available: always, run: () => { openTerminalWindow(); } },
 ];
 
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */
 export const OMITTED_COMMANDS: readonly OmittedCommand[] = [
   { label: 'Search transcript', shortcut: 'Ctrl+F', reason: 'no transcript search panel exists yet (REQ-CHAT domain); the entry returns with the panel' },
-  { label: 'Open terminal', shortcut: 'Ctrl+Shift+T', reason: 'no terminal window exists yet (ADR-0021 owed); the entry returns with the window' },
   { label: 'Open demo window', shortcut: null, reason: 'no demo mode exists yet (REQ-SHELL-162, REQ-SHELL-005); the entry returns with the mode' },
   { label: 'Toggle reasoning bodies', shortcut: null, reason: 'the display/showReasoning preference of REQ-CHAT-167 is not registered in the preference store yet; the entry returns with the key' },
 ];

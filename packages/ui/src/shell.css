@@ -1216,3 +1216,16 @@
 .req-pane__queue-row--executing { background: var(--rt-accent-tint-10); }
 .req-pane__unit { color: var(--rt-text-secondary); font-size: var(--rt-text-xs); }
 .req-pane__queue-row .req-pane__reason { flex-basis: 100%; color: var(--rt-text-secondary); font-size: var(--rt-text-xs); }
+/* Part AL2 — the terminal window's shell around the window component (REQ-SHELL-109's auto-open control in a slim bar
+   under the content). The component's own rule is `height: 100vh`; inside the shell it takes the column's remainder.
+   Tokens by name; the bar is the one container the preference needs and nothing else is added. */
+.term-shell { display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; background: var(--rt-bg); color: var(--rt-text); }
+.term-shell .term-window { height: auto; flex: 1 1 auto; min-height: 0; }
+.term-shell__bar { flex: none; display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-top: 1px solid var(--rt-border); font-size: var(--rt-text-xs, 11px); }
+.term-shell__bar .toggle { flex: none; }
+/* Defect AL2-3's trigger, removed at the surface: a banner appearing or leaving changed the grid's host, so the process was
+   resized in the middle of a command and ConPTY repainted its viewport into the agent's observation. The banner slot now
+   reserves the notice's own height — composed from the same tokens the notice is drawn with — so a banner costs the process
+   no resize (AM's handoff §9 named this the remedy). A message that wraps to a second line still grows the slot; stated. */
+.term-tab__banner { min-height: calc(var(--rt-text-sm, 12px) * var(--rt-leading-body, 1.62) + var(--rt-text-xs, 11px) * var(--rt-leading-body, 1.62) + 2 * var(--rt-space-2, 8px) + var(--rt-space-1, 4px) + 2 * var(--rt-hairline-width, 1px)); }
+.term-tab__banner:empty { display: block; }

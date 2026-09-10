@@ -74,7 +74,7 @@ describe('FrameDeliveryLimiter — REQ-MONITOR-306 at the point of delivery, per
     }
   });
 
-  it('a merged step keeps the stream\'s order: the screen supersedes the deltas before it, the deltas after it follow, the latest meta closes', () => {
+  it('a merged step keeps the stream\'s order: the screen supersedes the deltas before it, the metas keep their places, the deltas after it follow, the latest meta closes', () => {
     const h = harness(2);
     h.limiter.deliver(frame({ streamId: 'fg:a', seq: 1, kind: 'meta', payload: '' }));
     h.limiter.deliver(frame({ streamId: 'fg:a', seq: 2, payload: 'A' }));
@@ -87,9 +87,29 @@ describe('FrameDeliveryLimiter — REQ-MONITOR-306 at the point of delivery, per
     h.limiter.deliver(frame({ streamId: 'fg:a', seq: 8, kind: 'meta', payload: '', meta: undefined }));
     expect(h.sent[1]!.map((s) => s.frame.seq)).toEqual([1, 2]);
     h.clock.advance(1000);
-    expect(h.sent[1]!.slice(2).map((s) => [s.frame.seq, s.frame.kind, s.frame.payload])).toEqual([[5, 'screen', 'SCREEN'], [7, 'delta', 'CD']]);
+    // Part AL2: the meta that arrived before the screen keeps its place (it may carry state the screen does not); the
+    // delta before the screen is superseded by it. Two frames a second is the bound this harness set.
+    expect(h.sent[1]!.slice(2).map((s) => [s.frame.seq, s.frame.kind, s.frame.payload])).toEqual([[4, 'meta', ''], [5, 'screen', 'SCREEN']]);
     h.clock.advance(1000);
-    expect(h.sent[1]!.slice(4).map((s) => [s.frame.seq, s.frame.kind])).toEqual([[8, 'meta']]);
+    expect(h.sent[1]!.slice(4).map((s) => [s.frame.seq, s.frame.kind, s.frame.payload])).toEqual([[7, 'delta', 'CD'], [8, 'meta', '']]);
+    expect(h.limiter.stats(1).pending).toBe(0);
+  });
+
+  it('Part AL2 regression (defect AL2-1): a meta between two deltas under saturation goes out between them, never after the merged delta with a lower seq', () => {
+    const h = harness(2);
+    h.limiter.deliver(frame({ streamId: 'fg:a', seq: 1, kind: 'meta', payload: '' }));
+    h.limiter.deliver(frame({ streamId: 'fg:a', seq: 2, payload: 'A' }));
+    // Saturated from here: a delta, the closing meta (running: false), then one more delta.
+    h.limiter.deliver(frame({ streamId: 'fg:a', seq: 3, payload: 'B' }));
+    h.limiter.deliver(frame({ streamId: 'fg:a', seq: 4, kind: 'meta', payload: '' }));
+    h.limiter.deliver(frame({ streamId: 'fg:a', seq: 5, payload: 'C' }));
+    h.clock.advance(1000);
+    h.clock.advance(1000);
+    const out = h.sent[1]!.map((s) => [s.frame.seq, s.frame.kind, s.frame.payload]);
+    expect(out).toEqual([[1, 'meta', ''], [2, 'delta', 'A'], [3, 'delta', 'B'], [4, 'meta', ''], [5, 'delta', 'C']]);
+    // The display's own rule (REQ-SHELL-104): a seq at or below the last applied is dropped — the order above is what keeps the meta alive.
+    let last = 0;
+    for (const [seq] of out) { expect(seq).toBeGreaterThan(last); last = seq as number; }
     expect(h.limiter.stats(1).pending).toBe(0);
   });
 

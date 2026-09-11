@@ -117,6 +117,9 @@ switch (command) {
   case 'resize':
     await withClient((d) => d.resize(Number(positional[0]), Number(positional[1])));
     break;
+  case 'maximize':
+    await withClient((d) => d.send('maximize'));
+    break;
   case 'command':
     await withClient((d) => d.command(JSON.parse(positional[0] ?? '{}')));
     break;

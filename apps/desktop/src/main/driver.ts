@@ -247,12 +247,34 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         writeFileSync(request.path, image.toPNG());
         return { path: request.path };
       }
+      case 'maximize': {
+        // Not the same as `resize` to the work area: the host decides a maximized window's frame, and a layout
+        // defect that only appears at the size a person actually uses is one this op exists to reach.
+        const win = windowOrThrow();
+        win.maximize();
+        const [width, height] = win.getContentSize();
+        return { maximized: win.isMaximized(), width, height };
+      }
       case 'resize': {
         const win = windowOrThrow();
         if (!request.width || !request.height) throw new Error('resize needs a width and a height');
+        /**
+         * The eighty-fourth defect, in this op's own first form (2026-09-11): `setContentSize` is a NO-OP on a
+         * maximized window, and this returned `getContentSize()` — the unchanged size — as though it had worked.
+         * A whole size sweep was measured at one size and read as three. Leave the maximized state first, and
+         * then REFUSE rather than report a size nobody asked for: a driver that cannot do what it was told must
+         * say so, or every assertion downstream of it is about a window that never existed.
+         */
+        const wasMaximized = win.isMaximized();
+        if (wasMaximized) win.unmaximize();
         win.setContentSize(request.width, request.height);
-        const [width, height] = win.getContentSize();
-        return { width, height };
+        const size = win.getContentSize();
+        const width = size[0] ?? 0;
+        const height = size[1] ?? 0;
+        if (Math.abs(width - request.width) > 2 || Math.abs(height - request.height) > 2) {
+          throw new Error(`the window is ${width}×${height}, not the ${request.width}×${request.height} asked for (a minimum size or the host refused it)`);
+        }
+        return { width, height, wasMaximized };
       }
       case 'command':
         return deps.command(request.request);

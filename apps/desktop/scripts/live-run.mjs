@@ -22,16 +22,25 @@
  *
  * The workspace is a COPY of `scripts/fixtures/todo-app` in the system temp directory — a small React todo
  * application with its requirements, its pure list functions and a `node --test` suite that needs nothing
- * installed. `REQ-TODO-003` is approved and unimplemented there on purpose: it is the work scenario 3 hands over.
+ * installed. Its store is the conventional shape of REQ-TRACE-002 — an epic and four children — and its identifiers
+ * are REQ-TRACE-022 identifiers, so the requirements BOARD can read it as well as the agent can. `REQ-103` and
+ * `REQ-104` are approved and unimplemented on purpose: the first is the work scenario 3 hands over in the composer,
+ * the second is the work scenario 4 releases from the board, so neither path depends on what the other did.
  *
  *   1. sign-in  — Settings → Models → Add endpoint, filled and pressed through the product's own dialog; the
  *                 credential file, the snapshot record and the catalogue asserted, the logs free of the key. An
  *                 endpoint that discovers no models takes the dialog's "Continue anyway", and the script writes
  *                 the `models:` entry the run needs by hand (REQ-CONFIG-082..097) rather than pretending.
  *   2. ask      — one real run that reads a file and answers. The lease, the request, a settled tool row, usage.
- *   3. edit     — one real run that implements REQ-TODO-003 and runs the suite in the terminal. Asserted from the
+ *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
  *                 files on disk, from `git diff`, and by running `node --test` again in this script.
- *   4. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the two runs left.
+ *   4. requirements — the REQUIREMENTS BOARD, driven as a person drives it: REQ-104 selected, the move control
+ *                 pressed, the release confirmed, and the run that follows watched from `backlog` through
+ *                 `running` to `review`, its review decision taken and the card left resting in `done`. Asserted
+ *                 from the board itself, from the delivery store's own rows, from the worktree the run was confined
+ *                 to, and by running `node --test` inside that worktree. It is the one path the composer scenarios
+ *                 never take: the work is handed over by the board, not typed into a prompt.
+ *   5. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the runs left.
  *
  * The key is never passed on a command line and never written to the repository. For one endpoint `<name>`:
  *   1. `ROTARIS_LIVE_API_KEY` in the environment (for a one-off, or a machine where the prompt cannot run);
@@ -66,7 +75,7 @@ const MAX_TOKENS = Number(value('max-tokens', '500000'));
 const MAX_ITERATIONS = Number(value('max-iterations', '15'));
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
-const OPTIONAL = ['ask', 'edit', 'shell'];
+const OPTIONAL = ['ask', 'edit', 'requirements', 'shell'];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
 for (const name of wanted) if (!OPTIONAL.includes(name)) throw new Error(`--only takes ${OPTIONAL.join(', ')}; got ${name}`);
@@ -560,7 +569,7 @@ if (wanted.includes('ask')) {
 // ── 3. One real run that changes the workspace and verifies it ───────────────────────────────────────────────
 if (wanted.includes('edit')) {
   const log = launch('edit', {
-    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-TODO-003 from docs/requirements: add a clearCompleted(todos) function to src/todos.js, export it, add tests for it to src/todos.test.js, then run `node --test` in the terminal and tell me whether it passed.',
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js, export it, add tests for it to src/todos.test.js, then run `node --test` in the terminal and tell me whether it passed.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, RUN_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
@@ -594,7 +603,112 @@ if (wanted.includes('edit')) {
   await budgetGate();
 }
 
-// ── 4. The shell over what the runs left ─────────────────────────────────────────────────────────────────────
+// ── 4. The requirements board hands the work over ────────────────────────────────────────────────────────────
+/**
+ * The one path the composer scenarios never take. `edit` types a prompt; here nothing is typed: REQ-104 is selected
+ * on the board, the move control is pressed, the release is confirmed, and everything after that is the product's —
+ * the worktree it provisions, the run its coordinator starts, the review it raises and the accept that settles the
+ * card in `done` (spec 08 §Runs Started from the Board; REQ-TRACE-464/472/474/499).
+ *
+ * The poll times below are an OBSERVATION schedule and are never reported as durations: they are the moments this
+ * script LOOKED, and a different schedule would print different numbers for identical work. The product's own times
+ * are read from the delivery store afterwards, which is the only place a duration here comes from.
+ */
+if (wanted.includes('requirements')) {
+  const RUN_MS = Number(process.env['LIVE_RUN_BOARD_MS'] ?? 240_000);
+  const CARD = '[data-req-card="REQ-104"]';
+  const BOARD_AT = `(() => { const el = document.querySelector('[data-req-card="REQ-104"]'); const b = window.__rotarisBoard; return { column: el === null ? null : el.getAttribute('data-column'), openPane: b ? b.openPane : null, feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()).slice(0, 3) }; })()`;
+  const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); return p === null ? null : { state: p.getAttribute('data-state'), entries: [...p.querySelectorAll('li')].map((l) => l.textContent.trim()) }; })()`;
+  // REQ-TRACE-364: `done` lies outside the columns area at this width, so the resting read goes through the board's
+  // own reveal first; reading the DOM without it reads `null` and proves nothing.
+  const REVEAL = `(() => { const b = window.__rotarisBoard; return b && typeof b.reveal === 'function' ? b.reveal('REQ-104') : 'no observable'; })()`;
+  const poll = [];
+  for (let t = 8_000; t < RUN_MS; t += 30_000) poll.push(t);
+  const review = RUN_MS;
+  const clicks = [
+    `${CARD}@3000`,
+    '[data-testid="req-move-control"]@4400',
+    '[data-testid="req-confirm"] .btn>>Release@5400',
+    // REQ-TRACE-474: a workspace that has already opted in to unattended work raises NO disclosure, and this
+    // sandbox opts in — so the press is a no-op where there is none and the acceptance where there is one.
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@6800',
+    `${CARD}@${review}`,
+    `[data-testid="req-detail-review"]@${review + 6_000}`,
+    `[data-testid="req-pane-review-decisions"] .btn-primary@${review + 9_000}`,
+    `[data-testid="req-pane-review-confirm"] .btn-primary@${review + 11_500}`,
+  ];
+  const watches = [`${BOARD_AT}@6400`, ...poll.map((t) => `${BOARD_AT}@${t}`), `${REVEAL}@${review + 14_000}`, `${BOARD_AT}@${review + 15_000}`, `${HISTORY_AT}@${review + 15_500}`];
+  const log = launch('requirements', {
+    ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+    ROTARIS_CAPTURE_VIEWS: '4@1200',
+    ROTARIS_CAPTURE_CLICKS: clicks.join(';;'),
+    // REQ-TRACE-484: the focused card opens its own detail with Enter; the harness sends single clicks only.
+    ROTARIS_CAPTURE_KEYS: `Return@${review + 3_000}`,
+    ROTARIS_CAPTURE_EVAL_AT: watches.join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: String(review + 17_000),
+  }, review + 120_000);
+  const readEval = (at) => {
+    const line = new RegExp(`capture: eval-at ${at} .*? → (.*)\\s*$`, 'm').exec(log);
+    if (line === null) return null;
+    try { return JSON.parse(line[1]); } catch { return null; }
+  };
+  const columns = poll.map((t) => readEval(t)?.column ?? null);
+  const trail = columns.join(' → ');
+  check(columns.some((c) => c === 'running' || c === 'review' || c === 'done'), 'the release became a real run, started by the board and not by a prompt', trail);
+  const reachedReview = columns.includes('review') || columns.includes('done');
+  check(reachedReview, `the run reached review inside the ${Math.round(review / 1000)} s the board was given`, `${trail} — raise it with LIVE_RUN_BOARD_MS if the model is slower than that`);
+  const settled = readEval(review + 15_000);
+  check(settled?.column === 'done', "the review's accept left the card resting in done", `it rests in ${settled?.column ?? 'nothing the board showed'}`);
+  const entries = readEval(review + 15_500)?.entries ?? [];
+  check(entries.some((e) => /release/i.test(e)) && entries.some((e) => /accept/i.test(e)), 'the delivery history carries both the release and the accept', entries.join(' | ') || 'the history read empty');
+
+  // The store, for the two facts no surface shows: that the run was recorded at all, and what it was granted.
+  const db = new (require('better-sqlite3'))(oneDatabase(), { readonly: true });
+  let runRows = [];
+  let historyRows = [];
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name);
+    const runsTable = tables.find((t) => /delivery.*run|run.*delivery/.test(t));
+    const historyTable = tables.find((t) => /delivery.*histor|histor.*delivery/.test(t));
+    if (runsTable) runRows = db.prepare(`SELECT * FROM "${runsTable}"`).all();
+    if (historyTable) historyRows = db.prepare(`SELECT * FROM "${historyTable}" ORDER BY rowid`).all();
+  } finally { db.close(); }
+  check(historyRows.filter((r) => String(r.action) === 'release').length === 1, 'exactly one release was written for one release', historyRows.map((r) => r.action).join(', '));
+  // REQ-TRACE-464/472: the run record names its session and the permissions it was actually granted, so the
+  // disclosure and the audit trail can never tell different stories.
+  const run = runRows[0];
+  check(runRows.length === 1 && typeof run?.session_id === 'string' && run.session_id.length > 0, 'the run record carries the session identifier', `${runRows.length} run row(s)`);
+  check(String(run?.permissions ?? '').length > 0, 'the run record says what permissions it was granted', String(run?.permissions ?? 'nothing'));
+  const read = readSession();
+  const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
+  const names = [...new Set(tools.map((row) => row.tool_name))];
+  check((read?.session.tokens_input ?? 0) > 0 && (read?.session.tokens_output ?? 0) > 0, 'the board-started run carries real usage from the endpoint', `${read?.session.tokens_input} in / ${read?.session.tokens_output} out over ${read?.session.iterations_completed} iteration(s)`);
+  check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call in the board-started run settled', names.join(', '));
+
+  // The work itself, in the worktree the run was confined to — never in the workspace the board sits in.
+  const worktrees = git('worktree', 'list', '--porcelain').split('\n').filter((l) => l.startsWith('worktree ')).map((l) => l.slice(9).trim());
+  check(worktrees.length >= 2, 'the run was confined to a worktree of its own', worktrees.map((w) => w.split(/[\\/]/).pop()).join(', '));
+  const unit = worktrees.slice(1).find((w) => existsSync(join(w, 'src', 'todos.js')));
+  const source = unit === undefined ? '' : readFileSync(join(unit, 'src', 'todos.js'), 'utf8');
+  const suiteText = unit === undefined ? '' : readFileSync(join(unit, 'src', 'todos.test.js'), 'utf8');
+  check(/export (function|const) completedCount/.test(source), 'completedCount is exported from the worktree\'s src/todos.js');
+  check(/completedCount/.test(suiteText), 'the worktree\'s suite tests it');
+  // The independent reading, as in `edit`: this script runs the suite itself, whatever the agent reported.
+  const suiteRun = unit === undefined ? { status: null } : spawnSync(process.execPath, ['--test'], { cwd: unit, encoding: 'utf8', timeout: 120_000 });
+  if (unit !== undefined) writeFileSync(join(output, 'node-test-requirements.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
+  check(suiteRun.status === 0, 'node --test is green inside the worktree afterwards', `exit ${suiteRun.status ?? 'no worktree to run it in'}`);
+  if (unit !== undefined) writeFileSync(join(output, 'diff-requirements.txt'), `${execFileSync('git', ['-C', unit, 'diff', head], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })}\n`);
+  results.scenarios.requirements = {
+    observed: columns, settledColumn: settled?.column ?? null, history: historyRows.map((r) => ({ action: r.action, at: r.at })),
+    run: run === undefined ? null : { sessionId: run.session_id, permissions: run.permissions, startedAt: run.started_at, endedAt: run.ended_at },
+    // The product's own durations, from its own timestamps — never from the poll schedule above.
+    runMs: run?.started_at && run?.ended_at ? Date.parse(String(run.ended_at)) - Date.parse(String(run.started_at)) : null,
+    tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, worktree: unit ?? null, suiteExit: suiteRun.status,
+  };
+  await budgetGate();
+}
+
+// ── 5. The shell over what the runs left ─────────────────────────────────────────────────────────────────────
 if (wanted.includes('shell')) {
   const PROBES = ['[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-repo-branch"]', '[data-testid="overview-tool-chips"] .tag', '.app-shell'];
   const log = launch('shell', { ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ROTARIS_CAPTURE_AFTER_MS: '2500' });

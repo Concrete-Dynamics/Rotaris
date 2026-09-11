@@ -1,12 +1,12 @@
 ---
-req-id: REQ-TODO-003
+req-id: REQ-103
 status: approved
 title: Clear the completed todos
 priority: P2
 date: 2026-09-11
 ---
 
-# REQ-TODO-003 - Clear the completed todos
+# REQ-103 - Clear the completed todos
 
 A person drops every done todo in one action, keeping the rest.
 
@@ -18,4 +18,4 @@ A person drops every done todo in one action, keeping the rest.
 
 ## Status
 
-Not implemented. This is the work the live run hands to the agent under test.
+Not implemented. This is the work the live run's `edit` scenario hands to the agent under test.

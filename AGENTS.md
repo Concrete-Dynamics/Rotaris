@@ -74,7 +74,7 @@ pnpm live-run --confirm --endpoint=openrouter
 ```
 
 `--confirm` is required. Useful flags: `--endpoint=<name>`, `--model=<id>` and `--base-url=<url>` (one-run
-overrides), `--budget=<usd>` (default `1.00`), `--max-tokens=<n>` (default 500 000), `--only=ask,edit,shell`,
+overrides), `--budget=<usd>` (default `1.00`), `--max-tokens=<n>` (default 500 000), `--only=ask,edit,requirements,shell`,
 `--max-iterations=<n>` (default 15), `--keep` (keep the sandbox), `--skip-build`.
 
 ### What it costs, and what stops it
@@ -105,15 +105,20 @@ lone field, which is what keeps the leased bearer reaching the right endpoint.
 The workspace is a copy of `apps/desktop/scripts/fixtures/todo-app` in the system temp directory — a small
 React todo application, its `docs/requirements/`, pure list functions in `src/todos.js` and a `node --test`
 suite that needs nothing installed. It is committed to a fresh Git repository before the app opens it, so the
-change can be read back from `git diff`. `REQ-TODO-003` (clear the completed todos) is approved and
-deliberately unimplemented there: it is the work the third scenario hands over.
+change can be read back from `git diff`. Its store is the conventional shape of `REQ-TRACE-002` — an epic at the
+root and its children in the sibling directory — and its identifiers are `REQ-TRACE-022` identifiers, so the
+requirements board can read it as readily as the agent can. Two requirements are approved and deliberately
+unimplemented, one per path: `REQ-103` (clear the completed todos) is the work the third scenario hands over in
+the composer, and `REQ-104` (count the completed todos) is the work the fourth releases from the board, so
+neither path depends on what the other did.
 
 | Scenario | What runs | What is asserted |
 | --- | --- | --- |
 | `sign-in` | Settings → Models → Add endpoint, filled and pressed in the product's dialog | the credential file, the snapshot's authenticated record, the catalogue, the bootstrapped `agents.yaml`, no credential in any log |
 | `ask` | one real run: read `src/todos.js`, answer | the leased bearer, a request to the endpoint, a completed session, settled tool rows, usage figures, an answer naming the real exports |
-| `edit` | one real run: implement `REQ-TODO-003`, then run the suite in the terminal | `clearCompleted` exported and tested, the terminal tool used, the session's tool-call total agreeing with the ring across every agent (`REQ-MONITOR-102`), `git diff` non-empty, and **`node --test` run again by the script itself** — the agent's own report is never the evidence |
-| `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the two runs left, the repository card's branch |
+| `edit` | one real run: implement `REQ-103`, then run the suite in the terminal | `clearCompleted` exported and tested, the terminal tool used, the session's tool-call total agreeing with the ring across every agent (`REQ-MONITOR-102`), `git diff` non-empty, and **`node --test` run again by the script itself** — the agent's own report is never the evidence |
+| `requirements` | the board: `REQ-104` selected, the move control pressed, the release confirmed, the run watched to review and its decision taken | the card's own trail `backlog → running → review → done`, exactly one release and an accept in the delivery history, the run record carrying its session identifier and the permissions it was granted (`REQ-TRACE-464/472`), real usage from the endpoint, the run confined to a worktree of its own, `completedCount` exported and tested **inside that worktree**, and **`node --test` run there by the script itself** |
+| `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and
@@ -144,9 +149,22 @@ Record what it found where the mechanism was decided, as the standing policy in 
 ### What the first execution found — 2026-09-11
 
 Twenty-six checks, all green, against the owner's own vLLM endpoint (`Qwen/Qwen3.6-35B-A3B`, unmetered): sign-in
-through the product's dialog, a run that read a file and answered, a run that implemented `REQ-TODO-003` — two
+through the product's dialog, a run that read a file and answered, a run that implemented `REQ-TODO-003` — the
+identifier it carried that day; the store was renumbered to `REQ-101`..`REQ-104` on 2026-09-11 so the board could
+read it, and this record is left saying what it said — two
 delegated children, twenty-five tool calls, the suite green when this script ran it itself — and the Overview
 painted from the store afterwards. The credential reached no log.
+
+### What the fifth scenario's first execution found — 2026-09-11
+
+Twenty-one checks, all green, against the same endpoint: `REQ-104` selected on the board, released, and the run
+that followed watched `backlog → running → review` and accepted into `done` — the product's own timestamps putting
+the run at **101.6 s**, 82,786 tokens in and 2,005 out over one iteration, twelve distinct tools including a
+delegated child and the terminal, the run confined to `rotaris-req-req-104-u1`, and `node --test` green inside that
+worktree when this script ran it. The scenario itself found nothing; the defect it exists to catch was found by the
+hand-driven precursor it was written from — the **eighty-first**, recorded in `codebase.md`'s live-run section: a
+store whose every document the engine rejected read exactly like an empty store, because this fixture's own
+identifiers were not identifiers and no surface but the board had ever parsed them.
 
 It still found a defect, in the way this record says it would, and not through a red check:
 
@@ -177,3 +195,9 @@ measured; the noise is the server's own, and quieting it is a decision for `REQ-
 only as text — nothing installs or builds it. Keep it dependency-free: the suite must run with a bare
 `node --test`, because the sandbox has no network and nothing installed. Its `AGENTS.md` is the instructions
 the agent under test reads, and the live run exercises that path too; change it deliberately.
+
+Its requirement store is read by the **board** as well as by the agent, so two things about it are load-bearing:
+the identifiers stay `REQ-TRACE-022` identifiers — the prefix, a hyphen, decimal digits and nothing else — and the
+layout stays `REQ-TRACE-002`'s conventional shape. A store that breaks either is not a smaller store; it is a store
+the engine rejects wholesale, which is what the board reads as empty. Renaming a requirement there also changes what
+the `edit` prompt and the `requirements` scenario name: change the three together.

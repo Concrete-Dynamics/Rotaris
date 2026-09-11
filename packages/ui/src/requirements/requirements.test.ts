@@ -9,7 +9,7 @@ import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
 import {
   ALERT_GLYPH, CLOSED_DROPDOWN_WIDTH, COLUMN_GAP, COLUMN_MAX, COLUMN_MIN, COLUMN_OVERSCAN_PX, CONFIRM_ACTIONS, OPEN_DROPDOWN_WIDTH, OTHER_CONTROL_HEIGHT, OVERSCAN_CARDS, PRIMARY_CONTROL_HEIGHT, PRIVATE_TRANSFER_TYPE, RAIL_CHARS, RAIL_MARGIN, RELEASED_POOL_CAP, SEARCH_DEBOUNCE_MS,
-  alertSeverity, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, visibleColumnBand,
+  alertSeverity, bodyStateOf, dragRefusedOnAxisSentence, dropTargetOptions, epicSummary, epicSummaryLine, headingAccessibleName, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveRefusedSentence, moveReachableSentence, moveStartsRun, nothingSelectedSentence, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, railAccessibleName, realisedBand, rejectedDocumentsSentence, visibleColumnBand,
 } from './model.js';
 
 /**
@@ -343,5 +343,34 @@ describe('what the pane host says (REQ-TRACE-422/463/472)', () => {
     expect(installedPanesSentence(PANE_KEYS, (k) => registry.installed(k))).toContain('asking builds nothing');
     registry.open('queue', () => ({ openedAt: 1 }));
     expect(installedPanesSentence(PANE_KEYS, (k) => registry.installed(k))).toContain('Delivery queue');
+  });
+});
+
+/**
+ * Defect 81, found by the first LIVE drive of this board (2026-09-11): a configured store whose every document the
+ * engine rejected (REQ-TRACE-022/026) yields no cards, and the body state was decided from the card count alone —
+ * so a store that would not parse printed "holds no requirement documents yet" and named nothing, while the
+ * projection carried the engine's errors the whole time. The decision is a pure function now, and it is this.
+ */
+describe('the stated body states (REQ-TRACE-231/380)', () => {
+  const dir = { kind: 'store', dir: 'docs/requirements', writable: false, canCreate: false } as const;
+  const rejected = [{ path: 'docs/requirements/REQ-TODO-003.md', message: 'docs/requirements/REQ-TODO-003.md: req-id "REQ-TODO-003" is not an identifier of the form REQ-<digits>' }];
+
+  it('tells a store that will not parse from a store nobody has written to', () => {
+    const empty = projection([]);
+    expect(bodyStateOf({ ...empty, source: { kind: 'none' } })).toBe('source');
+    expect(bodyStateOf({ ...empty, source: dir, parseErrors: rejected })).toBe('unparsed');
+    expect(bodyStateOf({ ...empty, source: dir })).toBe('store');
+  });
+
+  it('states no empty state at all once there is a board, whatever the errors say', () => {
+    const board = projection([card('REQ-101')]);
+    expect(bodyStateOf(board)).toBe(null);
+    expect(bodyStateOf({ ...board, parseErrors: rejected })).toBe(null);
+  });
+
+  it('counts the rejected documents for a store that parses only in part (REQ-TRACE-026)', () => {
+    expect(rejectedDocumentsSentence(1)).toBe('1 document in the requirement source was rejected and is not on the board.');
+    expect(rejectedDocumentsSentence(3)).toBe('3 documents in the requirement source were rejected and are not on the board.');
   });
 });

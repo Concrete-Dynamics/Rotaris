@@ -12,7 +12,7 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, UNPARSED_STORE_HOW, UNPARSED_STORE_SENTENCE, bodyStateOf, dragRefusedOnAxisSentence, rejectedDocumentsSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
 // Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
 import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
 import { GraphPane } from './GraphPane.js';
@@ -749,18 +749,37 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       if (reading) return <p className="req-status" role="status" data-testid="req-reading">{READING_LABEL}</p>;
       return <div className="empty-state req-empty" data-testid="req-error" role="alert"><span className="empty-state-title">{PROJECTION_UNAVAILABLE}</span><span className="empty-state-hint">{error ?? 'No reason was given.'} No board is assembled locally in its place.</span></div>;
     }
-    if (board.source.kind === 'none') {
+    // REQ-TRACE-380: which of the stated states holds is the model's decision, taken over the whole projection
+    // rather than by a chain of conditions here; this reads it and draws it.
+    const stated = bodyStateOf(board);
+    const dir = board.source.kind === 'store' ? board.source.dir : '';
+    const errorList = (
+      <ul className="req-empty__errors">{board.parseErrors.map((e, i) => <li key={`${e.path}-${i}`} className="mono">{e.path}{e.line === undefined ? '' : `:${e.line}`} — {e.message}</li>)}</ul>
+    );
+    if (stated === 'source') {
       return (
         <div className="empty-state req-empty" data-testid="req-empty-source">
           <span className="empty-state-title">{EMPTY_SOURCE_TITLE}</span>
           <span className="empty-state-hint">{EMPTY_SOURCE_WHAT}</span>
           <span className="empty-state-hint">{EMPTY_SOURCE_HOW}</span>
-          {board.parseErrors.length > 0 && <ul className="req-empty__errors">{board.parseErrors.map((e, i) => <li key={`${e.path}-${i}`} className="mono">{e.path}{e.line === undefined ? '' : `:${e.line}`} — {e.message}</li>)}</ul>}
+          {board.parseErrors.length > 0 && errorList}
         </div>
       );
     }
-    if (board.cards.length === 0) {
-      return <div className="empty-state req-empty" data-testid="req-empty-store"><span className="empty-state-title">{EMPTY_STORE_SENTENCE}</span><span className="empty-state-hint">Source: <span className="mono">{board.source.dir}</span>. {EMPTY_SOURCE_HOW}</span></div>;
+    // Defect 81, found by the first live drive of this board: a configured store whose every document was rejected
+    // (REQ-TRACE-022/026) has no cards, and the card count alone read that as a store nobody had written to. The
+    // engine's errors were on the projection the whole time; they are what this state says (REQ-TRACE-231).
+    if (stated === 'unparsed') {
+      return (
+        <div className="empty-state req-empty" data-testid="req-empty-unparsed" role="alert">
+          <span className="empty-state-title">{UNPARSED_STORE_SENTENCE}</span>
+          <span className="empty-state-hint">Source: <span className="mono">{dir}</span>. {UNPARSED_STORE_HOW}</span>
+          {errorList}
+        </div>
+      );
+    }
+    if (stated === 'store') {
+      return <div className="empty-state req-empty" data-testid="req-empty-store"><span className="empty-state-title">{EMPTY_STORE_SENTENCE}</span><span className="empty-state-hint">Source: <span className="mono">{dir}</span>. {EMPTY_SOURCE_HOW}</span></div>;
     }
     // Part R2 — REQ-TRACE-322: the graph is a PRESENTATION of this board centred on one requirement, not a grouping
     // axis (an axis has no centre), so it takes the body while the header keeps the board's own state; the columns
@@ -845,6 +864,14 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
           </div>
         )}
         <p className="req-header__analysis card-meta" data-testid="req-analysis">{board?.analysisEnabled ? ANALYSIS_ON_SENTENCE : ANALYSIS_OFF_SENTENCE} {AWAITING_JUDGEMENT_NONE}</p>
+        {/* Defect 81's quieter half: a store that parses in part draws a board, and the rejected documents are on
+            no card. The count and the engine's own errors are stated here, in the alert the board already uses. */}
+        {board !== null && board.cards.length > 0 && board.parseErrors.length > 0 && (
+          <ul className="req-detail__findings" data-testid="req-parse-errors">
+            <li className="req-alert req-alert--failure"><span className="req-alert__glyph" aria-hidden="true">✕</span>{rejectedDocumentsSentence(board.parseErrors.length)}</li>
+            {board.parseErrors.map((e, i) => <li key={`${e.path}-${i}`} className="req-alert req-alert--failure"><span className="req-alert__glyph" aria-hidden="true">✕</span><span className="mono">{e.path}{e.line === undefined ? '' : `:${e.line}`}</span> {e.message}</li>)}
+          </ul>
+        )}
         {error !== null && board !== null && <p className="req-status req-status--error" role="alert" data-testid="req-error-inline">{PROJECTION_UNAVAILABLE}: {error} The last good board stays on screen. <button type="button" className="btn btn-link" onClick={reevaluate}>{REEVALUATE_LABEL}</button></p>}
         {notice !== null && <p className="req-status" role="status" data-testid="req-notice">{notice} <button type="button" className="btn btn-link" onClick={() => setNotice(null)}>Dismiss</button></p>}
       </header>

@@ -9,5 +9,5 @@ A small React todo application. Keep changes minimal and verified.
 - **Dependencies are not installed** and there is no network here: `npm install`, `npm run dev` and
   `npm run build` will fail. The check that works is `node --test`, and it must be green before you
   report a change as done.
-- Requirements live in `docs/requirements/`. When you implement one, cite its identifier (`REQ-TODO-00N`) in a
+- Requirements live in `docs/requirements/`. When you implement one, cite its identifier (`REQ-1NN`) in a
   comment above the function, as the existing functions do.

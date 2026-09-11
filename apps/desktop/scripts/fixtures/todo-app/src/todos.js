@@ -10,31 +10,31 @@ export function nextId(todos) {
   return todos.reduce((highest, todo) => Math.max(highest, todo.id), 0) + 1;
 }
 
-/** REQ-TODO-001: append a todo with the trimmed title. An empty or blank title adds nothing. */
+/** REQ-101: append a todo with the trimmed title. An empty or blank title adds nothing. */
 export function addTodo(todos, title) {
   const trimmed = title.trim();
   if (trimmed === '') return todos;
   return [...todos, { id: nextId(todos), title: trimmed, done: false }];
 }
 
-/** REQ-TODO-001: flip one todo's done flag. An identifier that is not in the list changes nothing. */
+/** REQ-101: flip one todo's done flag. An identifier that is not in the list changes nothing. */
 export function toggleTodo(todos, id) {
   return todos.map((todo) => (todo.id === id ? { ...todo, done: !todo.done } : todo));
 }
 
-/** REQ-TODO-001: drop one todo by identifier. */
+/** REQ-101: drop one todo by identifier. */
 export function removeTodo(todos, id) {
   return todos.filter((todo) => todo.id !== id);
 }
 
-/** REQ-TODO-002: the list under one of the three filters. */
+/** REQ-102: the list under one of the three filters. */
 export function filterTodos(todos, filter) {
   if (filter === 'active') return todos.filter((todo) => !todo.done);
   if (filter === 'done') return todos.filter((todo) => todo.done);
   return todos;
 }
 
-/** REQ-TODO-002: how many are still to do. */
+/** REQ-102: how many are still to do. */
 export function remaining(todos) {
   return todos.filter((todo) => !todo.done).length;
 }

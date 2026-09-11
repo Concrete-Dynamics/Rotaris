@@ -91,6 +91,7 @@ file leaves the hole open rather than inventing a row to fill it.
 | 2026-09-09 | the terminal stream in the run host (Part AL) | ADR-0021 | 50–52 *(codebase)* | three, the last being two registered keys nothing read |
 | 2026-09-09 | the terminal grid and pop-out content (Part AM) | ADR-0047 | 53–55 *(codebase)* | three, over a scripted frame source |
 | **2026-09-11** | **the live run** (`pnpm live-run`) | **`AGENTS.md`** | — | **the persisted tool-call total was the entry agent's own, not the session's** (`REQ-MONITOR-102`): `sessions.tool_calls = 9` against 25 ring rows, so Overview's card read short and the synthetic run row read **0 tool calls** on any run that delegated |
+| **2026-09-11** | **the requirements board against a real model** (`pnpm live-run --only=requirements`, the fifth scenario) | **`codebase.md`** (the live-run record) | **81** *(codebase)* | **a store whose every document was rejected read exactly like an empty one**: the body state was decided from the card count alone, so the board said "holds no requirement documents yet" and named nothing while the projection carried the engine's errors. Found by the hand-driven precursor; the scenario built from it then passed 21 checks at once and found nothing of its own |
 
 ---
 

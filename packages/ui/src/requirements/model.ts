@@ -81,6 +81,32 @@ export const EMPTY_SOURCE_TITLE = 'No requirement source';
 export const EMPTY_SOURCE_WHAT = 'A requirement source is a directory of Markdown documents, one requirement per document (or several per document under their own headings), each opening with a frontmatter block that declares its identifier, its lifecycle and its title.';
 export const EMPTY_SOURCE_HOW = 'Configure one by placing a `rotaris-traceability.json` at the repository root whose `layout.requirements_dir` names that directory (the default is `docs/requirements`), then re-evaluate. The board reads the source through the traceability engine and never keeps a copy of it.';
 export const EMPTY_STORE_SENTENCE = 'The requirement source is configured but holds no requirement documents yet.';
+/**
+ * REQ-TRACE-022/026: a document whose `req-id` is not an identifier is REJECTED and contributes nothing, so a store
+ * of nothing but rejected documents yields no cards at all. Reading the card count alone then printed
+ * `EMPTY_STORE_SENTENCE` over it, and a store that will not parse read exactly like a store nobody has written to —
+ * while the projection was carrying the engine's own errors the whole time (REQ-TRACE-231: never a blank pane, and
+ * never a wrong one). The sentence names the condition; the errors themselves are the engine's words, unaltered.
+ */
+export const UNPARSED_STORE_SENTENCE = 'The requirement source is configured, but nothing in it could be read: every document was rejected.';
+export const UNPARSED_STORE_HOW = 'Each rejection is listed below as the engine reported it. Correct the documents it names and re-evaluate; until then the board has nothing to show.';
+/**
+ * REQ-TRACE-380: which stated state the body shows is decided here, as a pure function of the projection, rather
+ * than by a chain of conditions inside the drawn tree — `source` for no configured source, `unparsed` for a store
+ * that yielded errors and no cards, `store` for one that is genuinely empty, and `null` when there is a board.
+ */
+/**
+ * The same defect in its quieter form: a store that parses in PART yields a board, and the documents the engine
+ * rejected contribute nothing to it (REQ-TRACE-026). Saying nothing there would leave a requirement missing from
+ * the board with no way to tell. The count is stated, and the engine's errors are listed beside it.
+ */
+export const rejectedDocumentsSentence = (n: number): string =>
+  `${n} document${n === 1 ? '' : 's'} in the requirement source ${n === 1 ? 'was' : 'were'} rejected and ${n === 1 ? 'is' : 'are'} not on the board.`;
+export function bodyStateOf(board: Pick<BoardProjection, 'source' | 'cards' | 'parseErrors'>): 'source' | 'unparsed' | 'store' | null {
+  if (board.source.kind === 'none') return 'source';
+  if (board.cards.length > 0) return null;
+  return board.parseErrors.length > 0 ? 'unparsed' : 'store';
+}
 /** REQ-TRACE-342: ONE plain re-evaluation control, in exactly these words. */
 export const REEVALUATE_LABEL = 'Re-evaluate';
 export const REEVALUATE_DESCRIPTION = 'Re-reads the sources and the delivery store and applies the propagation rules. Consults no model and measures nothing; cards a rule moves will move.';

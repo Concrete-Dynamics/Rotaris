@@ -660,13 +660,19 @@ key (`.slice-proof/results.json`), after two runs that each found a defect.
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
 `--confirm` it prints its plan and exits. The workspace is a COPY of `apps/desktop/scripts/fixtures/todo-app` in
 the system temp directory — a React todo application with its requirements and a `node --test` suite needing
-nothing installed — committed to a fresh Git repository so the change can be read back from `git diff`; `REQ-TODO-003`
-is approved and unimplemented there on purpose. Four scenarios over one scratch profile: (1) sign-in through the
+nothing installed — committed to a fresh Git repository so the change can be read back from `git diff`. Its store is
+the conventional shape of REQ-TRACE-002 and its identifiers are REQ-TRACE-022 identifiers, so the requirements BOARD
+reads it as readily as the agent does; `REQ-103` and `REQ-104` are approved and unimplemented there on purpose, one
+for each path. Five scenarios over one scratch profile: (1) sign-in through the
 product's own dialog, filled and pressed by the third `>>key` segment of the fill seam — the credential file, the
 snapshot record, the discovered catalogue and logs free of the key; (2) one real run that reads and answers — the
 lease, the request, a completed session, settled tool rows, usage; (3) one real run that implements the requirement
 and runs the suite in the terminal — asserted from the files, from `git diff` and by the script running `node --test`
-ITSELF, because the agent's own report is never the evidence; (4) a relaunch with no prompt — Overview painted from
+ITSELF, because the agent's own report is never the evidence; (4) the requirements BOARD, where nothing is typed —
+`REQ-104` selected, the move control pressed, the release confirmed, and the run that follows watched from `backlog`
+through `running` to `review`, its decision taken and the card left resting in `done`, asserted from the board, from
+the delivery store's own rows, from the worktree the run was confined to and by running `node --test` inside it;
+(5) a relaunch with no prompt — Overview painted from
 the store. The endpoint is the owner's: `--add-endpoint` registers a name, the label the product will show, the base
 URL, the model and optional prices in `~/.rotaris/live-run/endpoints.json`, with the key beside it, one file per
 endpoint, DPAPI-encrypted on Windows (PowerShell 7 probed first, since 5.1 cannot always load the cmdlets; an
@@ -682,6 +688,25 @@ store's token counts, else tokens alone against `--max-tokens`. `--context=<toke
 discovers no catalogue is not a dead end: the sign-in takes the dialog's own "Continue anyway" and the script writes
 the `models:` entry the run needs (REQ-CONFIG-082..097, the shape `snapshotLayer` would have produced). Evidence
 under `.live-run/`; `AGENTS.md` is its standing instruction.
+
+**What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
+scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;
+the scenario passed 21 checks at once and found nothing of its own. **The eighty-first: a requirement store whose
+every document the engine REJECTED read exactly like a store nobody had written to.** `RequirementsView` decided its
+body state from the card count alone, so a configured source with no cards printed `EMPTY_STORE_SENTENCE` — "holds no
+requirement documents yet" — and named nothing, while `BoardProjection.parseErrors` had carried the engine's own
+errors the whole time and the no-source branch two lines above was already rendering them. The fix is `bodyStateOf`
+in the board's pure model (REQ-TRACE-380), a fourth stated state for a store that will not parse, and — the same
+defect in its quieter form — a stated count and error list when the store parses only in PART, since REQ-TRACE-026
+drops each rejected document silently and a board missing a requirement looks exactly like a board that has them all.
+**Why it hid is the finding, and it is the fixture's fault rather than the board's:** `fixtures/todo-app` shipped
+`req-id: REQ-TODO-001..003`, which REQ-TRACE-022 does not admit as identifiers at all, and no check ever noticed
+because the live run reads those documents only as **prose** for the agent — the one surface that parses them is the
+board, and until this scenario existed the board had never been pointed at that workspace. The store is renumbered to
+an epic and four children; `AGENTS.md`'s fixture section now states both constraints as load-bearing. **The tally
+stands at eighty-one.** The precursor also produced two *harness* mistakes worth keeping separate from it: it read
+transcript tool rows as `kind = 'tool_call'` where they are `kind = 'tool'`, and it asserted an elevation disclosure
+in a sandbox that opts in to unattended work, where REQ-TRACE-474 requires there to be none.
 
 **What `pnpm overview-proof` does.** It builds Electron and carries one scratch profile across four launches against
 a scratch Git repository it creates (one commit, one untracked file): (1) a fresh launch — Overview is the first view

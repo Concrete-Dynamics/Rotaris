@@ -5,6 +5,42 @@ state, the architecture views and the design language. Read it first — nothing
 
 This file covers one thing it does not: **the live run**, the only check here that spends real money.
 
+## Driving the built app — `pnpm app:drive`
+
+The app can be launched and then **driven one command at a time from a shell**, which is the fastest way to see
+what a surface actually does without editing a proof script and waiting out a launch. It spends nothing, talks to
+no provider by default (the scripted dialect), and runs against a scratch profile under `.drive/`.
+
+```
+pnpm build                                  # it drives the BUILT app, so build first
+pnpm app:drive start [--workspace=PATH] [--fresh] [--dialect=scripted]
+pnpm app:drive waitFor ".app-shell"         # waits for it; never a fixed sleep
+pnpm app:drive click ".nav-item" --text=Git
+pnpm app:drive chord Ctrl+1
+pnpm app:drive type "some text" --enter
+pnpm app:drive inspect ".composer"          # boxes, attributes, text, what holds focus
+pnpm app:drive probe "[data-testid=…]"      # the shape the *-proof scripts read
+pnpm app:drive eval "document.title"
+pnpm app:drive shot screen.png              # a PNG you can open, or read in a transcript
+pnpm app:drive resize 1000 680
+pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
+pnpm app:drive log --tail=40                # what the app printed
+pnpm app:drive stop
+```
+
+`command` is relayed to main's own `runCommand` — the same path the renderer's channel reaches — so driving a
+command drives the product, not a stand-in for it. Everything else moves a pointer, presses a key or reads the
+document the user is looking at.
+
+The seam behind it (`apps/desktop/src/main/driver.ts`) exists only when `ROTARIS_DRIVER` names an endpoint file at
+launch, and every request must carry the secret that launch minted. It is verification only: no product surface
+reaches it, and no requirement names it. `pnpm driver-proof` is its proof, and `docs/architecture/codebase.md`
+records what its first execution found.
+
+Two habits worth keeping: **`shot` produces a PNG an agent can read directly**, which is the cheapest way to meet
+`CLAUDE.md`'s "match after drawing" obligation; and a step that needs a condition should `waitFor` it rather than
+sleep, because the reason this seam exists is that fixed offsets have produced false reds three times.
+
 ## The live run — `pnpm live-run`
 
 Every other check in this repository answers the model itself. `pnpm test` uses scripted clients; each

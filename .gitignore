@@ -62,5 +62,9 @@ apps/desktop/.cache/
 # The live run (`pnpm live-run`): its evidence, and nothing of the sandbox it works in.
 .live-run/
 
+# The driver (`pnpm app:drive`, `pnpm driver-proof`): the scratch profile a driven app runs against, and the proof's evidence.
+.drive/
+.driver-proof/
+
 # the token proxy's local history database — a tool artifact, never repository content
 rtk/

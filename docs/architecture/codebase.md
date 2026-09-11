@@ -858,6 +858,59 @@ re-raises the one dialog rather than a second; a body file deleted underneath le
 disabled and the failure stated once. Evidence under `.artifacts-proof/`. Every launch clicks the Artifacts tab after
 switching view — the Library opens on Prompts, REQ-LIBRARY-103's first tab.
 
+## The driver — a step that waits instead of guessing (2026-09-11)
+
+Two changes to how this repository verifies itself, taken together on 2026-09-11. Neither is product behaviour and
+no requirement names either; both are listed here because the proofs are the evidence and a change to how they
+work is a change to what the evidence means.
+
+**The extraction.** `apps/desktop/scripts/lib/harness.mjs` holds what twenty-eight `*-proof` scripts each carried a
+copy of: `cleanEnvironment` (twenty-eight copies, twenty-seven of them identical and the twenty-eighth differing
+only in the name of a loop variable), `findDatabases` (twenty-one) and `oneDatabase` (twelve of the fifteen; the
+other three close over their own `local` and keep it). The bodies moved unchanged — a proof green before the move
+is green for the same reason after it, which is why the move was made mechanically and verified by re-running
+`part-j-proof` rather than by reading. About 430 lines of duplication went. **`launch` was deliberately NOT
+extracted**: twenty-six scripts define one and twenty are genuinely different, so a common form would be a rewrite
+of the evidence rather than a move of it, and the driver below removes the pressure that produced the variants.
+
+**The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
+launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally
+by the name on screen), `type`, `chord`, `inspect`, `probe`, `eval`, `screenshot`, `resize`, `command` (relayed to
+main's own `runCommand`, never around it) and `quit`. The client is `scripts/lib/driver.mjs`; `pnpm app:drive` is
+the one-command-at-a-time CLI over it and `pnpm driver-proof` is its proof.
+
+**Why it exists, stated as the thing it replaces.** The sixty-seven `ROTARIS_CAPTURE_*` seams share one shape: a
+step scheduled at a wall-clock offset, fired at whatever the window is showing then, read back by grepping the
+log. That shape cannot wait, so every proof using it encodes a guess about how fast the machine will be. Three
+recorded reds were that guess being wrong and nothing else — `git-proof` probing 1.2 s after a create still in
+flight is the clearest, and the 2026-09-08 sweep's "three of the four were measurement defects" is the same
+disease in its other form. `waitFor` is the whole mechanism; the rest of the ops are what replies made possible.
+The first run reports what the wait was worth rather than asserting it: the shell arrived **411 ms** after the
+connection, a number no fixed offset could have known.
+
+**A secret per launch, and why.** The listener carries an `eval` that runs script in a window the user may have
+signed into, so a request without the per-launch secret written into the endpoint file is refused and the
+connection dropped. The proof asserts both halves — the refusal, and that the refusal does not take the window
+down with it.
+
+**What the first execution found.** The endpoint file **outlived the process it described**. Cleanup hung on
+`app.on('will-quit')`, and `app.exit()` — how the `quit` op ends the process, and how every capture seam beside it
+ends one — emits neither `will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
+port nothing was listening on and failed with a connection error where it should have said "no app is being
+driven". The falsified assumption is kept beside its replacement in `driver.ts`: an Electron exit path is not one
+path, and a cleanup that matters is called by the op that knows it is ending as well as hung on the event that
+usually fires. Fixed, re-run, fourteen checks green.
+
+**Not a row in `first-executions.md`, and the reason is checkable.** That register is for a mechanism **the
+architecture record decided**; no ADR decided this one, and its own tail excludes proof and harness findings on
+exactly that principle. If the driver is later given an ADR — the open question is whether a verification seam of
+this reach deserves one — its first execution is recorded here and the register would point at this section.
+
+**What did not change.** No `ROTARIS_CAPTURE_*` seam was removed, no existing proof was rewritten onto the driver,
+and the packaged application still compiles the whole capture surface in (gated on an environment variable at
+launch). Moving a proof across, and gating the seams at build time so the shipped binary carries none of them, are
+separate pieces of work and are **owed**, not done.
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it

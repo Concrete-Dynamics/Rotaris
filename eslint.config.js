@@ -94,7 +94,9 @@ export default tseslint.config(
     // The proof directories hold scratch workspaces a real model may write code into (the slice's third prompt did).
     ignores: ['**/node_modules/**', '.live-run/**', '**/dist/**', '**/out/**', '**/release/**', 'docs/**', '.slice-proof/**', '.overview-proof/**', '.fetch-proof/**', '.git-proof/**', '.resilience-proof/**', '.checkpoint-proof/**', '.sessions-proof/**', '.mcp-proof/**', '.part-h-proof/**', '.part-j-proof/**', '.config-proof/**', '.theme-proof/**', 'packages/kernel/src/generated/**', 'apps/desktop/scripts/**', 'packages/*/spike/**', '.mission-proof/**', '.artifacts-proof/**', '.code-intel-proof/**', '.library-proof/**', 'apps/desktop/resources/**', 'apps/desktop/.cache/**', '.traceability-proof/**', '.requirements-proof/**' /* Part AK2 — the board proof's evidence directory (the plan's Reservations, ruled 2026-09-09: both files); delivery-proof never had a line here */,
       // Part AP
-      '.requirements-runs-proof/**', '.chat-controls-proof/**'],
+      '.requirements-runs-proof/**', '.chat-controls-proof/**',
+      // The driver (2026-09-11): the scratch profile a driven app runs against, and its proof's evidence.
+      '.drive/**', '.driver-proof/**'],
   },
   ...tseslint.configs.recommended,
   {

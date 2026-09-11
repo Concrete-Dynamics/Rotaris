@@ -5,6 +5,8 @@ import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
 import { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
+// The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
+import { startDriver } from './driver.js';
 // Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
 import { createRequirementsRelay } from './requirements.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey` beside `currentWorkspace`).
@@ -1737,6 +1739,26 @@ async function main(): Promise<void> {
     }).catch(() => { closeConfirmed = true; win.close(); });
   });
   win.once('ready-to-show', () => win.show());
+  /**
+   * The driver seam (verification only). `ROTARIS_DRIVER=<path>` starts a loopback listener and writes the port
+   * and this launch's secret to that path; with the variable unset nothing listens and nothing is written.
+   *
+   * It sits OUTSIDE the `ROTARIS_CAPTURE_PNG` block on purpose: the capture seams are a scripted launch that
+   * ends in a photograph, and this is the opposite — a window that stays up and answers questions. A proof may
+   * use both, and `pnpm app:drive` uses only this one.
+   */
+  const driverEndpoint = process.env['ROTARIS_DRIVER'];
+  if (driverEndpoint) {
+    const driver = startDriver(driverEndpoint, {
+      window: () => (win.isDestroyed() ? null : win),
+      timers: clocks.timers,
+      monotonic: clocks.monotonic,
+      log,
+      command: (request) => runCommand(request),
+      quit: () => app.exit(0),
+    });
+    app.on('will-quit', () => driver.close());
+  }
   /**
    * Part AA's verification seams (only with `ROTARIS_CAPTURE_PNG`).
    *

@@ -352,7 +352,7 @@ describe('what the pane host says (REQ-TRACE-422/463/472)', () => {
  * so a store that would not parse printed "holds no requirement documents yet" and named nothing, while the
  * projection carried the engine's errors the whole time. The decision is a pure function now, and it is this.
  */
-describe('the stated body states (REQ-TRACE-231/380)', () => {
+describe('the stated body states (REQ-TRACE-515, over REQ-TRACE-231/380)', () => {
   const dir = { kind: 'store', dir: 'docs/requirements', writable: false, canCreate: false } as const;
   const rejected = [{ path: 'docs/requirements/REQ-TODO-003.md', message: 'docs/requirements/REQ-TODO-003.md: req-id "REQ-TODO-003" is not an identifier of the form REQ-<digits>' }];
 

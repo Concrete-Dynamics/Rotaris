@@ -703,7 +703,10 @@ drops each rejected document silently and a board missing a requirement looks ex
 `req-id: REQ-TODO-001..003`, which REQ-TRACE-022 does not admit as identifiers at all, and no check ever noticed
 because the live run reads those documents only as **prose** for the agent — the one surface that parses them is the
 board, and until this scenario existed the board had never been pointed at that workspace. The store is renumbered to
-an epic and four children; `AGENTS.md`'s fixture section now states both constraints as load-bearing. **The tally
+an epic and four children; `AGENTS.md`'s fixture section now states both constraints as load-bearing.
+**`REQ-TRACE-515` was minted for this on 2026-09-11**, because the board's obligation here was inferred from a field
+the projection already carried and was stated nowhere — which is exactly why the build satisfied it in the no-source
+branch and not in the other; the round is recorded in `docs/spec/resolutions/08-requirements-traceability.md`. **The tally
 stands at eighty-one.** The precursor also produced two *harness* mistakes worth keeping separate from it: it read
 transcript tool rows as `kind = 'tool_call'` where they are `kind = 'tool'`, and it asserted an elevation disclosure
 in a sandbox that opts in to unattended work, where REQ-TRACE-474 requires there to be none.

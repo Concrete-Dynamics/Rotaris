@@ -320,3 +320,38 @@ sweep; OQ 9's 30-second bound and OQ 7's empty-store warning survive it intact.
 > unestablished cause and uncontrolled anti-malware; a normative document should not carry it as though
 > it were a rate. What an implementer needs — do not condition on contention, do not drop the ladder — is
 > stated in full.
+
+
+> ## Amendment, 2026-09-11 — `REQ-TRACE-515` states what the board says when its source does not parse
+>
+> *Raised by the first execution of the requirements board against a real model, recorded in
+> `../../architecture/codebase.md`'s live-run section as the eighty-first defect and in
+> `../../architecture/first-executions.md`.*
+>
+> **The defect.** A workspace whose requirement documents the store had **rejected** — every one of them, for
+> identifiers `REQ-TRACE-022` does not admit — was drawn by the board as an empty store: it printed the
+> sentence that says the source holds no requirement documents yet, and named nothing. The engine had the
+> right words for each rejection and the board's own projection was already carrying them; the surface read
+> the card count alone and never looked. A reader was told their requirements did not exist when what had
+> happened was that none of them could be read.
+>
+> **The amendment.** A configured source whose documents were rejected SHALL be stated as a source that does
+> not parse, SHALL be distinguished from the empty state of `REQ-TRACE-231`, and SHALL name **each** rejection
+> in the engine's own words — the document and what was rejected in it — rather than a count alone, because
+> the correction is made in the document named.
+>
+> **The clause that stops the wrong build.** The obligation does not end where a board exists. `REQ-TRACE-026`
+> makes a rejected document contribute *nothing*, so a store that parses only in **part** yields a board that
+> is silently short of a requirement and identical, to a reader, to a board carrying every one. The board is
+> therefore drawn from what parsed **and** states how many documents were rejected, with those same errors.
+> An implementation that states the condition only when the board is empty satisfies the sentence and not the
+> requirement, which is precisely the shape this defect took: the no-source branch already rendered the
+> errors, and the branch beside it did not.
+>
+> **Why it was minted rather than amended in place, and what it does not do.** No existing requirement was
+> wrong. `REQ-TRACE-231` governs a workspace with *no source*, `REQ-TRACE-503`'s three empty findings bind the
+> check of `REQ-TRACE-508`, and `REQ-TRACE-380` says only that the mapping is pure. The board's obligation
+> here had been inferred from a field the projection carried and stated nowhere — which is why a build could
+> satisfy it in one branch, miss it in another, and pass every review. `REQ-TRACE-515` is **not** a second
+> check: it states what the surface a person is looking at owes them, and `REQ-TRACE-508` remains the whole
+> report. **No prior disposition is reversed and nothing is withdrawn.**

@@ -82,7 +82,8 @@ export const EMPTY_SOURCE_WHAT = 'A requirement source is a directory of Markdow
 export const EMPTY_SOURCE_HOW = 'Configure one by placing a `rotaris-traceability.json` at the repository root whose `layout.requirements_dir` names that directory (the default is `docs/requirements`), then re-evaluate. The board reads the source through the traceability engine and never keeps a copy of it.';
 export const EMPTY_STORE_SENTENCE = 'The requirement source is configured but holds no requirement documents yet.';
 /**
- * REQ-TRACE-022/026: a document whose `req-id` is not an identifier is REJECTED and contributes nothing, so a store
+ * REQ-TRACE-515, over REQ-TRACE-022/026: a document whose `req-id` is not an identifier is REJECTED and
+ * contributes nothing, so a store
  * of nothing but rejected documents yields no cards at all. Reading the card count alone then printed
  * `EMPTY_STORE_SENTENCE` over it, and a store that will not parse read exactly like a store nobody has written to —
  * while the projection was carrying the engine's own errors the whole time (REQ-TRACE-231: never a blank pane, and
@@ -91,12 +92,12 @@ export const EMPTY_STORE_SENTENCE = 'The requirement source is configured but ho
 export const UNPARSED_STORE_SENTENCE = 'The requirement source is configured, but nothing in it could be read: every document was rejected.';
 export const UNPARSED_STORE_HOW = 'Each rejection is listed below as the engine reported it. Correct the documents it names and re-evaluate; until then the board has nothing to show.';
 /**
- * REQ-TRACE-380: which stated state the body shows is decided here, as a pure function of the projection, rather
+ * REQ-TRACE-380 with REQ-TRACE-515: which stated state the body shows is decided here, as a pure function of the projection, rather
  * than by a chain of conditions inside the drawn tree — `source` for no configured source, `unparsed` for a store
  * that yielded errors and no cards, `store` for one that is genuinely empty, and `null` when there is a board.
  */
 /**
- * The same defect in its quieter form: a store that parses in PART yields a board, and the documents the engine
+ * REQ-TRACE-515's part clause — the same defect in its quieter form: a store that parses in PART yields a board, and the documents the engine
  * rejected contribute nothing to it (REQ-TRACE-026). Saying nothing there would leave a requirement missing from
  * the board with no way to tell. The count is stated, and the engine's errors are listed beside it.
  */

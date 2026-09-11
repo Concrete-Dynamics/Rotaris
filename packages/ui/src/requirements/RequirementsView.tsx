@@ -766,9 +766,9 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         </div>
       );
     }
-    // Defect 81, found by the first live drive of this board: a configured store whose every document was rejected
-    // (REQ-TRACE-022/026) has no cards, and the card count alone read that as a store nobody had written to. The
-    // engine's errors were on the projection the whole time; they are what this state says (REQ-TRACE-231).
+    // REQ-TRACE-515, minted for defect 81 after the first live drive of this board: a configured store whose every
+    // document was rejected (REQ-TRACE-022/026) has no cards, and the card count alone read that as a store nobody
+    // had written to. The engine's errors were on the projection the whole time; they are what this state says.
     if (stated === 'unparsed') {
       return (
         <div className="empty-state req-empty" data-testid="req-empty-unparsed" role="alert">
@@ -864,8 +864,9 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
           </div>
         )}
         <p className="req-header__analysis card-meta" data-testid="req-analysis">{board?.analysisEnabled ? ANALYSIS_ON_SENTENCE : ANALYSIS_OFF_SENTENCE} {AWAITING_JUDGEMENT_NONE}</p>
-        {/* Defect 81's quieter half: a store that parses in part draws a board, and the rejected documents are on
-            no card. The count and the engine's own errors are stated here, in the alert the board already uses. */}
+        {/* REQ-TRACE-515's part clause, defect 81's quieter half: a store that parses in part draws a board, and the
+            rejected documents are on no card. The count and the engine's own errors are stated here, in the alert
+            the board already uses. */}
         {board !== null && board.cards.length > 0 && board.parseErrors.length > 0 && (
           <ul className="req-detail__findings" data-testid="req-parse-errors">
             <li className="req-alert req-alert--failure"><span className="req-alert__glyph" aria-hidden="true">✕</span>{rejectedDocumentsSentence(board.parseErrors.length)}</li>

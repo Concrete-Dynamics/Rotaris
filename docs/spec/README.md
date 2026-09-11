@@ -7,10 +7,10 @@ how any other implementation achieves it.
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)
-- Requirements: **3,953** identifiers across the 19 shipping domains, of which **258** are withdrawn
-  in place, leaving **3,695** that carry live behavior. The two retired domains (17 and 18) hold a
+- Requirements: **3,954** identifiers across the 19 shipping domains, of which **258** are withdrawn
+  in place, leaving **3,696** that carry live behavior. The two retired domains (17 and 18) hold a
   further **444** identifiers, **10** of them withdrawn in place; those are counted separately and
-  are not part of the shipping total — **4,397** identifiers in all, **268** of them withdrawn.
+  are not part of the shipping total — **4,398** identifiers in all, **268** of them withdrawn.
   Every figure here counts identifiers, not behaviors: an identifier is never removed, so a
   withdrawn requirement keeps its number and keeps being counted. A total that rose while behavior
   was being removed rose because resolution minted new identifiers to carry rescued capabilities,
@@ -95,6 +95,14 @@ how any other implementation achieves it.
     qualification. Every amended sentence quotes what it previously read. The ruling and its alternatives
     are in `../architecture/owner-decisions.md`; where each change landed is in
     `../clean-room/provenance.md`.
+  - The **board-parse round** (2026-09-11) answered the first execution of the requirements board against a
+    real model, which found that a store the engine had rejected wholesale read on the board exactly like a
+    store nobody had written to. It **withdrew no identifier and minted one** — `REQ-TRACE-515`, what the
+    board states when its source does not parse, and when it parses only in part — so live behavior grew
+    by 1. Nothing was amended in place and no prior disposition was reversed: the obligation had been
+    inferred from a field the projection already carried (`parseErrors`) and was stated nowhere, which is
+    why the build satisfied it in one branch and not the other. The round is recorded in
+    [`resolutions/08-requirements-traceability.md`](resolutions/08-requirements-traceability.md).
 - Clean-room audit: 6 domains clean, 15 with minor concerns, 0 contaminated — see
   [`../clean-room/specification-gate.md`](../clean-room/specification-gate.md)
 
@@ -112,7 +120,7 @@ never renumbered or reused. A changed requirement gets a new revision, not a new
 | 05 | [Agent Tooling, Terminal Execution, Permissions, and Approvals](05-tools-permissions-approvals.md) | `REQ-TOOLS` | 192 | 0 | core |
 | 06 | [Git Integration, Worktrees, and Checkpoints](06-git-worktrees-checkpoints.md) | `REQ-GIT` | 161 | 8 | core |
 | 07 | [Session Persistence, Resume, and Background Sessions](07-sessions-persistence.md) | `REQ-SESSION` | 202 | 22 | core |
-| 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 514 | 16 | core |
+| 08 | [Requirements Board and Traceability](08-requirements-traceability.md) | `REQ-TRACE` | 515 | 16 | core |
 | 09 | [User-Defined Lifecycle Hook Commands](09-lifecycle-hooks.md) | `REQ-HOOKS` | 139 | 1 | core |
 | 10 | [Command Sandboxing and Network Egress Policy](10-sandbox-network-egress.md) | `REQ-SANDBOX` | 130 | 1 | core |
 | 11 | [Application Startup, Distribution, and Updates](11-startup-distribution-updates.md) | `REQ-STARTUP` | 168 | 11 | secondary |

@@ -47,6 +47,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
+import { cleanEnvironment } from './lib/harness.mjs';
 import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -67,11 +68,7 @@ if (!process.argv.includes('--skip-build')) {
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);

@@ -70,6 +70,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, write
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -147,11 +148,7 @@ if (!process.argv.includes('--skip-build')) {
 }
 expect(existsSync(electron), `Electron executable is absent: ${electron}`);
 
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
 const PROBES = [
   '.app-shell', '[data-testid="requirements"]', '[data-testid="req-total"]', '[data-testid="req-column"]', '[data-testid="req-rail"]', '[data-testid="req-card"]', '[data-testid="req-epic"]',
   '[data-testid="req-filter-summary"]', '[data-testid="req-feedback"]', '[data-testid="req-move-control"]', '[data-testid="req-error"]', '[data-testid="req-empty-source"]', '[data-testid="req-blocked"]',
@@ -221,16 +218,7 @@ function profile(name, preferencesRoot) {
  */
 const proofRequire = createRequire(import.meta.url);
 const Database = proofRequire('better-sqlite3');
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
+
 function deliveryRows(local) {
   const files = findDatabases(local);
   if (files.length === 0) return null;

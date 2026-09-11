@@ -30,6 +30,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -49,11 +50,7 @@ if (!process.argv.includes('--skip-build')) {
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
 
 const W = '[data-testid="proof-workspace"]';
 const P = '[data-testid="proof-persona"]';

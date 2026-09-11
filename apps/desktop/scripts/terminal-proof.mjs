@@ -18,6 +18,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { cleanEnvironment } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
@@ -84,11 +85,7 @@ await esbuild.build({
 });
 
 // ── 3. Electron ────────────────────────────────────────────────────────────────────────────────────────────────
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
 const run = spawnSync(electron, [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'main.cjs')], {
   cwd: repo, encoding: 'utf8', timeout: 400_000, windowsHide: true,
   env: {

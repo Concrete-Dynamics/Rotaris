@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -97,11 +98,7 @@ const WORKSPACE = ['# workspace configuration', 'runtime:', '  permission_mode: 
 const MCP_JSON = `{\n  "mcpServers": {\n    "gamma": { "command": ${y(node)}, "args": ${y([fixture, '--pid-file', join(pids, 'gamma.pids')])}, "envFile": ".env", "weird": true }\n  }\n}\n`;
 writeFileSync(join(configDir, 'secrets.yaml'), 'alpha:\n  ALPHA_KEY: "sk-proof-secret-value-1234"\n');
 
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
 function oneDatabase() {
   const found = [];
   const walk = (dir) => { if (!existsSync(dir)) return; for (const e of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'workspace.db') found.push(p); } };

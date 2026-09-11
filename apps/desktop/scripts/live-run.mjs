@@ -57,6 +57,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
+import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -395,21 +396,6 @@ const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json
 const snapshotFile = join(local, 'rotaris', 'config', 'project_settings.yaml');
 const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
 
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const name of Object.keys(env)) if (name.startsWith('ROTARIS_')) delete env[name];
-  return env;
-}
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
 function oneDatabase() {
   const databases = findDatabases(local);
   if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);

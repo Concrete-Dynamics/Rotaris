@@ -35,6 +35,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -59,21 +60,8 @@ if (!process.argv.includes('--skip-build')) {
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
+
+
 function openStore(local) {
   const databases = findDatabases(local);
   if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);

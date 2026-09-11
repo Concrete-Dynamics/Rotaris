@@ -32,6 +32,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -52,21 +53,8 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
+
 const PROBES = [
   '.session-browser tr[data-session-id]', '[data-testid="session-report"]', '[data-testid="session-browser-error"]', '[data-testid="session-disclosure"]',
   '[data-testid="session-unreadable-detail"]', '[data-testid="session-delete-confirm"]', '.notice__headline', '.notice__detail', '.app-shell',

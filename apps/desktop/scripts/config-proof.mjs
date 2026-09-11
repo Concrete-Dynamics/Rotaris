@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment } from './lib/harness.mjs';
 
 /**
  * ADR-0036 / ADR-0037's first execution in the built app (Part I step 5): hand-authored, commented files at
@@ -53,12 +54,6 @@ const WORKSPACE = [
   '  delegation_strategy: single',
   '',
 ].join('\n');
-
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
 
 function scenario(name, files = { global: GLOBAL, workspace: WORKSPACE }) {
   const root = join(output, name);

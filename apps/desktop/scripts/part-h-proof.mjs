@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -21,17 +22,6 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
 
 function scratchAgentsYaml(workspace) {
   // The stopgaps `ROTARIS_PERMISSION_MODE` and `ROTARIS_RUN_OVERRIDE` are gone: the run reads its files (ADR-0036).
@@ -59,12 +49,6 @@ function scratchAgentsYaml(workspace) {
   ].join('\n'));
 }
 
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
-
 function launch(name, workspace, local, preferences, extra) {
   const png = join(output, `${name}.png`);
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
@@ -88,12 +72,6 @@ function launch(name, workspace, local, preferences, extra) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return { png, log };
-}
-
-function oneDatabase(local) {
-  const databases = findDatabases(local);
-  if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
-  return databases[0];
 }
 
 const loopRoot = join(output, 'loop');

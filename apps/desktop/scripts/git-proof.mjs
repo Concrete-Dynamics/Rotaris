@@ -26,6 +26,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -46,21 +47,8 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
+
 const PROBES = [
   '[data-testid="git-branch"]', '[data-testid="git-sync"]', '[data-testid="git-worktrees"] tr.git__row', '[data-testid="git-tag-base"]', '[data-testid="git-tag-active"]',
   '[data-testid="git-worktrees-empty"]', '[data-testid="git-history"] tr.git__commit', '[data-testid="git-history-empty"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-checkpoint-row"]',

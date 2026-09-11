@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -75,21 +76,6 @@ function globalYaml({ personas = {} } = {}) {
 const WORKSPACE_SINGLE = ['# workspace configuration', 'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true', 'rotaris:', '  delegation_strategy: single', ''].join('\n');
 const WORKSPACE_ORCHESTRATOR = WORKSPACE_SINGLE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n');
 
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
-function findDatabases(dir) {
-  if (!existsSync(dir)) return [];
-  const found = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
 function oneDatabase() {
   const found = findDatabases(local);
   if (found.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${found.length}`);

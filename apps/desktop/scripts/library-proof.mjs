@@ -26,6 +26,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -46,21 +47,8 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
-function oneDatabase(local) {
-  const databases = findDatabases(local);
-  if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
-  return databases[0];
-}
+
+
 /** Both saved-prompt lists as the store holds them, newest first — what every claim below is checked against. */
 function storedPrompts(local) {
   const db = new Database(oneDatabase(local), { readonly: true });
@@ -70,11 +58,7 @@ function storedPrompts(local) {
   db.close();
   return { ...lists, userVersion: version };
 }
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
+
 
 const PROBES = [
   '.app-shell', '[data-testid="library"]', '.library__title', '[data-testid="library-search"]', '[data-testid="library-tab"]',

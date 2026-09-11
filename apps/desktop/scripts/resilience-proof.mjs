@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
 
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
@@ -27,26 +28,6 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function findDatabases(root) {
-  if (!existsSync(root)) return [];
-  const found = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) found.push(...findDatabases(path));
-    else if (entry.name === 'workspace.db') found.push(path);
-  }
-  return found;
-}
-function oneDatabase(local) {
-  const databases = findDatabases(local);
-  if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
-  return databases[0];
-}
-function cleanEnvironment() {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  return env;
-}
 /**
  * A scratch workspace: `alpha` on provider `scripted` fills every tier; `beta` on provider `scripted-b` is configured
  * beside it. With `snapshot: true` the per-user discovery snapshot lists `scripted-b` as an authenticated provider

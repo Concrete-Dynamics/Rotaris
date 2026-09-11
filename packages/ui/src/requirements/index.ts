@@ -11,3 +11,7 @@ export * from './DetailPanel.js';
 export * from './EvidencePane.js';
 export * from './EvidenceIndicator.js';
 export * from './ReasonDialog.js';
+// Part R2 — the relationship graph (REQ-TRACE-322..333, 505) and the pure half of hosting Part AP's five panes.
+export * from './graph.js';
+export * from './GraphPane.js';
+export * from './panes-host.js';

@@ -38,6 +38,34 @@ mkdirSync(output, { recursive: true });
 const fixture = join(app, 'scripts', 'fixtures', 'requirements-store');
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
 /**
+ * Part R2 — the linear-growth assertions, made load-tolerant WITHOUT relaxing them (the plan's Reservations,
+ * 2026-09-10: "a ratio of two wall-clock measurements is load-sensitive by construction … wave 3 should give it a
+ * floor or measure work instead of time"). This proof went red once at 3.06 against a 3.0 threshold on a machine
+ * running five build agents, and passed three times consecutively afterwards.
+ *
+ * Both halves of the plan's advice are taken, and the threshold is NOT moved:
+ *  - **Work, asserted always.** The half-size tree must really be about half — the documents parsed, the files swept
+ *    or the files parsed on each side. No clock can tell a proof that, and if it is wrong the timing ratio means
+ *    nothing whatever it reads. This is the assertion that cannot be bought off by load.
+ *  - **Time, taken as the minimum of three readings and floored.** Load can only make a pass slower, never faster,
+ *    so the minimum is the least contaminated estimate (`msMin`, in `traceability.proof.test.ts`). Below the floor,
+ *    a wall clock cannot tell two passes apart at all, so the ratio is RECORDED and not asserted, and the line says
+ *    so rather than passing silently — a proof that cannot fail is not evidence, and neither is one that pretends
+ *    a 3 ms reading measured something.
+ */
+const GROWTH_FLOOR_MS = 25;
+const GROWTH_CEILING = 3.0;
+const linear = (label, pair, lower) => {
+  const workRatio = Math.round((pair.work.full / Math.max(pair.work.half, 1)) * 100) / 100;
+  expect(workRatio > 1.5 && workRatio < 2.6, `${label}: the half-size tree is not about half the work (${pair.work.full} against ${pair.work.half}, ratio ${workRatio})`);
+  if (pair.fullMinMs < GROWTH_FLOOR_MS || pair.halfMinMs < GROWTH_FLOOR_MS) {
+    console.log(`  NOTE  ${label} growth ratio ${pair.ratio} recorded, NOT asserted: ${pair.fullMinMs} ms against ${pair.halfMinMs} ms is below the ${GROWTH_FLOOR_MS} ms floor at which a wall clock can tell two passes apart (work ratio ${workRatio} asserted instead)`);
+    return;
+  }
+  expect(pair.ratio > lower && pair.ratio < GROWTH_CEILING, `${label} growth ratio ${pair.ratio} is not linear — minimum of the readings ${JSON.stringify(pair.warmRunsMs ?? [])} full against ${JSON.stringify(pair.halfWarmRunsMs ?? pair.warmRunsMs ?? [])} half, work ratio ${workRatio}`);
+};
+
+/**
  * Part AJ2: two files planted into each fixture COPY (never the fixture, which Parts AK and AP reuse) for the checks the
  * syntax-tree parser decides — a re-export-only module that rule 1 of the orphan-module check excuses, and a test whose
  * function was renamed while the orphan-test baseline still names the old one, so the check reports the stale entry and
@@ -96,12 +124,12 @@ try {
   // REQ-TRACE-501 / REQ-TRACE-088: about one second each at the stated scale; the linear clause is the binding one.
   expect(spike.parse.documents >= 1500 && spike.parse.warmMs < 1500, `parse of ${spike.parse.documents} documents took ${spike.parse.warmMs} ms`);
   expect(spike.sweep.files >= 1000 && spike.sweep.sites >= 10_000 && spike.sweep.warmMs < 1500, `sweep of ${spike.sweep.files} files / ${spike.sweep.sites} sites took ${spike.sweep.warmMs} ms`);
-  expect(spike.parseHalf.ratio > 1.4 && spike.parseHalf.ratio < 3.0, `parse growth ratio ${spike.parseHalf.ratio} is not linear`);
-  expect(spike.sweepHalf.ratio > 1.3 && spike.sweepHalf.ratio < 3.0, `sweep growth ratio ${spike.sweepHalf.ratio} is not linear`);
+  linear('parse', spike.parseHalf, 1.4);
+  linear('sweep', spike.sweepHalf, 1.3);
   // Part AJ2 / OQ-24: the parse-requiring checks are timed over the same tree and recorded; no requirement fixes a budget
   // for them, so the assertions are shape (every file parsed, every test function found) and linear growth, never a bound.
   expect(spike.parser && spike.parser.files >= 1000 && spike.parser.functions === 2000, `the parser did not cover the tree: ${JSON.stringify(spike.parser)}`);
-  expect(spike.parser.ratio > 1.3 && spike.parser.ratio < 3.0, `parser growth ratio ${spike.parser.ratio} is not linear`);
+  linear('parser', spike.parser, 1.3);
   expect(fixtureResults.passed === true, 'the fixture drive did not pass');
   expect(fixtureResults.checkCodes.every((c) => c !== 'requires-parse') && fixtureResults.exemptModules.includes('src/barrel.ts'), 'the parser did not decide the two checks over the fixture');
 

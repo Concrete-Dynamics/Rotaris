@@ -101,6 +101,13 @@ export interface BoardCard {
 export interface EpicCard { readonly id: ReqId; readonly title: string; readonly done: number; readonly total: number; readonly children: readonly ReqId[] }
 export interface QueueEntry { readonly id: ReqId; readonly unit: string; readonly state: 'executing' | 'next' | 'deferred'; readonly reason?: string /* engine's words, unaltered */ }
 export interface DeliveryQueue { readonly entries: readonly QueueEntry[]; readonly automatic: boolean; readonly concurrency: number; readonly stopped: boolean }
+/**
+ * REQ-TRACE-406 — the board state is ONE value carrying the columns, the queue and the pending and feedback action
+ * lists together. It is this interface: the cards (each with its column, and each with the `inFlight` action that is
+ * the pending list, and the `feedback` sentence the surface shows), the epics, the queue and the blocked summary
+ * arrive in a single message and are replaced in a single assignment, so no two of them can be read from different
+ * generations. Cited by Part R″ as part of lane R's closing statement; the shape is Part AK's and is unchanged.
+ */
 export interface BoardProjection {
   readonly workspace: string; readonly generation: number; readonly producedAt: string;    // ISO; the display mapping takes `now` as an argument (REQ-TRACE-380)
   readonly source: { readonly kind: 'none' } | { readonly kind: 'store'; readonly dir: string; readonly writable: boolean; readonly canCreate: boolean };

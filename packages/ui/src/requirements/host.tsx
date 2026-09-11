@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import type { BoardAction, BoardProjection, ColumnToken, Reachability, RendererBridge, ReqId, RequirementDetail, RequirementsChanged } from '@rotaris/contracts';
+import type { BlockerPayload, BoardAction, BoardProjection, ColumnToken, DeliveryQueue, LaunchPreview, Reachability, RendererBridge, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload } from '@rotaris/contracts';
 import { commandById, detectPlatform } from '../commands/registry.js';
-import { RequirementsView, type ActOutcome, type BoardPreferenceKey, type BoardPreferences, type HostResult, type RequirementsHost } from './RequirementsView.js';
+import { RequirementsView, type ActOutcome, type BoardPreferenceKey, type BoardPreferences, type DispatchOutcome, type HostResult, type LocationPreviewOutcome, type QueueChange, type RequirementsHost, type SourceWriteOutcome } from './RequirementsView.js';
 
 /**
  * Part AK2 — the board's host over the renderer bridge (REQ-TRACE-368..373, 378, 381). The composition root mounts
@@ -32,6 +32,12 @@ export function createRequirementsHost({ bridge, workspace, onOpenSession }: Req
     if (!r.ok) return { ok: false, reason: r.detail ? `${r.headline}: ${r.detail}` : r.headline };
     return { ok: true, value: r.value as T };
   };
+  // Part R2 — main's run coordinator answers `requirements.runs` directly; a refusal becomes the same stated reason.
+  const runs = async <T,>(command: Record<string, unknown>): Promise<HostResult<T>> => {
+    const r = await bridge.command({ kind: 'requirements.runs', ...command } as never);
+    if (!r.ok) return { ok: false, reason: r.detail ? `${r.headline}: ${r.detail}` : r.headline };
+    return { ok: true, value: r.value as T };
+  };
   const readString = async (key: BoardPreferenceKey): Promise<string> => {
     const r = await bridge.command({ kind: 'prefs.get', key } as never);
     const v = r.ok ? (r.value as { value?: unknown }).value : undefined;
@@ -50,6 +56,19 @@ export function createRequirementsHost({ bridge, workspace, onOpenSession }: Req
     reachable: (id: ReqId, from: ColumnToken, to: ColumnToken) => send<Reachability>({ name: 'requirements.reachable', id, from, to }),
     act: (id: ReqId, action: BoardAction, target: ColumnToken | undefined, payload: Readonly<Record<string, string>> | undefined) =>
       send<ActOutcome>({ name: 'requirements.act', id, action, ...(target === undefined ? {} : { target }), ...(payload === undefined ? {} : { payload }) }),
+    // Part R2 — Part AP's panes and its run coordinator, over the same bridge. The service's family travels in the
+    // `requirements` envelope (main stamps the actor and replaces the workspace); the launch preview, the dispatch
+    // and the permanent suppression are MAIN's own `requirements.runs` command, because main owns the two elevation
+    // preferences and the session start (spec 08 §Runs Started from the Board, REQ-TRACE-472).
+    readReview: (id: ReqId) => send<ReviewPayload>({ name: 'requirements.review', id }),
+    readBlocker: (id: ReqId) => send<BlockerPayload>({ name: 'requirements.blocker', id }),
+    setQueue: (change: QueueChange) => send<DeliveryQueue>({ name: 'requirements.queue.set', ...change }),
+    writeSource: (request: { readonly id?: ReqId; readonly document: string }) =>
+      send<SourceWriteOutcome>({ name: 'requirements.source.write', ...(request.id === undefined ? {} : { id: request.id }), document: request.document }),
+    previewLocation: (epic: ReqId | undefined) => send<LocationPreviewOutcome>({ name: 'requirements.source.previewLocation', ...(epic === undefined ? {} : { epic }) }),
+    launchPreview: (id: ReqId, action: BoardAction) => runs<LaunchPreview>({ op: 'preview', id, action }),
+    dispatchRuns: () => runs<DispatchOutcome>({ op: 'dispatch' }),
+    suppressDisclosure: () => runs<unknown>({ op: 'suppress', suppressed: true }),
     onChanged: (listener: (change: RequirementsChanged) => void) => bridge.onRequirementsChanged((p) => listener(p as RequirementsChanged)),
     async readPreferences(): Promise<BoardPreferences> {
       const [text, epic, source, lifecycle, health, priority, sort, axis, blocked, folds] = await Promise.all([

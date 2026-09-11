@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, EpicCard, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, TransitionOutcome } from '@rotaris/contracts';
+import type { BlockerPayload, BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, LaunchPreview, PaneKey, Reachability, Refusal, ReqId, RequirementDetail, RequirementsChanged, ReviewPayload, TransitionOutcome } from '@rotaris/contracts';
 import { COLUMN_TOKENS, DELIVERY_COLUMNS, HEALTH_TOKENS } from '@rotaris/contracts';
 import { AXES, AXIS_DRAGGABLE, EMPTY_AXIS_SENTENCE, EMPTY_COLUMN_SENTENCE, EMPTY_FILTER, SORT_ORDERS, absoluteMoment, axisOf, columnLabel, columnsFor, describeFilter, distribute, emptinessFolds, filterActive, filterCards, foldDecision, parseFolds, relativeAge, serializeFolds, sortCards, sortOrderOf, type BoardFilter, type GroupingAxis, type SortOrder } from '@rotaris/ui-core';
 import { ConfirmDialog } from '../ConfirmDialog.js';
@@ -12,7 +12,20 @@ import { EpicCardView } from './EpicCardView.js';
 import { EvidencePane, evidenceOpenerSelector } from './EvidencePane.js';
 import { MoveControl } from './MoveControl.js';
 import { ReasonDialog } from './ReasonDialog.js';
-import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, BLOCKED_COLUMN_DESCRIPTION, BLOCKED_COLUMN_LABEL, BOARD_TITLE, CARD_HEIGHT_ESTIMATE, CLOCK_TICK_MS, CLOSED_DROPDOWN_WIDTH, CONFIRM_ACTIONS, EMPTY_SOURCE_HOW, EMPTY_SOURCE_TITLE, EMPTY_SOURCE_WHAT, EMPTY_STORE_SENTENCE, EVALUATING_LABEL, FILTER_CLEAR, FILTER_HIDE, FILTER_NOTHING, FILTER_SHOW, OPEN_DROPDOWN_WIDTH, PROJECTION_UNAVAILABLE, READING_LABEL, REEVALUATE_DESCRIPTION, REEVALUATE_LABEL, SEARCH_DEBOUNCE_MS, SUBSCRIPTION_SENTENCE, dragRefusedOnAxisSentence, dropTargetOptions, evaluatedSentence, inFlightLabelFor, initialColumnBandEnd, mergeAffected, moveActionFor, moveControlState, moveStartsRun, payloadFieldFor, promptWithdrawnSentence, pruneUserFolds, visibleColumnBand, type BoardObservable } from './model.js';
+// Part R2 — the five panes Part AP built and nothing hosted, the elevation's disclosure, and the relationship graph.
+import { GRAPH_DEPTH_DEFAULT, buildGraph, clampDepth } from './graph.js';
+import { GraphPane } from './GraphPane.js';
+import { BlockersPane } from './panes/BlockersPane.js';
+import { CreatePane, EditorPane, type CreateDraft } from './panes/EditorPane.js';
+import { LaunchDisclosure } from './panes/LaunchDisclosure.js';
+import { QueuePane } from './panes/QueuePane.js';
+import { ReviewPane } from './panes/ReviewPane.js';
+import { createPaneRegistry } from './panes/registry.js';
+// Defect R2-3: `PANE_TITLE` belongs in this list. It was dropped from it while the pane host's own chrome did not yet
+// exist, then used by that chrome — and a bundler does not resolve identifiers, so the renderer built cleanly and threw
+// `PANE_TITLE is not defined` the first time a pane opened, which React answers by unmounting the whole tree.
+import { consequenceForDecision, DISCLOSURE_PENDING, DISPATCH_NOTHING_STARTED, LAUNCH_ABANDONED, PANE_TITLE, QUEUE_CONTROL_LABEL, readOnlyEditorRefusal } from './panes-host.js';
 
 /**
  * Part AK2 — the Requirements view (spec 08 §Board Surface onwards; REQ-SHELL-023's fourth primary view; ADR-0041's
@@ -40,6 +53,16 @@ import { ANALYSIS_OFF_SENTENCE, ANALYSIS_ON_SENTENCE, AWAITING_JUDGEMENT_NONE, B
  */
 export type HostResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
 export type ActOutcome = { readonly ok: true; readonly value: TransitionOutcome } | { readonly ok: false; readonly error: Refusal };
+// Part R2 — the four answers the panes' commands come back as. Each is the service's own reply shape, narrowed here
+// so the view never invents a field: a refusal is `{ok: false, error: {reason}}` exactly as `requirements.act`'s is.
+export type QueueChange = { readonly automatic?: boolean; readonly concurrency?: number; readonly stop?: true; readonly start?: true; readonly hold?: ReqId; readonly release?: ReqId; readonly disclosure?: 'accepted' | 'suppressed' | 'off' };
+export type SourceWriteOutcome = { readonly ok: true; readonly value: { readonly id: ReqId; readonly path: string } } | { readonly ok: false; readonly error: Refusal };
+export type LocationPreviewOutcome =
+  | { readonly ok: true; readonly value: { readonly id: ReqId; readonly location: string; readonly confirmSourceWrites: boolean; readonly storeDir: string; readonly epics: readonly { readonly id: ReqId; readonly title: string }[] } }
+  | { readonly ok: false; readonly error: Refusal };
+export interface DispatchOutcome { readonly started: readonly { readonly id: ReqId; readonly unit: string; readonly sessionId: string }[]; readonly abandoned: readonly { readonly id: ReqId; readonly unit: string; readonly reason: string }[] }
+/** What the one write path answers a pane that asked for a decision: taken, or not taken with the reason (REQ-TRACE-423/432). */
+export type PerformResult = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 export type BoardPreferenceKey = 'requirements/filter/text' | 'requirements/filter/epic' | 'requirements/filter/source' | 'requirements/filter/lifecycle' | 'requirements/filter/health' | 'requirements/filter/priority' | 'requirements/sort' | 'requirements/blocked_column' | 'requirements/axis' | 'workspaces/{workspace}/requirementColumnFolds';
 export interface BoardPreferences { readonly filter: BoardFilter; readonly sort: string; readonly axis: string; readonly blockedColumn: boolean; readonly folds: string }
 
@@ -51,6 +74,20 @@ export interface RequirementsHost {
   refresh(): Promise<HostResult<{ readonly generation: number }>>;
   reachable(id: ReqId, from: ColumnToken, to: ColumnToken): Promise<HostResult<Reachability>>;
   act(id: ReqId, action: BoardAction, target: ColumnToken | undefined, payload: Readonly<Record<string, string>> | undefined): Promise<HostResult<ActOutcome>>;
+  // Part R2 — what hosting Part AP's panes and its run coordinator needs (spec 08 §Review Surface, §Blockers,
+  // §Editing and Creating Requirements, §Delivery Queue, §Runs Started from the Board). Every one is a command the
+  // seam already carries; the board sends them and composes nothing (REQ-TRACE-378).
+  readReview(id: ReqId): Promise<HostResult<ReviewPayload>>;
+  readBlocker(id: ReqId): Promise<HostResult<BlockerPayload>>;
+  setQueue(change: QueueChange): Promise<HostResult<DeliveryQueue>>;
+  writeSource(request: { readonly id?: ReqId; readonly document: string }): Promise<HostResult<SourceWriteOutcome>>;
+  previewLocation(epic: ReqId | undefined): Promise<HostResult<LocationPreviewOutcome>>;
+  /** REQ-TRACE-472: main's coordinator answers what the run receives and where it is confined; a preview provisions nothing. */
+  launchPreview(id: ReqId, action: BoardAction): Promise<HostResult<LaunchPreview>>;
+  /** REQ-TRACE-463/478: the coordinator claims and starts whatever the scheduler offers now. */
+  dispatchRuns(): Promise<HostResult<DispatchOutcome>>;
+  /** REQ-TRACE-472: accepting permanently suppresses the disclosure in later launches. */
+  suppressDisclosure(): Promise<HostResult<unknown>>;
   onChanged(listener: (change: RequirementsChanged) => void): () => void;
   readPreferences(): Promise<BoardPreferences>;
   writePreference(key: BoardPreferenceKey, value: string): void;
@@ -120,6 +157,18 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const [reason, setReason] = useState<PendingReason | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reveal, setReveal] = useState<{ readonly column: string; readonly index: number; readonly id: ReqId } | null>(null);
+  // ---- Part R2: the panes, the launch disclosure and the graph ----
+  const [pane, setPane] = useState<PaneKey | null>(null);
+  const [paneTarget, setPaneTarget] = useState<ReqId | null>(null);
+  const [review, setReview] = useState<ReviewPayload | 'reading' | null>(null);
+  const [reviewError, setReviewError] = useState<string | undefined>(undefined);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [blockerPayload, setBlockerPayload] = useState<BlockerPayload | null>(null);
+  /** REQ-TRACE-472: the launch whose disclosure is on screen. Nothing has been sent while this stands; abandoning sends nothing at all. */
+  const [launch, setLaunch] = useState<{ readonly id: ReqId; readonly action: BoardAction; readonly from: ColumnToken; readonly to: ColumnToken; readonly payload: Readonly<Record<string, string>> | undefined; readonly preview: LaunchPreview; readonly via: 'act' | 'queue'; readonly sendTarget: ColumnToken | undefined } | null>(null);
+  /** REQ-TRACE-322/323: the graph's centre, and its depth — held here and deliberately NOT persisted (the graph opens at the default every time). */
+  const [graphCentre, setGraphCentre] = useState<ReqId | null>(null);
+  const [graphDepth, setGraphDepth] = useState(GRAPH_DEPTH_DEFAULT);
   const [realised, setRealised] = useState<ReadonlyMap<string, number>>(new Map());
   /** REQ-TRACE-360/361 (defect AK2-3): the best card height this board has actually measured, so a column built later starts from it instead of the built-in estimate. */
   const [cardEstimate, setCardEstimate] = useState(CARD_HEIGHT_ESTIMATE);
@@ -271,6 +320,10 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const epics = useMemo(() => board?.epics ?? NO_EPICS, [board]);
   const epicIds = useMemo(() => new Set(epics.map((e) => e.id)), [epics]);
   const filtered = useMemo(() => filterCards(cards, filter, epics), [cards, filter, epics]);
+  // REQ-TRACE-496, cited here because this is the call that meets its first two clauses: `distribute` walks the
+  // delivery axis in `DELIVERY_COLUMNS`' own order — a constant of the contract, never derived from the data, so an
+  // empty column keeps its place — and for a CLOSED vocabulary emits every value while an open one (epic, source)
+  // emits only the values present, with the unset bucket last. The sort within a column is `sortCards` below.
   const distribution = useMemo(() => distribute(axis, filtered, epics, blockedColumn), [axis, filtered, epics, blockedColumn]);
   const columnKeys = useMemo(() => [...distribution.keys()], [distribution]);
   const members = useMemo(() => { const m = new Map<string, readonly BoardCard[]>(); for (const k of columnKeys) m.set(k, sortCards(distribution.get(k) ?? [], sort)); return m; }, [columnKeys, distribution, sort]);
@@ -341,9 +394,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   }, [columnFocus, columnBand]);
 
   // ---- REQ-TRACE-366: the observable state a caller or the proof waits on ----
-  useEffect(() => {
-    window.__rotarisBoard = { generation, ready, pending: Math.max(0, filtered.length - realisedTotal), realised: realisedTotal, paintMs, filterMs, populating, cards: filtered.length, columns: columnKeys.length, reveal: revealCard };
-  }, [generation, ready, filtered.length, realisedTotal, paintMs, filterMs, populating, columnKeys.length, revealCard]);
+  // Part R2: it is published at the END of this component now, because it reports the pane registry and the graph as
+  // well, and both are declared below. One observable, one publisher — a second would be a second truth.
 
   // ---- REQ-TRACE-390..394: the engine's answers for the selected requirement, per delivery target, asked per selection and generation ----
   useEffect(() => {
@@ -368,20 +420,53 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const clearFeedback = useCallback((id: ReqId) => { setFeedback((f) => withoutEntry(f, id)); }, []);
 
   // ---- the one write path (REQ-TRACE-382/387/388) ----
-  const perform = useCallback(async (id: ReqId, action: BoardAction, from: ColumnToken, to: ColumnToken, payload: Readonly<Record<string, string>> | undefined) => {
+  // Part R2: `to` is the column the board SAYS the action moves to (the sentences, the disclosure gate); `sendTarget`
+  // is what travels to the engine, and a review decision sends none — `reject`, `edit` and `keep-worktree` have a
+  // resting place the transition function decides and the board does not name (REQ-TRACE-385's table names moves).
+  const perform = useCallback(async (id: ReqId, action: BoardAction, from: ColumnToken, to: ColumnToken, payload: Readonly<Record<string, string>> | undefined, sendTarget: ColumnToken | undefined = to): Promise<PerformResult> => {
+    let effective = payload;
+    // Part R2 — REQ-TRACE-472: the FIRST action within a launch that would result in a run starting declares what
+    // permissions the run receives and where it is confined, BEFORE anything is written. Main's coordinator answers
+    // it (it owns the two preferences); a launch already carrying a disclosure — the dialog's own accept, or a
+    // release from the queue — passes straight through rather than asking twice.
+    if (moveStartsRun(action, to) && effective?.['disclosure'] === undefined) {
+      const p = await host.launchPreview(id, action);
+      if (!p.ok) {
+        // The elevation may never happen undisclosed, so a release whose disclosure cannot even be read is refused
+        // and nothing is written. `resume` is the exception the specification itself names: REQ-TRACE-463 forbids a
+        // failure on the run side from stopping a blocker clearing, so it proceeds and the queue states the reason.
+        if (action !== 'resume') { addFeedback(id, [`The launch of ${id} could not be disclosed, so nothing was started and nothing was written: ${p.reason}`]); return { ok: false, reason: p.reason }; }
+      } else if (p.value.disclosure === 'due') {
+        setLaunch({ id, action, from, to, payload, preview: p.value, via: 'act', sendTarget });
+        return { ok: false, reason: DISCLOSURE_PENDING(id) };
+      } else if (p.value.disclosure !== 'unattended') {
+        // `suppressed` and `off` are disclosures too — the run's permissions are settled and the service records which.
+        effective = { ...(effective ?? {}), disclosure: p.value.disclosure };
+      }
+    }
     setInFlight((m) => withEntry(m, id, inFlightLabelFor(action)));
-    const r = await host.act(id, action, to, payload);
+    const r = await host.act(id, action, sendTarget, effective);
     setInFlight((m) => withoutEntry(m, id));
-    if (!r.ok) { addFeedback(id, [r.reason]); return; }
+    if (!r.ok) { addFeedback(id, [r.reason]); return { ok: false, reason: r.reason }; }
     if (!r.value.ok) {
       const refusal = r.value.error;
       // REQ-TRACE-397: the engine's words, each unmet condition on its own line, and what the source can reach.
       addFeedback(id, [refusal.reason, ...(refusal.reachable && refusal.reachable.length > 0 ? [`From ${columnLabel(from)} it can reach: ${refusal.reachable.map((c) => columnLabel(c)).join(', ')}.`] : [])]);
-      return;
+      return { ok: false, reason: refusal.reason };
     }
     clearFeedback(id);
+    // Part R2 — REQ-TRACE-463/478: the move is recorded; the coordinator then starts whatever the scheduler offers
+    // now, and where nothing began for THIS requirement the reason is reported on the action's result rather than
+    // dropped. The service puts its own stall sentence on the outcome; the coordinator's abandonment carries one too.
+    if (moveStartsRun(action, to)) {
+      const stall = (r.value.value as TransitionOutcome & { readonly dispatch?: string }).dispatch;
+      const d = await host.dispatchRuns();
+      const reason = d.ok ? (d.value.started.some((s) => s.id === id) ? undefined : d.value.abandoned.find((a) => a.id === id)?.reason ?? stall) : d.reason;
+      if (reason !== undefined) addFeedback(id, [DISPATCH_NOTHING_STARTED(id, reason)]);
+    }
     const again = await host.readBoard();
     if (again.ok) adoptBoard(again.value, [id]);
+    return { ok: true };
   }, [host, addFeedback, clearFeedback, adoptBoard]);
 
   const requestMove = useCallback(async (id: ReqId, to: ColumnToken) => {
@@ -473,6 +558,162 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   }, [host]);
   const filterToEpic = useCallback((id: ReqId) => setFilter((f) => ({ ...f, epic: id })), []);
 
+  // ---- Part R2: Part AP's five panes hosted, the launch's disclosure, the graph (REQ-TRACE-322..333, 369..375, 472) ----
+  /**
+   * REQ-TRACE-369/370/375: ONE registry per window and per workspace. A pane is built the first time it is needed and
+   * reused after; asking whether a key is installed builds nothing; a workspace change discards every pane, which is
+   * what rebuilding the registry on `host.workspace` means. The value held is the pane's own mount record, so "built
+   * once and reused" is observable from outside (`window.__rotarisBoard.panes`) rather than merely asserted, and
+   * REQ-TRACE-370's rule that a pane attached first is never displaced is `open`'s own contract, never bypassed here.
+   */
+  // The registry is carried WITH the workspace it belongs to, so that its identity is visibly tied to that workspace
+  // rather than tied by a dependency array a reader has to trust (and that the lint rule cannot see the point of).
+  const paneSet = useMemo(() => ({ workspace: host.workspace, registry: createPaneRegistry<{ readonly openedAt: number }>() }), [host.workspace]);
+  const panes = paneSet.registry;
+  const [paneBuilds, setPaneBuilds] = useState(0);
+  const paneOpener = useRef<HTMLElement | null>(null);
+  const reviewReading = useRef(false);
+  const [confirmWrites, setConfirmWrites] = useState(false);
+
+  /** REQ-TRACE-425: the surface states that it is reading, keeps responding, and REFUSES a second read rather than starting one. */
+  const loadReview = useCallback((id: ReqId) => {
+    if (reviewReading.current) { setReviewBusy(true); return; }
+    reviewReading.current = true;
+    setReviewBusy(false); setReview('reading'); setReviewError(undefined);
+    void host.readReview(id).then((r) => {
+      reviewReading.current = false;
+      if (r.ok) { setReview(r.value); setReviewError(undefined); } else { setReview(null); setReviewError(r.reason); }
+    });
+  }, [host]);
+
+  const openPane = useCallback((key: PaneKey, id: ReqId | null) => {
+    paneOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panes.open(key, () => ({ openedAt: Date.now() }));
+    setPaneBuilds((n) => n + 1);
+    setPane(key);
+    setPaneTarget(id);
+    if (key === 'review' && id !== null) loadReview(id);
+    if (key === 'blockers' && id !== null) { setBlockerPayload(null); void host.readBlocker(id).then((r) => { if (r.ok) setBlockerPayload(r.value); }); }
+    // REQ-TRACE-436: whether a source write is confirmed first is the workspace's own configuration, and the service
+    // reports it with the location preview; the editor asks before it can need the answer.
+    if (key === 'editor' || key === 'create') void host.previewLocation(undefined).then((r) => { if (r.ok && r.value.ok) setConfirmWrites(r.value.value.confirmSourceWrites); });
+  }, [panes, host, loadReview]);
+  const closePane = useCallback(() => {
+    setPane(null); setPaneTarget(null);
+    const el = paneOpener.current; paneOpener.current = null;
+    requestAnimationFrame(() => el?.focus());
+  }, []);
+
+  /** REQ-TRACE-422: the six decisions travel the board's ONE write path; only accept, send-back and re-run name a target. */
+  const DECISION_TARGET: Partial<Record<BoardAction, ColumnToken>> = useMemo(() => ({ accept: 'done', 'send-back': 'ready', rerun: 'ready' }), []);
+  const decide = useCallback(async (action: BoardAction, payload?: Readonly<Record<string, string>>): Promise<PerformResult> => {
+    const id = paneTarget;
+    if (id === null) return { ok: false, reason: 'No requirement is open in this pane, so no decision can be taken.' };
+    const card = latest.current.cards.find((c) => c.id === id);
+    const from: ColumnToken = card?.column ?? 'review';
+    const target = DECISION_TARGET[action];
+    const r = await perform(id, action, from, target ?? from, payload, target);
+    if (r.ok) loadReview(id);
+    return r;
+  }, [paneTarget, perform, loadReview, DECISION_TARGET]);
+
+  /** REQ-TRACE-453/454: an answer carries only the chosen option; `resume` is the path that returns the card to where it was held from. */
+  const answerBlocker = useCallback(async (option: string): Promise<PerformResult> => {
+    const id = paneTarget;
+    if (id === null) return { ok: false, reason: 'No requirement is open in this pane.' };
+    const card = latest.current.cards.find((c) => c.id === id);
+    const back = blockerPayload?.returnTo ?? card?.returnTo ?? 'backlog';
+    const r = option === 'resume'
+      ? await perform(id, 'resume', 'blocked', back === 'running' ? 'ready' : back, undefined)
+      : await perform(id, 'answer-blocker', card?.column ?? 'blocked', card?.column ?? 'blocked', { option }, undefined);
+    if (r.ok) void host.readBlocker(id).then((b) => { if (b.ok) setBlockerPayload(b.value); });
+    return r;
+  }, [paneTarget, blockerPayload, perform, host]);
+
+  /** REQ-TRACE-479/480: the queue's four controls, each answered by the service; a release is also the scheduler's cue. */
+  const queueSet = useCallback(async (change: QueueChange): Promise<PerformResult> => {
+    const r = await host.setQueue(change);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    const again = await host.readBoard();
+    if (again.ok) adoptBoard(again.value, null);
+    if (change.release !== undefined || change.start === true || change.automatic === true || change.concurrency !== undefined) void host.dispatchRuns();
+    return { ok: true };
+  }, [host, adoptBoard]);
+
+  /** REQ-TRACE-472 from the queue: the same disclosure, answered by a release rather than by a move. */
+  const discloseFromQueue = useCallback(async (id: ReqId) => {
+    const p = await host.launchPreview(id, 'release');
+    if (!p.ok) { setNotice(`The launch of ${id} could not be disclosed, so nothing was started: ${p.reason}`); return; }
+    if (p.value.disclosure === 'due') { setLaunch({ id, action: 'release', from: 'ready', to: 'ready', payload: undefined, preview: p.value, via: 'queue', sendTarget: undefined }); return; }
+    await queueSet({ release: id, ...(p.value.disclosure === 'unattended' ? {} : { disclosure: p.value.disclosure }) });
+  }, [host, queueSet]);
+
+  const acceptLaunch = useCallback(async (always: boolean) => {
+    const l = launch;
+    if (l === null) return;
+    setLaunch(null);
+    // REQ-TRACE-472: accepting suppresses the disclosure for the rest of THIS launch; accepting permanently suppresses
+    // it in later launches too, which is main's preference to write, not the board's.
+    if (always) void host.suppressDisclosure();
+    const disclosure = always ? 'suppressed' : 'accepted';
+    if (l.via === 'queue') { await queueSet({ release: l.id, disclosure }); return; }
+    await perform(l.id, l.action, l.from, l.to, { ...(l.payload ?? {}), disclosure }, l.sendTarget);
+  }, [launch, host, perform, queueSet]);
+  /** REQ-TRACE-472: abandoning sends NOTHING — no act, no release, no preference — and the card says so. */
+  const abandonLaunch = useCallback(() => {
+    const l = launch;
+    setLaunch(null);
+    if (l !== null) addFeedback(l.id, [LAUNCH_ABANDONED(l.id)]);
+  }, [launch, addFeedback]);
+
+  /** REQ-TRACE-434/439: the edit is composed by the service from the title and the description; the pane reports what it answered. */
+  const saveEdit = useCallback(async (draft: { readonly id: ReqId; readonly title: string; readonly description: string }) => {
+    const r = await host.writeSource({ id: draft.id, document: JSON.stringify({ title: draft.title, prose: draft.description }) });
+    if (!r.ok) return { ok: false as const, reason: r.reason };
+    if (!r.value.ok) return { ok: false as const, reason: r.value.error.reason };
+    const again = await host.readBoard();
+    if (again.ok) adoptBoard(again.value, null);
+    return { ok: true as const };
+  }, [host, adoptBoard]);
+  const createRequirement = useCallback(async (draft: CreateDraft) => {
+    const document = JSON.stringify({ title: draft.title, prose: draft.prose, kind: draft.kind, derivedFrom: draft.derivedFrom, ...(draft.epic === undefined ? {} : { epic: draft.epic }), ...(draft.priority === undefined ? {} : { priority: draft.priority }) });
+    const r = await host.writeSource({ document });
+    if (!r.ok) return { ok: false as const, reason: r.reason };
+    if (!r.value.ok) return { ok: false as const, reason: r.value.error.reason };
+    const again = await host.readBoard();
+    if (again.ok) adoptBoard(again.value, null);
+    return { ok: true as const, id: r.value.value.id, path: r.value.value.path };
+  }, [host, adoptBoard]);
+  /** REQ-TRACE-443/498: the location the write produces, or the inability reported — never a path invented here. */
+  const previewCreateLocation = useCallback(async (epic: ReqId | undefined) => {
+    const r = await host.previewLocation(epic);
+    if (!r.ok) return { ok: false as const, reason: r.reason };
+    if (!r.value.ok) return { ok: false as const, reason: r.value.error.reason };
+    return { ok: true as const, id: r.value.value.id, location: r.value.value.location, confirmSourceWrites: r.value.value.confirmSourceWrites };
+  }, [host]);
+
+  /** REQ-TRACE-322/329: the graph is centred on a requirement whose DETAIL is the source of its relations, so centring reads it. */
+  const openGraph = useCallback((id: ReqId) => {
+    if (latest.current.detailId !== id) open(id);
+    setGraphCentre(id);
+    setGraphDepth(GRAPH_DEPTH_DEFAULT);
+  }, [open]);
+  const graphModel = useMemo(
+    () => (graphCentre === null ? null : buildGraph(graphCentre, detailId === graphCentre ? detail : null, cards, epics, graphDepth)),
+    [graphCentre, detailId, detail, cards, epics, graphDepth],
+  );
+
+  // ---- REQ-TRACE-366: the observable state a caller or the proof waits on (Part AK2; Part R2 adds the panes and the graph) ----
+  useEffect(() => {
+    window.__rotarisBoard = {
+      generation, ready, pending: Math.max(0, filtered.length - realisedTotal), realised: realisedTotal, paintMs, filterMs, populating,
+      cards: filtered.length, columns: columnKeys.length, reveal: revealCard,
+      panes: panes.keys.map((key) => ({ key, installed: panes.installed(key), openedAt: panes.peek(key)?.openedAt ?? null })),
+      openPane: pane,
+      graph: graphModel === null ? null : { centre: graphModel.centre, depth: graphModel.depth, nodes: graphModel.nodes.length, edges: graphModel.edges.length, unexpanded: graphModel.unexpanded.length },
+    };
+  }, [generation, ready, filtered.length, realisedTotal, paintMs, filterMs, populating, columnKeys.length, revealCard, panes, paneBuilds, pane, graphModel]);
+
   const renderCard = useCallback((card: BoardCard): ReactNode => {
     const epic = epicIds.has(card.id) ? epics.find((e) => e.id === card.id) : undefined;
     if (epic !== undefined) return <EpicCardView card={card} epic={epic} cards={cards} selected={selected === card.id} onSelect={select} onOpen={open} onFilterToEpic={filterToEpic} onKeyNavigate={onKeyNavigate} />;
@@ -498,6 +739,8 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const filterSentence = describeFilter(filter);
   const evaluated = board === null ? '' : relativeAge(board.producedAt, now);
   const detailCard = detailId === null ? undefined : cards.find((c) => c.id === detailId);
+  /** Part R2: the requirement a per-requirement pane was opened against — the editor writes into ITS source document. */
+  const paneCard = paneTarget === null ? undefined : cards.find((c) => c.id === paneTarget);
   const evidenceCard = evidenceId === null ? undefined : cards.find((c) => c.id === evidenceId);
 
   // ---- REQ-TRACE-231 / 379: the stated states before a board exists ----
@@ -518,6 +761,12 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     }
     if (board.cards.length === 0) {
       return <div className="empty-state req-empty" data-testid="req-empty-store"><span className="empty-state-title">{EMPTY_STORE_SENTENCE}</span><span className="empty-state-hint">Source: <span className="mono">{board.source.dir}</span>. {EMPTY_SOURCE_HOW}</span></div>;
+    }
+    // Part R2 — REQ-TRACE-322: the graph is a PRESENTATION of this board centred on one requirement, not a grouping
+    // axis (an axis has no centre), so it takes the body while the header keeps the board's own state; the columns
+    // come back exactly as they were when it is closed, because nothing about them was touched.
+    if (graphModel !== null) {
+      return <GraphPane model={graphModel} depth={graphDepth} onDepth={(d) => setGraphDepth(clampDepth(d))} onCentre={openGraph} onClose={() => setGraphCentre(null)} />;
     }
     return (
       <div ref={columnsRef} className="req-columns" data-testid="req-columns" data-axis={axis} data-dragging={drag !== null} onScroll={scheduleBand}>
@@ -571,6 +820,11 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
           <label className="req-header__field req-header__check" title={BLOCKED_COLUMN_DESCRIPTION}><input type="checkbox" data-testid="req-blocked-column" checked={blockedColumn} onChange={(e) => setBlockedColumn(e.currentTarget.checked)} aria-description={BLOCKED_COLUMN_DESCRIPTION} /><span className="field-label">{BLOCKED_COLUMN_LABEL}</span></label>
           {/* REQ-TRACE-488: the toggle's accessible name alternates; hiding removes the controls from the tab sequence and returns focus here. */}
           <button ref={filterToggleRef} type="button" className="btn btn-secondary btn-compact" data-testid="req-filter-toggle" aria-expanded={filtersShown} onClick={() => { setFiltersShown((v) => !v); if (filtersShown) requestAnimationFrame(() => filterToggleRef.current?.focus()); }}>{filtersShown ? FILTER_HIDE : FILTER_SHOW}</button>
+          {/* Part R2 — the two board-level panes of REQ-TRACE-375 reachable from the board itself; every other pane is
+              opened against ONE requirement and is therefore reached from its detail. Both are 24 high, as
+              REQ-TRACE-491 fixes every header control but the one primary. */}
+          <button type="button" className="btn btn-secondary btn-compact" data-testid="req-queue-open" onClick={() => openPane('queue', null)} aria-label={`${QUEUE_CONTROL_LABEL}: the scheduler's order, its reasons and its four controls`}>{QUEUE_CONTROL_LABEL}</button>
+          <button type="button" className="btn btn-secondary btn-compact" data-testid="req-create-open" onClick={() => openPane('create', null)} disabled={board === null || board.source.kind === 'none'} aria-label="New requirement, written into the project's own source">New requirement</button>
           <span className="req-header__filter card-meta" data-testid="req-filter-summary" data-active={filterActive(filter)} data-populating={populating}>{filterSentence}</span>
           {filterActive(filter) && <button type="button" className="btn btn-ghost btn-compact" data-testid="req-filter-clear" onClick={() => { setFilter(EMPTY_FILTER); setTyped(''); }}>{FILTER_CLEAR}</button>}
         </div>
@@ -598,11 +852,78 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
       <div className="req-body">
         {body}
         {detailCard !== undefined && board !== null && (
-          <DetailPanel card={detailCard} detail={detail} board={board} now={now} localOffsetMinutes={host.localOffsetMinutes} onClose={closeDetail} onNavigate={open} onOpenEvidence={openEvidence} onOpenSession={host.openSession} />
+          <DetailPanel
+            card={detailCard} detail={detail} board={board} now={now} localOffsetMinutes={host.localOffsetMinutes}
+            onClose={closeDetail} onNavigate={open} onOpenEvidence={openEvidence} onOpenSession={host.openSession}
+            onOpenPane={(key) => openPane(key, detailCard.id)} onOpenGraph={openGraph}
+          />
+        )}
+        {/* Part R2 — the pane host: one of REQ-TRACE-375's five keys at a time, each built on first use and reused.
+            REQ-TRACE-376: every pane shares ONE stack with the board — this element is the board body's only absolute
+            child, so a pane covers the columns rather than living in a window or a layer of its own, and nothing in
+            the area clips at REQ-SHELL-022's 1000 × 680 (asserted by `requirements-proof`'s `minimum` stage, which
+            opens the queue pane at that size and measures the host's box against the viewport). */}
+        {pane !== null && board !== null && (
+          <div className="req-pane-host" data-testid="req-pane-host" data-pane={pane}>
+            {/* The host's own chrome. Three of the five panes carry a Close control of their own and the queue does
+                not; a surface with no way back is not a surface, so the way back belongs to whoever opened it.
+                Defect R2-7: this bar drew as an unstyled block until the gate measured it, and it named the pane a
+                line above the pane's own heading. All five panes draw their own `<h2 class="req-pane__title">`, so
+                the host names nothing: the pane's identity travels on the Close control's accessible name, which is
+                where a person who has arrived by keyboard actually meets it. */}
+            <div className="req-pane-host__bar">
+              <button type="button" className="btn btn-secondary btn-compact" data-testid="req-pane-close" onClick={closePane} aria-label={`Close ${PANE_TITLE[pane]} and return to the board`}>Close</button>
+            </div>
+            {pane === 'review' && (
+              <ReviewPane
+                id={paneTarget ?? ''} payload={review} error={reviewError} busy={reviewBusy}
+                consequenceOf={(action) => consequenceForDecision(action, paneTarget ?? '')}
+                onDecision={decide}
+                onReload={() => { if (paneTarget !== null) loadReview(paneTarget); }}
+                onNavigate={(link) => {
+                  // REQ-TRACE-417/475: the session and the version-control view are the application's to open; a
+                  // difference view is neither this board's nor offered here, so it is stated rather than left inert.
+                  if (link.kind === 'session' || (link.kind === 'git' && link.sessionId !== undefined)) { const s = link.kind === 'session' ? link.sessionId : link.sessionId!; if (host.openSession !== undefined) { host.openSession(s); return; } }
+                  setNotice(link.kind === 'diff' ? `This build opens no difference view, so ${link.path} is named rather than opened; the branch and worktree above locate it.` : 'No session identifier accompanies that link, so there is nothing to bring into focus.');
+                }}
+                onClose={closePane}
+              />
+            )}
+            {pane === 'queue' && (
+              <QueuePane
+                queue={board.queue} cards={cards} onSet={queueSet}
+                onDisclose={(id) => { void discloseFromQueue(id); }}
+                onOpenSession={(sessionId) => { if (host.openSession !== undefined) host.openSession(sessionId); else setNotice('No session opener is offered on this surface.'); }}
+              />
+            )}
+            {pane === 'blockers' && <BlockersPane payload={blockerPayload} onAnswer={answerBlocker} onNavigate={(id) => { closePane(); open(id); }} onOpenRun={(sessionId) => { if (host.openSession !== undefined) host.openSession(sessionId); }} onClose={closePane} />}
+            {pane === 'editor' && paneCard !== undefined && (
+              <EditorPane
+                id={paneCard.id} title={paneCard.title} description={detailId === paneCard.id ? detail?.prose ?? '' : ''}
+                version={null} confirmWrites={confirmWrites}
+                readOnly={board.source.kind === 'store' && board.source.writable ? null : { sentence: readOnlyEditorRefusal(paneCard.id, paneCard.sourcePath), artifact: paneCard.sourcePath }}
+                onSave={saveEdit}
+                onOpenArtifact={(artifact) => setNotice(`This build opens no file for editing, so ${artifact} is named rather than opened; edit it there and re-evaluate the board.`)}
+                onLeave={closePane}
+              />
+            )}
+            {pane === 'create' && (
+              <CreatePane
+                sources={board.source.kind === 'store' ? [{ key: board.source.dir, label: board.source.dir, canCreate: board.source.canCreate }] : []}
+                epics={epics.map((e) => ({ id: e.id, title: e.title }))}
+                origins={cards.map((c) => c.id)}
+                previewLocation={previewCreateLocation} onCreate={createRequirement} onLeave={closePane}
+              />
+            )}
+          </div>
         )}
       </div>
       <p className="req-foot card-meta" data-testid="req-subscription">{SUBSCRIPTION_SENTENCE}</p>
       {evidenceCard !== undefined && <EvidencePane card={evidenceCard} detail={detail} onClose={closeEvidence} onOpenSession={host.openSession} />}
+      {/* Part R2 — REQ-TRACE-472: the elevation's disclosure, raised by the FIRST action of a launch that would start
+          a run and before anything at all has been sent. Abandoning it sends nothing; accepting sends the act (or the
+          queue's release) carrying the acceptance, and accepting permanently also asks main to suppress it for later. */}
+      {launch !== null && <LaunchDisclosure preview={launch.preview} onAccept={(always) => { void acceptLaunch(always); }} onAbandon={abandonLaunch} />}
       {confirm !== null && (
         <ConfirmDialog
           title={`${sentenceCase(confirm.action)} ${confirm.id}?`}

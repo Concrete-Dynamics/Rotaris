@@ -363,6 +363,16 @@ export interface BoardObservable {
   readonly columns: number;
   /** REQ-TRACE-364: force a named card to be realised; false for an unknown or empty identifier. */
   readonly reveal: (id: ReqId) => boolean;
+  /**
+   * Part R2 — REQ-TRACE-369/375: which of the five panes this board has BUILT, and when each was built. A key that
+   * has never been opened reports `installed: false` and `openedAt: null`, and asking builds nothing; a key opened
+   * twice keeps its first `openedAt`, which is what "constructed on first use and reused after" looks like from
+   * outside. `openPane` is the one on screen, if any.
+   */
+  readonly panes: readonly { readonly key: string; readonly installed: boolean; readonly openedAt: number | null }[];
+  readonly openPane: string | null;
+  /** Part R2 — REQ-TRACE-322/327: the graph in view, or null while no centre has been chosen (REQ-TRACE-333). */
+  readonly graph: { readonly centre: ReqId; readonly depth: number; readonly nodes: number; readonly edges: number; readonly unexpanded: number } | null;
 }
 
 /** REQ-TRACE-296: an axis value the engine would compute — re-exported for the column's accessible description. */

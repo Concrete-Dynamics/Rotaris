@@ -801,3 +801,39 @@ the requirements view's own control for the check (`REQ-TRACE-508`'s "reachable 
 met through the card and the board's re-read, not a control on the view); a packaged build without `typescript`
 beside the service (the degradation path is unit-tested with a simulated load failure, not packaged); the
 contended replace (OQ-41); macOS and Linux (IC-3).
+
+## Third execution — 2026-09-11 (Part R″), the linear-growth assertions made honest
+
+*Recorded under GD-10. Defects are numbered `R2-n`; the manager assigns the ordinals at merge. This execution built
+no engine mechanism: what it changed is how this record's own measurements are asserted, which the plan's
+Reservations named for wave 3 in as many words — "a ratio of two wall-clock measurements is load-sensitive by
+construction and will keep costing re-runs; wave 3 should give it a floor or measure work instead of time".*
+
+**The problem, stated exactly.** `REQ-TRACE-501` and `REQ-TRACE-088` budget a parse and a sweep at about a second at
+the stated scale and require the cost to grow **linearly** with the input. The proof read the linear clause as a
+quotient of two wall-clock measurements — the full tree's warm pass over the half-size tree's — and asserted it
+below 3.0. That quotient went red once at **3.06** on a machine running five build agents and passed three times
+afterwards. Nothing about the engine had changed between those runs. A number that changes with what ELSE the
+machine is doing is not measuring the thing the requirement is about, and a threshold raised until it stops
+complaining measures nothing at all.
+
+**What was chosen, and why.** Both halves of the advice, and the 3.0 threshold is untouched.
+
+1. **Work is asserted, always.** The half-size tree must genuinely be about half — the documents parsed, the files
+   swept, the files handed to the compiler — and the proof now asserts that ratio (`1.5 < w < 2.6`) from counts the
+   generator produces, before it looks at any clock. No clock can tell a proof that its two inputs were comparable,
+   and if they were not, the timing ratio is meaningless whatever it reads. This is the assertion that cannot be
+   bought off by load, and it is new.
+2. **Time is taken as the minimum of three readings, and floored.** Load can only make a pass slower, never faster,
+   so of repeated readings of one pass the **minimum** is the least contaminated estimate — not a single reading,
+   and not the mean, which a single long stall drags upward. Each paired timing is therefore measured three times
+   (`msMin`), the ratio is computed from the two minima, and every reading is recorded beside it. Below a **25 ms**
+   floor the ratio is recorded and NOT asserted, and the proof prints that it was not asserted and why: a quotient
+   of two sub-25 ms wall-clock readings cannot be told from timer noise, and a proof that cannot fail is not
+   evidence — but neither is one that pretends a 3 ms reading measured something.
+
+The alternative that was rejected: raising the threshold. It would have been one character and it would have made
+the assertion unfalsifiable in exactly the case it exists for — a genuinely quadratic pass on a quiet machine.
+
+**Found nothing else.** The engine, the parser, the sweep and the four operations are unchanged by this execution,
+and the fixture and process stages of `pnpm traceability-proof` pass as Part AJ′ left them.

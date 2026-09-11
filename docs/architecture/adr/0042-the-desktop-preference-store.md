@@ -338,3 +338,21 @@ preference key.
 **The fold key is the second parametrised family, and it went in exactly as the fifth execution's draft did.** `workspaces/<key>/requirementColumnFolds` (REQ-TRACE-312/313: one JSON object string, keys sorted, written whole, last writer wins) is minted only by `requirementColumnFoldsKey(workspacePath)` — `workspaceKey`'s digest of the path, or the literal `default` when no workspace is open, which is the requirement's "literal fallback key" — and `preferenceEntry` admits a member by the family's regex or refuses. What differs from the draft is the command channel. The draft got two commands carrying no key; the board's keys are ten and travel through `prefs.get`/`prefs.set` like everything else, so `contracts` registers ONE placeholder, `workspaces/{workspace}/requirementColumnFolds`, which the renderer sends literally and main resolves to the digest key of the workspace it has open, beside `currentWorkspace`. The isolation is again a property of the seam: no window can spell another workspace's key, and `requirements-proof` measures it — a column folded in one workspace is still folded on that workspace's relaunch and is not folded in a second workspace opened against the same preference root.
 
 **Found: nothing in this store.** The twelve literal keys and the family round-trip as strings; the digest key resolves on the main side once. **One thing the surface above it did wrong and the proof caught** — the board wrote every display key back the moment it had read it, because the write-on-change effects fired for the state the read had just set; a value that merely arrived from the store is now remembered and never written back (REQ-TRACE-408's "opening the board writes nothing" read against the preference store as well as the delivery store). Recorded with the board under ADR-0041's second execution rather than here, since the store did what it was asked.
+
+## Seventh execution — 2026-09-11 (Part C″), the draft a load can beat
+
+**Found — C2-1: a stored draft can be discarded by a load that beats it.** Returning to the Workspace view
+remounts the composer, which reads the workspace's stored draft over a command round trip, while a prompt loaded
+from the Library arrives two animation frames after the view switch (`loadIntoComposer` waits for the composer to
+register). `REQ-CHAT-015` adopts a draft only into an EMPTY composer, so whichever arrives second loses: draft
+first and the load appends after one blank line (`REQ-CHAT-044`); load first and the draft is dropped without a
+word. Measured in `library-proof`'s `use` launch: **appended in three runs of four on one build and one schedule,
+replaced in the fourth.** The proof now pins what holds in both branches and records which happened
+(`results.use.draftRace`).
+
+**Not repaired, and the reason is scope rather than difficulty.** The fix has to decide the ORDER rather than the
+winner: the smallest shape is for the composer to remember that its current text arrived from an external load
+rather than from typing and, when the draft then lands, to compose the two (draft first, one blank line) instead of
+discarding it. That is a change to `packages/ui/src/WorkspaceView.tsx`'s draft adoption, which lane C's wave-3 row
+does not own. Recorded here by the manager at merge 3, from Part C″'s handoff section 8, because the Part that
+found it may not edit this record.

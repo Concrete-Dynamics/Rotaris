@@ -1102,6 +1102,16 @@ literal plain-text replacement carrying an explicit marker, while every earlier 
 **That is a reading, not a fact**, and the alternative reading — plain text throughout — would contradict
 three shell requirements.
 
+*Executed three times (Parts AL, AL′, T″; 2026-09-09, 2026-09-11).* The reading is unchanged and now
+exercised three ways: the closing frame is a `screen` carrying `closing: true` and the observation's final plain
+text; the proof asserts that text equals the observation byte for byte against a real 10,000-line command
+(`closingEqualsObservation`); and with the stream sampled in motion the window's grid, the transcript preview and
+the persona card reset and write that text together, agreeing at the instant they do it. What the executions add is
+only this: the alternative reading — plain text throughout — is no longer merely argued against, because the
+same proof renders cursor addressing and an alternate screen from the VT deltas that precede the closing frame,
+which plain text cannot carry (`REQ-SHELL-095`, `REQ-SHELL-098`). Nothing measured contradicts the record's reading
+and nothing measured establishes it as the specification's intent. **Still the owner's.**
+
 **OQ-38 — The output sampling period versus the echo budget.** *(ADR-0021; changes what a configured key
 does for a user who sets it.)* `REQ-TOOLS-126` names `runtime.terminal_stream_interval_ms` the **output
 sampling period**, default 100 ms, range 20–2000. `REQ-SHELL-166` requires the character a keystroke
@@ -1117,6 +1127,18 @@ fixed-period reading is intended, one of the two published 100 ms figures has to
 product-owner decision rather than an architectural one. Spike 15 measures it. *(Numbering note: ADR-0004
 and ADR-0040 cite "OQ-38" for a different question, drafted against a provisional number before this one
 was filed; they mean **OQ-41**.)*
+
+*Executed three times (Parts AL, AL′, T″; 2026-09-09, 2026-09-11), and the reading now has a price on
+both sides.* Echo under the ceiling-plus-flush reading, with the interval configured to 2,000 ms: framed in
+**16.2 ms** (first execution), **15.0 / 15.2 ms** (its addendum) and **12.8 ms** (2026-09-11); key press to painted
+frame through the real window, **12.4–25.0 ms** (second execution) and **6.8–21.2 ms** (2026-09-11). A strict
+fixed-period reading makes the same keystroke wait up to the configured 2,000 ms. **The new figure is the cost of
+the reading**, which ADR-0021's "One coupling to OQ-38" asked for and could not state: the ceiling-plus-flush
+reading licenses 50 frames/s per stream, so at `REQ-TOOLS-108`'s shipped default of twenty background sessions
+those streams **alone offer 1,000 deliveries a second — `REQ-MONITOR-306`'s entire aggregate** — where the
+strict fixed-period reading at `REQ-TOOLS-126`'s own 100 ms default would offer 200. The two readings therefore
+differ by a factor of five in transport pressure as well as by 2,000 ms in echo. **Still the owner's**; if the
+fixed-period reading is intended, one of the two published 100 ms figures has to move, which is a product decision.
 
 **OQ-21 — Per-token prices: floating point in the format, exact decimal in the arithmetic.**
 *(ADR-0031, ADR-0032; changes a persisted format.)* `REQ-PROVIDER-072` maps decimal-string prices "to
@@ -1521,6 +1543,14 @@ full-fidelity parse is materially more expensive than a pattern pass.
 
 *Part AJ′ (2026-09-10), the second execution: MEASURED, and the premise is falsified. The TypeScript compiler API (5.9.3) parses the spike's thousand-file tree in 202 ms warm and 255 ms cold, 0.202 ms a file, after a load of about half a second once per process. Inside a real sweep it never sees a thousand files: only those a pattern cannot decide are parsed, which was 200 files in 34 ms on the same tree. So a full syntax tree is NOT materially more expensive than a pattern pass at the stated scale, and `REQ-TRACE-104` rule 1 with `REQ-TRACE-109`/`110` fit inside `REQ-TRACE-088`'s one second beside the sweep rather than competing with it. What the entry asked for was a budget and what exists now is the cost; stating the budget is the owner's, and the open count is left untouched here for that reason. One residue is recorded rather than hidden: `typescript` is not a runtime dependency of the packaged desktop application, so in a packaged build both checks degrade to the `requires-parse` finding naming that cause (Part AJ′'s handoff, ruling request 2).*
 
+*Part R″ (2026-09-11): closed, and the way it was measured is now honest.* Part AJ′ answered the
+substance — the TypeScript compiler API decides `REQ-TRACE-104` rule 1 and `109`/`110` over spike 7's 1,000-file
+tree in about 200 ms warm, after a one-time load of 0.3–0.6 s per service process. What wave 3 changed is the
+assertion that guards it: the linear-growth ratio was a quotient of two single wall-clock readings, which is
+load-sensitive by construction and had already gone red once at 3.06 against a 3.0 threshold. It is now the
+quotient of the **minimum of three readings** on each side, with a **work-count ratio asserted unconditionally**
+beside it and the timing ratio recorded rather than asserted below a 25 ms floor. **The threshold was not moved.**
+
 **OQ-25 — Project-supplied regular expressions run unbounded.** *(ADR-0040.)* `REQ-TRACE-073` compiles
 four patterns per project-declared convention and evaluates them against every claimed file;
 `REQ-TRACE-154` states that the absence of any time or resource limit on the scan is "a deliberate
@@ -1532,6 +1562,9 @@ what the user is told, is not specified.** The pattern arrives with a checked-ou
 user.
 
 *Part AJ (2026-09-09), the first execution's decision: no bound on the pattern (REQ-TRACE-154/225 forbid one). The pass runs on a worker thread; a cancel raises a shared flag the pass observes at its next checkpoint, and a worker that has not answered 2 s after the cancel is terminated and respawned for the next job. Termination happens only on the user's cancel, never on the engine's initiative, and the user is told only "cancelled". Whether the engine should ever terminate on its own, and what it says when it does, stays open.*
+
+*Part R″ (2026-09-11): the regex bound stands as Part AJ decided it. Recommended: close, with the
+pattern-COST question — a catastrophic-backtracking guard — raised as its own item rather than carried here.*
 
 **OQ-26 — Resolved.** See *Resolved, and closed with the reason* above.
 
@@ -1762,6 +1795,12 @@ conflict, now **split into its two halves with their two owners**, and does **no
 satisfied.
 
 *Part AJ (2026-09-09) measured one replace: every regeneration and baseline update in the proof replaced its files at attempt 1 through REQ-TRACE-061's ladder (5 attempts, 0.05/0.1/0.2/0.4 s), with the writer the workspace service's owner thread and no reader in the product holding a descriptor. The contended case — a test session in the same checkout on Windows — was not staged and the residue stands as ADR-0040 specific 6 records it.*
+
+*Part R″ (2026-09-11): still unstaged, and now one concurrent launch away rather than hypothetical.* The
+board's `end-to-end` path writes into the requirement source THROUGH the workspace service while the engine holds
+the same store open. Recommended: keep open, and name `requirements-proof`'s `end-to-end` profile as the place to
+stage it. It is also why `REQ-TRACE-513`'s replacement ladder is listed as met in part in lane R's closing
+statement.
 
 **OQ-42 — CLOSED as a policy decision, 2026-09-06; implementation evidence updated 2026-09-07.**
 
@@ -2267,6 +2306,19 @@ reference, but **no screen can be built without it.**
 > `implementation-conditions.md` so it binds something rather than lapsing into nobody's. OQ-30 and the
 > three items below it stay open and stay the reference's. OQ-31 was removed from this list and ruled
 > without the reference; see its entry.
+
+*Priced by Part T″, 2026-09-11 (`pnpm terminal-stream-proof`, the `obligation2` ladder).* At the licensed
+rate of 50 frames/s per stream, with the delivered rate capped at `REQ-MONITOR-306`'s 1,000/s by merging: **twenty
+background sessions alone offer exactly 1,000 deliveries a second, the whole aggregate**, before one of
+`REQ-MONITOR-285`'s twenty agent streams is counted; the shipped ~40 offer 2,000/s and merge 2,960 frames over
+three seconds; 400 streams offer 20,000/s, 1,000 streams 50,000/s, 3,000 streams 150,000/s. **Nothing is dropped at
+any count** — the cap merges, as `REQ-SHELL-103` requires — so what the count buys is staleness, and the
+staleness has a law: while `streams × windows ≤ 1,000` it is bounded by the drain's own one-second period (at
+most 1,000 ms, about 500 ms in the median, whatever the count), and above that it is
+`streams × windows ÷ 1,000` seconds (three thousand streams measured 3,000 ms worst and 1,500 ms median).
+**So a stated maximum M would let the worst-case surface staleness be computed rather than absorbed:
+`(agents + M) × windows ÷ 1,000` seconds.** That is what ADR-0021's "Revisit if" says a ceiling would buy.
+The owner's call; recorded, not resolved.
 
 **OQ-30 — Theme palettes and token values. CLOSED 2026-09-04 by the IC-2 implementation and rendered-pixel
 proof.** *(ADR-0050; `spikes/theme-proof.md`.)* `REQ-SHELL-129` fixes the default theme's shell

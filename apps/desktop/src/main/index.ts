@@ -1747,7 +1747,9 @@ async function main(): Promise<void> {
    * ends in a photograph, and this is the opposite — a window that stays up and answers questions. A proof may
    * use both, and `pnpm app:drive` uses only this one.
    */
-  const driverEndpoint = process.env['ROTARIS_DRIVER'];
+  // The same shape as the theme proof's read above: behind the flag, so a packaged bundle holds neither the
+  // listener, nor `driver.ts` at all, nor the name of the variable that would have started it.
+  const driverEndpoint = __ROTARIS_SEAMS__ ? process.env['ROTARIS_DRIVER'] : undefined;
   if (driverEndpoint) {
     const driver = startDriver(driverEndpoint, {
       window: () => (win.isDestroyed() ? null : win),
@@ -1789,7 +1791,11 @@ async function main(): Promise<void> {
     const { writeFileSync } = await import('node:fs');
     // Every proof: a renderer error is logged here, so a blank window is explained by its log and not by its PNG (Part O).
     win.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: renderer console: ${message} (${sourceId}:${line})`); });
-    const proofDir = process.env['ROTARIS_THEME_PROOF_DIR'];
+    // The READ is behind the flag, not just the branch. `__ROTARIS_SEAMS__` is false in a packaged build, so this
+    // is a constant `undefined` there and rollup removes the whole pass — seven views, every Settings category, a
+    // tab through every focusable control, the theme switch — and the variable's name with it. The first attempt
+    // guarded only the `if`, which left `ROTARIS_THEME_PROOF_DIR` in the shipped bundle and failed rule 5.
+    const proofDir = __ROTARIS_SEAMS__ ? process.env['ROTARIS_THEME_PROOF_DIR'] : undefined;
     if (proofDir) {
       mkdirSync(proofDir, { recursive: true });
       const rendererErrors: string[] = [];
@@ -1879,7 +1885,9 @@ async function main(): Promise<void> {
     // "Sessions" control opens the browser (REQ-SHELL-126), the row's "Open" loads it (REQ-SESSION-118).
     // Runs after the workspace is open (the list is the workspace's); the prompt seam then continues it.
     const resumeWanted = process.env['ROTARIS_CAPTURE_RESUME'];
-    if (resumeWanted) {
+    // The variable is read either way — the prompt seam below times itself against it — but the route it drives
+    // is verification only, so the body goes with the rest in a packaged build.
+    if (__ROTARIS_SEAMS__ && resumeWanted) {
       const clickAt = (rect: { x: number; y: number }) => {
         win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
@@ -1916,6 +1924,19 @@ async function main(): Promise<void> {
         });
       });
     }
+    /**
+     * EVERY REMAINING SEAM IS INSIDE THIS BLOCK, and a packaged build has none of them.
+     *
+     * What is above it is what the packaged probe of `scripts/package.mjs` itself drives — the prompt typed and
+     * submitted — and what is below it is the capture that ends the launch (`ROTARIS_CAPTURE_AFTER_MS`, the wait,
+     * the end-view, the probes, the photograph). Those three stay. Everything here — the scripted clicks, the
+     * typed text, the chords, the `eval`, the notices, the prompts, the drags, the OS input, the persona windows,
+     * the gap injection — is removed by rollup when `__ROTARIS_SEAMS__` is false.
+     *
+     * The body is NOT re-indented for the added brace. Re-indenting four hundred lines would bury the change
+     * that matters in a diff nobody can read, and the gate is the point, not the whitespace.
+     */
+    if (__ROTARIS_SEAMS__) {
     // ROTARIS_CAPTURE_ACTION=backup|restore at ROTARIS_CAPTURE_ACTION_MS: the command a Settings action sends.
     const action = process.env['ROTARIS_CAPTURE_ACTION'];
     if (action === 'backup' || action === 'restore' || action === 'hooks-review') {
@@ -2326,6 +2347,7 @@ async function main(): Promise<void> {
         wc.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         log(`capture: clicked "${rect.label}" at ${Math.round(rect.x)},${Math.round(rect.y)}`);
       });
+    }
     }
     // ROTARIS_CAPTURE_AFTER_MS lets a verification run wait for the run loop to finish before the capture.
     // ROTARIS_CAPTURE_WAIT=file:<path>|result, bounded by ROTARIS_CAPTURE_WAIT_MS: the AFTER timer starts only once the

@@ -117,7 +117,11 @@ you declare; a timing alone reads as "slow", not as "dead".
 
 ## What `pnpm package` does, and refuses
 
-`apps/desktop/scripts/package.mjs`: `electron-vite build`; `electron-builder --win` with two hooks
+`apps/desktop/scripts/package.mjs`: `electron-vite build` **with `ROTARIS_BUILD=package`, which compiles the
+verification seams out** (`__ROTARIS_SEAMS__`; the driver and every scriptable capture seam leave the bundle, the
+probe's three below stay), then **the seam check** — the built bundle read back and asserted to carry those three and
+none of the scriptable ones, an assertion about the artifact for rule 1a's reason and deliberately not numbered into
+N3's five; then `electron-builder --win` with two hooks
 (`scripts/build-hooks.cjs`) — `beforeBuild` removes every copy's `build/`, stamps the rebuild marker and runs
 @electron/rebuild by name over the binding set, cold, from source; `afterPack` holds rule 1a (a compiled
 binary newer than the marker, byte-identical in `app.asar.unpacked`, no prebuild in the asar index), rule 4
@@ -906,10 +910,41 @@ architecture record decided**; no ADR decided this one, and its own tail exclude
 exactly that principle. If the driver is later given an ADR — the open question is whether a verification seam of
 this reach deserves one — its first execution is recorded here and the register would point at this section.
 
-**What did not change.** No `ROTARIS_CAPTURE_*` seam was removed, no existing proof was rewritten onto the driver,
-and the packaged application still compiles the whole capture surface in (gated on an environment variable at
-launch). Moving a proof across, and gating the seams at build time so the shipped binary carries none of them, are
-separate pieces of work and are **owed**, not done.
+**The seams stop shipping — the same day.** Until now the packaged application compiled the whole capture surface
+in, gated on an environment variable **at launch**: about 240 lines of main that could click, type and evaluate
+script in a window the user had signed into, available to anything that could set a variable in the app's
+environment. The gate is now at **build time**. `electron.vite.config.ts` defines `__ROTARIS_SEAMS__`;
+`scripts/package.mjs` builds with `ROTARIS_BUILD=package`, which makes it false, and rollup removes every branch
+behind it — the scripted clicks, the typed text, the chords, the renderer `eval`, the notices, the drags, the OS
+input, the persona seams, the theme proof's whole capture pass, and `driver.ts` in its entirety. What survives is
+the three the packaged probe itself drives (`ROTARIS_CAPTURE_PNG`, `_PROMPT`, `_AFTER_MS`). Main's bundle goes from
+325,694 to 273,691 bytes. **An environment variable cannot turn the seams back on in a binary built without them**,
+which is why the gate is a build-time constant and not a run-time check.
+
+`package.mjs` asserts it on the artifact rather than on the source — **the seam check**, deliberately un-numbered
+because ADR-0056's five rules are the native-module obligation and its own rule 5 is a different subject. The
+reasoning is rule 1a's: a `define` that stopped being applied, or a guard someone moved outside the block, would
+leave the surface in the product and change nothing a source reading would notice.
+
+**What that check found, immediately, in its author's own work.** The first attempt guarded the `if` and not the
+environment **read**, so `const proofDir = process.env['ROTARIS_THEME_PROOF_DIR']` and the driver's endpoint read
+survived into the shipped bundle with their variable names. Both reads are behind the flag now. The check failing
+its author before it ever failed anyone else is the argument for having written it as an assertion about the
+artifact.
+
+**A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
+launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a
+reason nobody would have guessed from its output. The script now says so on exit.
+
+Verified on 2026-09-11: `pnpm package` (`ROTARIS_PACKAGE_DIR_ONLY=1`) **PASSED** in 277 s with the seam check as
+its fourth step — rule 1a and rule 4 holding as before, and the packaged app, built without the seams, opening a
+store and settling a terminal call at store v15; `driver-proof` 14/14 and `part-j-proof` green against a normal
+build afterwards.
+
+**What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
+proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's
+`rows-proof` role, which is a fixture surface with no input injection, named here so its survival is a decision
+rather than an oversight.
 
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 

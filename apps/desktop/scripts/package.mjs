@@ -47,6 +47,10 @@ function finish(ok, why) {
   mkdirSync(RELEASE, { recursive: true });
   writeFileSync(REPORT, JSON.stringify(report, null, 2));
   process.stdout.write(`\n[package] ${ok ? 'PASSED' : 'REFUSED'}${why ? ` — ${why}` : ''} (${report.ms} ms) → ${REPORT}\n`);
+  // This script builds with the verification seams compiled OUT and leaves that build in `out/`. Every `*-proof`
+  // script launches `out/main/index.js` and drives those seams, so the next proof run after a package would fail
+  // for a reason no one would guess from its output. Say so here rather than let it be discovered.
+  process.stdout.write('[package] `out/` now holds a SEAM-FREE build — run `pnpm build` before any proof or `pnpm app:drive`.\n');
   process.exit(ok ? 0 : 1);
 }
 
@@ -61,7 +65,32 @@ try {
     return { bundle: { python: marker.answers.python, distribution: marker.distribution, version: marker.answers.distribution, bytes: marker.size.bytes, files: marker.size.files, builtAt: marker.builtAt, elapsedMs: marker.elapsedMs } };
   });
   step('code-intelligence manifest equals the committed module', () => run('node', [join(APP, 'scripts', 'code-intelligence', 'manifest.mjs'), '--check']));
-  step('electron-vite build', () => run('pnpm', ['exec', 'electron-vite', 'build']));
+  // ROTARIS_BUILD=package compiles the verification seams OUT (electron.vite.config.ts). A packaged binary that
+  // could still be scripted through its environment is the thing this flag exists to prevent.
+  step('electron-vite build (seams compiled out)', () => run('pnpm', ['exec', 'electron-vite', 'build'], { env: { ...process.env, ROTARIS_BUILD: 'package' } }));
+  /**
+   * The SEAM CHECK: the shipped bundle carries the probe's three seams and NOT the scriptable ones.
+   *
+   * Deliberately un-numbered. ADR-0056's five rules are the native-module obligation (N3) and its rule 5 is about
+   * a swallowed failure at runtime; this is about the surface the bundle ships, so numbering it "6" would imply an
+   * amendment to a set it does not belong to.
+   *
+   * This is an assertion about the artifact rather than about the source, for the same reason rule 1a weighs the
+   * binary rather than trusting the rebuild: a `define` that stopped being applied — a section added to the config
+   * without it, a guard someone moved outside the block — would leave the surface in the product and change
+   * nothing a source reading would notice. The probe below drives `_PROMPT` and `_PNG`, so those must survive;
+   * everything named in the second list can script a window, so none of them may.
+   */
+  step('the packaged bundle carries no scriptable seam', () => {
+    const bundle = readFileSync(join(APP, 'out', 'main', 'index.js'), 'utf8');
+    const kept = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS'];
+    const forbidden = ['ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER'];
+    const missing = kept.filter((name) => !bundle.includes(name));
+    const present = forbidden.filter((name) => bundle.includes(name));
+    if (missing.length) throw new Error(`the packaged bundle lost a seam the probe needs: ${missing.join(', ')}`);
+    if (present.length) throw new Error(`the packaged bundle still carries scriptable seams: ${present.join(', ')}`);
+    return { kept, removed: forbidden.length, bytes: bundle.length };
+  });
   // The keep-prebuild counterfactual packs from the same configuration minus the prebuild exclusions, so the
   // prebuild is in the asar index where the binding's own loader looks first. Rule 4 has to refuse it.
   let config = 'electron-builder.yml';

@@ -17,6 +17,21 @@ import { builtinModules } from 'node:module';
  *  - assets bundled, not fetched; strict CSP; no remote origin.
  */
 const repo = resolve(__dirname, '..', '..');
+
+/**
+ * The verification seams are compiled in or compiled OUT, and the build says which.
+ *
+ * `ROTARIS_BUILD=package` (set by `scripts/package.mjs` for its own `electron-vite build`) makes
+ * `__ROTARIS_SEAMS__` false, and rollup then removes every branch guarded by it — the scripted clicks, the typed
+ * text, the chords, the renderer `eval`, the persona and OS-input seams, the theme proof's whole capture pass and
+ * the driver's listener. What survives in a packaged build is the three the packaged probe itself needs
+ * (`ROTARIS_CAPTURE_PNG`, `_PROMPT`, `_AFTER_MS`), and nothing that can be scripted from outside.
+ *
+ * Without this the shipped binary carried all of it, gated on an environment variable at launch: about 240 lines
+ * of main, able to click, type and evaluate script in a window the user had signed into, for anything that could
+ * set a variable in the app's environment. The proofs need that surface; the product never did.
+ */
+const seams = process.env['ROTARIS_BUILD'] !== 'package';
 const designSystem = resolve(repo, 'docs', 'design', 'system');
 const designAssets = resolve(repo, 'docs', 'design', 'assets');
 
@@ -50,6 +65,7 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin({ exclude: WORKSPACE_PACKAGES })],
     resolve: { alias: workspaceAliases },
+    define: { __ROTARIS_SEAMS__: JSON.stringify(seams) },
     build: {
       rollupOptions: {
         input: {

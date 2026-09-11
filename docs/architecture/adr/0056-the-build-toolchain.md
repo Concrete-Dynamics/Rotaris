@@ -453,3 +453,45 @@ application's scripted session with a terminal call, store v9. IC-6 stands.
 
 The decision's second-execution list counted the toolchain's defects at three; this is the fourth, and CLAUDE.md's
 count says so.
+
+## Fourth execution — 2026-09-11, the seams stop shipping, and the build is made to say so
+
+The build gained one assertion and one flag, and ran end to end under both.
+
+**The flag.** `electron.vite.config.ts` defines `__ROTARIS_SEAMS__`, and `scripts/package.mjs` builds with
+`ROTARIS_BUILD=package`, which makes it false. Rollup then removes every branch behind it from main's bundle: the
+scripted clicks, the typed text, the chords, the renderer `eval`, the notices, the drags, the OS input, the persona
+seams, the theme proof's whole capture pass, and `apps/desktop/src/main/driver.ts` in its entirety. What survives is
+the three seams this script's own packaged probe drives — `ROTARIS_CAPTURE_PNG`, `_PROMPT`, `_AFTER_MS`. Main goes
+from 325,694 to 273,691 bytes.
+
+Until this ran, the shipped binary carried the whole surface, gated on an environment variable **at launch**: about
+240 lines able to click, type and evaluate script in a window the user had signed into, reachable by anything that
+could set a variable in the app's environment. A build-time constant is the difference between a surface that is
+switched off and a surface that is absent, and only the second survives an attacker who controls the environment.
+
+**The assertion — the seam check, and why it carries no number.** After the build, the bundle is read and asserted
+to contain the probe's three names and none of the scriptable ones. It is deliberately **not** numbered into N3's
+five rules: those are the native-module obligation and rule 5 there is a swallowed failure at runtime, so calling
+this one "6" would imply an amendment to a set it does not belong to. Its reasoning is rule 1a's, though, exactly: a
+`define` that silently stopped applying, or a guard moved outside the block by a later edit, would leave the surface
+in the product and change **nothing that a reading of the source would notice**. The artifact is the evidence.
+
+**What it found.** Its author's own first attempt. The guards were placed on the `if` and not on the environment
+**read**, so `process.env['ROTARIS_THEME_PROOF_DIR']` and the driver's endpoint read survived into the shipped
+bundle, names and all, with only their bodies removed. The check refused the build; both reads went behind the flag;
+the second run passed. This is a defect of the change being made, not of the toolchain — **the toolchain's count
+stays at four** and this is not a fifth.
+
+**The run.** `ROTARIS_PACKAGE_DIR_ONLY=1 pnpm package`, **PASSED in 277 s**: the code-intelligence bundle and its
+manifest check, the seam-free `electron-vite build`, the seam check at 3 ms, `electron-builder --win --dir` at 246 s
+(the cold rebuild of both bindings inside it, 190 s, "which is not evidence of anything" as rule 1a says), rule 1a on
+five compiled binaries, the bundled runtime answering Python 3.13.15 from inside the artifact, rule 4 loading two
+files from `app.asar.unpacked` at SQLite 3.53.4, and the packaged application — built **without** the seams — opening
+a store at v15 and settling a terminal call. Nothing in rules 1a or 4 moved.
+
+**Owed, and named so it is not mistaken for done.** The strip covers **main only**. The renderer bundle still carries
+Part AA's `rows-proof` role; it is a fixture surface with no input injection, and leaving it is a decision recorded
+here rather than an oversight. A second trap was closed on the way: this script leaves `out/` holding the seam-free
+build, and every `*-proof` launches `out/main/index.js` expecting the seams, so it now says on exit that `pnpm build`
+must come before the next proof.

@@ -108,6 +108,8 @@ console.log(`terminal-proof: ${items.filter(([, v]) => v.pass).length}/${items.l
 // Part AL2: REQ-SHELL-166's figures, in the log as well as in results.json.
 const live = electronResults.results?.live ?? {};
 console.log(`terminal-proof live (REQ-SHELL-166): ${JSON.stringify({ echo: live.echo, endInput: live.endInput && { ms: live.endInput.ms, exitCode: live.endInput.exitCode }, interrupt: live.interrupt && { ms: live.interrupt.ms, exitCode: live.interrupt.exitCode }, resize: live.resize, midCommandResize: live.midCommandResize, resizeRepaint: live.resizeRepaint, throughput: live.throughput, threeSurfaces: live.threeSurfaces, delivery: live.delivery })}`);
+// Part T2: REQ-SHELL-102 measured in motion as well as at rest — the samples taken while the stream was writing.
+console.log(`terminal-proof motion (REQ-SHELL-102): ${JSON.stringify(live.motion)}`);
 if (!electronResults.passed || run.status !== 0) {
   console.error(JSON.stringify(electronResults.failures, null, 2));
   console.error((run.stderr ?? '').slice(-2000));

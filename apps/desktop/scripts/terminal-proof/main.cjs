@@ -546,6 +546,60 @@ app.whenReady().then(async () => {
     const sizeDone = await Promise.race([sizeRun.done, pause(15_000).then(() => null)]);
     live.resize = { reported: lastGeometry, process: sizeDone?.result.output ?? null };
     expect('live.processReportsGridSize', sizeDone !== null && lastGeometry && sizeDone.result.output.includes(`cols=${lastGeometry.cols} rows=${lastGeometry.rows}`), live.resize);
+    // ── Part T2 — REQ-SHELL-102 IN MOTION: the three surfaces sampled WHILE output arrives, not only at rest ──────
+    // Wave 2 measured the equality after the closing frame (`live.threeSurfacesIdentical`, below). REQ-SHELL-102 is
+    // stated at the same time — "show the same thing at the same time … Moving between the two never shows the user
+    // older output in one than in the other" — and a still screen is the one state in which the claim cannot be
+    // false, so it is measured here while a command is still writing. ONE `state()` call reads the window's grid
+    // (@xterm/xterm), the transcript row's preview and the persona card's (two separate @xterm/headless registries —
+    // ADR-0021 consequence 3's "two emulator instances per visible stream", and UI's objection that two parsers may
+    // disagree) in ONE page turn, so a sample is simultaneous rather than three reads with a gap between them.
+    const motionCommand = '1..40 | ForEach-Object { "motion $_"; Start-Sleep -Milliseconds 55 }';
+    const motionSample = async (at) => {
+      const st = await state(LIVE);
+      return {
+        at,
+        grid: JSON.stringify(trimmed(st.stream.grid ? st.stream.grid.lines : null)),
+        preview: JSON.stringify(trimmed(st.stream.preview ? st.stream.preview.lines : null)),
+        persona: JSON.stringify(trimmed(st.stream.persona ? st.stream.persona.lines : null)),
+        running: [st.stream.meta ? st.stream.meta.running : null, st.stream.previewMeta ? st.stream.previewMeta.running : null, st.stream.personaMeta ? st.stream.personaMeta.running : null],
+        truncated: [st.stream.meta ? st.stream.meta.truncated : null, st.stream.previewMeta ? st.stream.previewMeta.truncated : null, st.stream.personaMeta ? st.stream.personaMeta.truncated : null],
+        exit: [st.stream.meta ? st.stream.meta.exitCode ?? null : null, st.stream.previewMeta ? st.stream.previewMeta.exitCode ?? null : null, st.stream.personaMeta ? st.stream.personaMeta.exitCode ?? null : null],
+      };
+    };
+    const motionRun = run(motionCommand);
+    await motionRun.started;
+    const motionSamples = [];
+    const motionFrom = Date.now();
+    while (Date.now() - motionFrom < 8_000) {
+      const s = await motionSample(Date.now() - motionFrom);
+      motionSamples.push(s);
+      if (motionSamples.length > 2 && s.running[0] === false) break;
+      await pause(70);
+    }
+    const motionDone = await Promise.race([motionRun.done, pause(20_000).then(() => null)]);
+    // One settled sample after the closing frame: a divergence in the last moving sample has a turn to resolve, which
+    // is what "never shows the user older output in one than in the other" asks of a surface a user could look at.
+    await pause(500);
+    motionSamples.push(await motionSample(Date.now() - motionFrom));
+    const whileRunning = motionSamples.filter((s) => s.running[0] === true);
+    const distinctScreens = new Set(whileRunning.map((s) => s.grid)).size;
+    const stateDisagreed = motionSamples.filter((s) => new Set(s.running).size !== 1 || new Set(s.truncated).size !== 1 || new Set(s.exit).size !== 1);
+    const previewsDisagreed = motionSamples.filter((s) => s.preview !== s.persona);
+    const gridDiverged = motionSamples.map((s, i) => (s.grid === s.preview ? -1 : i)).filter((i) => i >= 0);
+    const gridStayedBehind = gridDiverged.filter((i) => i + 1 >= motionSamples.length || motionSamples[i + 1].grid !== motionSamples[i + 1].preview);
+    live.motion = {
+      command: motionCommand, samples: motionSamples.length, whileRunning: whileRunning.length, distinctScreens,
+      stateDisagreed: stateDisagreed.length, previewsDisagreed: previewsDisagreed.length,
+      gridDivergedSamples: gridDiverged.length, gridStayedBehind: gridStayedBehind.length,
+      sampleIntervalMs: 70, exitCode: motionDone ? motionDone.result.exitCode : null,
+    };
+    // An equality asserted over a still screen is not evidence: the samples must have caught the stream MOVING.
+    expect('live.motionReallyMoved', whileRunning.length >= 8 && distinctScreens >= 5, live.motion);
+    expect('live.motionStateIdentical', stateDisagreed.length === 0, stateDisagreed.slice(0, 3));
+    expect('live.motionPreviewsIdentical', previewsDisagreed.length === 0, previewsDisagreed.slice(0, 2));
+    expect('live.motionGridNeverStaysBehind', gridStayedBehind.length === 0, { diverged: gridDiverged.length, stayedBehind: gridStayedBehind.length, first: gridDiverged.length > 0 ? motionSamples[gridDiverged[0]] : null });
+
     // ── REQ-SHELL-102 / REQ-SHELL-075 (b): three surfaces over one live stream, at rest after the closing frame ──
     await pause(400);
     const rest = await state(LIVE);

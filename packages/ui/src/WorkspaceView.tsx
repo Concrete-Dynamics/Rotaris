@@ -185,6 +185,27 @@ export function composeWithStashed(current: string, incoming: string): string {
   return current === '' ? incoming : `${current}\n\n${incoming}`;
 }
 
+/**
+ * REQ-CHAT-015 with REQ-CHAT-044 — defect C2-1, repaired 2026-09-11. The stored draft arrives over a command round
+ * trip while a prompt loaded from the Library arrives two animation frames after the view switch, so either can land
+ * first and the order is not the schedule's to promise. What this fixes is that NEITHER order discards text:
+ *
+ *   - into a composer nothing has touched, the draft is adopted exactly as it was stored;
+ *   - into a composer holding only what an external load put there, the draft is composed BEFORE it on
+ *     REQ-CHAT-044's one-blank-line terms — which is the same string the other order already produced, so the two
+ *     orders stop being distinguishable to a user;
+ *   - into a composer the user has typed into, the draft is NOT adopted, because that would overwrite live typing,
+ *     which is the rule REQ-CHAT-015 was always read as stating and the one part of this that has not changed.
+ *
+ * `null` means leave the composer alone. Pure, so the order a race decides is checkable without a DOM.
+ */
+export function adoptDraft(current: string, loaded: string | null, draft: string | undefined): string | null {
+  if (draft === undefined || draft === '') return null;
+  if (current === '') return draft;
+  if (loaded !== null && current === loaded) return composeWithStashed(draft, current);
+  return null;
+}
+
 /** REQ-MONITOR-051: below 1180 px the inspector and the agents panel are overlay drawers, one open at a time. */
 function useNarrow(): boolean {
   const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 1179px)') : null;
@@ -533,6 +554,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
    * why nothing here persists it beyond the walk. The saved draft is the text the composer held at the first Up.
    */
   const [walk, setWalk] = useState<HistoryWalk | null>(null);
+  /**
+   * Defect C2-1: text an external load put into an EMPTY composer, held so a draft arriving afterwards composes with
+   * it instead of being dropped. State rather than a ref because the adoption below reads it DURING render, which is
+   * what `react-hooks/refs` forbids of a ref and what state exists for. It needs no clearing — once the two are
+   * composed the text no longer equals what was loaded, so `adoptDraft`'s branch cannot fire twice on one load.
+   */
+  const [loadedIntoEmpty, setLoadedIntoEmpty] = useState<string | null>(null);
   const caretToEnd = useCallback(() => {
     const el = area.current;
     if (!el) return;
@@ -574,7 +602,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const [seenDraft, setSeenDraft] = useState(draft);
   if (seenDraft !== draft) {
     setSeenDraft(draft);
-    if (draft !== undefined && draft !== '' && text === '') setText(draft);
+    const adopted = adoptDraft(text, loadedIntoEmpty, draft);
+    if (adopted !== null) setText(adopted);
   }
 
   // ── Part AN — the slash catalogue: REQ-CHAT-018..033, REQ-CHAT-159, REQ-LIBRARY-142 ──
@@ -870,7 +899,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       enabled: !busy,
       // REQ-LIBRARY-107 through REQ-CHAT-044: append after one blank line into a non-empty composer, replace an
       // empty one, and take focus. The Library and the stash dialog reach the composer through this and nothing else.
-      setText: (incoming: string) => { setText((current) => composeWithStashed(current, incoming)); requestAnimationFrame(() => area.current?.focus()); },
+      setText: (incoming: string) => {
+        // C2-1: only a load into an EMPTY composer can be racing the stored draft's arrival. Anything else is text
+        // the user wrote, which `adoptDraft` must never compose a draft over. Recorded before the update rather
+        // than inside it, so the updater stays pure.
+        setLoadedIntoEmpty(text === '' ? incoming : null);
+        setText((current) => composeWithStashed(current, incoming));
+        requestAnimationFrame(() => area.current?.focus());
+      },
     });
   });
   useEffect(() => () => registerComposer(null), [registerComposer]);

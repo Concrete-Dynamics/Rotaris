@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LIBRARY_TABS } from '@rotaris/contracts';
 import {
+  adoptDraft,
   applyStashLabel,
   clampPromptSplit,
   composeWithStashed,
@@ -114,6 +115,23 @@ describe('library — the stash controls (REQ-LIBRARY-140, REQ-LIBRARY-141, REQ-
     // Exactly one blank line is inserted; the incoming text is otherwise passed through unchanged.
     expect(composeWithStashed('typed', '\nstashed')).toBe('typed\n\n\nstashed');
     expect(composeWithStashed('a\n\nb', 'c')).toBe('a\n\nb\n\nc');
+  });
+
+  it('C2-1: a draft landing after a Library load composes with it, and neither order discards text', () => {
+    // The two orders of the race produce the SAME string, which is the whole point of the repair.
+    expect(composeWithStashed('draft', 'loaded')).toBe('draft\n\nloaded');          // draft first, load appends
+    expect(adoptDraft('loaded', 'loaded', 'draft')).toBe('draft\n\nloaded');        // load first, draft composes in
+    // An untouched composer takes the draft as stored (REQ-CHAT-015).
+    expect(adoptDraft('', null, 'draft')).toBe('draft');
+    // Text the USER typed is never composed over: the draft is declined instead.
+    expect(adoptDraft('typed', null, 'draft')).toBeNull();
+    // A load that appended onto typed text is not a bare load, so it is not composed over either.
+    expect(adoptDraft('typed\n\nloaded', null, 'draft')).toBeNull();
+    // A stale memory of some earlier load never fires against different text.
+    expect(adoptDraft('something else', 'loaded', 'draft')).toBeNull();
+    // Nothing to adopt is nothing done.
+    expect(adoptDraft('loaded', 'loaded', undefined)).toBeNull();
+    expect(adoptDraft('loaded', 'loaded', '')).toBeNull();
   });
 
   it('reaches the composer through the registration and never through the DOM (REQ-LIBRARY-107)', () => {

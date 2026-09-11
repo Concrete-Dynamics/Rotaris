@@ -286,15 +286,16 @@ if (whileInLibrary === null || whileInLibrary.length !== 0) throw new Error(`the
  * 2026-09-11, replaced in the third, same build, same schedule. The user-visible half is that a prompt used from the
  * Library sometimes discards what the composer had.
  *
- * This proof therefore pins what is true in BOTH branches and records which one happened, rather than asserting a
- * coin toss. What it still measures deterministically is the requirement this scenario exists for: the stash
- * dialog's Apply appends after EXACTLY one blank line onto whatever the composer held, and the composer was not
- * empty. When the race is settled (the draft's arrival composing with a load, rather than being dropped), the
- * `appended` branch becomes the only one and this can go back to a single expected string.
+ * REPAIRED 2026-09-11, and this assertion is what the repair is worth: `adoptDraft` composes the draft with a load
+ * that beat it instead of dropping it, so BOTH orders now leave `alpha one\n\nalpha one` and the outcome no longer
+ * depends on which of the two arrived first. The two-branch reading below is therefore gone rather than relaxed —
+ * the note above is kept so the shape of what was wrong survives beside what replaced it, as this record's standing
+ * rule requires. A single expected string is the stronger assertion, and it fails if either half regresses: drop
+ * the draft and this reads `alpha one`, drop the append and it reads `alpha one` too.
  */
 const afterSecondUse = used.inspects['.composer__input@4900']?.matches?.[0]?.text;
-const draftRace = afterSecondUse === 'alpha one\n\nalpha one' ? 'draft-first (appended)' : afterSecondUse === 'alpha one' ? 'load-first (draft dropped)' : 'unexpected';
-if (draftRace === 'unexpected') throw new Error(`REQ-CHAT-044/REQ-CHAT-015: after "Use and remove" the composer should hold the loaded prompt, with or without the restored draft before it; it held ${JSON.stringify(afterSecondUse)}`);
+if (afterSecondUse !== 'alpha one\n\nalpha one') throw new Error(`REQ-CHAT-044/REQ-CHAT-015 (C2-1 repaired): after "Use and remove" the composer must hold the restored draft, one blank line, then the loaded prompt, whichever of the two arrived first; it held ${JSON.stringify(afterSecondUse)}`);
+const draftRace = 'composed (C2-1 repaired)';
 const composerAfter = first(used.probes, '.composer__input')?.value;
 // REQ-CHAT-044 on the toolbar's own route, measured against what was actually there: one blank line, nothing else.
 if (composerAfter !== `${afterSecondUse}\n\nalpha two`) throw new Error(`REQ-CHAT-044: Apply onto a non-empty composer (${JSON.stringify(afterSecondUse)}) produced ${JSON.stringify(composerAfter)}`);

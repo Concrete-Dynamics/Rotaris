@@ -1,4 +1,9 @@
-.claude/
+# Agent tooling is local, with one exception: the skills under `.claude/skills/` are repository content —
+# procedures the work depends on, which a fresh clone must carry. The directory itself is listed as
+# `.claude/*` rather than `.claude/`, because git will not descend into an excluded directory and a
+# negation inside one is never read.
+.claude/*
+!.claude/skills/
 .serena/
 .tokensave/
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardCard, BoardProjection, EpicCard, Reachability } from '@rotaris/contracts';
-import { DELIVERY_COLUMNS } from '@rotaris/contracts';
+import { DELIVERY_COLUMNS, PANE_KEYS, REVIEW_DECISIONS } from '@rotaris/contracts';
+// Part R2 — the pane host's pure half and the registry the board drives it through.
+import { createPaneRegistry } from './panes/registry.js';
+import { PANE_TITLE, consequenceForDecision, disclosurePending, dispatchNothingStarted, installedPanesSentence, launchAbandoned } from './panes-host.js';
 import { arcPath, segmentArcs } from './EvidenceIndicator.js';
 import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
@@ -291,5 +294,54 @@ describe('alerts, evidence and the card description (REQ-TRACE-247, 263, 485)', 
     // fixes the sections at five, so the panel is not one of them and carries its own identifier on the surface.
     expect([...DETAIL_SECTIONS]).not.toContain('history');
     expect(DETAIL_SECTIONS).toHaveLength(5);
+  });
+});
+
+// ---- Part R2: hosting Part AP's five panes, and what the host says (REQ-TRACE-369/375, 422, 463, 472) ----
+
+describe('the pane registry, as the board uses it (REQ-TRACE-369/370/375)', () => {
+  it('answers every key without constructing, builds on first use and reuses after', () => {
+    const registry = createPaneRegistry<{ readonly openedAt: number }>();
+    let built = 0;
+    for (const key of PANE_KEYS) expect(registry.installed(key)).toBe(false);
+    expect(built).toBe(0);
+    const first = registry.open('review', () => { built += 1; return { openedAt: 1 }; });
+    const again = registry.open('review', () => { built += 1; return { openedAt: 2 }; });
+    expect(built).toBe(1);
+    expect(again).toBe(first);
+    expect(registry.installed('review')).toBe(true);
+    expect(registry.installed('queue')).toBe(false);
+    // REQ-TRACE-375 closes the namespace: a sixth key is refused rather than silently accepted.
+    expect(() => registry.installed('graph' as never)).toThrow(/not a pane key/);
+    // A workspace change discards them: the board rebuilds the registry, which is what `discard` does key by key.
+    registry.discard('review');
+    expect(registry.installed('review')).toBe(false);
+  });
+});
+
+describe('what the pane host says (REQ-TRACE-422/463/472)', () => {
+  it('gives each of the six review decisions its own consequence for the branch and the worktree', () => {
+    const said = REVIEW_DECISIONS.map((action) => consequenceForDecision(action, 'REQ-101'));
+    expect(said).toHaveLength(6);
+    expect(new Set(said).size).toBe(6);
+    for (const sentence of said) expect(sentence).toContain('REQ-101');
+    expect(consequenceForDecision('accept', 'REQ-101')).toContain('branch and worktree are left exactly as they are');
+    expect(consequenceForDecision('reject', 'REQ-101')).toContain('nothing is deleted and nothing is merged');
+    expect(consequenceForDecision('keep-worktree', 'REQ-101')).toContain('continued by hand');
+  });
+  it('states that nothing was written when a disclosure is pending or abandoned (REQ-TRACE-472)', () => {
+    expect(disclosurePending('REQ-101')).toContain('Nothing has been recorded for REQ-101 yet');
+    expect(disclosurePending('REQ-101')).toContain('abandoning it leaves everything as it stands');
+    expect(launchAbandoned('REQ-101')).toContain('nothing was written');
+  });
+  it('reports the reason nothing started on the action\'s own result (REQ-TRACE-463)', () => {
+    expect(dispatchNothingStarted('REQ-101', 'Waiting for a unit slot: 2 of 2 in use.')).toBe('REQ-101 moved, and no run began: Waiting for a unit slot: 2 of 2 in use.');
+  });
+  it('names the five panes and reports which are built without building any (REQ-TRACE-370/375)', () => {
+    expect(Object.keys(PANE_TITLE)).toEqual([...PANE_KEYS]);
+    const registry = createPaneRegistry<{ readonly openedAt: number }>();
+    expect(installedPanesSentence(PANE_KEYS, (k) => registry.installed(k))).toContain('asking builds nothing');
+    registry.open('queue', () => ({ openedAt: 1 }));
+    expect(installedPanesSentence(PANE_KEYS, (k) => registry.installed(k))).toContain('Delivery queue');
   });
 });

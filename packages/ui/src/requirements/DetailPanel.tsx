@@ -32,6 +32,10 @@ export interface DetailPanelProps {
   readonly onNavigate: (id: ReqId) => void;
   readonly onOpenEvidence: (id: ReqId) => void;
   readonly onOpenSession: ((sessionId: string) => void) | undefined;
+  /** Part R2 — the per-requirement panes (REQ-TRACE-375); absent, the control is not offered (REQ-TRACE-372). */
+  readonly onOpenPane?: ((key: 'review' | 'blockers' | 'editor') => void) | undefined;
+  /** Part R2 — REQ-TRACE-322: centre the relationship graph on this requirement. */
+  readonly onOpenGraph?: ((id: ReqId) => void) | undefined;
 }
 
 export const DETAIL_SECTIONS = ['requirement', 'relations', 'execution', 'traceability', 'verification'] as const;
@@ -47,7 +51,7 @@ export const HISTORY_READING = 'The history is being read…';
 export const HISTORY_NONE = 'No delivery action has been recorded for this requirement yet; the current revision is its only one.';
 const RELATION_NO_SOURCE: readonly RelationToken[] = ['supersedes', 'superseded-by', 'depends-on', 'blocks', 'refines', 'refined-by', 'conflicts-with', 'related-to'];
 
-export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onClose, onNavigate, onOpenEvidence, onOpenSession }: DetailPanelProps) {
+export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onClose, onNavigate, onOpenEvidence, onOpenSession, onOpenPane, onOpenGraph }: DetailPanelProps) {
   const titleId = useId();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); } };
@@ -83,8 +87,18 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
         <h2 id={titleId} className="req-detail__title display">{card.title}</h2>
         <div className="req-detail__actions">
           <button type="button" className="btn btn-secondary btn-compact" onClick={() => onOpenEvidence(card.id)}>Evidence</button>
-          {/* REQ-TRACE-276: whether the requirement can be edited is a fact the detail carries; the source is read-only in this build (Part AP builds the write), stated, not a disabled field (REQ-TRACE-498). */}
-          <span className="card-meta" data-testid="req-detail-editable">{board.source.kind === 'store' && board.source.writable ? 'Editable in place.' : 'Read-only here: writing into the source is Part AP\'s and not built in this version.'}</span>
+          {/* Part R2 — the per-requirement panes of REQ-TRACE-375 are reached from the requirement, which is the only
+              place that knows which one they would open against. Review is offered wherever the requirement stands and
+              names the state instead of hiding (REQ-TRACE-424); blockers likewise (REQ-TRACE-447's positive statement). */}
+          {onOpenPane !== undefined && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-review" onClick={() => onOpenPane('review')} aria-label={`Review the delivery of ${card.id}`}>Review</button>}
+          {onOpenPane !== undefined && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-blockers" onClick={() => onOpenPane('blockers')} aria-label={`What is holding ${card.id}`}>Blockers</button>}
+          {onOpenGraph !== undefined && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-graph" onClick={() => onOpenGraph(card.id)} aria-label={`Centre the relationship graph on ${card.id}`}>Graph</button>}
+          {/* REQ-TRACE-276/498: whether the requirement can be edited is a fact the detail carries, and where the source
+              cannot be written the sentence says so — never a disabled field. An earlier build said here that writing
+              into the source was "Part AP's and not built in this version"; Part AP built it and Part R2 hosts it, so
+              that reason is falsified and is recorded as such in ADR-0041's third execution rather than kept here. */}
+          {onOpenPane !== undefined && board.source.kind === 'store' && board.source.writable && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-edit" onClick={() => onOpenPane('editor')} aria-label={`Edit ${card.id} in its own source document`}>Edit</button>}
+          <span className="card-meta" data-testid="req-detail-editable">{board.source.kind === 'store' && board.source.writable ? 'Editable in place: the edit is written into this requirement\'s own source document.' : `Read-only here: this account cannot write into the requirement source, so ${card.id} is changed by editing ${card.sourcePath} directly and re-evaluating.`}</span>
         </div>
       </div>
       <div className="req-detail__body">

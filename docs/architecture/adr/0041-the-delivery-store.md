@@ -925,3 +925,66 @@ The five panes are **built and exported and nothing in this branch hosts them**:
 AK′'s, in a worktree of its own, so this row's proof drives the panes' pure halves and the mechanism beneath them,
 never a mounted pane. That is the seam the merge closes, and it is the one thing in this note that a reader should
 not mistake for a working surface.
+
+## Third execution — 2026-09-11 (Part R″), the lane closed end to end
+
+*Recorded under GD-10. Defects are numbered `R2-n` here; the manager assigns the ordinals at merge, and the tally
+stands at sixty-eight before them. This execution took the seam the second execution named and left open — "the five
+panes are built and exported and nothing in this branch hosts them" — and closed it, then drove `REQ-TRACE-499` over
+the composition that results.*
+
+**Built and run.** The board hosts the five panes through Part AP's own registry (`REQ-TRACE-369/370/375`): one
+registry per window and workspace, a pane built the first time it is needed and reused after, `installed` answerable
+for every key without constructing anything, and a workspace change discarding them all. The two board-level panes —
+the queue and creation — are reached from the board's header; the three that are about ONE requirement — review,
+blockers, the editor — are reached from that requirement's detail, because the detail is the only surface that knows
+which requirement they would open against. The elevation's disclosure (`REQ-TRACE-472`) now stands where the
+specification puts it: between the first action of a launch that would start a run and anything being written. The
+protocol is Part AP's, unchanged — `requirements.runs {op:'preview'}`, the dialog, `requirements.act` carrying
+`payload.disclosure`, then `requirements.runs {op:'dispatch'}` — and abandoning sends nothing at all, which is how
+`REQ-TRACE-472`'s "nothing whatsoever happens" is met: by not speaking, not by a rollback. The relationship graph of
+`REQ-TRACE-322..333` and `REQ-TRACE-505`, which the first and second executions both left where they found it, is
+built as a **presentation** of the board centred on one requirement rather than as a grouping axis, because an axis
+has no centre; its model is pure and unit-tested, its walk is breadth-first with first-seen depth winning, and its
+surface is depth columns of focusable node controls beside a textual edge list, which is what `REQ-TRACE-328` fixes.
+
+**Found (1) — `R2-1`: the queue pane had no way back.** Three of Part AP's five panes carry a Close control of their
+own and the queue does not, because the queue was built to be hosted and the host had not been written. Mounted as
+they were, opening the queue left the board unreachable until the view was switched away and back. The way back
+belongs to whoever opened the pane, so the host draws its own chrome — a titled bar with one Close control — above
+whichever pane is open, and the panes' own controls stay as they are. Found by driving the surface, not by reading it.
+
+**Found (2) — `R2-2`: the observable state could not see the panes, so the first proof of the registry was vacuous.**
+`window.__rotarisBoard` reported the cards, the columns and the budgets, and said nothing about which panes were
+built. A proof written against the DOM alone can see that a pane is on screen but not that a SECOND open reused the
+first — which is the whole of `REQ-TRACE-369` — so the observable now carries, per key, whether the pane is installed
+and the moment it was built. The assertion that re-opening the queue leaves `openedAt` unchanged is the one that can
+fail; without it the proof would have passed against a host that rebuilt the pane every time.
+
+**Readings recorded.**
+
+- *`REQ-TRACE-465`'s stop control is met by navigation, and that is a reading rather than a repair.* The second
+  execution left the button missing. The specification requires pause, steer, stop and answer to operate on a
+  board-started run for the whole of its life; `REQ-TRACE-475` separately forbids the requirements view to build a
+  transcript, an agent tree or a worktree listing of its own and requires it to link out, carrying the session
+  identifier, to the surface that owns each aspect. Those two together say the board's obligation is to make the
+  session reachable, not to grow a second set of run controls; the workspace view's stop operates on the same live
+  handle (`REQ-TRACE-464`). The board offers the session opener on the card, in the detail's execution section and on
+  the queue row that is waiting on a person. What is NOT built is a stop button on the board, and the reason is
+  stated here rather than left as an omission.
+- *The detail's "read-only" sentence was falsified and is replaced.* It read "writing into the source is Part AP's and
+  not built in this version". Part AP built it and this execution hosts it; the sentence now states the source's
+  actual writability and what to do when it is read-only (`REQ-TRACE-498`'s source row). The falsified reason is kept
+  here beside its replacement, as the record's standing rule requires.
+- *The graph is not a tab.* The mockup's `REQUIREMENTS` screen carries Kanban / List / Graph tabs, which is craft; the
+  specification fixes the axes (`REQ-TRACE-293`) and asks for a graph "centred on one requirement" (`REQ-TRACE-322`),
+  which is not an axis value. Opening it from a requirement's detail is what makes a centre exist before the graph
+  does, which is also what `REQ-TRACE-333` requires — no graph content and no contents summary before a centre has
+  been chosen.
+
+**Not built here, stated.** `accept-proposal` and `accept-change-work` remain the refusals this record's first
+execution wrote, naming OQ-45's improvement store; the derived technical proposals of spec 08 §1116 are read and
+shown by the review (the run's `proposed-requirements.json`, `REQ-TRACE-427/430`) and cannot be ACCEPTED, because
+accepting is what causes the write (`REQ-TRACE-429`) and there is no store to write into. `REQ-TRACE-465`'s stop
+button (above). `REQ-TRACE-409..416`'s offers, `278..280`'s source revisions and `REQ-TRACE-514`'s export, all where
+the earlier executions left them.

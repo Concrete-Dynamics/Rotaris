@@ -37,10 +37,30 @@
  *               "does not grow"); the axis switch itself within the budget; the post-debounce filter recomputation
  *               within REQ-TRACE-367's 100 ms.
  *
+ * Stage 3 (Electron) is Part R″'s — the lane driven end to end over the shipped composition:
+ *
+ *   end-to-end — REQ-TRACE-499 with no caller-supplied wiring: a card selected, the move control clicked, the
+ *               consequence confirmed, the elevation's disclosure ABANDONED (and nothing written for it, which the
+ *               SQL afterwards proves by counting one release and not two), then accepted; a real session started by
+ *               main's coordinator against the scripted dialect; the review pane opened from the requirement's own
+ *               detail and its accept decision taken; the card resting in `done`; then the requirement's source
+ *               document edited ON DISK by this script and a SECOND launch of the same profile showing the card in
+ *               `needs-update` (REQ-TRACE-407/499). The delivery store is then read with SQL for the two facts no
+ *               surface can show: that every state-changing action left a record, and that the run record carries a
+ *               session identifier and the permissions it was granted (REQ-TRACE-405/464/472/497).
+ *   panes     — REQ-TRACE-369/375: the queue pane opened from the board, closed and opened again, with the board's
+ *               own observable reporting that it was built ONCE and that no other key was built by asking; the
+ *               relationship graph (REQ-TRACE-322..333) centred from a requirement's detail — its four node kinds,
+ *               its navigability rule, its depth columns, its edge list, its bound statement and its depth control's
+ *               range; and the rest of REQ-TRACE-497 a proof can reach — an epic card offering no delivery action and
+ *               not draggable, a drag on a non-delivery axis refused in words, a folded rail carrying no rotated
+ *               text, a column count agreeing with the widgets in it, and the card and its detail agreeing on health.
+ *
  * Evidence under `.requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -183,6 +203,39 @@ function profile(name, preferencesRoot) {
 }
 
 /**
+ * Part R2 — the delivery store, read with SQL after a launch. Two of REQ-TRACE-497's never-observable clauses are
+ * facts about the STORE and not about the screen — a state-changing action for which no record was written, and a run
+ * in flight whose record carries no session identifier — and a third (a run started while its disclosure was due) can
+ * only be proved by counting what the abandoned launch did NOT write.
+ *
+ * The store is found, never chosen: a profile holds exactly one workspace, so exactly one `workspace.db` may be under
+ * it and the proof fails rather than picking. That is the sixty-eighth defect's rule applied here — a proof reads the
+ * store its own launch wrote, and a store taken "by sort" names whichever hash sorts last.
+ */
+const proofRequire = createRequire(import.meta.url);
+const Database = proofRequire('better-sqlite3');
+function findDatabases(root) {
+  if (!existsSync(root)) return [];
+  const found = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) found.push(...findDatabases(path));
+    else if (entry.name === 'workspace.db') found.push(path);
+  }
+  return found;
+}
+function deliveryRows(local) {
+  const files = findDatabases(local);
+  if (files.length === 0) return null;
+  expect(files.length === 1, `the profile holds ${files.length} stores and a proof may not choose between them: ${files.join(', ')}`);
+  const query = (sql) => { const db = new Database(files[0], { readonly: true }); try { return db.prepare(sql).all(); } finally { db.close(); } };
+  const tables = query("select name from sqlite_master where type='table' and name like 'delivery%' order by name").map((t) => t.name);
+  const counts = {};
+  for (const t of tables) counts[t] = query(`select count(*) as n from "${t}"`)[0].n;
+  return { file: files[0], tables, counts, query };
+}
+
+/**
  * A generated store of 100 epics × 14 children = 1,500 requirements, shaped as spike 7's generator shapes one
  * (`packages/workspace/src/traceability/scale-fixture.ts`: an epic's number is a multiple of 100, its children live
  * in its stem directory and take it as their epic by the parser's index-document rule) but documents only, with
@@ -240,6 +293,15 @@ const ARM_LONGTASKS = `(() => { window.__rotarisArmedAt = performance.now(); if 
 const READ_LONGTASKS = `(() => { const since = window.__rotarisArmedAt ?? 0; const tasks = (window.__rotarisLongTasks ?? []).filter((t) => t.at >= since).map((t) => t.ms); const b = window.__rotarisBoard; return { longest: Math.max(0, ...tasks), count: tasks.length, tasks, board: b ? { paintMs: b.paintMs, ready: b.ready, pending: b.pending, realised: b.realised, cards: b.cards, columns: b.columns } : null }; })()`;
 const BUDGET_MS = 100;
 const stage2 = {};
+/**
+ * Part R2 — failures that are evaluated where they belong and REPORTED AT THE END. Exactly one assertion uses this:
+ * REQ-TRACE-300/239's axis-switch long task, which is the most load-sensitive number this proof takes (Part AK′
+ * measured 72, 87, 89, 89 and 134 ms for it on one tree, the 134 with the machine loaded). Nothing about it is
+ * relaxed — the same budget, the same comparison, and the proof still exits non-zero on it — but a breach no longer
+ * stops the script before the REQ-TRACE-499 path has been driven, because a proof that stops at its flakiest
+ * measurement reports less than it measured.
+ */
+const deferred = [];
 
 // ── board: the fixture at 1264 px, the budget, the partition, the header ─────────────────────────
 const boardProfile = profile('board');
@@ -447,7 +509,8 @@ expect(scrolledColumns.present >= 100, `REQ-TRACE-300: the columns area holds ${
 expect(scrolledColumns.scrollWidth >= 100 * 276, `REQ-TRACE-300/238: a hundred columns at the 276 minimum need ${100 * 276} px of row; the area reports ${scrolledColumns.scrollWidth}`);
 expect(scrolledColumns.built > 0 && scrolledColumns.built < 100, `defect AK2-3: ${scrolledColumns.built} of the ${scrolledColumns.present} columns were built for a viewport ${scrolledColumns.clientWidth} px wide`);
 expect(axisTasks && axisTasks.board && axisTasks.board.columns >= 100, `REQ-TRACE-300: the board's own model reports ${axisTasks?.board?.columns} columns on the epic axis, not a hundred`);
-expect(axisTasks.longest < BUDGET_MS, `REQ-TRACE-300/239: switching to 100 populated columns cost a ${axisTasks?.longest} ms long task`);
+// Part R2: evaluated here, reported at the end (see `deferred`). Not relaxed, not floored, not lowered.
+if (!(axisTasks.longest < BUDGET_MS)) deferred.push(`REQ-TRACE-300/239: switching to 100 populated columns cost a ${axisTasks.longest} ms long task against the ${BUDGET_MS} ms budget (every long task in that window: ${JSON.stringify(axisTasks.tasks)})`);
 const epicAxisColumns = columnsOf(scale.at['[data-testid="req-column"]@14400']);
 const realisedOnEpicAxis = epicAxisColumns.reduce((n, c) => n + c.realised, 0);
 expect(realisedOnEpicAxis > 0 && realisedOnEpicAxis < 100, `defects AK2-2/AK2-3: ${realisedOnEpicAxis} card widgets realised across 100 columns for a viewport four columns wide`);
@@ -463,7 +526,195 @@ const filterTasks = scale.evals['19000'];
 // the work alone". A red that names the shape can be attributed; a red that names one number cannot.
 stage2.scale = { requirements: scaleProfile.requirements, paintMs: scalePaint, longestTaskMs: scaleTasks.longest, arrivalTasks: scaleTasks.tasks, observable: scaleTasks.board, backlog: { count: backlog.count, realised: backlog.realised }, sweep: scrolled.seen, endLast: scrolled.endLast, endRealised: scrolled.endRealised, realisedMax, epicColumns: epicAxis.matches.length, minColumnWidth: Math.min(...epicAxis.matches.map((m) => m.rect.width)), columnsScroll: scrolledColumns, columnsPresent: scrolledColumns.present, columnsBuilt: scrolledColumns.built, modelColumns: axisTasks.board?.columns ?? null, axisSwitchLongestTaskMs: axisTasks.longest, axisSwitchTasks: axisTasks.tasks, realisedOnEpicAxis, filterMs, filterTotal, filterLongestTaskMs: filterTasks?.longest ?? null };
 
+// ══ Stage 3 (Part R2): REQ-TRACE-499 over the shipped composition, and REQ-TRACE-497 turned into assertions ══════
+//
+// REQ-TRACE-499 asks for ONE end-to-end path over the shipped composition with no caller-supplied wiring: release,
+// run, review, accept, and notice a subsequent edit. It is driven here through the built application's own controls —
+// a card clicked, the move control clicked, the consequence confirmed, the elevation's disclosure ABANDONED once and
+// then accepted, a real session started by main's coordinator against the scripted dialect, the review pane opened
+// from the requirement's detail and its accept decision taken — and then the requirement's source document is edited
+// ON DISK, by this script rather than by the application, and a SECOND launch of the same profile must show the card
+// in needs-update. The delivery store is read directly with SQL afterwards, because the two things REQ-TRACE-497
+// forbids most sharply — a state-changing action that wrote no record, and a run started while its disclosure was due
+// — are facts about the store and not about the screen.
+
+const CARD_101 = '[data-req-card="REQ-101"]';
+/** One read of everything the board can be asked for at an instant: the card, the columns, the rails, the feedback. */
+const BOARD_AT = `(() => { const el = document.querySelector('[data-req-card="REQ-101"]'); const b = window.__rotarisBoard; return { column: el === null ? null : el.getAttribute('data-column'), health: el === null ? null : el.getAttribute('data-health'), generation: b ? b.generation : null, openPane: b ? b.openPane : null, panes: b ? b.panes : null, feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()), rails: [...document.querySelectorAll('[data-testid="req-rail"]')].map((r) => r.getAttribute('data-column')), columns: [...document.querySelectorAll('[data-testid="req-column"]')].map((c) => ({ key: c.getAttribute('data-column'), count: Number(c.getAttribute('data-count')), realised: Number(c.getAttribute('data-realised')), widgets: c.querySelectorAll('[data-req-card]').length, offscreen: c.getAttribute('data-offscreen') === 'true' })) }; })()`;
+const DISCLOSURE_AT = `(() => { const d = document.querySelector('[data-testid="req-pane-disclosure"]'); return d === null ? null : { lines: [...d.querySelectorAll('li')].map((l) => l.textContent.trim()), buttons: [...d.querySelectorAll('button')].map((b) => b.textContent.trim()) }; })()`;
+/** REQ-TRACE-364: the board's own operation for bringing a named card into view, used before a read that must find it. */
+const REVEAL_101 = `(() => { const b = window.__rotarisBoard; return b && typeof b.reveal === 'function' ? b.reveal('REQ-101') : 'no observable'; })()`;
+const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); const d = document.querySelector('[data-testid="req-detail"]'); return { state: p === null ? null : p.getAttribute('data-state'), entries: p === null ? [] : [...p.querySelectorAll('li')].map((l) => l.textContent.trim()), detailHealth: d === null ? null : (d.querySelector('[data-section="requirement"] dd .mono') || {}).textContent, runs: d === null ? [] : [...d.querySelectorAll('.req-detail__run')].map((r) => r.textContent.trim()) }; })()`;
+
+const e2e = profile('end-to-end');
+const release = launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    `${CARD_101}@3000`,
+    '[data-testid="req-move-control"]@4400',
+    '[data-testid="req-confirm"] .btn>>Release@5400',
+    // REQ-TRACE-472: abandoned first. Nothing may be written by this, and the second attempt below must therefore
+    // leave exactly ONE release in the history — which is what the SQL after the launch reads.
+    '[data-testid="req-pane-disclosure"] .btn>>Abandon@6800',
+    `${CARD_101}@8200`,
+    '[data-testid="req-move-control"]@9200',
+    '[data-testid="req-confirm"] .btn>>Release@10200',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@11200',
+    `${CARD_101}@30000`,
+    '[data-testid="req-detail-review"]@32000',
+    '[data-testid="req-pane-review-decisions"] .btn-primary@34000',
+    '[data-testid="req-pane-review-confirm"] .btn-primary@35600',
+  ].join(';;'),
+  // The focused card opens its own detail with Enter (REQ-TRACE-484); the harness sends single clicks only.
+  ROTARIS_CAPTURE_KEYS: 'Return@31000',
+  // The resting column is read through the board's OWN reveal operation (REQ-TRACE-364) first: `done` is the sixth of
+  // seven columns and lies outside the columns area's viewport at 1264 px, so it is a sized placeholder holding no
+  // card widget (defect AK2-3, by design). Reading the DOM without revealing first reads `null` and proves nothing.
+  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@6400`, `${BOARD_AT}@7600`, `${BOARD_AT}@13000`, `${BOARD_AT}@18000`, `${BOARD_AT}@23000`, `${BOARD_AT}@29000`, `${REVEAL_101}@37000`, `${BOARD_AT}@38000`, `${HISTORY_AT}@38400`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '39000',
+}, 300_000);
+
+const disclosure = release.evals['6400'];
+expect(disclosure !== null && Array.isArray(disclosure.lines) && disclosure.lines.length > 0, `REQ-TRACE-472: no disclosure was raised by the first action of the launch (${JSON.stringify(disclosure)})`);
+expect(disclosure.lines.some((l) => /confined/i.test(l)), `REQ-TRACE-472: the disclosure does not identify the worktree the run is confined to (${JSON.stringify(disclosure.lines)})`);
+expect(disclosure.buttons.includes('Abandon') && disclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the disclosure offers ${JSON.stringify(disclosure.buttons)} rather than a way to abandon and a way to start`);
+const abandoned = release.evals['7600'];
+expect(abandoned && abandoned.column === 'backlog', `REQ-TRACE-472: after abandoning the disclosure REQ-101 sits in ${abandoned?.column}, not the column it was in`);
+expect((abandoned.feedback ?? []).some((f) => f.includes('nothing was written')), `REQ-TRACE-472: abandoning left no statement that nothing happened (${JSON.stringify(abandoned?.feedback)})`);
+const timeline = ['13000', '18000', '23000', '29000'].map((k) => release.evals[k]).filter((v) => v && typeof v === 'object');
+const columnsSeen = timeline.map((t) => t.column);
+expect(columnsSeen.some((c) => c === 'running' || c === 'review' || c === 'done'), `REQ-TRACE-499: the release never became a run — the card read ${JSON.stringify(columnsSeen)} across the launch`);
+const reviewed = timeline.find((t) => t.column === 'review');
+expect(reviewed !== undefined, `REQ-TRACE-499: the run never arrived at review (${JSON.stringify(columnsSeen)})`);
+// REQ-TRACE-497: a card that has arrived in a column which remains folded is never observable.
+expect(!(reviewed.rails ?? []).includes('review'), `REQ-TRACE-497: the review column held the arrived card while folded (${JSON.stringify(reviewed.rails)})`);
+// REQ-TRACE-497: a column count that disagrees with the number of cards visible in that column. Only a column that
+// has realised everything it holds can be counted on screen; a virtualised one reports what it built, by design.
+for (const t of [abandoned, ...timeline]) for (const c of t.columns ?? []) if (!c.offscreen && c.realised === c.count) expect(c.widgets === c.count, `REQ-TRACE-497: column ${c.key} says ${c.count} and shows ${c.widgets} card widgets`);
+const settled = release.evals['37000'];
+expect(settled && settled.column === 'done', `REQ-TRACE-499: after the review's accept REQ-101 sits in ${settled?.column}, not done`);
+const history = release.evals['37400'];
+expect(history && history.state === 'available' && history.entries.length >= 2, `REQ-TRACE-497: the delivery history of REQ-101 reads ${JSON.stringify(history)} after a release and an accept`);
+expect(history.entries.some((e) => /release/i.test(e)) && history.entries.some((e) => /accept/i.test(e)), `REQ-TRACE-405: the history does not carry both actions (${JSON.stringify(history.entries)})`);
+// REQ-TRACE-276: the card and the detail are one projection, so the health on each must be the same word.
+expect(history.detailHealth === null || history.detailHealth === settled.health, `REQ-TRACE-497: the card reads health ${settled.health} and its detail reads ${history.detailHealth}`);
+
+// The store, read directly: what the screen cannot show (REQ-TRACE-405/464/497).
+const rows = deliveryRows(e2e.local);
+expect(rows !== null, `no delivery store was written under ${e2e.local}`);
+const historyTable = rows.tables.find((t) => /history/.test(t));
+const runsTable = rows.tables.find((t) => /run/.test(t));
+expect(historyTable !== undefined && runsTable !== undefined, `the store holds no delivery history or run table (${JSON.stringify(rows.tables)})`);
+const entries = rows.query(`select * from "${historyTable}" order by rowid`);
+const releases = entries.filter((e) => String(e.action) === 'release');
+expect(releases.length === 1, `REQ-TRACE-472/497: the abandoned launch wrote a record — ${releases.length} release entries in the history, not one (${JSON.stringify(entries.map((e) => e.action))})`);
+expect(entries.some((e) => String(e.action) === 'accept'), `REQ-TRACE-405: no accept was recorded (${JSON.stringify(entries.map((e) => e.action))})`);
+const runRows = rows.query(`select * from "${runsTable}"`);
+expect(runRows.length === 1, `REQ-TRACE-464: ${runRows.length} run rows were written for one release`);
+expect(typeof runRows[0].session_id === 'string' && runRows[0].session_id.length > 0, `REQ-TRACE-464/497: the run record carries no session identifier (${JSON.stringify(runRows[0])})`);
+expect(String(runRows[0].permissions).length > 0, `REQ-TRACE-472: the run record does not say what permissions it was granted (${JSON.stringify(runRows[0])})`);
+
+// The subsequent edit: the requirement's own document, changed on disk by something other than the application.
+const storeDir = join(e2e.workspace, 'docs', 'requirements', 'REQ-100-fixture-epic');
+const docName = readdirSync(storeDir).find((f) => f.startsWith('REQ-101'));
+expect(docName !== undefined, `the fixture copy holds no REQ-101 document in ${storeDir}`);
+const docPath = join(storeDir, docName);
+const before = readFileSync(docPath, 'utf8');
+writeFileSync(docPath, `${before.trimEnd()}\n\nEdited on disk by requirements-proof after the delivery was accepted, so the text no longer matches the accepted snapshot.\n`);
+const noticed = launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  // `needs-update` is the fifth column and lies outside the viewport at 1264 px, so the card is revealed first.
+  ROTARIS_CAPTURE_EVAL_AT: [`${REVEAL_101}@6000`, `${BOARD_AT}@7000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '8000',
+}, 240_000);
+const after = noticed.evals['7000'];
+expect(after && after.column === 'needs-update', `REQ-TRACE-499/407: after the source was edited on disk REQ-101 reads ${after?.column}, not needs-update`);
+expect(after.health === 'needs-update', `REQ-TRACE-252: the card's health after the edit is ${after?.health}`);
+stage2['end-to-end'] = {
+  disclosure: { lines: disclosure.lines.length, buttons: disclosure.buttons },
+  abandoned: { column: abandoned.column, statement: (abandoned.feedback ?? [])[0] ?? null },
+  timeline: columnsSeen, settled: settled.column, history: history.entries.length,
+  store: { tables: rows.tables, counts: rows.counts, releases: releases.length, runs: runRows.length, session: String(runRows[0].session_id).slice(0, 8), permissions: runRows[0].permissions },
+  afterEdit: { column: after.column, health: after.health },
+};
+
+// ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
+const GRAPH_AT = `(() => { const g = document.querySelector('[data-testid="req-graph"]'); const b = window.__rotarisBoard; if (g === null) return null; return { centre: g.getAttribute('data-centre'), depth: Number(g.getAttribute('data-depth')), summary: (document.querySelector('[data-testid="req-graph-summary"]') || {}).textContent, bound: (document.querySelector('[data-testid="req-graph-bound"]') || {}).textContent, nodes: [...document.querySelectorAll('[data-testid="req-graph-node"]')].map((n) => ({ id: n.getAttribute('data-node'), kind: n.getAttribute('data-kind'), resolved: n.getAttribute('data-resolved') === 'true', navigable: n.getAttribute('data-navigable') === 'true', disabled: n.disabled })), columns: [...document.querySelectorAll('[data-testid="req-graph-column"]')].map((c) => c.getAttribute('data-depth')), edges: [...document.querySelectorAll('[data-testid="req-graph-edge"]')].map((e) => e.textContent.trim()), observable: b ? b.graph : null }; })()`;
+const SET_DEPTH = `(() => { const el = document.querySelector('[data-testid="req-graph-depth"]'); if (el === null) return 'absent'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, '3'); el.dispatchEvent(new Event('input', { bubbles: true })); return { min: el.getAttribute('min'), max: el.getAttribute('max'), description: el.getAttribute('aria-description') }; })()`;
+const EPIC_AND_RAIL = `(() => { const epic = document.querySelector('[data-testid="req-epic"]'); const rail = document.querySelector('[data-testid="req-rail"]'); const styleOf = (el) => { const s = getComputedStyle(el); return { writingMode: s.writingMode, transform: s.transform }; }; return { epic: epic === null ? null : { draggable: epic.getAttribute('draggable'), actions: epic.querySelectorAll('button[data-req-move], [data-testid="req-move-control"]').length }, rail: rail === null ? null : styleOf(rail) }; })()`;
+const DRAG_ON_EPIC_AXIS = `(() => { const card = document.querySelector('[data-req-card="REQ-101"]'); if (card === null) return 'absent'; const dt = new DataTransfer(); const ev = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }); card.dispatchEvent(ev); return { defaultPrevented: ev.defaultPrevented, types: [...dt.types], dragging: (document.querySelector('[data-testid="req-columns"]') || {}).getAttribute ? document.querySelector('[data-testid="req-columns"]').getAttribute('data-dragging') : null, feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()) }; })()`;
+
+const paneProfile = profile('panes');
+const panes = launch('panes', paneProfile.workspace, paneProfile.local, paneProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    '[data-testid="req-queue-open"]@3000',
+    '[data-testid="req-pane-close"]@4200',
+    '[data-testid="req-queue-open"]@4800',
+    '[data-testid="req-pane-close"]@5600',
+    `${CARD_101}@6200`,
+    '[data-testid="req-detail-graph"]@7600',
+    '[data-testid="req-graph-back"]@11000',
+  ].join(';;'),
+  ROTARIS_CAPTURE_KEYS: 'Return@6800',
+  ROTARIS_CAPTURE_SELECT: '[data-testid="req-axis"]>>epic@11600',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@3600`, `${BOARD_AT}@5200`, `${GRAPH_AT}@8400`, `${SET_DEPTH}@9000`, `${GRAPH_AT}@9800`, `${EPIC_AND_RAIL}@11400`, `${DRAG_ON_EPIC_AXIS}@12400`].join(';;'),
+  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-pane-queue"]@3800',
+  ROTARIS_CAPTURE_AFTER_MS: '13200',
+}, 240_000);
+
+const firstOpen = panes.evals['3600'];
+const secondOpen = panes.evals['5200'];
+const queuePane = panes.inspects['[data-testid="req-pane-queue"]@3800'];
+expect(queuePane && queuePane.matches.length === 1, 'REQ-TRACE-375: the queue pane did not open from the board');
+const queueMount = (firstOpen.panes ?? []).find((p) => p.key === 'queue');
+expect(firstOpen.openPane === 'queue' && queueMount && queueMount.installed === true, `REQ-TRACE-369: the queue pane reports ${JSON.stringify(queueMount)} after being opened`);
+for (const p of firstOpen.panes ?? []) if (p.key !== 'queue') expect(p.installed === false, `REQ-TRACE-375: asking about ${p.key} built it (${JSON.stringify(p)})`);
+const queueAgain = (secondOpen.panes ?? []).find((p) => p.key === 'queue');
+expect(queueAgain && queueAgain.openedAt === queueMount.openedAt, `REQ-TRACE-369: re-opening the queue pane built a second one (${queueMount.openedAt} then ${queueAgain?.openedAt})`);
+
+const graph = panes.evals['8400'];
+expect(graph !== null && graph.centre === 'REQ-101', `REQ-TRACE-322: the graph did not centre on REQ-101 (${JSON.stringify(graph)})`);
+expect(graph.depth === 2 && graph.bound.includes('of 3'), `REQ-TRACE-323: the graph opened at depth ${graph.depth} and states ${JSON.stringify(graph.bound)}`);
+expect(graph.summary.includes('Centred on REQ-101') && /at depth 2/.test(graph.summary), `REQ-TRACE-327: the contents summary reads ${JSON.stringify(graph.summary)}`);
+expect(graph.nodes.length > 1 && graph.edges.length > 0, `REQ-TRACE-322: the graph drew ${graph.nodes.length} nodes and ${graph.edges.length} edges`);
+expect(graph.nodes.every((n) => ['requirement', 'epic', 'implementation', 'test'].includes(n.kind)), `REQ-TRACE-326: a node carries a kind outside the four (${JSON.stringify(graph.nodes.map((n) => n.kind))})`);
+for (const n of graph.nodes) expect(n.navigable === ((n.kind === 'requirement' || n.kind === 'epic') && n.resolved), `REQ-TRACE-326: ${n.id} is ${n.kind}, resolved ${n.resolved}, navigable ${n.navigable}`);
+for (const n of graph.nodes) expect(n.disabled === !n.navigable, `REQ-TRACE-326: ${n.id} is navigable ${n.navigable} and its control is disabled ${n.disabled}`);
+expect(graph.observable && graph.observable.nodes === graph.nodes.length && graph.observable.edges === graph.edges.length, `the board's own model reports ${JSON.stringify(graph.observable)} against ${graph.nodes.length} nodes and ${graph.edges.length} edges on screen`);
+const depthControl = panes.evals['9000'];
+expect(depthControl && depthControl.min === '1' && depthControl.max === '3', `REQ-TRACE-323: the depth control's range is ${JSON.stringify(depthControl)}`);
+expect(String(depthControl.description).includes('maximum of 3'), `REQ-TRACE-323: the depth control's accessible description reads ${JSON.stringify(depthControl.description)}`);
+const deeper = panes.evals['9800'];
+expect(deeper && deeper.depth === 3 && /at depth 3/.test(deeper.summary), `REQ-TRACE-323: after asking for depth 3 the graph reads ${JSON.stringify({ depth: deeper?.depth, summary: deeper?.summary })}`);
+expect(deeper.nodes.length >= graph.nodes.length, `a deeper graph shows fewer nodes (${deeper.nodes.length} against ${graph.nodes.length})`);
+
+const shapes = panes.evals['11400'];
+expect(shapes && shapes.epic !== null, 'the epic card is not on screen');
+expect(shapes.epic.draggable !== 'true' && shapes.epic.actions === 0, `REQ-TRACE-497: the epic card offers a delivery action or can be dragged (${JSON.stringify(shapes.epic)})`);
+if (shapes.rail !== null) expect(shapes.rail.writingMode === 'horizontal-tb' && (shapes.rail.transform === 'none' || shapes.rail.transform === ''), `REQ-TRACE-497: the folded rail carries rotated text (${JSON.stringify(shapes.rail)})`);
+const dragged = panes.evals['12400'];
+expect(dragged !== 'absent' && dragged.dragging !== 'true' && dragged.types.length === 0, `REQ-TRACE-497: a card was dragged on the epic axis (${JSON.stringify(dragged)})`);
+expect((dragged.feedback ?? []).some((f) => f.includes('Dragging moves a requirement between delivery states')), `REQ-TRACE-297: the refusal was silent (${JSON.stringify(dragged.feedback)})`);
+stage2.panes = {
+  registry: { first: queueMount, second: queueAgain, others: (firstOpen.panes ?? []).filter((p) => p.key !== 'queue').map((p) => p.installed) },
+  graph: { centre: graph.centre, depth: graph.depth, nodes: graph.nodes.length, edges: graph.edges.length, kinds: [...new Set(graph.nodes.map((n) => n.kind))], columns: graph.columns, deeperNodes: deeper.nodes.length },
+  epic: shapes.epic, rail: shapes.rail, dragOnEpicAxis: { dragging: dragged.dragging, feedback: (dragged.feedback ?? [])[0] ?? null },
+};
+
 results.stage2 = stage2;
+// Part R2 — the deferred failure, reported now that everything else has been measured and recorded.
+if (deferred.length > 0) {
+  results.passed = false;
+  results.deferred = deferred;
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+  for (const [name, value] of Object.entries(stage2)) console.log(`  ${name}: ${JSON.stringify(value).slice(0, 220)}`);
+  console.error(deferred.join('\n'));
+  process.exit(1);
+}
 results.passed = true;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 for (const [name, value] of Object.entries(stage2)) console.log(`  PASS  ${name}: ${JSON.stringify(value).slice(0, 220)}`);

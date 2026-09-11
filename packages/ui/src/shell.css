@@ -1229,3 +1229,35 @@
    no resize (AM's handoff §9 named this the remedy). A message that wraps to a second line still grows the slot; stated. */
 .term-tab__banner { min-height: calc(var(--rt-text-sm, 12px) * var(--rt-leading-body, 1.62) + var(--rt-text-xs, 11px) * var(--rt-leading-body, 1.62) + 2 * var(--rt-space-2, 8px) + var(--rt-space-1, 4px) + 2 * var(--rt-hairline-width, 1px)); }
 .term-tab__banner:empty { display: block; }
+
+/* Part R2 — the pane host (Part AP's five panes, mounted on the board at last), the launch disclosure's place in the
+   flow and the relationship graph of REQ-TRACE-322..333. Craft from the mockup's REQUIREMENTS screen and its Graph
+   tab: cards on the surface ground with a hairline border and the medium radius, the identifier in the mono face
+   above a display-weight label, relations named in the mono face. Structure is the specification's — REQ-TRACE-328
+   fixes depth COLUMNS of focusable node controls and a textual edge list, which is what these rules lay out, and not
+   the mockup's absolutely positioned canvas. Every value is a token by name; no literal colour and no literal size
+   that the design does not already name. */
+.req-pane-host { position: absolute; inset: 0; z-index: 4; overflow: auto; background: var(--rt-bg); padding: var(--rt-space-4, 16px); display: flex; flex-direction: column; }
+.req-body { position: relative; }
+.req-graph { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); overflow: auto; flex: 1 1 auto; min-height: 0; }
+.req-graph__head { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
+.req-graph__title { font-size: var(--rt-text-md, 14px); font-weight: var(--rt-weight-medium, 500); margin: 0; }
+.req-graph__spacer { flex: 1 1 auto; }
+.req-graph__depth { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
+.req-graph__depth-input { width: calc(var(--rt-space-8, 40px) + var(--rt-space-4, 16px)); height: var(--rt-control-sm, 24px); }
+.req-graph__summary, .req-graph__bound { margin: 0; }
+.req-graph__columns { display: flex; gap: var(--rt-space-4, 16px); align-items: flex-start; overflow-x: auto; }
+.req-graph__column { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: calc(var(--rt-space-8, 40px) * 5); }
+.req-graph__node { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); align-items: flex-start; text-align: left;
+  background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px);
+  padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); color: var(--rt-text); cursor: pointer; }
+.req-graph__node:disabled { cursor: default; }
+.req-graph__node.is-centre { background: var(--rt-accent-tint-07, var(--rt-surface-2)); border-color: var(--rt-accent-500, var(--rt-border-strong)); }
+.req-graph__node.is-unresolved { border-style: dashed; color: var(--rt-text-tertiary); }
+.req-graph__node:focus-visible { outline: var(--rt-focus-width, 2px) solid var(--rt-focus, var(--rt-accent-400)); outline-offset: var(--rt-focus-offset, 2px); }
+.req-graph__node-id { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+.req-graph__node-label { font-size: var(--rt-text-sm, 12px); font-weight: var(--rt-weight-medium, 500); }
+.req-graph__node-tags { display: flex; gap: var(--rt-space-1, 4px); align-items: center; flex-wrap: wrap; }
+.req-graph__edges { margin: 0; padding-left: var(--rt-space-5, 20px); display: flex; flex-direction: column; gap: var(--rt-space-1, 4px);
+  font-size: var(--rt-text-xs, 11px); color: var(--rt-text-secondary); }
+.req-graph__empty { margin: 0; }

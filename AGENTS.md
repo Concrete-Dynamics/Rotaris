@@ -3,6 +3,10 @@
 `CLAUDE.md` states what governs this repository: the clean-room boundary, the approved inputs, the process
 state, the architecture views and the design language. Read it first — nothing here relaxes any of it.
 
+[`CONTEXT-MAP.md`](CONTEXT-MAP.md) is the vocabulary those documents fix: one `CONTEXT.md` per context, every
+term derived from `docs/spec/` and citing the requirement that owns it. Read it before naming anything new,
+and prefer its word over a synonym you would otherwise reach for.
+
 This file covers one thing it does not: **the live run**, the only check here that spends real money.
 
 ## Driving the built app — `pnpm app:drive`

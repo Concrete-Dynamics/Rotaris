@@ -115,3 +115,13 @@ states them; §2 states what is adopted and what is not, and nothing below moves
 
 Implementation work cites the requirement IDs it satisfies. Commits that implement behavior
 reference those IDs so requirement, decision, code, and test remain linked.
+
+[`CONTEXT-MAP.md`](CONTEXT-MAP.md) is the **domain glossary**: one `CONTEXT.md` per context, each at the
+package that owns that language, with the contexts drawn from the spec domains rather than from the process
+split. Consult it before naming anything, and keep it current when a name changes. Three rules hold it to
+this repository's terms — every term is **derived from `docs/spec/` and none is coined**, a term is defined
+in exactly one context and cited from the others (the specification's own "holds no copy of it" discipline),
+and every entry cites its owning `REQ-<DOMAIN>-<NNN>`, which is what makes the first rule checkable rather
+than taken on trust. A word the specification does not have is an open question against a requirement, not a
+licence to invent one; and an entry that disagrees with the requirement it cites is a defect of the change
+that wrote it, on the same terms as a stale view.

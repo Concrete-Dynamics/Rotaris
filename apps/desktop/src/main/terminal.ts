@@ -75,7 +75,7 @@ export class FrameDeliveryLimiter {
     this.bound = deps.bound ?? TERMINAL_DELIVERY_BOUND_PER_SECOND;
   }
 
-  /** One frame from the run host → every window subscribed to its session, each under its own bound. */
+  /** One frame from the run host → every window subscribed to its session, all of them spending the ONE bound (Part T2: a frame fanned to two windows spends two of the budget, never one each). */
   deliver(frame: TerminalFrame): number {
     const sinks = this.deps.relay.subscribersOf(frame.sessionId);
     for (const sink of sinks) this.offer(this.stateOf(sink), frame);

@@ -155,7 +155,13 @@ export class TerminalStreams {
     this.schedule(s, s.armed ? this.floorWait(s) : s.intervalMs);
   }
 
-  /** A keystroke was written to the process: arm the next flush (REQ-SHELL-166's echo budget; ADR-0021 Decision). */
+  /**
+   * The USER wrote to the process through the control surface: arm the next flush (REQ-SHELL-166's echo budget;
+   * REQ-CONFIG-117). Called only from `sendKeys`, `interrupt` and `endInput` — the three control-surface entries a person
+   * reaches after taking control. Output never arms, and neither does an agent's own `is_input` call (OQ-38, ruled
+   * 2026-09-11): the period is a ceiling on batching, and the licence to beat it is spent only where someone is waiting
+   * to see their own keystroke.
+   */
   keystroke(streamId: string): void {
     const s = this.find(streamId);
     if (!s) return;

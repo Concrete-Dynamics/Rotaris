@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
+import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
 import { wrapCommand } from './foreground.js';
@@ -104,6 +105,20 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const r = await t.execute(args({ command: "[Console]::Error.WriteLine('stderr-captured')" }), ctx());
     expect(output(r.text)).toContain('stderr-captured');
   });
+
+  it('OQ-38 ruled 2026-09-11: an agent keystroke does not arm the flush, and the control surface still does', async () => {
+    const t = await tool();
+    const streamId = foregroundStreamId('orchestrator');
+    // A call that supplies no timeout and then goes quiet soft-pauses and returns while the process keeps running, so
+    // the stream is still open and still framing (REQ-TOOLS-098) and the counter below is read against a live stream.
+    await t.execute(args({ command: 'Start-Sleep -Seconds 3; Write-Output done-later' }), ctx());
+    const before = manager!.streams.counters.armedFlushes;
+    await t.execute(args({ command: 'x', is_input: true }), ctx());
+    expect(manager!.streams.counters.armedFlushes).toBe(before);
+    // REQ-CONFIG-117 gives the licence to beat the period to the person who took control, and it is still spent there.
+    expect(manager!.streams.sendKeys(streamId, 'y').ok).toBe(true);
+    expect(manager!.streams.counters.armedFlushes).toBe(before + 1);
+  }, 20_000);
 
   it('REQ-TOOLS-097/099: the hard timeout kills the tree, restarts the session, reports 124 and session_reset; shell state is gone', async () => {
     const t = await tool();

@@ -8,7 +8,7 @@
 - **Origin:** DATA (ADR-DATA-07)
 - **Depends on:** ADR-0003, ADR-0040
 - **Scope note:** this record now also owns the **export** of the improvement artifact store, and only
-  the export. That store's write path remains unowned — OQ-45 — and this record does not take it.
+  the export. That store's write path was unowned when this note was written — OQ-45 — and this record still does not take it; **ADR-0061 takes it, 2026-09-11**, and OQ-45 is closed. The split stands: the export is this record's because `REQ-LIBRARY-176` and `REQ-TRACE-514` were minted by one ruling over one guarantee, and the write is ADR-0061's because the rule is not this store's.
 
 > **What moves and what does not.** Delivery state, history, the audit trail, run records, worktree
 > references and tombstones become rows in the per-workspace database SR-4 introduces. **Requirement

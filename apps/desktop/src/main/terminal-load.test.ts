@@ -293,7 +293,7 @@ describe('Part T2 — ADR-0021 obligation 2: what an unbounded background-sessio
     expect(shipped.maxLagMs).toBeLessThan(1000);
     measurements['obligation2'] = {
       licensedFramesPerSecondPerStream: 1000 / TERMINAL_COALESCE_FLOOR_MS, bound: TERMINAL_DELIVERY_BOUND_PER_SECOND,
-      key: { name: 'runtime.shell_max_background_sessions', default: 20, minimum: 1, maximum: null },
+      key: { name: 'runtime.shell_max_background_sessions', default: 20, minimum: 1, maximum: 64 },
       source: 'synthetic at the licensed rate through the real limiter', rungs,
     };
   });

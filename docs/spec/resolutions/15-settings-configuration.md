@@ -403,3 +403,31 @@ No behavior was lost to the sweep, and no requirement identifier was renumbered,
 > rule the three now share is stated in terms, so it survives a later edit to any of the lists — **the
 > starter file is written only where the product has established that nothing is there, and never where it
 > has failed to establish anything. Not being able to read a file is not evidence that the file is empty.**
+
+> ## Amendment, 2026-09-11 — REQ-CONFIG-116 gains a maximum and REQ-CONFIG-117 states what its period means
+>
+> **No disposition below is reversed.** Two keys this domain owns were ruled on by the product owner after the
+> terminal was built against them, and both rulings are stated where the key is registered rather than where it is
+> consumed, because a key's value space is this domain's.
+>
+> **REQ-CONFIG-116 — `shell_max_background_sessions` is `int 1–64` (OQ-55).** It had a default and a minimum and
+> **no maximum**, which ESC-22 had already noticed from the other side in 2026-09-02's amendment to domain 02. The
+> count is a multiplier on live terminal streams, whose delivery REQ-MONITOR-306 bounds in aggregate, so without a
+> ceiling the worst-case staleness of a live surface cannot be computed from a configuration at all — only observed
+> afterwards. The figure is REQ-TRACE-481's, taken with the reason that requirement gives rather than invented here.
+> A value outside the range is rejected at load and on assignment (REQ-CONFIG-111) and never clamped, which is the
+> treatment REQ-CONFIG-473 and REQ-CONFIG-476 already state for keys whose silent coercion would remove something
+> the user asked for.
+>
+> **REQ-CONFIG-117 — `terminal_stream_interval_ms` is a ceiling on batching, not a fixed cadence (OQ-38).** A
+> stream may frame sooner than the period and must do so when input the user has directed at a stream whose control
+> they have taken arms the next frame, so REQ-SHELL-166's echo criterion holds at every value the range permits.
+> Two bounds hold that licence and neither is configurable: the 20 ms floor between two frames of one stream, and
+> REQ-MONITOR-306's aggregate. **Output alone never arms a frame, and neither does input an agent sends to its own
+> terminal session.** That last clause is the narrow part of the ruling and it changed shipped behaviour: the first
+> implementation armed on an agent's keystroke as well, which spent a licence of 50 frames per second per stream on
+> streams no person was watching, and at the shipped defaults that was the whole of REQ-MONITOR-306's aggregate.
+>
+> **What is deliberately not changed.** Neither key moves its default, and neither amendment touches what a
+> configured value means for the command itself — REQ-TOOLS-126's statement that disabling streaming costs the live
+> view and never the command still governs, and the two keys remain ordinary `runtime:` keys layered per field.

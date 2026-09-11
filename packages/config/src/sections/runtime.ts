@@ -132,7 +132,7 @@ export function readRuntimeSection(value: unknown, sink: ProblemSink): RuntimeSe
     tool_call_timeout: r.int('tool_call_timeout', d.tool_call_timeout, { min: 1 }),
     summary_timeout: r.int('summary_timeout', d.summary_timeout, { min: 1 }),
     shell_command_timeout: r.int('shell_command_timeout', d.shell_command_timeout, { min: 1 }),
-    shell_max_background_sessions: r.int('shell_max_background_sessions', d.shell_max_background_sessions, { min: 1 }),
+    shell_max_background_sessions: r.int('shell_max_background_sessions', d.shell_max_background_sessions, { min: 1, max: 64 }),
     shell_background_timeout: r.int('shell_background_timeout', d.shell_background_timeout, { min: 1 }),
     terminal_stream_enabled: r.bool('terminal_stream_enabled', d.terminal_stream_enabled),
     terminal_stream_interval_ms: r.int('terminal_stream_interval_ms', d.terminal_stream_interval_ms, { min: 20, max: 2000 }),

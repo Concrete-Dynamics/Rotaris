@@ -209,8 +209,11 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
       }
       if (a.is_input) {
         session.sendInput(keystroke(a.command));
-        // Part AL: the agent's own keystroke arms the stream's next flush too, the same as the user's (ADR-0021 Decision).
-        manager.streams.keystroke(foregroundStreamId(ctx.agentName));
+        // REQ-CONFIG-117 (OQ-38, ruled 2026-09-11): the agent's own keystroke does NOT arm the stream's flush. Part AL
+        // armed it here "the same as the user's", which was the reading before the key was ruled; what the ruling fixes is
+        // that the licence to frame sooner than the period exists for REQ-SHELL-166's echo budget, and that budget is a
+        // person's gesture. An agent waits on the observation, not on a painted frame, so its input is framed at the period
+        // like any other output, and the 50 frames/s licence is not spent on a stream nobody is watching for an echo.
         const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: 'Input was written to the terminal session.', exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', warnings: [] });
         return observation(`Sent input to the terminal session.\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'success', exitCode: 0, warnings: [] });
       }

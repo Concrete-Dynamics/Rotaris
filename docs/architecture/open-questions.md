@@ -24,8 +24,12 @@ separates them into the three groups the gate actually turns on.
 **The specification-question count has moved since, and implementation is what moves it.** Four questions
 were raised by building the thing that met the requirement: **OQ-50** (Part K, the public model catalogue),
 **OQ-51** (Part AB, the unscoped queued prompt), **OQ-52** (Part AC, whether a delegated child may ask) and
-**OQ-53** (Part AH, which event reports a compression), **OQ-54** (Part AL, the user-terminal audit entry outside the closed permission vocabularies) and **OQ-55** (Part AL, `shell_max_background_sessions` without a maximum). That is **fifty-three specification questions**, eight
-resolved, leaving **forty-five open**, and **none blocks a named ADR**. Each of the four is stated where it
+**OQ-53** (Part AH, which event reports a compression), **OQ-54** (Part AL, the user-terminal audit entry outside the closed permission vocabularies) and **OQ-55** (Part AL, `shell_max_background_sessions` without a maximum). That is **fifty-three specification questions**. **Twelve are now resolved, leaving forty-one open**, and none
+blocks a named ADR. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
+**OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
+path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
+had been priced by measurement before they were put. Each of the four is stated where it
 was found, with what the build shipped meanwhile, so a ruling replaces an interim rather than filling a gap.
 
 ***Three of those counts changed on 2026-09-02 and the direction is not the usual one, so a reader should
@@ -1093,7 +1097,18 @@ decides whether the phrase is satisfied or merely not violated.** *Unchanged by 
 argument against the alternative: several main windows may display one session (`REQ-MONITOR-243`), so
 "the window side" is not a single place to put it.*
 
-**OQ-5 — What the closing terminal `screen` frame carries.** *(ADR-0021.)* `REQ-TOOLS-127` requires the
+**OQ-5 — Decision closed, 2026-09-11.** `REQ-TOOLS-127` now states that the closing frame is a literal
+replacement of the displayed text carrying an explicit marker that it is one, that its text is plain on the terms
+the requirement already fixed, and that it is **the only frame of a stream of which any of that is true**. The
+record's reading is ratified rather than replaced, and the amendment states the reason the conflict was never
+real: `REQ-SHELL-095` and `REQ-SHELL-098` govern the stream **while the process is running**, and this frame is
+emitted after it has exited — no cursor to paint, no alternate screen to be in, no further output to attribute to
+a cell. The two bind different instants. **One thing nobody had noticed is fixed with it:** the closing sentence
+bound a *foreground* stream only, while all three executions emitted a closing frame for `bg:` streams as well and
+a proof asserted it — the code was ahead of the requirement rather than outside it, and the amendment covers both.
+No code changed. Recorded in ADR-0021's ruling section of the same date.
+
+**Historical question.** *(ADR-0021.)* `REQ-TOOLS-127` requires the
 closing frame's text to **equal the observation's final output text**, which is plain, capped and
 truncated from the oldest end — not terminal control bytes. `REQ-SHELL-095`, `REQ-SHELL-098` and
 `REQ-SHELL-166` require a full character grid with alternate-screen fidelity, per-cell attributes and
@@ -1112,7 +1127,22 @@ same proof renders cursor addressing and an alternate screen from the VT deltas 
 which plain text cannot carry (`REQ-SHELL-095`, `REQ-SHELL-098`). Nothing measured contradicts the record's reading
 and nothing measured establishes it as the specification's intent. **Still the owner's.**
 
-**OQ-38 — The output sampling period versus the echo budget.** *(ADR-0021; changes what a configured key
+**OQ-38 — Decision closed, 2026-09-11, and the ruling narrowed the reading it ratified.** `REQ-CONFIG-117` now
+states that `terminal_stream_interval_ms` is a **ceiling on batching and not a fixed cadence**, and `REQ-TOOLS-126`
+cites it rather than restating it. The strict fixed-period reading was not rulable: it makes `REQ-SHELL-166`, a
+SHALL with a demonstration obligation against a real pseudo-terminal, unmeetable at `REQ-TOOLS-126`'s own default
+and at every larger value in its range. **What the ruling changed is who holds the licence.** The first execution
+armed the flush on the agent's own `is_input` call as well, on the reading that an agent's keystroke is "the same
+as the user's"; the amendment states that it is not, because the licence exists for `REQ-SHELL-166`'s gesture
+budget and an agent waits on the observation rather than on a painted frame. Output alone never arms. That closes
+the transport pressure this register priced: the licence is 50 frames/s per stream, and spending it only where a
+person is watching leaves a background session framing at the configured period — **ten frames a second at the
+default rather than fifty** — so twenty background sessions offer 200 deliveries a second against
+`REQ-MONITOR-306`'s 1,000 rather than consuming the whole aggregate. `REQ-TOOLS-126`'s new citation of
+`REQ-MONITOR-306` also discharges the half of **ESC-22** domain 05 was recorded as owing. The falsified reading is
+kept beside its replacement in ADR-0021 and in the code that held it.
+
+**Historical question.** *(ADR-0021; changes what a configured key
 does for a user who sets it.)* `REQ-TOOLS-126` names `runtime.terminal_stream_interval_ms` the **output
 sampling period**, default 100 ms, range 20–2000. `REQ-SHELL-166` requires the character a keystroke
 produces to be visible within `REQ-SHELL-150`'s **100 ms** gesture budget, measured key press to painted
@@ -1974,7 +2004,18 @@ native replace primitive (`ReplaceFileW`, measured succeeding against a held rea
 a ladder on the traceability path entirely, at a cost that is measured out of process and unmeasured in
 process. That is a decision about who owns a native addon, not about constants.
 
-**OQ-45 — No ADR owns the improvement artifact store. *Its product half was ESC-30, which is now RULED AND
+**OQ-45 — Decision closed, 2026-09-11: ADR-0061 owns the store.** This entry had stopped being a question for the
+owner when ESC-30 was ruled and applied on 2026-09-02; what remained was a record nobody had written, and
+**ADR-0061 — The improvement artifact store's write path** is now it. It takes the second of the two horns this
+entry names: the version write stays **outside** the artifact write's all-or-nothing boundary, as `REQ-LIBRARY-047`
+requires, and the store carries a count of versions *allocated* as against retained so the export can tell a
+version that was never recorded from one retention pruned. The first horn — bringing the version write inside the
+transaction — is refused for the reason this entry gives: it would let a failed version write undo the review
+decision it was recording, which is worse for a user than an imprecise export. Constraint **W-26** is satisfied by
+the same counter shape ADR-0041 already obliges for transitions, and **ESC-3's ruling has an architectural home**
+again. ADR-0041's scope note is amended to point at it.
+
+**Historical question.** *Its product half was ESC-30, which is now RULED AND
 APPLIED (2026-09-02); the storage half stays here and is what remains open.*** *(ADR-0003, ADR-0004, ADR-0041; ESC-3, ESC-18,
 ESC-30; constraint C-10.)*
 
@@ -2288,7 +2329,17 @@ event joins it — the interim is not repaired quietly.
 
 REQ-SHELL-107 says a user's terminal action is written to the permission audit with `decision: user-input`, `source: user`. `DECISIONS` is the closed set `{allow, ask, deny}` (REQ-TOOLS-012) and `DECISION_SOURCES` the closed twelve (REQ-TOOLS-028); neither holds `user-input` or `user`. Part AL writes the entry as spec 12 words it (the writer takes the strings), so a decision-log reader that enumerates the closed vocabularies will not recognise it. Whether spec 12 mints two new members, or the audit entry is a different record from a permission decision, is the owner's call. Recorded, written as spec 12 says, not resolved.
 
-**OQ-55 — `runtime.shell_max_background_sessions` has no stated maximum.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+**OQ-55 — Decision closed, 2026-09-11.** `REQ-CONFIG-116` gives the key a range of **1–64**. The figure is
+`REQ-TRACE-481`'s ceiling taken with its reason — an input needs some upper bound, and a figure no machine could
+actually service is of no use to anyone — rather than a fresh invention. A value outside the range is rejected at
+load and on assignment (`REQ-CONFIG-111`), never clamped; `REQ-TOOLS-108` keeps the effective limit and the message
+on reaching it. With the ceiling in place the staleness law Part T″ measured has both of its terms: at the maximum,
+`(20 agents + 64) × windows` stays under the thousand-stream crossing for any window count a user can produce, so
+the worst case a **configuration** can reach is the flat regime bounded by the drain's own one-second period rather
+than the `streams × windows ÷ 1,000` seconds that applies above it. **ADR-0021's "The cap is load-bearing"
+obligation 2 is discharged by this**, and says so in place.
+
+**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 

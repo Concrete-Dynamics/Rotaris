@@ -32,12 +32,22 @@
  *   `/compress`    during the run: dispatched to the run host, whose refusal (no arm until Part AO) surfaces as `failed`;
  *   `/stop`        during the run: accepted, the run cancels, no notice (REQ-CHAT-029).
  *
+ * Part C2 (wave 3) adds three launches of its own after that one, each with its own scratch profile:
+ *
+ *   palettes       `/theme` switches to each of REQ-SHELL-128's three built-in palettes in turn and REQ-CHAT-027's
+ *                  four roles are measured on each — against the ground that palette actually paints, which is read
+ *                  from the document root's `--rt-bg` at the same instant rather than written down here;
+ *   theme-restart  the same preference root opened again: the theme `/theme` wrote is the theme the new window paints;
+ *   wired          `/logout` against the real provider registry and credential store (a key written through
+ *                  `providers.save`, signed out by the command, the store read back on both sides and the file gone),
+ *                  and REQ-CHAT-028's rebuild on a LIBRARY change and on a SETTINGS change, both without a restart.
+ *
  * Evidence under `.slash-proof/`: `catalogue.png` (the end), `popup.png` (the popup open), `catalogue.log`,
- * `results.json`. `--skip-build` skips the build.
+ * one log and PNG per later launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -120,6 +130,15 @@ const srgb = (painted) => {
 const luminance = (painted) => { const [r, g, b] = srgb(painted); return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b); };
 const transparent = (painted) => !painted.trim().startsWith('oklch') && channels(painted).length === 4 && channels(painted)[3] === 0;
 const contrast = (a, b) => { const la = luminance(a), lb = luminance(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
+/**
+ * Part C2 — the same colour written two ways. A COMPUTED colour is serialised by Chromium with its lightness as a
+ * fraction; a custom property read with `getPropertyValue` comes back as the theme DECLARED it, with the percent sign
+ * the token carries. Comparing the two as text says they differ when they are the same paint, so they are compared as
+ * numbers — which is also what keeps this script free of any literal colour of its own, as `tools/check-theme-colours.mjs`
+ * requires (it caught the two examples this comment first spelled out, which is the rule working).
+ */
+const oklchNumbers = (text) => { const m = /oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)/.exec(String(text ?? '')); return m ? [m[2] === '%' ? Number(m[1]) / 100 : Number(m[1]), Number(m[3]), Number(m[4])] : null; };
+const sameColour = (a, b) => { const x = oklchNumbers(a); const y = oklchNumbers(b); return x !== null && y !== null && x.every((v, i) => Math.abs(v - y[i]) < 1e-4); };
 
 const root = join(output, 'profile');
 const workspace = join(root, 'alpha');
@@ -378,6 +397,223 @@ const atRest = evalAt(run, T.stopped);
 expect((atRest === null || atRest.title !== 'Command not run') && match(run, '[data-testid="composer-notice"]', T.stopped) === null,
   `an executed /stop raises no refusal and the composer draws no banner of its own; the slot may hold the run's own rest notice: ${JSON.stringify(atRest)}`);
 results.run = { compress: compress === null ? null : compress.message, afterStop: stopped, atRest: atRest === null ? null : atRest.title };
+
+/* ═══ Part C2 (wave 3) ═══════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * Three things the launch above cannot establish, each in a launch of its own so no measurement rides on another's
+ * schedule:
+ *
+ *   palettes       REQ-CHAT-027 measured on ALL THREE built-in palettes (REQ-SHELL-128), in the built product, on the
+ *                  ground each palette actually paints — the composer's background compared with the document root's
+ *                  own `--rt-bg` at the same instant, so no literal colour is written here and no palette is asserted
+ *                  from data this script holds. The switch between them is `/theme <name>` itself, so REQ-CHAT-159's
+ *                  command is what performs each change.
+ *   theme-restart  `/theme` against the REAL settings: the desktop preference store's `appearance/theme` after the
+ *                  launch, and a second launch on the same preference root that paints what the command wrote.
+ *   wired          `/logout` against the REAL provider registry and credential store — the catalogue's own six rows,
+ *                  a key written through `providers.save` and then signed out by the command, with the store's answer
+ *                  read back on either side; and REQ-CHAT-028's rebuild measured LIVE on both triggers it names that
+ *                  this product has: a LIBRARY change (a stash written through `prompts.push`) and a SETTINGS change
+ *                  (`config.setField`, the write the composer's own chips make), each without a restart.
+ *
+ * What is NOT measured, stated rather than skipped: `/logout`'s limb for a provider signed in against a real endpoint
+ * with a real key — this machine has no credential for one, and a key that validates cannot be invented. The limb
+ * exercised below is the same code path with `validate: false`, which writes and deletes a real credential file and
+ * never reaches the network.
+ */
+
+/** A scratch profile per launch: a theme or a credential written by one cannot reach another's measurements. */
+function scratch(name) {
+  const base = join(output, name);
+  const dirs = { workspace: join(base, 'workspace'), local: join(base, 'local'), preferences: join(base, 'preferences') };
+  for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true });
+  mkdirSync(join(dirs.workspace, '.rotaris'), { recursive: true });
+  mkdirSync(join(dirs.workspace, '.agents', 'prompts'), { recursive: true });
+  writeFileSync(join(dirs.workspace, 'README.md'), `# slash proof workspace (${name})\n`);
+  writeFileSync(join(dirs.workspace, '.rotaris', 'agents.yaml'), AGENTS_YAML);
+  return dirs;
+}
+
+/**
+ * A file written into the workspace WHILE the application is running, by a process of its own. `spawnSync` blocks this
+ * script for the whole launch, so a file that must not exist when the catalogue is first built cannot be written from
+ * here; this is the person who drops a prompt file into `.agents/prompts/` with the window open.
+ */
+function writeDuringLaunch(path, contents, delayMs) {
+  const source = `const fs=require('node:fs');const p=require('node:path');setTimeout(()=>{fs.mkdirSync(p.dirname(${JSON.stringify(path)}),{recursive:true});fs.writeFileSync(${JSON.stringify(path)},${JSON.stringify(contents)});},${delayMs});`;
+  spawn(process.execPath, ['-e', source], { detached: true, stdio: 'ignore' }).unref();
+}
+
+/** The active theme and the ground it paints, read from the document root and the composer at one instant. */
+const readTheme = `(() => { const root = getComputedStyle(document.documentElement); const input = document.querySelector('.composer__input'); return { theme: document.documentElement.dataset.theme ?? null, dark: document.documentElement.dataset.dark ?? null, background: root.getPropertyValue('--rt-bg').trim(), surface: input ? getComputedStyle(input).backgroundColor : null }; })()`;
+/** REQ-CHAT-027's four roles as painted, with the theme and its ground beside them so each ratio names the palette it belongs to. */
+const readRole = `(() => { const t = document.querySelector('[data-testid="slash-token"]'); const a = document.querySelector('[data-testid="slash-argument"]'); const input = document.querySelector('.composer__input'); if (!input) return { state: null }; const s = t ? getComputedStyle(t) : null; return { theme: document.documentElement.dataset.theme ?? null, state: t ? t.dataset.state : null, text: t ? t.textContent : null, color: s ? s.color : null, weight: s ? s.fontWeight : null, argument: a ? getComputedStyle(a).color : null, argumentText: a ? a.textContent : null, surface: getComputedStyle(input).backgroundColor, background: getComputedStyle(document.documentElement).getPropertyValue('--rt-bg').trim() }; })()`;
+/** One popup row by name, with the availability and reason REQ-CHAT-025 requires it to carry. */
+const slashRow = (name) => `(() => { const p = document.querySelector('[data-testid="slash-popup"]'); if (!p) return { popup: false }; const rows = [...p.querySelectorAll('[role="option"]')]; const r = rows.find((x) => x.dataset.command === ${JSON.stringify(name)}); return { popup: true, rows: rows.length, row: r ? { kind: r.dataset.kind, available: r.dataset.available, title: r.getAttribute('title'), text: r.textContent.replace(/\\s+/g, ' ').trim() } : null }; })()`;
+/** The registrar's own signal (Part AO): what the prompt-file module has put on the registry the popup reads. */
+const promptSignal = `(() => { const s = document.querySelector('[data-testid="prompt-commands"]'); return { count: Number(s?.dataset.count ?? '-1'), roots: s?.dataset.roots ?? null, focused: document.activeElement ? String(document.activeElement.className) : null }; })()`;
+// The window's own bridge (ADR-0044's one namespace), so the provider registry and the configuration writer are reached
+// by exactly the commands the Providers card and the composer's chips send — never by a stand-in.
+const providersList = `(async () => { const r = await window.rotaris.command({ kind: 'providers.list' }); return r.ok ? r.value.map((row) => ({ id: row.id, authenticated: row.authenticated })) : { error: r.headline }; })()`;
+/**
+ * The key is written and the registry re-read in ONE evaluation, so the second read happens after the first command's
+ * REPLY rather than at a millisecond that hopes it has landed. `providers.save` re-bootstraps the workspace's
+ * configuration before it answers, which took longer than the 700 ms this once allowed and made the second run of this
+ * proof red on a machine running three agents — a schedule measuring the host, which is the failure this wave exists
+ * to stop. `validate: false` is what keeps it off the network: the credential is stored and no endpoint is called.
+ */
+const saveProviderKeyAndList = `(async () => { const s = await window.rotaris.command({ kind: 'providers.save', id: 'deepseek', apiKey: 'sk-proof-not-a-real-key', baseUrl: null, validate: false }); const l = await window.rotaris.command({ kind: 'providers.list' }); return { saved: s.ok ? s.value : { error: s.headline }, rows: l.ok ? l.value.map((row) => ({ id: row.id, authenticated: row.authenticated })) : null }; })()`;
+/** The registry read until the sign-out the COMMAND performed is visible in it, bounded, with the wait recorded. */
+// `while (true)`, never `for (;;)`: the capture harness splits its step list on `;;`, so a probe holding that pair is
+// cut in half and arrives as two broken fragments — measured here as "Script failed to execute" from the renderer.
+const listUntilSignedOut = `(async () => { const started = Date.now(); while (true) { const r = await window.rotaris.command({ kind: 'providers.list' }); const rows = r.ok ? r.value.map((row) => ({ id: row.id, authenticated: row.authenticated })) : null; const row = rows?.find((x) => x.id === 'deepseek') ?? null; if (row === null || row.authenticated === false || Date.now() - started > 4000) return { rows, waitedMs: Date.now() - started }; await new Promise((res) => setTimeout(res, 50)); } })()`;
+/** The registrar's signal read until it carries `want` commands, bounded, with the wait recorded (never a fixed millisecond). */
+const promptSignalWhen = (want) => `(async () => { const started = Date.now(); const read = () => { const s = document.querySelector('[data-testid="prompt-commands"]'); return { count: Number(s?.dataset.count ?? '-1'), roots: s?.dataset.roots ?? null }; }; while (true) { const v = read(); if (v.count >= ${want} || Date.now() - started > 5000) return { ...v, waitedMs: Date.now() - started }; await new Promise((r) => setTimeout(r, 50)); } })()`;
+const writeSetting = `(async () => { const r = await window.rotaris.command({ kind: 'config.setField', patch: { personas: { orchestrator: { model: 'scripted-2' } } } }); return { ok: r.ok, headline: r.ok ? null : r.headline }; })()`;
+
+// ── REQ-CHAT-027 on all three palettes ────────────────────────────────────────────────────────────────────────────
+const paletteProfile = scratch('profile-palettes');
+/** Each palette gets the same six steps from its own base; `+2800` apart, never interleaved. */
+const PALETTE_PLAN = [['rotaris-dim', 2000], ['nocturne', 4800], ['high-contrast', 7600]];
+const palettes = launch('palettes', paletteProfile.workspace, paletteProfile.local, paletteProfile.preferences, {
+  ROTARIS_CAPTURE_KEYS: PALETTE_PLAN.map(([, at]) => `Return@${at + 200}`).join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: PALETTE_PLAN.flatMap(([name, at]) => [
+    `${setComposer(`/theme ${name}`)}@${at}`, `${readTheme}@${at + 600}`,
+    `${setComposer('/mod')}@${at + 800}`, `${readRole}@${at + 1100}`,
+    `${setComposer('/model x')}@${at + 1400}`, `${readRole}@${at + 1700}`,
+    `${setComposer('/zzz')}@${at + 2000}`, `${readRole}@${at + 2300}`,
+    `${setComposer('')}@${at + 2500}`,
+  ]).join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '10600',
+});
+const paletteResults = {};
+for (const [name, at] of PALETTE_PLAN) {
+  const applied = evalAt(palettes, at + 600);
+  expect(applied?.theme === name, `"/theme ${name}" should have applied that palette (REQ-CHAT-159): ${JSON.stringify(applied)}`);
+  const partialRole = evalAt(palettes, at + 1100);
+  const resolvedRole = evalAt(palettes, at + 1700);
+  const unknownRole = evalAt(palettes, at + 2300);
+  expect(partialRole?.state === 'partial' && resolvedRole?.state === 'resolved' && unknownRole?.state === 'unknown',
+    `the three states on ${name}: ${JSON.stringify([partialRole?.state, resolvedRole?.state, unknownRole?.state])}`);
+  expect(partialRole.weight === '400' && resolvedRole.weight === '500' && unknownRole.weight === '500',
+    `REQ-CHAT-027's weights on ${name}: partial ${partialRole.weight} (not bold), resolved ${resolvedRole.weight}, unknown ${unknownRole.weight}`);
+  expect(resolvedRole.theme === name && partialRole.theme === name && unknownRole.theme === name, `every read must belong to ${name}: ${JSON.stringify([partialRole.theme, resolvedRole.theme, unknownRole.theme])}`);
+  // The ground is the palette's own token as the document root resolves it — never a colour this script knows.
+  const surface = resolvedRole.surface;
+  expect(sameColour(surface, resolvedRole.background), `the composer's painted ground on ${name} should be that palette's --rt-bg: ${surface} vs ${resolvedRole.background}`);
+  expect(resolvedRole.argumentText === ' x', `the argument span should hold the typed argument on ${name}: ${JSON.stringify(resolvedRole.argumentText)}`);
+  const painted = { partial: partialRole.color, resolved: resolvedRole.color, unknown: unknownRole.color, argument: resolvedRole.argument };
+  const ratios = {};
+  for (const [role, colour] of Object.entries(painted)) {
+    expect(typeof colour === 'string' && colour !== '' && !transparent(colour), `${role} paints nothing on ${name}: ${JSON.stringify(colour)}`);
+    ratios[role] = contrast(colour, surface);
+    expect(ratios[role] >= 4.5, `REQ-CHAT-027: ${role} paints at ${ratios[role].toFixed(2)}:1 on ${name}, below 4.5:1`);
+  }
+  expect(new Set(Object.values(painted)).size === 4, `the four role colours must differ on ${name}: ${Object.values(painted).join(' | ')}`);
+  paletteResults[name] = { surface, painted, ratios: Object.fromEntries(Object.entries(ratios).map(([role, r]) => [role, Number(r.toFixed(3))])) };
+}
+// Three palettes, not one palette measured three times.
+const grounds = new Set(Object.values(paletteResults).map((p) => p.surface));
+expect(grounds.size === 3, `the three palettes must paint three different grounds: ${[...grounds].join(' | ')}`);
+// `/theme` against the REAL settings: the desktop preference store's own key (REQ-SHELL-128, ADR-0042).
+const preferenceDocument = JSON.parse(readFileSync(join(paletteProfile.preferences, 'preferences.json'), 'utf8'));
+expect(preferenceDocument['appearance/theme'] === 'high-contrast', `"/theme" must write the theme the settings surface writes: ${JSON.stringify(preferenceDocument)}`);
+results.palettes = { themes: paletteResults, storedTheme: preferenceDocument['appearance/theme'] };
+
+// ── The theme the command wrote is the theme a restart paints ─────────────────────────────────────────────────────
+const restarted = launch('theme-restart', paletteProfile.workspace, paletteProfile.local, paletteProfile.preferences, {
+  ROTARIS_CAPTURE_EVAL_AT: `${readTheme}@2000`,
+  ROTARIS_CAPTURE_AFTER_MS: '2600',
+});
+const restoredTheme = evalAt(restarted, 2000);
+expect(restoredTheme?.theme === 'high-contrast', `the theme "/theme" wrote should be the one a new launch paints: ${JSON.stringify(restoredTheme)}`);
+expect(sameColour(restoredTheme.background, paletteResults['high-contrast'].surface), `the restarted window should paint the same ground: ${restoredTheme.background} vs ${paletteResults['high-contrast'].surface}`);
+results.themeRestart = restoredTheme;
+
+// ── `/logout` against the real providers, and REQ-CHAT-028's two live rebuilds ────────────────────────────────────
+const wiredProfile = scratch('profile-wired');
+const latePrompt = join(wiredProfile.workspace, '.agents', 'prompts', 'late-arrival.md');
+const W = {
+  firstPopup: 1500, popRow: 1800, clearA: 2000, listBefore: 2300, saveAndList: 2800,
+  logout: 4200, logoutEnter: 4400, logoutToast: 5600, notice: 5700, listAfterOut: 5900,
+  stash: 6600, secondPopup: 7200, popRow2: 7500, clearB: 7700, unknown: 8000, unknownEnter: 8200, unknownNotice: 8900,
+  // The prompt file lands at wall-clock 16 s. Every provider command above re-bootstraps the configuration, and each
+  // of those is a settings change that would re-read the roots, so the file must arrive AFTER the last of them — the
+  // margin is what makes `signalBefore`'s zero mean "nothing has re-read", rather than "the file is not there yet".
+  signalBefore: 18000, setField: 18500, signalAfter: 19000, thirdPopup: 23500, promptRow: 23900, end: 24600,
+};
+writeDuringLaunch(latePrompt, '---\ndescription: Written while the window was open\n---\nA prompt file that did not exist when the catalogue was first built.\n', 16_000);
+const launchedAt = Date.now();
+const wired = launch('wired', wiredProfile.workspace, wiredProfile.local, wiredProfile.preferences, {
+  ROTARIS_CAPTURE_PROMPTS: `stash>>a stashed prompt@${W.stash}`,
+  ROTARIS_CAPTURE_KEYS: `Return@${W.logoutEnter};;Return@${W.unknownEnter}`,
+  ROTARIS_CAPTURE_EVAL_AT: [
+    `${setComposer('/')}@${W.firstPopup}`, `${slashRow('pop')}@${W.popRow}`, `${setComposer('')}@${W.clearA}`,
+    `${providersList}@${W.listBefore}`, `${saveProviderKeyAndList}@${W.saveAndList}`,
+    `${setComposer('/logout deepseek')}@${W.logout}`, `${readNotice}@${W.notice}`, `${listUntilSignedOut}@${W.listAfterOut}`,
+    `${setComposer('/')}@${W.secondPopup}`, `${slashRow('pop')}@${W.popRow2}`, `${setComposer('')}@${W.clearB}`,
+    `${setComposer('/logout zzz')}@${W.unknown}`, `${readNotice}@${W.unknownNotice}`,
+    `${promptSignal}@${W.signalBefore}`, `${writeSetting}@${W.setField}`, `${promptSignalWhen(2)}@${W.signalAfter}`,
+    `${setComposer('/')}@${W.thirdPopup}`, `${slashRow('late-arrival')}@${W.promptRow}`,
+  ].join(';;'),
+  ROTARIS_CAPTURE_TEXT_AT: `Signed out of deepseek.@${W.logoutToast}`,
+  ROTARIS_CAPTURE_AFTER_MS: String(W.end),
+});
+// `/logout`: the real catalogue, a real credential written and then removed by the command (REQ-CHAT-159).
+const providersBefore = evalAt(wired, W.listBefore);
+expect(Array.isArray(providersBefore) && providersBefore.some((p) => p.id === 'deepseek' && p.authenticated === false),
+  `the real provider registry should list deepseek unauthenticated: ${JSON.stringify(providersBefore)}`);
+const saveAndList = evalAt(wired, W.saveAndList);
+expect(saveAndList?.saved?.ok === true, `the credential store should have taken the key: ${JSON.stringify(saveAndList?.saved)}`);
+const providersAuthenticated = saveAndList.rows ?? [];
+expect(providersAuthenticated.find((p) => p.id === 'deepseek')?.authenticated === true, `deepseek should be authenticated once the key is stored: ${JSON.stringify(providersAuthenticated)}`);
+expect(wired.texts[`Signed out of deepseek.@${W.logoutToast}`] === true, 'REQ-CHAT-159: "/logout deepseek" must report what it signed out of');
+const logoutNoticeWired = evalAt(wired, W.notice);
+expect(logoutNoticeWired === null || logoutNoticeWired.title !== 'Command not run', `a successful /logout raises no refusal: ${JSON.stringify(logoutNoticeWired)}`);
+const signedOutRead = evalAt(wired, W.listAfterOut);
+const providersSignedOut = signedOutRead?.rows ?? [];
+expect(providersSignedOut.find((p) => p.id === 'deepseek')?.authenticated === false, `the command should have signed deepseek out (read back over ${signedOutRead?.waitedMs} ms): ${JSON.stringify(signedOutRead)}`);
+const credentialFiles = [];
+(function walk(dir) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walk(path);
+    else if (entry.name === 'deepseek.json') credentialFiles.push(path);
+  }
+})(wiredProfile.local);
+expect(credentialFiles.length === 0, `the credential file must be gone after /logout: ${credentialFiles.join(', ')}`);
+// REQ-CHAT-159's "available" clause names the provider registry's own rows, in its own order.
+const unknownProvider = evalAt(wired, W.unknownNotice);
+const providerIds = providersSignedOut.map((p) => p.id);
+expect(unknownProvider?.message === `Unknown provider 'zzz'. Available: ${providerIds.join(', ')}`,
+  `the rejected value and the real providers in their source's order: ${JSON.stringify(unknownProvider)} vs ${JSON.stringify(providerIds)}`);
+// REQ-CHAT-028, trigger 1 — the LIBRARY: `/pop` is listed and unavailable while the stash is empty, and becomes
+// available once a stash row is written through `prompts.push`, with no restart (REQ-LIBRARY-142).
+const popBefore = evalAt(wired, W.popRow);
+expect(popBefore?.popup === true && popBefore.row?.available === '0' && popBefore.row.title === 'No stashed prompts. Use Stash beside the composer first.',
+  `with an empty stash /pop is listed and unavailable with its stated reason: ${JSON.stringify(popBefore)}`);
+const popAfter = evalAt(wired, W.popRow2);
+expect(popAfter?.popup === true && popAfter.row?.available === '1', `REQ-CHAT-028: a library change must rebuild the catalogue in place: ${JSON.stringify(popAfter)}`);
+// REQ-CHAT-028, trigger 2 — the SETTINGS: a prompt file that arrived after start-up is invisible until a settings
+// change, and is offered immediately after one. The first read is what makes the second mean anything.
+const signalBefore = evalAt(wired, W.signalBefore);
+expect(signalBefore?.roots === 'read' && signalBefore.count === 0,
+  `the file written during the launch must not be registered before the settings change: ${JSON.stringify(signalBefore)}`);
+const settingWritten = evalAt(wired, W.setField);
+expect(settingWritten?.ok === true, `the settings write should have been accepted: ${JSON.stringify(settingWritten)}`);
+const signalAfter = evalAt(wired, W.signalAfter);
+expect(signalAfter?.count === 2, `REQ-CHAT-028: the settings change must rebuild the catalogue from the roots (both names of the new file): ${JSON.stringify(signalAfter)}`);
+const promptRow = evalAt(wired, W.promptRow);
+expect(promptRow?.popup === true && promptRow.row?.kind === 'prompt' && promptRow.row.text.includes('/late-arrival — Written while the window was open'),
+  `the new prompt file must be usable without a restart: ${JSON.stringify(promptRow)}`);
+expect(existsSync(latePrompt), 'the prompt file was never written during the launch');
+results.rebuild = {
+  library: { before: popBefore.row, after: popAfter.row },
+  settings: { before: signalBefore, after: signalAfter, row: promptRow.row },
+  promptFileWrittenAfterLaunchMs: Math.round(statSync(latePrompt).mtimeMs - launchedAt),
+};
+results.logout = { before: providersBefore, saved: saveAndList.saved, authenticated: providersAuthenticated.find((p) => p.id === 'deepseek'), afterSignOut: providersSignedOut.find((p) => p.id === 'deepseek'), signOutVisibleAfterMs: signedOutRead?.waitedMs ?? null, unknown: unknownProvider?.message, credentialFilesLeft: credentialFiles.length };
 
 results.passed = true;
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));

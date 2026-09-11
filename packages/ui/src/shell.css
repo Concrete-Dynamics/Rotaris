@@ -361,7 +361,9 @@
 .approval__actions .btn:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 
 /* ── The delegation tree (REQ-MONITOR-036..047, 304): a side column beside the transcript ── */
-.workspace--with-sidebar { grid-template-columns: 260px 1fr; grid-template-areas: 'agents runhead' 'agents transcript' 'agents queue' 'agents divider' 'agents composer'; }
+/* The template for this class is declared ONCE, in Part R's block below, where the inspector column joins it.
+   A second copy stood here without the inspector and was overridden by it — dead since Part R, removed 2026-09-11
+   with the eighty-second defect, since two templates for one class is how that defect stayed unreadable. */
 .workspace--with-sidebar > .agents { grid-area: agents; }
 .workspace--with-sidebar > .transcript { grid-area: transcript; }
 .workspace--with-sidebar > .composer { grid-area: composer; }
@@ -467,6 +469,27 @@
 
 /* ── Stored-session browser (REQ-SHELL-126/127, REQ-SESSION-117/118) ── */
 .session-browser-backdrop { z-index: 20; }
+/**
+ * The eighty-fifth defect (2026-09-11): a confirm dialog painted UNDER the composer.
+ *
+ * The design system's `.dialog-backdrop` is `position: fixed; inset: 0` and carries no `z-index`, so it paints in
+ * DOM order — and it is rendered from the transcript toolbar, which is an earlier grid item than the composer.
+ * A later sibling therefore paints on top of an application-modal dialog. `document.elementFromPoint` at the
+ * confirm button's own centre returned the composer's textarea: the dialog was visible, focusable and NOT
+ * clickable where it mattered.
+ *
+ * It had been latent since the dialog was built and was reached only when the workspace grid was corrected the
+ * same day — removing a dead row moved the composer down over the button. **The modal had been operable by
+ * luck, not by construction**, which is why this is a defect of the product and not of the layout repair that
+ * exposed it. Every `ConfirmDialog` in the application shared it.
+ *
+ * 50 puts it above the slash popup (30) and the artifact inspector (40) and below the acknowledgement toast (60),
+ * which must stay readable over a dialog. `pnpm layout-proof` now asserts that a modal is the topmost element at
+ * its own centre and that its confirmation reaches the product — the user row gone, the dialog closed and the
+ * toast shown, rather than an empty transcript, because a live run legitimately writes new rows onto the emptied
+ * record (REQ-CHAT-084).
+ */
+.dialog-backdrop { z-index: 50; }
 .session-browser { width: min(920px, 100%); max-height: min(720px, calc(100vh - 2 * var(--rt-space-4))); }
 .session-browser__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rt-space-4); }
 .session-browser__head .dialog-title, .session-browser__head .dialog-body { margin: 0; }
@@ -702,9 +725,25 @@
 .settings__steps { list-style: none; margin: var(--rt-space-3, 12px) 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
 .workspace--with-sidebar { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
-.workspace:not(.workspace--with-agents):not(.workspace--narrow) { grid-template-columns: 1fr auto; grid-template-areas: 'runhead inspector' 'transcript inspector' 'queue inspector' 'divider inspector' 'composer inspector'; }
-.workspace:not(.workspace--with-agents):not(.workspace--narrow) > .transcript { grid-area: transcript; }
-.workspace:not(.workspace--with-agents):not(.workspace--narrow) > .composer { grid-area: composer; }
+/**
+ * REMOVED 2026-09-11 — the eighty-second defect, and the falsified rule is stated rather than quietly deleted.
+ *
+ * Three rules stood here, each selected by `.workspace:not(.workspace--with-agents):not(.workspace--narrow)`,
+ * meaning "the workspace with no agents column": two columns, main and inspector, no `agents` area.
+ *
+ * `workspace--with-agents` is set NOWHERE in this codebase. `WorkspaceView` renders
+ * `workspace workspace--with-sidebar` and always mounts the `.agents` aside in the wide layout, so the guard was
+ * always true — and three class selectors (0,3,0) beat the one (0,1,0) of the `.workspace--with-sidebar` rule
+ * below, on the very element that rule was written for. The two-column template therefore won in EVERY wide
+ * window, while `.agents` kept `grid-area: agents` from the delegation-tree block above, naming an area the
+ * winning template does not declare. A named area that does not exist is not an error: the browser invents
+ * implicit tracks for it. Measured at 1920×983 — a 259 px column and a 167 px row of dead space with the agents
+ * pane stranded where they crossed; at 1000×680 the invented tracks pushed the composer, the inspector and the
+ * agents pane past the bottom of the window, taking `Start run` with them.
+ *
+ * The rules are gone rather than repaired because with `--with-sidebar` unconditional there is no reachable
+ * state they could describe. `pnpm layout-proof` now fails if any child names an area the template lacks.
+ */
 .workspace > .inspector { grid-area: inspector; }
 .inspector { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); width: 300px; padding: var(--rt-space-3, 12px); border-left: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; font-size: var(--rt-text-xs, 12px); }
 .inspector__head { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }

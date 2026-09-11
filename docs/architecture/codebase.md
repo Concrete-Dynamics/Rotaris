@@ -941,6 +941,65 @@ its fourth step — rule 1a and rule 4 holding as before, and the packaged app, 
 store and settling a terminal call at store v15; `driver-proof` 14/14 and `part-j-proof` green against a normal
 build afterwards.
 
+**What the driver found the day it was built — the eighty-second, eighty-third and eighty-fourth defects.** The
+owner opened the Workspace view maximized and asked whether a layout fault could be seen. It could, and the seam
+turned "it looks wrong" into three named faults in about twenty minutes, two of them in code that had shipped for
+weeks and appeared in every wide-window screenshot any proof had ever taken.
+
+**The eighty-second — a dead class name winning on specificity.** `shell.css` carried
+`.workspace:not(.workspace--with-agents):not(.workspace--narrow)` for "the workspace with no agents column", and
+**`workspace--with-agents` is set nowhere in this codebase**. Three class selectors (0,3,0) therefore beat
+`.workspace--with-sidebar` (0,1,0) on the very element that rule was written for, so the two-column template won in
+every wide window while `.agents` kept `grid-area: agents` — a name that template does not declare. A named area
+that does not exist is not an error: the browser invents implicit tracks for it. Measured, `.workspace` computed to
+**four columns and seven rows against a two-by-five template**: at 1920×983 a 259 px column and a 167 px row of dead
+space with the agents pane stranded where they crossed; at 1000×680 the invented tracks overflowed the box by 144 px
+and pushed the composer, the inspector and the agents pane past the bottom of the window, **taking `Start run` with
+them**. The rules are removed rather than repaired, with the falsified reason kept where they stood.
+
+**The eighty-third — a breakpoint that worked once and never again.** `useNarrow` built its `MediaQueryList` during
+render, and `matchMedia` returns a NEW object on every call, so the effect's dependency changed on every render and
+the listener was torn down and re-attached continuously; `matches` was read only to seed the state. A `change`
+delivered while nothing was attached was therefore lost **for ever**. At 1000 px wide the query reported `true`
+while the component still rendered the wide layout — at the exact size **REQ-MONITOR-051** says the workspace must
+remain usable. A listener armed by hand in the same window received the event, which is what cleared the platform
+and convicted the hook. The list is made once now, and the effect re-reads `matches` when it attaches: state written
+only by an event cannot recover from one that never arrives.
+
+**The eighty-fourth — in the driver itself.** Its `resize` op called `setContentSize`, which is a **no-op on a
+maximized window**, and returned the unchanged size as though it had worked; a three-size sweep was measured at one
+size and read as three. It leaves the maximized state first now, and refuses loudly when the host will not give the
+size asked for.
+
+**The eighty-fifth — a modal painted under the composer, and the repair of the eighty-second is what reached it.**
+`chat-controls-proof` went red on the corrected layout and green without it, so the layout repair was the suspect;
+driving the app to the dialog and asking the document what was at the confirm button's own centre answered it
+otherwise. The button's box was right, the backdrop was correctly `position: fixed; inset: 0` over the whole
+viewport, no ancestor carried a transform or a `contain` — and `document.elementFromPoint` at that centre returned
+**the composer's textarea**. The design system's `.dialog-backdrop` carries no `z-index`, and the dialog is
+rendered from the transcript toolbar, an EARLIER grid item than the composer; a later sibling therefore paints over
+an application-modal dialog. Removing the dead row moved the composer down across the button, and what had been
+operable by luck stopped being operable at all. **This is a defect of the product, latent since the dialog was
+built and shared by every `ConfirmDialog` in it** — not of the repair that exposed it. `shell.css` lifts the
+backdrop to 50, above the slash popup and the artifact inspector and below the acknowledgement toast, in the same
+place the session browser's backdrop was already lifted for the same reason.
+
+The lesson it carries is the one this whole day is about: **a presence assertion cannot see a stacking defect**.
+Every proof that touched this dialog asserted that it was there, that its text was verbatim and that its buttons
+were named — and the one that clicked it did so through a seam that reports "clicked" whether or not anything
+received the click.
+
+**`pnpm layout-proof` is the assertion whose absence let all this live.** Nothing had ever asserted that the grid a
+stylesheet DEFINES is the grid the browser BUILDS. It measures the Workspace at 1400×900, at REQ-MONITOR-051's
+1000×680 floor and maximized, and asserts: no implicit tracks (computed track count against declared area count),
+every child's `grid-area` naming a declared area (the cause, not the symptom), nothing leaving the window with the
+run control checked by name, the rows fitting their box, and the narrow layout engaging **after a live resize**
+rather than at startup — which is the one form in which the eighty-third defect is visible. Run before the repair it
+failed **thirteen of seventeen**; after it, seventeen of seventeen. Two more checks came with the eighty-fifth —
+the modal's hit test and its confirmation — and the second of those failed on its own first execution against
+correct behaviour, asserting an empty transcript where the product had legitimately rewritten the record under a
+live run. The assertion is the user row's absence now, and the reason is kept beside it.
+
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's
 `rows-proof` role, which is a fixture surface with no input injection, named here so its survival is a decision

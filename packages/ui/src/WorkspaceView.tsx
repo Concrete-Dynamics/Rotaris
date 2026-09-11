@@ -206,13 +206,29 @@ export function adoptDraft(current: string, loaded: string | null, draft: string
   return null;
 }
 
-/** REQ-MONITOR-051: below 1180 px the inspector and the agents panel are overlay drawers, one open at a time. */
+const NARROW_QUERY = '(max-width: 1179px)';
+
+/**
+ * REQ-MONITOR-051: below 1180 px the inspector and the agents panel are overlay drawers, one open at a time.
+ *
+ * **The eighty-third defect, repaired 2026-09-11, and both halves of the repair are the defect.** `matchMedia`
+ * returns a NEW `MediaQueryList` on every call, so building it during render gave the effect a dependency that
+ * changed on every render: the listener was torn down and re-attached continuously, and a `change` delivered
+ * while nothing was attached was gone. Worse, `matches` was read ONCE, to seed the state — so a lost event was
+ * lost for ever. Measured: at 1000 px wide `matchMedia('(max-width: 1179px)').matches` reported `true` while the
+ * component still rendered the wide layout, at the very size REQ-MONITOR-051 says the workspace must stay usable.
+ * A listener armed by hand in the same window received the event, so the platform was never at fault.
+ *
+ * The list is now made once, and the effect RE-READS it when it attaches. The second half is what makes a missed
+ * event survivable: state that is only ever written by an event cannot recover from one that never arrives.
+ */
 function useNarrow(): boolean {
-  const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 1179px)') : null;
+  const query = useMemo(() => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null), []);
   const [narrow, setNarrow] = useState(query?.matches ?? false);
   useEffect(() => {
     if (!query) return;
     const on = () => setNarrow(query.matches);
+    on();
     query.addEventListener('change', on);
     return () => query.removeEventListener('change', on);
   }, [query]);

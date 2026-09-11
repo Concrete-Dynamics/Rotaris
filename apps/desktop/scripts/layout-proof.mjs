@@ -1,0 +1,221 @@
+/**
+ * The layout proof (`pnpm layout-proof`) — the Workspace view's grid, measured at the sizes the specification names.
+ *
+ * It exists because three defects lived in a screen everybody had looked at. Nothing asserted that the grid a
+ * stylesheet DEFINES is the grid the browser BUILDS, so a `grid-area` naming an area that no template declares
+ * produced implicit tracks — a dead column and a dead row — in every wide window, and no proof noticed. The
+ * screenshots had been showing it for weeks.
+ *
+ * What it asserts, and why each one is the assertion whose absence let a defect live:
+ *
+ *   1. NO IMPLICIT TRACKS. The computed `grid-template-columns`/`rows` have exactly as many tracks as the
+ *      computed `grid-template-areas` declares. A browser invents a track when an item names an area that does
+ *      not exist, and the invention is invisible to every test that only looks at whether elements are present.
+ *   2. EVERY NAMED AREA EXISTS. Each child's `grid-area` name appears in the template. This is (1)'s cause rather
+ *      than its symptom, so a regression names the element rather than a track count.
+ *   3. NOTHING CLIPS AT 1000×680. REQ-MONITOR-051: "The workspace must remain usable down to 1000×680." Every
+ *      surface, and the primary action in particular, lies wholly inside the viewport.
+ *   4. THE BREAKPOINT ENGAGES ON A LIVE RESIZE. REQ-MONITOR-051's drawer layout below 1180 px, asserted after a
+ *      resize rather than at startup, because the defect was precisely that it worked at mount and never again.
+ *
+ * Evidence under `.layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
+ */
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
+import { startApp } from './lib/driver.mjs';
+
+const output = evidenceDirectory('.layout-proof');
+rmSync(output, { recursive: true, force: true });
+mkdirSync(output, { recursive: true });
+if (!process.argv.includes('--skip-build')) buildDesktop(output);
+
+const workspace = join(output, 'workspace');
+mkdirSync(join(workspace, '.rotaris'), { recursive: true });
+writeFileSync(join(workspace, 'README.md'), '# layout proof\n');
+writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'runtime:', '  permission_mode: autonomous',
+  'mcp_servers:', '  code_intelligence: { enabled: false }',
+  'rotaris:', '  delegation_strategy: single', '',
+].join('\n'));
+
+const results = [];
+let failures = 0;
+const check = (name, ok, detail) => {
+  results.push({ name, verdict: ok ? 'PASS' : 'FAIL', detail });
+  if (!ok) failures += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
+};
+
+/** Everything the assertions need, read in one pass so a measurement cannot straddle two layouts. */
+const MEASURE = `JSON.stringify((() => {
+  const w = document.querySelector('.workspace');
+  if (!w) return { missing: true };
+  const s = getComputedStyle(w);
+  const r = w.getBoundingClientRect();
+  const areas = (s.gridTemplateAreas || '').match(/"[^"]*"/g) || [];
+  const areaRows = areas.map((a) => a.slice(1, -1).trim().split(/\\s+/));
+  const names = [...new Set(areaRows.flat())].filter((n) => n !== '.');
+  const tracks = (v) => (v && v !== 'none' ? v.trim().split(/\\s+/) : []);
+  const box = (el) => { const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), bottom: Math.round(b.bottom), right: Math.round(b.right) }; };
+  const kids = [...w.children].map((el) => {
+    const cs = getComputedStyle(el);
+    // The shorthand reads back as "name / name / name / name" when it resolved to a named area, and as
+    // "auto / auto / auto / auto" when it did not. The first token is the name the author asked for.
+    const asked = (cs.gridArea || '').split('/')[0].trim();
+    return { cls: (typeof el.className === 'string' ? el.className : el.tagName).trim(), area: asked, ...box(el) };
+  });
+  const startRun = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === 'Start run');
+  return {
+    viewport: { w: innerWidth, h: innerHeight },
+    cls: w.className,
+    grid: box(w),
+    cols: tracks(s.gridTemplateColumns), rows: tracks(s.gridTemplateRows),
+    areaCols: areaRows.length ? areaRows[0].length : 0, areaRows: areaRows.length, names,
+    drawerBar: !!document.querySelector('.workspace__drawer-bar'),
+    kids,
+    startRun: startRun ? box(startRun) : null,
+  };
+})())`;
+
+const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000 });
+const d = started.driver;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const measure = async () => JSON.parse(await d.eval(MEASURE));
+
+try {
+  await d.waitFor('.app-shell', { timeoutMs: 30_000 });
+  await d.chord('Ctrl+2');
+  await d.waitFor('.workspace', { timeoutMs: 15_000 });
+
+  /** The two structural assertions, at whatever size is current. */
+  const structure = async (label, m) => {
+    const implicitCols = m.cols.length - m.areaCols;
+    const implicitRows = m.rows.length - m.areaRows;
+    check(`${label}: the grid has no implicit tracks`,
+      implicitCols <= 0 && implicitRows <= 0,
+      `${m.cols.length} column tracks against ${m.areaCols} declared, ${m.rows.length} row tracks against ${m.areaRows} declared${implicitCols > 0 || implicitRows > 0 ? ` — ${implicitCols} invented column(s), ${implicitRows} invented row(s): ${m.cols.join(' ')} / ${m.rows.join(' ')}` : ''}`);
+    const orphans = m.kids.filter((k) => k.area && k.area !== 'auto' && !m.names.includes(k.area));
+    check(`${label}: every child's grid-area names a declared area`,
+      orphans.length === 0,
+      orphans.length === 0 ? `${m.kids.length} children, areas declared: ${m.names.join(', ')}` : `orphaned: ${orphans.map((o) => `.${o.cls.split(' ')[0]} wants "${o.area}"`).join('; ')}`);
+  };
+
+  /** Nothing may leave the window, and the primary action least of all. */
+  const containment = async (label, m) => {
+    const escapees = m.kids.filter((k) => k.bottom > m.viewport.h + 1 || k.right > m.viewport.w + 1);
+    check(`${label}: no surface leaves the window`,
+      escapees.length === 0,
+      escapees.length === 0 ? `${m.kids.length} children all inside ${m.viewport.w}×${m.viewport.h}` : escapees.map((e) => `.${e.cls.split(' ')[0]} bottom ${e.bottom}/right ${e.right}`).join('; '));
+    check(`${label}: the run control is wholly on screen`,
+      m.startRun !== null && m.startRun.bottom <= m.viewport.h && m.startRun.right <= m.viewport.w && m.startRun.y >= 0,
+      m.startRun === null ? 'no "Start run" control was found at all' : `[${m.startRun.x},${m.startRun.y} ${m.startRun.w}×${m.startRun.h}] in ${m.viewport.w}×${m.viewport.h}`);
+  };
+
+  // ── 1. A wide window: the layout the stylesheet means, with the agents column beside the transcript.
+  await d.resize(1400, 900);
+  await sleep(600);
+  const wide = await measure();
+  await d.screenshot(join(output, 'wide-1400x900.png'));
+  await structure('1400×900', wide);
+  await containment('1400×900', wide);
+  check('1400×900: the agents column stands beside the transcript',
+    wide.kids.some((k) => k.cls.startsWith('agents') && k.h > wide.grid.h * 0.8),
+    (() => { const a = wide.kids.find((k) => k.cls.startsWith('agents')); return a ? `.agents is ${a.w}×${a.h} in a grid ${wide.grid.w}×${wide.grid.h}` : '.agents is absent'; })());
+
+  // ── 2. REQ-MONITOR-051's floor. Below 1180 the drawer layout is what the requirement asks for.
+  await d.resize(1000, 680);
+  await sleep(700);
+  const min = await measure();
+  await d.screenshot(join(output, 'minimum-1000x680.png'));
+  check('1000×680: the narrow layout engages after a live resize (REQ-MONITOR-051)',
+    min.cls.includes('workspace--narrow'),
+    `class "${min.cls}", drawer bar ${min.drawerBar ? 'present' : 'absent'}`);
+  await structure('1000×680', min);
+  await containment('1000×680', min);
+  const rowSum = min.rows.reduce((a, t) => a + parseFloat(t), 0);
+  check('1000×680: the rows fit the grid box',
+    rowSum <= min.grid.h + 1,
+    `rows sum to ${Math.round(rowSum)} in a box ${min.grid.h} tall`);
+
+  // ── 3. Maximized: the size a person actually uses, and where the dead bands were first seen.
+  const maxed = await d.send('maximize');
+  await sleep(700);
+  const big = await measure();
+  await d.screenshot(join(output, 'maximized.png'));
+  await structure(`maximized ${big.viewport.w}×${big.viewport.h}`, big);
+  await containment(`maximized ${big.viewport.w}×${big.viewport.h}`, big);
+  const claimed = big.cols.reduce((a, t) => a + parseFloat(t), 0);
+  check(`maximized: every column track is claimed by the layout`,
+    big.cols.length === big.areaCols && Math.abs(claimed - big.grid.w) < 2,
+    `${big.cols.length} tracks (${big.cols.join(' ')}) summing to ${Math.round(claimed)} across a ${big.grid.w}px grid; maximized=${maxed.maximized}`);
+
+  // ── 4. Back up, to prove the breakpoint is not a one-way trip.
+  await d.resize(1400, 900);
+  await sleep(700);
+  const back = await measure();
+  check('1400×900 again: the wide layout returns',
+    !back.cls.includes('workspace--narrow') && back.cols.length === back.areaCols,
+    `class "${back.cls}", ${back.cols.length} tracks against ${back.areaCols} declared`);
+
+  /**
+   * ── 5. A modal must be the TOPMOST element at its own centre.
+   *
+   * The eighty-fifth defect: the confirm dialog was painted under the composer, because the design system's
+   * backdrop carries no `z-index` and it is rendered from an earlier grid item than the composer. It was
+   * visible and focusable, and a click at the confirm button's own centre reached the composer's textarea
+   * instead. Presence assertions cannot see that; only hit-testing can, so this asks the document what is
+   * actually at the point a user would press, and then presses it and checks the product answered.
+   */
+  await d.chord('Ctrl+L');
+  await d.type('a prompt for the layout proof', { enter: true });
+  await d.waitFor('.transcript article.row', { timeoutMs: 30_000 });
+  await sleep(1_200);
+  await d.click('[data-testid="transcript-clear"]', { timeoutMs: 15_000 });
+  await d.waitFor('[data-testid="clear-transcript-dialog"]', { timeoutMs: 10_000 });
+  await sleep(400);
+  const modal = JSON.parse(await d.eval(`JSON.stringify((() => {
+    const dialog = document.querySelector('[data-testid="clear-transcript-dialog"]');
+    const button = [...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Clear transcript');
+    const r = button.getBoundingClientRect();
+    const cx = Math.round(r.x + r.width / 2), cy = Math.round(r.y + r.height / 2);
+    const hit = document.elementFromPoint(cx, cy);
+    return { cx, cy, topmost: hit === button || button.contains(hit),
+      at: hit ? hit.tagName.toLowerCase() + '.' + (typeof hit.className === 'string' ? hit.className.split(' ')[0] : '') : null };
+  })())`));
+  await d.screenshot(join(output, 'modal.png'));
+  check('a modal is the topmost element at its own centre',
+    modal.topmost, `the element at (${modal.cx},${modal.cy}) is ${modal.topmost ? 'the confirm button' : `"${modal.at}"`}`);
+  await d.click('[data-testid="clear-transcript-dialog"] button', { text: 'Clear transcript', timeoutMs: 10_000 });
+  await sleep(1_500);
+  const cleared = JSON.parse(await d.eval(`JSON.stringify({
+    rows: document.querySelectorAll('.transcript article.row').length,
+    user: [...document.querySelectorAll('.transcript article.row')].filter((r) => /\\brow--user\\b/.test(r.className)).length,
+    dialog: !!document.querySelector('[data-testid="clear-transcript-dialog"]'),
+    toast: document.body.innerText.includes('Transcript cleared.'),
+  })`));
+  /**
+   * What "reached the product" means here is the USER ROW being gone, not an empty transcript.
+   *
+   * The first execution of this check asserted `rows === 0` and failed with two rows present — my assertion's
+   * defect, not the product's. The clear is confirmed while the scripted run is still live, and REQ-CHAT-084's
+   * behaviour is that the run's next writes land on the emptied record: `chat-controls-proof` asserts exactly
+   * that a few seconds later ("new rows, no resurrected user row"). An empty transcript is therefore a claim
+   * about timing; the user row's absence, the closed dialog and the toast are claims about the command.
+   */
+  check('the modal’s confirmation reaches the product',
+    cleared.user === 0 && !cleared.dialog && cleared.toast,
+    `the user row is ${cleared.user === 0 ? 'gone' : 'still there'}, the dialog is ${cleared.dialog ? 'still open' : 'closed'}, the toast ${cleared.toast ? 'was shown' : 'was not shown'} (${cleared.rows} rows now, which a live run may legitimately have rewritten)`);
+} finally {
+  await d.quit().catch(() => undefined);
+  d.close();
+  try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
+  const log = existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '';
+  writeFileSync(join(output, 'app.log'), log);
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
+}
+
+console.log(`\n${results.filter((r) => r.verdict === 'PASS').length} passed, ${failures} failed — evidence in ${output}`);
+process.exit(failures === 0 ? 0 : 1);

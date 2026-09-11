@@ -56,6 +56,7 @@
     "live-run": "node apps/desktop/scripts/live-run.mjs",
     "app:drive": "node apps/desktop/scripts/drive.mjs",
     "driver-proof": "node apps/desktop/scripts/driver-proof.mjs",
+    "layout-proof": "node apps/desktop/scripts/layout-proof.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

@@ -96,7 +96,7 @@ export default tseslint.config(
       // Part AP
       '.requirements-runs-proof/**', '.chat-controls-proof/**',
       // The driver (2026-09-11): the scratch profile a driven app runs against, and its proof's evidence.
-      '.drive/**', '.driver-proof/**'],
+      '.drive/**', '.driver-proof/**', '.layout-proof/**'],
   },
   ...tseslint.configs.recommended,
   {

@@ -65,6 +65,7 @@ apps/desktop/.cache/
 # The driver (`pnpm app:drive`, `pnpm driver-proof`): the scratch profile a driven app runs against, and the proof's evidence.
 .drive/
 .driver-proof/
+.layout-proof/
 
 # the token proxy's local history database — a tool artifact, never repository content
 rtk/

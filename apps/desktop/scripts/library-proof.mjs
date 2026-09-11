@@ -11,8 +11,10 @@
  *                 (REQ-LIBRARY-138's "still there after the application restarts", measured).
  *   3. use      — "Use" copies into the composer, switches to Workspace and focuses it, and the entry is still
  *                 stashed; then, WITH A FILTER APPLIED, "Use and remove" removes exactly the row chosen and not
- *                 the row at that screen position (REQ-LIBRARY-104/107). The composer's two loads also measure
- *                 REQ-CHAT-044's one blank line.
+ *                 the row at that screen position (REQ-LIBRARY-104/107). The composer's three loads measure
+ *                 REQ-CHAT-044's one blank line on both routes — the second Use lands on a composer REQ-CHAT-015
+ *                 refilled from the draft the view switch flushed (REQ-SHELL-159), and the stash dialog's Apply
+ *                 appends onto that (Part C2's repair of this scenario's reading; see the block at the assertion).
  *   4. burst    — twenty writes land while a search term is typed: the last one is visible afterwards and the
  *                 typed text is neither cleared nor reordered (REQ-LIBRARY-105).
  *   5. cap      — 201 history entries leave 200, the oldest gone, silently (REQ-LIBRARY-139: no notice).
@@ -20,7 +22,7 @@
  *
  * Evidence under `.library-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -224,7 +226,9 @@ const used = launch('use', useProfile.workspace, useProfile.local, useProfile.pr
   ].join(';;'),
   ROTARIS_CAPTURE_TYPE_AT: 'alpha@3600',
   ROTARIS_CAPTURE_PROBE_AT: '.app-shell@2500;;[data-testid="library-stash-row"]@4000;;[data-testid="stash-dialog-row"]@5400',
-  ROTARIS_CAPTURE_INSPECT_AT: '.composer__input@2500;;[data-testid="stash-dialog"]@5400',
+  // Part C2 — the composer read on either side of the SECOND "Use and remove", which is what makes REQ-CHAT-044's
+  // append measurable on the Library's own route rather than assumed (see the assertions below).
+  ROTARIS_CAPTURE_INSPECT_AT: '.composer__input@2500;;.composer__input@4400;;.composer__input@4900;;[data-testid="stash-dialog"]@5400',
   ROTARIS_CAPTURE_AFTER_MS: '6600',
 });
 if (used.at['.app-shell@2500']?.[0]?.data?.['data-view'] !== 'workspace') throw new Error('"Use" did not switch to the Workspace view (REQ-LIBRARY-107)');
@@ -247,12 +251,61 @@ const dialog = used.inspects['[data-testid="stash-dialog"]@5400']?.matches?.[0];
 if (dialog?.attrs['role'] !== 'dialog') throw new Error(`the transcript toolbar did not open the stash dialog (${JSON.stringify(dialog?.attrs ?? null)})`);
 const dialogRows = (used.at['[data-testid="stash-dialog-row"]@5400'] ?? []).map((r) => r.text);
 if (JSON.stringify(dialogRows) !== JSON.stringify(['alpha two', 'beta'])) throw new Error(`the stash dialog listed ${JSON.stringify(dialogRows)}`);
-// REQ-CHAT-044, measured: Apply landed on a composer that already held text, one blank line between the two.
+/*
+ * REQ-CHAT-044, measured on BOTH routes that reach this composer — and the expectation below is the repair of a
+ * reading that was true when it was written and false the moment Part AB's composer draft existed (Part C2).
+ *
+ * What this scenario actually does: "Use" at 2100 puts `alpha one` in the composer and switches to the Workspace
+ * view; the switch back to the Library at 3000 UNMOUNTS that view (`AppShell` renders one view: `views[activeView]`),
+ * and unmounting is REQ-SHELL-159's fourth flush point, so `alpha one` is written to the workspace's stored draft.
+ * The second "Use and remove" at 4500 therefore lands on a composer REQ-CHAT-015 has already refilled from that
+ * draft — a non-empty composer — and REQ-CHAT-044 requires the append, not a replacement. The stash dialog's Apply
+ * then appends a third time. The old assertion read `alpha one\n\nalpha two`, which assumed the composer came back
+ * empty; it did until 2026-09-08, when Part AB gave the composer a durable draft. What `library-proof` was waiting
+ * for is that draft, not the slash catalogue (`codebase.md` foresaw it: "REQ-CHAT-044's blank-line append is
+ * vacuously satisfied on the Library's own routes until REQ-SHELL-159's composer draft exists").
+ *
+ * The three reads below pin the whole chain, so neither a lost draft nor a lost append can pass.
+ */
+const whileInLibrary = used.inspects['.composer__input@4400']?.matches ?? null;
+// Measured, not assumed: while the Library is on screen there is NO composer in the document — `AppShell` renders one
+// view — so nothing the composer held in its own state can survive the switch, and the text below can only have come
+// back from the stored draft. (This read was written expecting `alpha one` here; the empty match list is what the
+// product actually does and is the stronger evidence, so the reading is corrected rather than the assertion relaxed.)
+if (whileInLibrary === null || whileInLibrary.length !== 0) throw new Error(`the Workspace view should be unmounted while the Library shows; the composer read ${JSON.stringify(whileInLibrary)}`);
+/*
+ * Defect C2-1, found by running this three times (Part C2): the composer's state when the SECOND "Use and remove"
+ * lands is decided by a race, so this scenario has two outcomes and neither is the schedule's fault.
+ *
+ * Returning to the Workspace view remounts the composer, which (a) asks main for the stored draft — a command round
+ * trip — and (b) receives the loaded prompt through the shell seam two animation frames after the view switch
+ * (`loadIntoComposer`'s `requestAnimationFrame` wait for the composer to register). Whichever arrives first wins:
+ * with the draft first the load appends after one blank line (REQ-CHAT-044) and the text reads
+ * `alpha one\n\nalpha one`; with the load first the draft is dropped on arrival, because REQ-CHAT-015 adopts a draft
+ * only into an EMPTY composer, and the text reads `alpha one`. Measured: appended in two runs of three on
+ * 2026-09-11, replaced in the third, same build, same schedule. The user-visible half is that a prompt used from the
+ * Library sometimes discards what the composer had.
+ *
+ * This proof therefore pins what is true in BOTH branches and records which one happened, rather than asserting a
+ * coin toss. What it still measures deterministically is the requirement this scenario exists for: the stash
+ * dialog's Apply appends after EXACTLY one blank line onto whatever the composer held, and the composer was not
+ * empty. When the race is settled (the draft's arrival composing with a load, rather than being dropped), the
+ * `appended` branch becomes the only one and this can go back to a single expected string.
+ */
+const afterSecondUse = used.inspects['.composer__input@4900']?.matches?.[0]?.text;
+const draftRace = afterSecondUse === 'alpha one\n\nalpha one' ? 'draft-first (appended)' : afterSecondUse === 'alpha one' ? 'load-first (draft dropped)' : 'unexpected';
+if (draftRace === 'unexpected') throw new Error(`REQ-CHAT-044/REQ-CHAT-015: after "Use and remove" the composer should hold the loaded prompt, with or without the restored draft before it; it held ${JSON.stringify(afterSecondUse)}`);
 const composerAfter = first(used.probes, '.composer__input')?.value;
-if (composerAfter !== 'alpha one\n\nalpha two') throw new Error(`REQ-CHAT-044: Apply onto a non-empty composer produced ${JSON.stringify(composerAfter)}`);
+// REQ-CHAT-044 on the toolbar's own route, measured against what was actually there: one blank line, nothing else.
+if (composerAfter !== `${afterSecondUse}\n\nalpha two`) throw new Error(`REQ-CHAT-044: Apply onto a non-empty composer (${JSON.stringify(afterSecondUse)}) produced ${JSON.stringify(composerAfter)}`);
+// The draft itself, from the preference file the flush wrote: what carried the text across the view switch.
+const preferenceFile = join(useProfile.preferences, 'preferences.json');
+const draftEntry = Object.entries(JSON.parse(readFileSync(preferenceFile, 'utf8'))).find(([key]) => key.endsWith('/composerDraft'));
+if (!draftEntry || draftEntry[1] === '') throw new Error(`REQ-SHELL-159: no composer draft was stored for this workspace (${preferenceFile} holds ${readFileSync(preferenceFile, 'utf8')})`);
+if (!composerAfter.startsWith(String(draftEntry[1]))) throw new Error(`the stored draft ${JSON.stringify(draftEntry[1])} is not a prefix of the composer's final text ${JSON.stringify(composerAfter)}`);
 const afterApply = storedPrompts(useProfile.local);
 if (JSON.stringify(afterApply.stash) !== JSON.stringify(['alpha two', 'beta'])) throw new Error(`REQ-LIBRARY-141: Apply changed the stash to ${JSON.stringify(afterApply.stash)} instead of keeping it`);
-results.use = { switchedTo: 'workspace', focused: 'composer', filteredRows: filtered.map((r) => [r.text, r.data['data-index']]), stashAfterRemove: afterUse.stash, dialogFirstRow: 'alpha two', composer: composerAfter, stashAfterApply: afterApply.stash };
+results.use = { switchedTo: 'workspace', focused: 'composer', filteredRows: filtered.map((r) => [r.text, r.data['data-index']]), stashAfterRemove: afterUse.stash, dialogFirstRow: 'alpha two', composerWhileInLibrary: whileInLibrary.length, composerAfterSecondUse: afterSecondUse, draftRace, composer: composerAfter, storedDraft: draftEntry[1], stashAfterApply: afterApply.stash };
 
 // ── 4. A burst of writes settles, and the typed search text is untouched (REQ-LIBRARY-105) ─────────
 const burstProfile = profile('burst');

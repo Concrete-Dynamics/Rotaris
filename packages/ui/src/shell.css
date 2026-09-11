@@ -1238,23 +1238,49 @@
    the mockup's absolutely positioned canvas. Every value is a token by name; no literal colour and no literal size
    that the design does not already name. */
 .req-pane-host { position: absolute; inset: 0; z-index: 4; overflow: auto; background: var(--rt-bg); padding: var(--rt-space-4, 16px); display: flex; flex-direction: column; }
+/* Defect R2-7, found by the gate against the built product: this bar was in the markup with no rule anywhere, so it
+   drew as a block of zero padding — the kicker and the Close control flush against each other above the pane's own
+   heading. It follows `.req-pane__header` above: one row, the hairline beneath, the section's own rhythm. The
+   DECISION beside it: the host names no pane. All five panes draw their own `<h2 class="req-pane__title">`, so a
+   kicker here repeated the heading a line below it; the host's business is the way back, and the pane's identity
+   travels on the Close control's accessible name instead. */
+.req-pane-host__bar { display: flex; align-items: center; justify-content: flex-end; gap: var(--rt-space-2, 8px); padding-bottom: var(--rt-space-2, 8px); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-body { position: relative; }
 .req-graph { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); overflow: auto; flex: 1 1 auto; min-height: 0; }
 .req-graph__head { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
 .req-graph__title { font-size: var(--rt-text-md, 14px); font-weight: var(--rt-weight-medium, 500); margin: 0; }
 .req-graph__spacer { flex: 1 1 auto; }
 .req-graph__depth { display: flex; align-items: center; gap: var(--rt-space-2, 8px); }
-.req-graph__depth-input { width: calc(var(--rt-space-8, 40px) + var(--rt-space-4, 16px)); height: var(--rt-control-sm, 24px); }
+/* Defect R2-8: this rule cited `--rt-control-sm`, which the token set does not define, so what rendered was the 24px
+   literal hiding inside the fallback — a token-shaped name that resolves to nothing IS the literal CLAUDE.md forbids.
+   The height is dropped rather than replaced: the token set (`contracts/src/theme/themes.ts`, the `size` group) holds
+   no control-height token at all, and the one compact-control height in this file is `.req-header`'s bare `24px` at
+   the top of the board's section, which is a violation to raise rather than to copy. Raised as a ruling request in
+   the handoff; the input takes the shell's own input height until the token exists. The width stays: it is spacing,
+   and spacing has tokens. */
+.req-graph__depth-input { width: calc(var(--rt-space-8, 32px) + var(--rt-space-4, 16px)); }
 .req-graph__summary, .req-graph__bound { margin: 0; }
-.req-graph__columns { display: flex; gap: var(--rt-space-4, 16px); align-items: flex-start; overflow-x: auto; }
-.req-graph__column { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: calc(var(--rt-space-8, 40px) * 5); }
+/* Defect R2-6, found by the gate against the BUILT product and invisible to every DOM assertion: this wrapper is a
+   flex item of `.req-graph` whose `overflow-x` is not `visible`, so its automatic minimum size is zero; the edge list
+   below it took the free space and the wrapper was shrunk to h:0 and clipped its ten node buttons away. The controls
+   were in the DOM, were focusable, and were never painted — REQ-TRACE-328 asks for node controls LAID OUT in depth
+   columns, and a queryable node is not a laid-out one. `flex: none` gives the wrapper its content height; the graph
+   itself scrolls, which is what `.req-graph`'s own `overflow: auto` is for. `requirements-proof`'s `panes` stage now
+   measures the wrapper's height and the first node's box inside it, so this cannot pass unpainted again. */
+.req-graph__columns { display: flex; flex: none; gap: var(--rt-space-4, 16px); align-items: flex-start; overflow-x: auto; }
+.req-graph__column { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: calc(var(--rt-space-8, 32px) * 5); }
 .req-graph__node { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); align-items: flex-start; text-align: left;
   background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px);
   padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); color: var(--rt-text); cursor: pointer; }
 .req-graph__node:disabled { cursor: default; }
 .req-graph__node.is-centre { background: var(--rt-accent-tint-07, var(--rt-surface-2)); border-color: var(--rt-accent-500, var(--rt-border-strong)); }
 .req-graph__node.is-unresolved { border-style: dashed; color: var(--rt-text-tertiary); }
-.req-graph__node:focus-visible { outline: var(--rt-focus-width, 2px) solid var(--rt-focus, var(--rt-accent-400)); outline-offset: var(--rt-focus-offset, 2px); }
+/* Defect R2-8, the other half: the focus ring here cited `--rt-focus-width` and `--rt-focus-offset`, neither of which
+   the token set defines, so both values came from their fallback literals. The override is dropped outright rather
+   than respelled — the house rule at `:where(button, input, select, textarea, [tabindex]):focus-visible` above rings
+   every one of these node buttons with `--rt-focus-ring-width` and `--rt-focus`, which are the real tokens and are
+   already what twelve rules in this file use. A rule that restates the house rule in invented names is worse than no
+   rule at all. */
 .req-graph__node-id { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
 .req-graph__node-label { font-size: var(--rt-text-sm, 12px); font-weight: var(--rt-weight-medium, 500); }
 .req-graph__node-tags { display: flex; gap: var(--rt-space-1, 4px); align-items: center; flex-wrap: wrap; }

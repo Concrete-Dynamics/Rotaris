@@ -83,6 +83,26 @@ describe('the walk (REQ-TRACE-326/329/330/332)', () => {
     expect(g.nodes.filter((n) => n.kind === 'implementation' || n.kind === 'test').map((n) => n.label)).toEqual(['src/b.ts:9', 'tests/a.ts:3']);
   });
 
+  // Part R2, after the gate: `requirements-proof`'s `panes` stage asserted that depth 3 shows no FEWER nodes than
+  // depth 2, which passed with ten against ten — the fixture store's neighbourhood of REQ-101 is exhausted at depth 2,
+  // so that assertion could not tell a working depth control from one that ignored the number. The claim it was
+  // meant to carry belongs here, where a fixture can be built that genuinely deepens: a chain whose every level adds
+  // a node, asserted as a STRICT increase. The proof states the saturation as a fact about its fixture instead.
+  it('adds a node at every level of a neighbourhood deeper than the bound (REQ-TRACE-323/332)', () => {
+    const chainCentre = card('REQ-101', { relations: [{ kind: 'related-to', id: 'REQ-200' }] });
+    const middle = card('REQ-200', { epic: 'REQ-300' });
+    const far = card('REQ-300', { title: 'Second epic' });
+    const farChild = card('REQ-301', { epic: 'REQ-300' });
+    const chain = [chainCentre, middle, far, farChild];
+    const at = (d: number) => buildGraph('REQ-101', detailOf(chainCentre), chain, [epic('REQ-300', ['REQ-200', 'REQ-301'])], d);
+    expect(at(1).nodes.map((n) => n.id)).toEqual(['REQ-101', 'REQ-200']);
+    expect(at(2).nodes.map((n) => n.id)).toEqual(['REQ-101', 'REQ-200', 'REQ-300']);
+    expect(at(3).nodes.map((n) => n.id)).toEqual(['REQ-101', 'REQ-200', 'REQ-300', 'REQ-301']);
+    expect(at(3).nodes.length).toBeGreaterThan(at(2).nodes.length);
+    expect(at(2).nodes.length).toBeGreaterThan(at(1).nodes.length);
+    expect(at(3).nodes.find((n) => n.id === 'REQ-301')?.depth).toBe(3);
+  });
+
   it('admits at most fifty neighbours for one node and reports the rest as left out (REQ-TRACE-505)', () => {
     const many = Array.from({ length: 60 }, (_, i) => card(`REQ-${200 + i}`, { epic: 'REQ-100' }));
     const g = buildGraph('REQ-100', detailOf(parent, { card: { ...parent, relations: many.map((m) => ({ kind: 'children' as const, id: m.id })) } }), [parent, ...many], epics, 1);

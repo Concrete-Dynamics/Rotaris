@@ -135,6 +135,11 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
   const dragState: 'idle' | 'reachable' | 'refused' = drag === null || !drag.droppable ? 'idle' : drag.answer?.reachable ? 'reachable' : 'refused';
   const dragSentence = drag === null || !drag.droppable ? '' : drag.answer === undefined ? 'Asking the engine…' : drag.answer.reachable ? `${drag.answer.glyph} ${drag.answer.consequence ?? 'Reachable.'}` : `${drag.answer.glyph} ${drag.answer.reason ?? 'Refused.'}`;
 
+  // REQ-TRACE-493, cited here because this is where it is met: the rail is a real `<button>` with its own accessible
+  // name (`railAccessibleName`), so it is in the tab sequence and fully operable without a pointer, and the heading it
+  // replaces carries `headingAccessibleName` below; the fold moves the focus to whichever of the two now exists, so no
+  // fold operation strands it. `requirements-proof`'s `fold` stage reads both names and the rail's computed writing
+  // mode off the built DOM — REQ-TRACE-497 forbids rotated text on a rail, and only a measurement can say it is absent.
   if (folded) {
     const railTitle = count === 0 ? `${label} · ${count}. ${emptySentence}` : `${label} · ${count}`;
     return (

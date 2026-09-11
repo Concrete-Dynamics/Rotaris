@@ -320,6 +320,10 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const epics = useMemo(() => board?.epics ?? NO_EPICS, [board]);
   const epicIds = useMemo(() => new Set(epics.map((e) => e.id)), [epics]);
   const filtered = useMemo(() => filterCards(cards, filter, epics), [cards, filter, epics]);
+  // REQ-TRACE-496, cited here because this is the call that meets its first two clauses: `distribute` walks the
+  // delivery axis in `DELIVERY_COLUMNS`' own order — a constant of the contract, never derived from the data, so an
+  // empty column keeps its place — and for a CLOSED vocabulary emits every value while an open one (epic, source)
+  // emits only the values present, with the unset bucket last. The sort within a column is `sortCards` below.
   const distribution = useMemo(() => distribute(axis, filtered, epics, blockedColumn), [axis, filtered, epics, blockedColumn]);
   const columnKeys = useMemo(() => [...distribution.keys()], [distribution]);
   const members = useMemo(() => { const m = new Map<string, readonly BoardCard[]>(); for (const k of columnKeys) m.set(k, sortCards(distribution.get(k) ?? [], sort)); return m; }, [columnKeys, distribution, sort]);
@@ -854,13 +858,20 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
             onOpenPane={(key) => openPane(key, detailCard.id)} onOpenGraph={openGraph}
           />
         )}
-        {/* Part R2 — the pane host: one of REQ-TRACE-375's five keys at a time, each built on first use and reused. */}
+        {/* Part R2 — the pane host: one of REQ-TRACE-375's five keys at a time, each built on first use and reused.
+            REQ-TRACE-376: every pane shares ONE stack with the board — this element is the board body's only absolute
+            child, so a pane covers the columns rather than living in a window or a layer of its own, and nothing in
+            the area clips at REQ-SHELL-022's 1000 × 680 (asserted by `requirements-proof`'s `minimum` stage, which
+            opens the queue pane at that size and measures the host's box against the viewport). */}
         {pane !== null && board !== null && (
           <div className="req-pane-host" data-testid="req-pane-host" data-pane={pane}>
             {/* The host's own chrome. Three of the five panes carry a Close control of their own and the queue does
-                not; a surface with no way back is not a surface, so the way back belongs to whoever opened it. */}
+                not; a surface with no way back is not a surface, so the way back belongs to whoever opened it.
+                Defect R2-7: this bar drew as an unstyled block until the gate measured it, and it named the pane a
+                line above the pane's own heading. All five panes draw their own `<h2 class="req-pane__title">`, so
+                the host names nothing: the pane's identity travels on the Close control's accessible name, which is
+                where a person who has arrived by keyboard actually meets it. */}
             <div className="req-pane-host__bar">
-              <span className="card-kicker">{PANE_TITLE[pane]}</span>
               <button type="button" className="btn btn-secondary btn-compact" data-testid="req-pane-close" onClick={closePane} aria-label={`Close ${PANE_TITLE[pane]} and return to the board`}>Close</button>
             </div>
             {pane === 'review' && (

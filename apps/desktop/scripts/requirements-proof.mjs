@@ -592,9 +592,10 @@ expect(!(reviewed.rails ?? []).includes('review'), `REQ-TRACE-497: the review co
 // REQ-TRACE-497: a column count that disagrees with the number of cards visible in that column. Only a column that
 // has realised everything it holds can be counted on screen; a virtualised one reports what it built, by design.
 for (const t of [abandoned, ...timeline]) for (const c of t.columns ?? []) if (!c.offscreen && c.realised === c.count) expect(c.widgets === c.count, `REQ-TRACE-497: column ${c.key} says ${c.count} and shows ${c.widgets} card widgets`);
-const settled = release.evals['37000'];
+expect(release.evals['37000'] === true, `REQ-TRACE-364: revealing REQ-101 before the resting read answered ${JSON.stringify(release.evals['37000'])}`);
+const settled = release.evals['38000'];
 expect(settled && settled.column === 'done', `REQ-TRACE-499: after the review's accept REQ-101 sits in ${settled?.column}, not done`);
-const history = release.evals['37400'];
+const history = release.evals['38400'];
 expect(history && history.state === 'available' && history.entries.length >= 2, `REQ-TRACE-497: the delivery history of REQ-101 reads ${JSON.stringify(history)} after a release and an accept`);
 expect(history.entries.some((e) => /release/i.test(e)) && history.entries.some((e) => /accept/i.test(e)), `REQ-TRACE-405: the history does not carry both actions (${JSON.stringify(history.entries)})`);
 // REQ-TRACE-276: the card and the detail are one projection, so the health on each must be the same word.
@@ -621,7 +622,16 @@ const docName = readdirSync(storeDir).find((f) => f.startsWith('REQ-101'));
 expect(docName !== undefined, `the fixture copy holds no REQ-101 document in ${storeDir}`);
 const docPath = join(storeDir, docName);
 const before = readFileSync(docPath, 'utf8');
-writeFileSync(docPath, `${before.trimEnd()}\n\nEdited on disk by requirements-proof after the delivery was accepted, so the text no longer matches the accepted snapshot.\n`);
+// REQ-TRACE-499's "notice a subsequent edit": the change must fall inside the requirement's own canonical hash, which
+// is taken per DECLARED identifier (spec 08 §Hashes) rather than over the file's bytes — so a paragraph appended past
+// the end of the declared block moves the content hash and need not move the canonical one. The title is declared,
+// the heading carries it, and the prose is the body; all three are changed, and the edit is one a person would make.
+const edited = before
+  .replace(/^title:.*$/m, (line) => `${line} (edited on disk)`)
+  .replace(/^(#+ .*)$/m, (line) => `${line} (edited on disk)`)
+  .trimEnd();
+expect(edited !== before.trimEnd(), `the proof could not edit ${docName}: neither a title nor a heading was found in it`);
+writeFileSync(docPath, `${edited}\n\nEdited on disk by requirements-proof after the delivery was accepted, so the text no longer matches the accepted snapshot.\n`);
 const noticed = launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',

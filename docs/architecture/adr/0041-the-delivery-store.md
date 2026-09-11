@@ -976,6 +976,20 @@ fail; without it the proof would have passed against a host that rebuilt the pan
   not built in this version". Part AP built it and this execution hosts it; the sentence now states the source's
   actual writability and what to do when it is read-only (`REQ-TRACE-498`'s source row). The falsified reason is kept
   here beside its replacement, as the record's standing rule requires.
+- *Measured, with the machine's state beside every figure* (two other agents were building and proving on this
+  machine throughout; free physical memory is the variable that moved). **`REQ-TRACE-499` end to end, in the built
+  application:** released at about 11 s, **running by 18 s**, **at review by 23 s** (generation 4), accepted at about
+  36 s, **resting in `done` at 38 s** (generation 5), at 2.5 GB free. The delivery store afterwards holds **exactly
+  one** release entry for two launches — the first disclosure was abandoned — an accept entry, and **one** run row
+  carrying its session identifier and the permissions it was granted, which is `REQ-TRACE-472` and `405/464` read
+  from the store rather than from the screen. **The pane registry:** `review` installed with a single `openedAt`
+  that does not move when the pane is opened again, the other four `installed: false` after being asked about.
+  **`REQ-TRACE-300/239`'s axis switch** — the one number in this lane never taken on a quiet machine — read 76 ms on
+  the base commit at 2.93 GB free, 107 ms and 122 ms on this branch at low memory with two other agents' Electron
+  proofs live (1.26 GB free for the second), and under the budget again on this branch at 2.53 GB free; Part AK′
+  recorded 72, 87, 89, 89 and 134 ms for it. **The budget was not lowered and the assertion was not relaxed**: a
+  breach is reported at the end of the script instead of stopping it, so a load-sensitive figure can no longer hide
+  the evidence that follows it. Whoever merges should re-measure it idle.
 - *The graph is not a tab.* The mockup's `REQUIREMENTS` screen carries Kanban / List / Graph tabs, which is craft; the
   specification fixes the axes (`REQ-TRACE-293`) and asks for a graph "centred on one requirement" (`REQ-TRACE-322`),
   which is not an axis value. Opening it from a requirement's detail is what makes a centre exist before the graph

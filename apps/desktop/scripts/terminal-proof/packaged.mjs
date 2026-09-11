@@ -158,7 +158,9 @@ export function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
 
 // Standalone: `node apps/desktop/scripts/terminal-proof/packaged.mjs`, for a reader who wants only this section.
 if (process.argv[1] && process.argv[1].endsWith('packaged.mjs')) {
-  const repo = join(import.meta.dirname, '..', '..', '..');
+  // Four segments, not three: this file sits at `apps/desktop/scripts/terminal-proof/`, so three `..` land on
+  // `<repo>/apps` and the refusal above then names a path that cannot exist (`<repo>/apps/apps/desktop/…`).
+  const repo = join(import.meta.dirname, '..', '..', '..', '..');
   const r = packagedTerminalStreaming({ repo });
   console.log(JSON.stringify(r, null, 2));
   process.exit(r.available && Object.values(r.checks).every(Boolean) ? 0 : 1);

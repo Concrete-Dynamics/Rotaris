@@ -24,12 +24,17 @@ the browser is the only authority on what the browser built.
 1. **Read the view that covers the area.** `docs/architecture/views/` — the component view for a new
    dependency, the process view for anything crossing a process, the runtime view for the run loop.
    A view that disagrees with your change is a defect *of your change*.
-2. **Separate structure from craft.** Which views exist, what they are called, their order, their tabs
-   and their fields come from `docs/spec/` (`REQ-SHELL-023` is the definition of the seven views).
-   Density, composition, what is a card and what is a line come from `docs/design/` (`pnpm mockup`,
-   `http://localhost:8791`, §7's table says which section covers which screen). Where the two disagree,
-   **the specification governs, without exception.** A plausible invention is not a third option.
-3. **Cite the token, never the literal.** `--rt-surface`, not `#1b1d21`. `pnpm lint` runs
+2. **Know which source decides what you are about to change.** The boundary between structure and
+   craft is stated in `CONTEXT-MAP.md` §"Where the structure comes from" and in
+   `packages/ui/CONTEXT.md`'s opening note; read it there rather than from a copy. What this skill
+   adds is the operational half: run **`pnpm mockup`** and look at the surface at
+   `http://localhost:8791` *before* writing the component — `docs/design/README.md` §7's table says
+   which section covers which screen.
+3. **Use the Shell context's words.** `packages/ui/CONTEXT.md` owns this vocabulary and names what to
+   avoid: an *acknowledgement*, not a toast; an *overlay drawer*, not a mobile drawer; a *primary
+   view*, not a page or route. A defect report, a `check()` detail string and a commit message that
+   use the specification's word are searchable against it.
+4. **Cite the token, never the literal.** `--rt-surface`, not `#1b1d21`. `pnpm lint` runs
    `tools/check-theme-colours.mjs` and will refuse the literal.
 
 ## 1 — Get the app under the driver
@@ -104,7 +109,8 @@ Check the primary action by name too. A `Start run` button one pixel below the f
 requirement, not a cosmetic complaint.
 
 **c. Hit-testing — is the control the topmost thing at its own centre?**
-**Run this for every modal, overlay, drawer and sticky bar.** Presence assertions structurally cannot
+**Run this for everything that paints over something else** — a confirm dialog, an overlay drawer, an
+acknowledgement, a notice, the title bar and status strip. Presence assertions structurally cannot
 see a stacking defect: defect 85 was a dialog that was visible, focusable and *not clickable* for its
 entire life, because its backdrop carried no `z-index` and it rendered from an earlier grid item than
 the composer.

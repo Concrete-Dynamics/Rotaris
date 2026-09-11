@@ -58,3 +58,9 @@ apps/desktop/.cache/
 
 # Part AO
 .chat-controls-proof/
+
+# The live run (`pnpm live-run`): its evidence, and nothing of the sandbox it works in.
+.live-run/
+
+# the token proxy's local history database — a tool artifact, never repository content
+rtk/

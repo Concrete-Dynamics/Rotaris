@@ -1,0 +1,6 @@
+{
+  "requirements_dir": "docs/requirements",
+  "id_prefix": "REQ",
+  "impl_roots": ["src"],
+  "test_roots": ["src"]
+}

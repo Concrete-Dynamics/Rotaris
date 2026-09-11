@@ -341,13 +341,36 @@ async function main(): Promise<void> {
       else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
       dlg.show();
       dlg.focus();
-      // ROTARIS_CAPTURE_PROVIDER_FILL="label>>url": the proof fills the two visible fields; the key is the owner's to paste (verification only).
+      // ROTARIS_CAPTURE_PROVIDER_FILL="label>>url[>>key]": the proof fills the two visible fields; a THIRD segment
+      // fills the key field too and presses the dialog's own button with a real click, so an unattended live run
+      // (`pnpm live-run`) signs in on the product's own path. The slice proof passes two segments and the paste
+      // stays the owner's. The key is never logged: the fill reports which fields it found, nothing of what it wrote.
+      // ROTARIS_CAPTURE_PROVIDER_EMPTY_OK=1: an endpoint that answers discovery with no models leaves an unattended
+      // run at the zero-model alert, so the seam takes that dialog's own "Continue anyway" (REQ-PROVIDER-133's
+      // recovery) — polled, because discovery takes as long as the endpoint takes.
       const fill = process.env['ROTARIS_CAPTURE_PNG'] ? process.env['ROTARIS_CAPTURE_PROVIDER_FILL'] : undefined;
       if (fill) {
-        const [label, url] = fill.split('>>');
+        const [label, url, apiKey] = fill.split('>>');
+        const centre = (selector: string, text: string | null): string => `(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => !x.disabled${text === null ? '' : ` && x.textContent.trim() === ${JSON.stringify(text)}`}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`;
+        const press = (what: string, script: string): void => {
+          void dlg.webContents.executeJavaScript(script)
+            .then((found: unknown) => {
+              const at = found as { x: number; y: number } | null;
+              if (at === null) return;
+              dlg.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 });
+              dlg.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 });
+              log(`capture: provider dialog ${what} pressed`);
+            }).catch((e) => log(`capture: provider ${what} failed: ${String(e)}`));
+        };
         clocks.timers.after(millis(600), () => {
-          void dlg.webContents.executeJavaScript(`(() => { const set = (id, v) => { const el = document.getElementById(id); if (!el) return false; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); return true; }; return [set('provider-label', ${JSON.stringify(label ?? '')}), set('provider-url', ${JSON.stringify(url ?? '')})]; })()`)
-            .then((r) => log(`capture: provider dialog filled ${JSON.stringify(r)}; waiting for the key to be pasted and Authenticate pressed`)).catch((e) => log(`capture: provider fill failed: ${String(e)}`));
+          void dlg.webContents.executeJavaScript(`(() => { const set = (id, v) => { const el = document.getElementById(id); if (!el) return false; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); return true; }; const filled = [set('provider-label', ${JSON.stringify(label ?? '')}), set('provider-url', ${JSON.stringify(url ?? '')})]; ${apiKey ? `filled.push(set('provider-key', ${JSON.stringify(apiKey)}));` : ''} return filled; })()`)
+            .then((r) => log(`capture: provider dialog filled ${JSON.stringify(r)}; ${apiKey ? "pressing the dialog's own button" : 'waiting for the key to be pasted and Authenticate pressed'}`)).catch((e) => log(`capture: provider fill failed: ${String(e)}`));
+          if (apiKey !== undefined && apiKey !== '') {
+            clocks.timers.after(millis(500), () => press('button', centre('[data-action="authenticate"]', null)));
+            if (process.env['ROTARIS_CAPTURE_PROVIDER_EMPTY_OK']) {
+              for (const at of [3_000, 6_000, 10_000, 16_000, 24_000]) clocks.timers.after(millis(at), () => press('"Continue anyway"', centre('[aria-label="No models discovered"] button', 'Continue anyway')));
+            }
+          }
         });
       }
     } catch (cause) {

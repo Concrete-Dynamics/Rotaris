@@ -53,6 +53,13 @@ export interface ChildrenDeps {
   readonly childTimeoutMs?: Millis;
   readonly runSignal: AbortSignal;
   readonly warn: (m: string) => void;
+  /**
+   * REQ-MONITOR-102: the persisted total is SESSION-wide, so a child's calls reach the run's aggregates as the
+   * child settles — once per child, from the one place its count is known. Without it the total is the entry
+   * agent's own calls, and a surface that subtracts the per-agent counts from it (the synthetic run row) reads
+   * zero on any run that delegated. Found by the live run's first execution, 2026-09-11.
+   */
+  readonly countToolCalls?: ((n: number) => void) | undefined;
   /** ADR-0015: `child_completed` fires once a child has finished, whatever its final state (REQ-HOOKS-003). */
   readonly hooks?: HookPort | null | undefined;
   /** REQ-ORCH-019: the rendered playbook per role; null or '' means no playbook. */
@@ -305,6 +312,8 @@ export class IterationChildren implements DelegationOps {
     const cancelled = deps.runSignal.aborted;
     const toolCalls = outcome?.toolCallCount ?? 0;
     this.toolCalls.set(row.task_id, toolCalls);
+    // REQ-MONITOR-102: this child's calls join the session-wide total, counted once, here, whatever it ended as.
+    deps.countToolCalls?.(toolCalls);
     // REQ-CHAT-088: the tool port may have persisted this child's own plan while it ran; settling updates the
     // call count while preserving that document for the scoped transcript and later session refreshes.
     const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;

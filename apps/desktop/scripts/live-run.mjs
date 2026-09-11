@@ -1,0 +1,618 @@
+/**
+ * The live run (`pnpm live-run --confirm`): the built application, a real OpenAI-compatible endpoint, a real key
+ * and a real workspace, end to end. It is the check to make after a major feature lands — the one thing the
+ * scripted proofs cannot do, because every one of them answers the model itself.
+ *
+ * It never runs on its own: `pnpm check` does not reach it, `pnpm test` does not collect it, and without
+ * `--confirm` it prints the plan and exits. It costs real money, so it is bounded three ways: the endpoint and
+ * model the owner chose, a ceiling on iterations written into the workspace's configuration, and an accounting
+ * check between scenarios that stops the run at `--budget` (default 1.00 USD). What that accounting can read
+ * depends on the endpoint (see ACCOUNTING below); the iteration ceiling binds whatever it reads.
+ *
+ * ENDPOINTS. The owner registers one or more with `--add-endpoint`: a name, the label the product will show, the
+ * base URL, the model id, optional prices, and the key behind a hidden prompt. They live in
+ * `~/.rotaris/live-run/endpoints.json`; the keys live beside it, one file each, and never in this repository.
+ * The default endpoint is the one a bare `--confirm` uses; `--endpoint=<name>` picks another for one run.
+ *
+ * ACCOUNTING, in order of what the endpoint allows:
+ *   1. the provider's own figure — OpenRouter answers `GET /key` with credits used; the difference is the truth;
+ *   2. the prices the owner registered — the store's token counts times `input`/`output` USD per million;
+ *   3. tokens alone — no money figure exists, so the ceiling is `--max-tokens` (default 500 000) instead.
+ * Whichever applies is named in the output and in `results.json`; none of them is ever inferred silently.
+ *
+ * The workspace is a COPY of `scripts/fixtures/todo-app` in the system temp directory — a small React todo
+ * application with its requirements, its pure list functions and a `node --test` suite that needs nothing
+ * installed. `REQ-TODO-003` is approved and unimplemented there on purpose: it is the work scenario 3 hands over.
+ *
+ *   1. sign-in  — Settings → Models → Add endpoint, filled and pressed through the product's own dialog; the
+ *                 credential file, the snapshot record and the catalogue asserted, the logs free of the key. An
+ *                 endpoint that discovers no models takes the dialog's "Continue anyway", and the script writes
+ *                 the `models:` entry the run needs by hand (REQ-CONFIG-082..097) rather than pretending.
+ *   2. ask      — one real run that reads a file and answers. The lease, the request, a settled tool row, usage.
+ *   3. edit     — one real run that implements REQ-TODO-003 and runs the suite in the terminal. Asserted from the
+ *                 files on disk, from `git diff`, and by running `node --test` again in this script.
+ *   4. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the two runs left.
+ *
+ * The key is never passed on a command line and never written to the repository. For one endpoint `<name>`:
+ *   1. `ROTARIS_LIVE_API_KEY` in the environment (for a one-off, or a machine where the prompt cannot run);
+ *   2. `~/.rotaris/live-run/<name>.key.dpapi` — Windows DPAPI, this account on this machine only
+ *      (`~/.rotaris/live-run/<name>.key`, mode 600, elsewhere).
+ * Every log this script writes has the key substituted out of it, and each one is asserted to hold no bearer.
+ *
+ * Evidence under `.live-run/`: one PNG and one log per scenario, `results.json`, `changed/` (what the agent
+ * wrote), `diff.txt`. The sandbox goes away at the end unless `--keep` is given.
+ */
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join, relative, resolve, sep } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { homedir, tmpdir } from 'node:os';
+import { createInterface } from 'node:readline/promises';
+
+const require = createRequire(import.meta.url);
+const repo = resolve(import.meta.dirname, '..', '..', '..');
+const app = join(repo, 'apps', 'desktop');
+const fixture = join(app, 'scripts', 'fixtures', 'todo-app');
+const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
+const output = resolve(repo, '.live-run');
+if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`the evidence directory escaped the repository: ${output}`);
+
+const argv = process.argv.slice(2);
+const has = (name) => argv.includes(`--${name}`);
+const value = (name, fallback) => { const hit = argv.find((a) => a.startsWith(`--${name}=`)); return hit === undefined ? fallback : hit.slice(name.length + 3); };
+
+const BUDGET = Number(value('budget', '1.00'));
+const MAX_TOKENS = Number(value('max-tokens', '500000'));
+const MAX_ITERATIONS = Number(value('max-iterations', '15'));
+const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
+const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
+const OPTIONAL = ['ask', 'edit', 'shell'];
+const only = value('only', null);
+const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
+for (const name of wanted) if (!OPTIONAL.includes(name)) throw new Error(`--only takes ${OPTIONAL.join(', ')}; got ${name}`);
+
+// ── The endpoint registry and the key store ──────────────────────────────────────────────────────────────────
+const HOME_DIR = join(homedir(), '.rotaris', 'live-run');
+const REGISTRY = join(HOME_DIR, 'endpoints.json');
+const KEY_ENV = 'ROTARIS_LIVE_API_KEY';
+/**
+ * The shell the key store talks to, probed once: PowerShell 7 first, because Windows PowerShell 5.1 cannot always
+ * load `Microsoft.PowerShell.Security` — where the DPAPI cmdlets live — and a host that cannot load it cannot
+ * encrypt. The probe is the cmdlet itself, not the version banner; when neither host answers, `storeKey` falls back.
+ */
+let powershellProbed;
+function powershell() {
+  if (powershellProbed !== undefined) return powershellProbed;
+  const candidates = process.platform === 'win32' ? ['pwsh.exe', join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')] : ['pwsh'];
+  for (const candidate of candidates) {
+    const probe = spawnSync(candidate, ['-NoProfile', '-NonInteractive', '-Command', 'ConvertTo-SecureString -String 1 -AsPlainText -Force | Out-Null'], { encoding: 'utf8', windowsHide: true });
+    if (probe.status === 0) { powershellProbed = candidate; return powershellProbed; }
+  }
+  powershellProbed = candidates[candidates.length - 1];
+  return powershellProbed;
+}
+const dpapiFileFor = (name) => join(HOME_DIR, `${name}.key.dpapi`);
+const plainFileFor = (name) => join(HOME_DIR, `${name}.key`);
+/** Whichever form this account's key is in: the DPAPI ciphertext when there is one, the protected file otherwise. */
+const keyFileFor = (name) => (existsSync(dpapiFileFor(name)) ? dpapiFileFor(name) : plainFileFor(name));
+const hasKey = (name) => existsSync(dpapiFileFor(name)) || existsSync(plainFileFor(name));
+/** The file's own protection: inheritance off and this account alone on Windows, mode 600 elsewhere. */
+function lockDown(file) {
+  if (process.platform !== 'win32') { chmodSync(file, 0o600); return; }
+  const icacls = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'icacls.exe');
+  spawnSync(icacls, [file, '/inheritance:r', '/grant:r', `${process.env['USERNAME'] ?? ''}:F`], { encoding: 'utf8', windowsHide: true });
+}
+/** REQ-PROVIDER-051, repeated here so the script can name the credential file before the app writes it. */
+const instanceIdFor = (label) => `openai-compatible--${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+
+function registry() {
+  if (!existsSync(REGISTRY)) return { default: null, endpoints: {} };
+  const read = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+  return { default: read.default ?? null, endpoints: read.endpoints ?? {} };
+}
+function writeRegistry(next) {
+  mkdirSync(HOME_DIR, { recursive: true });
+  writeFileSync(REGISTRY, `${JSON.stringify(next, null, 2)}\n`);
+}
+/**
+ * Storage, best available first: DPAPI through PowerShell's SecureString — ciphertext this account on this
+ * machine can read and nothing else — and, where that shell cannot load `Microsoft.PowerShell.Security` (a
+ * constrained host, a policy), the key in a file whose ACL names this account alone. Which one was used is
+ * returned and printed; it is never quietly the weaker of the two.
+ */
+function storeKey(name, secret) {
+  mkdirSync(HOME_DIR, { recursive: true });
+  if (process.platform === 'win32') {
+    const file = dpapiFileFor(name);
+    const script = `$k = ConvertTo-SecureString -String $env:ROTARIS_LIVE_RUN_SECRET -AsPlainText -Force; ConvertFrom-SecureString -SecureString $k | Set-Content -NoNewline -Encoding ascii -Path ${JSON.stringify(file)}`;
+    const written = spawnSync(powershell(),['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, env: { ...process.env, ROTARIS_LIVE_RUN_SECRET: secret } });
+    if (written.status === 0 && existsSync(file)) { lockDown(file); rmSync(plainFileFor(name), { force: true }); return { file, protection: 'DPAPI, this account on this machine' }; }
+    rmSync(file, { force: true });
+    const plain = plainFileFor(name);
+    writeFileSync(plain, secret);
+    lockDown(plain);
+    return { file: plain, protection: `an owner-only ACL — DPAPI was not available (${(written.stderr ?? '').split('\n')[0]?.trim() || `powershell exited ${written.status}`})` };
+  }
+  const plain = plainFileFor(name);
+  writeFileSync(plain, secret, { mode: 0o600 });
+  lockDown(plain);
+  return { file: plain, protection: 'mode 600' };
+}
+function storedKey(name) {
+  const file = keyFileFor(name);
+  if (!existsSync(file)) return null;
+  if (!file.endsWith('.dpapi')) return readFileSync(file, 'utf8').trim();
+  const read = spawnSync(powershell(),['-NoProfile', '-NonInteractive', '-Command', `$s = Get-Content -Raw -Path ${JSON.stringify(file)} | ConvertTo-SecureString; [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))`], { encoding: 'utf8', windowsHide: true });
+  if (read.status !== 0) throw new Error(`${file} could not be decrypted — DPAPI binds it to one account on one machine. Store it again with \`pnpm live-run --set-key --endpoint=${name}\`.\n${read.stderr?.trim() ?? ''}`);
+  return read.stdout.trim();
+}
+/** A hidden prompt: PowerShell's own on Windows, `stty -echo` elsewhere. The secret never reaches a command line. */
+function promptSecret(what) {
+  if (!process.stdin.isTTY) throw new Error(`there is no terminal to prompt on; put the key in ${KEY_ENV} for this command instead`);
+  if (process.platform === 'win32') {
+    const script = `$k = Read-Host -AsSecureString ${JSON.stringify(what)}; [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($k))`;
+    const read = spawnSync(powershell(),['-NoProfile', '-Command', script], { encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] });
+    if (read.status !== 0) throw new Error('nothing was entered');
+    return read.stdout.trim();
+  }
+  const read = spawnSync('sh', ['-c', `stty -echo < /dev/tty; printf '%s: ' ${JSON.stringify(what)} > /dev/tty; read k < /dev/tty; stty echo < /dev/tty; printf '\\n' > /dev/tty; printf '%s' "$k"`], { encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] });
+  if (read.status !== 0) throw new Error('nothing was entered');
+  return read.stdout.trim();
+}
+
+/**
+ * Registration. Every field may arrive as a flag (`--name= --label= --base-url= --model= --in-price= --out-price=`),
+ * so this is scriptable; whatever is missing is asked for, which needs a terminal. The key comes from the hidden
+ * prompt, or from the environment when there is no terminal to prompt on — never from a flag.
+ */
+async function addEndpoint() {
+  const rl = process.stdin.isTTY ? createInterface({ input: process.stdin, output: process.stdout }) : null;
+  const ask = async (given, question) => {
+    if (given !== null) return given.trim();
+    if (rl === null) throw new Error('there is no terminal to prompt on; pass --name= --label= --base-url= --model= and put the key in ROTARIS_LIVE_API_KEY');
+    return (await rl.question(question)).trim();
+  };
+  try {
+    const reg = registry();
+    const name = await ask(value('name', null), 'A short name for this endpoint (e.g. custom, openrouter): ');
+    if (name === '' || !/^[a-z0-9][a-z0-9-]*$/i.test(name)) throw new Error('the name must be alphanumeric with dashes');
+    const label = await ask(value('label', null), 'The label the product shows (e.g. My Endpoint): ');
+    if (label === '') throw new Error('the label must not be empty');
+    const baseUrl = await ask(value('base-url', null), 'The OpenAI-compatible base URL (the part before /chat/completions): ');
+    if (!/^https?:\/\/[^\s]+$/.test(baseUrl)) throw new Error('the base URL needs a scheme and a host');
+    const model = await ask(value('model', null), 'The model id as the endpoint names it: ');
+    if (model === '') throw new Error('the model id must not be empty');
+    const inUsd = await ask(value('in-price', rl === null ? '' : null), 'Input price, USD per million tokens (blank if unknown): ');
+    const outUsd = await ask(value('out-price', rl === null ? '' : null), 'Output price, USD per million tokens (blank if unknown): ');
+    const context = await ask(value('context', rl === null ? '' : null), 'Context window in tokens (blank to take whatever discovery reports): ');
+    const unmeteredHere = has('unmetered') || (rl !== null && /^y/i.test(await ask(null, 'Unmetered — your own hardware, no cost ceiling? [y/N]: ')));
+    rl?.close();
+    // Re-registering keeps the key already stored; only a key in the environment, or `--set-key`, replaces one.
+    const fromEnv = (process.env[KEY_ENV] ?? '').trim();
+    const keep = fromEnv === '' && hasKey(name);
+    const secret = keep ? null : fromEnv !== '' ? fromEnv : promptSecret('API key (hidden)');
+    if (!keep && (secret === null || secret === '')) throw new Error('no key was entered');
+    const stored = keep ? { file: keyFileFor(name), protection: 'kept as it was' } : storeKey(name, secret);
+    reg.endpoints[name] = {
+      label, baseUrl: baseUrl.replace(/\/+$/, ''), model,
+      inputUsdPerMillion: inUsd === '' ? null : Number(inUsd),
+      outputUsdPerMillion: outUsd === '' ? null : Number(outUsd),
+      contextTokens: context === '' ? null : Number(context),
+      unmetered: unmeteredHere,
+    };
+    if (reg.default === null || has('default')) reg.default = name;
+    writeRegistry(reg);
+    console.log(`\nregistered "${name}" → ${label} at ${baseUrl}, model ${model}`);
+    console.log(`key at ${stored.file} (${stored.protection})`);
+    console.log(reg.default === name ? `"${name}" is the default endpoint.` : `the default endpoint is still "${reg.default}".`);
+  } finally {
+    rl?.close();
+  }
+}
+function listEndpoints() {
+  const reg = registry();
+  const names = Object.keys(reg.endpoints);
+  if (names.length === 0) { console.log(`no endpoints registered; run \`pnpm live-run --add-endpoint\``); return; }
+  for (const name of names) {
+    const e = reg.endpoints[name];
+    const priced = e.inputUsdPerMillion !== null && e.outputUsdPerMillion !== null;
+    console.log(`${name === reg.default ? '*' : ' '} ${name.padEnd(14)} ${e.label} — ${e.baseUrl}  model ${e.model}  ${hasKey(name) ? 'key stored' : 'NO KEY'}${e.unmetered ? '  unmetered' : priced ? `  ${e.inputUsdPerMillion}/${e.outputUsdPerMillion} USD per Mtok` : '  unpriced'}${typeof e.contextTokens === 'number' ? `  ${e.contextTokens} ctx` : ''}`);
+  }
+  console.log('\n* is the default. `--endpoint=<name>` picks another for one run.');
+}
+
+const USAGE = `pnpm live-run — the application against a real model endpoint, on purpose only.
+
+  pnpm live-run                     the plan, and nothing else
+  pnpm live-run --confirm           the run (it spends money; the ceiling is --budget, default 1.00 USD)
+
+  pnpm live-run --add-endpoint      register an endpoint: label, base URL, model, context, prices, key (hidden)
+                                    scripted: --name= --label= --base-url= --model= --context=<tokens>
+                                              --in-price= --out-price= --unmetered --default
+  pnpm live-run --endpoints         list what is registered, which is the default, which has a key
+  pnpm live-run --set-default=<n>   make one the default
+  pnpm live-run --set-key           replace one endpoint's key      (with --endpoint=<name>)
+  pnpm live-run --forget-key        delete one endpoint's key       (with --endpoint=<name>)
+  pnpm live-run --remove-endpoint=<n>
+
+  --endpoint=<name>    the endpoint to run against (default: the registry's default)
+  --model=<id>         override the endpoint's model for this run
+  --base-url=<url>     override the endpoint's base URL for this run
+  --budget=<usd>       stop when the spend crosses this (default 1.00); needs a provider figure or prices
+  --max-tokens=<n>     the ceiling when no money figure exists (default 500000)
+                       an endpoint registered --unmetered carries no ceiling unless one of these two is named here
+  --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 15)
+  --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
+  --keep               keep the sandbox workspace instead of deleting it
+  --skip-build         trust apps/desktop/out as it stands
+`;
+
+if (has('help')) { console.log(USAGE); process.exit(0); }
+if (has('endpoints')) { listEndpoints(); process.exit(0); }
+if (has('add-endpoint')) { await addEndpoint(); process.exit(0); }
+if (value('set-default', null) !== null) {
+  const reg = registry();
+  const name = value('set-default', '');
+  if (!reg.endpoints[name]) { console.error(`no endpoint named "${name}"`); process.exit(1); }
+  reg.default = name; writeRegistry(reg); console.log(`the default endpoint is "${name}"`); process.exit(0);
+}
+if (value('remove-endpoint', null) !== null) {
+  const reg = registry();
+  const name = value('remove-endpoint', '');
+  if (!reg.endpoints[name]) { console.error(`no endpoint named "${name}"`); process.exit(1); }
+  delete reg.endpoints[name];
+  if (reg.default === name) reg.default = Object.keys(reg.endpoints)[0] ?? null;
+  writeRegistry(reg); rmSync(dpapiFileFor(name), { force: true }); rmSync(plainFileFor(name), { force: true });
+  console.log(`removed "${name}" and its key`); process.exit(0);
+}
+
+/** The endpoint this invocation is about: --endpoint, else the registry's default. */
+function chosenEndpoint() {
+  const reg = registry();
+  const name = value('endpoint', reg.default);
+  if (name === null) return null;
+  const found = reg.endpoints[name];
+  if (!found) throw new Error(`no endpoint named "${name}"; \`pnpm live-run --endpoints\` lists them`);
+  return { name, ...found, baseUrl: value('base-url', found.baseUrl).replace(/\/+$/, ''), model: value('model', found.model) };
+}
+
+if (has('set-key')) {
+  const endpoint = chosenEndpoint();
+  if (endpoint === null) { console.error('no endpoint registered; run `pnpm live-run --add-endpoint`'); process.exit(1); }
+  const stored = storeKey(endpoint.name, promptSecret(`API key for ${endpoint.name} (hidden)`));
+  console.log(`stored at ${stored.file} (${stored.protection})`); process.exit(0);
+}
+if (has('forget-key')) {
+  const endpoint = chosenEndpoint();
+  if (endpoint === null) { console.error('no endpoint registered'); process.exit(1); }
+  const removed = [dpapiFileFor(endpoint.name), plainFileFor(endpoint.name)].filter((file) => existsSync(file));
+  for (const file of removed) rmSync(file, { force: true });
+  console.log(removed.length === 0 ? `no key was stored for "${endpoint.name}"` : `removed ${removed.join(', ')}`); process.exit(0);
+}
+
+const endpoint = chosenEndpoint();
+if (endpoint === null) {
+  console.log(USAGE);
+  console.error('No endpoint is registered. Run `pnpm live-run --add-endpoint` first.');
+  process.exit(1);
+}
+const PROVIDER_ID = instanceIdFor(endpoint.label);
+const QUALIFIED = `${PROVIDER_ID}/${endpoint.model}`;
+const envKey = (process.env[KEY_ENV] ?? '').trim();
+const keySource = envKey !== '' ? `the environment (${KEY_ENV})` : hasKey(endpoint.name) ? keyFileFor(endpoint.name) : null;
+/** OpenRouter is the one endpoint in this build whose own accounting can be read; everything else is priced or counted. */
+const providerAccounting = /(^|\/\/|\.)openrouter\.ai(\/|$)/.test(endpoint.baseUrl);
+const priced = typeof endpoint.inputUsdPerMillion === 'number' && typeof endpoint.outputUsdPerMillion === 'number';
+/** An endpoint registered unmetered spends nothing that needs guarding — the owner's own hardware — so no ceiling
+ * is imposed on it unless this invocation asks for one by naming `--budget` or `--max-tokens` itself. */
+const unmetered = endpoint.unmetered === true;
+const ceilingAsked = argv.some((a) => a.startsWith('--budget=') || a.startsWith('--max-tokens='));
+const accountingKind = unmetered && !ceilingAsked ? 'unmetered' : providerAccounting ? 'provider' : priced ? 'priced' : 'tokens';
+
+if (!has('confirm')) {
+  console.log(USAGE);
+  console.log(`Endpoint: ${endpoint.name} — ${endpoint.label} at ${endpoint.baseUrl}, model ${endpoint.model}`);
+  console.log(`Plan:     ${['sign-in', ...wanted].join(' → ')}, ${MAX_ITERATIONS} iterations per run`);
+  console.log(`Ceiling:  ${accountingKind === 'unmetered' ? 'none — registered unmetered; only the iteration ceiling binds' : accountingKind === 'tokens' ? `${MAX_TOKENS} tokens (this endpoint reports no cost and carries no prices)` : `${BUDGET.toFixed(2)} USD, ${accountingKind === 'provider' ? "read from the provider's own accounting" : 'estimated from the registered prices'}`}`);
+  console.log(`Key:      ${keySource ?? `NONE — run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}`}`);
+  console.log('\nNothing ran. Add --confirm to spend.');
+  process.exit(2);
+}
+const key = envKey !== '' ? envKey : storedKey(endpoint.name);
+if (key === null || key === '') { console.error(`No key for "${endpoint.name}". Run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}.`); process.exit(1); }
+const redact = (text) => text.split(key).join('[redacted]');
+
+// ── What has been spent ──────────────────────────────────────────────────────────────────────────────────────
+async function providerCredits() {
+  const res = await fetch(`${endpoint.baseUrl}/key`, { headers: { authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new Error(`the endpoint refused the key check: ${res.status} ${res.statusText}`);
+  const body = await res.json();
+  const data = body?.data ?? {};
+  return { usage: typeof data.usage === 'number' ? data.usage : null, remaining: data.limit_remaining ?? null };
+}
+const before = accountingKind === 'provider' ? await providerCredits() : { usage: null, remaining: null };
+if (before.remaining !== null && before.remaining < BUDGET) console.error(`warning: the key has ${before.remaining} USD left, below the ${BUDGET.toFixed(2)} USD ceiling.`);
+
+// ── The build, the sandbox and the evidence ──────────────────────────────────────────────────────────────────
+rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+mkdirSync(output, { recursive: true });
+if (!has('skip-build')) {
+  const built = process.platform === 'win32'
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 300_000 })
+    : spawnSync('pnpm', ['--filter', '@rotaris/desktop', 'build'], { cwd: repo, encoding: 'utf8', timeout: 300_000 });
+  writeFileSync(join(output, 'build.log'), `${built.stdout ?? ''}\n${built.stderr ?? ''}`);
+  if (built.status !== 0) throw new Error(`the desktop build exited ${built.status ?? built.signal ?? 'unknown'}; see build.log`);
+}
+if (!existsSync(electron)) throw new Error(`the Electron executable is absent: ${electron}`);
+
+const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+const SANDBOX_ROOT = join(tmpdir(), 'rotaris-live-run');
+const KEPT = 'KEPT';
+/**
+ * The sandbox holds a real credential — the app writes the leased key into its own store, exactly as it would on
+ * the owner's machine — so the credential directory is deleted on every exit path there is, including `--keep`,
+ * a thrown error and a Ctrl-C. `--keep` keeps the workspace and the store to read, never the key.
+ */
+const dropCredentials = (dir) => rmSync(join(dir, 'local', 'rotaris', 'data', 'tokens'), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+function cleanup(keep) {
+  dropCredentials(sandbox);
+  if (keep) writeFileSync(join(sandbox, KEPT), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
+  else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+}
+// Whatever a previous run left behind loses its credentials now, and loses everything unless it was kept on purpose.
+if (existsSync(SANDBOX_ROOT)) for (const old of readdirSync(SANDBOX_ROOT)) {
+  const dir = join(SANDBOX_ROOT, old);
+  dropCredentials(dir);
+  if (!existsSync(join(dir, KEPT))) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+}
+const sandbox = join(SANDBOX_ROOT, stamp);
+const workspace = join(sandbox, 'workspace');
+const local = join(sandbox, 'local');
+mkdirSync(workspace, { recursive: true });
+mkdirSync(local, { recursive: true });
+// An interrupt or a crash is an exit path too: it may not strand the key in the temp directory.
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { console.error(`\n${signal}: deleting the sandbox.`); cleanup(false); process.exit(130); });
+for (const fatal of ['uncaughtException', 'unhandledRejection']) process.on(fatal, (error) => { console.error(`${fatal}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`); cleanup(false); process.exit(1); });
+cpSync(fixture, workspace, { recursive: true });
+const GIT_IDENTITY = { GIT_AUTHOR_NAME: 'rotaris-live-run', GIT_AUTHOR_EMAIL: 'live-run@rotaris.invalid', GIT_COMMITTER_NAME: 'rotaris-live-run', GIT_COMMITTER_EMAIL: 'live-run@rotaris.invalid' };
+const git = (...args) => execFileSync('git', args, { cwd: workspace, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }).trim();
+try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { console.error('the live run needs git on PATH: the workspace is a repository and the edit is read back from `git diff`.'); process.exit(1); }
+git('init', '-q', '-b', 'main');
+git('add', '.');
+git('commit', '-q', '-m', 'the todo application, before the live run');
+const head = git('rev-parse', 'HEAD');
+
+const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json`);
+const snapshotFile = join(local, 'rotaris', 'config', 'project_settings.yaml');
+const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
+
+function cleanEnvironment() {
+  const env = { ...process.env };
+  for (const name of Object.keys(env)) if (name.startsWith('ROTARIS_')) delete env[name];
+  return env;
+}
+function findDatabases(root) {
+  if (!existsSync(root)) return [];
+  const found = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) found.push(...findDatabases(path));
+    else if (entry.name === 'workspace.db') found.push(path);
+  }
+  return found;
+}
+function oneDatabase() {
+  const databases = findDatabases(local);
+  if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
+  return databases[0];
+}
+function launch(name, extra, timeoutMs = 180_000) {
+  const png = join(output, `${name}.png`);
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+    env: {
+      ...cleanEnvironment(),
+      LOCALAPPDATA: local, APPDATA: join(sandbox, 'roaming'), ROTARIS_PREFERENCES_ROOT: join(sandbox, 'preferences'),
+      ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      ...extra,
+    },
+  });
+  const log = redact(`${result.stdout ?? ''}\n${result.stderr ?? ''}`);
+  writeFileSync(join(output, `${name}.log`), log);
+  if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
+  if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // The substitution above is the belt; these two are the braces — no bearer may reach the evidence.
+  if (/sk-[a-z-]*[a-z0-9]{16,}/i.test(log)) throw new Error(`${name}.log carries something shaped like an API key`);
+  if (/Bearer\s+(?!\*\*\*)\S{20,}/.test(log)) throw new Error(`${name}.log carries a bearer value`);
+  return log;
+}
+/** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */
+function readSession() {
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  try {
+    const session = db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tool_calls, tokens_input, tokens_output FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    if (!session) return null;
+    const rows = db.prepare('SELECT kind, settled, tool_name, tool_status, body FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(session.session_id);
+    const events = db.prepare('SELECT kind, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(session.session_id);
+    const totals = db.prepare('SELECT COALESCE(SUM(tokens_input), 0) AS input, COALESCE(SUM(tokens_output), 0) AS output FROM sessions').get();
+    // The ring the gate writes, by the agent that dispatched: what the session's own counter must agree with.
+    const byAgent = db.prepare('SELECT agent_name, COUNT(*) AS calls FROM tool_calls WHERE session_id = ? GROUP BY agent_name ORDER BY agent_name').all(session.session_id);
+    return { session, rows, events, totals, byAgent };
+  } finally { db.close(); }
+}
+function storeTotals() {
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(oneDatabase(), { readonly: true });
+    try { return db.prepare('SELECT COALESCE(SUM(tokens_input), 0) AS input, COALESCE(SUM(tokens_output), 0) AS output FROM sessions').get(); } finally { db.close(); }
+  } catch { return { input: 0, output: 0 }; }
+}
+
+const checks = [];
+const check = (passed, what, detail) => { checks.push({ passed: Boolean(passed), what, detail: detail ?? null }); return Boolean(passed); };
+const noted = (what, detail) => { checks.push({ passed: true, noted: true, what, detail }); };
+const results = {
+  startedAt: new Date().toISOString(), endpoint: { name: endpoint.name, label: endpoint.label, baseUrl: endpoint.baseUrl, model: endpoint.model, contextTokens: endpoint.contextTokens ?? null, unmetered },
+  qualifiedModel: QUALIFIED, accounting: accountingKind, budgetUsd: BUDGET, maxTokens: MAX_TOKENS, keySource, sandbox, scenarios: {},
+};
+function finish(code) {
+  results.finishedAt = new Date().toISOString();
+  results.checks = checks;
+  results.passed = code === 0 && checks.every((c) => c.passed);
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+  // A red names the assertion, never the run.
+  for (const c of checks) console.log(`  ${c.noted ? 'NOTE' : c.passed ? 'PASS' : 'FAIL'}  ${c.what}${c.detail === null ? '' : `  — ${c.detail}`}`);
+  const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
+  console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
+  console.log(`evidence: ${output}`);
+  cleanup(has('keep'));
+  if (has('keep')) console.log(`sandbox kept (its credential store deleted): ${sandbox}`);
+  console.log(results.passed ? 'live-run PASSED' : 'live-run FAILED');
+  process.exit(results.passed ? 0 : 1);
+}
+/** Between scenarios: whichever figure this endpoint allows, and a stop when it crosses its ceiling. */
+async function budgetGate() {
+  const totals = storeTotals();
+  results.tokens = { input: totals.input, output: totals.output };
+  if (accountingKind === 'provider') {
+    const now = await providerCredits();
+    results.spentUsd = now.usage === null || before.usage === null ? null : Number((now.usage - before.usage).toFixed(6));
+  } else if (priced) {
+    results.spentUsd = Number(((totals.input / 1e6) * endpoint.inputUsdPerMillion + (totals.output / 1e6) * endpoint.outputUsdPerMillion).toFixed(6));
+  }
+  if (accountingKind === 'unmetered') return;
+  if (typeof results.spentUsd === 'number' && results.spentUsd > BUDGET) {
+    check(false, `the spend stayed under the ${BUDGET.toFixed(2)} USD ceiling`, `${results.spentUsd.toFixed(4)} USD spent; the remaining scenarios did not run`);
+    finish(1);
+  }
+  if (accountingKind === 'tokens' && totals.input + totals.output > MAX_TOKENS) {
+    check(false, `the run stayed under the ${MAX_TOKENS} token ceiling`, `${totals.input + totals.output} tokens; the remaining scenarios did not run`);
+    finish(1);
+  }
+}
+
+console.log(`live-run: ${endpoint.label} (${endpoint.name}) at ${endpoint.baseUrl}, model ${endpoint.model}`);
+console.log(`accounting: ${accountingKind === 'unmetered' ? 'none — unmetered; tokens are counted and reported, nothing stops on them' : accountingKind === 'provider' ? "the provider's own figure" : accountingKind === 'priced' ? 'the registered prices over the store\'s tokens' : `tokens only, ceiling ${MAX_TOKENS}`}`);
+console.log(`key: ${keySource}`);
+console.log(`sandbox: ${sandbox}`);
+
+// ── 1. Sign in through the product's own dialog ──────────────────────────────────────────────────────────────
+const signIn = launch('sign-in', {
+  ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
+  ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
+  ROTARIS_CAPTURE_PROVIDER_FILL: `${endpoint.label}>>${endpoint.baseUrl}>>${key}`,
+  ROTARIS_CAPTURE_PROVIDER_EMPTY_OK: '1',
+  ROTARIS_CAPTURE_WAIT: `file:${tokensFile}`, ROTARIS_CAPTURE_WAIT_MS: String(SIGN_IN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+}, SIGN_IN_WAIT_MS + 90_000);
+const added = /providers: (Added .+?; discovered (\d+) model\(s\)\.)/.exec(signIn);
+check(existsSync(tokensFile), 'the credential file was written', tokensFile);
+if (!check(added !== null, 'the endpoint was added and its catalogue discovered', added?.[1] ?? (/provider dialog "Continue anyway" pressed/.test(signIn) ? 'the endpoint discovered no models and the zero-model recovery was taken' : 'the outcome was not logged'))) finish(1);
+const snapshot = existsSync(snapshotFile) ? readFileSync(snapshotFile, 'utf8') : '';
+check(snapshot.includes(`  ${PROVIDER_ID}:`) && snapshot.includes('    authenticated: true'), 'the snapshot carries the authenticated provider', PROVIDER_ID);
+check(!/access_token|sk-[a-z-]*[a-z0-9]{16,}/.test(snapshot), 'the snapshot carries no credential');
+check(existsSync(agentsFile), 'the starter agents.yaml was bootstrapped');
+const inCatalogue = snapshot.includes(`      - id: ${QUALIFIED}\n`);
+if (inCatalogue) check(true, `the catalogue carries ${endpoint.model}`);
+else noted(`the catalogue does not carry ${endpoint.model}`, 'the script writes the models: entry the run needs (REQ-CONFIG-082..097)');
+results.scenarios['sign-in'] = { discovered: added === null ? 0 : Number(added[2]), modelInCatalogue: inCatalogue };
+
+// The slots, the model entry when discovery did not supply one, and the two bounds this run answers for: an
+// unattended run per scenario (REQ-TOOLS-071's consent given in the file, as a person gives it in Settings →
+// Runtime), and a ceiling on iterations so a confused agent cannot spend the budget in one turn.
+let agents = readFileSync(agentsFile, 'utf8');
+for (const slot of ['large_model', 'medium_model', 'small_model']) agents = agents.replace(new RegExp(`^${slot}: .*$`, 'm'), `${slot}: ${QUALIFIED}`);
+// A `models:` entry here REPLACES the snapshot layer's entry for the same key as a whole, so it carries everything
+// the run needs, never a lone field: written when discovery supplied no entry at all, and when the owner registered
+// a context window the endpoint does not declare (`/models` payloads rarely carry one discovery can read).
+if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
+  const prices = priced ? `    input_cost_per_token: ${endpoint.inputUsdPerMillion / 1e6}\n    output_cost_per_token: ${endpoint.outputUsdPerMillion / 1e6}\n` : '';
+  const context = typeof endpoint.contextTokens === 'number' ? `    max_input_tokens: ${endpoint.contextTokens}\n` : '';
+  agents += `models:\n  ${JSON.stringify(QUALIFIED)}:\n    provider: openai-compatible\n    model_id: ${JSON.stringify(endpoint.model)}\n    auth_provider: ${PROVIDER_ID}\n    base_url: ${endpoint.baseUrl}\n${context}${prices}`;
+}
+if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n`;
+writeFileSync(agentsFile, agents);
+cpSync(agentsFile, join(output, 'agents.yaml'));
+check(['large_model', 'medium_model', 'small_model'].every((slot) => agents.includes(`${slot}: ${QUALIFIED}`)), 'the three tier slots name the live model', QUALIFIED);
+
+// ── 2. One real run that reads and answers ───────────────────────────────────────────────────────────────────
+if (wanted.includes('ask')) {
+  const log = launch('ask', {
+    ROTARIS_CAPTURE_PROMPT: 'Read src/todos.js in this workspace and reply, in one sentence, with the names of the functions it exports.',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+  }, RUN_WAIT_MS + 90_000);
+  const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
+  check(log.includes(`credentials leased: ${PROVIDER_ID}`), 'main leased the bearer to the run host');
+  check(requests.some((url) => url.startsWith(`${endpoint.baseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));
+  check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
+  const read = readSession();
+  const answer = (read?.rows ?? []).filter((row) => row.kind === 'agent').map((row) => row.body).join(' ');
+  const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
+  const usage = (read?.events ?? []).filter((event) => event.kind === 'usage.update').map((event) => JSON.parse(event.payload));
+  check(read?.session.execution_status === 'completed', 'the session completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
+  check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', tools.map((row) => `${row.tool_name}:${row.tool_status}`).join(', '));
+  check(/addTodo/.test(answer) && /toggleTodo/.test(answer), 'the answer names the functions the file exports', answer.trim().slice(0, 200));
+  check(usage.length > 0, 'usage figures were recorded', JSON.stringify(usage[usage.length - 1] ?? null));
+  results.scenarios.ask = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400) };
+  await budgetGate();
+}
+
+// ── 3. One real run that changes the workspace and verifies it ───────────────────────────────────────────────
+if (wanted.includes('edit')) {
+  const log = launch('edit', {
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-TODO-003 from docs/requirements: add a clearCompleted(todos) function to src/todos.js, export it, add tests for it to src/todos.test.js, then run `node --test` in the terminal and tell me whether it passed.',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, RUN_WAIT_MS + 90_000);
+  check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
+  const read = readSession();
+  const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
+  const names = [...new Set(tools.map((row) => row.tool_name))];
+  const source = readFileSync(join(workspace, 'src', 'todos.js'), 'utf8');
+  const suite = readFileSync(join(workspace, 'src', 'todos.test.js'), 'utf8');
+  check(read?.session.execution_status === 'completed', 'the session completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
+  check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', names.join(', '));
+  check(names.includes('terminal'), 'the agent ran the suite through the terminal tool', names.join(', '));
+  // REQ-MONITOR-102: the session's own counter is SESSION-wide, so it must agree with the ring the gate wrote
+  // across every agent that dispatched. The first live run found it holding the entry agent's calls alone, which
+  // left the Overview card short and the synthetic run row reading zero on any run that delegated.
+  const byAgent = read?.byAgent ?? [];
+  const dispatched = byAgent.reduce((n, row) => n + row.calls, 0);
+  const named = byAgent.map((row) => `${row.agent_name}:${row.calls}`).join(', ');
+  check(dispatched >= 5000 || read?.session.tool_calls === dispatched, 'the session-wide tool-call total counts every agent', `${read?.session.tool_calls} counted vs ${dispatched} row(s) across ${byAgent.length} agent(s) — ${named}`);
+  check(/export (function|const) clearCompleted/.test(source), 'clearCompleted is exported from src/todos.js');
+  check(/clearCompleted/.test(suite), 'src/todos.test.js tests it');
+  // The independent reading: this script runs the suite itself, whatever the agent reported.
+  const suiteRun = spawnSync(process.execPath, ['--test'], { cwd: workspace, encoding: 'utf8', timeout: 120_000 });
+  writeFileSync(join(output, 'node-test.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
+  check(suiteRun.status === 0, 'node --test is green in the workspace afterwards', `exit ${suiteRun.status ?? suiteRun.signal}`);
+  const diff = git('diff', head, '--stat');
+  writeFileSync(join(output, 'diff.txt'), `${git('diff', head)}\n`);
+  check(diff !== '', 'git sees the change', diff.split('\n').pop() ?? '');
+  mkdirSync(join(output, 'changed'), { recursive: true });
+  cpSync(join(workspace, 'src'), join(output, 'changed'), { recursive: true });
+  results.scenarios.edit = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, toolCallTotal: read?.session.tool_calls ?? null, toolCallsByAgent: byAgent, diffstat: diff, suiteExit: suiteRun.status };
+  await budgetGate();
+}
+
+// ── 4. The shell over what the runs left ─────────────────────────────────────────────────────────────────────
+if (wanted.includes('shell')) {
+  const PROBES = ['[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-repo-branch"]', '[data-testid="overview-tool-chips"] .tag', '.app-shell'];
+  const log = launch('shell', { ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ROTARIS_CAPTURE_AFTER_MS: '2500' });
+  const probe = (selector) => {
+    const line = new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])\\s*$`, 'm').exec(log);
+    return line === null ? null : JSON.parse(line[1]);
+  };
+  const sessions = probe('[data-testid="overview-sessions"] .ov-session') ?? [];
+  const branch = probe('[data-testid="overview-repo-branch"]') ?? [];
+  check(probe('.app-shell')?.length === 1, 'the shell painted');
+  check(sessions.length >= wanted.filter((name) => name === 'ask' || name === 'edit').length, 'Overview lists the sessions the runs left', `${sessions.length} session row(s)`);
+  check(branch.length > 0 && /main/.test(branch[0]?.text ?? ''), 'the repository card reads the branch', branch[0]?.text ?? 'absent');
+  results.scenarios.shell = { sessions: sessions.map((row) => row.text), branch: branch[0]?.text ?? null, toolChips: (probe('[data-testid="overview-tool-chips"] .tag') ?? []).map((tag) => tag.text) };
+}
+
+await budgetGate();
+const spentTokens = (results.tokens?.input ?? 0) + (results.tokens?.output ?? 0);
+if (accountingKind === 'unmetered') noted('no ceiling was imposed', `${spentTokens} tokens over the run; this endpoint is registered unmetered`);
+else if (typeof results.spentUsd === 'number') check(results.spentUsd <= BUDGET, `the spend stayed under the ${BUDGET.toFixed(2)} USD ceiling`, `${results.spentUsd.toFixed(4)} USD`);
+else check(spentTokens <= MAX_TOKENS, `the run stayed under the ${MAX_TOKENS} token ceiling`, `${spentTokens} tokens`);
+finish(0);

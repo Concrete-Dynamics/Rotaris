@@ -494,7 +494,7 @@ in `configuration.ts`'s header.)
    assistant's text — the tenth defect (ADR-0059).
 
 13. **intent classification and the playbooks (2026-09-04):** before the coordinator exists the prompt is classified
-   through the first configured model slot over a three-rung ladder bounded at 8.0 s — every failure the fallback
+   through the first configured model slot over a three-rung ladder bounded at 12.0 s (8.0 s until ESC-35) — every failure the fallback
    intent with a reason, shown in the Workspace view and recorded in the launch audit with the grant and the
    resolved playbooks; the two simplest intents (or a `single` override) grant the entry role the direct-work
    bundle by facet; every role's instructions carry the playbook its row resolves to (role × intent-or-group-or-
@@ -639,7 +639,9 @@ two sign-in methods, Copilot's and codex's discovery, the bridges, the usage and
 the grant on Windows; `<data>/tokens` replacing the reserved `credentials`; the lock inside the directory (OQ-19); the
 shipped capability metadata empty (OQ-18); REQ-PROVIDER-091's override read as the named-entry overlay; the zero-model
 recovery without "edit by hand" (no configuration editor). `ROTARIS_CAPTURE_PROVIDER_FILL`, `ROTARIS_CAPTURE_WAIT`
-and `ROTARIS_CAPTURE_WAIT_MS` are verification seams.
+and `ROTARIS_CAPTURE_WAIT_MS` are verification seams; a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`); `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
+zero-model alert's own "Continue anyway", so an endpoint whose `/models` answers with nothing does not strand a run
+that no one is watching.
 
 **What `pnpm slice-proof` does.** It builds Electron and carries ONE scratch profile across five launches, because
 the credential the owner pastes in the first must be the one the third leases: (1) first launch — the notice, Settings
@@ -653,6 +655,33 @@ slot and never fall back, the answering rung recorded; (5) sign-out from the car
 the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
 key (`.slice-proof/results.json`), after two runs that each found a defect.
+
+**What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
+and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
+`--confirm` it prints its plan and exits. The workspace is a COPY of `apps/desktop/scripts/fixtures/todo-app` in
+the system temp directory — a React todo application with its requirements and a `node --test` suite needing
+nothing installed — committed to a fresh Git repository so the change can be read back from `git diff`; `REQ-TODO-003`
+is approved and unimplemented there on purpose. Four scenarios over one scratch profile: (1) sign-in through the
+product's own dialog, filled and pressed by the third `>>key` segment of the fill seam — the credential file, the
+snapshot record, the discovered catalogue and logs free of the key; (2) one real run that reads and answers — the
+lease, the request, a completed session, settled tool rows, usage; (3) one real run that implements the requirement
+and runs the suite in the terminal — asserted from the files, from `git diff` and by the script running `node --test`
+ITSELF, because the agent's own report is never the evidence; (4) a relaunch with no prompt — Overview painted from
+the store. The endpoint is the owner's: `--add-endpoint` registers a name, the label the product will show, the base
+URL, the model and optional prices in `~/.rotaris/live-run/endpoints.json`, with the key beside it, one file per
+endpoint, DPAPI-encrypted on Windows (PowerShell 7 probed first, since 5.1 cannot always load the cmdlets; an
+owner-only ACL where no host can, said aloud) and mode 600 elsewhere — never on a command line, never in the repository;
+every log is substituted and then asserted to hold no bearer. Two bounds on the cost always hold — the model the
+owner chose and `runtime.max_iterations` written into the sandbox — and the third is whatever the endpoint allows,
+named in the output rather than inferred: none at all for an endpoint registered `--unmetered` (the owner's own
+hardware — tokens counted and reported, nothing stopping on them, unless the invocation names a ceiling itself),
+else the provider's own figure where it answers `GET /key` (OpenRouter), else the registered prices over the
+store's token counts, else tokens alone against `--max-tokens`. `--context=<tokens>` covers an endpoint whose
+`/models` declares its window in a key discovery does not read (vLLM's `max_model_len`): it becomes
+`max_input_tokens` on the written entry. An endpoint that
+discovers no catalogue is not a dead end: the sign-in takes the dialog's own "Continue anyway" and the script writes
+the `models:` entry the run needs (REQ-CONFIG-082..097, the shape `snapshotLayer` would have produced). Evidence
+under `.live-run/`; `AGENTS.md` is its standing instruction.
 
 **What `pnpm overview-proof` does.** It builds Electron and carries one scratch profile across four launches against
 a scratch Git repository it creates (one commit, one untracked file): (1) a fresh launch — Overview is the first view

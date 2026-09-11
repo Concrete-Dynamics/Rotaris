@@ -55,9 +55,10 @@ recording the result in the record whether or not it passed, and **no condition 
 the person doing the work**.
 
 **A mechanism's first execution reports back into the record that decided it**, in place, including
-when it found nothing — standing policy, ruled at the Architecture Gate. Every mechanism in this
-record that has gone from paper to first execution has held a defect no reading had caught (fifty-three by
-the count in ADR-0058 consequence 17, plus the build toolchain's four and the relay's one).
+when it found nothing — standing policy, ruled at the Architecture Gate — **and appends one row to
+`docs/architecture/first-executions.md`**, which is where the ratio that justifies this policy is read.
+Nearly every mechanism that has gone from paper to first execution has held a defect no reading had caught;
+the count is the number of rows in that register, written down nowhere so that it cannot go stale.
 Keep a falsified reason beside its replacement; never repair it quietly in the code that meets it.
 
 **A spike is taken as the first act of building the thing it prices**, not before and not later.
@@ -70,6 +71,10 @@ downward only, and `eslint-plugin-boundaries` fails `pnpm lint` on a violation. 
 `electron` is imported. Engine code takes time from the clock ports, never from globals
 (`rotaris/no-bare-timers`). `pnpm check` runs the symbol generator, typecheck, lint and tests; all four
 must be green before a commit. `pnpm build` then `electron apps/desktop/out/main/index.js` runs the app.
+
+`AGENTS.md` covers the one check `pnpm check` does not reach: **`pnpm live-run`** — the built product against a
+real OpenRouter key in a throwaway workspace, bounded by the provider's own accounting. It spends the owner's
+money, it is never automatic, and an agent asks before running it.
 
 ## The architecture views — consult before, maintain after
 

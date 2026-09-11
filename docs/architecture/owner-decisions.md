@@ -1213,3 +1213,35 @@ a surface in each case and erases a distinction one of them draws on purpose.
   and opens nothing; navigating between workspaces from a notice is owed, and is recorded in the map
   rather than silently ignored.
 - The count is unchanged: no identifier was minted or withdrawn.
+
+### ESC-35 — the intent-classification bound was set against a hosted provider's latency
+
+**Ruled: amend `REQ-ORCH-008`; raise the default from 8.0 s to 12.0 s.** Raised by the live run's first
+execution (2026-09-11, `AGENTS.md`): against the owner's self-hosted vLLM endpoint the classification call
+did not answer inside 8.0 s, so `REQ-ORCH-007`'s fallback stood in — `moderate_feature`, flagged, reason
+"the classification call timed out after 8 s" — on a prompt the model classifies correctly when it is
+allowed to finish. Nothing failed; the ladder did exactly what it promises. The figure was simply chosen
+against providers whose first token arrives sooner than a local one's.
+
+**Why this one.** The bound exists so a slow classifier cannot delay the first iteration, and the cost of
+being wrong is asymmetric: too long delays a run start by seconds, too short silently degrades every run
+on that endpoint to the fallback intent, which then gates capabilities, playbook cells and the budget
+clamp (`REQ-ORCH-005`) for the whole run. A default that a supported class of endpoint cannot meet is a
+default set against the wrong population. 12.0 s clears the measured first-token latency with margin and
+stays well inside what a person waits at run start.
+
+*The alternatives were:* **a configuration key** — a `runtime:` field so this machine alone sets 12 s —
+which is the better long-run shape but mints a `REQ-CONFIG` identifier and leaves the shipped default
+still wrong for local endpoints, so it answers the owner's machine and not the defect; or **leave 8.0 s
+and accept the fallback**, which is only tenable while nobody reads the intent, and `REQ-ORCH-005` makes
+that false. The configuration key is **not rejected** — it remains available on top of this ruling, and
+`ClassifyDeps.timeoutMs` already carries a per-call override for whoever mints it.
+
+**Consequences to carry.**
+
+- The old figure is not preserved anywhere and the amendment says so in place, quoting what the sentence
+  read. A reader who wants the shorter bound back needs a measurement that says 12.0 s costs something.
+- **This one changes code**: `CLASSIFICATION_TIMEOUT_MS` and the test that drives the clock past it, both
+  citing this ruling. No other bound moves — `REQ-ORCH-113`'s completion classifier stays at 15 s and
+  `runtime.loop_classification_timeout` (`REQ-CONFIG-467`) stays at 2.0 s; they bound different calls.
+- The count is unchanged: no identifier was minted or withdrawn.

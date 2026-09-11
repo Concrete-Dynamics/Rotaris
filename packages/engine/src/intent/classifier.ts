@@ -3,7 +3,7 @@ import { millis, type Timers } from '@rotaris/kernel';
 import type { AgentBackend, ModelError, ModelRef, OutputSpec } from '@rotaris/model';
 
 /**
- * REQ-ORCH-005..012: pre-flight intent classification. One bounded call (8.0 s) to the first configured
+ * REQ-ORCH-005..012: pre-flight intent classification. One bounded call (12.0 s, ESC-35) to the first configured
  * slot in `small → fallback → summary` order, through a three-rung degradation ladder — strict
  * enum-constrained JSON schema, JSON-object mode with the keys and one example appended, unconstrained
  * text — remembering per model for the session a rung the provider rejected. Every failure — timeout,
@@ -18,7 +18,8 @@ import type { AgentBackend, ModelError, ModelRef, OutputSpec } from '@rotaris/mo
  * the next rung tried inside the same budget. The earlier reading, "a parse failure is a classification
  * failure" (REQ-ORCH-007), is kept only for the text rung and for an answer that names no category.
  */
-export const CLASSIFICATION_TIMEOUT_MS = 8_000;
+/** REQ-ORCH-008, as amended under ESC-35 on 2026-09-11: 12.0 s, raised from 8.0 s after a self-hosted endpoint's first token arrived later than the old bound and forced REQ-ORCH-007's fallback. */
+export const CLASSIFICATION_TIMEOUT_MS = 12_000;
 export const PROMPT_CAP = 4_000;
 export const STATUS_REASON_CAP = 180;
 export type Rung = 'json_schema' | 'json_object' | 'text';

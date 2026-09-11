@@ -267,6 +267,20 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(dal.getSession(sid)!.execution_status).toBe('completed');
   });
 
+  it('REQ-MONITOR-102: the persisted tool-call total is session-wide — the entry agent\'s calls AND its children\'s', async () => {
+    const { sessions } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Delegating.') : answer('All done.');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      return turn === 1 ? toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'none' } }], 'Checking.') : answer('I implemented it.');
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(children(sid)[0]!.tool_calls).toBe(1);
+    // One delegate by the entry agent, one call by the child. A total that held the entry agent's alone read 1,
+    // and every surface that subtracts the per-agent counts from it — the synthetic run row — read zero.
+    expect(dal.getSession(sid)!.tool_calls).toBe(2);
+  });
+
   it('a foreground delegation waits through the one mechanism and returns the report inline; wait_for_tasks refuses the caller\'s own task', async () => {
     const { sessions } = sessionsWith((persona, turn) => {
       if (persona === 'orchestrator') {

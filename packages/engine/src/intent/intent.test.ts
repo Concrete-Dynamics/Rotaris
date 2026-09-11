@@ -132,16 +132,16 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(parseClassification('{"result":"Question","why":"asks"}', 'json_object')).toEqual({ category: 'question', confidence: null, reason: '' });
     expect(parseClassification('{"classification":"nope"}', 'json_schema')).toBeNull();
   });
-  it('REQ-ORCH-008: 8.0 s on the clock ends the classification as a fallback', async () => {
+  it('REQ-ORCH-008 (ESC-35): 12.0 s on the clock ends the classification as a fallback', async () => {
     const { b } = backend(() => 'hold');
     const clock = new FakeClock();
     const p = classifyIntent({ prompt: 'p', metadata: {} }, SLOTS, deps(b, clock), new AbortController().signal);
-    clock.advance(7_999);
+    clock.advance(11_999);
     await Promise.resolve();
     clock.advance(1);
     const r = await p;
     expect(r).toMatchObject({ category: 'moderate_feature', fallback: true });
-    expect(r.reason).toBe('the classification call timed out after 8 s');
+    expect(r.reason).toBe('the classification call timed out after 12 s');
   });
   it('REQ-ORCH-014: the reason is normalised and cut at 180; a provider rejection reads generically', () => {
     expect(normaliseReason('x'.repeat(300)).length).toBe(180);

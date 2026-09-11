@@ -1,0 +1,10 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+.app { margin: 3rem auto; max-width: 32rem; display: grid; gap: 1rem; }
+.composer { display: flex; gap: 0.5rem; }
+.composer input { flex: 1; padding: 0.5rem; }
+.filters { display: flex; gap: 0.5rem; }
+.filters .active { font-weight: 700; text-decoration: underline; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; }
+.list li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.list li.done label { opacity: 0.6; text-decoration: line-through; }
+.count { color: GrayText; }

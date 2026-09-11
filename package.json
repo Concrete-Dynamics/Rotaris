@@ -53,6 +53,7 @@
     "slash-proof": "node apps/desktop/scripts/slash-proof.mjs",
     "requirements-runs-proof": "node apps/desktop/scripts/requirements-runs-proof.mjs",
     "chat-controls-proof": "node apps/desktop/scripts/chat-controls-proof.mjs",
+    "live-run": "node apps/desktop/scripts/live-run.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

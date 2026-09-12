@@ -76,7 +76,10 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
 describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020, REQ-TOOLS-097..104, 179, 187)', () => {
   it('runs a command, recovers the exit status, cleans the echo and the markers, and persists shell state across calls', async () => {
     const t = await tool();
-    const r = await t.execute(args({ command: 'Write-Output hello' }), ctx());
+    // The FIRST call on a session pays `pwsh`'s cold start, which under full-suite load can outlast the 1.5 s
+    // no-output window; it came back `(no output)` and read as a failure of the marker protocol. Every later
+    // call here answers in a fraction of the window and is left on the default path deliberately.
+    const r = await t.execute(args({ command: 'Write-Output hello', timeout: 15 }), ctx());
     expect(r.isError).toBe(false);
     expect(output(r.text)).toBe('hello');
     expect(diag(r.text)).toMatchObject({ backend: 'single-session', exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', session_reinitialized: false });
@@ -126,10 +129,96 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const r = await t.execute(args({ command: 'Start-Sleep -Seconds 20; Write-Output late', timeout: 1 }), ctx());
     expect(diag(r.text)).toMatchObject({ exit_code: 124, timeout: true, failure_kind: 'timeout', kill_status: 'session_reset', outcome_kind: 'timeout' });
     expect(r.text).toContain('[partial_terminal_output]');
-    const after = await t.execute(args({ command: 'Write-Output "[$env:ROTARIS_GONE]"' }), ctx());
+    // This one reads a SHELL THAT HAS JUST BEEN RESPAWNED, and a cold `pwsh` under full-suite load can take
+    // longer to answer than the 1.5 s no-output window; the read then came back `(no output)` and the test read
+    // as a failure of the reset. It names its own timeout, which is what takes the window out of the question.
+    const after = await t.execute(args({ command: 'Write-Output "[$env:ROTARIS_GONE]"', timeout: 15 }), ctx());
     expect(output(after.text)).toBe('[]');
     expect(diag(after.text)['session_reinitialized']).toBe(true);
   }, 30_000);
+
+  /**
+   * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof
+   * below was RED against the code that run exercised.
+   */
+  it('REQ-TOOLS-097/099, REQ-CONFIG-116: a call that supplies NO timeout is still bounded by runtime.shell_command_timeout', async () => {
+    // REQ-TOOLS-097's two bounds hold TOGETHER and the first REACHED governs. This call names no `timeout`
+    // of its own, so BOTH arm: a 1 s `runtime.shell_command_timeout` and the shared session's 1.5 s no-output
+    // window. Both timers start in the same turn, so which one is nearer is fixed by the two numbers and not
+    // by how quickly the shell answers — full-suite load delays both and cannot reorder them.
+    const t1 = await tool({ commandTimeoutS: 1 });
+    const r = await t1.execute(args({ command: 'Start-Sleep -Seconds 40; Write-Output late' }), ctx());
+    expect(diag(r.text)).toMatchObject({ exit_code: 124, timeout: true, failure_kind: 'timeout', kill_status: 'session_reset', outcome_kind: 'timeout', timeout_seconds: 1 });
+    expect(r.text).toContain('the terminal session was forcibly restarted to terminate the process tree');
+    expect(r.text).toContain('[partial_terminal_output]');
+  }, 25_000);
+
+  // The three proofs below name a `timeout`, which is the agent declaring how long it will wait and takes the
+  // no-output window out of the picture (REQ-TOOLS-097). What they are about is the wrapper, the capture and the
+  // marker, not the pause, and under full-suite load a real shell can take longer than the window to answer.
+  it('REQ-TOOLS-097/179 (ADR-0020, amended): a multi-line command keeps its newlines, and the exit status still comes out of it', async () => {
+    const t = await tool();
+    const here = await t.execute(args({ command: '$t = @"\nLINE ONE\nLINE TWO\n"@\nWrite-Output $t', timeout: 10 }), ctx());
+    expect(diag(here.text)['exit_code']).toBe(0);
+    expect(output(here.text)).toBe('LINE ONE\nLINE TWO');
+    const block = await t.execute(args({ command: 'foreach ($i in 1..3) {\n  if ($i -eq 2) { Write-Output "two" }\n  else { Write-Output "n$i" }\n}', timeout: 10 }), ctx());
+    expect(diag(block.text)['exit_code']).toBe(0);
+    expect(output(block.text)).toBe('n1\ntwo\nn3');
+    // REQ-TOOLS-179: a native non-zero status and a failing cmdlet both still reach the observation.
+    const native = await t.execute(args({ command: "Write-Output 'before'\ncmd /c exit 9", timeout: 10 }), ctx());
+    expect(diag(native.text)['exit_code']).toBe(9);
+    expect(output(native.text)).toBe('before');
+    const cmdlet = await t.execute(args({ command: "Write-Output 'before'\nGet-Item C:\\definitely\\not\\here.txt", timeout: 10 }), ctx());
+    expect(diag(cmdlet.text)['exit_code']).toBe(1);
+    // A terminating error inside the payload returns its own failure rather than wedging until the hard cap.
+    const thrown = await t.execute(args({ command: "Write-Output 'a'\nthrow 'boom'", timeout: 10 }), ctx());
+    expect(diag(thrown.text)['exit_code']).toBe(1);
+    expect(output(thrown.text)).toContain('boom');
+    // The tool's own promise: what a command sets persists into the next call, multi-line payload included.
+    await t.execute(args({ command: "$rotMulti = 'kept'\n$null = 1", timeout: 10 }), ctx());
+    expect(output((await t.execute(args({ command: 'Write-Output "[$rotMulti]"', timeout: 10 }), ctx())).text)).toBe('[kept]');
+    // A single-line command keeps today's wrapper, byte for byte.
+    expect(wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E')).toContain("Write-Output 'S'; git status; Write-Output ('E:'");
+  }, 60_000);
+
+  it('ADR-0021 / REQ-TOOLS-097/113: the capture is the emulated screen, not a VT strip', async () => {
+    const t = await tool();
+    // ConPTY expresses a tab stop as a cursor-forward sequence; deleting it ran the columns together.
+    const tabs = await t.execute(args({ command: "Write-Host ('a' + [char]9 + 'b')", timeout: 10 }), ctx());
+    expect(output(tabs.text)).toBe('a       b');
+    // A screen clear is a screen clear, not the rows of the screen left behind as blank lines.
+    const cleared = await t.execute(args({ command: "Write-Host 'BEFORE'; Clear-Host; Write-Host 'AFTER'", timeout: 10 }), ctx());
+    expect(output(cleared.text)).toBe('AFTER');
+    // The 2026-09-12 run's OWN symptom, reproduced: an EMPTY write between two non-empty ones. The strip
+    // returned `Total Endpoints: 0Resource Sections: 0File Size: 58 KB` — the production string byte for
+    // byte, from a command carrying no newline at all. This is the trigger, and the one the 60 runs above
+    // missed; see this ADR's note, where the reading it falsifies is kept beside it.
+    const empties = await t.execute(args({ command: 'Write-Host "Total Endpoints: 0"; Write-Host ""; Write-Host "Resource Sections: 0"; Write-Host ""; Write-Host "File Size: 58 KB"', timeout: 10 }), ctx());
+    expect(output(empties.text)).not.toContain('Total Endpoints: 0Resource Sections: 0');
+    expect((output(empties.text) ?? '').split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['Total Endpoints: 0', 'Resource Sections: 0', 'File Size: 58 KB']);
+    // The same shape through `&&` and `echo`, which is how the run's other concatenation arrived.
+    const chained = await t.execute(args({ command: 'echo "VERIFICATION: created successfully" && echo "" && echo "File exists:"', timeout: 10 }), ctx());
+    expect(output(chained.text)).not.toContain('successfullyFile exists:');
+    // A formatted table's rows stay on separate lines — true before this change and it must stay true.
+    const file = join(root, 'measure.txt').replace(/\\/g, '\\\\');
+    const measured = await t.execute(args({ command: `Set-Content -LiteralPath '${file}' -Value 'alpha','beta','alpha'; Select-String 'alpha' -LiteralPath '${file}' | Measure-Object`, timeout: 10 }), ctx());
+    const rows = (output(measured.text) ?? '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
+    expect(rows[0]).toBe('Count             : 2');
+    expect(rows).toContain('Property          :');
+    // REQ-TOOLS-113's checks read the cleaned text, never the echoed command line.
+    expect(diag(measured.text)['warnings']).toEqual([]);
+  }, 40_000);
+
+  it('ADR-0020 c.1: the end marker never reaches the agent, not even when the output does not end in a newline', async () => {
+    const t = await tool();
+    const r = await t.execute(args({ command: "Write-Host -NoNewline 'Property          : '", timeout: 10 }), ctx());
+    expect(r.text).not.toContain('__rot_');
+    expect(output(r.text)).toBe('Property          :');
+    const c = await t.execute(args({ command: "[Console]::Write('tail-no-newline')", timeout: 10 }), ctx());
+    expect(c.text).not.toContain('__rot_');
+    expect(output(c.text)).toBe('tail-no-newline');
+  }, 30_000);
+
   it('REQ-TOOLS-098: a call with no timeout that produces nothing for the no-output window returns −1 while the process keeps running; an empty command polls', async () => {
     const t = await tool();
     const r = await t.execute(args({ command: 'Start-Sleep -Seconds 3; Write-Output done-later' }), ctx());
@@ -156,7 +245,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const started = await t.execute(args({ command: '1..3 | ForEach-Object { Write-Output "tick $_"; Start-Sleep -Milliseconds 300 }; Write-Output end', background: true }), ctx());
     expect(started.text).toMatch(/^Background session started: ts_[0-9a-f]{8}/);
     const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
-    await new Promise((res) => setTimeout(res, 2_500));
+    // Wait for the subprocess to FINISH, by listing — which consumes no output, unlike `query` — rather than by
+    // sleeping a span guessed for an idle machine. The guess was 2.5 s against ~0.9 s of work, and under
+    // full-suite load the query came back `(no new output since last poll)` before the first tick.
+    for (let i = 0; i < 80; i += 1) {
+      if ((await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✓ ${id}`)) break;
+      await new Promise((res) => setTimeout(res, 250));
+    }
     const q = await t.execute(args({ session_id: id }), ctx());
     expect(output(q.text)).toContain('tick 1');
     expect(output(q.text)).toContain('end');

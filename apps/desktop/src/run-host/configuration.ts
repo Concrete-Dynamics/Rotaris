@@ -406,7 +406,8 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
   }
   const runtime = runtimeFromConfiguration(cfg);
   const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
-  const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i) });
+  // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
+  const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers });
   const backend: AgentBackend = new DefaultAgentBackend(client);
   const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, () => deps.bearers(workspaceRoot));
   const setup: ModelSetup = {

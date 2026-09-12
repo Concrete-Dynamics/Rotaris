@@ -1,4 +1,4 @@
-import { err, ok, type Result } from '@rotaris/kernel';
+import { err, millis, ok, type Result, type TimerHandle, type Timers } from '@rotaris/kernel';
 import { APICallError, jsonSchema, Output, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
@@ -24,6 +24,11 @@ import { createStreamNormaliser, reasoningItemSeparator } from './reasoning.js';
  * - The retry count is the request's (REQ-PROVIDER-089), never the SDK's own.
  * - An error preserves the HTTP status and the provider's message, cut to 500
  *   characters (REQ-PROVIDER-071, REQ-ORCH-091/092).
+ * - `timeoutMs` is an IDLE bound, re-armed on every part the provider streams
+ *   (REQ-CONFIG-115's "model HTTP timeout"), and WHICH signal ended the call
+ *   decides the error's class: the caller's abort is `aborted` and fatal, the
+ *   bound is `timeout` and transient (REQ-ORCH-092). ADR-0027's fourth
+ *   execution has the falsified reason.
  * - No SDK type crosses the port; cost is never computed here.
  */
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -36,6 +41,12 @@ export interface AiSdkClientOptions {
   readonly fetch?: FetchLike;
   /** Observes each request with its secret-bearing headers already redacted (REQ-PROVIDER-131). */
   readonly onRequest?: (info: { url: string; method: string; headers: Record<string, string> }) => void;
+  /**
+   * ADR-0006's timer port, which the idle bound is re-armed from. Required, not optional: this
+   * package is engine code (`rotaris/no-bare-timers`), so there is no fallback to fall back to, and
+   * the one production site — `apps/desktop/src/run-host/configuration.ts` — already holds clocks.
+   */
+  readonly timers: Timers;
 }
 
 const SECRET_HEADER = /authorization|api-key|x-api-key|cookie/i;
@@ -152,8 +163,36 @@ export class AiSdkModelClient implements ModelClient {
       yield err(fromError(cause, req.signal.aborted));
       return;
     }
-    const timeoutSignal = AbortSignal.timeout(req.timeoutMs);
-    const signal = AbortSignal.any([req.signal, timeoutSignal]);
+    /**
+     * The bound measures SILENCE, not the length of the answer. The first implementation armed one
+     * `AbortSignal.timeout(req.timeoutMs)` for the whole call, so no generation longer than
+     * `model_timeout` could ever complete — the reason it gave, that REQ-CONFIG-115 fixes "the model
+     * HTTP timeout", was true of the wait and silent about the answer. Measured 2026-09-12: four
+     * children writing long documents were killed at 120 s with their streamed text discarded
+     * (ADR-0027, fourth execution). The timer is re-armed on every part received, so a stalled
+     * connection still dies at the bound and a long answer does not.
+     */
+    const idle = new AbortController();
+    let idleExpired = false;
+    const arm = (): TimerHandle => this.opts.timers.after(millis(req.timeoutMs), () => {
+      idleExpired = true;
+      idle.abort();
+    });
+    let idleTimer: TimerHandle = arm();
+    const rearm = (): void => {
+      idleTimer.cancel();
+      idleTimer = arm();
+    };
+    /**
+     * WHICH signal ended the call decides the class (REQ-ORCH-092): the caller's abort is the run
+     * stopping and is fatal; the idle bound produced no usable answer for a reason outside the
+     * request's content, so it is a timeout and `isTransient` makes it transient — the ladder then
+     * retries it and falls back, where `aborted` had it discard the turn.
+     */
+    const endedEarly = (): ModelError => (req.signal.aborted
+      ? modelError({ code: 'aborted', headline: 'the call was aborted', transient: false })
+      : modelError({ code: 'timeout', headline: `no stream activity for ${req.timeoutMs} ms` }));
+    const signal = AbortSignal.any([req.signal, idle.signal]);
     try {
       const tools = toToolSet(req.tools);
       // REQ-ORCH-010: the structured-output rungs map to the SDK's `output`; a provider rejection surfaces as an error part.
@@ -169,6 +208,8 @@ export class AiSdkModelClient implements ModelClient {
       const normalise = createStreamNormaliser();
       let reasoningItem: string | null = null;
       for await (const part of result.fullStream) {
+        // Every part, of every kind — a reasoning delta and a tool-call argument are activity too.
+        rearm();
         switch (part.type) {
           case 'text-delta':
             // Shape (b): a thinking block inside the content is routed to the reasoning channel here, never below.
@@ -200,14 +241,20 @@ export class AiSdkModelClient implements ModelClient {
             yield err(fromError(part.error, req.signal.aborted));
             return;
           case 'abort':
-            yield err(fromError(null, true));
+            // The SDK reports the COMBINED signal firing and cannot say which half did; this can.
+            yield err(endedEarly());
             return;
           default:
             break;
         }
       }
     } catch (cause) {
-      yield err(fromError(cause, req.signal.aborted || timeoutSignal.aborted));
+      // The same distinction on the thrown path, where `req.signal.aborted || timeoutSignal.aborted`
+      // had collapsed both signals into the one `aborted` flag and reported a timeout as an abort too.
+      yield err(req.signal.aborted || idleExpired ? endedEarly() : fromError(cause, false));
+    } finally {
+      // Including the path where the consumer walks away from the generator: the timer never outlives the call.
+      idleTimer.cancel();
     }
   }
 }

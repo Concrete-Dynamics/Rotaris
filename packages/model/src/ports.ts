@@ -7,7 +7,7 @@ import type { Result } from '@rotaris/kernel';
  * tool calls, a finish reason, a terminal usage record; image parts in
  * (REQ-CHAT-171); a dialect of `chat | responses` per model (REQ-PROVIDER-089);
  * a thinking level (REQ-PROVIDER-088; `auto` is not in the vocabulary); a
- * per-call abort signal and a per-model timeout (REQ-CONFIG-115/086); a retry
+ * per-call abort signal and a per-model IDLE timeout (REQ-CONFIG-115/086); a retry
  * count (REQ-PROVIDER-089, default 5); an error preserving the HTTP status
  * and the provider's own message (REQ-ORCH-091/092, REQ-PROVIDER-098); a
  * credential resolver invoked INSIDE the request path (REQ-PROVIDER-092).
@@ -120,6 +120,13 @@ export interface ModelRequest {
   readonly messages: readonly ChatMessage[];
   readonly thinking: ThinkingLevel;
   readonly signal: AbortSignal;
+  /**
+   * REQ-CONFIG-115's model HTTP timeout (REQ-CONFIG-086 per model), as an **idle** bound: the longest
+   * the call may go without a part arriving, re-armed on each one. It is not a cap on how long an
+   * answer may take — read as one, it made every generation longer than `model_timeout` impossible
+   * (ADR-0027, fourth execution). Its expiry is a `timeout`, which is transient; only the caller's
+   * `signal` produces `aborted`, which is fatal (REQ-ORCH-092).
+   */
   readonly timeoutMs: number;
   readonly retries: number;
   /** Invoked inside the request path, per request (REQ-PROVIDER-092). */

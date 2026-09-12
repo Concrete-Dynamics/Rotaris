@@ -583,6 +583,12 @@ export class Run {
         else this.compressing.set(agent, toIsoUtc(this.deps.clocks.wall.instant()));
         this.deps.owner.reconcile();
       },
+      /**
+       * REQ-SESSION-139 (ADR-0008): the run's compression aggregate, maintained in process and copied into every
+       * save like the other three. Every agent's compressor — the root's and each child's — reaches the one
+       * `Aggregates`, because REQ-SESSION-139's figure is the SESSION's and not an agent's.
+       */
+      onCompressed: () => this.aggregates.addCompression(),
     };
   };
 

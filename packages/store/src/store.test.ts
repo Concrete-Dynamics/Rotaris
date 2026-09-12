@@ -310,6 +310,35 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.close();
     forgetSpelling(r.dir);
   });
+  /**
+   * PD-LIBRARY-001. The migration is the part of this change that touches data somebody already has, so it is
+   * tested against a store stopped at v15 rather than against a fresh one: the column arrives, the row that
+   * predates it survives, and it reads `[]` — "this artifact recorded no commands" — because the figure was
+   * never captured for it and cannot be recovered. REQ-LIBRARY-090 then omits the section entirely, so an old
+   * artifact renders exactly as it did rather than growing a heading that would claim the child ran nothing.
+   */
+  it('PD-LIBRARY-001: a v15 store migrates to v16; an artifact written before it keeps its row and reads no commands', () => {
+    const id = mintWorkspaceId('000000000000000000000000000000f1');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+    // Drop back to v15 and remove the column, so what is exercised is the ALTER and not the fresh-create path.
+    const sid = asSessionId('S-v16');
+    new StoreDal(r.db).upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    // The DAL prepares every statement at construction, so the column goes only after one exists — a DAL built
+    // against the v15 shape could not be built at all, which is the point the ALTER is here to cover.
+    r.db.exec('ALTER TABLE artifacts DROP COLUMN commands');
+    r.db.pragma('user_version = 15');
+    r.db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
+      highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
+      VALUES (?, 'art_oldAAAAA', 'old', 't', 'child_report', 'bg_1', 'tester-1', 'tester', 'succeeded', 's', 'k', '[]', '[]', '[]', '[]', '[]', NULL, NULL, 'a', '[]', NULL, NULL, 'normal', 't', NULL, 'artifact-old.md')`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 15, to: 16 });
+    const after = new StoreDal(r.db).artifactsOf(sid);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.id).toBe('art_oldAAAAA');
+    expect(after[0]!.commands).toBe('[]');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
   it('the launch audit is written exactly once: the second insert is refused by the statement, not by a check', () => {
     const id = mintWorkspaceId('00000000000000000000000000000089');
     const r = openWorkspaceStore(root, id, 'C:/ws');
@@ -474,9 +503,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v15; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v16; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(15); // Part AK: v15, the delivery tables (plan Reservations, ruled 2026-09-09: the store suite's pins ride with the v15 reservation)
+    expect(CURRENT_SCHEMA_VERSION).toBe(16); // PD-LIBRARY-001: v16 adds `artifacts.commands`; v15 was Part AK's delivery tables
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -621,7 +650,7 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       // Part Y (v12): the artifact record goes with its session, so its body file is the only thing left to remove.
       dal.insertArtifact({
         session_id: raw, id: `art_${raw.slice(-6)}A`, slug: `slug-${raw.toLowerCase()}`, title: 't', kind: 'agent_published', source_task_id: null, canonical_name: null, source_persona: 'p',
-        status: 'published', summary: 's', key_findings: 'k', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', tags: '[]', supersedes: null, superseded_by: null,
+        status: 'published', summary: 's', key_findings: 'k', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]', supersedes: null, superseded_by: null,
         created_by: 'a', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal', created_at: 't', edited_at: null, body_file: 'artifact-x.md',
       });
       return sid;
@@ -756,12 +785,12 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v15, and the migration list is append-only with nothing renumbered', () => {
+  it('is v16, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
-    // the pin ride with the v15 reservation) before any of them was written; the ladder is
+    // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16. The ladder is
     // asserted whole rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(15);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(16);
   });
 });
 

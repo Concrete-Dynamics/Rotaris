@@ -1,4 +1,4 @@
-import type { ArtifactRecord } from './record.js';
+import type { ArtifactRecord, RanCommand } from './record.js';
 
 /**
  * REQ-LIBRARY-090 — the artifact's Markdown document, which is what REQ-LIBRARY-087 keeps on disk so that
@@ -6,7 +6,8 @@ import type { ArtifactRecord } from './record.js';
  *
  * The form is fixed: YAML frontmatter carrying `id`, `slug`, `title` (JSON-quoted), `kind`, `status`, the
  * record's timestamps, and — ONLY when the record has them — its source ids, its tags and its supersession
- * links; then `# <title>`; then Summary, Key Findings, Highlight Paths, Snippets, Edited Files, Created
+ * links; then `# <title>`; then Summary, Key Findings, Highlight Paths, Snippets, Commands (PD-LIBRARY-001,
+ * which places it immediately before Edited Files and moves nothing else), Edited Files, Created
  * Files, in that order, each omitted ENTIRELY when empty (no heading, no placeholder), so a reader never has
  * to tell an empty section from an absent one. A record carrying only a body renders as frontmatter, title
  * and its Key Findings, and one carrying nothing renders as frontmatter and title alone.
@@ -40,6 +41,22 @@ function fence(code: string): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
+/**
+ * PD-LIBRARY-001: one command, with its exit status IN WORDS. A bare number is read correctly only by
+ * someone who already knows that zero means success, and the whole reason this section exists is that
+ * nobody could see which of a child's commands had failed. The backtick span is the design language's
+ * mono face, which carries "this is a command" without needing a label. Two characters cannot survive
+ * inside a span and are replaced rather than dropped: a newline (PowerShell has accepted a multi-line
+ * command since ADR-0020's amendment) becomes the two characters backslash-n, and a backtick becomes
+ * U+2035 so that nothing in a command can close the span early.
+ */
+export function renderCommand(c: RanCommand): string {
+  const command = c.command.replace(/\r?\n/g, '\\n').replace(/`/g, '\u2035');
+  const span = `- \`${command}\``;
+  if (c.exitCode === null) return `${span} — exit status not recorded`;
+  return c.exitCode === 0 ? span : `${span} — **failed, exit ${c.exitCode}**`;
+}
+
 export function renderSidecar(record: ArtifactRecord): string {
   const front: string[] = [
     `id: ${yamlScalar(record.id)}`,
@@ -69,10 +86,11 @@ export function renderSidecar(record: ArtifactRecord): string {
   if (record.keyFindings.trim() !== '') section('Key Findings', [record.keyFindings.trim()]);
   section('Highlight Paths', record.highlightPaths.map((h) => (h.reason === '' ? `- \`${h.path}\`` : `- \`${h.path}\` — ${h.reason}`)));
   section('Snippets', record.snippets.flatMap((s) => { const f = fence(s.code); return [`- \`${s.path}\``, '', `${f}${s.language}`, s.code, f]; }));
+  section('Commands', record.commands.map(renderCommand));
   section('Edited Files', record.editedFiles.map((e) => (e.changeType === '' ? `- \`${e.path}\`` : `- \`${e.path}\` (${e.changeType})`)));
   section('Created Files', record.createdFiles.map((p) => `- \`${p}\``));
   return `${out.join('\n')}\n`;
 }
 
 /** REQ-LIBRARY-090's section order, as one list, so a reader (and the proof) can assert it without restating it. */
-export const SIDECAR_SECTIONS = ['Summary', 'Key Findings', 'Highlight Paths', 'Snippets', 'Edited Files', 'Created Files'] as const;
+export const SIDECAR_SECTIONS = ['Summary', 'Key Findings', 'Highlight Paths', 'Snippets', 'Commands', 'Edited Files', 'Created Files'] as const;

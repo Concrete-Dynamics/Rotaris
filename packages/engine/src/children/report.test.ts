@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage } from '@rotaris/model';
 import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
+import { commandsForArtifact } from './ledger.js';
 
 /**
  * REQ-ORCH-108..112 and the specification's "Child report artifact (behavioral schema)": the report names
@@ -34,6 +35,31 @@ describe('engine/children/report — commands derived from the transcript (REQ-O
       result('t2', 'terminal', observation('The command exited with code 1.', 'nope', { backend: 'pwsh', command: 'git status', exit_code: 1, outcome_kind: 'shell_failure' })),
     ];
     expect(commandsFrom(messages)).toEqual([{ command: 'pnpm test', exit_code: 0 }, { command: 'git status', exit_code: 1 }]);
+  });
+
+  /**
+   * PD-LIBRARY-001. The two halves of the wiring meet at one shape, and the report's is snake-cased where the
+   * artifact record's is not. This is that join, asserted against `commandsFrom`'s REAL output rather than a
+   * hand-written literal, because a test that restates the shape cannot fail when the shape moves.
+   */
+  it('PD-LIBRARY-001: what the report carries is what the artifact record takes, field for field', () => {
+    const messages = [
+      call('t1', 'terminal', { command: 'pnpm test' }),
+      result('t1', 'terminal', observation('The command exited with code 0.', 'all green', { backend: 'pwsh', command: 'pnpm test', exit_code: 0, outcome_kind: 'success' })),
+      call('t2', 'terminal', { command: 'wc -l x' }),
+      result('t2', 'terminal', observation('The command exited with code 1.', 'nope', { backend: 'pwsh', command: 'wc -l x', exit_code: 1, outcome_kind: 'shell_failure' })),
+      call('t3', 'terminal', { command: 'tail -f log', background: true }),
+      result('t3', 'terminal', 'Started in the background.'),
+    ];
+    expect(commandsForArtifact(commandsFrom(messages))).toEqual([
+      { command: 'pnpm test', exitCode: 0 },
+      { command: 'wc -l x', exitCode: 1 },
+      { command: 'tail -f log', exitCode: null },
+    ]);
+    // The hop crosses `Record<string, unknown>`, which a model's own output reaches, so neither half may
+    // assume the other was well formed.
+    expect(commandsForArtifact(undefined)).toEqual([]);
+    expect(commandsForArtifact([{ command: '' }, { command: 'ok', exit_code: 'two' }, null, 'bare'])).toEqual([{ command: 'ok', exitCode: null }]);
   });
 
   it('reports a null exit code when the block carries none, and when no result was paired at all', () => {

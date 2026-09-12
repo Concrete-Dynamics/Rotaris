@@ -24,7 +24,11 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-12** — **deepening main-window lifecycle**: the inline main-window
+Last reconciled with the code: **2026-09-12** — **PD-LIBRARY-001, the commands a child ran**: the store moves to
+**v16**, one column (`artifacts.commands`), which is the whole of the change these views can see — no package, no
+allowed edge, no process, no message kind, no channel, no command and no run-loop step moves, and the column is
+noted on the `artifacts` row of the runtime view beside the v12 that created the table. Earlier the same day,
+**deepening main-window lifecycle**: the inline main-window
 lifecycle, registry, startup resolution, chooser gates, add/replace flows, hand-over routing, and per-window deferred offers
 are now encapsulated in `MainWindows` (`apps/desktop/src/main/main-windows.ts`) with Electron and in-memory adapter seams;
 window records and listener registrations are guaranteed prior to renderer loading, and failure to load unregisters and

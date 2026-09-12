@@ -31,8 +31,11 @@ const entry = (action: string, from: string, to: string, over: Partial<{ actor: 
 });
 
 describe('store v15 — the delivery tables (ADR-0041)', () => {
-  it('is the current schema and lands the seven delivery tables, none referencing sessions', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(15);
+  it('lands the seven delivery tables, none referencing sessions', () => {
+    // v15 is where these tables arrived, not where the ladder stops: PD-LIBRARY-001 appended v16 and the next
+    // part will append another. What this file is for is the SHAPE below, so the version is asserted as the
+    // floor these tables need rather than as the top of the ladder, which `store.test.ts` pins whole.
+    expect(CURRENT_SCHEMA_VERSION).toBeGreaterThanOrEqual(15);
     const tables = (r.db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name LIKE 'delivery%' ORDER BY name").all() as { name: string; sql: string }[]);
     expect(tables.map((t) => t.name)).toEqual(['delivery', 'delivery_audit', 'delivery_blockers', 'delivery_history', 'delivery_runs', 'delivery_tombstones', 'delivery_worktrees']);
     for (const t of tables) expect(t.sql, t.name).not.toMatch(/REFERENCES sessions/);

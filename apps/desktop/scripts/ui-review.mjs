@@ -4,7 +4,7 @@
  * The command invokes no model. It records rendered ground truth and caps a review
  * series at three iterations. `$review-ui` turns the pack into `critique.json`.
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo } from './lib/harness.mjs';
@@ -58,7 +58,28 @@ if (run.status !== 0) process.exit(run.status ?? 1);
 const report = JSON.parse(readFileSync(join(output, 'report.json'), 'utf8'));
 const dirty = spawnSync('git', ['diff', '--quiet'], { cwd: repo }).status !== 0;
 const files = readdirSync(output, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
-const previousCritique = iteration > 1 ? join(repo, '.ui-review', revision, `iteration-${iteration - 1}`, 'critique.json') : null;
+/**
+ * The previous iteration's critique, which is almost never under this revision.
+ *
+ * Acting on a finding changes the source, which changes `HEAD`, which changes the directory the
+ * next pack is written to — so keying the chain on the revision alone breaks it on exactly the
+ * round where something was repaired, and a three-iteration series would never link once. The
+ * pack keeps the revision it was shot at, because that is its provenance; the chain is found by
+ * looking across revisions for the newest `iteration-(N-1)/critique.json`.
+ */
+function previousIterationCritique(n) {
+  if (n <= 1) return null;
+  const root = join(repo, '.ui-review');
+  if (!existsSync(root)) return null;
+  const candidates = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(root, entry.name, `iteration-${n - 1}`, 'critique.json'))
+    .filter((candidate) => existsSync(candidate))
+    .map((candidate) => ({ candidate, at: statSync(candidate).mtimeMs }))
+    .sort((a, b) => b.at - a.at);
+  return candidates[0]?.candidate ?? null;
+}
+const previousCritique = previousIterationCritique(iteration);
 const byKind = report.findings.reduce((acc, finding) => ({ ...acc, [finding.kind]: (acc[finding.kind] ?? 0) + 1 }), {});
 const manifest = {
   version: 1,
@@ -74,7 +95,7 @@ const manifest = {
   captured: { theme: report.theme ?? null, sizes: report.sizes ?? [], views: report.views ?? [] },
   deterministic: { findings: report.findings.length, byKind },
   files,
-  previousCritique: previousCritique !== null && existsSync(previousCritique) ? relative(output, previousCritique).replaceAll('\\', '/') : null,
+  previousCritique: previousCritique === null ? null : relative(output, previousCritique).replaceAll('\\', '/'),
 };
 writeFileSync(join(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 writeFileSync(join(output, 'critic-input.json'), `${JSON.stringify({

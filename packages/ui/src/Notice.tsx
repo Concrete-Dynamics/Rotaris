@@ -46,11 +46,21 @@ export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerPr
           </details>
         )}
       </div>
-      {notice.action && (
-        <DesignButton type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
-      )}
-      {notice.persistent && (
-        <DesignButton type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</DesignButton>
+      {/*
+        One row for both controls, cross-centred. They were direct children of a `flex-start` banner
+        with only the dismiss carrying `align-self: center`, so their centres sat 5.42 px apart on
+        every view at both sizes — the first misalignment on every screen in the product, found by
+        the visual critic of 2026-09-12 (UIR-008). The `align-y` contract is what keeps it found.
+      */}
+      {(notice.action || notice.persistent) && (
+        <div className="notice__actions">
+          {notice.action && (
+            <DesignButton type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
+          )}
+          {notice.persistent && (
+            <DesignButton type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} ui={{ id: 'notice-dismiss', relations: notice.action ? [{ kind: 'align-y', target: 'notice-action', edge: 'middle' }] : [] }} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</DesignButton>
+          )}
+        </div>
       )}
     </div>
   );

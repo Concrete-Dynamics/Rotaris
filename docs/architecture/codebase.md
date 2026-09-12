@@ -1322,7 +1322,7 @@ one** — `packages/ui/src/design-system/` (twenty-seven briefs, twenty-nine typ
 migrated onto it), `tools/check-ui-language.mjs` in `pnpm lint`, `pnpm ui-review`'s evidence pack, `theme-proof` moved
 onto the driver, and three portable skills under `.agents/skills/` with thin `.claude/skills/` routers.
 
-**Seven defects, the ninety-first to the ninety-seventh, and five of the seven were in the measuring code.** That ratio
+**Eight defects, the ninety-first to the ninety-eighth, and six of the eight were in the measuring code.** That ratio
 is the finding, not a coincidence: this delivery is almost entirely measurement, and measurement is where this project
 has repeatedly found its faults.
 
@@ -1361,6 +1361,37 @@ one changes approved design material and the other changes an approved requireme
 narrow check stays narrow with its reason written beside it, `docs/design/README.md` §5 item 1 records that the
 acceptance item it had flagged as "specifically at risk" has now been settled from pixels and failed, and OQ-56 carries
 the two resolutions. `pnpm theme-proof` is red on `rotaris-dim`'s `contrast` section and on nothing else until it is answered.
+
+**The critic ran, in a fresh context, and it is worth what it cost.** `pnpm ui-review` captured twenty-six PNGs — seven
+views at two sizes, six overlays at two sizes — with geometry, computed-style landmarks, eight evaluated layout
+contracts per view and **zero deterministic findings**; an agent with no memory of building any of it read the pack and
+returned **twelve findings, four high, seven medium, one low**, every one citing `geometry.json` or `styles.json` by
+number. The deterministic layer had reported the surfaces CLEAN, and it was right: nothing was clipped, buried,
+unreachable or outside its box. What the critic found is the class of thing no assertion here was ever written to
+catch — **ten distinct interactive heights across the pack**, three different treatments for "this one is selected"
+with one of them outside the declared tints, empty-state panels at 84 % of a view's height around three lines of copy,
+and a table whose right edge lands at 1400.44 px in a 1400 px window. **Two lessons, both cheap to state and neither
+obvious before the pack existed.** A screenshot pack read by something that did not build the product is a different
+instrument from a proof, and it should be run as one. And the containment check did not report that 1400.44 — a finding
+against the probe, which the next round owes.
+
+**One was repaired, ten were carried, and the difference is the point.** UIR-008: the banner's two controls were direct
+children of a `flex-start` row with only the dismiss centring itself, so their centres sat **5.42 px apart on every view
+at both sizes** — the first misalignment on every screen in the product. They share one cross-centred row now and an
+`align-y` contract between them, and iteration 2 measures both middles at **81.62** where they had been 76.19 and 81.62.
+**The other eleven were not an agent's to act on**, and saying why is the whole discipline: seven touch geometry or an
+information architecture the specification owns, one — the native checkboxes — is **OQ-57**, because
+`docs/design/` contains no checkbox at all and drawing one would invent a member of the adopted language, and the rest
+are readings of the design material that the material should settle. Their dispositions are written into
+`critique.json` beside them, each with its reason, and **the dispositions are this session's, not the owner's** — the
+file says so in the field that records who wrote them. **Only one of the three cycles the plan allows was spent**: a
+second pass over eleven unchanged surfaces would return the same eleven findings and read like progress.
+
+**The ninety-eighth — the iteration series broke on the round where something was repaired.** `ui-review` keyed its
+output directory on `HEAD`, and acting on a finding changes `HEAD`, so `iteration-2` never found `iteration-1`'s
+critique and a three-round series could not link once. The pack keeps the revision it was shot at — that is its
+provenance — and the chain now looks across revisions for the newest `iteration-(N-1)/critique.json`. Found by running
+the loop rather than by reading it.
 
 **The matrix was run twice and the two passes are identical.** Fifteen runs each — three themes × five scales — naming
 the same two strings at the same 2.898:1 on the same four scale points, with **zero stale captures**, **31 of 32 focus

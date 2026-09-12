@@ -268,7 +268,10 @@
 .notice__details summary { cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .notice__detail { margin: 4px 0; padding: var(--rt-space-2, 8px); background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; user-select: text; }
 .notice__message { font-size: var(--rt-text-xs, 12px); }
-.notice__dismiss { align-self: center; }
+/* UIR-008: the banner's controls share one cross-centred row, so they share a baseline. Each was a
+   direct child of the `flex-start` banner before and only the dismiss centred itself, which put the
+   two centres 5.42 px apart on every view at both sizes. */
+.notice__actions { display: flex; align-items: center; gap: var(--rt-space-2); align-self: center; }
 
 /* ── The ONE transient acknowledgement surface (REQ-NOTIFY-011..022, REQ-SHELL-112/113; craft from the design
    system's Toast + ToastStack). Anchored to this WINDOW's content area, never the screen: a fixed inset follows
@@ -490,7 +493,9 @@
 .hooks__output summary { cursor: pointer; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); }
 .hooks__stream { margin: var(--rt-space-1, 4px) 0 0; padding: var(--rt-space-2, 8px); max-height: 160px; overflow: auto; background: var(--rt-chrome); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .hooks__stream--err { border-color: var(--rt-warn); }
+/* The gap is the row's now (UIR-008); the terminal banner keeps this class without that row. */
 .notice__action { margin-left: var(--rt-space-2, 8px); }
+.notice__actions .notice__action { margin-left: 0; }
 .hook-review__dialog { width: 100%; max-width: 760px; }
 .hook-review__list { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); max-height: 46vh; overflow: auto; }
 .hook-review__entry { margin: 0; padding: var(--rt-space-3, 12px); background: var(--rt-chrome); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre; overflow-x: auto; user-select: text; }

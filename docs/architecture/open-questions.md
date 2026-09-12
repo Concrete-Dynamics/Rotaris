@@ -2358,8 +2358,27 @@ the dimmest surface and stays at 4.14:1 on the ground, comfortably under half th
 caps it by, and leaves the default still dimmer than the other two themes — or REQ-SHELL-145's floor is amended to name
 the ground it is measured against. **An agent may not choose between them**: the first changes approved design material
 and the second changes an approved requirement. Until it is answered, `pnpm theme-proof`'s `contrast` section is red on
-`rotaris-dim` at every scale **and on nothing else**, the two tests that pin the shortfall keep it from being lost, and
-the narrow static check stays narrow so the conflict cannot be mistaken for an ordinary test failure.
+`rotaris-dim` at four of the five scales **and on nothing else**, the two tests that pin the shortfall keep it from being
+lost, and the narrow static check stays narrow so the conflict cannot be mistaken for an ordinary test failure.
+
+**OQ-57 — The product draws checkboxes and the adopted design language has none.** *(`docs/design/README.md` §2; raised 2026-09-12 by the first independent visual-critic pass, finding UIR-004.)*
+
+`docs/design/` contains **no checkbox** — not in the token set, not in §1's component notes, not in the mockup. The
+product needs them all the same: the start-session dialog's "Run in an isolated Git worktree", the Requirements board's
+"Blocked column", and the worktree-cleanup dialog's "Don't ask again" (`REQ-GIT-135`). They are drawn today as the
+platform's native control, and it shows — the critic measured the Requirements checkbox at **13 × 24 with
+`border-radius: 0px`**, below every radius the system declares, and in the start-session dialog the box sits at one end
+of its row with the words it governs at the other. The shared layer has no `Checkbox` because the material it is drawn
+from has none, and `tools/check-ui-language.mjs` cannot catch it: the callers pass `type="checkbox"` to the shared
+`Input`, so the guard sees a component, not a raw control.
+
+**This is a gap in the adopted material, not a violation of it, and the difference decides who answers.** There is no
+approved drawing to match and no requirement that states one, so an agent drawing a checkbox here would be inventing a
+member of the design language — which `CLAUDE.md` forbids in exactly these words. Either the design material gains a
+checkbox (and the shared layer gains the component that transcribes it, with the native input kept underneath for its
+semantics), or the product states that these three choices are drawn as `ToggleSwitch`, which the language **does**
+define. The layout half is not waiting on the answer and can be repaired under either: a control and its label belong on
+one line, adjacent.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

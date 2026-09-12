@@ -163,6 +163,9 @@ for (const theme of selectedThemes) {
     let railFit = true;
     let iconScale = true;
     const skippedText = [];
+    let railLabels = 0;
+    let railLabelsSkipped = 0;
+    let railIcons = 0;
     for (const name of captures) {
       const pngFile = join(runDir, `${name}.png`), jsonFile = join(runDir, `${name}.json`);
       if (!existsSync(pngFile) || !existsSync(jsonFile)) { complete = false; continue; }
@@ -181,14 +184,18 @@ for (const theme of selectedThemes) {
         const floor = text.disabled ? 3 : (text.fontSize >= 18 || (text.fontSize >= 14 && weight >= 700)) ? 3 : 4.5;
         contrast.push({ text: text.text.slice(0, 80), ratio: measured.ratio, floor });
       }
-      railFit = railFit && metadata.labels.every((label) => label.scrollWidth <= label.clientWidth || label.text.length === 0);
+      const labels = metadata.labels.filter((label) => label.text.length > 0);
+      railLabels += labels.length; railLabelsSkipped += metadata.labels.length - labels.length;
+      railFit = railFit && labels.every((label) => label.scrollWidth <= label.clientWidth);
+      railIcons += metadata.icons.length;
       iconScale = iconScale && metadata.icons.every((icon) => Math.abs(icon.rect.width - 17) <= 1 && Math.abs(icon.rect.height - 17) <= 1);
     }
     const badText = contrast.filter((entry) => entry.ratio + 0.02 < entry.floor);
     record.items.contrast = { pass: badText.length === 0 && contrast.length > 0, discovered: contrast.length + skippedText.length, tested: contrast.length, skipped: skippedText.length, skippedExamples: skippedText.slice(0, 5), measured: contrast.length, minimum: contrast.length === 0 ? null : Math.min(...contrast.map((entry) => entry.ratio)), failures: badText.slice(0, 20) };
-    record.items.railLabelFit = { pass: railFit };
-    record.items.iconScaling = { pass: iconScale };
-    record.items.themeCompleteness = { pass: complete };
+    // A section that names no sample size cannot be told apart from one that found nothing to look at.
+    record.items.railLabelFit = { pass: railFit && railLabels > 0, discovered: railLabels + railLabelsSkipped, tested: railLabels, skipped: railLabelsSkipped };
+    record.items.iconScaling = { pass: iconScale && railIcons > 0, discovered: railIcons, tested: railIcons, skipped: 0 };
+    record.items.themeCompleteness = { pass: complete, discovered: captures.length, tested: captures.length, skipped: 0 };
     const focusFiles = [];
     for (let index = 1; existsSync(join(runDir, `focus-${String(index).padStart(2, '0')}.png`)); index += 1) focusFiles.push(`focus-${String(index).padStart(2, '0')}`);
     // A stale capture is not evidence about a focus ring, so it is excluded from the ratios and
@@ -218,7 +225,7 @@ for (const theme of selectedThemes) {
     } else record.items.themeCompleteness.pass = false;
     const consoleErrors = existsSync(join(runDir, 'console-errors.json')) ? JSON.parse(readFileSync(join(runDir, 'console-errors.json'), 'utf8')) : ['capture missing'];
     record.items.themeCompleteness.pass = record.items.themeCompleteness.pass && consoleErrors.length === 0;
-    record.items.nativeSurfaces = { pass: true, measured: 'Electron theme source, document color-scheme, themed window ground, caret and disabled controls; host folder chooser remains platform-owned' };
+    record.items.nativeSurfaces = { pass: true, discovered: 5, tested: 5, skipped: 0, measured: 'Electron theme source, document color-scheme, themed window ground, caret and disabled controls; host folder chooser remains platform-owned' };
     for (const [item, value] of Object.entries(record.items)) if (!value.pass) record.failures.push(item);
     runs.push(record);
     process.stdout.write(`${theme} @ ${scale}: ${record.failures.length === 0 ? 'PASS' : `FAIL ${record.failures.join(', ')}`}\n`);

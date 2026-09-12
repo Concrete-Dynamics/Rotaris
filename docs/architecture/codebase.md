@@ -1390,6 +1390,13 @@ obvious before the pack existed.** A screenshot pack read by something that did 
 instrument from a proof, and it should be run as one. And the containment check did not report that 1400.44 — a finding
 against the probe, which the next round owes.
 
+**The critic dropped one of its own findings, and that is the part worth keeping.** It had read `.btn-secondary` in the
+downscaled captures as a filled light block, which would have violated the one-filled-control rule outright. Before
+writing it down it decoded the PNGs and sampled the pixels: the secondary's ground is `rgb(34,34,34)` against the
+primary's `rgb(103,78,176)`, the perceptual read of a shrunk screenshot was simply wrong, and the rule holds. **A critic
+that judges from an impression of a picture is worth nothing here**; one that measures before it files is the whole
+difference, and it is why the pack ships geometry and computed styles beside the PNGs rather than PNGs alone.
+
 **One was repaired, ten were carried, and the difference is the point.** UIR-008: the banner's two controls were direct
 children of a `flex-start` row with only the dismiss centring itself, so their centres sat **5.42 px apart on every view
 at both sizes** — the first misalignment on every screen in the product. They share one cross-centred row now and an

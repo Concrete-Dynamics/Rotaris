@@ -321,4 +321,26 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     // REQ-MONITOR-086: one completion, counted once — a second iteration must not re-count it.
     expect(timeline(sid).filter((t) => t.name === 'context_compressed')).toHaveLength(1);
   });
+
+  it("REQ-SESSION-139 / ADR-0008: a completed compression INCREMENTS the session's compressions aggregate", async () => {
+    /**
+     * Measured after a real 22-minute run: three `context_compressed` timeline entries against
+     * `sessions.compressions = 0`. The per-agent counter was kept (`activity.compressed`) and the session-wide
+     * one was declared, rehydrated and copied into every save with nothing ever adding to it, so the two
+     * records of the same fact disagreed. ADR-0008 rules the aggregate MAINTAINED, not recomputed: the figure
+     * is raised where the completion happens, and never by counting the timeline back.
+     */
+    const { sessions } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return answer('Work performed: a lot. Findings reached: some. Questions left open: none.');
+      if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking', { input: 20, output: 10 });
+      if (turn === 2) return toolCalls([{ callId: 'c2', name: 'glob', args: {} }], 'looking again', { input: 900, output: 10 });
+      return answer('done');
+    }, { triggerTokens: 600, preserveRecentTurns: 1 });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && dal.getSession(sid)!.execution_status === 'running'; i++) await tick();
+    const entries = timeline(sid).filter((t) => t.name === 'context_compressed');
+    expect(entries).toHaveLength(1);
+    // The two records of one fact must agree: the per-agent counter and the session-wide aggregate.
+    expect(dal.getSession(sid)!.compressions).toBe(entries.length);
+  });
 });

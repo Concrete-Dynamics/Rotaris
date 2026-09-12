@@ -51,6 +51,20 @@ export class Aggregates {
     this.toolCalls += n;
   }
 
+  /**
+   * REQ-SESSION-139: the compression aggregate, raised once per COMPLETED compression, wherever the
+   * completion happens (`run/compression.ts`, beside the per-agent counter of REQ-MONITOR-086).
+   *
+   * The reason it was missing, kept beside its replacement: the figure was declared, rehydrated and copied
+   * into every save from the day this class was written, and nothing ever added to it — so a run measured at
+   * three `context_compressed` timeline entries persisted `compressions = 0` while the PER-AGENT counter said
+   * three. Counting the timeline back at save time would have closed the gap and is refused: ADR-0008 rules
+   * these figures maintained, not recomputed, and a scan per save is the cost that decision exists to remove.
+   */
+  addCompression(): void {
+    this.compressions += 1;
+  }
+
   get figures(): AggregateFigures {
     return { tokensInput: this.tokensInput, tokensOutput: this.tokensOutput, cost: this.cost, toolCalls: this.toolCalls, compressions: this.compressions };
   }

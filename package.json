@@ -11,7 +11,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/check-theme-colours.mjs && eslint .",
+    "lint": "node tools/check-line-endings.mjs && node tools/check-theme-colours.mjs && eslint .",
     "mockup": "node tools/mockup.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

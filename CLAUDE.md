@@ -153,10 +153,14 @@ choose — the cost of an unmerged branch is paid later, by someone who cannot s
 - **Remove the worktree once it is merged**: `git worktree remove ../Rotaris-crw-wt-<short>` and
   `git branch -d <topic>`, so the next session inherits a list of live work rather than a graveyard.
 
-One trap that has cost a whole-file diff before: `core.autocrlf=true` checks the working copy out CRLF while
-every blob in the repository is bare LF. Read and write files with the line ending the working copy already
-has, match `\r?\n` in any regex, and read `git diff --stat` — or
-`git diff --ignore-cr-at-eol --numstat` — before committing a scripted edit.
+**Line endings are LF, everywhere, and no edit has to negotiate them.** `.gitattributes` sets
+`* text=auto eol=lf`, so a checkout on Windows holds the same bytes as one on Linux whatever
+`core.autocrlf` the machine carries, and `tools/check-line-endings.mjs` fails `pnpm lint` if a CRLF or
+mixed blob is ever staged. Write LF and stop thinking about it. A checkout made before that file landed
+may still hold CRLF on disk — harmless, because git normalises it on the way in — and
+`git checkout-index -a -f`, against a clean `git status`, converts it. The trap this replaces cost a
+937-line diff for a seven-line edit: if a diff ever reports a whole file again,
+`git diff --ignore-cr-at-eol --numstat` separates the endings from the content.
 
 ## The architecture views — consult before, maintain after
 

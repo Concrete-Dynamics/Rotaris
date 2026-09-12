@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Timers } from '@rotaris/kernel';
 import { AiSdkModelClient } from './ai-sdk-client.js';
 import type { ModelRequest, StreamPart } from './ports.js';
 
@@ -16,6 +17,12 @@ import type { ModelRequest, StreamPart } from './ports.js';
  * (status and body preserved), and an abort mid-stream. Report the figures
  * into docs/architecture/spikes/responses-dialect.md.
  */
+/** The adapter's idle bound needs a real timer here; a test file is outside `rotaris/no-bare-timers`. */
+const realTimers: Timers = {
+  after: (delay, fn) => { const h = setTimeout(fn, delay); return { cancel: () => clearTimeout(h) }; },
+  every: (period, fn) => { const h = setInterval(fn, period); return { cancel: () => clearInterval(h) }; },
+};
+
 const baseUrl = process.env['ROTARIS_SPIKE6_BASE_URL'];
 const modelId = process.env['ROTARIS_SPIKE6_MODEL'];
 const keyEnv = process.env['ROTARIS_SPIKE6_API_KEY_ENV'];
@@ -31,7 +38,7 @@ function req(dialect: 'chat' | 'responses', over: Partial<ModelRequest> = {}): M
 describe.skipIf(!live)('spike 6 — the Responses dialect against a real endpoint (ADR-0027 consequence 2)', () => {
   for (const dialect of ['responses', 'chat'] as const) {
     it(`${dialect}: streams deltas and reports the provider's usage`, async () => {
-      const client = new AiSdkModelClient({ baseUrl: baseUrl!, headers: { 'x-rotaris-spike': '6' }, onRequest: (i) => console.log(`[spike6] ${dialect} → ${i.url}`) });
+      const client = new AiSdkModelClient({ timers: realTimers, baseUrl: baseUrl!, headers: { 'x-rotaris-spike': '6' }, onRequest: (i) => console.log(`[spike6] ${dialect} → ${i.url}`) });
       const parts: StreamPart[] = [];
       let error: unknown = null;
       const t0 = performance.now();
@@ -49,7 +56,7 @@ describe.skipIf(!live)('spike 6 — the Responses dialect against a real endpoin
     });
   }
   it('responses: a bad key keeps the status and the provider body', async () => {
-    const client = new AiSdkModelClient({ baseUrl: baseUrl! });
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: baseUrl! });
     let error: { status?: number; providerMessage?: string } | null = null;
     for await (const r of client.stream(req('responses', { resolveCredential: async () => 'not-a-key' }))) { if (!r.ok) { error = r.error; break; } }
     console.log(`[spike6] bad key → ${JSON.stringify(error)}`);
@@ -57,7 +64,7 @@ describe.skipIf(!live)('spike 6 — the Responses dialect against a real endpoin
   });
   it('responses: an abort mid-stream ends as aborted', async () => {
     const ac = new AbortController();
-    const client = new AiSdkModelClient({ baseUrl: baseUrl! });
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: baseUrl! });
     let code: string | null = null;
     let n = 0;
     for await (const r of client.stream(req('responses', { signal: ac.signal, messages: [{ role: 'user', content: [{ kind: 'text', text: 'Count slowly from 1 to 200, one number per line.' }] }] }))) {

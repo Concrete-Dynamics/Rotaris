@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Timers } from '@rotaris/kernel';
 import { AiSdkModelClient, redactHeaders, type FetchLike } from './ai-sdk-client.js';
 import type { ModelRequest, StreamPart } from './ports.js';
 
@@ -9,7 +10,18 @@ import type { ModelRequest, StreamPart } from './ports.js';
  * body, that an abort ends the stream as aborted, and the v7 usage mapping.
  * The live half — a real responses-dialect endpoint — is owed and recorded in
  * docs/architecture/spikes/responses-dialect.md.
+ *
+ * The idle-bound pair below (ADR-0027's fourth execution) reads REAL time on
+ * purpose. A FakeClock cannot falsify the shape it was written against: the
+ * bound it replaces was an `AbortSignal.timeout`, which reads the platform
+ * clock and would not have noticed a controlled one advancing. The two tests
+ * therefore run under a 300 ms bound rather than the product's 120 s.
  */
+const realTimers: Timers = {
+  after: (delay, fn) => { const h = setTimeout(fn, delay); return { cancel: () => clearTimeout(h) }; },
+  every: (period, fn) => { const h = setInterval(fn, period); return { cancel: () => clearInterval(h) }; },
+};
+
 function sse(lines: string[]): Response {
   const body = lines.map((l) => `data: ${l}\n\n`).join('');
   return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
@@ -40,7 +52,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       return sse([chatChunk('Hel', null), chatChunk('lo', null), chatChunk(null, 'stop', { prompt_tokens: 7, completion_tokens: 2 }), '[DONE]']);
     };
     const logged: Record<string, string>[] = [];
-    const client = new AiSdkModelClient({ baseUrl: 'https://acme.example/v1', headers: { 'editor-version': 'rotaris/0.1' }, fetch: fake, onRequest: (i) => logged.push(i.headers) });
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', headers: { 'editor-version': 'rotaris/0.1' }, fetch: fake, onRequest: (i) => logged.push(i.headers) });
     const { parts, error } = await collect(client.stream(request('chat')));
     expect(error).toBeNull();
     expect(seen[0]!.url).toBe('https://acme.example/v1/chat/completions');
@@ -59,7 +71,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       seen.push(`${init?.method ?? 'GET'} ${String(input)} auth=${new Headers(init?.headers).get('authorization')}`);
       return new Response(JSON.stringify({ error: { message: 'bad key for acme', type: 'invalid_request_error' } }), { status: 401, headers: { 'content-type': 'application/json' } });
     };
-    const client = new AiSdkModelClient({ baseUrl: 'https://acme.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', fetch: fake });
     const { error } = await collect(client.stream(request('responses')));
     expect(seen[0]).toBe('POST https://acme.example/v1/responses auth=Bearer sk-test-secret');
     expect(error).not.toBeNull();
@@ -69,8 +81,8 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
   });
   it('a 503 is transient, a 400 is not (REQ-ORCH-092 decided on the status, not on prose)', async () => {
     const at = (status: number): FetchLike => async () => new Response('{"error":{"message":"x"}}', { status, headers: { 'content-type': 'application/json' } });
-    const e503 = (await collect(new AiSdkModelClient({ baseUrl: 'https://a.example/v1', fetch: at(503) }).stream(request('chat')))).error!;
-    const e400 = (await collect(new AiSdkModelClient({ baseUrl: 'https://a.example/v1', fetch: at(400) }).stream(request('chat')))).error!;
+    const e503 = (await collect(new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: at(503) }).stream(request('chat')))).error!;
+    const e400 = (await collect(new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: at(400) }).stream(request('chat')))).error!;
     expect((e503 as { transient?: boolean }).transient).toBe(true);
     expect((e400 as { transient?: boolean }).transient).toBe(false);
   });
@@ -86,15 +98,64 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       });
       return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
     };
-    const client = new AiSdkModelClient({ baseUrl: 'https://a.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: fake });
     const it = client.stream(request('chat', { signal: ac.signal }))[Symbol.asyncIterator]();
     const first = await it.next();
     expect(first.value).toEqual({ ok: true, value: { kind: 'text', delta: 'part' } });
     ac.abort();
     let last = await it.next();
     while (!last.done && last.value.ok) last = await it.next();
-    expect(last.done).toBe(false);
-    if (!last.done && !last.value.ok) expect(last.value.error.code).toBe('aborted');
+    // Asserted unconditionally: the earlier form skipped its own assertion when the stream simply ended.
+    if (last.done || last.value.ok) throw new Error('the stream ended without an error');
+    expect(last.value.error.code).toBe('aborted');
+  });
+  it('a stream that goes SILENT past the bound fails as a timeout, not as an abort (REQ-CONFIG-115, REQ-ORCH-092)', async () => {
+    // The shape that killed four children on 2026-09-12: nothing aborted the call; the bound expired, and the
+    // adapter reported `aborted`, which REQ-ORCH-092 classes fatal — no retry, no fallback, the partial discarded.
+    const fake: FetchLike = async (_input, init) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`data: ${chatChunk('part', null)}\n\n`));
+          init?.signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')));
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    };
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: fake });
+    const { parts, error } = await collect(client.stream(request('chat', { timeoutMs: 300 })));
+    expect(parts.some((p) => p.kind === 'text')).toBe(true);
+    expect(error).not.toBeNull();
+    expect(error!.code).toBe('timeout');
+    expect((error as { transient?: boolean }).transient).toBe(true);
+  });
+  it('a stream still emitting past the bound runs to completion: the bound measures silence, not total duration (REQ-CONFIG-115)', async () => {
+    const enc = new TextEncoder();
+    const fake: FetchLike = async (_input, init) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          void (async () => {
+            try {
+              // Eight deltas 60 ms apart is 480 ms of generation under a 300 ms bound — a long answer, in miniature.
+              for (let i = 0; i < 8; i++) {
+                await new Promise((r) => setTimeout(r, 60));
+                if (init?.signal?.aborted === true) return;
+                controller.enqueue(enc.encode(`data: ${chatChunk(`d${i} `, null)}\n\n`));
+              }
+              controller.enqueue(enc.encode(`data: ${chatChunk(null, 'stop', { prompt_tokens: 4, completion_tokens: 8 })}\n\n`));
+              controller.enqueue(enc.encode('data: [DONE]\n\n'));
+              controller.close();
+            } catch { /* the reader is gone; nothing to close */ }
+          })();
+          init?.signal?.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError')));
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    };
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: fake });
+    const { parts, error } = await collect(client.stream(request('chat', { timeoutMs: 300 })));
+    expect(error).toBeNull();
+    expect(parts.filter((p) => p.kind === 'text').map((p) => (p as { delta: string }).delta).join('')).toBe('d0 d1 d2 d3 d4 d5 d6 d7 ');
+    expect(parts.at(-1)).toEqual({ kind: 'finish', reason: 'stop' });
   });
   it('redactHeaders blanks every secret-bearing header', () => {
     expect(redactHeaders({ Authorization: 'Bearer x', 'x-api-key': 'k', accept: 'a' })).toEqual({ Authorization: '<redacted>', 'x-api-key': '<redacted>', accept: 'a' });
@@ -105,7 +166,7 @@ describe('model — a system message reaches the provider (spike 6, live half: t
   it('chat: the system text travels as instructions and lands in the request body; the stream still maps across', async () => {
     const seen: string[] = [];
     const fake: FetchLike = async (_input, init) => { seen.push(String(init?.body ?? '')); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
-    const client = new AiSdkModelClient({ baseUrl: 'https://acme.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', fetch: fake });
     const req = request('chat', { messages: [{ role: 'system', content: [{ kind: 'text', text: 'You are the orchestrator.' }] }, { role: 'user', content: [{ kind: 'text', text: 'hi' }] }] });
     const { parts, error } = await collect(client.stream(req));
     expect(error).toBeNull();

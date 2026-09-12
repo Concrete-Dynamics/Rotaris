@@ -23,6 +23,9 @@ describe('engine/run/resilience — classification (REQ-ORCH-091/092, REQ-NOTIFY
     ['504', http(504), 'transient'],
     ['connection error', modelError({ code: 'connection', headline: 'fetch failed' }), 'transient'],
     ['request timeout', modelError({ code: 'timeout', headline: 'the call timed out' }), 'transient'],
+    // The adapter's idle bound (REQ-CONFIG-115): a silent stream is a timeout and is retried, where it
+    // once arrived as `aborted` and was classed fatal — the shape that lost four children on 2026-09-12.
+    ['the model timeout expiring mid-stream', modelError({ code: 'timeout', headline: 'no stream activity for 120000 ms' }), 'transient'],
     ['peer closed connection phrase', modelError({ code: 'unknown', headline: 'peer closed connection without sending complete message body', transient: false }), 'transient'],
     ['service unavailable phrase', http(400, 'Service Unavailable'), 'transient'],
     ['temporarily unavailable', http(400, 'The model is temporarily unavailable'), 'transient'],

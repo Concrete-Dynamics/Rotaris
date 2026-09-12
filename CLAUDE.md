@@ -156,11 +156,22 @@ choose — the cost of an unmerged branch is paid later, by someone who cannot s
 **Line endings are LF, everywhere, and no edit has to negotiate them.** `.gitattributes` sets
 `* text=auto eol=lf`, so a checkout on Windows holds the same bytes as one on Linux whatever
 `core.autocrlf` the machine carries, and `tools/check-line-endings.mjs` fails `pnpm lint` if a CRLF or
-mixed blob is ever staged. Write LF and stop thinking about it. A checkout made before that file landed
-may still hold CRLF on disk — harmless, because git normalises it on the way in — and
-`git checkout-index -a -f`, against a clean `git status`, converts it. The trap this replaces cost a
-937-line diff for a seven-line edit: if a diff ever reports a whole file again,
-`git diff --ignore-cr-at-eol --numstat` separates the endings from the content.
+mixed blob is ever staged. Write LF and stop thinking about it.
+
+A checkout made before that file landed still holds CRLF on disk — every worktree standing today does,
+until it merges this. It is harmless while it lasts, because git normalises on the way in, and it heals in
+two steps, in this order:
+
+1. **Rewrite the files.** `git checkout-index -f` does *not* do this: it leaves an existing file alone
+   whatever `-f` suggests, and only writes one it had to create. Convert them in place, or delete and
+   re-check-out.
+2. **`git add --renormalize .`** — which is what refreshes the index's stat cache. Skip it and `git status`
+   reports several hundred unmodified files as modified while `git diff` shows nothing and
+   `git update-index --really-refresh` cannot clear it: measured here, 519 files, index and disk hashes
+   identical throughout.
+
+The trap all of this replaces cost a 937-line diff for a seven-line edit. If a diff ever reports a whole
+file again, `git diff --ignore-cr-at-eol --numstat` separates the endings from the content.
 
 ## The architecture views — consult before, maintain after
 

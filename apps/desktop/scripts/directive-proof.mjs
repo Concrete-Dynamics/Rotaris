@@ -26,8 +26,25 @@ const original = readFileSync(register, 'utf8');
 let failures = 0;
 let ran = 0;
 
-/** @param {string} body */
-const withDirectives = (body) => writeFileSync(register, `${original}\n${body}\n`);
+/**
+ * Write a register holding ONLY the fixture.
+ *
+ * Found on the first execution of this register with entries in it (2026-09-12, PD-SHELL-001 and
+ * PD-WORKSPACE-001): this used to APPEND the fixture to the committed file, which was sound only
+ * while that file held no directive. With real entries above it, every exact assertion below became
+ * order- and count-dependent — `DIRECTIVE_COUNT = 1` and a map anchored at its first line are claims
+ * about an empty register, not about the generator. Worse, the counterfactual for a disposition with
+ * no directive above it could no longer arise at all: a committed directive was always above it, so
+ * the generator was right to accept it and that check silently stopped refusing anything, which is
+ * the one failure mode this whole file exists to prevent.
+ *
+ * Replacing rather than appending keeps every case exact however many directives the register grows
+ * to hold. What the committed register itself claims is checked in section 1, against the artifact.
+ *
+ * @param {string} body
+ */
+const withDirectives = (body) =>
+  writeFileSync(register, `# Product directives — replaced by directive-proof, restored in its finally block\n\n${body}\n`);
 
 /** Run the generator, returning its exit status and combined output. */
 const generate = () => {
@@ -70,7 +87,15 @@ try {
     assert('an empty register generates', ok, out);
     const art = readFileSync(artifact, 'utf8');
     assert('the artifact declares DIRECTIVE_COUNT', /export const DIRECTIVE_COUNT = \d+;/.test(art));
-    assert('the artifact carries no directive yet', /export const DIRECTIVE_COUNT = 0;/.test(art));
+    // Not "the register is empty" — it is not, and will only grow. What matters is that the count is
+    // not stale with respect to the symbols beside it, which is checkable without knowing either.
+    const carried = [...art.matchAll(/^ {2}'(PD-[A-Z]+-\d+)': \{ id:/gm)].length;
+    const declared = Number(/export const DIRECTIVE_COUNT = (\d+);/.exec(art)?.[1] ?? -1);
+    assert(
+      'DIRECTIVE_COUNT matches the directives the artifact carries',
+      carried === declared,
+      `${carried} PD symbols, DIRECTIVE_COUNT ${declared}`,
+    );
     assert('the template inside the HTML comment is not parsed as a directive', !/'PD-CHAT-001':/.test(art));
   }
 

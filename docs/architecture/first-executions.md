@@ -114,7 +114,7 @@ its five Parts in merge order from 46 and carries on to **80**.
 inside the other's, which is precisely what "a changed requirement gets a new revision, not a new number"
 forbids by analogy. So:
 
-- **`codebase.md` holds the canonical defect ledger** — continuous, current, 1→86, counting *every defect the
+- **`codebase.md` holds the canonical defect ledger** — continuous, current, 1→87, counting *every defect the
   build found, whatever found it*. **Anywhere but this file's own table, a number cited without a ledger means
   this one**; inside the table the historic rows predate it, so there an unlabelled number is ADR-0058's.
 - **ADR-0058's sentence is a superseded parallel narrative**, 1→53, closed on 2026-09-11, counting *mechanisms

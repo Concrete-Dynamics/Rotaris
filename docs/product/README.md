@@ -181,3 +181,25 @@ The proof runs 25 checks: the register as committed, a well-formed directive rea
 all three dispositions, nine refusals each paired with what would have passed without it, and `New`
 alone. It edits the register in place and restores it in a `finally` block, ending by regenerating the
 artifact so the committed symbols always match the committed register.
+
+## Second execution, 2026-09-12 — the register's own proof assumed it would stay empty
+
+The first two directives (`PD-SHELL-001`, `PD-WORKSPACE-001`) were written the day after this layer, and
+writing them took `pnpm directive-proof` from 25/25 to **21/25**. Nothing was wrong with the generator or with
+the directives: the proof appended each fixture to the *committed* register and then asserted absolutes about
+the result — `DIRECTIVE_COUNT = 1`, and each precedence map anchored at its first line. Those are claims about
+an empty register, and this register is not for staying empty.
+
+Three of the four failures were that arithmetic. **The fourth was a check that had stopped checking.** The
+counterfactual for "a disposition with no directive above it" injects a bare disposition and expects the
+refusal; appended below two real directives there was always a directive above it, so the generator was right
+to accept it and the counterfactual could no longer arise. It would have gone on reporting a pass for a
+refusal it was no longer exercising — the failure "a check that has never refused anything is
+indistinguishable from no check" exists to prevent, reached by a route that wording did not anticipate: not a
+check that never refused, but one whose precondition the register's own growth destroyed.
+
+The fixture register is written in full now rather than appended to, so every case stays exact however many
+directives are committed, and what the committed register claims is checked separately against the artifact by
+a test that needs to know neither count: `DIRECTIVE_COUNT` must equal the number of `PD` symbols beside it.
+25/25 again. Recorded as the eighty-seventh defect in `codebase.md`'s ledger, which is where a proof defect
+belongs — `first-executions.md` excludes them by its own terms.

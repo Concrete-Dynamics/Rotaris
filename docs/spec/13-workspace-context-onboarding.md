@@ -38,6 +38,10 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-009** — Choosing a project folder SHALL use the operating system's native folder chooser, titled "Open a project folder", restricted to directories, starting at the given initial directory or else the user's home directory. The product SHALL be answerable only for what it hands the host dialog — the title, the restriction to directories, and the initial location — and for interpreting every answer that dialog can return (REQ-SHELL-164); keyboard traversal, localization of platform-supplied button text and screen-reader behavior inside a native dialog are inherited and are not requirements on this product. A dismissal by any means the host offers — Cancel, Escape, the window close control, or a platform gesture — SHALL be treated identically: no selection is returned and nothing changes. When the cancelled chooser was the first-launch prompt, a toast SHALL say: "Open a project folder when you're ready by selecting the workspace path in the title bar."
 
 - **REQ-WORKSPACE-010** — Selecting the folder that is already the current workspace SHALL be a no-op.
+  > **Superseded by [`PD-WORKSPACE-001`](../product/directives.md#pd-workspace-001), 2026-09-12.** The
+  > text above states the behavioural target and is kept for that reason; it no longer states what this
+  > product does. Choosing the folder a window already has open now raises a transient notice in that
+  > window offering to start a new session in it.
 
 - **REQ-WORKSPACE-011** — On a bundled build that still owes machine setup (see REQ-WORKSPACE-138), the machine-setup modal SHALL be scheduled after first paint with the same shared deferred first-paint delay (REQ-SHELL-011), this domain again stating no figure of its own; only after it completes SHALL the startup git refresh begin and — when this is also a first launch — the workspace chooser prompt continue.
 

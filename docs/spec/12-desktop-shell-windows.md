@@ -41,10 +41,23 @@ Rotaris presents a single main desktop window containing seven primary views sel
 ### Workspace selection and replacement
 
 - **REQ-SHELL-017**: Opening another project builds a new main window on the selected folder, shows it, and then closes the old window. Only if the old window closes successfully is the new window recorded as current, the last-opened-workspace preference updated, and the new window activated.
+  > **Extended by [`PD-SHELL-001`](../product/directives.md#pd-shell-001), 2026-09-12.** This still
+  > governs in full, and remains what happens when a chosen folder replaces the window. The directive
+  > adds a second route beside it, taken by its own two gestures, on which a main window is added and
+  > no window is closed.
 - **REQ-SHELL-018**: If the old window refuses to close (for example the user cancels an unsaved-settings dialog or an active-run confirmation), the replacement window is discarded and nothing changes: the old window, the current workspace, and the stored preference all remain as they were.
 - **REQ-SHELL-019**: If constructing the replacement window fails, the old window stays open and shows the error notification "Could not open the selected project: {reason}".
 - **REQ-SHELL-020**: Only workspace-open requests originating from the currently active window are honored; requests from stale windows are ignored. This governs requests raised inside a window. A launch of the application carrying a workspace directory originates in no window and is not such a request: it is honored under REQ-STARTUP-163, which adds a main window rather than replacing one, and the several main windows the one running instance may hold at once (REQ-STARTUP-161) are not stale windows of each other — each honors the requests raised inside it while it is the active one.
 - **REQ-SHELL-021**: Activating the title-bar workspace chip evaluates the same three gates as a window close, in the same fixed order as REQ-SHELL-119 — unsaved settings, then worktree integration, then active runs — and any of them ends the flow. (1) With unsaved settings present, the save/discard/cancel dialog of REQ-SHELL-124 is raised: Cancel ends the flow with nothing changed, a Save that fails also ends it, and Save-that-succeeds or Discard lets evaluation continue. (2) While a worktree integration is running, the request is declined outright with the transient error notification of REQ-SHELL-112 reading "Finish the worktree integration before opening another project.". (3) With a run active, it is declined the same way with "Finish the active run before opening another project.". A decline shows no folder chooser and changes no window, workspace or stored preference. When no gate stops it, the chooser opens pointed at the current workspace. Cancelling the chooser leaves the window, the workspace and the stored preference exactly as they were and may show the reminder of REQ-SHELL-012. Selecting the folder that is already open builds no replacement window and leaves the current window in place; whether the selected folder is the one already open is decided by the rule REQ-STARTUP-163 fixes for when two directory strings name the same directory, which this requirement cites rather than restating, so this decision, REQ-STARTUP-052's and the window-reuse decision REQ-STARTUP-163 makes for itself are all taken on one rule.
+  > **Narrowed by [`PD-SHELL-001`](../product/directives.md#pd-shell-001), 2026-09-12.** The three
+  > gates above govern every activation of the chip but the two add-a-window gestures that directive
+  > names, on which they are not evaluated because such a request adds a window rather than displacing
+  > one. Every other activation is the replacement route and this requirement governs it in full.
+  >
+  > **Extended by [`PD-WORKSPACE-001`](../product/directives.md#pd-workspace-001), 2026-09-12.** The
+  > sentence above still governs — selecting the folder already open builds no replacement window and
+  > leaves the current window in place — and the directive adds an offer of a new session beside it.
+  > What it changes is that this outcome is no longer silent; no window, workspace or preference moves.
 
 ### Main window structure
 

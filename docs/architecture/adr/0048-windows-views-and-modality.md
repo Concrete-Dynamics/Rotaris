@@ -306,3 +306,7 @@ each naming its own workspace path; closing one left the survivor usable and rem
 from the focus ordering. What is **not** yet measured, and is owed to `workspace-proof`: approval parenting
 with two windows live, the notice store's application-wide broadcast (ADR-0049's open decision),
 `REQ-STARTUP-043`'s constructed-but-unshown window, and a second workspace service.
+
+*Note on deepened structure (2026-09-12):* The main window registry, per-window lifecycle state, and focus
+order now live inside `MainWindows` (`apps/desktop/src/main/main-windows.ts`) with Electron and in-memory adapter
+seams, replacing the inline records in `index.ts`. All behavior, attribution, and modality rules remain identical.

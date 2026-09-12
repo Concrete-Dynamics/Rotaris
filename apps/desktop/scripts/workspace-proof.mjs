@@ -24,8 +24,9 @@
  * `"[object Object]" is not valid JSON` at the first assertion, before anything has been measured.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
+import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, mainEntry } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
@@ -65,6 +66,8 @@ function project(name) {
 
 const A = project('project-a');
 const B = project('project-b');
+const C = project('project-c');
+const D = project('project-d');
 /**
  * REQ-WORKSPACE-149 rule 3: a folder name must reach the window as literal text, whatever it contains.
  *
@@ -113,6 +116,52 @@ async function launch(name, { workspace, folders = [], extra = {}, preferences }
   return started;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let handOverSequence = 0;
+/** Launch the same profile again and wait for the secondary process to hand its request to the owner. */
+async function handOver(started, workspace) {
+  const sequence = ++handOverSequence;
+  const child = spawn(electron, [mainEntry, ...(workspace ? [workspace] : [])], {
+    cwd: appDirectory,
+    windowsHide: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...cleanEnvironment(),
+      LOCALAPPDATA: started.local,
+      APPDATA: join(started.local, '..', 'roaming'),
+      ROTARIS_PREFERENCES_ROOT: started.preferences,
+      ROTARIS_MODEL_DIALECT: 'scripted',
+      ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    },
+  });
+  let outputText = '';
+  child.stdout?.on('data', (chunk) => { outputText += String(chunk); });
+  child.stderr?.on('data', (chunk) => { outputText += String(chunk); });
+  const exit = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { child.kill(); reject(new Error('the hand-over launch did not exit within 30 s')); }, 30_000);
+    child.on('error', (cause) => { clearTimeout(timeout); reject(cause); });
+    child.on('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal }); });
+  });
+  writeFileSync(join(output, `hand-over-${sequence}.log`), outputText);
+  return exit;
+}
+async function waitForWindowCount(driver, count, timeoutMs = 30_000) {
+  const began = Date.now();
+  for (;;) {
+    const windows = await windowsOf(driver);
+    if (windows.length === count) return windows;
+    if (Date.now() - began > timeoutMs) throw new Error(`expected ${count} main windows within ${timeoutMs} ms; found ${windows.length}`);
+    await sleep(100);
+  }
+}
+async function waitForRememberedWorkspace(started, workspace, timeoutMs = 30_000) {
+  const began = Date.now();
+  for (;;) {
+    if (String(preferenceFile(started)['workspace/lastOpened'] ?? '').toLowerCase() === workspace.toLowerCase()) return;
+    if (Date.now() - began > timeoutMs) throw new Error(`workspace/lastOpened did not become ${workspace} within ${timeoutMs} ms`);
+    await sleep(100);
+  }
+}
 /**
  * The main windows open, most recently focused first. The driver answers `{ windows, selected }` rather than a
  * bare list, and the first version of this file read the envelope as the list: every window assertion then
@@ -485,6 +534,65 @@ try {
     check('REQ-STARTUP-163: choosing a folder another window already holds surfaces that window and builds none',
       afterDuplicate.length === 2,
       `${afterDuplicate.length} main window(s) after choosing an already-open folder`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 12 — overlapping opens, sender attribution and one deferred offer per window.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('concurrent', { workspace: A, folders: [B, C, D, C, '(cancel)'] });
+    await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+    await waitForWindowCount(s.driver, 2);
+
+    await s.driver.useWindow('project-a');
+    const openingC = s.driver.command({ kind: 'workspace.choose', newWindow: true });
+    await s.driver.useWindow('project-b');
+    const openingD = s.driver.command({ kind: 'workspace.choose', newWindow: true });
+    await Promise.all([openingC, openingD]);
+    const opened = await waitForWindowCount(s.driver, 4);
+    const overlapLog = logOf(s);
+    const bothBuilt = Math.max(overlapLog.indexOf(`loaded for ${C}`), overlapLog.indexOf(`loaded for ${D}`));
+    const firstSettled = Math.min(overlapLog.indexOf('added main window', overlapLog.indexOf(`loaded for ${C}`)), overlapLog.indexOf('added main window', overlapLog.indexOf(`loaded for ${D}`)));
+    check('MainWindows: concurrent project opens retain four independently attributed windows',
+      opened.length === 4 && bothBuilt >= 0 && firstSettled > bothBuilt,
+      `${opened.length} windows; both builds ${firstSettled > bothBuilt ? 'started before either settled' : 'did not overlap'}: ${JSON.stringify(opened)}`);
+
+    await s.driver.useWindow('project-c');
+    await s.driver.deferProjectOffer(1_500);
+    await s.driver.useWindow('project-d');
+    const deferredD = await s.driver.deferProjectOffer(1_500);
+    await s.driver.useWindow('project-c');
+    await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+    await sleep(2_500);
+    const deferredLog = logOf(s);
+    const offered = [...deferredLog.matchAll(/offering the first-launch project chooser for window (\d+)/g)].map((match) => Number(match[1]));
+    check('REQ-SHELL-020: the driver command is attributed to its selected main window',
+      JSON.parse(await s.driver.eval(TOASTS)).some((toast) => toast.action === 'Start a new session'),
+      `project-c acknowledgements: ${await s.driver.eval(TOASTS)}`);
+    await s.driver.useWindow('project-d');
+    const dToasts = JSON.parse(await s.driver.eval(TOASTS));
+    check('REQ-SHELL-011 / REQ-WORKSPACE-008: answering one window cancels only its deferred offer',
+      offered.length === 1 && offered[0] === deferredD.windowId && dToasts.some((toast) => toast.title.includes('Open a project folder')),
+      `offered for ${JSON.stringify(offered)}; project-d acknowledgements ${JSON.stringify(dToasts)}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 13 — a real second launch: surface an existing workspace, then add a different one.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('hand-over', { workspace: A });
+    const surfacedExit = await handOver(s, A);
+    const surfaced = await waitForWindowCount(s.driver, 1);
+    check('REQ-STARTUP-162/163: hand-over for an open workspace surfaces its holder and builds nothing',
+      surfacedExit.code === 0 && surfaced.length === 1 && logOf(s).includes('hand-over surfaced window'),
+      `secondary exit ${surfacedExit.code ?? surfacedExit.signal}; ${surfaced.length} main window(s)`);
+
+    const addedExit = await handOver(s, B);
+    const added = await waitForWindowCount(s.driver, 2);
+    await waitForRememberedWorkspace(s, B);
+    check('REQ-STARTUP-163: hand-over for a different workspace adds a main window',
+      addedExit.code === 0 && added.some((window) => String(window.workspace).toLowerCase() === B.toLowerCase()) && logOf(s).includes('origin hand-over'),
+      `secondary exit ${addedExit.code ?? addedExit.signal}; windows ${JSON.stringify(added)}`);
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

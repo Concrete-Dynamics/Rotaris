@@ -24,8 +24,12 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-12** — **opening a project from inside the application**: every main
-window is now built by one builder and lives in a registry keyed by `webContents` id, which is what makes a
+Last reconciled with the code: **2026-09-12** — **deepening main-window lifecycle**: the inline main-window
+lifecycle, registry, startup resolution, chooser gates, add/replace flows, hand-over routing, and per-window deferred offers
+are now encapsulated in `MainWindows` (`apps/desktop/src/main/main-windows.ts`) with Electron and in-memory adapter seams;
+window records and listener registrations are guaranteed prior to renderer loading, and failure to load unregisters and
+destroys cleanly; earlier the same day, **opening a project from inside the application**: every main
+window is built by one builder and lives in a registry keyed by `webContents` id, which is what makes a
 second main window possible and makes a command answerable for the window that sent it; the renderer gains one
 command, `workspace.choose`, carrying no folder so that main owns the gates and the chooser; and main gains the
 `workspace/lastOpened` preference key that no renderer may name. Both are in the process view — the main row and

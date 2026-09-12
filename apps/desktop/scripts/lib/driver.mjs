@@ -95,6 +95,7 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     inspect: (selector) => send('inspect', { selector }),
     probe: (selector) => send('probe', { selector }),
     eval: (expression) => send('eval', { expression }),
+    deferProjectOffer: (delayMs = 650) => send('deferProjectOffer', { delayMs }),
     screenshot: (path) => send('screenshot', { path }),
     resize: (width, height) => send('resize', { width, height }),
     command: (request) => send('command', { request }),

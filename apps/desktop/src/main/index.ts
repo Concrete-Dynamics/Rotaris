@@ -2,7 +2,8 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
-import { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
+import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
+import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, type MainWindowView } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
@@ -151,36 +152,8 @@ async function main(): Promise<void> {
    * The capacity is still exactly one and nothing here changes behaviour; lifting it is A3's job, and the
    * reason it is worth a step of its own is that `REQ-SHELL-017` needs two of these alive at once.
    */
-  interface MainWindowState {
-    readonly win: BrowserWindow;
-    readonly wcId: number;
-    /** REQ-SHELL-010's resolved workspace for this window, or the sentinel until one is open. */
-    workspace: string;
-    /** The identifier the workspace service answered with (REQ-SESSION-197), once its store is open. */
-    workspaceId: string | undefined;
-    /** REQ-SHELL-072 / REQ-NOTIFY-028: the session this window's renderer last subscribed to. */
-    followedSessionId: string | null;
-    /**
-     * A3 — REQ-TOOLS-063: "exactly one approval dialog is open **per window**, and approval dialogs never
-     * stack". So the pending queue and the dialog that is up are the WINDOW's, not the application's. They had
-     * been one of each for the whole process, which satisfied the requirement only while there was one window:
-     * with two, one window's approval would have blocked the other's, and the parent was picked by scanning
-     * `getAllWindows()` — so project A's permission prompt could have opened over project B's window. ADR-0019
-     * measured what that costs: a prompt the user cannot answer where they are looking lapses, and a lapsed
-     * presenter denies the agent's own tool calls silently.
-     */
-    approvals: ApprovalPayload[];
-    openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null;
-    /**
-     * ADR-0048: at most one persona window PER PERSONA and exactly one terminal window PER MAIN WINDOW, all
-     * owned by their main window and destroyed with it. Two main windows therefore need two of each registry,
-     * which is why these are the window's and not the process's.
-     */
-    readonly personaWindows: PersonaWindows;
-    readonly terminalWindows: TerminalWindows;
-    /** REQ-GIT-118: the id the launch dialog last showed in THIS window, consumed by its next isolated start. */
-    mintedSessionId: string | null;
-  }
+  type ApprovalDialogState = { requestId: string; win: BrowserWindow; answered: boolean };
+  type MainWindowState = MainWindowView<BrowserWindow, PersonaWindows, TerminalWindows>;
   /**
    * A2 — the registry, and ADR-0055 consequence 5's ordering. Keyed by the window's `webContents` id, which is
    * what every message from a renderer carries, so "which window asked this" is a lookup rather than a guess.
@@ -193,44 +166,20 @@ async function main(): Promise<void> {
    * more — it asks for the ACTIVE one or for the SENDER's one, and those two questions have different answers
    * the moment there are two.
    */
-  const mainWindows = new Map<number, MainWindowState>();
-  const focusOrder: number[] = [];
-  const rememberFocus = (id: number): void => {
-    const at = focusOrder.indexOf(id);
-    if (at >= 0) focusOrder.splice(at, 1);
-    focusOrder.unshift(id);
-  };
-  const forgetWindow = (id: number): void => {
-    mainWindows.delete(id);
-    const at = focusOrder.indexOf(id);
-    if (at >= 0) focusOrder.splice(at, 1);
-  };
+  let mainWindows!: MainWindows<BrowserWindow, PersonaWindows, TerminalWindows, ApprovalPayload, ApprovalDialogState>;
   /** The window a message came from, when that sender is a main window at all (a dialog or a persona window is not). */
-  const windowFor = (senderId: number): MainWindowState | undefined => mainWindows.get(senderId);
+  const windowFor = (senderId: number): MainWindowState | undefined => mainWindows?.forSender(senderId);
   /**
    * REQ-STARTUP-162's ordering: most recently focused, else the one built first. Every application-wide service
    * that has to name *a* window — the notice store's focused session, the provider bootstrap, a notice's recovery
    * action — reads this one rather than a variable that assumed there was only ever one window to read.
    */
-  const activeWindow = (): MainWindowState | undefined => {
-    for (const id of focusOrder) { const w = mainWindows.get(id); if (w && !w.win.isDestroyed()) return w; }
-    for (const w of mainWindows.values()) if (!w.win.isDestroyed()) return w;
-    return undefined;
-  };
+  const activeWindow = (): MainWindowState | undefined => mainWindows?.active();
   /**
    * The live main windows in REQ-STARTUP-162's order — most recently focused first, then the rest as built.
    * The driver seam reads this to address a window by index (A4); nothing in the product depends on it.
    */
-  const orderedMainWindows = (): readonly MainWindowState[] => {
-    const out: MainWindowState[] = [];
-    const seen = new Set<number>();
-    for (const id of focusOrder) {
-      const w = mainWindows.get(id);
-      if (w && !w.win.isDestroyed()) { out.push(w); seen.add(id); }
-    }
-    for (const [id, w] of mainWindows) if (!seen.has(id) && !w.win.isDestroyed()) out.push(w);
-    return out;
-  };
+  const orderedMainWindows = (): readonly MainWindowState[] => mainWindows?.ordered() ?? [];
   /**
    * REQ-TRACE-312's per-workspace fold key reads the active window's workspace, and the literal fallback key
    * when there is none — which is why it is a function and not a value: the answer changes with the window.
@@ -243,14 +192,10 @@ async function main(): Promise<void> {
   // read — the Overview's session list and repository read (REQ-GIT-102: "beginning after the window has first been
   // drawn") — arrives while no workspace is open yet. Found on the Overview's first execution (ADR-0055 note): those
   // reads wait, bounded, for the open in flight instead of being refused with "no workspace".
-  let workspaceReady: Promise<unknown> = Promise.resolve();
-  const awaitWorkspace = () => Promise.race([workspaceReady, new Promise<void>((r) => clocks.timers.after(millis(30_000), r))]);
   const openWorkspace = async (root: string, owner: MainWindowState): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
-    const opening = openWorkspaceInner(root, owner);
-    workspaceReady = opening.catch(() => undefined);
-    return opening;
+    return mainWindows.open(owner.wcId, root);
   };
-  const openWorkspaceInner = async (root: string, owner: MainWindowState): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
+  const openWorkspaceInner = async (root: string): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
     const key = canonicalPath(root);
     let svc = services.get(key);
     if (!svc) {
@@ -280,7 +225,6 @@ async function main(): Promise<void> {
     // Stage B, as the A2 note here promised: the window this open was performed FOR is passed in. Reading
     // `activeWindow()` instead would, with two windows open, write one project's workspace identifier onto the
     // other project's window — and every workspace-scoped command resolves its window through that field.
-    if (ack.kind === 'workspace.ack') owner.workspaceId = opened.workspaceId;
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
@@ -507,11 +451,7 @@ async function main(): Promise<void> {
    *   2. else the active main window — where a background session's first approval lands.
    */
   const ownerOf = (sessionId: string): MainWindowState | undefined => {
-    for (const sink of relay.subscribersOf(sessionId)) {
-      const w = mainWindows.get(sink.id);
-      if (w && !w.win.isDestroyed()) return w;
-    }
-    return activeWindow();
+    return mainWindows.ownerOfSession(sessionId, relay.subscribersOf(sessionId).map((sink) => sink.id));
   };
   /**
    * The main window that owns an AUXILIARY window, found by asking each window's own registries whether the
@@ -520,16 +460,12 @@ async function main(): Promise<void> {
    * main windows — cannot resolve it, and with two main windows alive "the main window" is not an answer.
    */
   const ownerOfAuxiliary = (senderId: number): MainWindowState | undefined => {
-    for (const w of mainWindows.values()) {
-      if (w.personaWindows.bySender(senderId) ?? w.terminalWindows.bySender(senderId)) return w;
-    }
-    return undefined;
+    return mainWindows.ownerOfAuxiliary(senderId);
   };
   const presentNext = async (w: MainWindowState): Promise<void> => {
-    if (w.openDialog || w.approvals.length === 0) return;
+    if (mainWindows.openDialog(w.wcId) || mainWindows.approvalQueue(w.wcId).length === 0) return;
     // REQ-TOOLS-061/063: oldest first by the published sequence, which ADR-0019 states orders presentation ACROSS windows.
-    w.approvals.sort((a, b) => a.sequence - b.sequence);
-    const payload = w.approvals.shift()!;
+    const payload = mainWindows.takeApproval(w.wcId, (a, b) => a.sequence - b.sequence)!;
     if (w.win.isDestroyed()) { await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined); return; }
     const dlg = new BrowserWindow({
       parent: w.win, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: themeBackground(),
@@ -537,17 +473,17 @@ async function main(): Promise<void> {
       webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     const entry = { requestId: payload.request_id, win: dlg, answered: false };
-    w.openDialog = entry;
+    mainWindows.setOpenDialog(w.wcId, entry);
     // Read once, up front: `webContents` on a destroyed window throws, and a throw from a `closed` handler is an
     // uncaught exception that raises the platform's native error box and wedges main (found on first execution).
     const dlgWcId = dlg.webContents.id;
     dialogs.set(dlgWcId, entry);
-    dialogPayloads.set(dlgWcId, { payload, othersWaiting: w.approvals.length });
+    dialogPayloads.set(dlgWcId, { payload, othersWaiting: mainWindows.approvalQueue(w.wcId).length });
     dlg.setMenuBarVisibility(false);
     dlg.on('closed', () => {
       dialogs.delete(dlgWcId);
       dialogPayloads.delete(dlgWcId);
-      if (w.openDialog === entry) w.openDialog = null;
+      if (mainWindows.openDialog(w.wcId) === entry) mainWindows.setOpenDialog(w.wcId, null);
       // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
       if (!entry.answered) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
       clocks.timers.after(millis(50), () => { void presentNext(w); });
@@ -558,7 +494,7 @@ async function main(): Promise<void> {
       dlg.show();
       dlg.focus();
       await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: true }, millis(5_000));
-      log(`approval ${payload.request_id} presented (${payload.tool_name}, rule ${payload.rule_id}); ${w.approvals.length} waiting`);
+      log(`approval ${payload.request_id} presented (${payload.tool_name}, rule ${payload.rule_id}); ${mainWindows.approvalQueue(w.wcId).length} waiting`);
       // Verification seam (only with ROTARIS_CAPTURE_PNG): answer the dialog with a real click or Escape.
       const scripted = capturing ? process.env['ROTARIS_CAPTURE_APPROVAL'] : undefined;
       if (scripted) {
@@ -655,19 +591,18 @@ async function main(): Promise<void> {
       // presents it. With no main window at all there is nobody to ask, which REQ-TOOLS-064 answers through
       // the headless policy — main says "not shown" and decides nothing itself (ADR-0019).
       const owner = ownerOf(e.payload.session_id);
-      if (owner) { owner.approvals.push(e.payload); void presentNext(owner); }
+      if (owner) { mainWindows.enqueueApproval(owner.wcId, e.payload); void presentNext(owner); }
       else void runHost.request({ kind: 'approval.shown', requestId: e.payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined);
     }
     else if (e.kind === 'approval.close') {
       // Answered or cancelled elsewhere: the open dialog closes without asking again; a queued one is dropped
       // unshown. Every window is searched, because the request was queued against its owner rather than
       // against the active window, and the two need not be the same.
-      for (const candidate of mainWindows.values()) {
-        const idx = candidate.approvals.findIndex((p) => p.request_id === e.requestId);
-        if (idx >= 0) candidate.approvals.splice(idx, 1);
-        const open = candidate.openDialog;
+      mainWindows.removeApproval((approval) => approval.request_id === e.requestId);
+      mainWindows.forEach((candidate) => {
+        const open = mainWindows.openDialog(candidate.wcId);
         if (open && open.requestId === e.requestId) { open.answered = true; if (!open.win.isDestroyed()) open.win.close(); }
-      }
+      });
     }
     else if (e.kind === 'notice.publish') {
       // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
@@ -760,187 +695,76 @@ async function main(): Promise<void> {
     });
   };
 
-  /**
-   * A3 — the main window builder. ADR-0055 consequence 6 is "two entrances, one builder": a folder carried in
-   * by a launch and a folder asked for from inside the application are the SAME construction, and what differs
-   * between them — which close gates were evaluated, whether a workspace is carried — belongs to the caller.
-   *
-   * Everything in here is per window: the window, its relay attachment, its presenter registration, its persona
-   * and terminal registries, its close guard and its record in the registry. Everything it reads that is per
-   * application — the run host, the credential store, the provider service, the preference store, the `services`
-   * map — is built once above and reached through that record.
-   *
-   * `origin` is recorded, never branched on: it is what `app.log` tells a two-window proof about which entrance
-   * built which window. The renderer load is awaited LAST, so every listener this window needs is attached
-   * before its renderer can send anything — and the ONE call site sits below `CHANNEL.command`'s handler for
-   * the same reason, since a renderer's first act is a command.
-   *
-   * The body is NOT re-indented beyond the one level the function adds, and nothing in it is reordered: what
-   * this move is answerable for is that the construction can be called twice, and a diff that also reflowed
-   * a hundred and forty lines would hide that claim rather than support it.
-   */
-  const buildMainWindow = async (
-    { workspace, origin }: { workspace: string; origin: 'launch' | 'open-request' | 'hand-over' },
-  ): Promise<MainWindowState> => {
-    const win = new BrowserWindow({
-      // A5 — REQ-SHELL-022 is the product's single definition of both figures: the main window "opens at 1440×900
-      // logical pixels, and refuses to be resized below 1000×680 in either dimension". It had been built 1280×820
-      // with no minimum at all, so the floor that every view's layout is measured against was not enforced by the
-      // window itself; a user could drag below it and reach the states REQ-SHELL-064/065/106 forbid.
-      width: 1440, height: 900, minWidth: 1000, minHeight: 680, show: false, backgroundColor: themeBackground(), title: 'Rotaris',
-      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
-    });
-    // The id is read once, up front: `webContents` on a destroyed window throws, and a throw from a
-    // `closed` handler during exit is an uncaught exception, which wedges the process (ADR-0044 note).
-    const wcId = win.webContents.id;
-    // A3: the record is built below, once this window's persona and terminal registries exist — they are fields
-    // of it, so a second window gets its own pair rather than sharing one process-wide pair.
-    // Verification only: an occluded window stops painting, and a capture then returns a frame older than the DOM the
-    // probes read (found on the Git proof's first execution: the PNG showed the split before the drag the probes saw).
-    if (capturing) win.webContents.setBackgroundThrottling(false);
-    relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
-    // ADR-0019 c.1: registration is explicit and prompt — on creation, and revoked on close (the last one closing makes the application unattended).
-    parentWindowIds.add(String(wcId));
-    void runHost.request({ kind: 'presenter.register', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
-    win.on('closed', () => {
-      // A2: out of the registry and out of the focus ordering before anything else reads either.
-      forgetWindow(wcId);
-      relay.detach(wcId);
+  const electronMainWindowAdapter = createElectronMainWindowAdapter({
+    createWindow: (options) => new BrowserWindow({
+      ...options,
+      webPreferences: { ...options.webPreferences, preload: join(__dirname, '../preload/index.cjs') },
+    }),
+    themeBackground,
+    capturing,
+    timers: { after: (delayMs, callback) => clocks.timers.after(millis(delayMs), callback) },
+    loadMainWindow: async (win) => {
+      const rowsProof = capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
+      if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(rowsProof ? `${process.env['ELECTRON_RENDERER_URL']}?role=rows-proof` : process.env['ELECTRON_RENDERER_URL']);
+      else await win.loadFile(join(__dirname, '../renderer/index.html'), rowsProof ? { query: { role: 'rows-proof' } } : undefined);
+    },
+    loadPersonaWindow: async (win, persona) => {
+      const query = { role: 'persona', persona };
+      if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await win.loadFile(join(__dirname, '../renderer/index.html'), { query });
+    },
+    loadTerminalWindow: async (win) => {
+      const query = { role: TERMINAL_WINDOW_ROLE };
+      if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+      else await win.loadFile(join(__dirname, '../renderer/index.html'), { query });
+    },
+    relayAttach: (win) => relay.attach({ id: win.webContents.id, send: (channel, payload) => { if (!win.isDestroyed()) win.webContents.send(channel, payload); } }),
+    relayDetach: (wcId) => { relay.detach(wcId); },
+    registerPresenter: (wcId) => {
+      parentWindowIds.add(String(wcId));
+      void runHost.request({ kind: 'presenter.register', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+    },
+    revokePresenter: (wcId) => {
       parentWindowIds.delete(String(wcId));
       void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
-      // REQ-SHELL-078: the persona windows are owned by this main window and do not outlive it.
-      personaWindows.destroyAll('the main window closed');
-    });
-    // A1: the followed session is a field of `mainWin` below (REQ-SHELL-072; Part R). A persona window is opened
-    // onto the session of the main window that owns it, which is why it cannot be one variable per application.
-    /**
-     * ADR-0048's window registry, first executed (Part R): the persona windows — one per persona, hide on close, destroyed
-     * with the main window and on a new session. A persona window is a full renderer of the one bundle (`role=persona`),
-     * attached to the relay like the main window; it subscribes and unsubscribes itself as it is shown and hidden.
-     */
-    const personaWindows = new PersonaWindows({
-      create: (persona) => {
-        const dlg = new BrowserWindow({
-          width: 820, height: 620, minWidth: 560, minHeight: 420, show: false, title: `Rotaris · ${persona}`, backgroundColor: themeBackground(),
-          webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
-        });
-        dlg.setMenuBarVisibility(false);
-        // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
-        if (capturing) dlg.webContents.setBackgroundThrottling(false);
-        return dlg;
-      },
-      load: async (dlg, persona) => {
-        const query = { role: 'persona', persona };
-        if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
-        else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
-      },
-      select: (dlg, agentId, focusSteer) => dlg.webContents.executeJavaScript(`typeof window.__rotarisPersonaSelect === 'function' ? window.__rotarisPersonaSelect(${JSON.stringify(agentId)}, ${focusSteer ? 'true' : 'false'}) : false`).then(() => undefined),
-      onCreated: (dlg, persona) => {
-        const id = dlg.webContents.id;
-        relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
-        if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: persona "${persona}" renderer console: ${message} (${sourceId}:${line})`); });
-      },
-      onDestroyed: (id) => { relay.detach(id); },
-      log,
-    });
-    // ADR-0048 (Part W): a modal surface cannot outlive the renderer that opened it — a navigation, a reload or a crash of the
-    // main window's renderer restores input to every persona window (the close destroys them, REQ-SHELL-078).
-    const releaseModality = (why: string) => { if (personaWindows.isFamilyModal()) { const n = personaWindows.setFamilyModal(false); log(`application modality released: ${why} (${n} persona window(s) enabled; ADR-0048)`); } };
-    win.webContents.on('did-start-navigation', (details) => { if (details.isMainFrame) releaseModality('the main window navigated'); });
-    win.webContents.on('render-process-gone', (_event, details) => releaseModality(`the main window's renderer is gone (${details.reason})`));
+    },
+    forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
+    log,
+  });
 
-    /**
-     * Part AL2 — the terminal window (REQ-SHELL-079..111; ADR-0021's and ADR-0047's window, first executed together here).
-     * ONE per main window, a full renderer of the one bundle (`role=terminal`), attached to the relay like a persona window;
-     * it subscribes to the followed session ITSELF (the sender is the subscriber, ADR-0043's note) and asks the run host for
-     * a resync, so it is given the output accumulated so far (REQ-SHELL-104). A close DESTROYS it and the next open rebuilds
-     * it (REQ-SHELL-086) — the deliberate difference from the persona window above (ADR-0047 consequence 3; not unified).
-     * Everything the window needs from main sits in this one block: the registry (`main/windows.ts`), its five commands
-     * (`terminalWindowCommand`, dispatched from the `terminal.*` case block below), REQ-SHELL-109's auto-open observer over
-     * the frames the run host publishes, and the ownership by this main window. The main window's renderer reports the
-     * session it follows through `window.terminalSession` (REQ-SHELL-110/111: the window closes, and reopens without focus
-     * only when it had been open on a session before — the reading is stated on `TerminalWindows.onSessionChange`).
-     */
-    const terminalWindows = new TerminalWindows({
-      create: () => {
-        const dlg = new BrowserWindow({
-          // REQ-SHELL-081: 900×620 initially; the title is seeded here and the renderer sets the final one (`terminalWindowTitle`).
-          width: 900, height: 620, minWidth: 560, minHeight: 360, show: false, title: 'Rotaris · Terminal', backgroundColor: themeBackground(),
-          webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
-        });
-        dlg.setMenuBarVisibility(false);
-        // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
-        if (capturing) dlg.webContents.setBackgroundThrottling(false);
-        return dlg;
-      },
-      load: async (dlg) => {
-        const query = { role: TERMINAL_WINDOW_ROLE };
-        if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
-        else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
-      },
-      focusStream: (dlg, streamId) => dlg.webContents.executeJavaScript(`typeof window.__rotarisTerminalFocus === 'function' ? window.__rotarisTerminalFocus(${JSON.stringify(streamId)}) : false`).then(() => undefined),
-      onCreated: (dlg) => {
-        const id = dlg.webContents.id;
-        relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
-        if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: terminal window renderer console: ${message} (${sourceId}:${line})`); });
-      },
-      onDestroyed: (id) => { relay.detach(id); terminalFrames.forget(id); },
-      log,
-    });
-    // REQ-SHELL-081's "per main window": the terminal window goes with the main window that owns it.
-    win.on('closed', () => terminalWindows.destroyWithOwner());
-    /**
-     * A1/A3: this window's own state, and the holder through which the application-wide services above read it.
-     * The workspace is the caller's — REQ-SHELL-010 (a)'s explicitly-built-for folder at a launch, a folder
-     * chosen from inside the application, or the sentinel standing for the interval before a workspace is open,
-     * which ADR-0055 requires to exist at all because the first paint is rendered from stored preferences and
-     * constants and therefore precedes the workspace read.
-     */
-    const mainWin: MainWindowState = {
-      win, wcId, workspace, workspaceId: undefined, followedSessionId: null,
-      approvals: [], openDialog: null, personaWindows, terminalWindows, mintedSessionId: null,
-    };
-    mainWindows.set(wcId, mainWin);
-    rememberFocus(wcId);
-    // ADR-0055 c.5: the ordering is maintained on focus, not on creation, so a switch that briefly holds two
-    // windows still answers "which window" with the one the user is actually looking at.
-    win.on('focus', () => rememberFocus(wcId));
-    // REQ-CONFIG-287: a user-initiated close asks the window's unsaved-settings guard; a cancelled guard leaves the window open.
-    let closeConfirmed = false;
-    win.on('close', (event) => {
-      if (closeConfirmed || win.isDestroyed()) return;
-      event.preventDefault();
-      void win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true').then((proceed: unknown) => {
-        if (proceed === false) return;
-        closeConfirmed = true;
-        win.close();
-      }).catch(() => { closeConfirmed = true; win.close(); });
-    });
-    win.once('ready-to-show', () => win.show());
-    /**
-     * Part AA's verification seams (only with `ROTARIS_CAPTURE_PNG`).
-     *
-     * `ROTARIS_CAPTURE_NET=1` logs **every request this window's session issues**, from the MAIN process rather
-     * than from the page — REQ-CHAT-056's "no image is ever loaded from a Markdown image reference" is a claim
-     * about the process, and a page cannot honestly measure itself. The observer sees the app's own `file:` assets too;
-     * the proof reads the whole list rather than a filtered one.
-     *
-     * `ROTARIS_ROWS_PROOF=1` loads the renderer in the `rows-proof` role — the row renderer mounted over a fixture
-     * array, which is the surface Part AA can prove before Part Z's pool exists (the plan's own instruction).
-     */
-    if (capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {
-      win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
-        log(`capture: net ${details.method} ${details.resourceType} ${details.url}`);
-        callback({});
-      });
-    }
-    const rowsProof = capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
-    if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(rowsProof ? `${process.env['ELECTRON_RENDERER_URL']}?role=rows-proof` : process.env['ELECTRON_RENDERER_URL']);
-    else await win.loadFile(join(__dirname, '../renderer/index.html'), rowsProof ? { query: { role: 'rows-proof' } } : undefined);
-    log(`main window ${wcId} loaded for ${workspace} (origin ${origin})`);
-    return mainWin;
-  };
-
+  mainWindows = new MainWindows({
+    adapter: electronMainWindowAdapter,
+    timers: { after: (delayMs, callback) => clocks.timers.after(millis(delayMs), callback) },
+    currentDirectory: () => canonicalPath(process.cwd()),
+    rememberedWorkspace: () => {
+      const remembered = preferences.read('workspace/lastOpened');
+      return typeof remembered === 'string' && remembered !== '' ? remembered : undefined;
+    },
+    isDirectory: (path) => { try { return statSync(path).isDirectory(); } catch { return false; } },
+    canonicalPath,
+    samePath,
+    chooseProjectFolder: (win, startAt) => chooseProjectFolder(win, startAt),
+    openWorkspace: (workspace) => openWorkspaceInner(workspace),
+    closeGuard: (owner) => owner.win.webContents
+      .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
+      .then((proceed: unknown) => proceed !== false)
+      .catch(() => true),
+    activeRunCount: async (workspaceId) => {
+      const active = await runHost.request({ kind: 'runs.active', workspaceId }, millis(5_000)).catch(() => null);
+      return active?.kind === 'runs.count' ? active.count : null;
+    },
+    persistWorkspace: (workspace) => preferences.write('workspace/lastOpened', workspace),
+    raiseTransient: (windowId, kind, title, body, action) => {
+      const owner = windowFor(windowId);
+      if (owner) raiseTransient(owner, kind, title, body, action);
+    },
+    reportFailure: (windowId, title, audience) => {
+      const owner = windowFor(windowId);
+      if (audience === 'window' && owner) raiseTransient(owner, 'fail', title);
+      else raiseNotice('error', title);
+    },
+    log,
+  });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,
    * the terminal window opens without taking keyboard focus. The window is never auto-opened for a stream that has
@@ -1075,26 +899,6 @@ async function main(): Promise<void> {
   };
 
   /**
-   * REQ-STARTUP-163's rule, which `PD-SHELL-001` and `PD-WORKSPACE-001` both cite rather than restate: whether a
-   * main window already has this directory open. `samePath` is the one place that question is answered — the same
-   * rule REQ-SHELL-021's same-folder test and REQ-STARTUP-052 are taken on.
-   */
-  const windowHolding = (root: string): MainWindowState | undefined => {
-    for (const w of mainWindows.values()) {
-      if (w.win.isDestroyed() || w.workspace === '(no workspace)') continue;
-      if (samePath(root, w.workspace)) return w;
-    }
-    return undefined;
-  };
-
-  /** `PD-WORKSPACE-001`: the folder this window already has open. A transient in THIS window and in no other. */
-  const offerNewSession = (w: MainWindowState, root: string): CommandOutcome => {
-    log(`the chosen folder ${root} is already open in window ${w.wcId}; offering a new session (PD-WORKSPACE-001)`);
-    raiseTransient(w, 'info', 'That project folder is already open in this window.', undefined, { kind: 'start-session', label: 'Start a new session' });
-    return { ok: true, value: { unchanged: true, workspace: w.workspace, offered: 'start-session' } };
-  };
-
-  /**
    * REQ-WORKSPACE-009 / REQ-SHELL-011: the platform's own folder chooser, titled "Open a project folder",
    * restricted to directories, pointed at the current workspace or else the user's home directory.
    *
@@ -1106,196 +910,13 @@ async function main(): Promise<void> {
    * What comes back is CANONICAL (REQ-STARTUP-163's rule, through `canonicalPath`): every later comparison and the
    * stored preference must be the resolved form, never the spelling the host dialog happened to hand back.
    */
-  /** The seam's remaining answers, read once so the queue survives across chooser invocations. */
-  const forcedFolders: string[] = (__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] ?? '' : '').split(';;').filter((s) => s !== '');
-  const chooseProjectFolder = async (parent: BrowserWindow, startAt: string | undefined): Promise<string | null> => {
-    // Verification only, beside the two seams that already exist. `(cancel)` answers as a dismissal, which is how
-    // a proof reaches REQ-SHELL-012's reminder with nobody at the machine.
-    // The eighty-ninth defect, found by writing `workspace-proof`: this read was gated on `capturing`, which is
-    // `ROTARIS_CAPTURE_PNG` — and that variable ALSO arms the screenshot-and-exit path further down. The seam was
-    // therefore unreachable by the only harness that can drive this flow: a proof that set it to answer the chooser
-    // would have had the app photograph itself and quit instead. The gate is `__ROTARIS_SEAMS__` now, exactly as the
-    // driver endpoint's is (`driverEndpoint` below), so the seam is absent from a packaged build and present for a
-    // driven one. A seam a harness cannot reach is a seam that is not there.
-    const forced = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] : undefined;
-    if (forced) {
-      // A QUEUE, `;;`-separated, one answer consumed per chooser (the convention `ROTARIS_CAPTURE_CLICKS` uses).
-      // One launch has to answer the chooser differently several times over — cancel, then a folder, then the
-      // folder already open — and a single value would have forced a relaunch per assertion, which is how a
-      // proof ends up measuring a different process than the one whose behaviour it claims. The last answer
-      // repeats once the queue is empty, so a flow that opens one more chooser than expected still terminates.
-      const answer = forcedFolders.length > 1 ? forcedFolders.shift()! : forcedFolders[0]!;
-      log(`capture: project folder chooser → ${answer}`);
-      return answer === '(cancel)' ? null : canonicalPath(answer);
-    }
-    const r = await dialog.showOpenDialog(parent, { title: 'Open a project folder', properties: ['openDirectory'], defaultPath: startAt ?? homedir() });
-    return r.canceled || r.filePaths.length === 0 ? null : canonicalPath(r.filePaths[0]!);
-  };
-
-  /**
-   * REQ-SHELL-010's precedence, which is REQ-WORKSPACE-005/006/007 seen from the other domain:
-   *
-   *   (a) a folder this window was explicitly built for — here, one an argv launch carried (REQ-STARTUP-163) —
-   *       wins, is used with no prompt, and is persisted at once in its resolved form;
-   *   (b) otherwise the remembered `workspace/lastOpened`, if and only if it still names a directory, no prompt;
-   *   (c) otherwise the directory the process started in, with the first-launch chooser scheduled after show.
-   *
-   * A remembered path that no longer exists is NOT overwritten (REQ-WORKSPACE-007's last sentence). That is not
-   * tidiness: a project on a drive that is not mounted today is not a project the user has abandoned, and clearing
-   * the key here would lose it silently. This stat is the only filesystem question asked about the value — the
-   * coerce in `PREFERENCE_KEYS` deliberately asks none, for the same reason.
-   */
-  /**
-   * REQ-SHELL-011's one-shot: whether the question "which project folder?" has been answered by ANY route. It is
-   * set the moment a chooser flow starts and read by the deferred offer scheduled after the window is shown, which
-   * is what keeps two folder choosers from ever being on screen at once.
-   */
-  let workspaceQuestionAnswered = false;
-  const resolveStartupWorkspace = (): { readonly workspace: string; readonly prompt: boolean; readonly persist: boolean } => {
-    if (argvWorkspace) return { workspace: argvWorkspace, prompt: false, persist: true };
-    const remembered = preferences.read('workspace/lastOpened');
-    if (typeof remembered === 'string' && remembered !== '') {
-      try {
-        if (statSync(remembered).isDirectory()) return { workspace: canonicalPath(remembered), prompt: false, persist: false };
-        log(`the remembered workspace ${remembered} is not a directory; opening the working directory instead (REQ-WORKSPACE-007)`);
-      } catch {
-        log(`the remembered workspace ${remembered} cannot be read; opening the working directory and leaving the stored value alone (REQ-WORKSPACE-007)`);
-      }
-    }
-    return { workspace: canonicalPath(process.cwd()), prompt: true, persist: false };
-  };
-
-  /**
-   * REQ-SHELL-021's three gates, in the ONE fixed order that requirement states — unsaved settings, then worktree
-   * integration, then active runs — any of which ends the flow with no chooser shown and nothing changed.
-   *
-   * **Gate 2 is the honest half of this function.** REQ-SHELL-021 and REQ-WORKSPACE-012 both require a decline
-   * while a worktree integration is running, and this build has no such state to read: `worktree.integrate` exists
-   * nowhere in the codebase, and `'integrating'` appears exactly once, as an unread member of `MERGE_STATUSES`
-   * (`contracts/repository.ts`). The gate is written here, in its place in the order, as an explicit no-op naming
-   * what it would read — so the requirement is visibly unmet rather than silently passed. Recorded as a residue of
-   * this stage; building it needs the integration operation to exist first.
-   */
-  const workspaceOpenGates = async (w: MainWindowState): Promise<{ readonly ok: true } | { readonly ok: false; readonly outcome: CommandOutcome }> => {
-    // 1 — unsaved settings (REQ-SHELL-021 (1), REQ-CONFIG-287). The SAME guard the window's own close asks, which
-    // is what makes this a second caller of one mechanism rather than a parallel one: `useConfiguration` installs
-    // it, the dialog it raises is REQ-SHELL-124's save/discard/cancel, and `false` means the user cancelled.
-    const proceed = await w.win.webContents
-      .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
-      .catch(() => true);
-    if (proceed === false) {
-      log('workspace open ended by the unsaved-settings guard (REQ-SHELL-021 gate 1)');
-      return { ok: false, outcome: { ok: true, value: { cancelled: true } } };
-    }
-    // 2 — a running worktree integration: no observable state in this build. See the note above.
-    // 3 — an active run (REQ-SHELL-021 (3), REQ-WORKSPACE-012), declined with the exact sentence both fix.
-    if (w.workspaceId) {
-      const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000)).catch(() => null);
-      if (active && active.kind === 'runs.count' && active.count > 0) {
-        const headline = 'Finish the active run before opening another project.';
-        raiseTransient(w, 'fail', headline);
-        log(`workspace open declined: ${headline} (REQ-SHELL-021 gate 3)`);
-        return { ok: false, outcome: { ok: true, value: { cancelled: true, declined: headline } } };
-      }
-    }
-    return { ok: true };
-  };
-
-  /**
-   * REQ-SHELL-017/018/019 and REQ-WORKSPACE-013: the replacement. It is built, its workspace is opened, it is
-   * shown, and ONLY once the old window has actually gone are the preference written and the new window activated.
-   *
-   * The order is the requirement's rather than a convenience. The workspace service for the chosen folder is
-   * opened before the old window closes, which is safe because `services` is keyed by resolved path (ADR-0002) and
-   * the outgoing workspace's service is untouched by it. A veto closes the REPLACEMENT and changes nothing
-   * (REQ-SHELL-018) — and the veto has to be READ, not assumed, which is why the close is awaited rather than
-   * requested and forgotten. A failure to build or to open leaves the old window fully usable (REQ-SHELL-019).
-   *
-   * Two residues of this stage, stated rather than implied. REQ-WORKSPACE-013's cancellation of a background
-   * initialization run cannot be built: REQ-WORKSPACE-109's machinery does not exist in this codebase, so there is
-   * no run to cancel and nothing to leave pending. And REQ-WORKSPACE-014's post-show activation order belongs to
-   * the builder's show path, not to this function.
-   */
-  const switchWorkspace = async (old: MainWindowState, chosen: string): Promise<CommandOutcome> => {
-    let replacement: MainWindowState;
-    try {
-      replacement = await buildMainWindow({ workspace: chosen, origin: 'open-request' });
-    } catch (cause) {
-      const reason = cause instanceof Error ? cause.message : String(cause);
-      raiseNotice('error', `Could not open the selected project: ${reason}`);
-      log(`workspace switch could not build the replacement: ${reason} (REQ-SHELL-019)`);
-      return { ok: false, code: 'workspace.buildFailed', headline: `Could not open the selected project: ${reason}` };
-    }
-    const opened = await openWorkspace(chosen, replacement).catch(() => undefined);
-    if (!opened) {
-      const reason = `${chosen} could not be opened as a workspace.`;
-      raiseNotice('error', `Could not open the selected project: ${reason}`);
-      log(`workspace switch could not open ${chosen}; discarding the replacement (REQ-SHELL-019)`);
-      // The replacement is what is discarded — never the window the user still has work in.
-      if (!replacement.win.isDestroyed()) replacement.win.destroy();
-      return { ok: false, code: 'workspace.openFailed', headline: `Could not open the selected project: ${reason}` };
-    }
-    if (!replacement.win.isDestroyed()) replacement.win.show();
-    const wentAway = await new Promise<boolean>((resolve) => {
-      if (old.win.isDestroyed()) { resolve(true); return; }
-      let settled = false;
-      const bound = clocks.timers.after(millis(30_000), () => { if (!settled) { settled = true; resolve(old.win.isDestroyed()); } });
-      old.win.once('closed', () => { if (!settled) { settled = true; bound.cancel(); resolve(true); } });
-      old.win.close();
-    });
-    if (!wentAway) {
-      log('the outgoing window vetoed its close; discarding the replacement and changing nothing (REQ-SHELL-018)');
-      if (!replacement.win.isDestroyed()) replacement.win.destroy();
-      return { ok: true, value: { cancelled: true, vetoed: true } };
-    }
-    // REQ-SHELL-017: recorded as current only now, which is also REQ-WORKSPACE-005's persistence of an explicitly
-    // selected folder. Before this line a crash leaves the previous folder remembered, which is the truthful state.
-    await preferences.write('workspace/lastOpened', chosen);
-    if (!replacement.win.isDestroyed()) replacement.win.focus();
-    log(`workspace switched to ${chosen} in window ${replacement.wcId} (REQ-SHELL-017)`);
-    return { ok: true, value: { workspace: chosen, wcId: replacement.wcId } };
-  };
-
-  /**
-   * Stage C — `PD-SHELL-001`'s add route. The same builder as the replacement (ADR-0055 consequence 6: two
-   * entrances, one builder), and three deliberate differences from `switchWorkspace` above, each the directive's:
-   *
-   *   - **No gate is evaluated.** An active run, an unsaved settings edit or a running worktree integration — in
-   *     the requesting window or any other — neither blocks this nor is disturbed by it, because this adds a
-   *     window rather than displacing one. That is REQ-STARTUP-163's own reasoning for a launch-carried folder,
-   *     extended to a request raised inside a window.
-   *   - **No window is closed**, so there is no veto to honour and nothing to discard on one.
-   *   - **The last-opened preference is written here**, on REQ-WORKSPACE-005's terms for a folder chosen through
-   *     the chooser — not on REQ-SHELL-017's terms, which make it conditional on the old window closing.
-   *
-   * A failure reports on REQ-SHELL-019's terms and leaves every open window usable, which costs nothing to
-   * guarantee here: nothing has been closed by the time anything can fail.
-   */
-  const addWorkspaceWindow = async (requester: MainWindowState, chosen: string): Promise<CommandOutcome> => {
-    let added: MainWindowState;
-    try {
-      added = await buildMainWindow({ workspace: chosen, origin: 'open-request' });
-    } catch (cause) {
-      const reason = cause instanceof Error ? cause.message : String(cause);
-      raiseTransient(requester, 'fail', `Could not open the selected project: ${reason}`);
-      log(`the added window could not be built: ${reason} (PD-SHELL-001, REQ-SHELL-019)`);
-      return { ok: false, code: 'workspace.buildFailed', headline: `Could not open the selected project: ${reason}` };
-    }
-    const opened = await openWorkspace(chosen, added).catch(() => undefined);
-    if (!opened) {
-      const reason = `${chosen} could not be opened as a workspace.`;
-      raiseTransient(requester, 'fail', `Could not open the selected project: ${reason}`);
-      log(`the added window could not open ${chosen}; destroying it and leaving every other window as it was`);
-      if (!added.win.isDestroyed()) added.win.destroy();
-      return { ok: false, code: 'workspace.openFailed', headline: `Could not open the selected project: ${reason}` };
-    }
-    // REQ-SHELL-161: show, raise and activate is a REQUEST to the window manager; a decline is a supported
-    // outcome and this still counts as having succeeded, so nothing here retries or reports.
-    if (!added.win.isDestroyed()) { added.win.show(); added.win.focus(); }
-    await preferences.write('workspace/lastOpened', chosen);
-    log(`added main window ${added.wcId} on ${chosen}; ${mainWindows.size} main windows open (PD-SHELL-001)`);
-    return { ok: true, value: { workspace: chosen, wcId: added.wcId, added: true } };
-  };
+  const chooseProjectFolder = createElectronProjectFolderChooser({
+    forcedAnswers: __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] : undefined,
+    homeDirectory: homedir,
+    canonicalPath,
+    showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
+    log,
+  });
 
   /**
    * REQ-SESSION-201's restore, as main conducts it: every question before anything is changed, cancel the
@@ -1391,7 +1012,7 @@ async function main(): Promise<void> {
     return p;
   };
   const checkpointContext = async (w: MainWindowState): Promise<{ workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } } | CommandOutcome> => {
-    await awaitWorkspace();
+    await mainWindows.awaitWorkspace(w.wcId);
     if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
     const root = canonicalPath(w.workspace);
     const svc = services.get(root);
@@ -1516,6 +1137,7 @@ async function main(): Promise<void> {
     const parsed = CommandRequestSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
     const req = parsed.data;
+    const awaitWorkspace = () => mainWindows.awaitWorkspace(w.wcId);
     switch (req.kind) {
       case 'approval.payload': {
         const p = dialogPayloads.get(senderId);
@@ -1523,7 +1145,7 @@ async function main(): Promise<void> {
       }
       case 'approval.raise': {
         // Part AC — REQ-CHAT-098/103: the approval trailer re-opens what is already up. Main raises; it never decides.
-        const open = w.openDialog;
+        const open = mainWindows.openDialog(w.wcId);
         if (!open || open.requestId !== req.requestId || open.win.isDestroyed()) return { ok: false, code: 'approval.none', headline: 'No approval dialog is open for that request' };
         open.win.show();
         open.win.focus();
@@ -1801,8 +1423,7 @@ async function main(): Promise<void> {
         const svc = services.get(root);
         if (req.isolation || req.attach) {
           if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-          sessionId = w.mintedSessionId ?? randomUUID();
-          w.mintedSessionId = null;
+          sessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
           const bindFailure = (r: ProcessReply): CommandOutcome => {
             const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
             const headline = `Error: could not create or attach the requested worktree: ${detail}`;
@@ -1842,8 +1463,9 @@ async function main(): Promise<void> {
       }
       case 'session.newId': {
         // REQ-GIT-118: the id the launch dialog shows; the next isolated or attached start takes it.
-        w.mintedSessionId = randomUUID();
-        return { ok: true, value: { sessionId: w.mintedSessionId } };
+        const sessionId = randomUUID();
+        mainWindows.setMintedSession(w.wcId, sessionId);
+        return { ok: true, value: { sessionId } };
       }
       case 'git.read': {
         await awaitWorkspace();
@@ -1956,7 +1578,7 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'session.delete', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(120_000));
         if (r.kind !== 'session.deleted') { if (r.kind === 'refused') raiseNotice('error', 'The session was not deleted', r.headline); return refusal(r, 'The session was not deleted'); }
         if (r.refsLeft !== null) log(`session ${req.sessionId}: checkpoint refs remain under ${r.refsLeft} (REQ-GIT-069, best-effort)`);
-        if (w.followedSessionId === req.sessionId) { w.followedSessionId = null; w.personaWindows.destroyAll('the followed session was deleted'); }
+        if (w.followedSessionId === req.sessionId) { mainWindows.clearFollowedSession(w.wcId, req.sessionId); w.personaWindows.destroyAll('the followed session was deleted'); }
         if (r.existed) raiseNotice('info', `Deleted session ${req.sessionId}.`, `${r.refsDeleted} checkpoint ref${r.refsDeleted === 1 ? '' : 's'} removed${r.refsLeft === null ? '' : `; some refs remain under ${r.refsLeft}`}.`);
         return { ok: true, value: { sessionId: r.sessionId, existed: r.existed, refsDeleted: r.refsDeleted, refsLeft: r.refsLeft, filesRemoved: r.filesRemoved, unreadable: r.unreadable, elapsedMs: r.elapsedMs } };
       }
@@ -2163,44 +1785,7 @@ async function main(): Promise<void> {
        * not given.
        */
       case 'workspace.choose': {
-        // REQ-SHELL-011: the question counts as answered from THIS moment, not from when the chooser returns.
-        // The deferred offer must never appear over a chooser the user opened, and a gate that declines still
-        // answered it — the user asked, and was told why not.
-        workspaceQuestionAnswered = true;
-        // Stage C — `PD-SHELL-001`: the GESTURE decides the route, and it decided before this handler ran. On the
-        // add route REQ-SHELL-021's gates are not evaluated at all; that is the whole difference, and it is why
-        // the flag rides the command rather than being asked after the chooser (REQ-SHELL-164: a native chooser
-        // carries no buttons of ours, so there is nowhere to ask).
-        const adding = req.newWindow === true;
-        const gated = adding ? { ok: true } as const : await workspaceOpenGates(w);
-        if (!gated.ok) return gated.outcome;
-        const chosen = await chooseProjectFolder(w.win, w.workspace === '(no workspace)' ? undefined : w.workspace);
-        if (chosen === null) {
-          // REQ-SHELL-012 / REQ-WORKSPACE-009: the reminder belongs to a chooser the user SAW and cancelled, and to
-          // this window alone. Nothing else moves — not the window, not the workspace, not the stored preference.
-          raiseTransient(w, 'info', 'Open a project folder when you\'re ready by selecting the workspace path in the title bar.');
-          return { ok: true, value: { cancelled: true } };
-        }
-        /*
-         * Whether the chosen folder is one a window already has open is REQ-STARTUP-163's rule, cited through
-         * `samePath` rather than restated — the same rule both directives cite. Three outcomes, and the route
-         * does not change any of them:
-         *
-         *   - the REQUESTING window already has it open → `PD-WORKSPACE-001`'s offer, which supersedes
-         *     REQ-WORKSPACE-010's silent no-op. No window is built and none is closed.
-         *   - ANOTHER window already has it open → that window is surfaced and none is built, which is what
-         *     REQ-STARTUP-163 fixes for a directory already open somewhere. Building a second window on one
-         *     workspace is the state no requirement asks for and two processes would have produced.
-         *   - nobody has it open → the route decides: add a window, or replace this one.
-         */
-        const holder = windowHolding(chosen);
-        if (holder?.wcId === w.wcId) return offerNewSession(w, chosen);
-        if (holder) {
-          log(`the chosen folder ${chosen} is already open in window ${holder.wcId}; surfacing it and building nothing (REQ-STARTUP-163)`);
-          if (!holder.win.isDestroyed()) { holder.win.show(); holder.win.focus(); }
-          return { ok: true, value: { unchanged: true, workspace: holder.workspace, surfaced: holder.wcId } };
-        }
-        return adding ? addWorkspaceWindow(w, chosen) : switchWorkspace(w, chosen);
+        return mainWindows.choose(w.wcId, { newWindow: req.newWindow === true });
       }
       case 'session.prompt': {
         const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
@@ -2218,13 +1803,13 @@ async function main(): Promise<void> {
         relay.subscribe(senderId, req.sessionId);
         // A2: the follow belongs to whichever MAIN window subscribed — a persona or terminal window subscribes
         // for itself (the twenty-seventh defect above) and must not move any main window's followed session.
-        { const sender = windowFor(senderId); if (sender) sender.followedSessionId = req.sessionId; }
+        mainWindows.setFollowedSession(senderId, req.sessionId);
         const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be followed');
       }
       case 'session.unsubscribe':
         relay.unsubscribe(senderId, req.sessionId);
-        { const sender = windowFor(senderId); if (sender && sender.followedSessionId === req.sessionId) sender.followedSessionId = null; }
+        mainWindows.clearFollowedSession(senderId, req.sessionId);
         void runHost.request({ kind: 'session.detach', sessionId: req.sessionId }, millis(5_000)).catch(() => undefined);
         return { ok: true };
       case 'window.openPersona': {
@@ -2291,8 +1876,7 @@ async function main(): Promise<void> {
    * paths entirely: (a), (b) and (c) all resolve to a real folder, and the sentinel now stands only for a window
    * built with none at all, which ADR-0055 still requires to be a state the shell can render.
    */
-  const startup = resolveStartupWorkspace();
-  const mainWin = await buildMainWindow({ workspace: startup.workspace, origin: 'launch' });
+  const mainWin = await mainWindows.launch(argvWorkspace);
   /**
    * The verification seams at the end of this function drive the FIRST main window on purpose — a capture is a
    * photograph of one window — so they go on reading `win`. A proof that wants the second window addresses it
@@ -2300,19 +1884,7 @@ async function main(): Promise<void> {
    */
   const win = mainWin.win;
 
-  surface = (h) => {
-    // REQ-STARTUP-162/163: surface the window; honour a carried workspace.
-    // A3: WHICH window — the most recently focused one (ADR-0055 c.5). REQ-STARTUP-163's "adds a window" for a
-    // carried directory is Stage B's, and the builder above is what will answer it; today the carried folder is
-    // opened in the window that is surfaced, which is what the single-window build did.
-    const target = activeWindow();
-    if (!target) { log('hand-over received with no main window to surface'); return; }
-    if (target.win.isMinimized()) target.win.restore();
-    target.win.show();
-    target.win.focus();
-    if (h.workspace) { void openWorkspace(h.workspace, target).then(() => { target.workspace = h.workspace!; }); }
-    log(`hand-over received${h.workspace ? ` with workspace ${h.workspace}` : ''}`);
-  };
+  surface = (h) => { void mainWindows.handOver(h).catch((cause) => log(`hand-over failed: ${String(cause)}`)); };
   for (const h of pendingHandOvers.splice(0)) surface(h);
 
   /**
@@ -2347,35 +1919,11 @@ async function main(): Promise<void> {
       timers: clocks.timers,
       monotonic: clocks.monotonic,
       log,
-      command: (request) => runCommand(request),
+      command: (request, selectedWindow) => runCommand(request, selectedWindow.webContents.id),
+      deferProjectOffer: (selectedWindow, delayMs) => mainWindows.deferProjectOffer(selectedWindow.webContents.id, delayMs),
       quit: () => app.exit(0),
     });
     app.on('will-quit', () => driver.close());
-  }
-
-  await openWorkspace(startup.workspace, mainWin);
-  // REQ-SHELL-010 (a) / REQ-WORKSPACE-005: a folder the window was explicitly built for is persisted AT ONCE, in
-  // the resolved form `workspaceFromArgv` already produced. (b) and (c) persist nothing here — (b) is already the
-  // stored value, and (c) is a fallback the user has not chosen, so writing it would invent a decision.
-  if (startup.persist) await preferences.write('workspace/lastOpened', startup.workspace);
-  /**
-   * REQ-SHELL-011's deferred first-launch offer, and the ONE place this product states that figure: the
-   * requirement calls itself "the product's single definition of that delay", so 650 ms lives here and everything
-   * else deferred to first paint cites the identifier instead of repeating the number.
-   *
-   * The offer is one-shot and is abandoned unshown when the question has already been answered by the time the
-   * delay elapses (REQ-SHELL-011's own terms). A window closed before then cancels it cleanly — no dialog, no
-   * crash (REQ-WORKSPACE-008). The delay is measured from here, which is the first moment after the window's
-   * renderer has loaded and its `ready-to-show` has shown it; the builder awaits that load as its last act.
-   */
-  const DEFERRED_FIRST_PAINT_MS = 650;
-  if (startup.prompt) {
-    const offer = clocks.timers.after(millis(DEFERRED_FIRST_PAINT_MS), () => {
-      if (workspaceQuestionAnswered || mainWin.win.isDestroyed()) { log('the first-launch project chooser was abandoned unshown (REQ-SHELL-011)'); return; }
-      log(`offering the first-launch project chooser ${DEFERRED_FIRST_PAINT_MS} ms after show (REQ-SHELL-010 (c), REQ-SHELL-011)`);
-      void runCommand({ kind: 'workspace.choose' }, mainWin.wcId);
-    });
-    mainWin.win.once('closed', () => { offer.cancel(); });
   }
 
   // A verification hook for the walking skeleton and the release gate's first-paint check

@@ -715,6 +715,79 @@ stands at eighty-one.** The precursor also produced two *harness* mistakes worth
 transcript tool rows as `kind = 'tool_call'` where they are `kind = 'tool'`, and it asserted an elevation disclosure
 in a sandbox that opts in to unattended work, where REQ-TRACE-474 requires there to be none.
 
+**What an owner's own run found — 2026-09-12, and the seven defects eighty-two to eighty-eight.** Not a harness
+and not a scenario: a 22-minute run in a scratch workspace, twelve children, 226 tool calls, 686k tokens, stopped
+by hand because it was going in circles. It commissioned the same architecture design three times and produced
+seven markdown files and no code. Reading the session store afterwards found seven defects, and the reason it
+found them where 26 green live-run checks had not is worth stating plainly: `pnpm live-run` runs short tasks
+against an unmetered endpoint, so it holds **no generation near the model timeout, no multi-line command, and no
+re-spawn**. Every one of the seven lived in exactly that gap.
+
+**The eighty-second, and the one that explains the circling: a model timeout reported itself as a user abort.**
+`AbortSignal.any([req.signal, timeoutSignal])` merged the two, and both failure paths collapsed them into
+`fromError`'s single `aborted` flag, which returns `code: 'aborted'` unconditionally. `classifyFailure` reads
+that as *the run is stopping* and returns `fatal` — no retry, no wait, no same-tier fallback, and the streamed
+text discarded. Four of eleven children died that way with an empty `final_response`, each **125.2, 125.5 and
+125.6 s** after its last tool call: `model_timeout` at 120 s plus report assembly. Two things were wrong, not
+one. The class is now decided by **which** signal fired, and the bound is an **idle** bound re-armed on every
+part, because REQ-CONFIG-115 fixes "the model HTTP timeout" and applying it to total stream duration means no
+answer longer than two minutes can ever complete. ADR-0027's fourth execution has it. **A reading falsified in
+the brief this was built from, kept here:** the `catch` path was described as already correct because it read
+`req.signal.aborted || timeoutSignal.aborted`; that expression is precisely the collapse, and the thrown path
+was as wrong as the streamed one.
+
+**Eighty-three to eighty-six, all in the terminal, all in ADR-0020's note.** `hardMs` was passed by `index.ts`
+and read nowhere in the repository, so a foreground call that supplied no `timeout` had the soft pause and **no
+hard cap at all** — REQ-TOOLS-097 requires both bounds with the first to fire governing. An `as` cast on the
+same line is what stripped the excess-property check `tsc` would have failed on. Two commands sat wedged for
+68 s and 49 s and were killed by hand while the diagnostic reported `timeout_seconds: 100`. A multi-line command
+lost its newlines in the PTY, so a here-string never terminated; carrying it needs the payload sent whole, and
+**the approved shape was falsified twice by measurement** — `&` runs it in a child scope, and neither `&` nor
+dot-sourcing propagates `$?`, so the marker protocol gained a nonce-named `$global:<end>_ok` and consequence 1's
+forgery argument is unchanged. The capture was VT-stripped where ADR-0020's own words had said the ADR-0021
+emulator would land with streaming; it landed for the live stream in Part AL and the agent's capture was left
+behind, so the terminal window and the agent read different renderings of the same bytes. And the end marker
+leaked into what the model read — `Property : __rot_…_e:0`, verbatim — because detection matched it **unanchored**
+while removal matched it **anchored**, the sibling of the seventh first-execution defect on the removal side.
+
+**The strongest finding of the day is not any of the seven; it is how the fourth was nearly mis-attributed.**
+Sixty real-PTY runs at four geometries could not reproduce the concatenation the run showed, and the conclusion
+drawn was that the evidence belonged to the newline fold instead. The store falsifies that without a shell:
+ordinals 193 and 200 are **503 and 385 characters on one line**, so the fold cannot reach them. The trigger the
+sixty missed is narrow — an **empty write between two non-empty ones** — present in both production commands and
+in none of the sixty. Reproduced against the unfixed strip it returns the production strings byte for byte.
+**Sixty negative runs are not a negative result when none of them carries the input that failed**, and the
+reproduction was owed to the recorded command rather than to a plausible family resembling it.
+
+**Eighty-seven and eighty-eight, the record describing a run that did not happen.** The session `compressions`
+aggregate was declared, rehydrated and copied into every save, and nothing ever added to it — three
+`context_compressed` entries against a persisted `0`, while REQ-MONITOR-086's per-agent counter said three
+(REQ-SESSION-139, ADR-0008). And the child report hardcoded `commands: []` at all three construction sites and
+took `edited_files` from whatever the summarising model wrote: the child that wrote five files and ran eight
+commands reported neither, another reported a prose sentence where the schema asks for paths. Both are now
+derived from the transcript the report is built from. **The bound on that, stated rather than hidden:** a
+compression replaces the conversation (REQ-MONITOR-084), so a child compressed mid-task no longer carries its
+earliest calls, and the derived lists are of what survives. **And nothing yet reads `report.commands`** — the
+field is correct and no surface shows it.
+
+**Why the tests did not catch four of the seven, which is one shape repeated.** A test asserted the mechanism in
+the single configuration where it worked. REQ-TOOLS-097's hard timeout had a passing test that supplied an
+explicit `timeout` — the path where the timer *is* armed — while the no-timeout test asserted only the soft
+pause, so the requirement's actual claim, *whichever bound is reached first*, was never tested. `Aggregates`
+rehydrated `compressions: 0` and asserted `0` came back, an assertion that could only ever see zero. `report.ts`
+had no test file at all. And `ai-sdk-client.test.ts` aborted only the caller's signal. **A further trap, recorded
+because it would have produced a green suite over a broken build:** `FakeClock` cannot be used for the timeout
+tests, since `AbortSignal.timeout` reads the platform clock and a controlled clock makes both new tests pass
+against the unfixed code. They read real time under a 300 ms bound. **The tally stands at eighty-eight.**
+
+**Verified on merged main** (`76e3667`): the symbol generator unchanged at 4,399 identifiers, `tsc --noEmit`
+green, `eslint` and `check-line-endings` green, the suite at **1,532 passed and 25 skipped** with one red —
+`mcp.test.ts`'s stderr capture, which passes alone and whose own fixed 400 ms wait for a spawned child is the
+same class of defect as the three terminal time-guesses this work hardened. The baseline before the merges
+failed **four** under the same load; three of them were those terminal tests and are now stable. Each of the
+seven fixes was checked by reverting its source against its new test and reading the red, rather than by
+trusting the report that it had been.
+
 **What `pnpm overview-proof` does.** It builds Electron and carries one scratch profile across four launches against
 a scratch Git repository it creates (one commit, one untracked file): (1) a fresh launch — Overview is the first view
 painted, the onboarding empty state, the repository read logged with its time; (1b) the same with `PATH` emptied of

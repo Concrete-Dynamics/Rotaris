@@ -19,12 +19,41 @@ never valid reasons to cross the boundary.
 
 ## Approved inputs
 
+- `docs/product/` — product directives (`PD-<DOMAIN>-<NNN>`), which **govern over** the requirements they name
 - `docs/spec/` — approved behavioral requirements (`REQ-<DOMAIN>-<NNN>`)
 - `docs/architecture/` — architecture and Architecture Decision Records
 - `docs/clean-room/` — process, reference record, zone policy, provenance
 - public library and platform documentation
 - the approved Claude Design UX reference for information architecture and visual design
 - sanitized black-box conformance feedback (observable differences only)
+
+## When the owner asks for something
+
+A request that would change what the product does is **classified before any code is written**, and is
+logged in `docs/product/requests.md` when it is made — before the classification, not after it. The
+failure this prevents is silent: a request arrives in conversation, an agent builds it, and the behaviour
+lands in the product with no identifier against it, invisible to traceability and to the clean-room
+argument. Five outcomes, and `docs/product/README.md` holds the table that chooses between them:
+
+- **Covered** by a live requirement — build it and cite the `REQ` ids. Nothing is minted.
+- **The specification is silent or under-determined** — an `OQ-NN` in `docs/architecture/open-questions.md`.
+- **The specification disagrees with itself**, or two requirements cannot both hold — an `ESC-NN` in
+  `docs/architecture/owner-decisions.md`, then an amendment round.
+- **Building or measuring found the specification wrong** — an amendment round, and a row in
+  `docs/architecture/first-executions.md`.
+- **The specification is right and the owner wants something else** — a **`PD-<DOMAIN>-<NNN>`** in
+  `docs/product/directives.md`.
+
+**A directive governs over every requirement it names**, per identifier and never wholesale. The
+specification is **never edited in place** for one: the requirement keeps its text and gains a
+back-pointer blockquote saying which directive superseded, narrowed or extended it, in the same commit.
+That is what keeps `REQ-` meaning *derived from the behavioural target* and `PD-` meaning *someone chose
+this* — the distinction the clean-room evidence rests on. `pnpm symbols` refuses a disposition naming an
+identifier the specification does not define, and marks every superseded requirement `@deprecated`.
+
+The boundary case that will be got wrong: a request contradicting a requirement is a **directive**, not an
+escalation, whenever that requirement faithfully states the behavioural target. Escalations are for a
+corpus that disagrees with itself. When in doubt, log the request and classify it in writing.
 
 ## Process state
 
@@ -114,7 +143,9 @@ states them; §2 states what is adopted and what is not, and nothing below moves
 ## Traceability
 
 Implementation work cites the requirement IDs it satisfies. Commits that implement behavior
-reference those IDs so requirement, decision, code, and test remain linked.
+reference those IDs so requirement, decision, code, and test remain linked. Work that implements a
+**product directive** cites its `PD-<DOMAIN>-<NNN>` on the same terms, and where a directive governs,
+the code cites the `PD` rather than the requirement it displaced.
 
 [`CONTEXT-MAP.md`](CONTEXT-MAP.md) is the **domain glossary**: one `CONTEXT.md` per context, each at the
 package that owns that language, with the contexts drawn from the spec domains rather than from the process

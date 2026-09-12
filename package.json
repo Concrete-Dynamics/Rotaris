@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "symbols": "node tools/symbol-artifact/generate.mjs",
+    "directive-proof": "node apps/desktop/scripts/directive-proof.mjs",
     "dev": "pnpm --filter @rotaris/desktop dev",
     "build": "pnpm --filter @rotaris/desktop build",
     "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",

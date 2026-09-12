@@ -1,0 +1,183 @@
+# Product directives — the layer that governs over the specification
+
+`docs/spec/` states behaviour that was **derived**: an isolated agent read a reference, a gateway
+converted its sealed findings into requirements, and every round since has corrected, narrowed or
+minted against that origin. Its authority comes from that derivation, and so does its value as
+clean-room evidence.
+
+This directory holds behaviour that was **decided**. A product directive is the owner saying what
+this product does, for reasons of their own, with no reference behind it. It is not a correction to
+the specification and it does not claim the specification was wrong.
+
+## The precedence rule
+
+**A directive governs over every requirement it names.** Where a `PD-<DOMAIN>-<NNN>` and a
+`REQ-<DOMAIN>-<NNN>` disagree, the directive is what gets built, without exception and without
+argument from the implementer. Nothing else in this repository moves that line: not the design
+material (`docs/design/README.md` §2 places it under the specification, and this layer sits above
+both), not an ADR, and not a convenience found while building.
+
+The order, top to bottom:
+
+```text
+docs/product/       directives   — decided by the owner, govern where they reach
+docs/spec/          requirements — derived behaviour, governs everywhere else
+docs/architecture/  decisions    — how the two above are built
+docs/design/        the language the result is drawn in
+```
+
+A requirement no directive names is untouched and governs exactly as it did. Precedence is per
+identifier, never wholesale: there is no directive that means "ignore the specification".
+
+## Why the specification is not edited in place for these
+
+Two reasons, and the second is the one that will matter to a reader in six months.
+
+**The evidence.** The specification's worth in a clean-room argument is that it is a record of what
+was *derived* from observable behaviour. Writing an owner's invention into it as though it had been
+derived is not a bookkeeping shortcut; it destroys the only distinction that makes the record worth
+producing. This layer keeps every divergence in files with no reference provenance at all, which is
+a **stronger** independence claim than the specification alone makes, not a weaker one.
+
+**The trace.** What is new must be readable from the identifier, not reconstructed by diffing a
+changelog against a corpus of four thousand requirements. `PD-` means someone chose this. `REQ-`
+means it came from the behavioural target. A reader who wants to know what this product does that
+its target never did reads one directory.
+
+## What is a directive, and what is not
+
+The registers that already exist all conclude that **the specification failed at the job it was
+doing** — it was silent, it contradicted itself, or it described something that could not be built.
+A directive concludes something different: the specification is right, and we want **something
+else**.
+
+| The request is… | It goes to | Because |
+|---|---|---|
+| already covered by a live requirement | nowhere — build it, cite the `REQ` ids | there is nothing to decide |
+| behaviour the specification is silent or under-determined about | an **OQ-NN** in [`../architecture/open-questions.md`](../architecture/open-questions.md) | a gap in the derivation is a question against it |
+| a disagreement about what the specification *means*, or two requirements that cannot both hold | an **ESC-NN** in [`../architecture/owner-decisions.md`](../architecture/owner-decisions.md), then an amendment round | the corpus is wrong, and is corrected in place |
+| a defect found by building or measuring the thing | an amendment round, and a row in [`../architecture/first-executions.md`](../architecture/first-executions.md) | the same — the corpus is wrong |
+| behaviour the owner wants **instead of**, or **as well as**, what a live requirement states | a **`PD`** in [`directives.md`](directives.md) | the corpus is not wrong; the product is changing |
+
+The boundary case is worth stating plainly, because it is the one that will be got wrong: a request
+that *contradicts* a requirement is a directive, not an escalation, **whenever the requirement is a
+faithful statement of the behavioural target**. An escalation is for when the corpus disagrees with
+itself. If in doubt, log it as a request (below) and let the classification be made in writing.
+
+## Identifiers
+
+`PD-<DOMAIN>-<NNN>`, where `<DOMAIN>` is the prefix of the specification domain that owns the
+behaviour — `PD-CHAT-001` belongs beside `REQ-CHAT-*`, in domain 03. The rules are the
+specification's own, deliberately:
+
+- Identifiers are **stable and permanent**. Once assigned, never renumbered and never reused.
+- Numbering runs **contiguously from 1 within each domain**, with no gap and no duplicate.
+- A changed directive gets a **new revision**, not a new number.
+- A directive that no longer applies is **withdrawn in place** — it keeps its number, carries no
+  behaviour, and states what replaced it. Withdrawing a directive does **not** silently restore the
+  requirement it superseded; the withdrawal says explicitly whether that requirement governs again.
+- The two retired domains (`TUI`, `CLI`) are closed here as they are there. No `PD-TUI` or `PD-CLI`
+  may be minted.
+
+## The shape of an entry
+
+Every directive carries five things. The fourth is parsed by the symbol generator and must be
+written exactly as shown.
+
+1. **A heading** — `### PD-<DOMAIN>-<NNN> — <what it decides>`.
+2. **The directive itself**, in the specification's own normative voice (`MUST`, `MUST NOT`,
+   `SHALL`), stating observable behaviour and nothing about how it is built.
+3. **Why, and what it costs** — the reasoning, and what was given up. A directive with no stated
+   reason is a defect: the whole point of this layer is that the reason is not derivable from
+   anywhere else.
+4. **The disposition block** — one or more of these four lines, each naming requirement identifiers,
+   comma-separated:
+
+   ```markdown
+   > **Supersedes:** REQ-CHAT-004, REQ-CHAT-005
+   > **Narrows:** REQ-CHAT-001
+   > **Extends:** REQ-SHELL-023
+   > **New:** no live requirement covers this.
+   ```
+
+   - **Supersedes** — the named requirement no longer governs. The directive governs in its place.
+   - **Narrows** — the named requirement still governs, except in the case the directive names. The
+     directive states that case exhaustively, so a reader can tell which side of the line they are on.
+   - **Extends** — the named requirement is untouched and still governs in full. The directive adds
+     behaviour beside it.
+   - **New** — nothing is displaced. Used alone, and it names no identifier.
+
+   A directive with no disposition block does not build. The generator refuses an identifier it
+   cannot find in the specification, which is what makes a typo a failed `pnpm check` rather than a
+   disposition that quietly governs nothing.
+5. **Raised by** — who asked, when, and where. For a request made in conversation:
+   `*Raised by the owner, <YYYY-MM-DD>; logged as [R-NNN](requests.md#r-nnn).*`
+
+## The back-pointer, in place
+
+A directive that supersedes, narrows or extends a requirement writes a note **at that requirement**,
+in `docs/spec/`, in the same commit. The requirement's own text is **never rewritten and never
+deleted** — this repository already keeps a falsified reason beside its replacement rather than
+repairing it quietly, and the same discipline applies here:
+
+```markdown
+- **REQ-CHAT-004** — The composer placeholder MUST be one of exactly these four strings …
+  > **Superseded by [`PD-CHAT-001`](../product/directives.md#pd-chat-001), 2026-09-12.** The text
+  > above states the behavioural target and is kept for that reason; it no longer states what this
+  > product does.
+```
+
+Use `Superseded by`, `Narrowed by` or `Extended by` to match the disposition. The note is a
+blockquote so that it can never be mistaken for part of the requirement.
+
+This is the half a reader actually relies on. A person who opens a specification file must not be
+able to read a superseded requirement and believe it, and a person who opens a directive must be
+able to reach the text it displaced. Both directions, or neither is trustworthy.
+
+## Intake — every request leaves a mark
+
+[`requests.md`](requests.md) is the log. **A request is logged when it is made, before it is
+classified and before any code is written**, because the failure this whole mechanism exists to
+prevent is a request arriving in conversation and landing in the product as unsourced behaviour with
+no identifier against it.
+
+A request that is **declined** or **deferred** stays in the log with the reason. That is the point
+of logging refusals: without it the same request can be asked again in three weeks and get a
+different answer, and nobody can see that it ever happened.
+
+## What binds a change
+
+- **Consult before building.** A request is classified against the table above *before* code is
+  written. Work that implements a directive cites its `PD` ids the way other work cites `REQ` ids.
+- **Maintain after building.** A commit that adds, revises or withdraws a directive updates
+  [`directives.md`](directives.md), the back-pointer in `docs/spec/`, and the row in
+  [`requests.md`](requests.md) **in the same commit**. A directive whose back-pointer is missing is a
+  defect of the change that wrote it, on the same terms as a stale architecture view.
+- **`pnpm check` enforces what it can.** `pnpm symbols` regenerates
+  `packages/kernel/src/generated/requirements.ts`, which carries `PD` as typed symbols beside `REQ`,
+  refuses a disposition naming an identifier the specification does not define, and marks every
+  superseded requirement `@deprecated` so that citing one in code warns at the editor. Prose is not
+  the enforcement; this is.
+- **First execution still reports back.** A directive is a mechanism decided on paper like any other.
+  The first time one is built, `CLAUDE.md`'s standing policy applies: report back into this record,
+  in place, including when it found nothing, and append a row to
+  [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+## First execution, 2026-09-12 — the check refused a directive that displaces nothing
+
+`pnpm directive-proof` ran this mechanism's enforcement for the first time on the day it was written,
+and **it held a defect**: the generator decided whether a directive had stated a disposition by
+counting the requirement identifiers it named, and `New` names none. Every directive that displaces
+nothing — the ordinary case for behaviour the product simply did not have before — was refused with
+the message reserved for a directive that had said nothing at all.
+
+Nine of the ten counterfactuals passed on the first run, so the check was not weak; it was **wrong in
+exactly one direction, and it was the permissive-looking direction that turned out to be strict**.
+The fix separates *stated a disposition* from *named an identifier*, which is the distinction the
+prose above already drew and the code had collapsed. The generator now carries that reason beside the
+flag, so a later reader is told why the two are not the same thing.
+
+The proof runs 25 checks: the register as committed, a well-formed directive reaching the corpus in
+all three dispositions, nine refusals each paired with what would have passed without it, and `New`
+alone. It edits the register in place and restores it in a `finally` block, ending by regenerating the
+artifact so the committed symbols always match the committed register.

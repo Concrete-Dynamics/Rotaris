@@ -4,6 +4,16 @@ These documents state the observable behavior an independent implementation must
 the approved input to architecture and implementation work. They describe *what* must happen, never
 how any other implementation achieves it.
 
+> **One layer governs over this one.** [`../product/directives.md`](../product/directives.md) holds
+> behaviour the product owner **decided** rather than behaviour that was **derived**, and a
+> `PD-<DOMAIN>-<NNN>` governs over every requirement it names. Precedence is per identifier and never
+> wholesale: a requirement no directive names governs exactly as it did. A requirement a directive
+> supersedes, narrows or extends carries a **back-pointer blockquote at its own definition**, so a
+> reader of these files is never left believing text that no longer states what the product does. The
+> text itself is never rewritten — it remains the record of what was derived, which is what this corpus
+> is for. See [`../product/README.md`](../product/README.md) for the precedence rule and the
+> classification that decides whether a change lands there or as an amendment here.
+
 - Behavioral target: `ROTARIS-CRW-001` (see [`../clean-room/reference-record.md`](../clean-room/reference-record.md))
 - Status: **draft — gate decisions recorded, awaiting the sufficiency statement**
 - Open questions: resolved per domain; decisions recorded in [`resolutions/`](resolutions/)

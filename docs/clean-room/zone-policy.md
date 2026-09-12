@@ -16,9 +16,15 @@ each emitted specification against the reference and rewrites anything that leak
 **Manager (clean side).** Coordinates the process, holds the gates, and reads only this repository
 and sanitized agent returns. Never reads the reference, the sealed area, or raw audit reports.
 
-**GREEN — implementation zone.** Reads only approved specifications, approved architecture
-decisions, public technical documentation, approved design material, and sanitized oracle feedback.
-Never reads the reference or any RED or sealed material.
+**GREEN — implementation zone.** Reads only approved product directives, approved specifications,
+approved architecture decisions, public technical documentation, approved design material, and
+sanitized oracle feedback. Never reads the reference or any RED or sealed material.
+
+Product directives (`docs/product/`) are the one input in that list with **no reference provenance at
+all**: they state behaviour the owner decided rather than behaviour any analysis derived, and they
+govern over every requirement they name. They pass no gateway because there is nothing to sanitize.
+This is why they are kept out of `docs/spec/` — a corpus that mixes derived behaviour with invented
+behaviour can no longer be offered as evidence of what was derived.
 
 **Oracle.** May run the reference to compare observable behavior against the rewrite. Reports
 observable differences only — never source, stack traces exposing internals, or explanations of how

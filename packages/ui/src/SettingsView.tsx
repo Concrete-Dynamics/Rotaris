@@ -9,6 +9,7 @@ import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
 import { TraceabilitySettings, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
+import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
 
 /**
  * The Settings view: the thirteen categories in REQ-CONFIG-268's order with
@@ -122,7 +123,7 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
             const selected = c.id === category;
             return (
               <li key={c.id}>
-                <button
+                <DesignButton
                   type="button"
                   role="option"
                   aria-selected={selected}
@@ -131,7 +132,7 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
                   onClick={() => setCategory(c.id)}
                 >
                   {c.label}
-                </button>
+                </DesignButton>
               </li>
             );
           })}
@@ -146,7 +147,7 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
             <h2 className="settings__heading">Appearance</h2>
             <div className="settings__action">
               <label htmlFor="theme-select">Theme</label>
-              <select
+              <DesignSelect
                 id="theme-select"
                 className="input select settings__select"
                 aria-label="Theme"
@@ -155,17 +156,17 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
                 onChange={(event) => { void chooseTheme(event.currentTarget.value as ThemeName); }}
               >
                 {themes.map((theme) => <option key={theme.name} value={theme.name}>{theme.label}</option>)}
-              </select>
+              </DesignSelect>
               <span className="text-secondary settings__hint">{themes.find((theme) => theme.name === selectedTheme)?.description ?? 'Choose a registered theme.'}</span>
             </div>
             <div className="settings__action">
               <span>Reduce motion</span>
-              <button type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
+              <DesignButton type="button" className={`toggle${reducedMotion ? ' is-on' : ''}`} role="switch" aria-label="Reduce motion" aria-checked={reducedMotion} onClick={() => { void chooseMotion(!reducedMotion); }} />
               <span className="text-secondary settings__hint">Every animation collapses to its end state. The operating-system setting is inherited until you choose here.</span>
             </div>
             {interfaceExtras}
             <div className="settings__action">
-              <button type="button" className="btn btn-secondary" onClick={() => setMessage('Panel sizes already use their declared defaults; no divider is registered yet.')}>Reset panel sizes</button>
+              <DesignButton type="button" className="btn btn-secondary" onClick={() => setMessage('Panel sizes already use their declared defaults; no divider is registered yet.')}>Reset panel sizes</DesignButton>
               <span className="text-secondary settings__hint">Restores every resizable pane to its default size and takes effect immediately.</span>
             </div>
             {message && <div className="composer__error" role="status">{message}</div>}
@@ -180,15 +181,15 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
             </p>
             <div className="settings__actions">
               <div className="settings__action">
-                <button type="button" className="btn btn-secondary" disabled={busyAction !== null || noWorkspace} title={noWorkspace ? disabledReason ?? undefined : undefined} onClick={() => { void act('backup'); }}>
+                <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || noWorkspace} title={noWorkspace ? disabledReason ?? undefined : undefined} onClick={() => { void act('backup'); }}>
                   {busyAction === 'backup' ? 'Backing up…' : 'Back up session store…'}
-                </button>
+                </DesignButton>
                 <span className="text-secondary settings__hint">One file, the whole store. Valid while a run is live.{noWorkspace ? ` ${disabledReason}` : ''}</span>
               </div>
               <div className="settings__action">
-                <button type="button" className="btn btn-secondary" disabled={busyAction !== null || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => { void act('restore'); }}>
+                <DesignButton type="button" className="btn btn-secondary" disabled={busyAction !== null || disabledReason !== null} title={disabledReason ?? undefined} onClick={() => { void act('restore'); }}>
                   {busyAction === 'restore' ? 'Restoring…' : 'Restore session store…'}
-                </button>
+                </DesignButton>
                 <span className="text-secondary settings__hint">Replaces this workspace's store with a backup; the previous store is kept. Refused while a run is live.{disabledReason ? ` ${disabledReason}` : ''}</span>
               </div>
             </div>

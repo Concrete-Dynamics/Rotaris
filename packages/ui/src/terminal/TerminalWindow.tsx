@@ -10,6 +10,7 @@ import { NOTHING_TO_COPY, copyText, type CopyOutcome } from './selection.js';
 import { TerminalStreamSet } from './streams.js';
 import { INITIAL_TAB_STATE, TerminalTab, type TabState } from './TerminalTab.js';
 import { isTerminalView, xtermViewEmulator, type TerminalView } from './xterm-view.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState } from '../design-system/index.js';
 
 /**
  * Part AM — the pop-out terminal window's content (REQ-SHELL-079..094). One tab per known stream in arrival order,
@@ -200,17 +201,17 @@ export function TerminalWindow({ streams, actions, onGoToWorkspace, focusStream,
       {empty ? (
         // REQ-SHELL-083: the empty state; the tabs are hidden while it shows.
         <div className="term-empty" data-testid="term-empty">
-          <div className="empty-state term-empty__block">
+          <DesignEmptyState className="empty-state term-empty__block">
             <span className="empty-state-title">{EMPTY_STATE.title}</span>
             <span className="empty-state-hint">{EMPTY_STATE.body}</span>
-            <button type="button" className="btn btn-primary" onClick={onGoToWorkspace} data-testid="term-go-to-workspace">{EMPTY_STATE.action}</button>
-          </div>
+            <DesignButton type="button" className="btn btn-primary" onClick={onGoToWorkspace} data-testid="term-go-to-workspace">{EMPTY_STATE.action}</DesignButton>
+          </DesignEmptyState>
         </div>
       ) : (
         <>
           <div className="tabs term-window__tabs" role="tablist" aria-label={TABLIST_NAME} data-testid="term-tablist">
             {tabs.map((t) => (
-              <button
+              <DesignButton
                 key={t.id}
                 type="button"
                 role="tab"
@@ -224,7 +225,7 @@ export function TerminalWindow({ streams, actions, onGoToWorkspace, focusStream,
               >
                 <span className={`status-dot term-window__tab-dot${t.running ? ' is-pulsing' : ''}`} data-state={t.running ? 'running' : 'idle'} aria-hidden="true" />
                 <span className="term-window__tab-label mono">{t.label}</span>
-              </button>
+              </DesignButton>
             ))}
           </div>
           {frontTab && (

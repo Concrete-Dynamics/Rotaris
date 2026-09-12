@@ -2,6 +2,7 @@ import { useEffect, useId } from 'react';
 import type { BoardCard, BoardProjection, RelationToken, ReqId, RequirementDetail } from '@rotaris/contracts';
 import { RELATION_TOKENS } from '@rotaris/contracts';
 import { HEALTH_DERIVATION_SENTENCE, HEALTH_GLOSS, RELATION_LABEL, absoluteMoment, columnLabel, evidenceSegments, executionLine, relativeAge } from '@rotaris/ui-core';
+import { Button as DesignButton, Tag as DesignTag } from '../design-system/index.js';
 
 /**
  * Part AK2 — the requirement detail view (REQ-TRACE-271..280, 276/277): exactly five sections, every one built on
@@ -78,26 +79,26 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
       <div className="req-detail__head">
         <div className="req-detail__ids">
           <span className="req-card__id mono">{card.id}</span>
-          <span className="tag tag-outline">{card.lifecycle}</span>
-          <span className="tag tag-neutral" data-testid="req-detail-column">{columnLabel(card.column).toLowerCase()}</span>
-          {isEpic && <span className="tag tag-accent">epic</span>}
+          <DesignTag className="tag tag-outline">{card.lifecycle}</DesignTag>
+          <DesignTag className="tag tag-neutral" data-testid="req-detail-column">{columnLabel(card.column).toLowerCase()}</DesignTag>
+          {isEpic && <DesignTag className="tag tag-accent">epic</DesignTag>}
           <span className="req-detail__spacer" />
-          <button type="button" className="btn btn-ghost btn-compact" onClick={onClose} aria-label={`Close the detail of ${card.id}`}>Close</button>
+          <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={onClose} aria-label={`Close the detail of ${card.id}`}>Close</DesignButton>
         </div>
         <h2 id={titleId} className="req-detail__title display">{card.title}</h2>
         <div className="req-detail__actions">
-          <button type="button" className="btn btn-secondary btn-compact" onClick={() => onOpenEvidence(card.id)}>Evidence</button>
+          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => onOpenEvidence(card.id)}>Evidence</DesignButton>
           {/* Part R2 — the per-requirement panes of REQ-TRACE-375 are reached from the requirement, which is the only
               place that knows which one they would open against. Review is offered wherever the requirement stands and
               names the state instead of hiding (REQ-TRACE-424); blockers likewise (REQ-TRACE-447's positive statement). */}
-          {onOpenPane !== undefined && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-review" onClick={() => onOpenPane('review')} aria-label={`Review the delivery of ${card.id}`}>Review</button>}
-          {onOpenPane !== undefined && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-blockers" onClick={() => onOpenPane('blockers')} aria-label={`What is holding ${card.id}`}>Blockers</button>}
-          {onOpenGraph !== undefined && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-graph" onClick={() => onOpenGraph(card.id)} aria-label={`Centre the relationship graph on ${card.id}`}>Graph</button>}
+          {onOpenPane !== undefined && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-review" onClick={() => onOpenPane('review')} aria-label={`Review the delivery of ${card.id}`}>Review</DesignButton>}
+          {onOpenPane !== undefined && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-blockers" onClick={() => onOpenPane('blockers')} aria-label={`What is holding ${card.id}`}>Blockers</DesignButton>}
+          {onOpenGraph !== undefined && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-graph" onClick={() => onOpenGraph(card.id)} aria-label={`Centre the relationship graph on ${card.id}`}>Graph</DesignButton>}
           {/* REQ-TRACE-276/498: whether the requirement can be edited is a fact the detail carries, and where the source
               cannot be written the sentence says so — never a disabled field. An earlier build said here that writing
               into the source was "Part AP's and not built in this version"; Part AP built it and Part R2 hosts it, so
               that reason is falsified and is recorded as such in ADR-0041's third execution rather than kept here. */}
-          {onOpenPane !== undefined && board.source.kind === 'store' && board.source.writable && <button type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-edit" onClick={() => onOpenPane('editor')} aria-label={`Edit ${card.id} in its own source document`}>Edit</button>}
+          {onOpenPane !== undefined && board.source.kind === 'store' && board.source.writable && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-detail-edit" onClick={() => onOpenPane('editor')} aria-label={`Edit ${card.id} in its own source document`}>Edit</DesignButton>}
           <span className="card-meta" data-testid="req-detail-editable">{board.source.kind === 'store' && board.source.writable ? 'Editable in place: the edit is written into this requirement\'s own source document.' : `Read-only here: this account cannot write into the requirement source, so ${card.id} is changed by editing ${card.sourcePath} directly and re-evaluating.`}</span>
         </div>
       </div>
@@ -125,7 +126,7 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
             <dl className="req-detail__grid">
               {relationsByKind.map((g) => (<div key={g.kind} className="req-detail__row"><dt>{RELATION_LABEL[g.kind]}</dt><dd>
                 {g.ids.map((id) => (onBoard(id)
-                  ? <button key={id} type="button" className="btn btn-link req-detail__relation mono" onClick={() => onNavigate(id)} aria-label={`${RELATION_LABEL[g.kind]}: open ${id}`}>{id}</button>
+                  ? <DesignButton key={id} type="button" className="btn btn-link req-detail__relation mono" onClick={() => onNavigate(id)} aria-label={`${RELATION_LABEL[g.kind]}: open ${id}`}>{id}</DesignButton>
                   : <span key={id} className="req-detail__dangling mono" title="Unresolved: this identifier is not in the requirement store">{id} (unresolved)</span>))}
               </dd></div>))}
             </dl>
@@ -141,7 +142,7 @@ export function DetailPanel({ card, detail, board, now, localOffsetMinutes, onCl
               <li key={`${r.unit}-${r.sessionId ?? ''}`} className="req-detail__run">
                 <span className="mono">{r.unit}</span> · {r.status}{r.branch ? <> · <span className="mono">{r.branch}</span></> : null}{r.worktree ? <> · <span className="mono">{r.worktree}</span></> : null}
                 {r.sessionId && (onOpenSession
-                  ? <button type="button" className="btn btn-link" onClick={() => onOpenSession(r.sessionId!)} aria-label={`Open the session of unit ${r.unit}`}>open session</button>
+                  ? <DesignButton type="button" className="btn btn-link" onClick={() => onOpenSession(r.sessionId!)} aria-label={`Open the session of unit ${r.unit}`}>open session</DesignButton>
                   : <span className="card-meta"> session {r.sessionId.slice(0, 8)} (no session opener is offered on this surface)</span>)}
               </li>))}</ul>)}
           <p className="card-meta">Commits belonging to a run are not reported by the projection in this build.</p>

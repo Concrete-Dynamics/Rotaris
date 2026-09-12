@@ -1,6 +1,7 @@
 import { useEffect, useId } from 'react';
 import type { BoardCard, ReqId, RequirementDetail } from '@rotaris/contracts';
 import { EVIDENCE_EXPLANATION, NOTHING_OWED, evidenceSegments, evidenceSummary } from '@rotaris/ui-core';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AK2 — the evidence view (REQ-TRACE-265..270): opened by activating the indicator, or from the keyboard while
@@ -67,12 +68,12 @@ export function EvidencePane({ card, detail, onClose, onOpenSession }: EvidenceP
             <span className="card-kicker">Execution · {runs.length}</span>
             {runs.length === 0 ? <p className="req-detail__empty">No run has been recorded for this requirement.</p> : (
               <ul className="req-detail__runs">{runs.map((r) => (
-                <li key={`${r.unit}-${r.sessionId ?? ''}`}><span className="mono">{r.unit}</span> · {r.status}{r.sessionId && onOpenSession ? <button type="button" className="btn btn-link" onClick={() => onOpenSession(r.sessionId!)} aria-label={`Open the session of unit ${r.unit}`}>open session</button> : null}</li>))}</ul>)}
+                <li key={`${r.unit}-${r.sessionId ?? ''}`}><span className="mono">{r.unit}</span> · {r.status}{r.sessionId && onOpenSession ? <DesignButton type="button" className="btn btn-link" onClick={() => onOpenSession(r.sessionId!)} aria-label={`Open the session of unit ${r.unit}`}>open session</DesignButton> : null}</li>))}</ul>)}
             <p className="card-meta">Integration records are not reported by the projection in this build.</p>
           </section>
         </div>
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" autoFocus onClick={onClose}>Close</button>
+          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onClose}>Close</DesignButton>
         </div>
       </div>
     </div>

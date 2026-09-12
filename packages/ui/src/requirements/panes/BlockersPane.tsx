@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import type { BlockerPayload } from '@rotaris/contracts';
 import { PATH_LABELS, blockerPresentation, nothingHolds, type AnswerPath } from './presentation.js';
+import { Button as DesignButton } from '../../design-system/index.js';
 
 /**
  * Part AP — the blockers pane (spec 08 §Blockers, REQ-TRACE-445..454). The presentation is a function of the blocker
@@ -29,16 +30,16 @@ export function BlockersPane(p: BlockersPaneProps) {
       <div className="req-pane req-pane--blockers" role="region" aria-labelledby={headingId} data-testid="req-pane-blockers">
         <h2 id={headingId} className="req-pane__title">{p.payload.id}</h2>
         <p className="req-pane__lead" data-testid="req-pane-blockers-none">{nothingHolds(p.payload.id)}</p>
-        <div className="dialog-actions"><button type="button" className="btn btn-secondary" onClick={p.onClose}>Close</button></div>
+        <div className="dialog-actions"><DesignButton type="button" className="btn btn-secondary" onClick={p.onClose}>Close</DesignButton></div>
       </div>
     );
   }
   const control = (path: AnswerPath) => {
     switch (path) {
       case 'choose': return null; // the options below are the choose path's controls
-      case 'navigate': return pres.blockingIds.map((id) => <button key={id} type="button" className="btn btn-secondary" onClick={() => p.onNavigate(id)} aria-label={`${PATH_LABELS.navigate} ${id}`}>{PATH_LABELS.navigate}: {id}</button>);
-      case 'inspect': return <button key="inspect" type="button" className="btn btn-secondary" disabled={pres.runSessionId === null} onClick={() => { if (pres.runSessionId !== null) p.onOpenRun(pres.runSessionId); }} aria-label={PATH_LABELS.inspect}>{PATH_LABELS.inspect}</button>;
-      case 'resume': return <button key="resume" type="button" className="btn btn-primary" disabled={busy} onClick={() => { void answer('resume'); }} aria-label={PATH_LABELS.resume}>{PATH_LABELS.resume}{pres.returnTo === null ? '' : ` (returns to ${pres.returnTo === 'running' ? 'ready' : pres.returnTo})`}</button>;
+      case 'navigate': return pres.blockingIds.map((id) => <DesignButton key={id} type="button" className="btn btn-secondary" onClick={() => p.onNavigate(id)} aria-label={`${PATH_LABELS.navigate} ${id}`}>{PATH_LABELS.navigate}: {id}</DesignButton>);
+      case 'inspect': return <DesignButton key="inspect" type="button" className="btn btn-secondary" disabled={pres.runSessionId === null} onClick={() => { if (pres.runSessionId !== null) p.onOpenRun(pres.runSessionId); }} aria-label={PATH_LABELS.inspect}>{PATH_LABELS.inspect}</DesignButton>;
+      case 'resume': return <DesignButton key="resume" type="button" className="btn btn-primary" disabled={busy} onClick={() => { void answer('resume'); }} aria-label={PATH_LABELS.resume}>{PATH_LABELS.resume}{pres.returnTo === null ? '' : ` (returns to ${pres.returnTo === 'running' ? 'ready' : pres.returnTo})`}</DesignButton>;
     }
   };
   return (
@@ -55,12 +56,12 @@ export function BlockersPane(p: BlockersPaneProps) {
       {pres.options.length > 0 && (
         <div className="req-pane__options" role="group" aria-label={PATH_LABELS.choose}>
           <span className="req-pane__kicker">{PATH_LABELS.choose}</span>
-          {pres.options.map((o) => <button key={o.key} type="button" className="btn btn-secondary" disabled={busy} onClick={() => { void answer(o.key); }} title={o.consequence ?? undefined} aria-description={o.consequence ?? undefined}>{o.label}{o.consequence === null ? '' : ` — ${o.consequence}`}</button>)}
+          {pres.options.map((o) => <DesignButton key={o.key} type="button" className="btn btn-secondary" disabled={busy} onClick={() => { void answer(o.key); }} title={o.consequence ?? undefined} aria-description={o.consequence ?? undefined}>{o.label}{o.consequence === null ? '' : ` — ${o.consequence}`}</DesignButton>)}
         </div>
       )}
       <div className="req-pane__paths" data-testid="req-pane-blockers-paths">{pres.paths.map((path) => control(path))}</div>
       {refusal !== null && <p className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-blockers-refused">{refusal}</p>}
-      <div className="dialog-actions"><button type="button" className="btn btn-secondary" onClick={p.onClose}>Close</button></div>
+      <div className="dialog-actions"><DesignButton type="button" className="btn btn-secondary" onClick={p.onClose}>Close</DesignButton></div>
     </div>
   );
 }

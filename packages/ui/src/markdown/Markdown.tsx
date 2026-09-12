@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { markdownCache } from './cache.js';
 import type { Block, ListItem, Span } from './parse.js';
+import { Button as DesignButton, Input as DesignInput, Table as DesignTable } from '../design-system/index.js';
 
 /**
  * ADR-0051, alternative B: the tree rendered to ELEMENTS. No markup string is produced and nothing is
@@ -36,17 +37,17 @@ function Spans({ spans, onOpenLink }: { spans: readonly Span[]; onOpenLink?: ((h
       case 'strike': return <s key={index} className="md__strike"><Spans spans={span.spans} onOpenLink={onOpenLink} /></s>;
       case 'link':
         return (
-          <button key={index} type="button" className="md__link" title={span.href} data-href={span.href}
+          <DesignButton key={index} type="button" className="md__link" title={span.href} data-href={span.href}
             onClick={() => onOpenLink?.(span.href)} disabled={onOpenLink === undefined}>
             <Spans spans={span.spans} onOpenLink={onOpenLink} />
-          </button>
+          </DesignButton>
         );
       case 'image':
         return (
-          <button key={index} type="button" className="md__link md__image" title={span.href} data-image-href={span.href}
+          <DesignButton key={index} type="button" className="md__link md__image" title={span.href} data-image-href={span.href}
             onClick={() => onOpenLink?.(span.href)} disabled={onOpenLink === undefined}>
             {span.alt === '' ? span.href : span.alt}
-          </button>
+          </DesignButton>
         );
       default: return null;
     }
@@ -56,7 +57,7 @@ function Spans({ spans, onOpenLink }: { spans: readonly Span[]; onOpenLink?: ((h
 function Item({ item, onOpenLink }: { item: ListItem; onOpenLink?: ((href: string) => void) | undefined }): ReactNode {
   return (
     <li className={item.task === null ? 'md__item' : 'md__item md__item--task'}>
-      {item.task !== null && <input type="checkbox" className="md__task" checked={item.task} readOnly aria-label={item.task ? 'done' : 'not done'} />}
+      {item.task !== null && <DesignInput type="checkbox" className="md__task" checked={item.task} readOnly aria-label={item.task ? 'done' : 'not done'} />}
       <Blocks blocks={item.blocks} onOpenLink={onOpenLink} />
     </li>
   );
@@ -85,10 +86,10 @@ function Blocks({ blocks, onOpenLink }: { blocks: readonly Block[]; onOpenLink?:
           : <ul key={index} className="md__list">{block.items.map((item, n) => <Item key={n} item={item} onOpenLink={onOpenLink} />)}</ul>;
       case 'table':
         return (
-          <table key={index} className="md__table">
+          <DesignTable key={index} className="md__table">
             <thead><tr>{block.header.map((cell, n) => <th key={n} className={block.align[n] ? `md__cell--${block.align[n]}` : undefined}><Spans spans={cell} onOpenLink={onOpenLink} /></th>)}</tr></thead>
             <tbody>{block.rows.map((row, r) => <tr key={r}>{row.map((cell, n) => <td key={n} className={block.align[n] ? `md__cell--${block.align[n]}` : undefined}><Spans spans={cell} onOpenLink={onOpenLink} /></td>)}</tr>)}</tbody>
-          </table>
+          </DesignTable>
         );
       case 'break': return <hr key={index} className="md__rule" />;
       default: return null;

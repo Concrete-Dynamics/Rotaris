@@ -1,0 +1,87 @@
+/**
+ * `pnpm ui-review` — deterministic evidence pack for an external, report-only UI critic.
+ *
+ * The command invokes no model. It records rendered ground truth and caps a review
+ * series at three iterations. `$review-ui` turns the pack into `critique.json`.
+ */
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { repo } from './lib/harness.mjs';
+
+const argv = process.argv.slice(2).filter((value) => value !== '--');
+const flag = (name) => argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3);
+const allowedStatuses = new Set(['proposed', 'approved', 'implemented', 'verified-resolved', 'partial']);
+const allowedCategories = new Set(['design-quality', 'originality', 'craft', 'functionality', 'deterministic']);
+const allowedSeverities = new Set(['high', 'medium', 'low']);
+
+function validateCritique(path) {
+  const value = JSON.parse(readFileSync(path, 'utf8'));
+  const errors = [];
+  if (value.version !== 1) errors.push('version must be 1');
+  if (typeof value.revision !== 'string' || value.revision === '') errors.push('revision is required');
+  if (!Number.isInteger(value.iteration) || value.iteration < 1 || value.iteration > 3) errors.push('iteration must be 1..3');
+  if (typeof value.summary !== 'string') errors.push('summary must be a string');
+  if (!Array.isArray(value.findings)) errors.push('findings must be an array');
+  else value.findings.forEach((finding, index) => {
+    const at = `findings[${index}]`;
+    if (typeof finding.id !== 'string' || finding.id === '') errors.push(`${at}.id is required`);
+    if (!allowedStatuses.has(finding.status)) errors.push(`${at}.status is outside the evidence lifecycle`);
+    if (!allowedCategories.has(finding.category)) errors.push(`${at}.category is outside the review categories`);
+    if (!allowedSeverities.has(finding.severity)) errors.push(`${at}.severity is outside high, medium, low`);
+    for (const key of ['surface', 'observation', 'recommendation']) if (typeof finding[key] !== 'string' || finding[key] === '') errors.push(`${at}.${key} is required`);
+    if (!Array.isArray(finding.evidence) || finding.evidence.length === 0 || finding.evidence.some((item) => typeof item !== 'string')) errors.push(`${at}.evidence requires file references`);
+  });
+  if (errors.length > 0) {
+    process.stderr.write(`Critique validation failed:\n${errors.join('\n')}\n`);
+    process.exitCode = 1;
+  } else process.stdout.write(`Critique valid: ${value.findings.length} finding(s)\n`);
+}
+
+const validation = flag('validate');
+if (validation !== undefined) {
+  validateCritique(resolve(repo, validation));
+  process.exit();
+}
+
+const iteration = Number(flag('iteration') ?? '1');
+if (!Number.isInteger(iteration) || iteration < 1 || iteration > 3) throw new Error('ui-review iteration must be 1, 2, or 3');
+const revisionResult = spawnSync('git', ['rev-parse', '--short=12', 'HEAD'], { cwd: repo, encoding: 'utf8' });
+if (revisionResult.status !== 0) throw new Error(`unable to identify revision: ${revisionResult.stderr}`);
+const revision = revisionResult.stdout.trim();
+const output = join(repo, '.ui-review', revision, `iteration-${iteration}`);
+const audit = join(repo, 'apps', 'desktop', 'scripts', 'ui-audit.mjs');
+const forwarded = argv.filter((value) => value !== `--iteration=${iteration}` && !value.startsWith('--validate='));
+const run = spawnSync(process.execPath, [audit, `--output=${output}`, ...forwarded], { cwd: repo, stdio: 'inherit' });
+if (run.status !== 0) process.exit(run.status ?? 1);
+
+const report = JSON.parse(readFileSync(join(output, 'report.json'), 'utf8'));
+const dirty = spawnSync('git', ['diff', '--quiet'], { cwd: repo }).status !== 0;
+const files = readdirSync(output, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name).sort();
+const previousCritique = iteration > 1 ? join(repo, '.ui-review', revision, `iteration-${iteration - 1}`, 'critique.json') : null;
+const byKind = report.findings.reduce((acc, finding) => ({ ...acc, [finding.kind]: (acc[finding.kind] ?? 0) + 1 }), {});
+const manifest = {
+  version: 1,
+  revision,
+  dirty,
+  iteration,
+  iterationLimit: 3,
+  evidenceStatus: 'verified',
+  criticStatus: 'pending',
+  generatedAt: new Date().toISOString(),
+  deterministic: { findings: report.findings.length, byKind },
+  files,
+  previousCritique: previousCritique !== null && existsSync(previousCritique) ? relative(output, previousCritique).replaceAll('\\', '/') : null,
+};
+writeFileSync(join(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(join(output, 'critic-input.json'), `${JSON.stringify({
+  version: 1,
+  revision,
+  iteration,
+  role: 'report-only',
+  categories: ['design-quality', 'originality', 'craft', 'functionality', 'deterministic'],
+  evidence: { screenshots: files.filter((file) => file.endsWith('.png')), geometry: 'geometry.json', styles: 'styles.json', deterministic: 'report.json', manifest: 'manifest.json' },
+  output: 'critique.json',
+  schema: '.agents/skills/review-ui/references/critique-schema.md',
+}, null, 2)}\n`);
+process.stdout.write(`UI review iteration ${iteration}/3 ready at ${output}\n`);

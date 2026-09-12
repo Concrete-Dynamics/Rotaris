@@ -35,6 +35,7 @@ import { groupSeverity, groupSummary, type Severity } from './project.js';
 // approval dialog needs. Re-exported so a consumer of this module still sees the vocabulary it draws.
 export type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
 import type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * What a row cannot know about itself, computed once per displayed array by `placements()` below.
@@ -399,7 +400,7 @@ function PlainText({ text, match, onOpenLink }: { text: string; match: RowRender
   // search to define, not this file's to guess at, so the link wins and the match is not drawn there.
   if (spans.length === 1 && spans[0]!.kind === 'text') return <Highlighted text={text} match={match} />;
   return spans.map((span, i) => (span.kind === 'link'
-    ? <button key={i} type="button" className="md__link" title={span.href} data-href={span.href} onClick={() => onOpenLink?.(span.href)} disabled={onOpenLink === undefined}>{span.href}</button>
+    ? <DesignButton key={i} type="button" className="md__link" title={span.href} data-href={span.href} onClick={() => onOpenLink?.(span.href)} disabled={onOpenLink === undefined}>{span.href}</DesignButton>
     : <span key={i}>{span.kind === 'text' ? span.text : ''}</span>));
 }
 
@@ -474,14 +475,14 @@ export function Row(p: RowProps) {
           <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
           <span className="row__attribution"><span className="row__role">{display.family}</span></span>
           <div className="row__main">
-            <button type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary} data-testid="group-header">
+            <DesignButton type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary} data-testid="group-header">
               <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
               <span className="tool__name">{summary}</span>
               <span
                 ref={(element) => { if (element && running) markMotionStart(element); }}
                 className={`tool__outcome tool__outcome--${severity}${running ? ' row__pulse' : ''}`}
               >{(durationMs / 1000).toFixed(1)}s</span>
-            </button>
+            </DesignButton>
             {/* REQ-CHAT-065: while a member is in flight the header carries that call's text. */}
             {!expanded && display.inFlight !== null && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
             {expanded && (
@@ -516,9 +517,9 @@ export function Row(p: RowProps) {
           <time className="row__time mono" />
           <span className="row__attribution"><span className="row__role">{t.role}</span></span>
           <div className="row__main">
-            <button type="button" className="row__trailer" onClick={() => surface.openTrailer?.(t)} disabled={surface.openTrailer === undefined}>
+            <DesignButton type="button" className="row__trailer" onClick={() => surface.openTrailer?.(t)} disabled={surface.openTrailer === undefined}>
               <Highlighted text={trailerText(t)} match={match} />
-            </button>
+            </DesignButton>
           </div>
         </div>
       </article>
@@ -546,7 +547,7 @@ export function Row(p: RowProps) {
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">
-            <button
+            <DesignButton
               type="button"
               className={`tool__header mono${expandable ? '' : ' tool__header--static'}`}
               onClick={() => { if (expandable) p.onToggle(); }}
@@ -560,13 +561,13 @@ export function Row(p: RowProps) {
               {outcome.text !== '' && (
                 <span ref={(element) => { if (element && outcome.state === 'running') markMotionStart(element); }} className={`tool__outcome tool__outcome--${outcome.state}`}>{outcome.text}</span>
               )}
-            </button>
+            </DesignButton>
             {/* Part AM — the live terminal preview: the emulator's screen text, the same cells the pop-out shows (REQ-SHELL-102). */}
             {preview !== null && <TerminalPreviewBlock preview={preview} onOpen={surface.openTerminal} />}
             {/* REQ-CHAT-076: clicking a live terminal preview requests the pop-out for that stream (the one-line form, until a screen is retained). */}
             {preview === null && !expanded && !collapsedToName && expandable && (
               stream !== null && !row.settled
-                ? <button type="button" className="tool__preview tool__preview--terminal text-secondary mono" data-stream-id={stream} onClick={() => surface.openTerminal?.(stream)} disabled={surface.openTerminal === undefined}>⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</button>
+                ? <DesignButton type="button" className="tool__preview tool__preview--terminal text-secondary mono" data-stream-id={stream} onClick={() => surface.openTerminal?.(stream)} disabled={surface.openTerminal === undefined}>⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</DesignButton>
                 : <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>
             )}
             {expanded && (
@@ -590,7 +591,7 @@ export function Row(p: RowProps) {
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">
-            <button type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary.text} data-testid="thinking-header">
+            <DesignButton type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary.text} data-testid="thinking-header">
               {/* The collapsed summary's own leading marker IS this chevron; the label never repeats it. */}
               <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : stalled === null ? summary.marker : '▸'}</span>
               <span
@@ -598,7 +599,7 @@ export function Row(p: RowProps) {
                 className={`tool__name${summary.live && stalled === null ? ' row__pulse' : ''}`}
               >{stalled === null ? summary.label : `reasoning · ${summary.seconds}s · ~${summary.tokens} tok`}</span>
               {stalled !== null && <span className="row__stalled" data-testid="row-stalled" aria-description={stalledLabel(stalled)}>{stalledLabel(stalled)}</span>}
-            </button>
+            </DesignButton>
             {expanded && <div className="row__body row__body--thinking" data-testid="thinking-body">{row.body}</div>}
           </div>
         </div>

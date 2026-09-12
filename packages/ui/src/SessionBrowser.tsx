@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RepairReportPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /** Every action answers a value or a reason; nothing throws across the bridge (ADR-0044). */
 export type ActionOutcome<T = unknown> = { readonly ok: true; readonly value?: T } | { readonly ok: false; readonly reason: string };
@@ -118,19 +119,19 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
             <h2 id="session-browser-title" className="dialog-title">Sessions</h2>
             <p className="dialog-body">Open, repair, export or delete this workspace's stored sessions; back up or restore the whole store.</p>
           </div>
-          <button type="button" className="btn btn-ghost" aria-label="Close sessions" onClick={onDismiss} disabled={modal}>Close</button>
+          <DesignButton type="button" className="btn btn-ghost" aria-label="Close sessions" onClick={onDismiss} disabled={modal}>Close</DesignButton>
         </header>
         <div className="session-browser__toolbar">
           <label className="session-browser__search">
             <span className="session-browser__label">Search sessions</span>
-            <input ref={search} className="input" type="search" placeholder="Filter by name, status, or branch…" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <DesignInput ref={search} className="input" type="search" placeholder="Filter by name, status, or branch…" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <div className="session-browser__actions" role="group" aria-label="Workspace actions">
-            {onRepair && <button type="button" className="btn btn-secondary btn-compact" data-testid="session-repair-all" disabled={modal} title={stale === 0 ? 'No session is marked stale; the answer says so.' : `${stale} stale session${stale === 1 ? '' : 's'}`} onClick={() => { void repair(null); }}>{busy === 'repair:all' ? 'Repairing…' : `Repair all stale${stale > 0 ? ` (${stale})` : ''}`}</button>}
-            {onExportTrajectory && <button type="button" className="btn btn-secondary btn-compact" data-testid="session-export-selected" disabled={modal || selected.length === 0} title={selected.length === 0 ? 'Select sessions with the checkboxes to export their trajectories together, in the order selected.' : `${selected.length} selected, in selection order`} onClick={() => { void exportTrajectories(selected); }}>Export selected trajectories…{selected.length > 0 ? ` (${selected.length})` : ''}</button>}
-            {onBackup && <button type="button" className="btn btn-secondary btn-compact" data-testid="session-backup" disabled={modal} onClick={() => { void run('backup', onBackup, () => ['The store was backed up to the file you chose.']); }}>Back up store…</button>}
-            {onRestore && <button type="button" className="btn btn-secondary btn-compact" data-testid="session-restore" disabled={modal} onClick={() => { void run('restore', onRestore, () => ['The restore finished; the list below is read again.']); }}>Restore store…</button>}
-            <button type="button" className="btn btn-ghost btn-compact" data-testid="session-disclosure-toggle" aria-expanded={disclosure} aria-controls="session-browser-disclosure" onClick={() => setDisclosure((d) => !d)}>About backups</button>
+            {onRepair && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="session-repair-all" disabled={modal} title={stale === 0 ? 'No session is marked stale; the answer says so.' : `${stale} stale session${stale === 1 ? '' : 's'}`} onClick={() => { void repair(null); }}>{busy === 'repair:all' ? 'Repairing…' : `Repair all stale${stale > 0 ? ` (${stale})` : ''}`}</DesignButton>}
+            {onExportTrajectory && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="session-export-selected" disabled={modal || selected.length === 0} title={selected.length === 0 ? 'Select sessions with the checkboxes to export their trajectories together, in the order selected.' : `${selected.length} selected, in selection order`} onClick={() => { void exportTrajectories(selected); }}>Export selected trajectories…{selected.length > 0 ? ` (${selected.length})` : ''}</DesignButton>}
+            {onBackup && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="session-backup" disabled={modal} onClick={() => { void run('backup', onBackup, () => ['The store was backed up to the file you chose.']); }}>Back up store…</DesignButton>}
+            {onRestore && <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="session-restore" disabled={modal} onClick={() => { void run('restore', onRestore, () => ['The restore finished; the list below is read again.']); }}>Restore store…</DesignButton>}
+            <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="session-disclosure-toggle" aria-expanded={disclosure} aria-controls="session-browser-disclosure" onClick={() => setDisclosure((d) => !d)}>About backups</DesignButton>
           </div>
         </div>
         {disclosure && (
@@ -148,7 +149,7 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
           </ul>
         )}
         <div className="session-browser__table-wrap">
-          <table className="table session-browser__table">
+          <DesignTable className="table session-browser__table">
             <thead><tr><th><span className="visually-hidden">Select for export</span></th><th>Session</th><th>Status</th><th>Branch</th><th>Updated</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
               {shown.map((session) => {
@@ -157,16 +158,16 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
                 return (
                   <tr key={session.sessionId} data-session-id={session.sessionId} data-stale={session.stale ? 'true' : 'false'} data-unreadable={unreadable ? 'true' : 'false'}>
                     <td className="session-browser__select">
-                      {onExportTrajectory && <input type="checkbox" className="session-browser__check" aria-label={`Select session ${session.label} for trajectory export`} checked={selected.includes(session.sessionId)} disabled={modal} onChange={() => toggleSelected(session.sessionId)} />}
+                      {onExportTrajectory && <DesignInput type="checkbox" className="session-browser__check" aria-label={`Select session ${session.label} for trajectory export`} checked={selected.includes(session.sessionId)} disabled={modal} onChange={() => toggleSelected(session.sessionId)} />}
                     </td>
                     <td><span className="session-browser__name">{session.label}</span><span className="session-browser__detail mono">{session.detail}</span></td>
                     <td>
                       {session.status}
-                      {session.stale && <span className="tag session-browser__stale">stale</span>}
-                      {session.awaitingInput && <span className="tag">awaiting input</span>}
-                      {session.status === 'waiting' && <span className="tag tag-wait">waiting on a provider limit</span>}
+                      {session.stale && <DesignTag className="tag session-browser__stale">stale</DesignTag>}
+                      {session.awaitingInput && <DesignTag className="tag">awaiting input</DesignTag>}
+                      {session.status === 'waiting' && <DesignTag className="tag tag-wait">waiting on a provider limit</DesignTag>}
                       {/* REQ-SESSION-041: listed, said to be unreadable, with the parse detail; Open refused, Delete offered. */}
-                      {unreadable && <><span className="tag tag-fail session-browser__unreadable-tag">unreadable</span><span className="session-browser__unreadable mono" data-testid="session-unreadable-detail">{session.unreadable}</span></>}
+                      {unreadable && <><DesignTag className="tag tag-fail session-browser__unreadable-tag">unreadable</DesignTag><span className="session-browser__unreadable mono" data-testid="session-unreadable-detail">{session.unreadable}</span></>}
                     </td>
                     {/* REQ-GIT-122: the row's `<branch or —> · <state>` text. */}
                     <td className="mono" data-testid="session-row-branch">{`${session.branch} · ${session.status}`}</td>
@@ -174,19 +175,19 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
                     <td className="session-browser__row-cell">
                       <div className="session-browser__row-actions">
                       {/* Open stays the row's FIRST button: main's resume seam clicks it by position (ROTARIS_CAPTURE_RESUME). */}
-                      <button type="button" className="btn btn-secondary btn-compact" data-testid="session-open" disabled={modal || unreadable} aria-disabled={unreadable} data-refused={unreadable ? 'true' : 'false'} title={unreadable ? `This session cannot be opened: ${session.unreadable}` : undefined} onClick={() => { void open(session.sessionId); }}>{busy === `open:${session.sessionId}` ? 'Opening…' : 'Open'}</button>
+                      <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="session-open" disabled={modal || unreadable} aria-disabled={unreadable} data-refused={unreadable ? 'true' : 'false'} title={unreadable ? `This session cannot be opened: ${session.unreadable}` : undefined} onClick={() => { void open(session.sessionId); }}>{busy === `open:${session.sessionId}` ? 'Opening…' : 'Open'}</DesignButton>
                       {(onRepair || onDelete || onExportRecords || onExportTrajectory || onOpenLog || onRevealFiles) && (
                         <span className="session-browser__menu-anchor">
-                          <button type="button" className="btn btn-ghost btn-compact" data-testid="session-actions" aria-haspopup="true" aria-expanded={menuFor === session.sessionId} aria-label={`Actions for session ${session.label}`} disabled={modal} onClick={() => setMenuFor((m) => (m === session.sessionId ? null : session.sessionId))}>{rowBusy ? 'Working…' : 'Actions'}</button>
+                          <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="session-actions" aria-haspopup="true" aria-expanded={menuFor === session.sessionId} aria-label={`Actions for session ${session.label}`} disabled={modal} onClick={() => setMenuFor((m) => (m === session.sessionId ? null : session.sessionId))}>{rowBusy ? 'Working…' : 'Actions'}</DesignButton>
                           {menuFor === session.sessionId && (
-                            <div className="session-browser__menu card elev-md" role="group" aria-label={`Actions for session ${session.label}`} data-testid="session-actions-menu">
-                              {onRepair && session.stale && <button type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-repair" onClick={() => { void repair(session.sessionId); }}>Repair</button>}
-                              {onExportRecords && <button type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-export-records" onClick={() => { void exportRecords(session.sessionId); }}>Export records…</button>}
-                              {onExportTrajectory && <button type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-export-trajectory" onClick={() => { void exportTrajectories([session.sessionId]); }}>Export trajectory…</button>}
-                              {onOpenLog && <button type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-open-log" onClick={() => { void openLog(session.sessionId); }}>Open log</button>}
-                              {onRevealFiles && <button type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-reveal-files" onClick={() => { void revealFiles(session.sessionId); }}>Reveal files</button>}
-                              {onDelete && <button type="button" className="btn btn-ghost btn-compact session-browser__menu-item session-browser__menu-item--danger" data-testid="session-delete" onClick={() => { setMenuFor(null); setConfirmDelete(session); }}>Delete…</button>}
-                            </div>
+                            <DesignCard className="session-browser__menu card elev-md" role="group" aria-label={`Actions for session ${session.label}`} data-testid="session-actions-menu">
+                              {onRepair && session.stale && <DesignButton type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-repair" onClick={() => { void repair(session.sessionId); }}>Repair</DesignButton>}
+                              {onExportRecords && <DesignButton type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-export-records" onClick={() => { void exportRecords(session.sessionId); }}>Export records…</DesignButton>}
+                              {onExportTrajectory && <DesignButton type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-export-trajectory" onClick={() => { void exportTrajectories([session.sessionId]); }}>Export trajectory…</DesignButton>}
+                              {onOpenLog && <DesignButton type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-open-log" onClick={() => { void openLog(session.sessionId); }}>Open log</DesignButton>}
+                              {onRevealFiles && <DesignButton type="button" className="btn btn-ghost btn-compact session-browser__menu-item" data-testid="session-reveal-files" onClick={() => { void revealFiles(session.sessionId); }}>Reveal files</DesignButton>}
+                              {onDelete && <DesignButton type="button" className="btn btn-ghost btn-compact session-browser__menu-item session-browser__menu-item--danger" data-testid="session-delete" onClick={() => { setMenuFor(null); setConfirmDelete(session); }}>Delete…</DesignButton>}
+                            </DesignCard>
                           )}
                         </span>
                       )}
@@ -197,7 +198,7 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
               })}
               {!loading && shown.length === 0 && <tr><td colSpan={6} className="session-browser__empty">{sessions.length === 0 ? 'This workspace has no stored sessions here.' : 'No sessions match this search.'}</td></tr>}
             </tbody>
-          </table>
+          </DesignTable>
           {loading && <p className="session-browser__loading" role="status">Loading sessions…</p>}
         </div>
       </section>

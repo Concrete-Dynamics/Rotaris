@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ArtifactRowPayload } from '@rotaris/contracts';
 import type { LibraryTabProps } from './types.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, Table as DesignTable } from '../design-system/index.js';
 
 /**
  * REQ-LIBRARY-108 / REQ-LIBRARY-136 — the Library's Artifacts tab: one accented card holding a flat table of
@@ -69,15 +70,15 @@ export function ArtifactsTab({ query, revision, onRead, onInspect }: ArtifactsTa
       {warnings.map((w, i) => <div key={i} className="composer__hint" role="status" data-testid="library-artifacts-warning">{w}</div>)}
       {visible.length === 0
         ? (
-          <div className="empty-state" data-testid="library-artifacts-empty">
+          <DesignEmptyState className="empty-state" data-testid="library-artifacts-empty">
             <span className="empty-state-title">No artifacts have been published in this session.</span>
             <span className="empty-state-hint">An agent publishes one with the artifact_write tool, and every child report is recorded here when its task ends.</span>
-          </div>
+          </DesignEmptyState>
         )
         : (
           // REQ-LIBRARY-108: columns auto-size to contents on every refresh — `table-layout: auto` is that rule,
           // and it re-applies on each render because the widths are the browser's function of the cells.
-          <table className="table library-artifacts__table" aria-label="Session artifacts">
+          <DesignTable className="table library-artifacts__table" aria-label="Session artifacts">
             <thead>
               <tr><th>Title</th><th>Producer</th><th>Persona</th><th>Kind</th><th>Status</th><th>Created</th></tr>
             </thead>
@@ -97,12 +98,12 @@ export function ArtifactsTab({ query, revision, onRead, onInspect }: ArtifactsTa
                 </tr>
               ))}
             </tbody>
-          </table>
+          </DesignTable>
         )}
       <div className="library-artifacts__actions">
-        <button type="button" className="btn btn-primary" data-testid="library-artifacts-inspect" disabled={selectedRow === null}
+        <DesignButton type="button" className="btn btn-primary" data-testid="library-artifacts-inspect" disabled={selectedRow === null}
           title={selectedRow === null ? 'Select an artifact to inspect or edit it.' : `Inspect ${selectedRow.title}`}
-          onClick={() => { if (selectedRow) onInspect(selectedRow.id); }}>Inspect / edit selected</button>
+          onClick={() => { if (selectedRow) onInspect(selectedRow.id); }}>Inspect / edit selected</DesignButton>
       </div>
     </section>
   );

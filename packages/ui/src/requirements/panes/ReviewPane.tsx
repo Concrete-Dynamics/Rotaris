@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import type { BoardAction, ReviewPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from '../../ConfirmDialog.js';
 import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, reviewDecisions, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
+import { Button as DesignButton, Tag as DesignTag, TextArea as DesignTextArea } from '../../design-system/index.js';
 
 /**
  * Part AP — the review pane (spec 08 §Review Surface, REQ-TRACE-417..426). Structure from the specification: the
@@ -63,8 +64,8 @@ export function ReviewPane(p: ReviewPaneProps) {
       <header className="req-pane__header">
         <span className="req-pane__id">{p.id}</span>
         <h2 id={titleId} className="req-pane__title">{payload?.title ?? 'Review'} — review delivery</h2>
-        {payload !== null && <span className="tag tag-wait req-pane__state">{payload.column}</span>}
-        <button type="button" className="btn btn-secondary req-pane__close" onClick={p.onClose} aria-label="Close the review">Close</button>
+        {payload !== null && <DesignTag className="tag tag-wait req-pane__state">{payload.column}</DesignTag>}
+        <DesignButton type="button" className="btn btn-secondary req-pane__close" onClick={p.onClose} aria-label="Close the review">Close</DesignButton>
       </header>
       {p.payload === 'reading' && <p className="req-pane__status" role="status">{REVIEW_READING}</p>}
       {p.busy && <p className="req-pane__status" role="status">{REVIEW_BUSY}</p>}
@@ -84,12 +85,12 @@ export function ReviewPane(p: ReviewPaneProps) {
       {decided !== null ? (
         <div className="req-pane__notice" role="status" data-testid="req-pane-review-decided">
           <span>{decided}</span>
-          <button type="button" className="btn btn-primary" onClick={() => { setDecided(null); p.onReload(); }}>{RELOAD_REVIEW}</button>
+          <DesignButton type="button" className="btn btn-primary" onClick={() => { setDecided(null); p.onReload(); }}>{RELOAD_REVIEW}</DesignButton>
         </div>
       ) : payload !== null && payload.refusal === undefined && (
         <footer className="req-pane__decisions" data-testid="req-pane-review-decisions">
           <span className="req-pane__footnote">Each decision states what it does to the branch and the worktree before it is taken.</span>
-          {reviewDecisions().map((d) => <button key={d.action} type="button" className={d.action === 'accept' ? 'btn btn-primary' : d.action === 'reject' ? 'btn btn-danger' : 'btn btn-secondary'} disabled={inFlight} onClick={() => setPending(d.action)} aria-label={`${d.label} ${p.id}`}>{d.label}</button>)}
+          {reviewDecisions().map((d) => <DesignButton key={d.action} type="button" className={d.action === 'accept' ? 'btn btn-primary' : d.action === 'reject' ? 'btn btn-danger' : 'btn btn-secondary'} disabled={inFlight} onClick={() => setPending(d.action)} aria-label={`${d.label} ${p.id}`}>{d.label}</DesignButton>)}
         </footer>
       )}
       {refusal !== null && <p className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-review-refused">{refusal}</p>}
@@ -102,10 +103,10 @@ export function ReviewPane(p: ReviewPaneProps) {
             <h2 className="dialog-title">Send the agent back</h2>
             <p className="dialog-body">{p.consequenceOf('send-back')}</p>
             <label className="field"><span className="field-label">Instructions for the next run</span>
-              <textarea className="input req-pane__textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} aria-label="Instructions for the next run" placeholder="What the next run must do differently. Submitting nothing would repeat the previous run unaltered." /></label>
+              <DesignTextArea className="input req-pane__textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} aria-label="Instructions for the next run" placeholder="What the next run must do differently. Submitting nothing would repeat the previous run unaltered." /></label>
             <div className="dialog-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setPending(null)} disabled={inFlight}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={() => { void decide('send-back'); }} disabled={inFlight}>Send back</button>
+              <DesignButton type="button" className="btn btn-secondary" onClick={() => setPending(null)} disabled={inFlight}>Cancel</DesignButton>
+              <DesignButton type="button" className="btn btn-primary" onClick={() => { void decide('send-back'); }} disabled={inFlight}>Send back</DesignButton>
             </div>
           </div>
         </div>
@@ -128,7 +129,7 @@ function Element({ element, heading, onNavigate }: { element: ReviewElement; hea
       <div id={descId} className={element.lines.length === 0 ? 'req-pane__empty' : 'req-pane__lines'}>
         {element.lines.length === 0 ? element.empty : element.lines.map((line, i) => <span key={i} className={element.key === 'changed-files' || element.key === 'branch-and-worktree' || element.key === 'specification-version' ? 'req-pane__line req-pane__mono' : 'req-pane__line'}>{line}</span>)}
       </div>
-      {element.links !== undefined && <div className="req-pane__links">{element.links.map((l) => <button key={l.label} type="button" className="btn btn-link" onClick={() => onNavigate(l.target)}>{l.label}</button>)}</div>}
+      {element.links !== undefined && <div className="req-pane__links">{element.links.map((l) => <DesignButton key={l.label} type="button" className="btn btn-link" onClick={() => onNavigate(l.target)}>{l.label}</DesignButton>)}</div>}
     </div>
   );
 }

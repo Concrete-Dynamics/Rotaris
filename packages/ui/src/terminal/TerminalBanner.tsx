@@ -1,6 +1,7 @@
 import { SEVERITY_GLYPHS } from '@rotaris/contracts';
 import { markMotionStart } from '../motion.js';
 import type { BannerText } from './labels.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AM — the tab's one banner slot (REQ-SHELL-089/090/091/094: "each tab holds a single persistent banner
@@ -32,7 +33,7 @@ export function TerminalBanner({ banner, onAction }: TerminalBannerProps) {
         <span className="notice__message text-secondary" data-testid="term-banner-body">{banner.body}</span>
       </div>
       {banner.action !== undefined && (
-        <button type="button" className="btn btn-secondary btn-compact notice__action" onClick={onAction} data-testid="term-banner-action">{banner.action}</button>
+        <DesignButton type="button" className="btn btn-secondary btn-compact notice__action" onClick={onAction} data-testid="term-banner-action">{banner.action}</DesignButton>
       )}
     </div>
   );

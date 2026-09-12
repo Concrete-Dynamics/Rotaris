@@ -5,7 +5,8 @@
   "type": "module",
   "description": "React components over the adopted design language (docs/design/system) and the seven views of REQ-SHELL-023. ADR-0057, ADR-0048.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./design-system": "./src/design-system/index.ts"
   },
   "dependencies": {
     "@rotaris/kernel": "workspace:*",

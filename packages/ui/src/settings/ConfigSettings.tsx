@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ModelSlotName } from '@rotaris/contracts';
 import { clampForDisplay, type PendingChange, type PendingSettings } from './config-state.js';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
 /**
  * The three configuration categories (structure from docs/spec, language from docs/design/system):
@@ -46,10 +47,10 @@ export function SaveBar({ dirty, serviceAvailable, onSave, onDiscard }: Pick<Con
   return (
     <div className="save-bar" role="group" aria-label="Settings save status and actions">
       <span className={`save-bar__status${dirty ? ' is-dirty' : ''}`} role="status" aria-label="Settings save status">{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
-      {dirty && serviceAvailable && <button type="button" className="btn btn-primary btn-compact" disabled={saving} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</button>}
-      {dirty && <button type="button" className="btn btn-secondary btn-compact" onClick={onDiscard}>Discard</button>}
+      {dirty && serviceAvailable && <DesignButton type="button" className="btn btn-primary btn-compact" disabled={saving} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</DesignButton>}
+      {dirty && <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={onDiscard}>Discard</DesignButton>}
       {!serviceAvailable && dirty && <span className="text-secondary settings__hint">Settings are read-only in the current mode; changes can be discarded but not saved.</span>}
-      {failure && <span className="composer__error" role="alert">Save failed: {failure} <button type="button" className="btn btn-link" onClick={() => { void save(); }}>Retry</button></span>}
+      {failure && <span className="composer__error" role="alert">Save failed: {failure} <DesignButton type="button" className="btn btn-link" onClick={() => { void save(); }}>Retry</DesignButton></span>}
     </div>
   );
 }
@@ -58,11 +59,11 @@ const LEVEL_LABELS: Readonly<Record<string, string>> = { auto: 'Auto (stored)', 
 
 function Fatal({ snapshot }: { snapshot: ConfigSnapshot }) {
   return (
-    <div className="card settings__fatal" role="alert">
+    <DesignCard className="card settings__fatal" role="alert">
       <div className="card-kicker">Configuration could not be loaded</div>
       <p className="card-body">{snapshot.fatal}</p>
       <p className="card-meta">Workspace file: <code className="mono">{snapshot.files.workspace}</code> · Global file: <code className="mono">{snapshot.files.global}</code></p>
-    </div>
+    </DesignCard>
   );
 }
 
@@ -76,14 +77,14 @@ export function ModelsSettings(props: ConfigSettingsProps) {
     <div className="settings__section">
       <h1 className="display">Models</h1>
       {snapshot.referential.length > 0 && (
-        <div className="card settings__referential" role="status">
+        <DesignCard className="card settings__referential" role="status">
           <div className="card-kicker">Unresolved references</div>
           <ul className="card-body">{snapshot.referential.map((m) => <li key={m}>{m}</li>)}</ul>
-        </div>
+        </DesignCard>
       )}
       <h2 className="settings__heading">Model slots</h2>
       <p className="text-secondary">Each slot names a configured model; a role may target a slot instead of a model. Edits are written to this workspace's configuration on Save.</p>
-      <table className="table settings__grid" aria-label="Model slots">
+      <DesignTable className="table settings__grid" aria-label="Model slots">
         <thead><tr><th>Slot</th><th>Model</th><th>Reasoning strength</th></tr></thead>
         <tbody>
           {EDITABLE_SLOTS.map((slot) => {
@@ -97,22 +98,22 @@ export function ModelsSettings(props: ConfigSettingsProps) {
               <tr key={slot}>
                 <td className="mono">{slot}<span className="text-tertiary settings__origin"> {view?.origin ?? 'built-in'}</span></td>
                 <td>
-                  <select className="input select" aria-label={`Model for ${slot}`} value={value} onChange={(e) => onChange({ kind: 'slot', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
+                  <DesignSelect className="input select" aria-label={`Model for ${slot}`} value={value} onChange={(e) => onChange({ kind: 'slot', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
                     <option value="">Leave as configured{view?.value ? ` (${view.value})` : ''}</option>
                     {options.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                  </DesignSelect>
                 </td>
                 <td>
-                  <select className="input select" aria-label={`Reasoning strength for ${slot}`} aria-description={`Sets the reasoning or thinking strength used by ${slot}'s model.`} value={thinking ?? ''} onChange={(e) => onChange({ kind: 'slotThinking', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
+                  <DesignSelect className="input select" aria-label={`Reasoning strength for ${slot}`} aria-description={`Sets the reasoning or thinking strength used by ${slot}'s model.`} value={thinking ?? ''} onChange={(e) => onChange({ kind: 'slotThinking', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
                     <option value="">Provider default</option>
                     {levels.map((l) => <option key={l} value={l}>{LEVEL_LABELS[l] ?? l}</option>)}
-                  </select>
+                  </DesignSelect>
                 </td>
               </tr>
             );
           })}
         </tbody>
-      </table>
+      </DesignTable>
       <h2 className="settings__heading">Providers</h2>
       {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
     </div>
@@ -133,13 +134,13 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
       <h1 className="display">Personas</h1>
       <div className="settings__action">
         <label htmlFor="persona-scope">Edit scope</label>
-        <select id="persona-scope" className="input select settings__select" aria-label="Edit scope" aria-description="Settles whether edits to a role's model and reasoning are recorded for this workspace or for the user as a whole." value={scope} onChange={(e) => setScope(e.currentTarget.value as 'workspace' | 'global')}>
+        <DesignSelect id="persona-scope" className="input select settings__select" aria-label="Edit scope" aria-description="Settles whether edits to a role's model and reasoning are recorded for this workspace or for the user as a whole." value={scope} onChange={(e) => setScope(e.currentTarget.value as 'workspace' | 'global')}>
           <option value="workspace">Workspace</option>
           <option value="global">Global</option>
-        </select>
+        </DesignSelect>
         <span className="text-secondary settings__hint">Switching scope shows that scope's values; it copies nothing.</span>
       </div>
-      <table className="table settings__grid" aria-label="Roles">
+      <DesignTable className="table settings__grid" aria-label="Roles">
         <thead><tr><th>Persona</th><th>Role</th><th>Model</th><th>Reasoning</th><th>Scope</th><th>Tools</th></tr></thead>
         <tbody>
           {snapshot.roles.map((r) => {
@@ -152,26 +153,26 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
                 <td>{r.role}</td>
                 <td className="mono">{r.role}</td>
                 <td>
-                  <select className="input select" aria-label={`Model for ${r.role}`} value={model} onChange={(e) => onChange({ kind: 'role', role: r.role, scope, model: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
+                  <DesignSelect className="input select" aria-label={`Model for ${r.role}`} value={model} onChange={(e) => onChange({ kind: 'role', role: r.role, scope, model: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
                     <option value="">{r.inherited ? `Inherited (${r.effectiveModel})` : `Unset (${r.builtInDefault ?? 'built-in'})`}</option>
                     {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                  </DesignSelect>
                 </td>
                 <td>
-                  <select className="input select" aria-label={`Reasoning for ${r.role}`} value={thinking} onChange={(e) => onChange({ kind: 'role', role: r.role, scope, thinking: e.currentTarget.value })}>
+                  <DesignSelect className="input select" aria-label={`Reasoning for ${r.role}`} value={thinking} onChange={(e) => onChange({ kind: 'role', role: r.role, scope, thinking: e.currentTarget.value })}>
                     {levels.map((l) => <option key={l} value={l}>{LEVEL_LABELS[l] ?? l}</option>)}
-                  </select>
+                  </DesignSelect>
                 </td>
                 <td className="settings__scope">
-                  <div>model: <span className="text-secondary">{r.modelOrigin}</span>{r.modelOrigin === scope && <button type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</button>}</div>
-                  <div>reasoning: <span className="text-secondary">{r.thinkingOrigin}</span>{r.thinkingOrigin === scope && <button type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</button>}</div>
+                  <div>model: <span className="text-secondary">{r.modelOrigin}</span>{r.modelOrigin === scope && <DesignButton type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
+                  <div>reasoning: <span className="text-secondary">{r.thinkingOrigin}</span>{r.thinkingOrigin === scope && <DesignButton type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
                 </td>
                 <td className="text-secondary settings__tools">{r.tools.join(', ') || '—'}</td>
               </tr>
             );
           })}
         </tbody>
-      </table>
+      </DesignTable>
       {props.children}
     </div>
   );
@@ -182,7 +183,7 @@ export function Toggle({ id, label, hint, on, onChange, disabled, testId }: { id
     <div className="settings__action">
       <span id={`${id}-label`}>{label}</span>
       {/* REQ-CONFIG-323: the accessible description states enabled or disabled and is regenerated on every change. */}
-      <button type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby={`${id}-label`} aria-description={`${label} is ${on ? 'enabled' : 'disabled'}.`} aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} {...(testId ? { 'data-testid': testId, 'data-on': on ? 'true' : 'false' } : {})} />
+      <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby={`${id}-label`} aria-description={`${label} is ${on ? 'enabled' : 'disabled'}.`} aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} {...(testId ? { 'data-testid': testId, 'data-on': on ? 'true' : 'false' } : {})} />
       <span className="text-secondary settings__hint">{hint}</span>
     </div>
   );
@@ -196,8 +197,8 @@ function Confirm({ title, body, onYes, onCancel }: { title: string; body: string
         <h2 id="settings-confirm-title" className="dialog-title">{title}</h2>
         <p className="dialog-body">{body}</p>
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Cancel</button>
-          <button type="button" className="btn btn-warning" onClick={onYes}>Yes</button>
+          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Cancel</DesignButton>
+          <DesignButton type="button" className="btn btn-warning" onClick={onYes}>Yes</DesignButton>
         </div>
       </div>
     </div>
@@ -223,27 +224,27 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
       <h1 className="display">Runtime</h1>
       <div className="settings__action">
         <label htmlFor="strategy">Delegation strategy</label>
-        <select id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
+        <DesignSelect id="strategy" className="input select settings__select" aria-label="Delegation strategy" value={pending.delegationStrategy} onChange={(e) => onChange({ kind: 'delegationStrategy', value: e.currentTarget.value as PendingSettings['delegationStrategy'] })}>
           {DELEGATION_STRATEGY_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        </DesignSelect>
         <span className="text-secondary settings__hint">orchestrator coordinates through specialists; swarm lets roles fan out; single does the work in one role with no delegation.</span>
       </div>
       <div className="settings__action">
         <label htmlFor="run-start-mode">Run-start mode</label>
-        <select id="run-start-mode" className="input select settings__select" aria-label="Run-start mode" aria-description="Decides whether a run produces a plan and waits for an answer before it changes anything." value={rt.run_start_mode} onChange={(e) => onChange({ kind: 'runtime', key: 'run_start_mode', value: e.currentTarget.value as 'auto' | 'plan' })}>
+        <DesignSelect id="run-start-mode" className="input select settings__select" aria-label="Run-start mode" aria-description="Decides whether a run produces a plan and waits for an answer before it changes anything." value={rt.run_start_mode} onChange={(e) => onChange({ kind: 'runtime', key: 'run_start_mode', value: e.currentTarget.value as 'auto' | 'plan' })}>
           {RUN_START_MODE_NAMES.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        </DesignSelect>
         <span className="text-secondary settings__hint">Stored for the next run. The plan gate itself is not built in this version.</span>
       </div>
       <h2 className="settings__heading">Delegation limits</h2>
       <div className="settings__action">
         <label htmlFor="max-depth">Depth cap</label>
-        <input id="max-depth" className="input settings__number" type="number" min={1} max={12} value={clampForDisplay(rt.max_depth, 1, 12)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_depth', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 12) })} />
+        <DesignInput id="max-depth" className="input settings__number" type="number" min={1} max={12} value={clampForDisplay(rt.max_depth, 1, 12)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_depth', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 12) })} />
         <label htmlFor="max-active">Fan-out limit</label>
-        <input id="max-active" className="input settings__number" type="number" min={1} max={64} value={clampForDisplay(rt.max_active_children, 1, 64)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_active_children', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 64) })} />
+        <DesignInput id="max-active" className="input settings__number" type="number" min={1} max={64} value={clampForDisplay(rt.max_active_children, 1, 64)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_active_children', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 64) })} />
       </div>
       <h2 className="settings__heading">Runtime policy</h2>
-      <div className="card settings__card">
+      <DesignCard className="card settings__card">
         <Toggle id="cb" label="Circuit breaker" hint="Watches every agent for repeated work and redirects it; escalates after three activations." on={pending.circuitBreakerEnabled} onChange={(v) => onChange({ kind: 'circuitBreaker', value: v })} />
         <Toggle id="outside" label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
         <Toggle id="improvement" label="Improvement loop" hint="One collection pass follows each finished run. Stored; the pass itself is not built in this version." on={rt.improvement_collector_enabled} onChange={(v) => onChange({ kind: 'runtime', key: 'improvement_collector_enabled', value: v })} />
@@ -252,35 +253,35 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
           <span>Permission mode</span>
           <div className="seg" role="radiogroup" aria-label="Permission mode, strictest first">
             {PERMISSION_PRESETS.map((m) => (
-              <button key={m} type="button" role="radio" aria-checked={rt.permission_mode === m} className={`seg-opt${rt.permission_mode === m ? ' is-active' : ''}`} onClick={() => { if (m === 'autonomous') setConfirm('autonomous'); else onChange({ kind: 'runtime', key: 'permission_mode', value: m }); }}>{m}</button>
+              <DesignButton key={m} type="button" role="radio" aria-checked={rt.permission_mode === m} className={`seg-opt${rt.permission_mode === m ? ' is-active' : ''}`} onClick={() => { if (m === 'autonomous') setConfirm('autonomous'); else onChange({ kind: 'runtime', key: 'permission_mode', value: m }); }}>{m}</DesignButton>
             ))}
           </div>
           <span className="text-secondary settings__hint">The preset a run starts from. Deferred to Save; it never reaches a live run — the composer's control does that.</span>
         </div>
         <div className="settings__action">
           <label htmlFor="threshold">Compression threshold</label>
-          <input id="threshold" className="input settings__number" type="number" min={50} max={95} value={clampForDisplay(pending.compressorThresholdPercentage, 50, 95)} onChange={(e) => onChange({ kind: 'compressorThreshold', value: clampForDisplay(Number(e.currentTarget.value) || 50, 50, 95) })} /><span className="text-secondary">%</span>
+          <DesignInput id="threshold" className="input settings__number" type="number" min={50} max={95} value={clampForDisplay(pending.compressorThresholdPercentage, 50, 95)} onChange={(e) => onChange({ kind: 'compressorThreshold', value: clampForDisplay(Number(e.currentTarget.value) || 50, 50, 95) })} /><span className="text-secondary">%</span>
           <label htmlFor="iterations">Iteration cap</label>
-          <input id="iterations" className="input settings__number" type="number" min={1} max={500} value={clampForDisplay(rt.max_iterations, 1, 500)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_iterations', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 500) })} /><span className="text-secondary">iterations</span>
+          <DesignInput id="iterations" className="input settings__number" type="number" min={1} max={500} value={clampForDisplay(rt.max_iterations, 1, 500)} onChange={(e) => onChange({ kind: 'runtime', key: 'max_iterations', value: clampForDisplay(Number(e.currentTarget.value) || 1, 1, 500) })} /><span className="text-secondary">iterations</span>
         </div>
         <p className="text-tertiary settings__hint">Secret redaction is always active; there is no way to disable it from this screen.</p>
-      </div>
+      </DesignCard>
       <h2 className="settings__heading">Security policy</h2>
       <p className="text-secondary">No confinement backend exists on this platform, so the six confinement and egress values are read from the file and not edited here.</p>
       <h2 className="settings__heading">Advanced runtime</h2>
-      <div className="card settings__card">
+      <DesignCard className="card settings__card">
         <div className="settings__action">
           <label htmlFor="advanced-scope">Scope</label>
-          <select id="advanced-scope" className="input select settings__select" aria-label="Runtime scope" value={advancedScope} onChange={(e) => setAdvancedScope(e.currentTarget.value as 'workspace' | 'global')}>
+          <DesignSelect id="advanced-scope" className="input select settings__select" aria-label="Runtime scope" value={advancedScope} onChange={(e) => setAdvancedScope(e.currentTarget.value as 'workspace' | 'global')}>
             <option value="workspace">Workspace</option>
             <option value="global">Global</option>
-          </select>
+          </DesignSelect>
           <span className="text-secondary settings__hint">The raw runtime mapping as the {advancedScope} file states it; a key absent here is stated elsewhere or inherited from the built-in defaults.</span>
         </div>
         <pre className="mono settings__raw" aria-label={`Raw runtime mapping of the ${advancedScope} file`}>{raw ? JSON.stringify(raw, null, 2) : '(no runtime: mapping in this file)'}</pre>
         <Toggle id="diagnostics" label="Memory diagnostics" hint="Written to the selected scope's file immediately and reloaded; outside Save and Discard — Discard does not undo it." on={snapshot.runtime.memory_diagnostics_enabled} disabled={!props.serviceAvailable} onChange={(v) => { void writeDiagnostics(v); }} />
         {advancedMessage && <div className="text-secondary settings__hint" role="status">{advancedMessage}</div>}
-      </div>
+      </DesignCard>
       {confirm === 'outside' && <Confirm title="Allow access beyond the workspace?" body="Agents will then be able to read and change files outside the chosen workspace. This belongs on only where a task genuinely needs it." onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: true }); }} />}
       {confirm === 'autonomous' && <Confirm title="Start runs in autonomous mode?" body="Mutating tools inside the workspace will be invoked without asking, except for the destructive commands the starter rules always deny." onCancel={() => setConfirm(null)} onYes={() => { setConfirm(null); onChange({ kind: 'runtime', key: 'permission_mode', value: 'autonomous' }); }} />}
     </div>
@@ -297,7 +298,7 @@ export function AgentPopOutToggle({ on, onChange }: { on: boolean; onChange: (va
   return (
     <div className="settings__action" data-testid="agent-pop-out">
       <span id="agent-pop-out-label">Agent pop-out</span>
-      <button type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby="agent-pop-out-label" aria-checked={on} aria-description={`Agent pop-out is ${on ? 'enabled' : 'disabled'}.`} data-testid="agent-pop-out-toggle" onClick={() => onChange(!on)} />
+      <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-labelledby="agent-pop-out-label" aria-checked={on} aria-description={`Agent pop-out is ${on ? 'enabled' : 'disabled'}.`} data-testid="agent-pop-out-toggle" onClick={() => onChange(!on)} />
       <span className="text-secondary settings__hint">On, clicking an agent opens or raises its persona window; off, a click selects it in the inspector only. Explicit Pop out always opens the window.</span>
     </div>
   );
@@ -310,9 +311,9 @@ export function UnsavedGuardDialog({ onSave, onDiscard, onCancel }: { onSave: ()
         <h2 id="unsaved-title" className="dialog-title">Save settings before leaving?</h2>
         <p className="dialog-body">There are unsaved settings changes. Save them, discard them, or stay on this screen.</p>
         <div className="dialog-actions">
-          <button type="button" className="btn btn-primary" autoFocus onClick={onSave}>Save</button>
-          <button type="button" className="btn btn-secondary" onClick={onDiscard}>Discard</button>
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <DesignButton type="button" className="btn btn-primary" autoFocus onClick={onSave}>Save</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary" onClick={onDiscard}>Discard</DesignButton>
+          <DesignButton type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</DesignButton>
         </div>
       </div>
     </div>

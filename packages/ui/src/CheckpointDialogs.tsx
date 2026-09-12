@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import type { CheckpointListPayload, CheckpointPreviewPayload } from '@rotaris/contracts';
+import { Button as DesignButton, Input as DesignInput, TextArea as DesignTextArea } from './design-system/index.js';
 
 /**
  * ADR-0039's desktop flow, the dialogs (REQ-GIT-096..100): the window-modal indeterminate progress dialog with no
@@ -80,19 +81,19 @@ export function RestoreConfirmDialog({ preview, onConfirm, onCancel }: RestoreCo
       <div className="dialog checkpoint-dialog checkpoint-dialog--confirm" role="alertdialog" aria-modal="true" aria-labelledby={titleId} data-testid="checkpoint-confirm" data-dirty={dirty ? '1' : '0'}>
         <h2 id={titleId} className="dialog-title">Restore checkpoint {preview.sequence}?</h2>
         <p className="dialog-body checkpoint-dialog__summary" data-testid="checkpoint-summary">{preview.summary}</p>
-        <textarea className="input mono checkpoint-dialog__preview" readOnly aria-label="Restore preview" data-testid="checkpoint-preview-text" value={preview.text} rows={Math.min(14, Math.max(4, preview.text.split('\n').length + 1))} />
+        <DesignTextArea className="input mono checkpoint-dialog__preview" readOnly aria-label="Restore preview" data-testid="checkpoint-preview-text" value={preview.text} rows={Math.min(14, Math.max(4, preview.text.split('\n').length + 1))} />
         {dirty && (
           <div className="checkpoint-dialog__warning" role="alert" data-testid="checkpoint-warning">
             <p className="checkpoint-dialog__warning-text">{preview.blockedReason}</p>
             <label className="checkpoint-dialog__check" htmlFor={checkId}>
-              <input id={checkId} type="checkbox" data-testid="checkpoint-overwrite" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
+              <DesignInput id={checkId} type="checkbox" data-testid="checkpoint-overwrite" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
               <span>Overwrite {preview.dirty.length} uncommitted change(s)</span>
             </label>
           </div>
         )}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" autoFocus data-testid="checkpoint-cancel" onClick={onCancel}>Cancel</button>
-          <button type="button" className="btn btn-danger" data-testid="checkpoint-restore-confirm" disabled={!canConfirm} title={canConfirm ? undefined : OVERWRITE_CONSENT_REASON} aria-disabled={!canConfirm} onClick={() => { if (canConfirm) onConfirm(); }}>Restore checkpoint {preview.sequence}</button>
+          <DesignButton type="button" className="btn btn-secondary" autoFocus data-testid="checkpoint-cancel" onClick={onCancel}>Cancel</DesignButton>
+          <DesignButton type="button" className="btn btn-danger" data-testid="checkpoint-restore-confirm" disabled={!canConfirm} title={canConfirm ? undefined : OVERWRITE_CONSENT_REASON} aria-disabled={!canConfirm} onClick={() => { if (canConfirm) onConfirm(); }}>Restore checkpoint {preview.sequence}</DesignButton>
         </div>
         {!canConfirm && <p className="checkpoint-dialog__reason text-secondary" data-testid="checkpoint-consent-reason">{OVERWRITE_CONSENT_REASON}</p>}
       </div>

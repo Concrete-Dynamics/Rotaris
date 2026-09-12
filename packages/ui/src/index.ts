@@ -53,3 +53,29 @@ export * from './requirements/index.js';
 export * from './requirements/panes/index.js'; // Part AP
 // Part AO
 export * from './slash/prompts.js';
+// REQ-SHELL-128..160: shared adopted-language primitives use explicit aliases
+// where the behavior-rich Shell component already owns the inventory name.
+export {
+  Button as DesignButton,
+  Input as DesignInput,
+  TextArea as DesignTextArea,
+  Select as DesignSelect,
+  Table as DesignTable,
+  Card as DesignCard,
+  StatusDot as DesignStatusDot,
+  Tag as DesignTag,
+  ToggleSwitch,
+  SegmentedControl,
+  Sparkline,
+  MeterBar,
+  Dialog as DesignDialog,
+  Tooltip,
+  Acknowledgement as DesignAcknowledgement,
+  Spinner,
+  Tabs as DesignTabs,
+  PageHeader as DesignPageHeader,
+  TableCard as DesignTableCard,
+  EmptyState as DesignEmptyState,
+  LogPanel as DesignLogPanel,
+} from './design-system/index.js';
+export type { UiLayoutContract, UiLayoutRelation } from './design-system/index.js';

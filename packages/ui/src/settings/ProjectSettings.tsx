@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ChangeEntry, Finding, ParseError, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput } from '../design-system/index.js';
 
 /**
  * Part AJ2 — the Project category's traceability card: the four toolchain operations of spec 08 §Toolchain
@@ -192,11 +193,11 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
   };
 
   return (
-    <div className="card settings__card" data-traceability-card data-traceability-state={inFlight ?? 'idle'}>
+    <DesignCard className="card settings__card" data-traceability-card data-traceability-state={inFlight ?? 'idle'}>
       <div className="providers-card__head">
         <div className="card-kicker">Requirement traceability</div>
         <div className="providers-card__actions">
-          {inFlight !== null ? <button type="button" className="btn btn-secondary btn-compact" onClick={() => { void stop(); }} data-action="traceability-stop">Stop</button> : null}
+          {inFlight !== null ? <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void stop(); }} data-action="traceability-stop">Stop</DesignButton> : null}
         </div>
       </div>
       <p className="text-secondary">
@@ -208,11 +209,11 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
       <div className="settings__actions">
         {OPERATIONS.map((operation) => (
           <div key={operation} className="settings__action">
-            <button type="button" className={`btn ${operation === 'check' ? 'btn-primary' : 'btn-secondary'} btn-compact`} disabled={unavailable !== null} title={unavailable ?? undefined} onClick={() => { void run(operation); }} data-action={`traceability-${operation}`}>
+            <DesignButton type="button" className={`btn ${operation === 'check' ? 'btn-primary' : 'btn-secondary'} btn-compact`} disabled={unavailable !== null} title={unavailable ?? undefined} onClick={() => { void run(operation); }} data-action={`traceability-${operation}`}>
               {inFlight === operation ? `${OPERATION_LABEL[operation]}…` : OPERATION_LABEL[operation]}
-            </button>
+            </DesignButton>
             {operation === 'compare' ? (
-              <input className="input settings__number" aria-label="Base revision" placeholder="HEAD" value={base} disabled={unavailable !== null} onChange={(event) => setBase(event.currentTarget.value)} data-traceability-base />
+              <DesignInput className="input settings__number" aria-label="Base revision" placeholder="HEAD" value={base} disabled={unavailable !== null} onChange={(event) => setBase(event.currentTarget.value)} data-traceability-base />
             ) : null}
             <span className="text-secondary settings__hint">{OPERATION_HINT[operation]}{operation === 'compare' ? ' The base defaults to the revision the working tree sits on.' : ''}{unavailable === null ? '' : ` ${unavailable}`}</span>
           </div>
@@ -236,6 +237,6 @@ export function TraceabilitySettings({ workspace, onOperate, onCancel }: Traceab
         Progress by phase reaches the workspace service's log, not this card. The check's findings also reach the requirements view's cards
         through the board's next reading; the view's own control for the check is not built in this version.
       </p>
-    </div>
+    </DesignCard>
   );
 }

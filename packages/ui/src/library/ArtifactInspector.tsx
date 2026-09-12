@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '../ConfirmDialog.js';
 import { Markdown } from '../markdown/Markdown.js';
+import { Button as DesignButton, TextArea as DesignTextArea } from '../design-system/index.js';
 
 /**
  * REQ-LIBRARY-131..135 — the artifact inspector and editor.
@@ -103,24 +104,24 @@ export function ArtifactInspector({ id, raised, onLoad, onSave, onClose, onOpenL
       <header className="artifact-inspector__head">
         <h2 className="artifact-inspector__title">{artifact?.title ?? id}</h2>
         <span className="artifact-inspector__meta mono" data-testid="artifact-inspector-meta">{artifact ? metadataLine(artifact) : id}</span>
-        <button type="button" className="btn btn-ghost btn-compact artifact-inspector__close" aria-label="Close the artifact inspector" onClick={requestClose}>Close</button>
+        <DesignButton type="button" className="btn btn-ghost btn-compact artifact-inspector__close" aria-label="Close the artifact inspector" onClick={requestClose}>Close</DesignButton>
       </header>
       <div className="artifact-inspector__tabs" role="tablist" aria-label="Artifact body">
-        <button type="button" role="tab" aria-selected={tab === 'preview'} className={`tab${tab === 'preview' ? ' is-active' : ''}`} data-testid="artifact-tab-preview" onClick={() => setTab('preview')}>Preview</button>
-        <button type="button" role="tab" aria-selected={tab === 'markdown'} className={`tab${tab === 'markdown' ? ' is-active' : ''}`} data-testid="artifact-tab-markdown" onClick={() => setTab('markdown')}>Markdown</button>
+        <DesignButton type="button" role="tab" aria-selected={tab === 'preview'} className={`tab${tab === 'preview' ? ' is-active' : ''}`} data-testid="artifact-tab-preview" onClick={() => setTab('preview')}>Preview</DesignButton>
+        <DesignButton type="button" role="tab" aria-selected={tab === 'markdown'} className={`tab${tab === 'markdown' ? ' is-active' : ''}`} data-testid="artifact-tab-markdown" onClick={() => setTab('markdown')}>Markdown</DesignButton>
       </div>
       <div className="artifact-inspector__body">
         {tab === 'preview'
           // REQ-LIBRARY-132: the preview re-renders on every keystroke — it reads `text`, not the saved body.
           ? <Markdown source={text} onOpenLink={onOpenLink} className="artifact-inspector__preview" testId="artifact-preview" />
           : (
-            <textarea className="input artifact-inspector__editor mono" aria-label="Artifact Markdown" data-testid="artifact-editor"
+            <DesignTextArea className="input artifact-inspector__editor mono" aria-label="Artifact Markdown" data-testid="artifact-editor"
               value={text} readOnly={readOnly} spellCheck={false} onChange={(e) => setText(e.currentTarget.value)} />
           )}
       </div>
       <footer className="artifact-inspector__foot">
         <span className="artifact-inspector__status" role="status" data-testid="artifact-inspector-status">{status}</span>
-        <button type="button" className="btn btn-primary" data-testid="artifact-save" data-enabled={readOnly || busy ? 'no' : 'yes'} disabled={readOnly || busy} onClick={() => { void save(); }}>{busy ? 'Saving…' : 'Save'}</button>
+        <DesignButton type="button" className="btn btn-primary" data-testid="artifact-save" data-enabled={readOnly || busy ? 'no' : 'yes'} disabled={readOnly || busy} onClick={() => { void save(); }}>{busy ? 'Saving…' : 'Save'}</DesignButton>
       </footer>
       {confirming && (
         // REQ-LIBRARY-135: the wording is the requirement's; Cancel is the default and keeps the dialog open.

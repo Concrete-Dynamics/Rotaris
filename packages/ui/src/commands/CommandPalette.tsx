@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { Kbd } from './Kbd.js';
 import { activateCommand, COMMANDS, filterCommands, type Command, type CommandContext, type KeyboardPlatform } from './registry.js';
 import { useApplicationModal } from './useApplicationModal.js';
+import { Input as DesignInput } from '../design-system/index.js';
 
 /**
  * REQ-SHELL-051/052/053 — the command palette: an application-modal dialog titled "Rotaris commands", 560×420 (the
@@ -72,7 +73,7 @@ function PaletteDialog({ ctx, onClose, platform, commands }: { ctx: CommandConte
       <div ref={dialog} className="cmdk cmdk--palette" role="dialog" aria-modal="true" aria-label="Rotaris command palette" aria-describedby={headingId} data-testid="command-palette" data-title="Rotaris commands" onKeyDown={onKeyDown}>
         <div className="cmdk-head">
           <span className="cmdk-title mono" data-testid="command-palette-title">Rotaris commands</span>
-          <input
+          <DesignInput
             ref={input}
             className="cmdk-input"
             type="text"

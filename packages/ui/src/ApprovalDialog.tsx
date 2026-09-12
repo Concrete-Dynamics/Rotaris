@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ApprovalOption, ApprovalPayload } from '@rotaris/contracts';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * REQ-TOOLS-063 — the desktop approval prompt, painted inside its own modal window (ADR-0019's
@@ -78,9 +79,9 @@ export function ApprovalDialog({ payload, othersWaiting, onAnswer }: ApprovalDia
         {othersWaiting > 0 && <p className="approval__queue text-secondary">{othersWaiting} other request{othersWaiting === 1 ? '' : 's'} waiting.</p>}
         {undeliverable && <p className="approval__status" role="status" data-testid="approval-failure">{APPROVAL_DELIVERY_FAILED}</p>}
         <div className="dialog-actions approval__actions">
-          <button ref={deny} type="button" className="btn btn-danger" disabled={disabled} onClick={() => { void answer('deny'); }}>Deny</button>
-          <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => { void answer('session'); }}>Approve for this session</button>
-          <button type="button" className="btn btn-primary" disabled={disabled} onClick={() => { void answer('once'); }}>Approve once</button>
+          <DesignButton ref={deny} type="button" className="btn btn-danger" disabled={disabled} onClick={() => { void answer('deny'); }}>Deny</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary" disabled={disabled} onClick={() => { void answer('session'); }}>Approve for this session</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" disabled={disabled} onClick={() => { void answer('once'); }}>Approve once</DesignButton>
         </div>
       </div>
     </div>

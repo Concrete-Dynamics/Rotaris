@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { derivedWorktreeDirectory, validateBranchName } from '@rotaris/contracts';
+import { Button as DesignButton, Input as DesignInput } from './design-system/index.js';
 
 /**
  * REQ-GIT-115/116: the "New worktree" dialog. The Directory field auto-derives from the branch as
@@ -71,11 +72,11 @@ export function WorktreeDialog({ workspaceRoot, existingBranches, existingPaths,
         <p className="dialog-body">Create an isolated branch directory for a separate Rotaris session.</p>
         <label className="field">
           <span className="field-label">Branch</span>
-          <input ref={branchRef} className="input mono" data-testid="worktree-branch" placeholder="feature/short-name" value={branch} disabled={busy} onChange={(event) => setBranch(event.currentTarget.value)} />
+          <DesignInput ref={branchRef} className="input mono" data-testid="worktree-branch" placeholder="feature/short-name" value={branch} disabled={busy} onChange={(event) => setBranch(event.currentTarget.value)} />
         </label>
         <label className="field">
           <span className="field-label">Directory</span>
-          <input className="input mono" data-testid="worktree-directory" value={effectiveDirectory} disabled={busy} onChange={(event) => { setEdited(true); setDirectory(event.currentTarget.value); }} />
+          <DesignInput className="input mono" data-testid="worktree-directory" value={effectiveDirectory} disabled={busy} onChange={(event) => { setEdited(true); setDirectory(event.currentTarget.value); }} />
         </label>
         <p className={message ? 'worktree-dialog__message' : 'worktree-dialog__message worktree-dialog__message--ok'} role="status" data-testid="worktree-message">{message ?? `The worktree will be created beside the workspace, not under .rotaris/.`}</p>
         {failure !== null && (
@@ -85,8 +86,8 @@ export function WorktreeDialog({ workspaceRoot, existingBranches, existingPaths,
           </div>
         )}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={message !== null || busy} data-testid="worktree-create">{busy ? 'Creating…' : 'Create'}</button>
+          <DesignButton type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>Cancel</DesignButton>
+          <DesignButton type="submit" className="btn btn-primary" disabled={message !== null || busy} data-testid="worktree-create">{busy ? 'Creating…' : 'Create'}</DesignButton>
         </div>
       </form>
     </div>

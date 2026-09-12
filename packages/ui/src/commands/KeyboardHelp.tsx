@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { Kbd } from './Kbd.js';
 import { COMMANDS, shortcutCommands, type Command, type KeyboardPlatform } from './registry.js';
 import { useApplicationModal } from './useApplicationModal.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * REQ-SHELL-054 — the keyboard-help dialog (design gap G13; `Kbd` is its primitive): an informational,
@@ -64,7 +65,7 @@ function HelpDialog({ onClose, platform, commands }: { onClose: () => void; plat
         </ul>
         <p className="dialog-body keyboard-help__escape" data-testid="keyboard-help-escape">{ESCAPE_HELP_LINE}</p>
         <div className="dialog-actions">
-          <button ref={closeButton} type="button" className="btn btn-primary" onClick={close}>Close</button>
+          <DesignButton ref={closeButton} type="button" className="btn btn-primary" onClick={close}>Close</DesignButton>
         </div>
       </div>
     </div>

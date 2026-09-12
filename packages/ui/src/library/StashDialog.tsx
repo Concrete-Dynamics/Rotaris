@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * REQ-LIBRARY-141 / REQ-CHAT-043 — the prompt stash dialog, reached from the transcript toolbar's
@@ -64,16 +65,16 @@ export function StashDialog({ stash, onTake, onClose }: StashDialogProps) {
           <ul className="library-list stash-dialog__list" aria-label="Stashed prompts" data-testid="stash-dialog-list">
             {stash.map((text, i) => (
               <li key={i}>
-                <button type="button" className={`library-list__row${index === i ? ' is-selected' : ''}`} aria-selected={index === i} data-index={i}
-                  data-testid="stash-dialog-row" title={text} onClick={() => setSelected(i)} onDoubleClick={() => { setSelected(i); onTake(i, false); onClose(); }}>{text}</button>
+                <DesignButton type="button" className={`library-list__row${index === i ? ' is-selected' : ''}`} aria-selected={index === i} data-index={i}
+                  data-testid="stash-dialog-row" title={text} onClick={() => setSelected(i)} onDoubleClick={() => { setSelected(i); onTake(i, false); onClose(); }}>{text}</DesignButton>
               </li>
             ))}
           </ul>
         )}
         <div className="dialog-actions">
-          <button ref={closeControl} type="button" className="btn btn-ghost" data-testid="stash-dialog-close" onClick={onClose}>Close</button>
-          <button type="button" className="btn btn-secondary" disabled={empty} data-testid="stash-dialog-apply" onClick={() => take(false)}>Apply</button>
-          <button ref={primary} type="button" className="btn btn-primary" disabled={empty} data-testid="stash-dialog-pop" onClick={() => take(true)}>Pop</button>
+          <DesignButton ref={closeControl} type="button" className="btn btn-ghost" data-testid="stash-dialog-close" onClick={onClose}>Close</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary" disabled={empty} data-testid="stash-dialog-apply" onClick={() => take(false)}>Apply</DesignButton>
+          <DesignButton ref={primary} type="button" className="btn btn-primary" disabled={empty} data-testid="stash-dialog-pop" onClick={() => take(true)}>Pop</DesignButton>
         </div>
       </div>
     </div>

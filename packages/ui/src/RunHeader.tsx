@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { SessionRecord } from '@rotaris/contracts';
 import { REASONING_LEVELS, RUN_STATE_TAGS, runHeaderControlReason, runStateLabel, runTimingLabel, runTimingSeconds, type RunState } from './composer.js';
 import { markMotionStart } from './motion.js';
-import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js'; // Part AO
+import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js';
+import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js'; // Part AO
 
 /**
  * Part AN — the run header, extracted from `WorkspaceView.tsx` as a pure move of Part AB's markup so that Part AO can
@@ -76,9 +77,9 @@ function CompressControl({ runState, runActive }: { runState: RunState; runActiv
   };
   return (
     <>
-      <button type="button" className="btn btn-ghost btn-compact run-header__compress" data-testid="run-compress" data-pending={pending ? '1' : '0'}
+      <DesignButton type="button" className="btn btn-ghost btn-compact run-header__compress" data-testid="run-compress" data-pending={pending ? '1' : '0'}
         disabled={disabled} aria-disabled={disabled} aria-describedby="run-compress-reason"
-        title={reason ?? COMPRESS_DESCRIPTION} onClick={activate}>{pending ? COMPRESSING_LABEL : COMPRESS_LABEL}</button>
+        title={reason ?? COMPRESS_DESCRIPTION} onClick={activate}>{pending ? COMPRESSING_LABEL : COMPRESS_LABEL}</DesignButton>
       <span className="visually-hidden" id="run-compress-reason">{reason ?? COMPRESS_DESCRIPTION}</span>
     </>
   );
@@ -108,20 +109,20 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
         <div className="run-controls" aria-label="Active run model and reasoning">
           <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>
           {onSetModel && models.length > 0 && (
-            <select className="input select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+            <DesignSelect className="input select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
               title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
               onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
               <option value="">Switch model…</option>
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            </DesignSelect>
           )}
           {onSetReasoning && (
-            <select className="input select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+            <DesignSelect className="input select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
               title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration.'} aria-describedby="run-controls-reason"
               onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
               <option value="">Switch reasoning…</option>
               {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
+            </DesignSelect>
           )}
         </div>
       )}

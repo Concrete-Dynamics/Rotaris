@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { LIBRARY_TABS } from '@rotaris/contracts';
 import { useShellState } from '../shell-state.js';
+import { Button as DesignButton, Input as DesignInput, PageHeader as DesignPageHeader } from '../design-system/index.js';
 
 /**
  * REQ-SHELL-023's sixth primary view, and Part X's half of it: the page title, the one search field and the
@@ -71,12 +72,12 @@ export function LibraryView({ query, onQuery, prompts, artifacts, proposals }: L
 
   return (
     <div className="library" data-testid="library" data-tab={active}>
-      <header className="library__header page-header">
+      <DesignPageHeader className="library__header page-header">
         <h1 className="display library__title">{LIBRARY_TITLE}</h1>
         <span className="library__spacer" />
         <div className="field library__search">
           <label className="visually-hidden" htmlFor={searchId}>{LIBRARY_SEARCH_NAME}</label>
-          <input
+          <DesignInput
             id={searchId}
             className="input"
             type="search"
@@ -87,10 +88,10 @@ export function LibraryView({ query, onQuery, prompts, artifacts, proposals }: L
             onChange={(event) => onQuery(event.currentTarget.value)}
           />
         </div>
-      </header>
+      </DesignPageHeader>
       <div className="tabs library__tabs" role="tablist" aria-label="Library sections">
         {LIBRARY_TABS.map((tab) => (
-          <button
+          <DesignButton
             key={tab}
             type="button"
             role="tab"
@@ -99,7 +100,7 @@ export function LibraryView({ query, onQuery, prompts, artifacts, proposals }: L
             data-tab={tab}
             data-testid="library-tab"
             onClick={() => choose(tab)}
-          >{LIBRARY_TAB_LABELS[tab]}</button>
+          >{LIBRARY_TAB_LABELS[tab]}</DesignButton>
         ))}
       </div>
       <div className="library__body" data-testid="library-body">{bodies[active]}</div>

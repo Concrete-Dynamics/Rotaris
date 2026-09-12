@@ -11,7 +11,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/check-line-endings.mjs && node tools/check-theme-colours.mjs && eslint .",
+    "lint": "node tools/check-line-endings.mjs && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && eslint .",
     "mockup": "node tools/mockup.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -60,6 +60,8 @@
     "layout-proof": "node apps/desktop/scripts/layout-proof.mjs",
     "workspace-proof": "node apps/desktop/scripts/workspace-proof.mjs",
     "ui-audit": "node apps/desktop/scripts/ui-audit.mjs",
+    "ui-review": "node apps/desktop/scripts/ui-review.mjs",
+    "migrate:ui-primitives": "node tools/migrate-ui-primitives.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",

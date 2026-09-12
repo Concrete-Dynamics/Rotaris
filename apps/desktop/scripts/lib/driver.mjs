@@ -110,7 +110,7 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
  * `detached` keeps the app alive after the caller exits — what the CLI's `start` needs and a proof never wants.
  * The log is a file rather than a pipe because the app outlives the process that started it.
  */
-export async function startApp({ root, workspace, extra = {}, detached = false, dialect = 'scripted', timeoutMs = 60_000 }) {
+export async function startApp({ root, workspace, extra = {}, electronArgs = [], detached = false, dialect = 'scripted', timeoutMs = 60_000 }) {
   mkdirSync(root, { recursive: true });
   const endpointFile = join(root, 'endpoint.json');
   const logFile = join(root, 'app.log');
@@ -121,7 +121,7 @@ export async function startApp({ root, workspace, extra = {}, detached = false, 
   mkdirSync(preferences, { recursive: true });
 
   const out = openSync(logFile, 'a');
-  const child = spawn(electron, [mainEntry, ...(workspace ? [workspace] : [])], {
+  const child = spawn(electron, [mainEntry, ...electronArgs, ...(workspace ? [workspace] : [])], {
     cwd: appDirectory,
     detached,
     windowsHide: false,

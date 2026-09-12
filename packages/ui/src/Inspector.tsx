@@ -4,6 +4,7 @@ import { cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesO
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
+import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
 
 /**
  * REQ-MONITOR-050..067 (Part R): the per-agent inspector. One tab per configured persona (050); the selected
@@ -85,18 +86,18 @@ export function Inspector(props: InspectorProps) {
       <div className="inspector__head">
         <span className="card-kicker">Inspector</span>
         <span className={`tag ${pinned ? 'tag-accent' : 'tag-neutral'} inspector__tag`} data-testid="inspector-tag">{shown ? (pinned ? PINNED_TAG : FOLLOWING_TAG) : 'No agent'}</span>
-        {pinned && <button type="button" className="btn btn-ghost btn-compact" onClick={() => onSelect(null)} title="Drop the selection; the panel returns to tracking whichever agent wrote last.">Unpin</button>}
-        {onCloseDrawer && <button type="button" className="btn btn-ghost btn-compact" aria-label="Close the inspector" onClick={onCloseDrawer}>×</button>}
+        {pinned && <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={() => onSelect(null)} title="Drop the selection; the panel returns to tracking whichever agent wrote last.">Unpin</DesignButton>}
+        {onCloseDrawer && <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Close the inspector" onClick={onCloseDrawer}>×</DesignButton>}
       </div>
       <div className="tabs inspector__tabs" role="tablist" aria-label="Personas">
         {personas.map((p) => (
-          <button key={p.role} type="button" role="tab" className={`tab${activeTab === p.role ? ' is-active' : ''}`} aria-selected={activeTab === p.role} data-persona={p.role} onClick={() => setTab(p.role)}>{p.role}</button>
+          <DesignButton key={p.role} type="button" role="tab" className={`tab${activeTab === p.role ? ' is-active' : ''}`} aria-selected={activeTab === p.role} data-persona={p.role} onClick={() => setTab(p.role)}>{p.role}</DesignButton>
         ))}
       </div>
       {activeTab && (
         <div className="inspector__instances" aria-label={`${activeTab} instances`}>
           {instances.length === 0 ? <span className="text-secondary">No instance of {activeTab} in this run.</span> : instances.map((a) => (
-            <button key={a.id} type="button" className={`btn btn-ghost btn-compact inspector__instance${shown?.id === a.id ? ' is-active' : ''}`} data-agent-id={a.id} aria-pressed={shown?.id === a.id} onClick={() => onSelect(a.id)}>{a.name}</button>
+            <DesignButton key={a.id} type="button" className={`btn btn-ghost btn-compact inspector__instance${shown?.id === a.id ? ' is-active' : ''}`} data-agent-id={a.id} aria-pressed={shown?.id === a.id} onClick={() => onSelect(a.id)}>{a.name}</DesignButton>
           ))}
         </div>
       )}
@@ -117,14 +118,14 @@ export function Inspector(props: InspectorProps) {
           </div>
           <div className="inspector__controls">
             <label className="field-label" htmlFor="inspector-model">Model</label>
-            <select id="inspector-model" className="input select" aria-label="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model" onChange={(e) => { const v = e.currentTarget.value; if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }}>
+            <DesignSelect id="inspector-model" className="input select" aria-label="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model" onChange={(e) => { const v = e.currentTarget.value; if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }}>
               {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
               {withheldModels.map((w) => <option key={`withheld:${w.model}`} value={w.model} disabled>{w.model} — withheld: {w.reason}</option>)}
-            </select>
+            </DesignSelect>
             <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
-            <select id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>
+            <DesignSelect id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>
               {['low', 'medium', 'high'].map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
+            </DesignSelect>
             <span id="inspector-controls-note" className="text-secondary inspector__note" data-testid="inspector-controls-note">{writable ? NEXT_ITERATION_NOTE : PER_PERSONA_NOTE}</span>
           </div>
           <div className="inspector__scope text-secondary" data-testid="inspector-scope">
@@ -150,9 +151,9 @@ export function Inspector(props: InspectorProps) {
           <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>
           {error && <div className="composer__error" role="alert">{error}</div>}
           <div className="inspector__actions">
-            <button type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</button>
-            <button type="button" className="btn btn-danger btn-compact" disabled={!enablement.cancel || !runActive} title={enablement.cancel && runActive ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued.'} onClick={() => onCancel(shown, cascade)}>Cancel</button>
-            <button type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</button>
+            <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</DesignButton>
+            <DesignButton type="button" className="btn btn-danger btn-compact" disabled={!enablement.cancel || !runActive} title={enablement.cancel && runActive ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued.'} onClick={() => onCancel(shown, cascade)}>Cancel</DesignButton>
+            <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</DesignButton>
           </div>
         </div>
       ) : (
@@ -161,9 +162,9 @@ export function Inspector(props: InspectorProps) {
           <div className="text-secondary">No agent is selected, and no transcript row names one.</div>
           <div className="inspector__ring"><ContextRing used={0} limit={1} thresholdPercent={compressionThresholdPercent} label="No agent's context window" /></div>
           <div className="inspector__actions">
-            <button type="button" className="btn btn-secondary btn-compact" disabled>Steer</button>
-            <button type="button" className="btn btn-danger btn-compact" disabled>Cancel</button>
-            <button type="button" className="btn btn-secondary btn-compact" disabled>Pop out</button>
+            <DesignButton type="button" className="btn btn-secondary btn-compact" disabled>Steer</DesignButton>
+            <DesignButton type="button" className="btn btn-danger btn-compact" disabled>Cancel</DesignButton>
+            <DesignButton type="button" className="btn btn-secondary btn-compact" disabled>Pop out</DesignButton>
           </div>
         </div>
       )}

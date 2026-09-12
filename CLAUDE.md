@@ -115,6 +115,10 @@ The same pair binds every change that **draws, redraws or restyles a surface**
 `docs/spec/` (`REQ-SHELL-023` governs). After drawing, match it: tokens alone are not compliance,
 and a plausible invention is not a third option where the design material decides.
 
+The repository operationalizes this pair through `.agents/skills/build-ui`, `.agents/skills/debug-ui`, and
+`.agents/skills/review-ui`. The first two join implementation to built-app evidence; the third is a report-only
+critic over screenshots, geometry, computed styles and deterministic findings, capped at three iterations.
+
 ## Traceability
 
 Implementation work cites the requirement IDs it satisfies. Commits that implement behavior

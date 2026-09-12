@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent as
 import type { PaneLayout, PromptList } from '@rotaris/contracts';
 import { matchesQuery } from './LibraryView.js';
 import type { LibraryTabProps } from './types.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState } from '../design-system/index.js';
 
 /**
  * REQ-LIBRARY-106's Prompts tab: two side-by-side cards in a drag-resizable split whose position persists across
@@ -56,12 +57,12 @@ function EntryList({ rows, listName, emptyLabel, selected, onSelect, onUse, test
   onUse: (index: number) => void;
   testId: string;
 }) {
-  if (rows.length === 0) return <div className="empty-state library__empty" data-testid={`${testId}-empty`}><span className="empty-state-hint">{emptyLabel}</span></div>;
+  if (rows.length === 0) return <DesignEmptyState className="empty-state library__empty" data-testid={`${testId}-empty`}><span className="empty-state-hint">{emptyLabel}</span></DesignEmptyState>;
   return (
     <ul className="library-list" aria-label={listName} data-testid={testId}>
       {rows.map((row) => (
         <li key={row.index}>
-          <button
+          <DesignButton
             type="button"
             className={`library-list__row${selected === row.index ? ' is-selected' : ''}`}
             aria-selected={selected === row.index}
@@ -71,7 +72,7 @@ function EntryList({ rows, listName, emptyLabel, selected, onSelect, onUse, test
             onClick={() => onSelect(row.index)}
             // REQ-LIBRARY-107: a double-click copies and keeps, on both lists.
             onDoubleClick={() => { onSelect(row.index); onUse(row.index); }}
-          >{row.text}</button>
+          >{row.text}</DesignButton>
         </li>
       ))}
     </ul>
@@ -130,8 +131,8 @@ export function PromptsTab({ query, history, stash, layout, onLayout, onUse }: P
         <EntryList rows={stashRows} listName="Stashed prompts" emptyLabel={STASH_EMPTY} selected={stashRow} testId="library-stash"
           onSelect={setStashSelected} onUse={(index) => onUse('stash', index, false)} />
         <div className="library-card__actions">
-          <button type="button" className="btn btn-secondary" disabled={stashRow === null} data-testid="stash-use" onClick={() => { if (stashRow !== null) onUse('stash', stashRow, false); }}>Use</button>
-          <button type="button" className="btn btn-primary" disabled={stashRow === null} data-testid="stash-use-remove" onClick={() => { if (stashRow !== null) { onUse('stash', stashRow, true); setStashSelected(null); } }}>Use and remove</button>
+          <DesignButton type="button" className="btn btn-secondary" disabled={stashRow === null} data-testid="stash-use" onClick={() => { if (stashRow !== null) onUse('stash', stashRow, false); }}>Use</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" disabled={stashRow === null} data-testid="stash-use-remove" onClick={() => { if (stashRow !== null) { onUse('stash', stashRow, true); setStashSelected(null); } }}>Use and remove</DesignButton>
         </div>
       </section>
       <div className="library-prompts__divider" role="separator" aria-orientation="vertical" aria-label={PROMPT_SPLITTER_NAME}
@@ -146,7 +147,7 @@ export function PromptsTab({ query, history, stash, layout, onLayout, onUse }: P
           onSelect={setHistorySelected} onUse={(index) => onUse('history', index, false)} />
         <div className="library-card__actions">
           {/* REQ-LIBRARY-107: history offers no removal at all — one control, and it copies. */}
-          <button type="button" className="btn btn-secondary" disabled={historyRow === null} data-testid="history-use" onClick={() => { if (historyRow !== null) onUse('history', historyRow, false); }}>Use selected</button>
+          <DesignButton type="button" className="btn btn-secondary" disabled={historyRow === null} data-testid="history-use" onClick={() => { if (historyRow !== null) onUse('history', historyRow, false); }}>Use selected</DesignButton>
         </div>
       </section>
     </div>

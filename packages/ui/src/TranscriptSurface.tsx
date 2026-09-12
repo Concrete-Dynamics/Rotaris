@@ -6,6 +6,7 @@ import {
   Row, TranscriptSurfaceProvider, defaultExpanded, delegationSummary, expansionKey, placements, rowMenuEntries,
   type DisplayRow, type RowMenuEntry, type RowMenuRequest, type TranscriptSurface,
 } from './transcript/Row.js';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * Part AA — everything ONE row is not: the surface that holds a set of rows, the single context menu, the
@@ -99,7 +100,7 @@ export function RowContextMenu({ request, acknowledge, onClose }: { request: Row
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}
     >
       {request.entries.map((entry) => (
-        <button
+        <DesignButton
           key={entry.key}
           type="button"
           role="menuitem"
@@ -107,7 +108,7 @@ export function RowContextMenu({ request, acknowledge, onClose }: { request: Row
           data-entry={entry.key}
           disabled={entry.disabled}
           onClick={() => { void copyRowEntry(entry, acknowledge); onClose(); }}
-        >{entry.label}</button>
+        >{entry.label}</DesignButton>
       ))}
     </div>
   );
@@ -140,7 +141,7 @@ export function DelegationHeader({ agent }: { agent: AgentRecord }) {
         <time className="row__time mono" />
         <span className="row__attribution"><span className="row__role">delegation</span></span>
         <div className="row__main">
-          <button
+          <DesignButton
             type="button"
             className="tool__header mono"
             aria-expanded={expanded}
@@ -150,7 +151,7 @@ export function DelegationHeader({ agent }: { agent: AgentRecord }) {
           >
             <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
             <span className="tool__name">{summary}</span>
-          </button>
+          </DesignButton>
           {expanded && (
             <dl className="row__delegation" data-testid="delegation-detail">
               {agent.name !== '' && (<><dt>Task</dt><dd>{agent.name}</dd></>)}
@@ -193,8 +194,8 @@ export function ScopeToggle({ scope, agent, nowIso, onScope }: { scope: 'all' | 
   const detail = agent === null ? SCOPE_NO_AGENT : `${agent.presentationState} · ${elapsedLabel(agent, nowIso)}`;
   return (
     <div className="seg row__scope" role="radiogroup" aria-label="Transcript scope" data-testid="scope-toggle" data-scope={scope}>
-      <button type="button" role="radio" aria-checked={scope === 'all'} className={`seg-opt${scope === 'all' ? ' is-active' : ''}`} onClick={() => onScope('all')}>All activity</button>
-      <button
+      <DesignButton type="button" role="radio" aria-checked={scope === 'all'} className={`seg-opt${scope === 'all' ? ' is-active' : ''}`} onClick={() => onScope('all')}>All activity</DesignButton>
+      <DesignButton
         type="button"
         role="radio"
         aria-checked={scope === 'task' && available}
@@ -204,7 +205,7 @@ export function ScopeToggle({ scope, agent, nowIso, onScope }: { scope: 'all' | 
         aria-description={detail}
         data-testid="scope-task"
         onClick={() => onScope('task')}
-      >{label}</button>
+      >{label}</DesignButton>
       <span className="row__scope-detail text-secondary mono" data-testid="scope-detail">{detail}</span>
     </div>
   );

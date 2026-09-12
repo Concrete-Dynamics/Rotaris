@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { Button as DesignButton, TextArea as DesignTextArea } from '../design-system/index.js';
 
 /**
  * Part AK2 — the one text a move needs from the person before the engine will take it: a hold's reason and a
@@ -36,12 +37,12 @@ export function ReasonDialog({ title, prompt, consequence, refusal, confirmLabel
         {consequence && <p className="dialog-body req-reason__consequence">{consequence}</p>}
         <div className="field">
           <label className="field-label" htmlFor={fieldId}>{title}</label>
-          <textarea id={fieldId} className="input" rows={4} autoFocus value={text} onChange={(event) => { setText(event.currentTarget.value); setRefused(false); }} />
+          <DesignTextArea id={fieldId} className="input" rows={4} autoFocus value={text} onChange={(event) => { setText(event.currentTarget.value); setRefused(false); }} />
         </div>
         {refused && <p className="req-reason__refusal" role="alert">{refusal}</p>}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={submit}>{confirmLabel}</button>
+          <DesignButton type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" onClick={submit}>{confirmLabel}</DesignButton>
         </div>
       </div>
     </div>

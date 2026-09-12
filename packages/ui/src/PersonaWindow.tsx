@@ -7,6 +7,7 @@ import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { TerminalPreview } from './terminal/streams.js'; // Part AL2
 import { personaColourToken } from './transcript/Row.js';
 import { markMotionStart } from './motion.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, TextArea as DesignTextArea } from './design-system/index.js';
 
 /**
  * REQ-SHELL-074/075, REQ-MONITOR-068..071 (Part R): the persona pop-out window's content. The header with the persona
@@ -85,13 +86,13 @@ export function PersonaWindow(props: PersonaWindowProps) {
   const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
   return (
     <div className="persona-window" data-persona={persona} data-shown={shown?.id ?? ''} data-instances={instances.length}>
-      <header className="persona-window__header page-header">
+      <DesignPageHeader className="persona-window__header page-header">
         <h1 className="display persona-window__title" style={{ color: `var(${personaColourToken(persona)}, var(--rt-text))` }}>{persona}</h1>
         <span className="page-header-sub mono" data-testid="persona-count">{countNoun(instances.length, 'instance')}</span>
-      </header>
+      </DesignPageHeader>
       <div className="tabs persona-window__tabs" role="tablist" aria-label={`${persona} instances`}>
         {instances.map((a) => (
-          <button key={a.id} type="button" role="tab" className={`tab${shown?.id === a.id ? ' is-active' : ''}`} aria-selected={shown?.id === a.id} data-agent-id={a.id} title={`${a.presentationState} · ${a.activity || '—'}`} onClick={() => onSelectTab(a.id)}>{a.name}</button>
+          <DesignButton key={a.id} type="button" role="tab" className={`tab${shown?.id === a.id ? ' is-active' : ''}`} aria-selected={shown?.id === a.id} data-agent-id={a.id} title={`${a.presentationState} · ${a.activity || '—'}`} onClick={() => onSelectTab(a.id)}>{a.name}</DesignButton>
         ))}
         {instances.length === 0 && <span className="text-secondary">No instance of {persona} in the followed session.</span>}
       </div>
@@ -110,7 +111,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
             <div className="ov-card__head"><span className="card-kicker">Agent transcript</span><span className="card-meta">{countNoun(own.length, 'row')}</span></div>
             <div className="transcript persona-window__rows" role="log" aria-live="polite">
               {own.length === 0
-                ? <div className="empty-state"><span className="empty-state-title">{TRANSCRIPT_EMPTY}</span></div>
+                ? <DesignEmptyState className="empty-state"><span className="empty-state-title">{TRANSCRIPT_EMPTY}</span></DesignEmptyState>
                 : (
                   // Part AA: the SAME `Row` the Workspace draws (Part R's one-renderer rule), over a plain list rather
                   // than Part Z's recycled pool — this is a small agent-scoped transcript and ADR-0045's invariance
@@ -161,11 +162,11 @@ export function PersonaWindow(props: PersonaWindowProps) {
           </section>
           <section className="card persona-window__steer" aria-label="Steer agent">
             <div className="ov-card__head"><span className="card-kicker">Steer agent</span></div>
-            <textarea ref={steerBox} className="input persona-window__steer-box" aria-label="Steer text" placeholder={STEER_PLACEHOLDER} rows={3} value={text} onChange={(e) => setText(e.currentTarget.value)} data-testid="persona-steer" />
+            <DesignTextArea ref={steerBox} className="input persona-window__steer-box" aria-label="Steer text" placeholder={STEER_PLACEHOLDER} rows={3} value={text} onChange={(e) => setText(e.currentTarget.value)} data-testid="persona-steer" />
             {error && <div className="composer__error" role="alert" data-testid="persona-steer-error">{error}</div>}
             <div className="dialog-actions persona-window__steer-actions">
-              <button type="button" className="btn btn-primary" data-testid="persona-send" onClick={() => { void send(); }}>Send steer</button>
-              <button type="button" className="btn btn-danger" data-testid="persona-cancel" onClick={() => { void onCancel(shown.id).then((r) => setError(r.ok ? null : r.reason)); }}>Cancel</button>
+              <DesignButton type="button" className="btn btn-primary" data-testid="persona-send" onClick={() => { void send(); }}>Send steer</DesignButton>
+              <DesignButton type="button" className="btn btn-danger" data-testid="persona-cancel" onClick={() => { void onCancel(shown.id).then((r) => setError(r.ok ? null : r.reason)); }}>Cancel</DesignButton>
             </div>
           </section>
         </div>

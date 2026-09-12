@@ -1,5 +1,6 @@
 import type { BoardCard } from '@rotaris/contracts';
 import { NOTHING_OWED, evidenceSegments, evidenceSummary, type EvidenceSegment, type SegmentState } from '@rotaris/ui-core';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AK2 — the evidence indicator (REQ-TRACE-258..264): a ring divided into one segment per obligation the
@@ -50,7 +51,7 @@ export function EvidenceIndicator({ card, onOpen, size = 16 }: EvidenceIndicator
   const r = half - 2.5;
   const arcs = segmentArcs(segments.length);
   return (
-    <button
+    <DesignButton
       type="button"
       className="req-evidence"
       data-testid="req-evidence"
@@ -66,6 +67,6 @@ export function EvidenceIndicator({ card, onOpen, size = 16 }: EvidenceIndicator
           : segments.map((s, i) => <path key={s.kind} d={arcPath(half, half, r, arcs[i]!.start, arcs[i]!.sweep)} fill="none" stroke={SEGMENT_TOKEN[s.state]} strokeWidth="3" strokeLinecap="butt" data-kind={s.kind} data-state={s.state} />)}
       </svg>
       <span className="visually-hidden">{segments.length === 0 ? NOTHING_OWED : summary}</span>
-    </button>
+    </DesignButton>
   );
 }

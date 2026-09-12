@@ -10,6 +10,17 @@ and prefer its word over a synonym you would otherwise reach for.
 This file covers the two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
 debugging of the built app) and **`pnpm live-run`** (the only check that spends real money).
 
+## Repository UI skills
+
+Three portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 makes them discoverable from
+this repository: **`build-ui`** for creating or substantially restyling a surface, **`debug-ui`** for a bounded
+rendered defect, and **`review-ui`** for a report-only external critique. Their `.claude/skills/` entries are thin
+compatibility routers; the portable files are canonical.
+
+`build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
+evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,
+authorized build or debug pass. A complete review loop has at most three iterations.
+
 ## Driving the built app — `pnpm app:drive`
 
 The fastest way to see what a surface actually does without editing a proof script and waiting out a

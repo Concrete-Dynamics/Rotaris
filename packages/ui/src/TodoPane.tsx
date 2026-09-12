@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { TaskPlan } from '@rotaris/contracts';
+import { Button as DesignButton, Input as DesignInput } from './design-system/index.js';
 
 export interface TodoEdit {
   readonly op: 'add' | 'update' | 'remove';
@@ -98,22 +99,22 @@ export function TodoPane({ plan, onEdit, onError }: TodoPaneProps) {
             <div className={`todo-task todo-task--${task.state}`} key={task.id} data-task-id={task.id}>
               <span className="todo-task__glyph" aria-label={task.state}>{GLYPH[task.state]}</span>
               {renaming === task.id ? (
-                <input className="input todo-task__editor" aria-label={`Rename task ${task.text}`} value={renameText} autoFocus
+                <DesignInput className="input todo-task__editor" aria-label={`Rename task ${task.text}`} value={renameText} autoFocus
                   onChange={(event) => setRenameText(event.currentTarget.value)} onBlur={() => { void commitRename(task.id); }}
                   onKeyDown={(event) => editorKey(event, () => { void commitRename(task.id); }, () => setRenaming(null))} />
               ) : (
-                <button type="button" className="todo-task__text" title="Click text to rename" aria-label={`${task.text}, click to rename`}
-                  onClick={() => { setRenaming(task.id); setRenameText(task.text); }}>{task.text}</button>
+                <DesignButton type="button" className="todo-task__text" title="Click text to rename" aria-label={`${task.text}, click to rename`}
+                  onClick={() => { setRenaming(task.id); setRenameText(task.text); }}>{task.text}</DesignButton>
               )}
-              <button type="button" className="todo-task__remove" aria-label={`Remove ${task.text}`} title="Remove task" onClick={() => { void remove(task.id); }}>×</button>
+              <DesignButton type="button" className="todo-task__remove" aria-label={`Remove ${task.text}`} title="Remove task" onClick={() => { void remove(task.id); }}>×</DesignButton>
             </div>
           ))}
           {adding === phase.id ? (
-            <input className="input todo-task__editor todo-task__editor--add" placeholder="Task name" aria-label="New task name" value={addText} autoFocus
+            <DesignInput className="input todo-task__editor todo-task__editor--add" placeholder="Task name" aria-label="New task name" value={addText} autoFocus
               onChange={(event) => setAddText(event.currentTarget.value)} onBlur={() => { void commitAdd(phase.id); }}
               onKeyDown={(event) => editorKey(event, () => { void commitAdd(phase.id); }, () => { setAdding(null); setAddText(''); })} />
           ) : (
-            <button type="button" className="todo-phase__add" onClick={() => { setAdding(phase.id); setAddText(''); }}>+ Add task</button>
+            <DesignButton type="button" className="todo-phase__add" onClick={() => { setAdding(phase.id); setAddText(''); }}>+ Add task</DesignButton>
           )}
         </div>
       ))}

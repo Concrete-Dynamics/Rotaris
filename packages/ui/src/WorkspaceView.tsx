@@ -28,6 +28,7 @@ import type { TrailerRow } from './transcript/types.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
 import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import './attachments.css';
+import { Button as DesignButton, Input as DesignInput, Select as DesignSelect, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -256,14 +257,14 @@ function QueuePanel({ prompts, onEdit, onRemove, onError }: { prompts: SessionRe
           <li key={p.id} className="queue__row" data-prompt-id={p.id}>
             {editing?.id === p.id ? (
               <>
-                <input className="input queue__editor" aria-label="Edit queued message" value={editing.text} onChange={(e) => setEditing({ id: p.id, text: e.currentTarget.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void save(); } if (e.key === 'Escape') setEditing(null); }} />
-                <button type="button" className="btn btn-secondary btn-compact" onClick={() => { void save(); }}>Save</button>
+                <DesignInput className="input queue__editor" aria-label="Edit queued message" value={editing.text} onChange={(e) => setEditing({ id: p.id, text: e.currentTarget.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void save(); } if (e.key === 'Escape') setEditing(null); }} />
+                <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void save(); }}>Save</DesignButton>
               </>
             ) : (
               <>
                 <span className="queue__text" title={p.content}>{p.content}</span>
-                {onEdit && <button type="button" className="btn btn-ghost btn-compact" onClick={() => setEditing({ id: p.id, text: p.content })}>Edit</button>}
-                {onRemove && <button type="button" className="btn btn-ghost btn-compact" onClick={() => { void onRemove(p.id).then((r) => onError(r.ok ? null : r.reason)); }}>Delete</button>}
+                {onEdit && <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={() => setEditing({ id: p.id, text: p.content })}>Edit</DesignButton>}
+                {onRemove && <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={() => { void onRemove(p.id).then((r) => onError(r.ok ? null : r.reason)); }}>Delete</DesignButton>}
               </>
             )}
           </li>
@@ -282,8 +283,8 @@ function ConfirmDialog({ title, body, confirmLabel, lines = [], onConfirm, onCan
         <p className="dialog-body">{body}</p>
         {lines.length > 0 && <ul className="dialog-body">{lines.map((l) => <li key={l}>{l}</li>)}</ul>}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Keep running</button>
-          <button type="button" className="btn btn-danger" onClick={onConfirm}>{confirmLabel}</button>
+          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Keep running</DesignButton>
+          <DesignButton type="button" className="btn btn-danger" onClick={onConfirm}>{confirmLabel}</DesignButton>
         </div>
       </div>
     </div>
@@ -304,11 +305,11 @@ function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name:
       <div className="dialog steer" role="dialog" aria-modal="true" aria-labelledby="steer-title">
         <h2 id="steer-title" className="dialog-title">Steer {target.name}</h2>
         <p className="dialog-body">The text reaches the agent at its next step as an instruction from you.</p>
-        <textarea className="input" aria-label="Steering text" rows={3} value={text} autoFocus onChange={(e) => setText(e.currentTarget.value)} />
+        <DesignTextArea className="input" aria-label="Steering text" rows={3} value={text} autoFocus onChange={(e) => setText(e.currentTarget.value)} />
         {error && <p className="composer__error" role="alert">{error}</p>}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={() => { void send(); }}>Steer</button>
+          <DesignButton type="button" className="btn btn-secondary" onClick={onClose}>Cancel</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" onClick={() => { void send(); }}>Steer</DesignButton>
         </div>
       </div>
     </div>
@@ -395,16 +396,16 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
         {error && <span className="composer__error" role="alert">{error}</span>}
       </div>
       <div className="wait-header__actions" aria-label="Wait choices">
-        <button type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(true); setChoosing(false); }}>Keep waiting</button>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(true); setChoosing(false); }}>Keep waiting</DesignButton>
         {onSetModel && models.length > 0 && (choosing ? (
-          <select className="input select" aria-label="Change model" defaultValue="" autoFocus onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }}>
+          <DesignSelect className="input select" aria-label="Change model" defaultValue="" autoFocus onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }}>
             <option value="">Choose a model…</option>
             {models.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          </DesignSelect>
         ) : (
-          <button type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</button>
+          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</DesignButton>
         ))}
-        <button type="button" className="btn btn-danger btn-compact" onClick={onCancel}>Cancel the run</button>
+        <DesignButton type="button" className="btn btn-danger btn-compact" onClick={onCancel}>Cancel the run</DesignButton>
       </div>
     </div>
   );
@@ -443,14 +444,14 @@ function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, on
   return (
     <ChipShell id={id} label={label} reason={reason} testId={testId}>
       <label className="chip-control__label" htmlFor={id}>{label}</label>
-      <select
+      <DesignSelect
         id={id} className="input select chip-control__select" aria-label={ariaLabel} value={value} disabled={reason !== null}
         aria-disabled={reason !== null} title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
         onChange={(e) => { const v = e.currentTarget.value; if (v !== '') onChoose(v); }}
       >
         {options.length === 0 && <option value="">—</option>}
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
+      </DesignSelect>
     </ChipShell>
   );
 }
@@ -491,7 +492,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
       <span className="mode__label text-secondary" data-testid="chip-mode-label">mode: {current ?? 'default'}</span>
       <div className="seg" role="radiogroup" aria-label="Permission mode, strictest first">
         {PERMISSION_PRESETS.map((m) => (
-          <button
+          <DesignButton
             key={m}
             type="button"
             role="radio"
@@ -499,7 +500,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
             className={`seg-opt${current === m ? ' is-active' : ''}`}
             title={enabled ? `Switch the active run to '${m}' from the next tool call, and write it as the configured mode.` : `Write '${m}' as the configured permission mode; the next run starts from it (REQ-CONFIG-288).`}
             onClick={() => { if (m === 'autonomous') setConfirming(m); else void apply(m); }}
-          >{m}</button>
+          >{m}</DesignButton>
         ))}
       </div>
       {error && <span className="composer__error" role="alert">{error}</span>}
@@ -509,8 +510,8 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
             <h2 id="mode-confirm-title" className="dialog-title">Run without asking?</h2>
             <p className="dialog-body">In 'autonomous' mode the agent runs commands and edits files without asking, except for the destructive commands the starter rules always deny.</p>
             <div className="dialog-actions">
-              <button type="button" className="btn btn-secondary" autoFocus onClick={() => setConfirming(null)}>Keep current mode</button>
-              <button type="button" className="btn btn-danger" onClick={() => { void apply(confirming); }}>Switch to autonomous</button>
+              <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={() => setConfirming(null)}>Keep current mode</DesignButton>
+              <DesignButton type="button" className="btn btn-danger" onClick={() => { void apply(confirming); }}>Switch to autonomous</DesignButton>
             </div>
           </div>
         </div>
@@ -1004,9 +1005,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
       {narrow && (
         <div className="workspace__drawer-bar" aria-label="Panels">
-          {agents.length > 0 && <button type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</button>}
-          <button type="button" className={`btn btn-ghost btn-compact${drawer === 'plan' ? ' is-active' : ''}`} aria-pressed={drawer === 'plan'} onClick={() => setDrawer(drawer === 'plan' ? null : 'plan')}>Task plan</button>
-          <button type="button" className={`btn btn-ghost btn-compact${drawer === 'inspector' ? ' is-active' : ''}`} aria-pressed={drawer === 'inspector'} onClick={() => setDrawer(drawer === 'inspector' ? null : 'inspector')}>Inspector</button>
+          {agents.length > 0 && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</DesignButton>}
+          <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'plan' ? ' is-active' : ''}`} aria-pressed={drawer === 'plan'} onClick={() => setDrawer(drawer === 'plan' ? null : 'plan')}>Task plan</DesignButton>
+          <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'inspector' ? ' is-active' : ''}`} aria-pressed={drawer === 'inspector'} onClick={() => setDrawer(drawer === 'inspector' ? null : 'inspector')}>Inspector</DesignButton>
         </div>
       )}
       {(!narrow || drawer === 'agents' || drawer === 'plan') && (
@@ -1014,10 +1015,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           {(!narrow || drawer === 'agents') && <><div className="agents__header">
             <span className="agents__title">Agents</span>
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
-              <button type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</button>
+              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
-              <button type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name }, descendants: descendantsOf(selected.id) })}>Cancel {selected.name}</button>
+              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name }, descendants: descendantsOf(selected.id) })}>Cancel {selected.name}</DesignButton>
             )}
           </div>
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
@@ -1036,8 +1037,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         {(onOpenStash || agents.length > 0) && (
           <div className="transcript__toolbar" role="toolbar" aria-label="Transcript actions">
             {onOpenStash && (
-              <button type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
-                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</button>
+              <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
+                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</DesignButton>
             )}
             {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
               * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
@@ -1111,7 +1112,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           * to the floor by `slashRoleColours`, and reach the CSS as custom properties on this box.
           */}
         <div className="slash-field" style={roleStyle} data-testid="slash-field" data-token-state={tokenState ?? ''}>
-          <textarea
+          <DesignTextArea
             ref={area}
             className={`input composer__input${tokenState !== null ? ' is-slash' : ''}`}
             aria-label="Composer"
@@ -1139,10 +1140,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           {popupOpen && <SlashPopup commands={suggestions} selected={current} ctx={slashContext} listId={listId} anchor={area} onHover={setRowIndex} onActivate={activate} />}
         </div>
         <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments">
-          <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
-          <button type="button" className="btn btn-ghost" disabled={!acceptsImages} title={attachmentReason ?? 'Attach images'} aria-describedby="attachment-capability" onClick={() => fileInput.current?.click()}>Attach images</button>
+          <DesignInput ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
+          <DesignButton type="button" className="btn btn-ghost" disabled={!acceptsImages} title={attachmentReason ?? 'Attach images'} aria-describedby="attachment-capability" onClick={() => fileInput.current?.click()}>Attach images</DesignButton>
           <span id="attachment-capability" className="composer__hint">{attachmentReason ?? 'Drop PNG, JPEG, WebP, or GIF images here.'}</span>
-          {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><button type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</button></li>)}</ol>}
+          {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><DesignButton type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</DesignButton></li>)}</ol>}
           <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'}>{estimate.label}</span>
         </div>
         <div className="composer__actions">
@@ -1160,7 +1161,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             {onSetNextModel && (
               <ChipShell id="chip-model" testId="chip-model" label={modelChipLabel(modelsLoaded, models, entry?.model ?? null)} reason={modelsLoaded ? chipReason : 'Model options are still loading.'}>
                 <label className="chip-control__label" htmlFor="chip-model">{modelChipLabel(modelsLoaded, models, entry?.model ?? null)}</label>
-                <select id="chip-model" className="input select chip-control__select" aria-label="Model for the next run"
+                <DesignSelect id="chip-model" className="input select chip-control__select" aria-label="Model for the next run"
                   value={entry?.model && models.includes(entry.model) ? entry.model : ''}
                   /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
                   disabled={!modelsLoaded || chipReason !== null} aria-disabled={!modelsLoaded || chipReason !== null}
@@ -1168,7 +1169,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
                   onChange={(e) => { const v = e.currentTarget.value; if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
                   <option value="">—</option>
                   {models.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
+                </DesignSelect>
               </ChipShell>
             )}
             {onSetNextReasoning && (
@@ -1180,21 +1181,21 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           </div>
           {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} />}
           {/* REQ-LIBRARY-140 / REQ-CHAT-042: a ghost control beside the composer; it stashes whatever is typed, run or no run. */}
-          {onStash && <button type="button" className="btn btn-ghost" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}>Stash</button>}
-          {runActive && onSteer && <button type="button" className="btn btn-secondary" onClick={() => setSteering({ id: 'run', name: 'the run' })}>Steer</button>}
-          {runActive && onPause && <button type="button" className="btn btn-secondary" disabled={pausePending || session?.executionStatus === 'pausing'} onClick={() => { void pause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</button>}
+          {onStash && <DesignButton type="button" className="btn btn-ghost" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}>Stash</DesignButton>}
+          {runActive && onSteer && <DesignButton type="button" className="btn btn-secondary" onClick={() => setSteering({ id: 'run', name: 'the run' })}>Steer</DesignButton>}
+          {runActive && onPause && <DesignButton type="button" className="btn btn-secondary" disabled={pausePending || session?.executionStatus === 'pausing'} onClick={() => { void pause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</DesignButton>}
           {runActive ? (
             <>
-              <button type="button" className="btn btn-danger" onClick={() => setConfirming('stop')} aria-describedby="stop-hint">{stopLabel(stopPending)}</button>
-              <button type="submit" className="btn btn-primary" disabled={busy}>Queue</button>
+              <DesignButton type="button" className="btn btn-danger" onClick={() => setConfirming('stop')} aria-describedby="stop-hint">{stopLabel(stopPending)}</DesignButton>
+              <DesignButton type="submit" className="btn btn-primary" disabled={busy}>Queue</DesignButton>
             </>
           ) : paused && onContinue ? (
             <>
-              <button type="button" className="btn btn-primary" onClick={() => { void continueRun(); }}>Continue run</button>
-              <button type="submit" className="btn btn-secondary" disabled={busy}>Continue with a message</button>
+              <DesignButton type="button" className="btn btn-primary" onClick={() => { void continueRun(); }}>Continue run</DesignButton>
+              <DesignButton type="submit" className="btn btn-secondary" disabled={busy}>Continue with a message</DesignButton>
             </>
           ) : (
-            <button type="submit" className="btn btn-primary" disabled={busy}>{composerAction(session, runActive)}</button>
+            <DesignButton type="submit" className="btn btn-primary" disabled={busy}>{composerAction(session, runActive)}</DesignButton>
           )}
           {runActive && <span id="stop-hint" className="composer__hint">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>}
           {paused && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}

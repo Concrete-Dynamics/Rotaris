@@ -26,8 +26,8 @@
  * Evidence under `.ui-audit/`: a PNG per view per size, and `report.json`.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
+import { join, relative, resolve, sep } from 'node:path';
+import { buildDesktop, evidenceDirectory, repo } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const argv = process.argv.slice(2);
@@ -37,7 +37,10 @@ const flag = (name, fallback) => {
   return found.includes('=') ? found.slice(found.indexOf('=') + 1) : true;
 };
 
-const output = evidenceDirectory('.ui-audit');
+const outputFlag = flag('output', null);
+const output = outputFlag === null ? evidenceDirectory('.ui-audit') : resolve(repo, String(outputFlag));
+const outputWithinRepo = relative(repo, output);
+if (outputWithinRepo === '' || outputWithinRepo === '..' || outputWithinRepo.startsWith(`..${sep}`)) throw new Error(`ui-audit output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 if (!argv.includes('--skip-build')) buildDesktop(output);
@@ -218,9 +221,81 @@ const AUDIT = `JSON.stringify((() => {
     }
   }
 
+  // ── CONTRACTS: explicit relationships published by shared components.
+  const edge = (rect, name) => name === 'right' ? rect.right : name === 'center' ? rect.x + rect.width / 2
+    : name === 'bottom' ? rect.bottom : name === 'middle' ? rect.y + rect.height / 2
+    : name === 'top' ? rect.top : rect.left;
+  const contracts = [];
+  for (const el of document.querySelectorAll('[data-ui-contract]')) {
+    let relations;
+    try { relations = JSON.parse(el.dataset.uiContract || '[]'); }
+    catch { contracts.push({ id: el.dataset.ui || cls(el), kind: 'schema', pass: false, detail: 'contract JSON is unreadable' }); continue; }
+    const own = el.getBoundingClientRect();
+    for (const relation of relations) {
+      const tolerance = Number(relation.tolerance ?? 1);
+      const target = relation.target ? document.querySelector('[data-ui="' + CSS.escape(relation.target) + '"]') : null;
+      const targetBox = target ? target.getBoundingClientRect() : null;
+      let pass = false, detail = '';
+      if (relation.kind === 'align-x' || relation.kind === 'align-y') {
+        const fallback = relation.kind === 'align-x' ? 'left' : 'top';
+        const ownValue = edge(own, relation.edge || fallback);
+        const targetValue = targetBox ? edge(targetBox, relation.edge || fallback) : NaN;
+        pass = targetBox !== null && Math.abs(ownValue - targetValue) <= tolerance;
+        detail = 'delta ' + (Number.isFinite(targetValue) ? Math.round((ownValue - targetValue) * 100) / 100 + 'px' : 'missing target');
+      } else if (relation.kind === 'equal-width' || relation.kind === 'equal-height') {
+        const dimension = relation.kind === 'equal-width' ? 'width' : 'height';
+        const delta = targetBox ? own[dimension] - targetBox[dimension] : NaN;
+        pass = targetBox !== null && Math.abs(delta) <= tolerance;
+        detail = 'delta ' + (Number.isFinite(delta) ? Math.round(delta * 100) / 100 + 'px' : 'missing target');
+      } else if (relation.kind === 'spacing-token') {
+        const actual = parseFloat(getComputedStyle(el).getPropertyValue(relation.property));
+        const expected = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(relation.token));
+        pass = Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
+        detail = relation.property + ' ' + actual + 'px; ' + relation.token + ' ' + expected + 'px';
+      } else if (relation.kind === 'containment') {
+        const box = targetBox || { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+        pass = own.left >= box.left - tolerance && own.top >= box.top - tolerance && own.right <= box.right + tolerance && own.bottom <= box.bottom + tolerance;
+        detail = 'box ' + [own.left, own.top, own.right, own.bottom].map(Math.round).join(',');
+      } else if (relation.kind === 'text-fit') {
+        const axis = relation.axis || 'both';
+        const x = el.scrollWidth <= el.clientWidth + tolerance, y = el.scrollHeight <= el.clientHeight + tolerance;
+        pass = axis === 'x' ? x : axis === 'y' ? y : x && y;
+        detail = 'client ' + el.clientWidth + 'x' + el.clientHeight + '; scroll ' + el.scrollWidth + 'x' + el.scrollHeight;
+      } else if (relation.kind === 'hit-test') {
+        const x = Math.round(own.x + own.width / 2), y = Math.round(own.y + own.height / 2);
+        const hit = document.elementFromPoint(x, y);
+        pass = hit === el || (hit !== null && (el.contains(hit) || hit.contains(el)));
+        detail = 'centre ' + x + ',' + y + '; hit ' + (hit ? cls(hit) : '(nothing)');
+      } else if (relation.kind === 'viewport-scroll') {
+        const x = el.scrollWidth > el.clientWidth + tolerance, y = el.scrollHeight > el.clientHeight + tolerance;
+        const actual = relation.axis === 'x' ? x : relation.axis === 'y' ? y : x || y;
+        pass = actual === relation.expected;
+        detail = 'scroll ' + x + ',' + y + '; expected ' + relation.expected;
+      }
+      contracts.push({ id: el.dataset.ui || cls(el), kind: relation.kind, target: relation.target || null, pass, detail });
+    }
+  }
+
+  const geometry = [...document.querySelectorAll('[data-ui], [data-ui-component]')].filter(visible).map((el) => {
+    const r = el.getBoundingClientRect();
+    return { id: el.dataset.ui || null, component: el.dataset.uiComponent || null, element: cls(el),
+      x: Math.round(r.x * 100) / 100, y: Math.round(r.y * 100) / 100,
+      width: Math.round(r.width * 100) / 100, height: Math.round(r.height * 100) / 100,
+      scrollWidth: el.scrollWidth, scrollHeight: el.scrollHeight, clientWidth: el.clientWidth, clientHeight: el.clientHeight };
+  });
+  const styles = [...document.querySelectorAll('[data-ui], [data-ui-component]')].filter(visible).map((el) => {
+    const s = getComputedStyle(el);
+    return { id: el.dataset.ui || null, component: el.dataset.uiComponent || null, element: cls(el),
+      display: s.display, position: s.position, fontFamily: s.fontFamily, fontSize: s.fontSize, fontWeight: s.fontWeight,
+      color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius,
+      gap: s.gap, rowGap: s.rowGap, columnGap: s.columnGap,
+      padding: [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].join(' '),
+      margin: [s.marginTop, s.marginRight, s.marginBottom, s.marginLeft].join(' ') };
+  });
+
   return { viewport: { w: innerWidth, h: innerHeight },
            counts: { elements: all.length, controls: controls.length, skipped },
-           tracks, escapees, buried, trapped };
+           tracks, escapees, buried, trapped, contracts, geometry, styles };
 })())`;
 
 /**
@@ -317,6 +392,8 @@ const OVERLAYS = [
 ];
 
 const findings = [];
+const geometryEvidence = [];
+const styleEvidence = [];
 const note = (kind, view, size, detail) => {
   findings.push({ kind, view, size, ...detail });
   console.log(`  ${kind.padEnd(11)} ${view} @ ${size} — ${JSON.stringify(detail)}`);
@@ -340,11 +417,14 @@ try {
       await sleep(450);
       const a = JSON.parse(await d.eval(AUDIT));
       await d.screenshot(join(output, `${view.n}-${view.name.toLowerCase()}-${size.label}.png`));
+      geometryEvidence.push({ view: view.name, size: size.label, viewport: a.viewport, items: a.geometry });
+      styleEvidence.push({ view: view.name, size: size.label, items: a.styles });
       for (const t of a.tracks) note('TRACKS', view.name, size.label, t);
       for (const e of a.escapees) note('CONTAINMENT', view.name, size.label, e);
       for (const b of a.buried) note('STACKING', view.name, size.label, b);
       for (const t of a.trapped) note('TRAPPED', view.name, size.label, t);
-      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, skipped ${JSON.stringify(a.counts.skipped)})`);
+      for (const contract of a.contracts.filter((candidate) => !candidate.pass)) note('CONTRACT', view.name, size.label, contract);
+      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + a.contracts.filter((candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${a.contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
     }
   }
   // ── The overlays, at both sizes. Nothing was open during the sweep above, and every overlay is a surface
@@ -418,6 +498,8 @@ try {
   const log = existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '';
   writeFileSync(join(output, 'app.log'), log);
   writeFileSync(join(output, 'report.json'), `${JSON.stringify({ findings }, null, 2)}\n`);
+  writeFileSync(join(output, 'geometry.json'), `${JSON.stringify({ captures: geometryEvidence }, null, 2)}\n`);
+  writeFileSync(join(output, 'styles.json'), `${JSON.stringify({ captures: styleEvidence }, null, 2)}\n`);
 }
 
 const byKind = findings.reduce((acc, f) => ({ ...acc, [f.kind]: (acc[f.kind] ?? 0) + 1 }), {});

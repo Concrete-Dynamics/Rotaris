@@ -3,6 +3,7 @@ import { contextPercent, type AgentRecord } from '@rotaris/contracts';
 import { elapsedLabel } from './AgentTree.js';
 import { tableOrder } from './agents.js';
 import { markMotionStart } from './motion.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, Table as DesignTable } from './design-system/index.js';
 
 /**
  * REQ-MONITOR-274/275/116/281 (Part R): the Mission view's agent activity table — one row per agent in the tree's
@@ -35,8 +36,8 @@ const Row = memo(function Row({ a, selected, elapsed, onSelect, onOpen, onPopOut
       <td className="agent-table__context mono" title={`${a.contextUsed.toLocaleString()} of ${a.contextLimit.toLocaleString()} tokens`}>{a.contextUsed.toLocaleString()}/{a.contextLimit.toLocaleString()} <span className="text-secondary">({percent}%)</span></td>
       <td className="agent-table__compressions text-secondary" title="The record carries no compression count in this build (REQ-MONITOR-281).">not recorded</td>
       <td className="agent-table__actions">
-        <button type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onOpen(a); }} title="Open this agent in the inspector, or in its persona window when the agent pop-out preference is on.">Open</button>
-        <button type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onPopOut(a); }} title="Open this agent's persona window.">Pop out</button>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onOpen(a); }} title="Open this agent in the inspector, or in its persona window when the agent pop-out preference is on.">Open</DesignButton>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onPopOut(a); }} title="Open this agent's persona window.">Pop out</DesignButton>
       </td>
     </tr>
   );
@@ -46,14 +47,14 @@ export function AgentTable({ agents, selected, nowIso, onSelect, onOpen, onPopOu
   const ordered = tableOrder(agents);
   if (ordered.length === 0) {
     return (
-      <div className="empty-state agent-table__empty" data-testid="agent-table-empty">
+      <DesignEmptyState className="empty-state agent-table__empty" data-testid="agent-table-empty">
         <span className="empty-state-title">No agents are working.</span>
         <span className="empty-state-hint">Start a run from the Workspace view, or resume a stored session from the title bar's Sessions browser; every delegated agent lands here as it is spawned.</span>
-      </div>
+      </DesignEmptyState>
     );
   }
   return (
-    <table className="table agent-table" aria-label="Agent activity">
+    <DesignTable className="table agent-table" aria-label="Agent activity">
       <thead>
         <tr><th>State</th><th>Agent</th><th>Persona</th><th>Activity</th><th>Tool calls</th><th>Elapsed</th><th>Context (used/limit)</th><th>Compressions</th><th><span className="visually-hidden">Actions</span></th></tr>
       </thead>
@@ -63,6 +64,6 @@ export function AgentTable({ agents, selected, nowIso, onSelect, onOpen, onPopOu
           <Row key={a.id} a={a} selected={a.id === selected} elapsed={a.live || a.completedAt ? elapsedLabel(a, a.live ? nowIso : a.completedAt) : '—'} onSelect={onSelect} onOpen={onOpen} onPopOut={onPopOut} />
         ))}
       </tbody>
-    </table>
+    </DesignTable>
   );
 }

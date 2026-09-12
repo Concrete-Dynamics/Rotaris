@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { stepsPhrase, type QuestionAnswer, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
+import { Button as DesignButton, TextArea as DesignTextArea } from './design-system/index.js';
 
 /**
  * REQ-CHAT-097..103 — the desktop question stepper. Structure from
@@ -160,7 +161,7 @@ export function QuestionStepper({ prompt, onSubmit, onCancel, onClose }: Questio
             {step.options.map((o) => {
               const selected = (current?.selected_option ?? null) === o.label;
               return (
-                <button
+                <DesignButton
                   key={o.label}
                   type="button"
                   role="radio"
@@ -172,14 +173,14 @@ export function QuestionStepper({ prompt, onSubmit, onCancel, onClose }: Questio
                 >
                   <span className="question-stepper__option-label">{o.label}</span>
                   {o.description !== '' && <span className="question-stepper__option-description">{o.description}</span>}
-                </button>
+                </DesignButton>
               );
             })}
           </div>
         )}
         {/* REQ-CHAT-100: visible only where the step allows freeform AND no option is selected. */}
         {freeform && (
-          <textarea
+          <DesignTextArea
             className="input question-stepper__freeform"
             aria-label={`A free answer for: ${step.title}`}
             data-testid="question-freeform"
@@ -191,14 +192,14 @@ export function QuestionStepper({ prompt, onSubmit, onCancel, onClose }: Questio
         )}
         {failed && <p className="question-stepper__status" role="alert" data-testid="question-failure">{QUESTION_DELIVERY_FAILED}</p>}
         <div className="dialog-actions question-stepper__actions">
-          <button type="button" className="btn btn-ghost" data-testid="question-cancel" disabled={busy} onClick={() => close(true)}>Cancel</button>
+          <DesignButton type="button" className="btn btn-ghost" data-testid="question-cancel" disabled={busy} onClick={() => close(true)}>Cancel</DesignButton>
           {/* REQ-CHAT-101: Back is disabled on the first step and preserves answers already entered. `data-disabled`
               rides beside the real `disabled` because a proof's probe reads `data-*` attributes; the control's own
               state is the DOM property, and the attribute mirrors it rather than standing in for it. */}
-          <button type="button" className="btn btn-secondary" data-testid="question-back" data-disabled={String(index === 0 || busy)} disabled={index === 0 || busy} onClick={() => setIndex((i) => Math.max(0, i - 1))}>Back</button>
+          <DesignButton type="button" className="btn btn-secondary" data-testid="question-back" data-disabled={String(index === 0 || busy)} disabled={index === 0 || busy} onClick={() => setIndex((i) => Math.max(0, i - 1))}>Back</DesignButton>
           {/* REQ-CHAT-101: Next is HIDDEN on the last step; Submit APPEARS only there; both gated on an answer. */}
-          {!last && <button type="button" className="btn btn-primary" data-testid="question-next" data-disabled={String(!answered || busy)} disabled={!answered || busy} onClick={() => setIndex((i) => Math.min(steps.length - 1, i + 1))}>Next</button>}
-          {last && <button type="button" className="btn btn-primary" data-testid="question-submit" data-disabled={String(!answered || busy)} disabled={!answered || busy} onClick={() => { void submit(); }}>{busy ? 'Submitting…' : 'Submit'}</button>}
+          {!last && <DesignButton type="button" className="btn btn-primary" data-testid="question-next" data-disabled={String(!answered || busy)} disabled={!answered || busy} onClick={() => setIndex((i) => Math.min(steps.length - 1, i + 1))}>Next</DesignButton>}
+          {last && <DesignButton type="button" className="btn btn-primary" data-testid="question-submit" data-disabled={String(!answered || busy)} disabled={!answered || busy} onClick={() => { void submit(); }}>{busy ? 'Submitting…' : 'Submit'}</DesignButton>}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { PersonaWindow } from './PersonaWindow.js';
 import { WorkspaceView } from './WorkspaceView.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { DisplayRow } from './transcript/Row.js';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * **Verification only** (Part AA's `pnpm rows-proof`, the `rows-proof` renderer role). The ONE row renderer
@@ -178,8 +179,8 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
   return (
     <div className="rows-proof" data-testid="rows-proof">
       <div className="rows-proof__controls">
-        <button type="button" className="btn btn-ghost btn-compact" data-testid="proof-show-reasoning" aria-pressed={showReasoning} onClick={() => setShowReasoning((v) => !v)}>display/showReasoning: {showReasoning ? 'on' : 'off'}</button>
-        <button type="button" className="btn btn-ghost btn-compact" data-testid="proof-auto-collapse" aria-pressed={autoCollapseTools} onClick={() => setAutoCollapseTools((v) => !v)}>display/autoCollapseTools: {autoCollapseTools ? 'on' : 'off'}</button>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="proof-show-reasoning" aria-pressed={showReasoning} onClick={() => setShowReasoning((v) => !v)}>display/showReasoning: {showReasoning ? 'on' : 'off'}</DesignButton>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="proof-auto-collapse" aria-pressed={autoCollapseTools} onClick={() => setAutoCollapseTools((v) => !v)}>display/autoCollapseTools: {autoCollapseTools ? 'on' : 'off'}</DesignButton>
       </div>
       <div className="rows-proof__surface" data-testid="proof-workspace">
         <WorkspaceView

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import type { TerminalStreamSet } from './streams.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AL2 — what a renderer that draws transcript previews holds for the terminal, as ONE value the surfaces read:
@@ -71,7 +72,7 @@ export function TerminalToolbarControl() {
   const { running, total } = useTerminalCounts(host?.streams ?? null);
   const description = TOOLBAR.description(running, total);
   return (
-    <button
+    <DesignButton
       type="button"
       className="btn btn-ghost btn-compact"
       aria-label={TOOLBAR.name(running)}
@@ -81,6 +82,6 @@ export function TerminalToolbarControl() {
       data-running={running}
       data-total={total}
       onClick={() => { if (host) host.open(); else openTerminalWindow(); }}
-    >{TOOLBAR.label(running)}</button>
+    >{TOOLBAR.label(running)}</DesignButton>
   );
 }

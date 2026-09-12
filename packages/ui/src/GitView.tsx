@@ -3,6 +3,7 @@ import type { CheckpointListPayload, CheckpointPreviewPayload, CheckpointRestore
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { WorktreeDialog } from './WorktreeDialog.js';
 import { CheckpointProgressDialog, checkpointsEmptyText, RESTORE_CANCELLED, RestoreConfirmDialog, restoreDisabledReason, TREE_UNCHANGED, type ListingState } from './CheckpointDialogs.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, Select as DesignSelect, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /**
  * REQ-SHELL-023's fifth view. Structure from the specification — REQ-GIT-075 (the header row), 076 (two resizable
@@ -303,23 +304,23 @@ export function GitView(props: GitViewProps) {
 
   return (
     <div className="git" data-testid="git">
-      <header className="git__header page-header">
+      <DesignPageHeader className="git__header page-header">
         <h1 className="display git__title">Git workspace</h1>
         <span className="git__branch mono" data-testid="git-branch" data-detached={state?.detached ? '1' : '0'} data-repository={state?.isRepository ? '1' : '0'}>{headerBranch(state)}</span>
         <span className="git__sync mono" data-testid="git-sync" aria-live="polite">{syncLabel(state, refreshing)}</span>
         <span className="git__spacer" />
-        <button type="button" className="btn btn-secondary" data-testid="git-refresh" disabled={refreshing} onClick={props.onRefresh}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
-        <button type="button" className="btn btn-primary" data-testid="git-new-worktree" disabled={!hasBranch} title={hasBranch ? undefined : NEW_WORKTREE_DISABLED_TOOLTIP} onClick={() => setDialog({ kind: 'create' })}>New worktree</button>
+        <DesignButton type="button" className="btn btn-secondary" data-testid="git-refresh" disabled={refreshing} onClick={props.onRefresh}>{refreshing ? 'Refreshing…' : 'Refresh'}</DesignButton>
+        <DesignButton type="button" className="btn btn-primary" data-testid="git-new-worktree" disabled={!hasBranch} title={hasBranch ? undefined : NEW_WORKTREE_DISABLED_TOOLTIP} onClick={() => setDialog({ kind: 'create' })}>New worktree</DesignButton>
         {/* REQ-GIT-083: integration is owed (ADR-0039's neighbour); the button carries the disabled text in this build. */}
-        <button type="button" className="btn btn-secondary" data-testid="git-merge" disabled title={eligible.length > 0 ? MERGE_ENABLED_TOOLTIP : MERGE_DISABLED_TOOLTIP}>Merge selected</button>
-      </header>
+        <DesignButton type="button" className="btn btn-secondary" data-testid="git-merge" disabled title={eligible.length > 0 ? MERGE_ENABLED_TOOLTIP : MERGE_DISABLED_TOOLTIP}>Merge selected</DesignButton>
+      </DesignPageHeader>
       <div className="git__body" ref={bodyRef} style={{ gridTemplateColumns: `minmax(${GIT_PANE_MIN}px, 1fr) 8px ${right}px` }}>
         <div className="git__column git__left">
           <Card kicker="Worktrees" className="table-card git-card--table" testId="git-worktrees" actions={<span className="card-meta">{rows.length} listed</span>}>
             {rows.length === 0 ? (
-              <div className="empty-state git__empty" data-testid="git-worktrees-empty"><span className="empty-state-title">No Git worktrees found for this workspace.</span></div>
+              <DesignEmptyState className="empty-state git__empty" data-testid="git-worktrees-empty"><span className="empty-state-title">No Git worktrees found for this workspace.</span></DesignEmptyState>
             ) : (
-              <table className="table git__table" aria-multiselectable="true" aria-label="Worktrees">
+              <DesignTable className="table git__table" aria-multiselectable="true" aria-label="Worktrees">
                 <thead><tr><th>Branch</th><th>Session</th><th>State</th><th>Ahead</th><th>Behind</th><th>Files</th><th>Actions</th></tr></thead>
                 <tbody>
                   {rows.map((row) => {
@@ -329,8 +330,8 @@ export function GitView(props: GitViewProps) {
                       <tr key={row.path} className={isSelected ? 'git__row is-selected' : 'git__row'} data-path={row.path} data-base={row.isBase ? '1' : '0'} data-active={row.isActive ? '1' : '0'} data-session={b?.sessionId ?? ''} aria-selected={isSelected} title={row.path} onClick={(e) => selectRow(e, row.path)}>
                         <td className="mono git__cell-branch">
                           <span className="git__branch-name">{row.branch ?? 'detached'}</span>
-                          {row.isBase && <span className="tag tag-outline" data-testid="git-tag-base">base</span>}
-                          {row.isActive && <span className="tag tag-accent" data-testid="git-tag-active">active</span>}
+                          {row.isBase && <DesignTag className="tag tag-outline" data-testid="git-tag-base">base</DesignTag>}
+                          {row.isActive && <DesignTag className="tag tag-accent" data-testid="git-tag-active">active</DesignTag>}
                         </td>
                         <td className="mono git__cell-session">{b?.sessionId ?? '-'}</td>
                         <td>{b?.status ?? 'idle'}<span className="git__merge-status text-secondary"> · {b?.mergeStatus ?? 'ready'}</span></td>
@@ -339,26 +340,26 @@ export function GitView(props: GitViewProps) {
                         <td className="mono">{filesCell(row)}</td>
                         <td className="git__cell-actions">
                           {!row.isBase && !row.isActive && (
-                            <button type="button" className="btn btn-danger btn-compact git__delete" aria-label={`Delete worktree ${row.branch ?? 'detached'}`} title="Delete this worktree" disabled={busy} onClick={(e) => { e.stopPropagation(); setDialog({ kind: 'confirm', row }); }}>Delete</button>
+                            <DesignButton type="button" className="btn btn-danger btn-compact git__delete" aria-label={`Delete worktree ${row.branch ?? 'detached'}`} title="Delete this worktree" disabled={busy} onClick={(e) => { e.stopPropagation(); setDialog({ kind: 'confirm', row }); }}>Delete</DesignButton>
                           )}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
-              </table>
+              </DesignTable>
             )}
           </Card>
           <Card kicker="Session checkpoints" testId="git-checkpoints" actions={(
             <div className="git__checkpoint-actions">
-              <select className="input select git__picker" aria-label="Checkpoint session" data-testid="git-checkpoint-session" disabled={pickerEntries.length === 0} value={effectivePick ?? ''} onChange={(e) => setPickedSession(e.currentTarget.value)}>
+              <DesignSelect className="input select git__picker" aria-label="Checkpoint session" data-testid="git-checkpoint-session" disabled={pickerEntries.length === 0} value={effectivePick ?? ''} onChange={(e) => setPickedSession(e.currentTarget.value)}>
                 {pickerEntries.map((s) => <option key={s.sessionId} value={s.sessionId}>{pickerLabel(s)}</option>)}
-              </select>
-              <button type="button" className="btn btn-secondary" disabled={restoreReason !== null || flow !== null} title={restoreReason ?? undefined} data-testid="git-restore" data-reason={restoreReason ?? ''} onClick={() => { void startRestore(); }}>Restore checkpoint</button>
+              </DesignSelect>
+              <DesignButton type="button" className="btn btn-secondary" disabled={restoreReason !== null || flow !== null} title={restoreReason ?? undefined} data-testid="git-restore" data-reason={restoreReason ?? ''} onClick={() => { void startRestore(); }}>Restore checkpoint</DesignButton>
             </div>
           )}>
             <div className="git__table-scroll" tabIndex={0} aria-label="Checkpoint columns" aria-description="Scroll horizontally when the checkpoint columns exceed the card width.">
-              <table className="table git__table git__checkpoint-table" aria-label="Checkpoints" aria-description="Rows are ordered oldest first." data-testid="git-checkpoint-table" data-state={listing.state}>
+              <DesignTable className="table git__table git__checkpoint-table" aria-label="Checkpoints" aria-description="Rows are ordered oldest first." data-testid="git-checkpoint-table" data-state={listing.state}>
                 <thead><tr><th>Checkpoint</th><th>Created</th><th>Iteration</th><th>Files changed</th><th>Kind</th></tr></thead>
                 <tbody>
                   {listedRows.map((c) => {
@@ -374,9 +375,9 @@ export function GitView(props: GitViewProps) {
                     );
                   })}
                 </tbody>
-              </table>
+              </DesignTable>
             </div>
-            {emptyText !== null && <div className="empty-state git__empty" data-testid="git-checkpoints-empty" aria-live="polite"><span className="empty-state-hint">{emptyText}</span></div>}
+            {emptyText !== null && <DesignEmptyState className="empty-state git__empty" data-testid="git-checkpoints-empty" aria-live="polite"><span className="empty-state-hint">{emptyText}</span></DesignEmptyState>}
           </Card>
         </div>
         <div className="git__divider" role="separator" aria-orientation="vertical" aria-label="Resize the commit history column" aria-valuemin={GIT_PANE_MIN} aria-valuemax={GIT_RIGHT_MAX} aria-valuenow={right} tabIndex={0}
@@ -384,9 +385,9 @@ export function GitView(props: GitViewProps) {
         <div className="git__column git__right" style={{ width: right }}>
           <Card kicker="Commit history" className="table-card git-card--table" testId="git-history" actions={<span className="card-meta">{state?.history.length ?? 0} of {30}</span>}>
             {(state?.history.length ?? 0) === 0 ? (
-              <div className="empty-state git__empty" data-testid="git-history-empty"><span className="empty-state-title">No commit history is available.</span></div>
+              <DesignEmptyState className="empty-state git__empty" data-testid="git-history-empty"><span className="empty-state-title">No commit history is available.</span></DesignEmptyState>
             ) : (
-              <table className="table git__table" aria-label="Commit history">
+              <DesignTable className="table git__table" aria-label="Commit history">
                 <thead><tr><th>Commit</th><th>Message</th><th>Author</th><th>Age</th></tr></thead>
                 <tbody>
                   {state!.history.map((c) => (
@@ -398,7 +399,7 @@ export function GitView(props: GitViewProps) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </DesignTable>
             )}
           </Card>
           <Card kicker="Agent commit policy" testId="git-policy">

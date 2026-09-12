@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { McpHealth, McpListing, McpProvisioning, McpSecretsView, McpServerRow, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
+import { Button as DesignButton, Card as DesignCard, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
 /**
  * REQ-MCP-091/092/108/109/115, REQ-CONFIG-350..353/437: the "MCP Servers" category. Structure from docs/spec; craft from
@@ -72,7 +73,7 @@ function Row({ row, health, probing, onToggle }: { row: McpServerRow; health: Mc
       </td>
       <td data-origin>{row.origin}</td>
       <td>
-        <button type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={`Enable ${row.name} for this session`} aria-description={enablement} disabled={!row.available || busy} title={!row.available ? 'The command was not found on the executable search path.' : undefined} onClick={() => { void toggle(); }} />
+        <DesignButton type="button" className={`toggle${on ? ' is-on' : ''}`} role="switch" aria-checked={on} aria-label={`Enable ${row.name} for this session`} aria-description={enablement} disabled={!row.available || busy} title={!row.available ? 'The command was not found on the executable search path.' : undefined} onClick={() => { void toggle(); }} />
         <div className="text-tertiary settings__hint" data-enablement>{enablement}</div>
         {message ? <div className="composer__error" role="alert">{message}</div> : null}
       </td>
@@ -108,13 +109,13 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
   const running = setup?.state === 'running';
   const start = async () => { setMessage(null); const r = await onStart(); if (!r.ok) setMessage(r.message); };
   return (
-    <div className="card settings__card" data-mcp-setup data-setup-state={setup?.state ?? 'unknown'} data-setup-outcome={setup?.outcome ?? ''}>
+    <DesignCard className="card settings__card" data-mcp-setup data-setup-state={setup?.state ?? 'unknown'} data-setup-outcome={setup?.outcome ?? ''}>
       <div className="providers-card__head">
         <div className="card-kicker">Code intelligence</div>
         <div className="providers-card__actions">
           {running
-            ? <button type="button" className="btn btn-secondary btn-compact" onClick={() => { void onCancel(); }} data-action="setup-cancel">Cancel</button>
-            : <button type="button" className="btn btn-primary btn-compact" disabled={setup === null} onClick={() => { void start(); }} data-action="setup-start">{setup?.state === 'finished' ? 'Set up again' : 'Set up code intelligence for this workspace'}</button>}
+            ? <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void onCancel(); }} data-action="setup-cancel">Cancel</DesignButton>
+            : <DesignButton type="button" className="btn btn-primary btn-compact" disabled={setup === null} onClick={() => { void start(); }} data-action="setup-start">{setup?.state === 'finished' ? 'Set up again' : 'Set up code intelligence for this workspace'}</DesignButton>}
         </div>
       </div>
       <p className="text-secondary">Creates the bundled runtime's project for this workspace, indexes it and initialises its project memories — three steps, in order, each bounded; a workspace without code gets the project only. Runs in the background; you can cancel between steps or while a step is running.</p>
@@ -137,7 +138,7 @@ function SetupCard({ setup, onStart, onCancel }: { setup: McpSetupStatus | null;
         </>
       )}
       <p className="text-tertiary settings__hint">The machine-setup half of this action — checking developer tooling and warming package caches for the other servers — is not built: it belongs with the onboarding task registry, which does not exist yet; the bundled runtime needs neither.</p>
-    </div>
+    </DesignCard>
   );
 }
 
@@ -149,12 +150,12 @@ export function McpSettings(props: McpSettingsProps) {
   return (
     <div className="settings__section" data-mcp-settings>
       <h1 className="display">MCP Servers</h1>
-      <div className="card settings__card" data-mcp-servers>
+      <DesignCard className="card settings__card" data-mcp-servers>
         <div className="providers-card__head">
           <div className="card-kicker">Configured servers</div>
           <div className="providers-card__actions">
-            <button type="button" className="btn btn-secondary btn-compact" onClick={props.onRefresh} disabled={props.loading}>Reload</button>
-            <button type="button" className="btn btn-primary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</button>
+            <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={props.onRefresh} disabled={props.loading}>Reload</DesignButton>
+            <DesignButton type="button" className="btn btn-primary btn-compact" aria-description="Probe every configured MCP server" disabled={props.probing || rows.length === 0} onClick={() => { void probeAll(); }} data-action="check-status">{props.probing ? 'Checking…' : 'Check status'}</DesignButton>
           </div>
         </div>
         <p className="text-secondary">Every server the configuration declares, whether or not it is enabled. Health is probed on demand and never remembered across launches; the switch turns a server off for this session only.</p>
@@ -163,43 +164,43 @@ export function McpSettings(props: McpSettingsProps) {
         {rows.length === 0 ? (
           <p className="text-secondary" data-mcp-empty>{props.loading ? 'Reading the configuration…' : `No tool servers are configured. Declare them under mcp_servers in ${props.listing?.configFile ?? 'the workspace configuration file'}.`}</p>
         ) : (
-          <table className="table settings__grid" aria-label="Configured MCP servers">
+          <DesignTable className="table settings__grid" aria-label="Configured MCP servers">
             <thead><tr><th>Health</th><th>Server</th><th>Origin</th><th>Enabled</th></tr></thead>
             <tbody>
               {rows.map((row) => <Row key={row.name} row={row} health={props.health[row.name] ?? { state: 'unknown' }} probing={props.probing} onToggle={props.onToggle} />)}
             </tbody>
-          </table>
+          </DesignTable>
         )}
-      </div>
+      </DesignCard>
       <SetupCard setup={props.setup} onStart={props.onSetupStart} onCancel={props.onSetupCancel} />
-      <div className="card settings__card" data-mcp-secrets>
+      <DesignCard className="card settings__card" data-mcp-secrets>
         <div className="card-kicker">Stored secrets</div>
         <p className="text-secondary">What the two secrets files hold, per server and key, with every value masked. Adding, changing and deleting a secret here is not built yet; edit <code className="mono">secrets.yaml</code> beside the configuration file (workspace or global). A stored secret takes effect on the next configuration load.</p>
         <div className="settings__action">
           <label htmlFor="mcp-secrets-server">View</label>
-          <select id="mcp-secrets-server" className="input select settings__select" aria-label="Secrets for" value={chosen ?? ''} onChange={(e) => props.onSecretsServer(e.currentTarget.value === '' ? null : e.currentTarget.value)}>
+          <DesignSelect id="mcp-secrets-server" className="input select settings__select" aria-label="Secrets for" value={chosen ?? ''} onChange={(e) => props.onSecretsServer(e.currentTarget.value === '' ? null : e.currentTarget.value)}>
             <option value="">All servers</option>
             {(props.secrets?.servers ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          </DesignSelect>
         </div>
         {props.secrets && props.secrets.servers.length === 0 ? (
           <p className="text-secondary" data-secrets-empty="no-servers">No server is configured, so there is nothing a secret could belong to.</p>
         ) : props.secrets && props.secrets.rows.length === 0 ? (
           <p className="text-secondary" data-secrets-empty={chosen === null ? 'none-at-all' : 'none-for-server'}>{chosen === null ? 'No server holds a stored secret.' : `${chosen} holds no stored secret.`}</p>
         ) : props.secrets ? (
-          <table className="table settings__grid" aria-label="Stored secrets">
+          <DesignTable className="table settings__grid" aria-label="Stored secrets">
             <thead><tr><th>Server</th><th>Key</th><th>Value</th><th>Scope</th></tr></thead>
             <tbody>
               {props.secrets.rows.map((r) => <tr key={`${r.server} ${r.key}`} data-secret-row={`${r.server}.${r.key}`}><td className="mono">{r.server}</td><td className="mono">{r.key}</td><td className="mono" data-mask>{r.masked}</td><td data-scope>{r.scope}</td></tr>)}
             </tbody>
-          </table>
+          </DesignTable>
         ) : <p className="text-secondary">Reading…</p>}
         {chosen !== null && props.secrets ? (
           <div className="settings__hint text-secondary" data-expected-keys>
             {props.secrets.expected.length === 0 ? `${chosen} declares no env keys.` : <>Expected keys of {chosen}: {props.secrets.expected.map((e) => <span key={e.key} className="mono" data-expected={e.key} data-satisfied={e.satisfied ? 'yes' : 'no'}>{e.key} ({e.satisfied ? 'stored' : 'missing'}) </span>)}</>}
           </div>
         ) : null}
-      </div>
+      </DesignCard>
     </div>
   );
 }

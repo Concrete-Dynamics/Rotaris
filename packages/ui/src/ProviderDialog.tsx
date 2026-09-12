@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProviderChoice, ProviderDialogPayload, ProviderSignInResult } from '@rotaris/contracts';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
 /**
  * REQ-PROVIDER-116/117 — the provider authentication window (ADR-0048, its own modal window like the
@@ -84,7 +85,7 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
         <h1 id="provider-title" className="dialog-title">{title}</h1>
         <p className="dialog-body" role="status" data-outcome="signed-in">{done}</p>
         <p className="text-secondary">Model slots were assigned from the discovered catalog; review them under Settings → Models.</p>
-        <div className="dialog-actions"><button type="button" className="btn btn-primary" autoFocus onClick={onClose}>Done</button></div>
+        <div className="dialog-actions"><DesignButton type="button" className="btn btn-primary" autoFocus onClick={onClose}>Done</DesignButton></div>
       </div>
     );
   }
@@ -95,57 +96,57 @@ export function ProviderDialog({ payload, onSubmit, onClose }: ProviderDialogPro
       {!fixed && (
         <label className="provider-dialog__field">
           <span className="text-secondary">Provider</span>
-          <select id="provider-choice" className="input select" value={choice?.id ?? ''} disabled={busy} onChange={(e) => pick(e.currentTarget.value)} aria-label="Provider">
+          <DesignSelect id="provider-choice" className="input select" value={choice?.id ?? ''} disabled={busy} onChange={(e) => pick(e.currentTarget.value)} aria-label="Provider">
             {payload.choices.map((c) => <option key={c.id} value={c.id} disabled={!c.available}>{c.displayName}{c.available ? '' : ` — ${c.unavailabilityReason ?? 'coming soon'}`}</option>)}
-          </select>
+          </DesignSelect>
         </label>
       )}
       {choice && <p className="text-secondary provider-dialog__hint" data-hint>{choice.hint}</p>}
       {choice && choice.custom && (<>
         <label className="provider-dialog__field">
           <span className="text-secondary">Endpoint label</span>
-          <input id="provider-label" className="input" value={label} disabled={busy} onChange={(e) => setLabel(e.currentTarget.value)} aria-invalid={fieldErrors.label ? true : undefined} placeholder="OpenRouter" />
+          <DesignInput id="provider-label" className="input" value={label} disabled={busy} onChange={(e) => setLabel(e.currentTarget.value)} aria-invalid={fieldErrors.label ? true : undefined} placeholder="OpenRouter" />
           {fieldErrors.label && <span className="composer__error" role="alert">{fieldErrors.label}</span>}
         </label>
         <label className="provider-dialog__field">
           <span className="text-secondary">Endpoint URL</span>
-          <input id="provider-url" className="input mono" value={baseUrl} disabled={busy} onChange={(e) => setBaseUrl(e.currentTarget.value)} aria-invalid={fieldErrors.baseUrl ? true : undefined} />
+          <DesignInput id="provider-url" className="input mono" value={baseUrl} disabled={busy} onChange={(e) => setBaseUrl(e.currentTarget.value)} aria-invalid={fieldErrors.baseUrl ? true : undefined} />
           {fieldErrors.baseUrl && <span className="composer__error" role="alert">{fieldErrors.baseUrl}</span>}
         </label>
       </>)}
       {choice && choice.method === 'api-key' && (
         <label className="provider-dialog__field">
           <span className="text-secondary">{KEY_INSTRUCTION}</span>
-          <input id="provider-key" ref={keyInput} className="input mono" type="password" autoComplete="off" value={apiKey} disabled={busy} onChange={(e) => setApiKey(e.currentTarget.value)} aria-label="API key" aria-invalid={fieldErrors.apiKey ? true : undefined} />
+          <DesignInput id="provider-key" ref={keyInput} className="input mono" type="password" autoComplete="off" value={apiKey} disabled={busy} onChange={(e) => setApiKey(e.currentTarget.value)} aria-label="API key" aria-invalid={fieldErrors.apiKey ? true : undefined} />
           {fieldErrors.apiKey && <span className="composer__error" role="alert">{fieldErrors.apiKey}</span>}
         </label>
       )}
       {choice && choice.method !== 'api-key' && <p className="text-secondary">{OAUTH_INSTRUCTION}</p>}
       {confirm && (
-        <div className="card provider-dialog__confirm" role="alertdialog" aria-label="Confirm replacement">
+        <DesignCard className="card provider-dialog__confirm" role="alertdialog" aria-label="Confirm replacement">
           <p className="card-body">{confirm.message}</p>
           <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" autoFocus onClick={() => setConfirm(null)}>No</button>
-            <button type="button" className="btn btn-danger" onClick={() => { void submit({ replace: true }); }}>Yes, replace</button>
+            <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={() => setConfirm(null)}>No</DesignButton>
+            <DesignButton type="button" className="btn btn-danger" onClick={() => { void submit({ replace: true }); }}>Yes, replace</DesignButton>
           </div>
-        </div>
+        </DesignCard>
       )}
       {noModels && (
-        <div className="card provider-dialog__confirm" role="alertdialog" aria-label="No models discovered">
+        <DesignCard className="card provider-dialog__confirm" role="alertdialog" aria-label="No models discovered">
           <p className="card-body">Discovery succeeded but returned no models. Continue anyway, retry discovery{noModels.retries >= 2 ? ' (the retry limit was reached)' : ''}, choose a different provider, or abandon.</p>
           <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => { setNoModels(null); void submit({ replace: true, allowEmpty: true }); }}>Continue anyway</button>
-            <button type="button" className="btn btn-secondary" disabled={noModels.retries >= 2} onClick={() => { setNoModels({ retries: noModels.retries + 1 }); void submit({ replace: true }); }}>Retry discovery</button>
-            {!fixed && <button type="button" className="btn btn-secondary" onClick={() => { setNoModels(null); setError(null); }}>Choose a different provider</button>}
-            <button type="button" className="btn btn-ghost" autoFocus onClick={onClose}>Abandon</button>
+            <DesignButton type="button" className="btn btn-secondary" onClick={() => { setNoModels(null); void submit({ replace: true, allowEmpty: true }); }}>Continue anyway</DesignButton>
+            <DesignButton type="button" className="btn btn-secondary" disabled={noModels.retries >= 2} onClick={() => { setNoModels({ retries: noModels.retries + 1 }); void submit({ replace: true }); }}>Retry discovery</DesignButton>
+            {!fixed && <DesignButton type="button" className="btn btn-secondary" onClick={() => { setNoModels(null); setError(null); }}>Choose a different provider</DesignButton>}
+            <DesignButton type="button" className="btn btn-ghost" autoFocus onClick={onClose}>Abandon</DesignButton>
           </div>
-        </div>
+        </DesignCard>
       )}
       {busy && <p className="text-secondary" role="status" data-busy>{choice?.custom ? BUSY_ADD : BUSY_AUTH}</p>}
       {error && <p className="composer__error" role="alert" data-outcome="failed">{error}</p>}
       <div className="dialog-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || !choice} onClick={() => { void submit(); }} data-action="authenticate">{choice?.custom ? 'Add endpoint' : 'Authenticate'}</button>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose} title="Escape">Cancel</button>
+        <DesignButton type="button" className="btn btn-primary" disabled={busy || !choice} onClick={() => { void submit(); }} data-action="authenticate">{choice?.custom ? 'Add endpoint' : 'Authenticate'}</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary" disabled={busy} onClick={onClose} title="Escape">Cancel</DesignButton>
       </div>
     </div>
   );

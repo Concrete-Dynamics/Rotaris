@@ -131,6 +131,7 @@ Edges worth knowing the reason for:
 | The terminal stream: one emulator per stream, the frames, the flush, the controls, the audit line (ADR-0021, REQ-TOOLS-126/127/128, REQ-SHELL-103..107) | `agent-tools/src/terminal/streams.ts` (+ `engine` for the row's `streamId`) | run-host (`terminal.ts`, `tools.ts`); main (`terminal.ts` — the delivery bound across every window taken together, Part T″ 2026-09-11: one budget the windows share, never one each) |
 | The terminal display: the emulator port and its two adapters, the stream set, the input rules, the window and the preview (ADR-0047, REQ-SHELL-079..107); the renderer's third-party emulator is `@xterm/xterm` + `@xterm/headless` 6.0.0, pinned (agent-tools takes headless + `@xterm/addon-serialize`) | `ui/src/terminal/` (+ `host.tsx`, Part AL′: the per-renderer terminal host the pane, the persona card, the toolbar control and the palette entry read) | renderer (the main window's and each persona window's previews; the terminal window, `role=terminal` — Part AL′) |
 | The composer's slash catalogue: the parser, the registry, the built-ins and the palette mirror, the highlighting, the popup (REQ-CHAT-018..034, 159) | `ui/src/slash/`, `ui/src/RunHeader.tsx` | renderer (`main.tsx` passes the `slash` host) |
+| The adopted design language, drawn once: the twenty-seven component briefs, their typed props, and the verification-only layout contracts (`docs/design/README.md` §2, §7) | `ui/src/design-system/` | renderer (every view and window imports through `@rotaris/ui`; nothing else in `ui` writes a design-equivalent control — `tools/check-ui-language.mjs` fails `pnpm lint` on one) |
 
 ### `ui/transcript` (Parts Z and AA, 2026-09-07; ADR-0045's first execution, ADR-0046 steps 3-5, ADR-0051's second)
 
@@ -186,3 +187,25 @@ contains-code walk (an edge it already had). Main gains its first module, `main/
 branch: `platform` for the per-user directory, nothing else), imported before anything that touches `electron`.
 `electron-builder.yml` carries the tree as `extraResources` outside the asar (a Python tree cannot run from an
 archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked`.
+
+### `ui/design-system` (2026-09-12)
+
+The adopted design language's **one** implementation, and the only place in `ui` where a design-equivalent control
+is written: `core.tsx` (`Button`, `StatusDot`, `Tag`, `ToggleSwitch`, `SegmentedControl`, `Kbd`), `forms.tsx`
+(`Input`, `TextArea`, `Select`), `surfaces.tsx` (`Card`, `KpiCard`, `SectionLabel`), `data.tsx` (`Sparkline`,
+`MeterBar`, `ContextRing`, `Table`), `feedback.tsx` (`Dialog`, `Tooltip`, `Spinner`, and the `Acknowledgement` /
+`AcknowledgementStack` adapter that keeps REQ-SHELL-115's vocabulary over the visual the design material calls a
+toast), `navigation.tsx` (`Tabs`, `NavRail`, `CommandPalette`), `patterns.tsx` (`TableCard`, `PageHeader`,
+`EmptyState`, `LogPanel`, `ConfirmDialog`) — twenty-seven briefs, twenty-nine exports — plus `shared.ts` (the two
+class helpers) and `layout-contract.ts`. **Edges unchanged** — `ui → kernel, contracts, ui-core`; the layer imports
+nothing but `react`, which is what lets `tools/check-ui-language.mjs` forbid a raw `button`, `input`, `textarea`,
+`select` or `table` everywhere *else* under `packages/ui/src` and `apps/desktop/src/renderer` without an exception
+list. Each component forwards native attributes and its ref, so a caller's `data-testid`, `aria-*` and handler
+survive the substitution; a specialised class already carrying a requirement's visual contract is passed through
+rather than overwritten (`componentClass`).
+
+`layout-contract.ts` is **verification-only data, not behaviour**: a `UiLayoutContract` on a component root is
+serialised into `data-ui` / `data-ui-contract` and evaluated by `ui-audit` against live geometry after layout and
+animation settle (nine relations — `align-x`, `align-y`, `equal-width`, `equal-height`, `spacing-token`,
+`containment`, `text-fit`, `hit-test`, `viewport-scroll`). Nothing in the product reads it, so a contract can
+neither move a pixel nor hide a defect; it can only be wrong in public.

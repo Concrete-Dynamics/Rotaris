@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type PaneLayout, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, Tag as DesignTag } from './design-system/index.js';
 
 /**
  * REQ-SHELL-026's startup view. Structure from the specification — REQ-MONITOR-164 (the header), 165 (the two
@@ -159,20 +160,20 @@ export function OverviewView(props: OverviewProps) {
 
   return (
     <div className="overview" data-testid="overview">
-      <header className="overview__header page-header">
+      <DesignPageHeader className="overview__header page-header">
         <h1 className="display overview__title">Overview</h1>
         <span className="page-header-sub overview__session mono" data-testid="overview-session">{headerLabel}</span>
         <span className="overview__spacer" />
-        <button type="button" className="btn btn-secondary" onClick={props.onListSessions}>List sessions</button>
-        <button type="button" className="btn btn-primary" onClick={() => { void newSession(); }}>New session</button>
-      </header>
+        <DesignButton type="button" className="btn btn-secondary" onClick={props.onListSessions}>List sessions</DesignButton>
+        <DesignButton type="button" className="btn btn-primary" onClick={() => { void newSession(); }}>New session</DesignButton>
+      </DesignPageHeader>
       {newSessionError && <p className="overview__error" role="alert" data-testid="overview-new-session-error">{newSessionError}</p>}
       {empty ? (
-        <div className="empty-state overview__empty" data-testid="overview-empty">
+        <DesignEmptyState className="empty-state overview__empty" data-testid="overview-empty">
           <span className="empty-state-title">Nothing to show yet</span>
           <span className="empty-state-hint">Start a run from the Workspace view. Finished and suspended runs, their tokens, tool calls and agents will be summarised here.</span>
-          <button type="button" className="btn btn-primary" onClick={() => props.onGoTo('workspace')}>Open Workspace</button>
-        </div>
+          <DesignButton type="button" className="btn btn-primary" onClick={() => props.onGoTo('workspace')}>Open Workspace</DesignButton>
+        </DesignEmptyState>
       ) : (
         <div className="overview__body" ref={bodyRef} style={{ gridTemplateColumns: `minmax(${OVERVIEW_LEFT_MIN}px, 1fr) 8px ${right}px` }}>
           <div className="overview__left">
@@ -188,7 +189,7 @@ export function OverviewView(props: OverviewProps) {
                 <div className="ov-kpi"><span className="kpi-value" data-testid="overview-tool-calls">{session?.toolCalls.total ?? 0}</span></div>
                 <div className="card-meta">across {session?.toolCalls.agents ?? 0} agent{(session?.toolCalls.agents ?? 0) === 1 ? '' : 's'}</div>
                 <div className="ov-chips" data-testid="overview-tool-chips">
-                  {(session?.toolCalls.byTool ?? []).slice(0, 5).map((t) => <span key={t.tool} className="tag tag-neutral mono">{t.tool} {t.count}</span>)}
+                  {(session?.toolCalls.byTool ?? []).slice(0, 5).map((t) => <DesignTag key={t.tool} className="tag tag-neutral mono">{t.tool} {t.count}</DesignTag>)}
                 </div>
               </Card>
               <Card kicker="Repository">
@@ -220,12 +221,12 @@ export function OverviewView(props: OverviewProps) {
                             <li key={row.sessionId} className="ov-session" data-session={row.sessionId} data-busy={row.busy ? '1' : '0'}>
                               <span className={`status-dot ov-dot ov-dot--${dot.tone}${dot.pulse && !reducedMotion ? ' is-pulsing' : ''}`} aria-hidden="true" />
                               <span className="visually-hidden">{dot.text}</span>
-                              <button type="button" className="btn btn-link ov-session__name" title={`${row.sessionId}${row.requirementId ? ` · ${row.requirementId}` : ''}`} onClick={() => props.onOpenSession(row.sessionId)}>{row.label}</button>
-                              {row.requirementId && <span className="tag tag-outline">{row.requirementId}</span>}
-                              {attached && <span className="tag tag-accent" data-testid="overview-focused">focused</span>}
-                              {row.status === 'waiting' && <span className="tag tag-outline tag-wait" data-testid="overview-waiting">waiting on a provider limit</span>}
+                              <DesignButton type="button" className="btn btn-link ov-session__name" title={`${row.sessionId}${row.requirementId ? ` · ${row.requirementId}` : ''}`} onClick={() => props.onOpenSession(row.sessionId)}>{row.label}</DesignButton>
+                              {row.requirementId && <DesignTag className="tag tag-outline">{row.requirementId}</DesignTag>}
+                              {attached && <DesignTag className="tag tag-accent" data-testid="overview-focused">focused</DesignTag>}
+                              {row.status === 'waiting' && <DesignTag className="tag tag-outline tag-wait" data-testid="overview-waiting">waiting on a provider limit</DesignTag>}
                               <span className="ov-session__detail text-secondary">{row.detail}</span>
-                              {!row.busy && <button type="button" className="btn btn-link" onClick={() => props.onContinueSession(row.sessionId)}>Continue run</button>}
+                              {!row.busy && <DesignButton type="button" className="btn btn-link" onClick={() => props.onContinueSession(row.sessionId)}>Continue run</DesignButton>}
                               <span className="ov-session__meta mono">{row.branch} · {formatTokens(row.tokens)} · {row.durationLabel || '—'}</span>
                             </li>
                           );
@@ -244,11 +245,11 @@ export function OverviewView(props: OverviewProps) {
             <Card kicker="Subscription limits">
               <div className="card-body">No usage figures for the signed-in providers yet.</div>
             </Card>
-            <Card kicker="Agents" className="ov-card--tree" actions={<button type="button" className="btn btn-link" onClick={() => props.onGoTo('mission')}>Open Mission</button>}>
+            <Card kicker="Agents" className="ov-card--tree" actions={<DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('mission')}>Open Mission</DesignButton>}>
               <AgentTree agents={session?.agents ?? []} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} />
             </Card>
-            <Card kicker="Improvement proposals" actions={<span className="tag tag-neutral">0 pending</span>}>
-              <div className="card-body">No proposals exist yet. <button type="button" className="btn btn-link" onClick={() => props.onGoTo('library')}>Open Library</button></div>
+            <Card kicker="Improvement proposals" actions={<DesignTag className="tag tag-neutral">0 pending</DesignTag>}>
+              <div className="card-body">No proposals exist yet. <DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('library')}>Open Library</DesignButton></div>
             </Card>
           </aside>
         </div>

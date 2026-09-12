@@ -10,7 +10,7 @@ import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type Termi
 import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
 import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
-import { bindPromptRootsReader } from '@rotaris/ui';
+import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
@@ -1636,7 +1636,7 @@ function TerminalApp({ streams, sessionId, initialFocus, initialAutoOpen }: { st
       {/* REQ-SHELL-109: the auto-open preference, default off, persisted user-wide by main under `terminal/autoOpen`. */}
       <div className="term-shell__bar" data-testid="term-auto-open">
         <span id="term-auto-open-label">Open this window automatically</span>
-        <button type="button" className={`toggle${autoOpen ? ' is-on' : ''}`} role="switch" aria-labelledby="term-auto-open-label" aria-checked={autoOpen} aria-description={`Automatic opening is ${autoOpen ? 'on' : 'off'}. On, the terminal window opens without taking focus when an agent's terminal starts while it is closed.`} data-testid="term-auto-open-toggle" onClick={() => changeAutoOpen(!autoOpen)} />
+        <ToggleSwitch checked={autoOpen} onChange={changeAutoOpen} label="Open this window automatically" aria-labelledby="term-auto-open-label" aria-description={`Automatic opening is ${autoOpen ? 'on' : 'off'}. On, the terminal window opens without taking focus when an agent's terminal starts while it is closed.`} data-testid="term-auto-open-toggle" />
         <span className="text-secondary">When an agent's terminal starts while this window is closed, it opens without taking focus.</span>
       </div>
       {/* ADR-0049's fourth decision: the acknowledgement stack is per window (a copy's outcome, REQ-SHELL-101). */}

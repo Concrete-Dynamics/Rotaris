@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DISPLAY_LINE_CAP_CHOICES, type DisplayView } from '@rotaris/contracts';
 import { Toggle, type ConfigSettingsProps } from './ConfigSettings.js';
+import { Select as DesignSelect } from '../design-system/index.js';
 
 /**
  * The Display category (REQ-CONFIG-403, REQ-CONFIG-472). Six controls over two commit policies, and the
@@ -44,7 +45,7 @@ function CapSelect({ id, label, description, value, disabled, onChange }: {
   return (
     <div className="settings__action">
       <label htmlFor={id}>{label}</label>
-      <select
+      <DesignSelect
         id={id}
         data-testid={id}
         className="input select settings__select"
@@ -55,7 +56,7 @@ function CapSelect({ id, label, description, value, disabled, onChange }: {
         onChange={(e) => onChange(e.currentTarget.value === 'unlimited' ? null : Number(e.currentTarget.value))}
       >
         {capOptions(value).map((cap) => <option key={capKey(cap)} value={capKey(cap)}>{capLabel(cap)}</option>)}
-      </select>
+      </DesignSelect>
       <span className="text-secondary settings__hint">{description}</span>
     </div>
   );

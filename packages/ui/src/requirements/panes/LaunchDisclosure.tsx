@@ -1,6 +1,7 @@
 import { useEffect, useId } from 'react';
 import type { LaunchPreview } from '@rotaris/contracts';
 import { DISCLOSURE_ABANDON, DISCLOSURE_ACCEPT, DISCLOSURE_ACCEPT_ALWAYS, DISCLOSURE_TITLE, disclosureLines } from './presentation.js';
+import { Button as DesignButton } from '../../design-system/index.js';
 
 /**
  * Part AP — the elevation's disclosure (REQ-TRACE-470..474): the first action of a launch that would start a run
@@ -33,10 +34,10 @@ export function LaunchDisclosure({ preview, onAccept, onAbandon, onSetUpGit }: L
         <h2 id={titleId} className="dialog-title">{DISCLOSURE_TITLE}: {preview.id}</h2>
         <ul className="dialog-body req-pane__disclosure-lines">{lines.map((line) => <li key={line} className={line.startsWith('It is confined') ? 'req-pane__mono' : undefined}>{line}</li>)}</ul>
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" autoFocus onClick={onAbandon}>{DISCLOSURE_ABANDON}</button>
-          {!canStart && !preview.repository.ok && preview.repository.offerSetup && onSetUpGit !== undefined && <button type="button" className="btn btn-secondary" onClick={onSetUpGit}>Set up Git here</button>}
-          {canStart && <button type="button" className="btn btn-secondary" onClick={() => onAccept(true)}>{DISCLOSURE_ACCEPT_ALWAYS}</button>}
-          {canStart && <button type="button" className="btn btn-primary" onClick={() => onAccept(false)}>{DISCLOSURE_ACCEPT}</button>}
+          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onAbandon}>{DISCLOSURE_ABANDON}</DesignButton>
+          {!canStart && !preview.repository.ok && preview.repository.offerSetup && onSetUpGit !== undefined && <DesignButton type="button" className="btn btn-secondary" onClick={onSetUpGit}>Set up Git here</DesignButton>}
+          {canStart && <DesignButton type="button" className="btn btn-secondary" onClick={() => onAccept(true)}>{DISCLOSURE_ACCEPT_ALWAYS}</DesignButton>}
+          {canStart && <DesignButton type="button" className="btn btn-primary" onClick={() => onAccept(false)}>{DISCLOSURE_ACCEPT}</DesignButton>}
         </div>
       </div>
     </div>

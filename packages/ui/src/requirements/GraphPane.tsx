@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import type { ReqId } from '@rotaris/contracts';
 import { GRAPH_BACK_LABEL, GRAPH_BOUND_NAME, GRAPH_DEPTH_CEILING, GRAPH_DEPTH_FLOOR, GRAPH_DEPTH_NAME, GRAPH_EDGES_DESCRIPTION, GRAPH_EDGES_NAME, GRAPH_NODES_NAME, GRAPH_NO_CENTRE, GRAPH_SUMMARY_NAME, GRAPH_TITLE, depthColumns, edgeSentence, graphDepthDescription, nodeSentence, type GraphModel } from './graph.js';
+import { Button as DesignButton, Input as DesignInput } from '../design-system/index.js';
 
 /**
  * Part R2 — the relationship graph's surface (spec 08 §Relationship Graph; REQ-TRACE-322..333, 505). The model is
@@ -41,14 +42,14 @@ export function GraphPane({ model, depth, onDepth, onCentre, onClose }: GraphPan
         <span className="req-graph__spacer" />
         <label className="req-graph__depth">
           <span className="field-label">Depth</span>
-          <input
+          <DesignInput
             className="input req-graph__depth-input" type="number" data-testid="req-graph-depth"
             min={GRAPH_DEPTH_FLOOR} max={GRAPH_DEPTH_CEILING} value={depth}
             aria-label={GRAPH_DEPTH_NAME} aria-description={graphDepthDescription(depth)} title={graphDepthDescription(depth)}
             onChange={(e) => { const v = Number(e.currentTarget.value); onDepth(v); }}
           />
         </label>
-        <button type="button" className="btn btn-secondary btn-compact" data-testid="req-graph-back" onClick={onClose} aria-label={`${GRAPH_BACK_LABEL} of requirements`}>{GRAPH_BACK_LABEL}</button>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="req-graph-back" onClick={onClose} aria-label={`${GRAPH_BACK_LABEL} of requirements`}>{GRAPH_BACK_LABEL}</DesignButton>
       </header>
       {model === null ? (
         <p className="req-status" role="status" data-testid="req-graph-empty">{GRAPH_NO_CENTRE}</p>
@@ -61,7 +62,7 @@ export function GraphPane({ model, depth, onDepth, onCentre, onClose }: GraphPan
               <div key={column.depth} className="req-graph__column" data-testid="req-graph-column" data-depth={column.depth}>
                 <span className="card-kicker">{column.depth === 0 ? 'Centre' : `Step ${column.depth}`}</span>
                 {column.nodes.map((node) => (
-                  <button
+                  <DesignButton
                     key={node.id} type="button"
                     className={`req-graph__node${node.id === model.centre ? ' is-centre' : ''}${node.resolved ? '' : ' is-unresolved'}`}
                     data-testid="req-graph-node" data-node={node.id} data-kind={node.kind} data-resolved={node.resolved} data-navigable={node.navigable}
@@ -75,7 +76,7 @@ export function GraphPane({ model, depth, onDepth, onCentre, onClose }: GraphPan
                       <span className={`tag ${node.kind === 'epic' ? 'tag-accent' : node.resolved ? 'tag-outline' : 'tag-neutral'}`}>{node.kind}</span>
                       <span className="card-meta" data-testid="req-graph-node-health">{node.healthLabel}</span>
                     </span>
-                  </button>
+                  </DesignButton>
                 ))}
               </div>
             ))}

@@ -4,6 +4,7 @@ import { ACKNOWLEDGEMENT_KIND_WORDS, ACKNOWLEDGEMENT_SEVERITY, SEVERITY_GLYPHS }
 import { type Acknowledgement, type AcknowledgementStore } from '@rotaris/ui-core';
 import { markMotionStart } from './motion.js';
 import { startNewSessionFromOffer } from './workspace-host.js';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * REQ-NOTIFY-013 / REQ-SHELL-112 / REQ-SHELL-113 — the window's ONE transient acknowledgement surface. There is no
@@ -85,17 +86,17 @@ function AcknowledgementRow({ item, count, onClose }: { item: Acknowledgement; c
           * user was doing, and nothing here autofocuses.
           */}
         {item.action && (
-          <button
+          <DesignButton
             type="button"
             className="ack__action"
             data-testid="acknowledgement-action"
             onClick={() => { if (item.action?.kind === 'start-session') startNewSessionFromOffer(); }}
           >
             {item.action.label}
-          </button>
+          </DesignButton>
         )}
       </div>
-      <button type="button" className="ack__close" aria-label={`Close the ${word.toLowerCase()} “${item.title}”`} onClick={close}>×</button>
+      <DesignButton type="button" className="ack__close" aria-label={`Close the ${word.toLowerCase()} “${item.title}”`} onClick={close}>×</DesignButton>
     </div>
   );
 }

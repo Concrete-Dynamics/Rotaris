@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { HooksSummary } from '@rotaris/contracts';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * REQ-HOOKS-106/107 — the review dialog, painted inside its own modal window: the workspace path, how
@@ -60,8 +61,8 @@ export function HookReviewDialog({ workspace, entries, onDecide }: HookReviewDia
         </div>
         {error && <p className="approval__status" role="alert">The decision could not be saved: {error}</p>}
         <div className="dialog-actions approval__actions">
-          <button ref={reject} type="button" className="btn btn-secondary" disabled={busy} onClick={() => { void decide(false); }} aria-description="Records a refusal: these hooks stay skipped and you are not asked again while they are unchanged.">Do not run these hooks</button>
-          <button type="button" className="btn btn-danger" disabled={busy} onClick={() => { void decide(true); }} aria-description="Allows exactly these commands to run on later loads of this workspace; any change to them reopens the review.">Allow these hooks</button>
+          <DesignButton ref={reject} type="button" className="btn btn-secondary" disabled={busy} onClick={() => { void decide(false); }} aria-description="Records a refusal: these hooks stay skipped and you are not asked again while they are unchanged.">Do not run these hooks</DesignButton>
+          <DesignButton type="button" className="btn btn-danger" disabled={busy} onClick={() => { void decide(true); }} aria-description="Allows exactly these commands to run on later loads of this workspace; any change to them reopens the review.">Allow these hooks</DesignButton>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import type { BoardProjection, ReqId } from '@rotaris/contracts';
 import { blockedHeading, blockedRows, columnLabel } from '@rotaris/ui-core';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AK2 — the blocked summary (REQ-TRACE-240/241): above the columns scroll area, reachable without scrolling
@@ -31,14 +32,14 @@ export function BlockedStrip({ blocked, onResume, onNavigate, onFilterToBlocked 
             <li key={row.id} className="req-blocked__row" data-testid="req-blocked-row" data-req={row.id}>
               <span className="req-blocked__id mono">{row.id}</span>
               <span className="req-blocked__reason">{row.reason}</span>
-              <button type="button" className="btn btn-secondary btn-compact" onClick={() => onResume(row.id)} aria-label={`Resume ${row.id}: return it to ${columnLabel(returnTo)}`} title={`Return ${row.id} to ${columnLabel(returnTo)}, the state it was blocked out of`}>Resume to {columnLabel(returnTo)}</button>
-              <button type="button" className="btn btn-ghost btn-compact" onClick={() => onNavigate(row.id)} aria-label={`Go to the card of ${row.id}`}>Go to card</button>
+              <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => onResume(row.id)} aria-label={`Resume ${row.id}: return it to ${columnLabel(returnTo)}`} title={`Return ${row.id} to ${columnLabel(returnTo)}, the state it was blocked out of`}>Resume to {columnLabel(returnTo)}</DesignButton>
+              <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={() => onNavigate(row.id)} aria-label={`Go to the card of ${row.id}`}>Go to card</DesignButton>
             </li>
           );
         })}
         {notListed > 0 && (
           <li className="req-blocked__row req-blocked__more">
-            <button type="button" className="btn btn-ghost btn-compact" data-testid="req-blocked-more" onClick={onFilterToBlocked}>{notListed} more not listed — filter the board to the blocked requirements</button>
+            <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-blocked-more" onClick={onFilterToBlocked}>{notListed} more not listed — filter the board to the blocked requirements</DesignButton>
           </li>
         )}
       </ul>

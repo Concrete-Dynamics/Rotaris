@@ -1,4 +1,5 @@
 import { PUBLIC_TOOL_NAMES, TOOL_IMPLEMENTATIONS, type ConfigSnapshot } from '@rotaris/contracts';
+import { Table as DesignTable } from '../design-system/index.js';
 
 /**
  * The read-only inventories (REQ-CONFIG-276, REQ-CONFIG-277, REQ-TOOLS-165). Three columns — Name, Source,
@@ -22,7 +23,7 @@ export interface InventoryEntry {
 export function InventoryTable({ label, entries, empty }: { label: string; entries: readonly InventoryEntry[]; empty: string }) {
   if (entries.length === 0) return <p className="text-secondary" data-testid="inventory-empty">{empty}</p>;
   return (
-    <table className="table settings__grid" aria-label={label}>
+    <DesignTable className="table settings__grid" aria-label={label}>
       <thead><tr><th>Name</th><th>Source</th><th>Description</th></tr></thead>
       <tbody>
         {entries.map((e) => (
@@ -33,7 +34,7 @@ export function InventoryTable({ label, entries, empty }: { label: string; entri
           </tr>
         ))}
       </tbody>
-    </table>
+    </DesignTable>
   );
 }
 

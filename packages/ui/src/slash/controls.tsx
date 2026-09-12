@@ -6,6 +6,7 @@ import { NO_RUN_ACTIVE, TRANSCRIPT_EMPTY } from './catalogue.js';
 import { bindChatControls, chatControls, CLEAR_DESCRIPTION, CLEAR_DIALOG_BODY, CLEAR_DIALOG_CONFIRM, CLEAR_DIALOG_IMPACT, CLEAR_DIALOG_TITLE, CLEAR_LABEL, compressNow, NOTHING_TO_COMPRESS_TOAST, TRANSCRIPT_ALREADY_EMPTY_TOAST, type ChatAcknowledger, type ControlAnswer } from './host.js';
 import { cachedPromptRoots, readPromptRoots, registerPromptCommands } from './prompts.js';
 import type { Availability, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AO — the transcript toolbar's "Clear transcript" (REQ-CHAT-073/082/083/084), its dialog, the binding of the
@@ -140,10 +141,10 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
   const empty = rowCount === 0;
   return (
     <>
-      <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-clear" aria-label={CLEAR_LABEL}
+      <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-clear" aria-label={CLEAR_LABEL}
         // REQ-CHAT-073: disabled on an empty transcript; REQ-CHAT-082: the accessible description, verbatim.
         disabled={empty || busy} aria-disabled={empty || busy} aria-describedby="transcript-clear-reason"
-        title={empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION} onClick={requestClear}>{CLEAR_LABEL}</button>
+        title={empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION} onClick={requestClear}>{CLEAR_LABEL}</DesignButton>
       <span className="visually-hidden" id="transcript-clear-reason">{empty ? TRANSCRIPT_EMPTY : CLEAR_DESCRIPTION}</span>
       {/* Defect AO-2 — what this registrar has put on the registry the composer currently holds, and whether the roots have
         * been read at all. The popup's list is a memo of the text and that registry, so anything reading the popup must act

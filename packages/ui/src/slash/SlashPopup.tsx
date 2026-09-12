@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { SlashCommand, SlashContext } from './types.js';
+import { Tag as DesignTag } from '../design-system/index.js';
 
 /**
  * Part AN — REQ-CHAT-024/025/026: the slash suggestion popup.
@@ -106,7 +107,7 @@ export function SlashPopup({ commands, selected, ctx, listId, anchor, onHover, o
               <span className="slash-popup__sep">—</span>{' '}
               <span className="slash-popup__desc">{c.description}</span>{' '}
               {c.argumentHint && <><span className="slash-popup__hint mono">[{c.argumentHint}]</span>{' '}</>}
-              <span className="tag tag-neutral slash-popup__kind" data-testid="slash-kind">{c.kind}</span>
+              <DesignTag className="tag tag-neutral slash-popup__kind" data-testid="slash-kind">{c.kind}</DesignTag>
               {reason !== null && <>{' '}<span className="slash-popup__reason" id={`${slashRowId(listId, i)}-reason`}>{reason}</span></>}
             </div>
           );

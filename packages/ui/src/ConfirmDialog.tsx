@@ -1,4 +1,5 @@
 import { useEffect, useId } from 'react';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * The design system's confirmation contract (docs/design/system, feedback): a title, a body, optional facts as a
@@ -32,8 +33,8 @@ export function ConfirmDialog({ title, body, lines = [], confirmLabel, cancelLab
         <p className="dialog-body confirm-dialog__body">{body}</p>
         {lines.length > 0 && <ul className="dialog-body confirm-dialog__lines">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" autoFocus disabled={busy} onClick={onCancel}>{cancelLabel}</button>
-          <button type="button" className={destructive ? 'btn btn-danger' : 'btn btn-primary'} disabled={busy} onClick={onConfirm}>{busy ? `${confirmLabel}…` : confirmLabel}</button>
+          <DesignButton type="button" className="btn btn-secondary" autoFocus disabled={busy} onClick={onCancel}>{cancelLabel}</DesignButton>
+          <DesignButton type="button" className={destructive ? 'btn btn-danger' : 'btn btn-primary'} disabled={busy} onClick={onConfirm}>{busy ? `${confirmLabel}…` : confirmLabel}</DesignButton>
         </div>
       </div>
     </div>

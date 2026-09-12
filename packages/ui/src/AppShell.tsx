@@ -10,6 +10,15 @@ import { CommandPalette } from './commands/CommandPalette.js';
 import { KeyboardHelp } from './commands/KeyboardHelp.js';
 import { commandById, detectPlatform, type CommandContext } from './commands/registry.js';
 import { useCommandShortcuts } from './commands/useCommandShortcuts.js';
+import { Button as DesignButton, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
+
+const SHELL_LAYOUT = {
+  root: { id: 'shell-root', relations: [{ kind: 'containment' }, { kind: 'viewport-scroll', axis: 'both', expected: false }] },
+  title: { id: 'shell-title', relations: [{ kind: 'containment', target: 'shell-root' }] },
+  body: { id: 'shell-body', relations: [{ kind: 'containment', target: 'shell-root' }] },
+  view: { id: 'shell-primary-view', relations: [{ kind: 'containment', target: 'shell-body' }] },
+  status: { id: 'shell-status', relations: [{ kind: 'containment', target: 'shell-root' }, { kind: 'align-x', target: 'shell-title', edge: 'left' }, { kind: 'equal-width', target: 'shell-title' }] },
+} satisfies Record<string, UiLayoutContract>;
 
 /**
  * REQ-SHELL-024 — vertical layout, top to bottom: title bar; a
@@ -115,10 +124,10 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
   const body = views[activeView];
 
   return (
-    <div className="app-shell" data-view={activeView}>
+    <div className="app-shell" data-view={activeView} {...layoutContractAttributes(SHELL_LAYOUT.root)}>
       <CommandPalette open={paletteOpen} ctx={ctx} onClose={closePalette} onModality={onModality} platform={platform} />
       <KeyboardHelp open={helpOpen} onClose={closeKeyboardHelp} onModality={onModality} platform={platform} />
-      <header className="title-bar">
+      <header className="title-bar" {...layoutContractAttributes(SHELL_LAYOUT.title)}>
         <span className="brand-mark" aria-hidden="true" />
         <span className="title-bar__name">Rotaris</span>
         <span className="title-bar__version mono">{version}</span>
@@ -128,14 +137,14 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
         <div className="title-bar__workspace-slot">
           <WorkspaceChip path={workspacePath} home={home} sessionName={sessionName} onChoose={onChooseWorkspace} />
         </div>
-        {onOpenSessions && <button type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</button>}
+        {onOpenSessions && <DesignButton type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</DesignButton>}
       </header>
       <div className="notice-slot" aria-live="polite">
         {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onAction={onAction} />}
       </div>
-      <div className="body">
+      <div className="body" {...layoutContractAttributes(SHELL_LAYOUT.body)}>
         <NavRail items={railItems} active={activeView} onSelect={(id: ViewId) => switchView(id)} platform={platform} />
-        <main className="view" aria-label={active.label}>
+        <main className="view" aria-label={active.label} {...layoutContractAttributes(SHELL_LAYOUT.view)}>
           {body ?? (
             <div className="view__empty">
               <h1 className="display">{active.label}</h1>
@@ -144,7 +153,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
           )}
         </main>
       </div>
-      <footer className="status-strip" aria-label="Status" aria-description="Scroll horizontally to view every status item." tabIndex={0}>
+      <footer className="status-strip" aria-label="Status" aria-description="Scroll horizontally to view every status item." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
         {statusItems.map((s, i) => (typeof s === 'string'
           ? <span key={i} className="status-strip__item">{s}</span>
           : <span key={i} className="status-strip__item" aria-label={s.name} title={s.title} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PausePayload, PauseResolution } from '@rotaris/contracts';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * REQ-ORCH-086 / REQ-SESSION-109: the message-limit pause, painted inside its own modal window (ADR-0048):
@@ -47,9 +48,9 @@ export function PauseDialog({ payload, onResolve }: PauseDialogProps) {
       </dl>
       {error && <p className="composer__error" role="alert">{error}</p>}
       <div className="dialog-actions">
-        <button ref={first} type="button" className="btn btn-primary" disabled={busy} onClick={() => { void resolve('continue'); }} title="Enter">Continue</button>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { void resolve('double'); }}>Double the limit</button>
-        <button type="button" className="btn btn-danger" disabled={busy} onClick={() => { void resolve('cancel'); }} title="Escape">Cancel the run</button>
+        <DesignButton ref={first} type="button" className="btn btn-primary" disabled={busy} onClick={() => { void resolve('continue'); }} title="Enter">Continue</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary" disabled={busy} onClick={() => { void resolve('double'); }}>Double the limit</DesignButton>
+        <DesignButton type="button" className="btn btn-danger" disabled={busy} onClick={() => { void resolve('cancel'); }} title="Escape">Cancel the run</DesignButton>
       </div>
     </div>
   );

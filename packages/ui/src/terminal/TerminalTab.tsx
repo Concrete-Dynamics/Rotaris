@@ -8,6 +8,7 @@ import type { CopyOutcome } from './selection.js';
 import { TerminalBanner } from './TerminalBanner.js';
 import { TerminalGrid } from './TerminalGrid.js';
 import type { TerminalView } from './xterm-view.js';
+import { Button as DesignButton, Tag as DesignTag } from '../design-system/index.js';
 
 /**
  * Part AM — one tab of the terminal window (REQ-SHELL-087..094): the header, the controls row in the fixed order with
@@ -73,12 +74,12 @@ export function TerminalTab(props: TerminalTabProps) {
         />
         <span className="term-tab__command mono" aria-label={HEADER.commandName} title={label.full} data-testid="term-command">{label.text}</span>
         {meta.truncated && (
-          <span className="tag tag-outline term-tab__truncated" aria-label={HEADER.truncationName} title={HEADER.truncationTooltip} data-testid="term-truncated">{HEADER.truncationLabel}</span>
+          <DesignTag className="tag tag-outline term-tab__truncated" aria-label={HEADER.truncationName} title={HEADER.truncationTooltip} data-testid="term-truncated">{HEADER.truncationLabel}</DesignTag>
         )}
         <span className={`tag ${running ? 'tag-run' : 'tag-neutral'} term-tab__outcome mono`} aria-label={HEADER.outcomeName} data-testid="term-outcome">{outcome}</span>
       </header>
       <div className="term-tab__controls" role="toolbar" aria-label="Terminal controls">
-        <button
+        <DesignButton
           ref={registerTakeControl}
           type="button"
           className={`btn ${state.armed ? 'btn-warning' : 'btn-secondary'} btn-compact`}
@@ -89,10 +90,10 @@ export function TerminalTab(props: TerminalTabProps) {
           disabled={!canTakeControl}
           onClick={onToggleControl}
           data-testid="term-take-control"
-        >{state.armed ? CONTROLS.releaseControl : CONTROLS.takeControl}</button>
-        <button type="button" className="btn btn-secondary btn-compact" aria-label={CONTROLS.interruptName} {...disabledProps} onClick={onInterrupt} data-testid="term-interrupt">{CONTROLS.interrupt}</button>
-        <button type="button" className="btn btn-secondary btn-compact" aria-label={CONTROLS.endInputName} {...disabledProps} onClick={onEndInput} data-testid="term-end-input">{CONTROLS.endInput}</button>
-        <button
+        >{state.armed ? CONTROLS.releaseControl : CONTROLS.takeControl}</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" aria-label={CONTROLS.interruptName} {...disabledProps} onClick={onInterrupt} data-testid="term-interrupt">{CONTROLS.interrupt}</DesignButton>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" aria-label={CONTROLS.endInputName} {...disabledProps} onClick={onEndInput} data-testid="term-end-input">{CONTROLS.endInput}</DesignButton>
+        <DesignButton
           type="button"
           className="btn btn-ghost btn-compact term-tab__help"
           aria-label={CONTROLS.helpName}
@@ -101,10 +102,10 @@ export function TerminalTab(props: TerminalTabProps) {
           title={reason}
           onClick={() => setHelpOpen((v) => !v)}
           data-testid="term-help"
-        >?</button>
+        >?</DesignButton>
         <span className="term-tab__spacer" aria-hidden="true" />
-        <button type="button" className="btn btn-secondary btn-compact" aria-label={CONTROLS.copyAllName} onClick={onCopyAll} data-testid="term-copy-all">{CONTROLS.copyAll}</button>
-        <button
+        <DesignButton type="button" className="btn btn-secondary btn-compact" aria-label={CONTROLS.copyAllName} onClick={onCopyAll} data-testid="term-copy-all">{CONTROLS.copyAll}</DesignButton>
+        <DesignButton
           type="button"
           className="btn btn-danger btn-compact"
           aria-label={CONTROLS.killName}
@@ -113,7 +114,7 @@ export function TerminalTab(props: TerminalTabProps) {
           disabled={ended || !meta.canKill}
           onClick={() => setKillAsked(true)}
           data-testid="term-kill"
-        >{CONTROLS.kill}</button>
+        >{CONTROLS.kill}</DesignButton>
       </div>
       {helpOpen && <p className="term-tab__help-note text-secondary" role="note" data-testid="term-help-note">{reason}</p>}
       <div className="term-tab__banner" data-testid="term-banner-slot" data-banner-seq={state.bannerSeq}>

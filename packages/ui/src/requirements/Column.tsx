@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { BoardCard, Reachability, ReqId } from '@rotaris/contracts';
 import { PRIVATE_TRANSFER_TYPE, headingAccessibleName, railAccessibleName, realisedBand } from './model.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AK2 — one column of the board, open or folded (REQ-TRACE-232..238, 303..321, 358..367).
@@ -143,7 +144,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
   if (folded) {
     const railTitle = count === 0 ? `${label} · ${count}. ${emptySentence}` : `${label} · ${count}`;
     return (
-      <button
+      <DesignButton
         ref={railRef}
         type="button"
         className={`req-rail${drag !== null && drag.droppable ? ' is-dragging' : ''}`}
@@ -163,7 +164,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
         <span className="req-rail__heading">{label}</span>
         <span className="req-rail__count mono">{count}</span>
         {drag !== null && drag.droppable && <span className="req-rail__hint">{dragSentence}</span>}
-      </button>
+      </DesignButton>
     );
   }
 
@@ -194,7 +195,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
         onDrop(colKey, id);
       }}
     >
-      <button
+      <DesignButton
         ref={headingRef}
         type="button"
         className="req-column__heading"
@@ -206,7 +207,7 @@ export const Column = memo(function Column({ colKey, label, count, members, fold
         <span className="card-kicker req-column__label">{label}</span>
         <span className="req-column__count mono" data-testid="req-count">{count}</span>
         <span className="req-column__header-text visually-hidden">{`${label} · ${count}`}</span>
-      </button>
+      </DesignButton>
       {drag !== null && drag.droppable && (
         <p className={`req-column__drag req-column__drag--${dragState}`} data-testid="req-drag-answer" role="status">{dragSentence}</p>
       )}

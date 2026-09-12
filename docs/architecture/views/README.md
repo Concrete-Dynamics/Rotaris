@@ -24,7 +24,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-12** — **PD-LIBRARY-001, the commands a child ran**: the store moves to
+Last reconciled with the code: **2026-09-12** — **the adopted design language, drawn once**: the component view gains
+`ui/design-system` and a responsibilities row for it — the twenty-seven component briefs as one typed layer, the
+verification-only `UiLayoutContract`, and the guard (`tools/check-ui-language.mjs`) that makes it the only place in
+`packages/ui/src` or `apps/desktop/src/renderer` where a design-equivalent control is written. **Edges are unchanged**
+(`ui → kernel, contracts, ui-core`; the layer imports only `react`), and no process, message kind, channel, command,
+window role, store table, run-loop step or control operation moves with it, so the process and runtime views are
+unchanged: sixty-nine drawing files changed what they *call*, not what crosses a boundary. `pnpm ui-review` and the
+theme matrix drive the existing driver seam the process view's main row already carries, and add no seam of their own.
+Earlier the same day, **PD-LIBRARY-001, the commands a child ran**: the store moves to
 **v16**, one column (`artifacts.commands`), which is the whole of the change these views can see — no package, no
 allowed edge, no process, no message kind, no channel, no command and no run-loop step moves, and the column is
 noted on the `artifacts` row of the runtime view beside the v12 that created the table. Earlier the same day,

@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { detectPlatform } from './commands/registry.js';
 import { collapseHome, workspaceLabel } from './workspace-label.js';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * The title bar's workspace chip — REQ-SHELL-035, REQ-WORKSPACE-016 and REQ-WORKSPACE-017, drawn
@@ -123,7 +124,7 @@ export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceCh
 
   const session = (sessionName ?? '').trim();
   return (
-    <button
+    <DesignButton
       ref={chip}
       type="button"
       className="title-bar__workspace"
@@ -138,6 +139,6 @@ export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceCh
       {/* Hidden entirely rather than drawn clipped where even `…` will not fit (rule 2). */}
       {label !== null && <span ref={text} className="title-bar__workspace-path">{label}</span>}
       <span className="title-bar__workspace-tail">{` · ${session === '' ? '—' : session}`}</span>
-    </button>
+    </DesignButton>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * The About category (REQ-CONFIG-398, REQ-SHELL-138..143). It renders from **local data alone** — no network
@@ -94,7 +95,7 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }
         {LEGAL_DOCUMENTS.map(({ name, path }) => {
           const url = `${LEGAL_BASE}${path}`;
           return (
-            <button
+            <DesignButton
               key={path}
               type="button"
               className="btn btn-link"
@@ -105,7 +106,7 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }
               onClick={() => { void open(name, url); }}
             >
               {name}
-            </button>
+            </DesignButton>
           );
         })}
       </div>
@@ -113,7 +114,7 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }
 
       <h2 className="settings__heading">Licensing</h2>
       <p className="about__value">Rotaris is licensed under the {PRODUCT_LICENCE} License.</p>
-      <button
+      <DesignButton
         type="button"
         className="btn btn-secondary"
         data-testid="licenses-open"
@@ -122,7 +123,7 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }
         onClick={() => { void openNotices(); }}
       >
         Open third-party licenses
-      </button>
+      </DesignButton>
       {/* The control stays reachable whether or not a bundle exists (REQ-SHELL-143); the caption says which it is. */}
       {info !== null && !info.thirdPartyLicenses && <p className="text-secondary" data-testid="licenses-caption">{NO_THIRD_PARTY_BUNDLE}</p>}
       {noticesError && <p className="composer__error" role="alert" data-testid="licenses-error">{noticesError}</p>}

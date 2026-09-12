@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { BoardCard, EpicCard } from '@rotaris/contracts';
 import { HEALTH_GLOSS, epicProgressLine } from '@rotaris/ui-core';
 import { ALERT_GLYPH, SELECTED_EXPLANATION, SELECTED_WORD, alertSeverity, epicSummary, epicSummaryLine } from './model.js';
+import { Button as DesignButton, Tag as DesignTag } from '../design-system/index.js';
 
 /**
  * Part AK2 — the epic card (REQ-TRACE-281..286): a DISTINCT widget kind from the requirement card, a grouping
@@ -50,8 +51,8 @@ export const EpicCardView = memo(function EpicCardView({ card, epic, cards, sele
     >
       <div className="req-card__head">
         <span className="req-card__id mono">{card.id}</span>
-        <span className="tag tag-accent">epic</span>
-        <span className="tag tag-outline" data-testid="req-lifecycle">{card.lifecycle}</span>
+        <DesignTag className="tag tag-accent">epic</DesignTag>
+        <DesignTag className="tag tag-outline" data-testid="req-lifecycle">{card.lifecycle}</DesignTag>
       </div>
       <span className="req-card__title">{card.title}</span>
       {selected && <span className="req-card__selected" data-testid="req-selected">{SELECTED_WORD} — {SELECTED_EXPLANATION}</span>}
@@ -64,8 +65,8 @@ export const EpicCardView = memo(function EpicCardView({ card, epic, cards, sele
         </ul>
       )}
       <div className="req-card__foot">
-        <button type="button" className="btn btn-ghost btn-compact" data-testid="req-epic-filter" onClick={(event) => { event.stopPropagation(); onFilterToEpic(card.id); }} aria-label={`Filter the board to ${card.id} and its children`}>Filter to children</button>
-        <button type="button" className="btn btn-ghost btn-compact" onClick={(event) => { event.stopPropagation(); onOpen(card.id); }} aria-label={`Open ${card.id}`}>Open</button>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-epic-filter" onClick={(event) => { event.stopPropagation(); onFilterToEpic(card.id); }} aria-label={`Filter the board to ${card.id} and its children`}>Filter to children</DesignButton>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(event) => { event.stopPropagation(); onOpen(card.id); }} aria-label={`Open ${card.id}`}>Open</DesignButton>
       </div>
     </article>
   );

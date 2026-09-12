@@ -11,6 +11,7 @@ import { Row, TranscriptSurfaceProvider, isReasoningRow, placements, rowMenuEntr
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
 import { useTerminalHost } from '../terminal/host.js'; // Part AL2 — the renderer's terminal host, read for the two terminal fields of the surface
 import type { DisplayRow, RowRenderProps, TrailerRow } from './types.js';
+import { Button as DesignButton, EmptyState as DesignEmptyState, Input as DesignInput } from '../design-system/index.js';
 
 /**
  * ADR-0045's **fixed-capacity recycled row pool**, and ADR-0046's **step 5 — present**.
@@ -399,7 +400,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     >
       {searchOpen && (
         <div className="transcript__search" role="search" aria-label="Search transcript">
-          <input
+          <DesignInput
             className="input transcript__search-input" autoFocus placeholder="Search transcript…" aria-label="Search transcript"
             data-testid="transcript-search-input" value={query}
             onChange={(e) => { setQuery(e.currentTarget.value); showMatch(0); }}
@@ -409,14 +410,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
             }}
           />
           <span className="transcript__search-count" data-testid="transcript-search-count">{countLabel(matches.length, current)}</span>
-          <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-prev" onClick={() => showMatch(stepMatch(current, matches.length, -1))}>Previous</button>
-          <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-next" onClick={() => showMatch(stepMatch(current, matches.length, 1))}>Next</button>
-          <button type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-close" onClick={() => { setSearchOpen(false); onFocusComposer?.(); }}>Close</button>
+          <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-prev" onClick={() => showMatch(stepMatch(current, matches.length, -1))}>Previous</DesignButton>
+          <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-next" onClick={() => showMatch(stepMatch(current, matches.length, 1))}>Next</DesignButton>
+          <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="transcript-search-close" onClick={() => { setSearchOpen(false); onFocusComposer?.(); }}>Close</DesignButton>
         </div>
       )}
       {unseen > 0 && (
-        <button type="button" className="btn btn-secondary btn-compact transcript__new" data-testid="transcript-new-updates"
-          onClick={() => { setFollowing(true); setSeenCount(null); }}>{newUpdatesLabel(unseen)}</button>
+        <DesignButton type="button" className="btn btn-secondary btn-compact transcript__new" data-testid="transcript-new-updates"
+          onClick={() => { setFollowing(true); setSeenCount(null); }}>{newUpdatesLabel(unseen)}</DesignButton>
       )}
       <div
         ref={scroller}
@@ -436,10 +437,10 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
         onScroll={onScroll}
       >
         {empty && (
-          <div className="empty-state" data-testid="transcript-empty">
+          <DesignEmptyState className="empty-state" data-testid="transcript-empty">
             <span className="empty-state-title">{EMPTY_TITLE}</span>
             <span className="empty-state-hint">{EMPTY_BODY}</span>
-          </div>
+          </DesignEmptyState>
         )}
         {/*
           * The pool is rendered whether or not the transcript has any rows — "emptied rather than unmounted"

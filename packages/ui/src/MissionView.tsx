@@ -5,6 +5,7 @@ import { AgentTree } from './AgentTree.js';
 import { cascadeNote, liveDescendants, pauseAvailability } from './agents.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
+import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect } from './design-system/index.js';
 
 /**
  * REQ-SHELL-023's third view, Mission (Part R; REQ-MONITOR-274..276, 038, 042, 043, 107, 116, 213, 273, 281,
@@ -69,10 +70,10 @@ export function MissionView(props: MissionViewProps) {
   const subtitle = session ? `delegation tree · ${sessionLabel ?? session.id.slice(0, 8)} · ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'No session is active.';
   return (
     <div className="mission" data-testid="mission" data-refresh-ms={refresh ? refresh.ms.toFixed(1) : ''} data-refresh-agents={refresh ? String(refresh.agents) : ''} data-selected={selectedAgentId ?? ''}>
-      <header className="mission__header page-header">
+      <DesignPageHeader className="mission__header page-header">
         <h1 className="display mission__title">Mission</h1>
         <span className="page-header-sub mission__subtitle mono" data-testid="mission-subtitle">{subtitle}</span>
-      </header>
+      </DesignPageHeader>
       <div className="mission__body">
         <section className="card mission__graph" aria-label="Delegation graph" data-testid="mission-graph">
           <div className="ov-card__head"><span className="card-kicker">Delegation graph</span><span className="card-meta">{agents.length} {agents.length === 1 ? 'agent' : 'agents'}</span></div>
@@ -85,10 +86,10 @@ export function MissionView(props: MissionViewProps) {
           </div>
           <AgentTree agents={agents} selected={selectedAgentId} onSelect={onSelect} nowIso={nowIso} />
           <div className="mission__actions" aria-label="Selection actions">
-            <button type="button" className="btn btn-secondary" aria-disabled={!pause.enabled || pausePending} aria-describedby="mission-pause-reason" data-testid="mission-pause" data-enabled={pause.enabled && !pausePending ? '1' : '0'} onClick={() => { void requestPause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</button>
+            <DesignButton type="button" className="btn btn-secondary" aria-disabled={!pause.enabled || pausePending} aria-describedby="mission-pause-reason" data-testid="mission-pause" data-enabled={pause.enabled && !pausePending ? '1' : '0'} onClick={() => { void requestPause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</DesignButton>
             <span id="mission-pause-reason" className="text-secondary mission__reason" data-testid="mission-pause-reason">{pause.reason}</span>
-            <button type="button" className="btn btn-danger" disabled={!cancelable} data-testid="mission-cancel" title={cancelable ? `Cancel ${selectedAgent?.name ?? ''}` : 'Select a live agent or the run to cancel it.'} onClick={() => { if (selectedAgent) setConfirming({ agent: selectedAgent, cascade: liveDescendants(agents, selectedAgent.id) }); }}>Cancel selection</button>
-            {selectedAgent && <button type="button" className="btn btn-ghost btn-compact" data-testid="mission-open" onClick={() => onOpen(selectedAgent)}>Open {selectedAgent.name}</button>}
+            <DesignButton type="button" className="btn btn-danger" disabled={!cancelable} data-testid="mission-cancel" title={cancelable ? `Cancel ${selectedAgent?.name ?? ''}` : 'Select a live agent or the run to cancel it.'} onClick={() => { if (selectedAgent) setConfirming({ agent: selectedAgent, cascade: liveDescendants(agents, selectedAgent.id) }); }}>Cancel selection</DesignButton>
+            {selectedAgent && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="mission-open" onClick={() => onOpen(selectedAgent)}>Open {selectedAgent.name}</DesignButton>}
           </div>
           {message && <div className="composer__hint mission__message" role="status" data-testid="mission-message">{message}</div>}
           {error && <div className="composer__error" role="alert">{error}</div>}
@@ -97,18 +98,18 @@ export function MissionView(props: MissionViewProps) {
           <div className="ov-card__head"><span className="card-kicker">Delegation settings</span><span className="card-meta">{STRATEGY_NOTE}</span></div>
           <div className="mission__setting">
             <label htmlFor="mission-strategy">Strategy</label>
-            <select id="mission-strategy" className="input select" aria-label="Delegation strategy" data-testid="mission-strategy" value={strategy ?? ''} disabled={strategy === null} onChange={(e) => { void onSetStrategy(e.currentTarget.value).then((r) => setError(r.ok ? null : r.reason)); }}>
+            <DesignSelect id="mission-strategy" className="input select" aria-label="Delegation strategy" data-testid="mission-strategy" value={strategy ?? ''} disabled={strategy === null} onChange={(e) => { void onSetStrategy(e.currentTarget.value).then((r) => setError(r.ok ? null : r.reason)); }}>
               {strategy === null && <option value="">—</option>}
               {DELEGATION_STRATEGY_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            </DesignSelect>
             <span className="text-secondary settings__hint">Stored as rotaris.delegation_strategy.</span>
           </div>
           <div className="mission__setting">
             <label htmlFor="mission-depth">Maximum depth</label>
-            <select id="mission-depth" className="input select" aria-label="Maximum delegation depth" data-testid="mission-depth" value={maxDepth === null ? '' : String(maxDepth)} disabled={maxDepth === null} onChange={(e) => { void onSetDepth(Number(e.currentTarget.value)).then((r) => setError(r.ok ? null : r.reason)); }}>
+            <DesignSelect id="mission-depth" className="input select" aria-label="Maximum delegation depth" data-testid="mission-depth" value={maxDepth === null ? '' : String(maxDepth)} disabled={maxDepth === null} onChange={(e) => { void onSetDepth(Number(e.currentTarget.value)).then((r) => setError(r.ok ? null : r.reason)); }}>
               {maxDepth === null && <option value="">—</option>}
               {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={String(n)}>{n}</option>)}
-            </select>
+            </DesignSelect>
             <span className="text-secondary settings__hint">Stored as runtime.max_depth; at least 1.</span>
           </div>
         </section>

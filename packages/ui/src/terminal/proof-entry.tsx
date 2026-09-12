@@ -12,6 +12,7 @@ import { headlessEmulator } from './headless.js';
 import { TerminalStreamSet } from './streams.js';
 import { createTerminalWindowStreams, TerminalWindow, type TerminalActionResult, type TerminalActions } from './TerminalWindow.js';
 import { isTerminalView } from './xterm-view.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * **Verification only** — `pnpm terminal-proof`'s page (ADR-0047's first execution, Part AM; its second, Part AL2). The
@@ -121,7 +122,7 @@ function ProofPage() {
         <TerminalWindow streams={windowStreams} actions={actions} onGoToWorkspace={() => { log.goToWorkspace += 1; }} focusStream={focusStream} acknowledge={acknowledge} clipboard={clipboard} />
       </div>
       <div className="terminal-proof__transcript" style={{ width: 640 }}>
-        <button type="button" className="btn btn-secondary" data-testid="proof-before-grid">A control before the grid</button>
+        <DesignButton type="button" className="btn btn-secondary" data-testid="proof-before-grid">A control before the grid</DesignButton>
         <Preview version={version} streamId={rowStream} />
       </div>
     </div>

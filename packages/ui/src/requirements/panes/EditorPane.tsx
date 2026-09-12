@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import type { ReqId } from '@rotaris/contracts';
+import { Button as DesignButton, Input as DesignInput, Select as DesignSelect, TextArea as DesignTextArea } from '../../design-system/index.js';
 
 /**
  * Part AP — the editor and the creation panes (spec 08 §Editing and Creating Requirements, REQ-TRACE-434..444; the
@@ -38,8 +39,8 @@ export function EditorPane(p: EditorPaneProps) {
         <p className="req-pane__notice" title={p.readOnly.sentence} aria-description={p.readOnly.sentence}>{p.readOnly.sentence}</p>
         <p className="req-pane__mono">{p.readOnly.artifact}</p>
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" onClick={p.onLeave} aria-label="Leave without saving">Close</button>
-          <button type="button" className="btn btn-primary" onClick={() => p.onOpenArtifact(p.readOnly!.artifact)} aria-label={`Open the artifact ${p.readOnly.artifact}`}>Open the artifact</button>
+          <DesignButton type="button" className="btn btn-secondary" onClick={p.onLeave} aria-label="Leave without saving">Close</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" onClick={() => p.onOpenArtifact(p.readOnly!.artifact)} aria-label={`Open the artifact ${p.readOnly.artifact}`}>Open the artifact</DesignButton>
         </div>
       </div>
     );
@@ -73,26 +74,26 @@ function EditorForm({ p, headingId }: { readonly p: EditorPaneProps; readonly he
       <h2 id={headingId} className="req-pane__title">Edit {p.id}</h2>
       <p className="req-pane__lead">Written back into the project's own artifact; a delivered requirement then needs an update.</p>
       <p className="req-pane__mono req-pane__version" data-testid="req-pane-editor-version">Applies to version {p.version === null ? '(unknown)' : p.version.slice(0, 8)}</p>
-      <label className="field"><span className="field-label">Title</span><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Requirement title" /></label>
-      <label className="field"><span className="field-label">Description</span><textarea className="input req-pane__textarea" value={description} onChange={(e) => setDescription(e.target.value)} aria-label="Requirement description" /></label>
+      <label className="field"><span className="field-label">Title</span><DesignInput className="input" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Requirement title" /></label>
+      <label className="field"><span className="field-label">Description</span><DesignTextArea className="input req-pane__textarea" value={description} onChange={(e) => setDescription(e.target.value)} aria-label="Requirement description" /></label>
       {failure !== null && (
         <div className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-editor-failure">
           <span>{failure}</span>
-          <button type="button" className="btn btn-secondary" onClick={() => { void save(); }} aria-label={SAVE_RETRY}>Retry</button>
-          <button type="button" className="btn btn-link" onClick={() => setFailure(null)} aria-label={SAVE_DISMISS}>Dismiss</button>
+          <DesignButton type="button" className="btn btn-secondary" onClick={() => { void save(); }} aria-label={SAVE_RETRY}>Retry</DesignButton>
+          <DesignButton type="button" className="btn btn-link" onClick={() => setFailure(null)} aria-label={SAVE_DISMISS}>Dismiss</DesignButton>
         </div>
       )}
       {confirming && (
         <div className="req-pane__notice" role="alertdialog" aria-label="Confirm writing into the source">
           <span>Write the title and description of {p.id} into the project's own artifact?</span>
-          <button type="button" className="btn btn-secondary" onClick={() => setConfirming(false)}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={() => { void save(); }} disabled={saving}>Write</button>
+          <DesignButton type="button" className="btn btn-secondary" onClick={() => setConfirming(false)}>Cancel</DesignButton>
+          <DesignButton type="button" className="btn btn-primary" onClick={() => { void save(); }} disabled={saving}>Write</DesignButton>
         </div>
       )}
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={p.onLeave} aria-label="Cancel and leave without saving">Cancel</button>
+        <DesignButton type="button" className="btn btn-secondary" onClick={p.onLeave} aria-label="Cancel and leave without saving">Cancel</DesignButton>
         {/* REQ-TRACE-438: the save control's enabled state tracks the fields. */}
-        <button type="button" className="btn btn-primary" disabled={!dirty || title.trim() === '' || saving} onClick={() => { if (p.confirmWrites) setConfirming(true); else void save(); }} aria-label={`Save ${p.id}`}>{saving ? 'Saving…' : 'Save'}</button>
+        <DesignButton type="button" className="btn btn-primary" disabled={!dirty || title.trim() === '' || saving} onClick={() => { if (p.confirmWrites) setConfirming(true); else void save(); }} aria-label={`Save ${p.id}`}>{saving ? 'Saving…' : 'Save'}</DesignButton>
       </div>
     </div>
   );
@@ -136,7 +137,7 @@ export function CreatePane(p: CreatePaneProps) {
   useEffect(() => { let alive = true; void p.previewLocation(epic === '' ? undefined : epic).then((r) => { if (alive) setPreview(r); }); return () => { alive = false; }; }, [epic, p]);
   if (creatable.length === 0) {
     // REQ-TRACE-444: a workspace with no writable store gets a board and no editor.
-    return <div className="req-pane req-pane--create" role="region" aria-labelledby={headingId}><h2 id={headingId} className="req-pane__title">No source can be created into</h2><p className="req-pane__notice">{p.sources.length === 0 ? 'No requirement store is open.' : 'The requirement store is read-only for this account, so nothing can be created here.'}</p><div className="dialog-actions"><button type="button" className="btn btn-secondary" onClick={p.onLeave}>Close</button></div></div>;
+    return <div className="req-pane req-pane--create" role="region" aria-labelledby={headingId}><h2 id={headingId} className="req-pane__title">No source can be created into</h2><p className="req-pane__notice">{p.sources.length === 0 ? 'No requirement store is open.' : 'The requirement store is read-only for this account, so nothing can be created here.'}</p><div className="dialog-actions"><DesignButton type="button" className="btn btn-secondary" onClick={p.onLeave}>Close</DesignButton></div></div>;
   }
   const originMissing = kind === 'technical' && derived === '';
   const create = async () => {
@@ -151,22 +152,22 @@ export function CreatePane(p: CreatePaneProps) {
       <h2 id={headingId} className="req-pane__title">New requirement</h2>
       <p className="req-pane__lead">Written back to the source document; the identifier and the location follow that source's own conventions.</p>
       <div className="req-pane__grid">
-        <label className="field"><span className="field-label">Source</span><select className="input select" value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source to write into">{creatable.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</select></label>
-        <label className="field"><span className="field-label">Epic</span><select className="input select" value={epic} onChange={(e) => setEpic(e.target.value)} aria-label="Epic it belongs under"><option value="">none</option>{p.epics.map((e) => <option key={e.id} value={e.id}>{e.id} — {e.title}</option>)}</select></label>
-        <label className="field"><span className="field-label">Kind</span><select className="input select" value={kind} onChange={(e) => setKind(e.target.value as 'product' | 'technical')} aria-label="Product or technical requirement"><option value="product">product</option><option value="technical">technical</option></select></label>
-        <label className="field"><span className="field-label">Derives from{kind === 'technical' ? ' (required)' : ''}</span><select className="input select" value={derived} onChange={(e) => setDerived(e.target.value)} aria-label="Requirement it derives from" disabled={kind !== 'technical'}><option value="">none</option>{p.origins.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
-        <label className="field"><span className="field-label">Priority</span><input className="input" value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority" placeholder="none" /></label>
+        <label className="field"><span className="field-label">Source</span><DesignSelect className="input select" value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source to write into">{creatable.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</DesignSelect></label>
+        <label className="field"><span className="field-label">Epic</span><DesignSelect className="input select" value={epic} onChange={(e) => setEpic(e.target.value)} aria-label="Epic it belongs under"><option value="">none</option>{p.epics.map((e) => <option key={e.id} value={e.id}>{e.id} — {e.title}</option>)}</DesignSelect></label>
+        <label className="field"><span className="field-label">Kind</span><DesignSelect className="input select" value={kind} onChange={(e) => setKind(e.target.value as 'product' | 'technical')} aria-label="Product or technical requirement"><option value="product">product</option><option value="technical">technical</option></DesignSelect></label>
+        <label className="field"><span className="field-label">Derives from{kind === 'technical' ? ' (required)' : ''}</span><DesignSelect className="input select" value={derived} onChange={(e) => setDerived(e.target.value)} aria-label="Requirement it derives from" disabled={kind !== 'technical'}><option value="">none</option>{p.origins.map((o) => <option key={o} value={o}>{o}</option>)}</DesignSelect></label>
+        <label className="field"><span className="field-label">Priority</span><DesignInput className="input" value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority" placeholder="none" /></label>
       </div>
-      <label className="field"><span className="field-label">Title</span><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Requirement title" placeholder="e.g. Export the audit trail" /></label>
-      <label className="field"><span className="field-label">Description</span><textarea className="input req-pane__textarea" value={prose} onChange={(e) => setProse(e.target.value)} aria-label="Requirement description" placeholder="What must hold true, stated so it can be verified." /></label>
+      <label className="field"><span className="field-label">Title</span><DesignInput className="input" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Requirement title" placeholder="e.g. Export the audit trail" /></label>
+      <label className="field"><span className="field-label">Description</span><DesignTextArea className="input req-pane__textarea" value={prose} onChange={(e) => setProse(e.target.value)} aria-label="Requirement description" placeholder="What must hold true, stated so it can be verified." /></label>
       {/* REQ-TRACE-443/498: the location the write produces, or the inability shown in the form — never a guessed path. */}
       <p className="req-pane__mono req-pane__location" data-testid="req-pane-create-location">{preview === null ? 'Deriving the identifier and location…' : preview.ok ? `${preview.id} at ${locationWithTitle(preview.location, title)}` : `Location cannot be previewed: ${preview.reason}`}</p>
       {originMissing && <p className="req-pane__notice" role="status">A technical requirement is not creatable without an origin: choose the requirement it derives from.</p>}
-      {failure !== null && <div className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-create-failure"><span>{failure}</span><button type="button" className="btn btn-secondary" onClick={() => { void create(); }} aria-label="Retry creating the requirement">Retry</button><button type="button" className="btn btn-link" onClick={() => setFailure(null)} aria-label="Dismiss the creation failure">Dismiss</button></div>}
+      {failure !== null && <div className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-create-failure"><span>{failure}</span><DesignButton type="button" className="btn btn-secondary" onClick={() => { void create(); }} aria-label="Retry creating the requirement">Retry</DesignButton><DesignButton type="button" className="btn btn-link" onClick={() => setFailure(null)} aria-label="Dismiss the creation failure">Dismiss</DesignButton></div>}
       {created !== null && <p className="req-pane__notice" role="status" data-testid="req-pane-create-done">{created.id} was created at {created.path}; it appears on the board in the first column and can be released.</p>}
       <div className="dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={p.onLeave} aria-label="Cancel and leave without creating">Cancel</button>
-        <button type="button" className="btn btn-primary" disabled={title.trim() === '' || originMissing || saving || preview === null || !preview.ok || created !== null} onClick={() => { void create(); }} aria-label="Create the requirement">{saving ? 'Creating…' : 'Create requirement'}</button>
+        <DesignButton type="button" className="btn btn-secondary" onClick={p.onLeave} aria-label="Cancel and leave without creating">Cancel</DesignButton>
+        <DesignButton type="button" className="btn btn-primary" disabled={title.trim() === '' || originMissing || saving || preview === null || !preview.ok || created !== null} onClick={() => { void create(); }} aria-label="Create the requirement">{saving ? 'Creating…' : 'Create requirement'}</DesignButton>
       </div>
     </div>
   );

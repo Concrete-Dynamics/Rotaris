@@ -1,6 +1,7 @@
 import { markMotionStart } from '../motion.js';
 import { HEADER, PREVIEW } from './labels.js';
 import type { TerminalPreview } from './streams.js';
+import { Button as DesignButton } from '../design-system/index.js';
 
 /**
  * Part AM — the live terminal preview inside a transcript row (REQ-SHELL-079: "a live preview embedded in the
@@ -38,7 +39,7 @@ export function TerminalPreviewBlock({ preview, onOpen }: TerminalPreviewBlockPr
         {preview.truncated && (
           <span className="term-preview__truncated text-tertiary" aria-label={HEADER.truncationName} title={HEADER.truncationTooltip} data-testid="term-preview-truncated">· {HEADER.truncationLabel}</span>
         )}
-        <button type="button" className="btn btn-ghost btn-compact" aria-label={PREVIEW.openName} onClick={open} disabled={open === undefined} data-testid="term-preview-open">Open terminal</button>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label={PREVIEW.openName} onClick={open} disabled={open === undefined} data-testid="term-preview-open">Open terminal</DesignButton>
       </div>
       {/* REQ-CHAT-076: clicking the preview requests the pop-out; the text stays selectable with the pointer (REQ-CHAT-075). */}
       <div

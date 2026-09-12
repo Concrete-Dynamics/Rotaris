@@ -20,7 +20,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Six.** The count is the number of rows below.
+**Seven.** The count is the number of rows below.
 
 ---
 
@@ -32,6 +32,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 | <a id="r-004"></a>R-004 | 2026-09-12 | "when the user opens a new workspace he gets the option to open it in a new window" | directive | [`PD-SHELL-001`](directives.md#pd-shell-001) |
 | <a id="r-005"></a>R-005 | 2026-09-12 | "if he tries to open two in the same workspace he gets the option to launch a new session / run instead (which will have the same effect as the users intent is to work on multiple things in paralell)" | directive | [`PD-WORKSPACE-001`](directives.md#pd-workspace-001) |
 | <a id="r-006"></a>R-006 | 2026-09-12 | "record a new product spec and wire up the report.commands at a meaningful - UX in mind - place" | directive | [`PD-LIBRARY-001`](directives.md#pd-library-001) |
+| <a id="r-007"></a>R-007 | 2026-09-12 | "identify our skills in the repo, the instructions and workflows so far and see if we could optimize ui generation and debugging based on these insights", followed by "Implement the plan." | covered | The adopted design language and its fidelity workflow govern generation (`docs/design/README.md` section 7); REQ-SHELL-128..160 govern rendered theme, focus, scale, contrast and completeness evidence; REQ-WORKSPACE-051 and REQ-WORKSPACE-053 govern repository-local portable-skill discovery and shape. The implementation adds repository workflow, shared UI components and verification evidence within those bounds |
 
 <!--
 Row shape:

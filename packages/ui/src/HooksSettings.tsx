@@ -1,4 +1,5 @@
 import type { HookAgentId, HookRow, HooksSummary } from '@rotaris/contracts';
+import { Button as DesignButton, EmptyState as DesignEmptyState, Input as DesignInput, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /**
  * Settings → Hooks (REQ-HOOKS-103..105, REQ-HOOKS-109, REQ-HOOKS-136, REQ-HOOKS-137; REQ-CONFIG-354..359):
@@ -60,17 +61,17 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
           )}
           <div className="settings__actions hooks__actions">
             <div className="settings__action">
-              <button type="button" className="btn btn-primary" disabled={loading || summary.declaredCount === 0} onClick={onReview} aria-description="Opens a dialog showing each command this workspace declares, to allow or refuse them.">Review workspace hooks…</button>
+              <DesignButton type="button" className="btn btn-primary" disabled={loading || summary.declaredCount === 0} onClick={onReview} aria-description="Opens a dialog showing each command this workspace declares, to allow or refuse them.">Review workspace hooks…</DesignButton>
               <span className="text-secondary settings__hint">{summary.declaredCount === 0 ? 'Nothing to review: this workspace declares no hooks.' : 'The only place a hook command is shown.'}</span>
             </div>
             {summary.decisionStored && (
               <div className="settings__action">
-                <button type="button" className="btn btn-secondary" disabled={loading} onClick={onClear} aria-description="Removes the stored decision; the workspace's hooks stay withheld until allowed again.">Clear the stored decision</button>
+                <DesignButton type="button" className="btn btn-secondary" disabled={loading} onClick={onClear} aria-description="Removes the stored decision; the workspace's hooks stay withheld until allowed again.">Clear the stored decision</DesignButton>
                 <span className="text-secondary settings__hint">Re-applies the gate at once; the hooks stay withheld until you allow them again.</span>
               </div>
             )}
             <div className="settings__action">
-              <button type="button" className="btn btn-secondary" disabled={loading} onClick={onRefresh} aria-description="Re-reads the hook sources and redraws this table; starts no hook and changes no decision.">{loading ? 'Reading…' : 'Re-read hook sources'}</button>
+              <DesignButton type="button" className="btn btn-secondary" disabled={loading} onClick={onRefresh} aria-description="Re-reads the hook sources and redraws this table; starts no hook and changes no decision.">{loading ? 'Reading…' : 'Re-read hook sources'}</DesignButton>
               <span className="text-secondary settings__hint">Starts no hook and changes no decision; governs runs started afterwards.</span>
             </div>
           </div>
@@ -81,7 +82,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
 
       <h2 className="settings__heading">Lifecycle hooks</h2>
       {summary && summary.rows.length > 0 ? (
-        <table className="table hooks__table" aria-label="Lifecycle hooks" role="treegrid">
+        <DesignTable className="table hooks__table" aria-label="Lifecycle hooks" role="treegrid">
           <thead>
             <tr><th scope="col">Hook</th><th scope="col">Event</th><th scope="col">Matches</th><th scope="col">Source</th><th scope="col">Status</th></tr>
           </thead>
@@ -94,7 +95,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
                 <tr key={agent} className="hooks__agent" role="row" aria-level={1} aria-expanded="true">
                   <td>
                     <label className="hooks__check">
-                      <input type="checkbox" checked={rows.length === 0 ? true : agentChecked} disabled={rows.length === 0} onChange={(e) => onToggle(agent, null, e.currentTarget.checked)} title={`Controls ${AGENT_LABELS[agent]}'s hooks for future sessions.`} aria-label={`${AGENT_LABELS[agent]} hooks, for future sessions`} />
+                      <DesignInput type="checkbox" checked={rows.length === 0 ? true : agentChecked} disabled={rows.length === 0} onChange={(e) => onToggle(agent, null, e.currentTarget.checked)} title={`Controls ${AGENT_LABELS[agent]}'s hooks for future sessions.`} aria-label={`${AGENT_LABELS[agent]} hooks, for future sessions`} />
                       <strong>{AGENT_LABELS[agent]}</strong>
                     </label>
                   </td>
@@ -105,7 +106,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
                     <td className="hooks__name">
                       {r.checkable ? (
                         <label className="hooks__check">
-                          <input type="checkbox" checked={r.checked} onChange={(e) => onToggle(agent, r.id, e.currentTarget.checked)} title="Takes effect for runs started afterwards; the run already executing keeps its hook set." aria-label={`${r.name}, for future sessions`} />
+                          <DesignInput type="checkbox" checked={r.checked} onChange={(e) => onToggle(agent, r.id, e.currentTarget.checked)} title="Takes effect for runs started afterwards; the run already executing keeps its hook set." aria-label={`${r.name}, for future sessions`} />
                           <span>{r.name}</span>
                         </label>
                       ) : <span className="hooks__name--static">{r.name}</span>}
@@ -119,12 +120,12 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
               ];
             })}
           </tbody>
-        </table>
+        </DesignTable>
       ) : (
-        <div className="empty-state">
+        <DesignEmptyState className="empty-state">
           <span className="empty-state-title">No hooks are declared.</span>
           <span className="empty-state-hint">Declare them under <code className="mono">hooks:</code> in your global <code className="mono">agents.yaml</code> or in this workspace's <code className="mono">.rotaris/agents.yaml</code>.</span>
-        </div>
+        </DesignEmptyState>
       )}
       <p className="text-secondary settings__hint">A checkbox cleared here takes effect for runs started afterwards; a run already executing keeps the hook set it started with.</p>
 
@@ -136,12 +137,12 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
               <div className="hooks__invocation-head">
                 <span className="hooks__invocation-name">{inv.name}</span>
                 <span className="mono text-secondary">{inv.event}{inv.toolName ? ` · ${inv.toolName}` : ''}</span>
-                {inv.withheld ? <span className="tag tag-wait">withheld: {inv.reason}</span> : (
+                {inv.withheld ? <DesignTag className="tag tag-wait">withheld: {inv.reason}</DesignTag> : (
                   <>
                     <span className="mono text-secondary">exit {inv.exitCode} · {inv.durationMs} ms</span>
-                    {inv.timedOut && <span className="tag tag-fail">timed out</span>}
-                    {inv.blocked && <span className="tag tag-run">stopped the call</span>}
-                    {inv.switchedOff && <span className="tag tag-neutral">switched off after this</span>}
+                    {inv.timedOut && <DesignTag className="tag tag-fail">timed out</DesignTag>}
+                    {inv.blocked && <DesignTag className="tag tag-run">stopped the call</DesignTag>}
+                    {inv.switchedOff && <DesignTag className="tag tag-neutral">switched off after this</DesignTag>}
                   </>
                 )}
               </div>
@@ -156,7 +157,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
           ))}
         </ol>
       ) : (
-        <div className="empty-state"><span className="empty-state-title">No hook has run in this session.</span><span className="empty-state-hint">Invocations appear here as they happen, with their exit status, duration and captured output.</span></div>
+        <DesignEmptyState className="empty-state"><span className="empty-state-title">No hook has run in this session.</span><span className="empty-state-hint">Invocations appear here as they happen, with their exit status, duration and captured output.</span></DesignEmptyState>
       )}
     </div>
   );

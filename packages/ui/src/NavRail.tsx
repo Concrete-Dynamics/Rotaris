@@ -1,5 +1,6 @@
 import type { ViewId } from '@rotaris/contracts';
 import { describeWithShortcut, type KeyboardPlatform } from './commands/registry.js';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * The navigation rail, drawn with the design system's `.nav-rail` /
@@ -38,7 +39,7 @@ export function NavRail({ items, active, onSelect, platform = 'windows' }: NavRa
         const title = `Open ${it.label}`;
         const description = describeWithShortcut(title, it.shortcut, platform);
         return (
-          <button
+          <DesignButton
             key={it.id}
             type="button"
             role="radio"
@@ -56,7 +57,7 @@ export function NavRail({ items, active, onSelect, platform = 'windows' }: NavRa
           >
             <i className={`ph ${it.icon}`} aria-hidden="true" />
             <span>{it.label}</span>
-          </button>
+          </DesignButton>
         );
       })}
     </nav>

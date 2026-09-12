@@ -1,5 +1,6 @@
 import { SEVERITY_GLYPHS, type Notice, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
+import { Button as DesignButton } from './design-system/index.js';
 
 /**
  * ADR-0049 / REQ-SHELL-114 / REQ-SHELL-116 — the ONE persistent notice, an inline banner under the title bar.
@@ -41,15 +42,15 @@ export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerPr
           <details className="notice__details">
             <summary>Details</summary>
             <pre className="notice__detail mono" data-testid="notice-detail">{notice.detail}</pre>
-            <button type="button" className="btn btn-ghost" aria-label="Copy the technical detail" onClick={() => { void navigator.clipboard?.writeText(notice.detail); }}>Copy</button>
+            <DesignButton type="button" className="btn btn-ghost" aria-label="Copy the technical detail" onClick={() => { void navigator.clipboard?.writeText(notice.detail); }}>Copy</DesignButton>
           </details>
         )}
       </div>
       {notice.action && (
-        <button type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</button>
+        <DesignButton type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
       )}
       {notice.persistent && (
-        <button type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</button>
+        <DesignButton type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</DesignButton>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { SANDBOX_MODE_NAMES, validateBranchName, type SandboxModeName } from '@rotaris/contracts';
+import { Button as DesignButton, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
 /**
  * REQ-SHELL-125's "Start session" dialog (≥ 460 px wide): Git worktree isolation with its branch (REQ-GIT-118, the
@@ -76,34 +77,34 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, c
         <fieldset className="start-session__group">
           <legend className="field-label">Git worktree</legend>
           <label className="start-session__check" title={runActive ? ISOLATION_REQUIRED_TOOLTIP : undefined}>
-            <input type="checkbox" data-testid="start-session-isolation" checked={isolation} disabled={isolationLocked} onChange={(event) => setIsolation(event.currentTarget.checked)} />
+            <DesignInput type="checkbox" data-testid="start-session-isolation" checked={isolation} disabled={isolationLocked} onChange={(event) => setIsolation(event.currentTarget.checked)} />
             <span>Run in an isolated Git worktree</span>
           </label>
           <p className="start-session__hint text-secondary" data-testid="start-session-hint">{runActive ? ISOLATION_REQUIRED_HINT : ISOLATION_HINT}</p>
           <label className="field">
             <span className="field-label">Branch</span>
-            <input className="input mono" data-testid="start-session-branch" value={branch} disabled={!isolation} onChange={(event) => setBranch(event.currentTarget.value)} />
+            <DesignInput className="input mono" data-testid="start-session-branch" value={branch} disabled={!isolation} onChange={(event) => setBranch(event.currentTarget.value)} />
           </label>
           {branchError !== null && <p className="composer__error" role="alert" data-testid="start-session-branch-error">{branchError}</p>}
           <div className="start-session__attach">
-            <button type="button" className="btn btn-secondary" disabled={choosing} data-testid="start-session-attach" onClick={() => { void choose(); }}>{choosing ? 'Choosing…' : 'Attach to an existing worktree…'}</button>
+            <DesignButton type="button" className="btn btn-secondary" disabled={choosing} data-testid="start-session-attach" onClick={() => { void choose(); }}>{choosing ? 'Choosing…' : 'Attach to an existing worktree…'}</DesignButton>
             {attach !== null && (<>
               <span className="mono start-session__attach-path" data-testid="start-session-attach-path">{attach.path} · {attach.branch}</span>
-              <button type="button" className="btn btn-ghost" onClick={() => setAttach(null)}>Clear</button>
+              <DesignButton type="button" className="btn btn-ghost" onClick={() => setAttach(null)}>Clear</DesignButton>
             </>)}
           </div>
           {attachError !== null && <p className="composer__error" role="alert" data-testid="start-session-attach-error">{attachError}</p>}
         </fieldset>
         <fieldset className="start-session__group">
           <legend className="field-label">Sandbox mode</legend>
-          <select className="input select start-session__select" aria-label="Sandbox mode" data-testid="start-session-sandbox" value={sandboxMode} onChange={(event) => setSandboxMode(event.currentTarget.value as SandboxModeName)}>
+          <DesignSelect className="input select start-session__select" aria-label="Sandbox mode" data-testid="start-session-sandbox" value={sandboxMode} onChange={(event) => setSandboxMode(event.currentTarget.value as SandboxModeName)}>
             {SANDBOX_MODE_NAMES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
-          </select>
+          </DesignSelect>
           {!confinementAvailable && <p className="start-session__disclosure text-secondary" data-testid="start-session-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>}
         </fieldset>
         <div className="dialog-actions">
-          <button type="button" className="btn btn-secondary" disabled={choosing} onClick={onCancel}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={branchError !== null || choosing} data-testid="start-session-accept">Start session</button>
+          <DesignButton type="button" className="btn btn-secondary" disabled={choosing} onClick={onCancel}>Cancel</DesignButton>
+          <DesignButton type="submit" className="btn btn-primary" disabled={branchError !== null || choosing} data-testid="start-session-accept">Start session</DesignButton>
         </div>
       </form>
     </div>

@@ -72,12 +72,106 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
   return cut(parts.join('\n'), TRANSCRIPT_CAP);
 }
 
+/**
+ * The two fields the specification's child-report schema names — "edited files (path, ...)" and
+ * "commands (command, exit code, ...)" — are FACTS OF THE TRANSCRIPT, and are derived from it here.
+ *
+ * The reason they were not, kept beside its replacement: `commands` was hardcoded `[]` at all three
+ * construction sites and `edited_files` was whatever list the summarising model happened to write. A real
+ * run measured the cost — one child wrote five files and ran eight terminal commands and reported both
+ * empty, and another filled `edited_files` with a prose sentence it had invented. Asking the model harder
+ * was the alternative and is refused: a summariser that FAILS still has to yield a report (REQ-ORCH-110),
+ * and it is exactly then that what ran matters most, so the derivation must not depend on it.
+ *
+ * The bound on it, stated rather than hidden: a context compression REPLACES the conversation
+ * (`REQ-MONITOR-084`), so a child whose history was compressed mid-task no longer carries its earliest tool
+ * calls here, and the derived lists are of what survives in the transcript the report was built from.
+ */
+
+/** `REQ-TOOLS-001`: `haet` resolves to the same tool as `haet_edit`; all three write to a path. */
+const WRITE_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit', 'haet']);
+/** `REQ-TOOLS-100`: every terminal observation ends with this block, sorted, with null-valued keys DROPPED. */
+const DIAGNOSTIC = '[terminal_diagnostic] ';
+
+function jsonObject(body: string): Record<string, unknown> | null {
+  try {
+    const v: unknown = JSON.parse(body);
+    return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  } catch {
+    // A model writes these arguments, so unparseable is an ordinary outcome here and never an exception.
+    return null;
+  }
+}
+
+function asText(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+/**
+ * The exit code the paired observation reports, or null. `REQ-TOOLS-100` drops a null-valued key, so a call
+ * that has no exit code — a background start, a rejected request — simply carries no `exit_code`, which is
+ * why the report's field is nullable. The LAST block is the real one: a command whose own output contains the
+ * marker (a log, a transcript of another run) must not shadow the one the tool appended.
+ */
+function exitCodeOf(result: string): number | null {
+  const at = result.lastIndexOf(DIAGNOSTIC);
+  if (at < 0) return null;
+  const code = jsonObject(result.slice(at + DIAGNOSTIC.length))?.['exit_code'];
+  return typeof code === 'number' ? code : null;
+}
+
+/**
+ * REQ-ORCH-108/110: the commands the child ran, in call order — the command from the `terminal` call's own
+ * arguments, the exit code from the `[terminal_diagnostic]` block of the result that answered it (matched by
+ * `callId`). A terminal action that names no command — `session_action: 'list'`, a bare reset — is not a
+ * command and is not reported as one.
+ */
+export function commandsFrom(messages: readonly ChatMessage[]): readonly { command: string; exit_code: number | null }[] {
+  const answered = new Map<string, string>();
+  for (const m of messages) if (m.role === 'tool') for (const p of m.content) if (p.kind === 'tool-result') answered.set(p.callId, p.result);
+  const out: { command: string; exit_code: number | null }[] = [];
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue;
+    for (const p of m.content) {
+      if (p.kind !== 'tool-call' || p.name !== 'terminal') continue;
+      const command = asText(jsonObject(p.args)?.['command']);
+      if (command.trim() === '') continue;
+      const answer = answered.get(p.callId);
+      out.push({ command, exit_code: answer === undefined ? null : exitCodeOf(answer) });
+    }
+  }
+  return out;
+}
+
+/**
+ * REQ-ORCH-108/109: the files the child edited — the path of every write-tool call, under either argument
+ * name the file tools accept (`path`, `file_path`), in call order and never repeated. The summariser's own
+ * list is UNIONED after them rather than replacing or replaced, so a genuine mention it made (a document
+ * written through a route with no tool call of its own) is not lost, while an invented one can no longer be
+ * the only thing the field holds.
+ */
+export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = []): readonly string[] {
+  const out: string[] = [];
+  const add = (v: string): void => { if (v !== '' && !out.includes(v)) out.push(v); };
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue;
+    for (const p of m.content) {
+      if (p.kind !== 'tool-call' || !WRITE_TOOLS.has(p.name)) continue;
+      const a = jsonObject(p.args);
+      add(asText(a?.['path']) || asText(a?.['file_path']));
+    }
+  }
+  for (const r of reported) add(r);
+  return out;
+}
+
 export function fallbackReport(input: ReportInput, why: string): ChildReport {
   const summary = input.lastText ? cut(input.lastText, SUMMARY_CAP) : `Tools used: ${input.toolsUsed.join(', ') || '(none)'}`;
   return {
     agent_name: input.agentName, role: input.role, status: input.status, summary, key_findings: [],
     last_response: input.lastText, final_response: input.finalTextIsFinal ? input.lastText : '',
-    edited_files: [], commands: [], errors: [...(input.errors ?? []), { type: 'summary_failure', message: why }], next_actions: [], tags: [],
+    edited_files: editedFilesFrom(input.messages), commands: commandsFrom(input.messages),
+    errors: [...(input.errors ?? []), { type: 'summary_failure', message: why }], next_actions: [], tags: [],
   };
 }
 
@@ -86,7 +180,8 @@ export function deterministicTesterReport(input: ReportInput): ChildReport | nul
   if (input.role !== 'tester' || input.status !== 'succeeded' || input.messages.length > 8 || input.toolCallCount < 1 || !input.finalTextIsFinal || !input.lastText) return null;
   return {
     agent_name: input.agentName, role: input.role, status: 'succeeded', summary: cut(input.lastText, SUMMARY_CAP), key_findings: [],
-    last_response: input.lastText, final_response: input.lastText, edited_files: [], commands: [], errors: [...(input.errors ?? [])], next_actions: [], tags: ['verification'],
+    last_response: input.lastText, final_response: input.lastText, edited_files: editedFilesFrom(input.messages), commands: commandsFrom(input.messages),
+    errors: [...(input.errors ?? [])], next_actions: [], tags: ['verification'],
   };
 }
 
@@ -100,7 +195,8 @@ function shape(raw: unknown, input: ReportInput): ChildReport | null {
   return {
     agent_name: input.agentName, role: input.role, status: normaliseReportStatus(str(o['status']) || input.status), summary: o['summary'],
     key_findings: list(o['key_findings']), last_response: input.lastText, final_response: input.finalTextIsFinal ? input.lastText : '',
-    edited_files: list(o['edited_files']), commands: [], errors: [...(input.errors ?? [])], next_actions: list(o['next_actions']),
+    edited_files: editedFilesFrom(input.messages, list(o['edited_files'])), commands: commandsFrom(input.messages),
+    errors: [...(input.errors ?? [])], next_actions: list(o['next_actions']),
     tags: list(o['tags']).filter((t) => ['research', 'planning', 'implementation', 'review', 'verification', 'errors'].includes(t)),
   };
 }

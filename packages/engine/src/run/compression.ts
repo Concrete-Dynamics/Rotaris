@@ -159,6 +159,12 @@ export interface TurnCompression {
    * null could not say which one finished.
    */
   readonly onState?: ((agent: string | null, name: string) => void) | undefined;
+  /**
+   * `REQ-SESSION-139` (ADR-0008): one COMPLETED compression, for the run's own aggregate. It is raised on the
+   * same line as `REQ-MONITOR-086`'s per-agent counter because they count the same event; keeping them apart
+   * is what let the session figure stay at zero through three compressions of a real run.
+   */
+  readonly onCompressed?: (() => void) | undefined;
   // Part AO
   /**
    * ADR-0060 decision 1's registry (Part AO): the turn registers its conversation here for the span of the turn, so
@@ -330,6 +336,8 @@ export class CompressionRunner {
     const latencyMs = clocks.monotonic.now() - startedMs;
     // REQ-MONITOR-086: the completion is counted once, here, and the entry below is what a resume counts again from.
     writer.activity.compressed(agent);
+    // REQ-SESSION-139 (ADR-0008): the session-wide aggregate is raised from the SAME completion, never recomputed.
+    this.svc.onCompressed?.();
     /**
      * REQ-CONFIG-135: the four inputs and the resulting token number as separate fields, never a sentence to parse.
      * Part AO: a MANUAL pass consulted none of them (REQ-CHAT-081, REQ-MONITOR-096), so its entry carries none — an

@@ -120,7 +120,9 @@ export class TerminalManager {
     if (!s) {
       s = new ForegroundSession({
         factory: this.deps.factory, backend: this.deps.backend, cwd, env: this.deps.env, monotonic: this.deps.clocks.monotonic, timers: this.deps.clocks.timers,
-        ...(this.deps.config.noOutputWindowMs === undefined ? {} : { noOutputWindowMs: this.deps.config.noOutputWindowMs }), warn: this.deps.warn,
+        ...(this.deps.config.noOutputWindowMs === undefined ? {} : { noOutputWindowMs: this.deps.config.noOutputWindowMs }),
+        // ADR-0021: the agent's own capture is read off the same headless emulator the live stream runs.
+        emulator: this.deps.emulator ?? xtermEmulatorFactory, warn: this.deps.warn,
       });
       this.foreground.set(key, s);
     }
@@ -217,6 +219,10 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
         const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: 'Input was written to the terminal session.', exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', warnings: [] });
         return observation(`Sent input to the terminal session.\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'success', exitCode: 0, warnings: [] });
       }
+      // REQ-TOOLS-097 / REQ-CONFIG-116: the hard wall clock is the call's own `timeout` when it supplies one and
+      // `runtime.shell_command_timeout` when it does not; the soft pause is only for a call that supplied none.
+      // Both bounds are handed over and the session arms them together — `hardMs` had been passed here since
+      // Part AL and nothing read it, which left the default path with no hard cap (ADR-0020's note, 2026-09-12).
       const timeoutMs = a.timeout !== undefined ? a.timeout * 1000 : config.commandTimeoutS * 1000;
       const softEligible = a.timeout === undefined;
       // Part AL / ADR-0021: the live stream. Opened before the command is written, fed by a tap on the PTY, closed with
@@ -224,7 +230,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig): 
       // the process keeps running (REQ-TOOLS-098) and the later poll is what ends it. The observation below reads
       // nothing from the stream (REQ-TOOLS-127).
       if (a.command !== '') manager.beginForeground(key, session, { sessionId: ctx.sessionId, agentId: ctx.agentName, persona: ctx.persona, command: a.command, workspaceRoot: cwd });
-      const r = a.command === '' ? await session.poll() : await session.run(a.command, { timeoutMs: softEligible ? null : timeoutMs, signal: ctx.signal, ...(softEligible ? { hardMs: timeoutMs } : {}) } as { timeoutMs: number | null; signal?: AbortSignal });
+      const r = a.command === '' ? await session.poll() : await session.run(a.command, { timeoutMs: softEligible ? null : timeoutMs, signal: ctx.signal, ...(softEligible ? { hardMs: timeoutMs } : {}) });
       if (!r.softPaused) manager.endForeground(key, ctx.agentName, { exitCode: r.exitCode, finalText: r.output });
       const label = `${resetNote ? '[RESET] ' : ''}${a.command}`;
       const warnings = r.exitCode === 0 || r.exitCode > 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];

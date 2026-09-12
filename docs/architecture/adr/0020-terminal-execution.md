@@ -263,14 +263,28 @@ cleared rows left behind as **fifty blank lines** instead of a cleared screen. T
 on the raw stream, which is what it was always right for.
 
 **Two things here contradict the brief this was built from, and both are measurements, so both are recorded.**
-First, the concatenation the run showed — `Total Endpoints: 0Resource Sections: 0File Size: 58 KB` from three
-`Write-Host` calls — **could not be reproduced from VT stripping**: across 60 real-PTY runs at 240×50,
-120×30, 80×24 and 60×10, over tables, delayed writes and `Measure-Object`, ConPTY emitted plain `\r\n` and the
-strip and the screen agreed every time. Those strings are exactly what defect B's fold produces from a
-here-string, so that evidence is most likely defect B's. Defect C is real on its own evidence — the tab and
-the clear, above — and was owed by this ADR's own words regardless. Second, the case the brief named,
-`Select-String … | Measure-Object`, does NOT distinguish the two: it passed before and after, and it is kept
-as a guard rather than presented as a proof.
+First, the case the brief named, `Select-String … | Measure-Object`, does NOT distinguish the two: it passed
+before and after, and it is kept as a guard rather than presented as a proof.
+
+Second — and **this is a falsified reading kept beside its replacement, per the standing policy.** The reading
+first recorded here was that the concatenation the run showed, `Total Endpoints: 0Resource Sections: 0File
+Size: 58 KB` from three `Write-Host` calls, **could not be reproduced from VT stripping**: across 60 real-PTY
+runs at 240×50, 120×30, 80×24 and 60×10, over tables, delayed writes and `Measure-Object`, ConPTY emitted
+plain `\r\n` and the strip and the screen agreed every time. The conclusion drawn was that those strings were
+"exactly what defect B's fold produces from a here-string", so the evidence was most likely defect B's.
+
+**That conclusion is wrong, and the store says so without needing a shell at all: the two commands whose
+output concatenated carry no newline.** Ordinals 193 and 200 of session `d314627f` are 503 and 385 characters
+on ONE line, so B's fold cannot reach them. What the 60 runs missed is the trigger, and it is narrow: an
+**empty write between two non-empty ones** — `Write-Host ""`, `echo ""` — which is present in both production
+commands and in none of the sixty. Reproduced afterwards against the unfixed strip, the first shape returns
+`"Total Endpoints: 0Resource Sections: 0File Size: 58 KB"` and the second
+`"VERIFICATION: created successfully" + "File exists:"` joined — the production strings byte for byte. Both
+are now assertions in `terminal.test.ts` beside the tab and the clear, and both are red on the strip.
+
+The lesson is the one this register keeps relearning, in a new place: sixty negative runs are not a negative
+result when none of them carries the input that failed. The reproduction was owed to the *recorded command*,
+not to a plausible family of commands resembling it.
 
 **The budget, decided by measurement, and the residue that is a `REQ-TOOLS-097` question.** A screen retains
 LINES; the cap counts CHARACTERS. `pnpm terminal-proof`'s flood is 10,000 lines and 98,893 characters, sized

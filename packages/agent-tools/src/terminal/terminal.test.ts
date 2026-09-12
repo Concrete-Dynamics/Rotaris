@@ -189,6 +189,16 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // A screen clear is a screen clear, not the rows of the screen left behind as blank lines.
     const cleared = await t.execute(args({ command: "Write-Host 'BEFORE'; Clear-Host; Write-Host 'AFTER'", timeout: 10 }), ctx());
     expect(output(cleared.text)).toBe('AFTER');
+    // The 2026-09-12 run's OWN symptom, reproduced: an EMPTY write between two non-empty ones. The strip
+    // returned `Total Endpoints: 0Resource Sections: 0File Size: 58 KB` — the production string byte for
+    // byte, from a command carrying no newline at all. This is the trigger, and the one the 60 runs above
+    // missed; see this ADR's note, where the reading it falsifies is kept beside it.
+    const empties = await t.execute(args({ command: 'Write-Host "Total Endpoints: 0"; Write-Host ""; Write-Host "Resource Sections: 0"; Write-Host ""; Write-Host "File Size: 58 KB"', timeout: 10 }), ctx());
+    expect(output(empties.text)).not.toContain('Total Endpoints: 0Resource Sections: 0');
+    expect((output(empties.text) ?? '').split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['Total Endpoints: 0', 'Resource Sections: 0', 'File Size: 58 KB']);
+    // The same shape through `&&` and `echo`, which is how the run's other concatenation arrived.
+    const chained = await t.execute(args({ command: 'echo "VERIFICATION: created successfully" && echo "" && echo "File exists:"', timeout: 10 }), ctx());
+    expect(output(chained.text)).not.toContain('successfullyFile exists:');
     // A formatted table's rows stay on separate lines — true before this change and it must stay true.
     const file = join(root, 'measure.txt').replace(/\\/g, '\\\\');
     const measured = await t.execute(args({ command: `Set-Content -LiteralPath '${file}' -Value 'alpha','beta','alpha'; Select-String 'alpha' -LiteralPath '${file}' | Measure-Object`, timeout: 10 }), ctx());

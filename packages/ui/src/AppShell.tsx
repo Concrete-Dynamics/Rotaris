@@ -2,6 +2,7 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import { PRIMARY_VIEWS, type Notice, type NoticeAction, type ViewId } from '@rotaris/contracts';
 import type { AcknowledgementStore } from '@rotaris/ui-core';
 import { NavRail } from './NavRail.js';
+import { WorkspaceChip } from './WorkspaceChip.js';
 import { useShellState } from './shell-state.js';
 import { Acknowledgements } from './Acknowledgements.js';
 import { NoticeBanner } from './Notice.js';
@@ -30,7 +31,19 @@ export type StatusItem = string | { readonly text: string; readonly name: string
 
 export interface AppShellProps {
   readonly version: string;
-  readonly workspaceLabel: string;
+  /**
+   * Stage B — the ABSOLUTE workspace path, as main resolved it, not a label: REQ-WORKSPACE-149's
+   * rules 1 and 2 are display rules, and the tooltip, the accessible description and anything handed
+   * to the platform must carry the full path, so the collapsing and the shortening happen at the
+   * surface that draws them rather than before they get here.
+   */
+  readonly workspacePath: string;
+  /** The user's home directory, from `shell.hello` — rule 1's `~`; absent means no collapsing. */
+  readonly home?: string | undefined;
+  /** REQ-WORKSPACE-017's session half; `—` is drawn for its absence, which is all this product has. */
+  readonly sessionName?: string | null | undefined;
+  /** REQ-SHELL-035: activating the chip opens the chooser flow of REQ-SHELL-021 (`workspace.choose`). */
+  readonly onChooseWorkspace?: (() => void) | undefined;
   readonly statusItems: readonly StatusItem[];
   readonly views?: Partial<Record<ViewId, ReactNode>>;
   /** ADR-0049: the one current notice, mirrored from main's store; the banner itself is `Notice.tsx`. */
@@ -79,7 +92,7 @@ export function useCommandContext(): CommandContext {
   }), [activeView]);
 }
 
-export function AppShell({ version, workspaceLabel, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality }: AppShellProps) {
+export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
   const paletteOpen = useShellState((s) => s.paletteOpen);
@@ -106,9 +119,13 @@ export function AppShell({ version, workspaceLabel, statusItems, views = {}, not
         <span className="brand-mark" aria-hidden="true" />
         <span className="title-bar__name">Rotaris</span>
         <span className="title-bar__version mono">{version}</span>
-        <span className="title-bar__spacer" />
+        {/* REQ-SHELL-033's order — brand, wordmark, version, the workspace chip in a CENTRED region,
+            then the session control. The slot is what the chip measures its label against; see
+            `WorkspaceChip.tsx` and the `.title-bar__workspace-slot` rule for why it has a zero basis. */}
+        <div className="title-bar__workspace-slot">
+          <WorkspaceChip path={workspacePath} home={home} sessionName={sessionName} onChoose={onChooseWorkspace} />
+        </div>
         {onOpenSessions && <button type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</button>}
-        <span className="title-bar__workspace">{workspaceLabel}</span>
       </header>
       <div className="notice-slot" aria-live="polite">
         {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onAction={onAction} />}

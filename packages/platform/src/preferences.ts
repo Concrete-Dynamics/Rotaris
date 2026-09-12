@@ -78,6 +78,20 @@ export const PREFERENCE_KEYS = {
    * observer: a stream that changes while running and the window is closed opens it without taking focus.
    */
   'terminal/autoOpen': { type: 'boolean', default: false, owner: 'REQ-SHELL-109', coerce: (value: unknown) => value === true || value === 'true' },
+  /**
+   * Stage B — REQ-STARTUP-146 owns this key and REQ-SHELL-006 makes this table the only place it exists. It is
+   * the one key here that decides what a launch OPENS (REQ-SHELL-010 (b)), and the reason REQ-SHELL-006 keeps
+   * this store unreplicated: it holds a path that describes *this* machine.
+   *
+   * The default `undefined` means nothing has been opened yet, which is a different state from a remembered path
+   * that no longer names a directory — REQ-WORKSPACE-007 forbids overwriting the latter, so that check belongs to
+   * the resolution in main and NOT here. This coerce answers `undefined` only for a value that is not a usable
+   * string at all; it never inspects the filesystem, because a store that reported "no workspace" for a folder on
+   * a detached drive would silently lose the user's project.
+   *
+   * Written by MAIN alone: it is deliberately absent from `PREFERENCE_COMMAND_KEYS`, so no renderer can set it.
+   */
+  'workspace/lastOpened': { type: 'string', default: undefined, owner: 'REQ-STARTUP-146', coerce: (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined) },
 } as const;
 
 /**

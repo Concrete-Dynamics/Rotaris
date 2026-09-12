@@ -24,7 +24,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-11** — three times that day. Third, the **driver seam**: main gains a
+Last reconciled with the code: **2026-09-12** — **opening a project from inside the application**: every main
+window is now built by one builder and lives in a registry keyed by `webContents` id, which is what makes a
+second main window possible and makes a command answerable for the window that sent it; the renderer gains one
+command, `workspace.choose`, carrying no folder so that main owns the gates and the chooser; and main gains the
+`workspace/lastOpened` preference key that no renderer may name. Both are in the process view — the main row and
+the renderer → main command list. No process, channel, message kind, store table, run-loop step, control
+operation or package edge was added or moved, so the component and runtime views are unchanged, and the window
+role set is unchanged with them: a second main window is another window of the `main` role rather than a new
+role. Before that **2026-09-11** — three times that day. Third, the **driver seam**: main gains a
 loopback control socket under `ROTARIS_DRIVER` (verification only — `main/driver.ts`, `pnpm app:drive`,
 `pnpm driver-proof`), carried in the process view's main row beside the capture seams — which the same day stopped being shipped at
 all: the seams are now compiled in behind `__ROTARIS_SEAMS__` and a packaged build carries none of the

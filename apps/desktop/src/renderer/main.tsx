@@ -1086,7 +1086,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
+function App({ version, workspace, home, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
   const counters = useStore(replica, (s) => s.counters);
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
@@ -1265,12 +1265,23 @@ function App({ version, workspace, processes, initialTheme, initialReducedMotion
   // and the keyboard help register with main's window registry through `window.modality`, and main disables input in the
   // persona windows for the duration.
   const onModality = useCallback((active: boolean) => { void bridge.command({ kind: 'window.modality', active }); }, []);
+  /**
+   * Stage B — REQ-SHELL-035: the chip asks, and main decides. The command carries NO folder: main
+   * evaluates REQ-SHELL-021's three gates, opens the native chooser and interprets the answer, so no
+   * surface can skip a gate or name a folder it was not given (REQ-SHELL-020 attributes the request
+   * to this window by its sender). The outcome reaches this window as a notice or a new window, never
+   * as a return value worth reading here.
+   */
+  const chooseWorkspace = useCallback(() => { void bridge.command({ kind: 'workspace.choose' }); }, []);
   const openRequirementSession = useCallback((id: string) => { void openSession(id); }, [openSession]); // Part AK2 — REQ-TRACE-266/269: the board's session opener is the window's own, memoised so the host is built once.
   return (<>
     <AppShell
       onModality={onModality}
       version={version}
-      workspaceLabel={workspace}
+      workspacePath={workspace}
+      home={home}
+      sessionName={null}
+      onChooseWorkspace={chooseWorkspace}
       statusItems={status}
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
@@ -1676,12 +1687,15 @@ async function boot(): Promise<void> {
     return;
   }
   const hello = await bridge.command({ kind: 'shell.hello' });
-  const info = hello.ok ? (hello.value as { version: string; workspace: string; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', processes: [], circuitBreakerArmed: false };
+  // Stage B — `home` rides the hello reply because REQ-WORKSPACE-149 rule 1 is a display rule and a
+  // sandboxed renderer has no `node:os` (ADR-0051). It is optional on the way in: a reply from an
+  // older main, or the fallback below, simply collapses nothing and draws the absolute path.
+  const info = hello.ok ? (hello.value as { version: string; workspace: string; home: string | undefined; processes: string[]; circuitBreakerArmed: boolean }) : { version: '?', workspace: '(no workspace)', home: undefined, processes: [], circuitBreakerArmed: false };
   // ESC-34: the dispatcher is not a component, and one action names a workspace it must be checked against.
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
+      <App version={info.version} workspace={info.workspace} home={info.home} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

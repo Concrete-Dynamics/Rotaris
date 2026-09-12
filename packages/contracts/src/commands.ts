@@ -141,6 +141,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),
+  /**
+   * Stage B — REQ-SHELL-021 / REQ-WORKSPACE-009: the title-bar chip's flow, raised by the window the user is
+   * looking at. It carries **no folder**: main evaluates the gates, opens the native chooser and performs the
+   * replacement (REQ-SHELL-017), so a renderer can neither name a workspace it was not given nor skip a gate.
+   * Answered `{ cancelled: true }` for a gate that declined or a chooser the user dismissed, which REQ-SHELL-021
+   * makes the same observable outcome: no window, workspace or stored preference moves.
+   */
+  z.object({ kind: z.literal('workspace.choose') }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /**
    * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER. The renderer is

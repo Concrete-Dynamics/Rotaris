@@ -23,10 +23,41 @@
   user-select: none;
 }
 .title-bar__name { font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 600; }
-.title-bar__version { color: var(--rt-text-tertiary); font-size: 12px; }
+.title-bar__version { color: var(--rt-text-tertiary); font-size: var(--rt-text-sm, 12px); }
 .title-bar__spacer { flex: 1; }
-.title-bar__workspace { color: var(--rt-text-secondary); font-size: 12px; }
 .title-bar__sessions { -webkit-app-region: no-drag; }
+/*
+ * Stage B — the workspace chip (REQ-SHELL-033/035, REQ-WORKSPACE-016/017), drawn from the mockup's
+ * own title bar (`docs/design/mockup/rotaris-ui-mockup.dc.html`, the `<!-- title bar -->` block):
+ * a pill with a strong hairline, the mono face, the folder glyph one step quieter than the text,
+ * and the 6 px gap / 3 px by 9 px padding that block carries — small control geometry the design
+ * material fixes, as `.nav-item` and `.chip-control__select` already carry theirs.
+ *
+ * Two figures are the SPECIFICATION's and not the mockup's, which is why they differ from it:
+ * the text scale is the smallest the scale has (REQ-WORKSPACE-017's "smallest text scale",
+ * `--rt-text-2xs`, where the mockup draws `--rt-text-xs`), and the chip sits in a CENTRED region
+ * because REQ-SHELL-033 names it one, where the mockup puts it hard left after the wordmark.
+ *
+ * The slot's zero flex basis is load-bearing for REQ-WORKSPACE-149 rule 2: it makes the width
+ * available to the label independent of the label, so shortening the text cannot move the budget
+ * that decided it. `WorkspaceChip.tsx` says the same thing from the other side.
+ */
+.title-bar__workspace-slot { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; overflow: hidden; }
+.title-bar__workspace {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 100%; min-width: 0; padding: 3px 9px;
+  border: var(--rt-hairline-width) solid var(--rt-border-strong);
+  border-radius: var(--rt-radius-pill);
+  background: transparent; color: var(--rt-text-secondary);
+  font: inherit; font-family: var(--rt-font-mono, 'JetBrains Mono', monospace); font-size: var(--rt-text-2xs, 10px);
+  cursor: pointer; white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.title-bar__workspace:hover { background: var(--rt-hover); color: var(--rt-text); }
+.title-bar__workspace:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.title-bar__workspace i { flex: none; font-size: 13px; line-height: 1; color: var(--rt-text-tertiary); }
+.title-bar__workspace-path { min-width: 0; }
+.title-bar__workspace-tail { flex: none; color: var(--rt-text-tertiary); }
 .brand-mark {
   width: 16px; height: 16px; border-radius: 50%;
   border: 2px solid var(--rt-accent);

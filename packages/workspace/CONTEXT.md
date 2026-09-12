@@ -15,7 +15,13 @@ of this vocabulary: [Version Control](./src/git/CONTEXT.md) and
 The user-selected folder a session's work happens in. Several workspaces are ordinary rather than
 exceptional: they are windows of the one running instance. — `REQ-WORKSPACE` overview,
 `REQ-STARTUP-162`
-_Avoid_: project, repository (a workspace need not be a repository), folder, directory
+_Avoid_: repository (a workspace need not be a repository), folder, directory
+_In the interface_: **project folder**. The specification's own user-facing strings say it — "Open project
+folder" and "Open another project folder" on the title-bar chip, "Open a project folder" as the chooser's
+title, "Current project: {path}" as the chip's description — so a surface that said "workspace" to the user
+would disagree with the requirement it implements. The distinction is the audience and not the thing: code,
+records and identifiers say **workspace**; what a person reads says **project folder**. — `REQ-SHELL-035`,
+`REQ-WORKSPACE-009`, `REQ-WORKSPACE-016`
 
 **Workspace identifier**:
 The stable identity that travels with a workspace and by which its machine-local records are found —

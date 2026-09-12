@@ -14,7 +14,7 @@ import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
-import { userInfo } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { FrameDeliveryLimiter, relayTerminalCommand } from './terminal.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
@@ -23,7 +23,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
-import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
+import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE } from '@rotaris/config';
@@ -245,12 +245,12 @@ async function main(): Promise<void> {
   // reads wait, bounded, for the open in flight instead of being refused with "no workspace".
   let workspaceReady: Promise<unknown> = Promise.resolve();
   const awaitWorkspace = () => Promise.race([workspaceReady, new Promise<void>((r) => clocks.timers.after(millis(30_000), r))]);
-  const openWorkspace = async (root: string): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
-    const opening = openWorkspaceInner(root);
+  const openWorkspace = async (root: string, owner: MainWindowState): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
+    const opening = openWorkspaceInner(root, owner);
     workspaceReady = opening.catch(() => undefined);
     return opening;
   };
-  const openWorkspaceInner = async (root: string): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
+  const openWorkspaceInner = async (root: string, owner: MainWindowState): Promise<{ workspaceId: string; storeFile: string } | undefined> => {
     const key = canonicalPath(root);
     let svc = services.get(key);
     if (!svc) {
@@ -277,10 +277,10 @@ async function main(): Promise<void> {
     // W-18: the run host is HANDED the resolved path; it never reads the identifier file.
     const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
     log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${ack.kind}`);
-    // A2: the window this open was performed for. B gives `openWorkspace` an explicit window; until then the
-    // active one is the only one, and naming it here is what makes that assumption visible instead of implicit.
-    const opening = activeWindow();
-    if (ack.kind === 'workspace.ack' && opening) opening.workspaceId = opened.workspaceId;
+    // Stage B, as the A2 note here promised: the window this open was performed FOR is passed in. Reading
+    // `activeWindow()` instead would, with two windows open, write one project's workspace identifier onto the
+    // other project's window — and every workspace-scoped command resolves its window through that field.
+    if (ack.kind === 'workspace.ack') owner.workspaceId = opened.workspaceId;
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
@@ -1060,6 +1060,166 @@ async function main(): Promise<void> {
   };
 
   /**
+   * Stage B — REQ-NOTIFY-013 / REQ-SHELL-112: a transient belongs to ONE window's stack, so it is sent to that
+   * window's renderer rather than through `relay.broadcast`. The store's broadcast is right for a PERSISTENT
+   * notice (ADR-0049 makes that one per process), but a reminder about a chooser THIS window showed, or the
+   * decline of a request this window raised, must not appear over another project's window.
+   *
+   * ADR-0052's per-channel counter is kept honest through `relay.count`, which exists for exactly this case — a
+   * delivery made outside `relaySequenced` and `broadcast`, as `main/terminal.ts` does for channel 3.
+   */
+  const raiseTransient = (w: MainWindowState, kind: 'info' | 'ok' | 'warn' | 'fail', title: string, body?: string): void => {
+    if (w.win.isDestroyed()) return;
+    relay.count(CHANNEL.acknowledgementPublish);
+    w.win.webContents.send(CHANNEL.acknowledgementPublish, { v: CONTRACT_SCHEMA_VERSION, kind, title, ...(body === undefined ? {} : { body }) });
+  };
+
+  /**
+   * REQ-WORKSPACE-009 / REQ-SHELL-011: the platform's own folder chooser, titled "Open a project folder",
+   * restricted to directories, pointed at the current workspace or else the user's home directory.
+   *
+   * ADR-0019's prohibition applies here as everywhere — the ASYNCHRONOUS form only. REQ-SHELL-164 fixes what the
+   * product is answerable for (the title, the restriction to directories, the initial location, and the reading of
+   * every answer the dialog can return) and makes a dismissal by ANY means the host offers — Cancel, Escape, the
+   * window close control, a platform gesture — the identical answer, which `showOpenDialog` reports as `canceled`.
+   *
+   * What comes back is CANONICAL (REQ-STARTUP-163's rule, through `canonicalPath`): every later comparison and the
+   * stored preference must be the resolved form, never the spelling the host dialog happened to hand back.
+   */
+  const chooseProjectFolder = async (parent: BrowserWindow, startAt: string | undefined): Promise<string | null> => {
+    // Verification only, beside the two seams that already exist. `(cancel)` answers as a dismissal, which is how
+    // a proof reaches REQ-SHELL-012's reminder with nobody at the machine.
+    const forced = capturing ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] : undefined;
+    if (forced) { log(`capture: project folder chooser → ${forced}`); return forced === '(cancel)' ? null : canonicalPath(forced); }
+    const r = await dialog.showOpenDialog(parent, { title: 'Open a project folder', properties: ['openDirectory'], defaultPath: startAt ?? homedir() });
+    return r.canceled || r.filePaths.length === 0 ? null : canonicalPath(r.filePaths[0]!);
+  };
+
+  /**
+   * REQ-SHELL-010's precedence, which is REQ-WORKSPACE-005/006/007 seen from the other domain:
+   *
+   *   (a) a folder this window was explicitly built for — here, one an argv launch carried (REQ-STARTUP-163) —
+   *       wins, is used with no prompt, and is persisted at once in its resolved form;
+   *   (b) otherwise the remembered `workspace/lastOpened`, if and only if it still names a directory, no prompt;
+   *   (c) otherwise the directory the process started in, with the first-launch chooser scheduled after show.
+   *
+   * A remembered path that no longer exists is NOT overwritten (REQ-WORKSPACE-007's last sentence). That is not
+   * tidiness: a project on a drive that is not mounted today is not a project the user has abandoned, and clearing
+   * the key here would lose it silently. This stat is the only filesystem question asked about the value — the
+   * coerce in `PREFERENCE_KEYS` deliberately asks none, for the same reason.
+   */
+  /**
+   * REQ-SHELL-011's one-shot: whether the question "which project folder?" has been answered by ANY route. It is
+   * set the moment a chooser flow starts and read by the deferred offer scheduled after the window is shown, which
+   * is what keeps two folder choosers from ever being on screen at once.
+   */
+  let workspaceQuestionAnswered = false;
+  const resolveStartupWorkspace = (): { readonly workspace: string; readonly prompt: boolean; readonly persist: boolean } => {
+    if (argvWorkspace) return { workspace: argvWorkspace, prompt: false, persist: true };
+    const remembered = preferences.read('workspace/lastOpened');
+    if (typeof remembered === 'string' && remembered !== '') {
+      try {
+        if (statSync(remembered).isDirectory()) return { workspace: canonicalPath(remembered), prompt: false, persist: false };
+        log(`the remembered workspace ${remembered} is not a directory; opening the working directory instead (REQ-WORKSPACE-007)`);
+      } catch {
+        log(`the remembered workspace ${remembered} cannot be read; opening the working directory and leaving the stored value alone (REQ-WORKSPACE-007)`);
+      }
+    }
+    return { workspace: canonicalPath(process.cwd()), prompt: true, persist: false };
+  };
+
+  /**
+   * REQ-SHELL-021's three gates, in the ONE fixed order that requirement states — unsaved settings, then worktree
+   * integration, then active runs — any of which ends the flow with no chooser shown and nothing changed.
+   *
+   * **Gate 2 is the honest half of this function.** REQ-SHELL-021 and REQ-WORKSPACE-012 both require a decline
+   * while a worktree integration is running, and this build has no such state to read: `worktree.integrate` exists
+   * nowhere in the codebase, and `'integrating'` appears exactly once, as an unread member of `MERGE_STATUSES`
+   * (`contracts/repository.ts`). The gate is written here, in its place in the order, as an explicit no-op naming
+   * what it would read — so the requirement is visibly unmet rather than silently passed. Recorded as a residue of
+   * this stage; building it needs the integration operation to exist first.
+   */
+  const workspaceOpenGates = async (w: MainWindowState): Promise<{ readonly ok: true } | { readonly ok: false; readonly outcome: CommandOutcome }> => {
+    // 1 — unsaved settings (REQ-SHELL-021 (1), REQ-CONFIG-287). The SAME guard the window's own close asks, which
+    // is what makes this a second caller of one mechanism rather than a parallel one: `useConfiguration` installs
+    // it, the dialog it raises is REQ-SHELL-124's save/discard/cancel, and `false` means the user cancelled.
+    const proceed = await w.win.webContents
+      .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
+      .catch(() => true);
+    if (proceed === false) {
+      log('workspace open ended by the unsaved-settings guard (REQ-SHELL-021 gate 1)');
+      return { ok: false, outcome: { ok: true, value: { cancelled: true } } };
+    }
+    // 2 — a running worktree integration: no observable state in this build. See the note above.
+    // 3 — an active run (REQ-SHELL-021 (3), REQ-WORKSPACE-012), declined with the exact sentence both fix.
+    if (w.workspaceId) {
+      const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000)).catch(() => null);
+      if (active && active.kind === 'runs.count' && active.count > 0) {
+        const headline = 'Finish the active run before opening another project.';
+        raiseTransient(w, 'fail', headline);
+        log(`workspace open declined: ${headline} (REQ-SHELL-021 gate 3)`);
+        return { ok: false, outcome: { ok: true, value: { cancelled: true, declined: headline } } };
+      }
+    }
+    return { ok: true };
+  };
+
+  /**
+   * REQ-SHELL-017/018/019 and REQ-WORKSPACE-013: the replacement. It is built, its workspace is opened, it is
+   * shown, and ONLY once the old window has actually gone are the preference written and the new window activated.
+   *
+   * The order is the requirement's rather than a convenience. The workspace service for the chosen folder is
+   * opened before the old window closes, which is safe because `services` is keyed by resolved path (ADR-0002) and
+   * the outgoing workspace's service is untouched by it. A veto closes the REPLACEMENT and changes nothing
+   * (REQ-SHELL-018) — and the veto has to be READ, not assumed, which is why the close is awaited rather than
+   * requested and forgotten. A failure to build or to open leaves the old window fully usable (REQ-SHELL-019).
+   *
+   * Two residues of this stage, stated rather than implied. REQ-WORKSPACE-013's cancellation of a background
+   * initialization run cannot be built: REQ-WORKSPACE-109's machinery does not exist in this codebase, so there is
+   * no run to cancel and nothing to leave pending. And REQ-WORKSPACE-014's post-show activation order belongs to
+   * the builder's show path, not to this function.
+   */
+  const switchWorkspace = async (old: MainWindowState, chosen: string): Promise<CommandOutcome> => {
+    let replacement: MainWindowState;
+    try {
+      replacement = await buildMainWindow({ workspace: chosen, origin: 'open-request' });
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      raiseNotice('error', `Could not open the selected project: ${reason}`);
+      log(`workspace switch could not build the replacement: ${reason} (REQ-SHELL-019)`);
+      return { ok: false, code: 'workspace.buildFailed', headline: `Could not open the selected project: ${reason}` };
+    }
+    const opened = await openWorkspace(chosen, replacement).catch(() => undefined);
+    if (!opened) {
+      const reason = `${chosen} could not be opened as a workspace.`;
+      raiseNotice('error', `Could not open the selected project: ${reason}`);
+      log(`workspace switch could not open ${chosen}; discarding the replacement (REQ-SHELL-019)`);
+      // The replacement is what is discarded — never the window the user still has work in.
+      if (!replacement.win.isDestroyed()) replacement.win.destroy();
+      return { ok: false, code: 'workspace.openFailed', headline: `Could not open the selected project: ${reason}` };
+    }
+    if (!replacement.win.isDestroyed()) replacement.win.show();
+    const wentAway = await new Promise<boolean>((resolve) => {
+      if (old.win.isDestroyed()) { resolve(true); return; }
+      let settled = false;
+      const bound = clocks.timers.after(millis(30_000), () => { if (!settled) { settled = true; resolve(old.win.isDestroyed()); } });
+      old.win.once('closed', () => { if (!settled) { settled = true; bound.cancel(); resolve(true); } });
+      old.win.close();
+    });
+    if (!wentAway) {
+      log('the outgoing window vetoed its close; discarding the replacement and changing nothing (REQ-SHELL-018)');
+      if (!replacement.win.isDestroyed()) replacement.win.destroy();
+      return { ok: true, value: { cancelled: true, vetoed: true } };
+    }
+    // REQ-SHELL-017: recorded as current only now, which is also REQ-WORKSPACE-005's persistence of an explicitly
+    // selected folder. Before this line a crash leaves the previous folder remembered, which is the truthful state.
+    await preferences.write('workspace/lastOpened', chosen);
+    if (!replacement.win.isDestroyed()) replacement.win.focus();
+    log(`workspace switched to ${chosen} in window ${replacement.wcId} (REQ-SHELL-017)`);
+    return { ok: true, value: { workspace: chosen, wcId: replacement.wcId } };
+  };
+
+  /**
    * REQ-SESSION-201's restore, as main conducts it: every question before anything is changed, cancel the
    * default everywhere, and the work in the workspace service. ADR-0058's identifier cases and ESC-26's
    * confirmation; D9's foreign rows as one condition with the risk stated.
@@ -1125,7 +1285,7 @@ async function main(): Promise<void> {
     const rep = done.report;
     if (rep.ok) {
       // The workspace now resolves as the restore left it; hand the run host the store again (W-18).
-      await openWorkspace(root);
+      await openWorkspace(root, w);
       raiseNotice('info', `Restored ${plural(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
       return { ok: true, value: { restoredInto: rep.restoredInto, identifierEstablished: rep.identifierEstablished } };
     }
@@ -1135,7 +1295,7 @@ async function main(): Promise<void> {
           : `Lock records name another machine (${rep.refusal.sessions.join(', ')}); nothing was changed.`
       : rep.error ?? 'The restore did not complete.';
     raiseNotice('error', 'The restore was not performed', why);
-    await openWorkspace(root);
+    await openWorkspace(root, w);
     return { ok: false, code: rep.refusal ? `restore.${rep.refusal.why}` : 'restore.failed', headline: 'The restore was not performed', detail: why };
   };
 
@@ -1445,6 +1605,11 @@ async function main(): Promise<void> {
           version: app.getVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
           circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
           build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
+          // Stage B — REQ-WORKSPACE-149 rule 1: home collapsing is a DISPLAY rule, so the renderer needs to know
+          // where home is. It cannot ask the platform itself (no `node:os` in a sandboxed renderer, ADR-0051), and
+          // the collapse must never reach the tooltip, the accessible description or anything handed to the host,
+          // which is why what travels is home itself rather than an already-collapsed label.
+          home: homedir(),
         } };
       }
       /**
@@ -1913,6 +2078,35 @@ async function main(): Promise<void> {
       }
       case 'workspace.restore':
         return restoreFlow(w);
+      /**
+       * Stage B — REQ-SHELL-021 / REQ-WORKSPACE-009/010: the title-bar chip's flow, answered for the window that
+       * raised it (REQ-SHELL-020). Gates first and in order, then the chooser, then either nothing at all or the
+       * replacement. No folder arrives from the renderer, so no surface can skip a gate or name a folder it was
+       * not given.
+       */
+      case 'workspace.choose': {
+        // REQ-SHELL-011: the question counts as answered from THIS moment, not from when the chooser returns.
+        // The deferred offer must never appear over a chooser the user opened, and a gate that declines still
+        // answered it — the user asked, and was told why not.
+        workspaceQuestionAnswered = true;
+        const gated = await workspaceOpenGates(w);
+        if (!gated.ok) return gated.outcome;
+        const chosen = await chooseProjectFolder(w.win, w.workspace === '(no workspace)' ? undefined : w.workspace);
+        if (chosen === null) {
+          // REQ-SHELL-012 / REQ-WORKSPACE-009: the reminder belongs to a chooser the user SAW and cancelled, and to
+          // this window alone. Nothing else moves — not the window, not the workspace, not the stored preference.
+          raiseTransient(w, 'info', 'Open a project folder when you\'re ready by selecting the workspace path in the title bar.');
+          return { ok: true, value: { cancelled: true } };
+        }
+        // REQ-WORKSPACE-010 / REQ-SHELL-021: the folder already open builds no replacement and leaves this window
+        // in place. WHETHER it is the folder already open is REQ-STARTUP-163's rule, cited through `samePath`
+        // rather than restated. PD-WORKSPACE-001 adds the new-session offer at this exact point in Stage C.
+        if (w.workspace !== '(no workspace)' && samePath(chosen, w.workspace)) {
+          log(`the chosen folder ${chosen} is already open in window ${w.wcId}; nothing to do (REQ-WORKSPACE-010)`);
+          return { ok: true, value: { unchanged: true, workspace: w.workspace } };
+        }
+        return switchWorkspace(w, chosen);
+      }
       case 'session.prompt': {
         const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
@@ -1996,7 +2190,14 @@ async function main(): Promise<void> {
    * sentinel, which is the interval ADR-0055 requires to exist at all because the first paint precedes the
    * workspace read.
    */
-  const mainWin = await buildMainWindow({ workspace: argvWorkspace ?? '(no workspace)', origin: 'launch' });
+  /**
+   * Stage B — REQ-SHELL-010's resolution, evaluated BEFORE the window is built, because a window is built for a
+   * workspace and its first paint happens on that workspace. The `'(no workspace)'` sentinel leaves the ordinary
+   * paths entirely: (a), (b) and (c) all resolve to a real folder, and the sentinel now stands only for a window
+   * built with none at all, which ADR-0055 still requires to be a state the shell can render.
+   */
+  const startup = resolveStartupWorkspace();
+  const mainWin = await buildMainWindow({ workspace: startup.workspace, origin: 'launch' });
   /**
    * The verification seams at the end of this function drive the FIRST main window on purpose — a capture is a
    * photograph of one window — so they go on reading `win`. A proof that wants the second window addresses it
@@ -2014,7 +2215,7 @@ async function main(): Promise<void> {
     if (target.win.isMinimized()) target.win.restore();
     target.win.show();
     target.win.focus();
-    if (h.workspace) { void openWorkspace(h.workspace).then(() => { target.workspace = h.workspace!; }); }
+    if (h.workspace) { void openWorkspace(h.workspace, target).then(() => { target.workspace = h.workspace!; }); }
     log(`hand-over received${h.workspace ? ` with workspace ${h.workspace}` : ''}`);
   };
   for (const h of pendingHandOvers.splice(0)) surface(h);
@@ -2057,7 +2258,30 @@ async function main(): Promise<void> {
     app.on('will-quit', () => driver.close());
   }
 
-  if (argvWorkspace) await openWorkspace(argvWorkspace);
+  await openWorkspace(startup.workspace, mainWin);
+  // REQ-SHELL-010 (a) / REQ-WORKSPACE-005: a folder the window was explicitly built for is persisted AT ONCE, in
+  // the resolved form `workspaceFromArgv` already produced. (b) and (c) persist nothing here — (b) is already the
+  // stored value, and (c) is a fallback the user has not chosen, so writing it would invent a decision.
+  if (startup.persist) await preferences.write('workspace/lastOpened', startup.workspace);
+  /**
+   * REQ-SHELL-011's deferred first-launch offer, and the ONE place this product states that figure: the
+   * requirement calls itself "the product's single definition of that delay", so 650 ms lives here and everything
+   * else deferred to first paint cites the identifier instead of repeating the number.
+   *
+   * The offer is one-shot and is abandoned unshown when the question has already been answered by the time the
+   * delay elapses (REQ-SHELL-011's own terms). A window closed before then cancels it cleanly — no dialog, no
+   * crash (REQ-WORKSPACE-008). The delay is measured from here, which is the first moment after the window's
+   * renderer has loaded and its `ready-to-show` has shown it; the builder awaits that load as its last act.
+   */
+  const DEFERRED_FIRST_PAINT_MS = 650;
+  if (startup.prompt) {
+    const offer = clocks.timers.after(millis(DEFERRED_FIRST_PAINT_MS), () => {
+      if (workspaceQuestionAnswered || mainWin.win.isDestroyed()) { log('the first-launch project chooser was abandoned unshown (REQ-SHELL-011)'); return; }
+      log(`offering the first-launch project chooser ${DEFERRED_FIRST_PAINT_MS} ms after show (REQ-SHELL-010 (c), REQ-SHELL-011)`);
+      void runCommand({ kind: 'workspace.choose' }, mainWin.wcId);
+    });
+    mainWin.win.once('closed', () => { offer.cancel(); });
+  }
 
   // A verification hook for the walking skeleton and the release gate's first-paint check
   // (REQ-STARTUP-156): capture the painted window to a file and exit. Not a user-facing surface.

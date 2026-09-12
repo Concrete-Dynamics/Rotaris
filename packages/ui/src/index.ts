@@ -1,4 +1,6 @@
 export * from './AppShell.js';
+export * from './WorkspaceChip.js';
+export * from './workspace-label.js';
 export * from './Notice.js';
 export * from './Acknowledgements.js';
 export * from './NavRail.js';

@@ -795,6 +795,21 @@ failed **four** under the same load; three of them were those terminal tests and
 seven fixes was checked by reverting its source against its new test and reading the red, rather than by
 trusting the report that it had been.
 
+**That last red, closed the same way, and this time the failure itself was reproduced (2026-09-12).**
+`mcp.test.ts`'s stderr capture started a second Node process, slept a fixed **400 ms**, and then read the log. The
+arrival was measured rather than guessed: **61, 68 and 93 ms** with that file alone, **239 ms** under the full suite —
+**161 ms of margin**, the same knife edge the resilience probes sat on — and **446 and 472 ms** under the suite with
+eight cores deliberately busy, which is past the bound. Under sixteen busy cores the unfixed test fails verbatim as the
+sweep saw it, `AssertionError: expected undefined to be defined`, and the deadline form passes on the same machine in
+the same minute with the line arriving at 446 ms. A module-level `until(hit, boundMs = 10_000)` now polls every 25 ms
+and returns the milliseconds waited, or `null` at the bound, so the assertion that follows fails for its own reason and
+says how long it gave. `pnpm check` is green with **nothing red**, which it had not been. **What the sweep found
+beside it:** with eight cores busy, `checkpoints.test.ts` blew vitest's own 30 s `testTimeout` doing real Git work —
+a load artifact of that measurement, not an appointment, and it did not recur unloaded. Two fixed sleeps of the same
+shape remain and are named here rather than changed under this commit: `terminal.test.ts:230` (3,500 ms) and
+`streams.test.ts:368` (2,300 ms), both waiting on a real PTY; `streams.test.ts` already carries the `until` helper
+they want, at its line 289.
+
 **What `pnpm overview-proof` does.** It builds Electron and carries one scratch profile across four launches against
 a scratch Git repository it creates (one commit, one untracked file): (1) a fresh launch — Overview is the first view
 painted, the onboarding empty state, the repository read logged with its time; (1b) the same with `PATH` emptied of

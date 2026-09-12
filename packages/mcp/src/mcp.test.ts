@@ -20,6 +20,27 @@ const log: McpLog = { info: (m) => lines.push(`I ${m}`), warn: (m) => lines.push
 const env = { ...process.env as Record<string, string> };
 const fixture = (...extra: string[]): StdioDescription => ({ transport: 'stdio', command: process.execPath, args: [FIXTURE, ...extra], env, cwd: dir });
 const pidLines = (file: string) => readFileSync(file, 'utf8').split('\n').filter((l) => l.trim() !== '');
+/**
+ * Wait FOR a condition under a deadline, rather than sampling once at an appointment. Spawning a
+ * second Node process costs whatever the machine has left: under full-suite parallelism the same
+ * work that takes tens of milliseconds alone can take an order of magnitude longer, so a fixed
+ * sleep asserts the machine's load, not the mechanism. Returns the milliseconds waited, or `null`
+ * when the bound passed without the condition holding — so the assertion that follows fails for
+ * its own reason and says how long it gave.
+ *
+ * Measured 2026-09-12 for the stderr line below, which a fixed 400 ms sleep used to wait out: 61,
+ * 68 and 93 ms with this file alone, 239 ms under the full suite, 446 and 472 ms under the suite
+ * plus eight busy cores — past the old bound, which is where that red came from.
+ */
+const until = async (hit: () => boolean, boundMs = 10_000): Promise<number | null> => {
+  const started = clocks.monotonic.now();
+  for (;;) {
+    const waited = clocks.monotonic.now() - started;
+    if (hit()) return waited;
+    if (waited >= boundMs) return null;
+    await new Promise((r) => clocks.timers.after(millis(25), () => r(undefined)));
+  }
+};
 const registries: SessionConnections[] = [];
 afterAll(async () => { for (const r of registries) await r.closeAll(); });
 
@@ -171,8 +192,9 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
   it("captures the child's stderr to the log after redaction", async () => {
     const t = new OwnedStdioTransport({ command: process.execPath, args: [FIXTURE, '--stderr', 'token=ghp_abcdefghijklmnop'], cwd: dir, env, timers: clocks.timers, log, label: 'noisy' });
     await t.start();
-    await new Promise((r) => clocks.timers.after(millis(400), () => r(undefined)));
+    const waited = await until(() => lines.some((l) => l.includes('noisy stderr')));
     await t.close();
+    expect(waited, 'the child wrote nothing to the log within the bound').not.toBeNull();
     const line = lines.find((l) => l.includes('noisy stderr'));
     expect(line).toBeDefined();
     expect(line).not.toContain('ghp_abcdefghijklmnop');

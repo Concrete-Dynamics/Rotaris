@@ -41,7 +41,9 @@ export interface DriverDeps {
   monotonic: MonotonicClock;
   log: (message: string) => void;
   /** The product's own command path — the same function the renderer's channel reaches. */
-  command: (request: unknown) => Promise<CommandOutcome>;
+  command: (request: unknown, win: BrowserWindow) => Promise<CommandOutcome>;
+  /** Verification only: arm REQ-SHELL-011's deferred offer for the selected main window. */
+  deferProjectOffer: (win: BrowserWindow, delayMs: number) => void;
   quit: () => void;
 }
 
@@ -64,6 +66,7 @@ interface Request {
   width?: number;
   height?: number;
   timeoutMs?: number;
+  delayMs?: number;
   request?: unknown;
 }
 
@@ -315,7 +318,12 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         return { width, height, wasMaximized };
       }
       case 'command':
-        return deps.command(request.request);
+        return deps.command(request.request, windowOrThrow());
+      case 'deferProjectOffer': {
+        const win = windowOrThrow();
+        deps.deferProjectOffer(win, request.delayMs ?? 650);
+        return { windowId: win.webContents.id, delayMs: request.delayMs ?? 650 };
+      }
       case 'quit':
         // The reply goes out first, then the seam takes itself down, then the process ends. In that order: a
         // client that is told "quitting" and then finds the endpoint file still there has been told a falsehood.

@@ -1048,3 +1048,8 @@ no in-flight worktree integration is observable from main (`worktree.integrate`:
 one, an unread member of `MERGE_STATUSES`), so `REQ-SHELL-021`'s second gate is written in its place in the fixed
 order as an explicit no-op naming the state it would read. `REQ-STARTUP-166`'s workspace-storage determination,
 which this record places on every path that opens a workspace, is likewise not built.
+
+*Note on deepened structure (2026-09-12):* The builder, startup resolution, project-folder chooser, gates,
+add/replace flows, hand-over routing, and per-window deferred offers were deepened into `MainWindows`
+(`apps/desktop/src/main/main-windows.ts`). Consequence 6's two entrances and listener-before-load ordering are
+guaranteed by the `MainWindows` lifecycle seam.

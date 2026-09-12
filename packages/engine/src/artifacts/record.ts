@@ -21,6 +21,15 @@ export interface EditedFile {
   readonly path: string;
   readonly changeType: string;
 }
+/**
+ * PD-LIBRARY-001: one command the child ran. `exitCode` is null where the observation carried none —
+ * REQ-TOOLS-100 drops a null-valued key from the diagnostic block, so a background start or a rejected
+ * request simply has no exit code, and null is that absence rather than a stand-in for zero.
+ */
+export interface RanCommand {
+  readonly command: string;
+  readonly exitCode: number | null;
+}
 
 export interface ArtifactRecord {
   readonly id: string;
@@ -37,6 +46,8 @@ export interface ArtifactRecord {
   readonly snippets: readonly Snippet[];
   readonly editedFiles: readonly EditedFile[];
   readonly createdFiles: readonly string[];
+  /** PD-LIBRARY-001: the commands the child ran, in the order it ran them. Empty for any other kind. */
+  readonly commands: readonly RanCommand[];
   readonly tags: readonly string[];
   readonly supersedes: string | null;
   readonly supersededBy: string | null;
@@ -119,6 +130,15 @@ const asEditedFile = (v: unknown): EditedFile | null => {
   const o = v as Record<string, unknown>;
   return typeof o['path'] === 'string' ? { path: o['path'], changeType: typeof o['change_type'] === 'string' ? o['change_type'] : '' } : null;
 };
+const asRanCommand = (v: unknown): RanCommand | null => {
+  // PD-LIBRARY-001. A bare string reads as a command whose exit status was not recorded, on the same terms
+  // `asEditedFile` reads a bare path — the two fields come from one sentence of REQ-ORCH-108's schema.
+  if (typeof v === 'string') return v === '' ? null : { command: v, exitCode: null };
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o['command'] !== 'string' || o['command'] === '') return null;
+  return { command: o['command'], exitCode: typeof o['exit_code'] === 'number' ? o['exit_code'] : null };
+};
 
 /**
  * REQ-LIBRARY-091: a record that fails validation is SKIPPED by hydration, never repaired into existence, so
@@ -137,6 +157,7 @@ export function toArtifactRecord(row: ArtifactRow): ArtifactRecord | null {
     snippets: parseList(row.snippets, asSnippet),
     editedFiles: parseList(row.edited_files, asEditedFile),
     createdFiles: parseList(row.created_files, asString),
+    commands: parseList(row.commands, asRanCommand),
     tags: parseList(row.tags, asString),
     supersedes: row.supersedes, supersededBy: row.superseded_by,
     createdBy: row.created_by, consumedBy: parseList(row.consumed_by, asString),

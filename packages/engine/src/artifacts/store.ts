@@ -3,8 +3,13 @@ import { join } from 'node:path';
 import { toIsoUtc, type SessionId, type WallClock } from '@rotaris/kernel';
 import { isArtifactStatus, kebabSlug, normaliseArtifactTags, type ArtifactSection } from '@rotaris/contracts';
 import type { ArtifactInsert, ArtifactRow, StoreDal } from '@rotaris/store';
-import { bodyFileName, deriveImportance, firstLineSummary, mintArtifactId, toArtifactRecord, uniqueSlug, type ArtifactRecord, type EditedFile, type HighlightPath, type Snippet } from './record.js';
-import { renderSidecar } from './sidecar.js';
+import { bodyFileName, deriveImportance, firstLineSummary, mintArtifactId, toArtifactRecord, uniqueSlug, type ArtifactRecord, type EditedFile, type HighlightPath, type RanCommand, type Snippet } from './record.js';
+import { renderCommand, renderSidecar } from './sidecar.js';
+
+/** PD-LIBRARY-001: the column's serialised form, snake-cased like every other list stored here. */
+function commandRows(commands: readonly RanCommand[]): readonly { command: string; exit_code: number | null }[] {
+  return commands.map((c) => ({ command: c.command, exit_code: c.exitCode }));
+}
 
 /**
  * REQ-LIBRARY-087 / REQ-ORCH-149 — the session artifact store. One row per artifact in the workspace's
@@ -61,6 +66,8 @@ export interface ChildReportInput {
   readonly keyFindings: readonly string[];
   readonly editedFiles: readonly (string | EditedFile)[];
   readonly createdFiles: readonly string[];
+  /** PD-LIBRARY-001: the commands the child ran, in the order it ran them. */
+  readonly commands: readonly RanCommand[];
   readonly highlightPaths: readonly HighlightPath[];
   readonly snippets: readonly Snippet[];
   readonly tags: readonly string[];
@@ -209,7 +216,7 @@ export class ArtifactStore {
       sourceTaskId: null, canonicalName: input.createdBy, sourcePersona: input.persona,
       // REQ-LIBRARY-093: `status` is `published`; `key_findings` is the body; `summary` is its first line, capped at 280.
       status: 'published', summary: firstLineSummary(input.body), keyFindings: input.body,
-      highlightPaths: [], snippets: [], editedFiles: [], createdFiles: [], tags: tags.tags,
+      highlightPaths: [], snippets: [], editedFiles: [], createdFiles: [], commands: [], tags: tags.tags,
       supersedes: target?.id ?? null, supersededBy: null,
       createdBy: input.createdBy, consumedBy: [],
       timelineEventId: null, conversationId: input.conversationId ?? null,
@@ -329,7 +336,7 @@ export class ArtifactStore {
             session_id: this.sessionId, id: existingRow.id, status, summary: input.summary, key_findings: keyFindings,
             highlight_paths: JSON.stringify(input.highlightPaths), snippets: JSON.stringify(input.snippets),
             edited_files: JSON.stringify(editedFiles.map((e) => ({ path: e.path, change_type: e.changeType }))),
-            created_files: JSON.stringify(input.createdFiles), tags: JSON.stringify(acceptedTags),
+            created_files: JSON.stringify(input.createdFiles), commands: JSON.stringify(commandRows(input.commands)), tags: JSON.stringify(acceptedTags),
             source_persona: input.persona, canonical_name: input.canonicalName, created_by: input.canonicalName, importance,
             timeline_event_id: null, conversation_id: input.conversationId ?? null,
           });
@@ -348,7 +355,7 @@ export class ArtifactStore {
       title: `${input.canonicalName} report`, kind: 'child_report',
       sourceTaskId: input.taskId, canonicalName: input.canonicalName, sourcePersona: input.persona,
       status, summary: input.summary, keyFindings,
-      highlightPaths: input.highlightPaths, snippets: input.snippets, editedFiles, createdFiles: input.createdFiles,
+      highlightPaths: input.highlightPaths, snippets: input.snippets, editedFiles, createdFiles: input.createdFiles, commands: input.commands,
       tags: acceptedTags, supersedes: null, supersededBy: null,
       createdBy: input.canonicalName, consumedBy: [], timelineEventId: null,
       conversationId: input.conversationId ?? null, importance: deriveImportance('child_report', status),
@@ -373,6 +380,9 @@ export class ArtifactStore {
       if (section === 'key_findings' && record.keyFindings !== '') parts.push(`## Key Findings\n\n${record.keyFindings}`);
       if (section === 'snippets' && record.snippets.length > 0) parts.push(`## Snippets\n\n${record.snippets.map((s) => `- \`${s.path}\``).join('\n')}`);
       if (section === 'highlights' && record.highlightPaths.length > 0) parts.push(`## Highlight Paths\n\n${record.highlightPaths.map((h) => (h.reason === '' ? `- \`${h.path}\`` : `- \`${h.path}\` — ${h.reason}`)).join('\n')}`);
+      // PD-LIBRARY-001: the same rendering the document carries, so the filtered view and the body can never
+      // disagree about which command failed — REQ-LIBRARY-099 reads the record's columns and never the document.
+      if (section === 'commands' && record.commands.length > 0) parts.push(`## Commands\n\n${record.commands.map(renderCommand).join('\n')}`);
       if (section === 'files' && (record.editedFiles.length > 0 || record.createdFiles.length > 0)) {
         const lines = [...record.editedFiles.map((e) => (e.changeType === '' ? `- \`${e.path}\`` : `- \`${e.path}\` (${e.changeType})`)), ...record.createdFiles.map((p) => `- \`${p}\` (created)`)];
         parts.push(`## Files\n\n${lines.join('\n')}`);
@@ -391,6 +401,7 @@ function toRow(sessionId: SessionId, record: ArtifactRecord): ArtifactInsert {
     snippets: JSON.stringify(record.snippets),
     edited_files: JSON.stringify(record.editedFiles.map((e) => ({ path: e.path, change_type: e.changeType }))),
     created_files: JSON.stringify(record.createdFiles),
+    commands: JSON.stringify(commandRows(record.commands)),
     tags: JSON.stringify(record.tags), supersedes: record.supersedes, superseded_by: record.supersededBy,
     created_by: record.createdBy, consumed_by: JSON.stringify(record.consumedBy),
     timeline_event_id: record.timelineEventId, conversation_id: record.conversationId,

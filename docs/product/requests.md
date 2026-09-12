@@ -20,7 +20,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Five.** The count is the number of rows below.
+**Six.** The count is the number of rows below.
 
 ---
 
@@ -31,6 +31,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 | <a id="r-003"></a>R-003 | 2026-09-12 | "this should also support the user launching two parallel instances of the app independently from one another in different workspaces" | declined | REQ-STARTUP-161: "at most one instance … SHALL run per user account", and its last sentence forbids defining any interface control by which a second instance can be started. Two processes would also mean two run hosts, two credential stores and two claims over one workspace store, which spike 19 measured as data loss. The owner's intent is met in full by several main windows of the one instance ([R-002](#r-002)) |
 | <a id="r-004"></a>R-004 | 2026-09-12 | "when the user opens a new workspace he gets the option to open it in a new window" | directive | [`PD-SHELL-001`](directives.md#pd-shell-001) |
 | <a id="r-005"></a>R-005 | 2026-09-12 | "if he tries to open two in the same workspace he gets the option to launch a new session / run instead (which will have the same effect as the users intent is to work on multiple things in paralell)" | directive | [`PD-WORKSPACE-001`](directives.md#pd-workspace-001) |
+| <a id="r-006"></a>R-006 | 2026-09-12 | "record a new product spec and wire up the report.commands at a meaningful - UX in mind - place" | directive | [`PD-LIBRARY-001`](directives.md#pd-library-001) |
 
 <!--
 Row shape:

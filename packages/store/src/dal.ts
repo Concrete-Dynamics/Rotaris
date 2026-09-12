@@ -289,6 +289,8 @@ export interface ArtifactRow {
   readonly snippets: string;
   readonly edited_files: string;
   readonly created_files: string;
+  /** PD-LIBRARY-001: `[{command, exit_code}]`; `[]` on every kind but `child_report` and on rows written before v16. */
+  readonly commands: string;
   readonly tags: string;
   readonly supersedes: string | null;
   readonly superseded_by: string | null;
@@ -456,9 +458,9 @@ export class StoreDal {
       // the supersession links or the consumer list: REQ-LIBRARY-094's "everything else stays immutable through every
       // editing surface" is enforced by the absence of a statement, as REQ-SESSION-131's is.
       insertArtifact: db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
-        highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
+        highlight_paths, snippets, edited_files, created_files, commands, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
         VALUES (@session_id, @id, @slug, @title, @kind, @source_task_id, @canonical_name, @source_persona, @status, @summary, @key_findings,
-        @highlight_paths, @snippets, @edited_files, @created_files, @tags, @supersedes, @superseded_by, @created_by, @consumed_by, @timeline_event_id, @conversation_id, @importance, @created_at, @edited_at, @body_file)`),
+        @highlight_paths, @snippets, @edited_files, @created_files, @commands, @tags, @supersedes, @superseded_by, @created_by, @consumed_by, @timeline_event_id, @conversation_id, @importance, @created_at, @edited_at, @body_file)`),
       // REQ-LIBRARY-096: ascending by creation time, the index's own order; the plan is asserted in `store.test.ts`.
       artifactsOf: db.prepare('SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at, id'),
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
@@ -470,7 +472,7 @@ export class StoreDal {
       touchArtifactEdited: db.prepare('UPDATE artifacts SET edited_at = ? WHERE session_id = ? AND id = ?'),
       // REQ-LIBRARY-092: a re-materialisation updates in place and preserves id, slug, title, creation time, supersession links, consumers and edit timestamp.
       rematerialiseArtifact: db.prepare(`UPDATE artifacts SET status = @status, summary = @summary, key_findings = @key_findings, highlight_paths = @highlight_paths,
-        snippets = @snippets, edited_files = @edited_files, created_files = @created_files, tags = @tags, source_persona = @source_persona, canonical_name = @canonical_name,
+        snippets = @snippets, edited_files = @edited_files, created_files = @created_files, commands = @commands, tags = @tags, source_persona = @source_persona, canonical_name = @canonical_name,
         created_by = @created_by, importance = @importance, timeline_event_id = coalesce(@timeline_event_id, timeline_event_id), conversation_id = coalesce(@conversation_id, conversation_id)
         WHERE session_id = @session_id AND id = @id`),
       // REQ-LIBRARY-095: both directions, each its own statement so neither can be written without the other being available.
@@ -967,7 +969,7 @@ export class StoreDal {
     return this.stmts['touchArtifactEdited']!.run(editedAt, id, artifactId).changes === 1;
   }
   /** REQ-LIBRARY-092: in place; id, slug, title, creation time, supersession links, consumers and `edited_at` are not in the statement. */
-  rematerialiseArtifact(row: Pick<ArtifactRow, 'session_id' | 'id' | 'status' | 'summary' | 'key_findings' | 'highlight_paths' | 'snippets' | 'edited_files' | 'created_files' | 'tags' | 'source_persona' | 'canonical_name' | 'created_by' | 'importance' | 'timeline_event_id' | 'conversation_id'>): boolean {
+  rematerialiseArtifact(row: Pick<ArtifactRow, 'session_id' | 'id' | 'status' | 'summary' | 'key_findings' | 'highlight_paths' | 'snippets' | 'edited_files' | 'created_files' | 'commands' | 'tags' | 'source_persona' | 'canonical_name' | 'created_by' | 'importance' | 'timeline_event_id' | 'conversation_id'>): boolean {
     return this.stmts['rematerialiseArtifact']!.run(row).changes === 1;
   }
   /** REQ-LIBRARY-095: both directions, written inside one transaction by the caller. */

@@ -33,8 +33,8 @@ export function isReadyArtifactStatus(s: string): boolean {
 export const ARTIFACT_KINDS = ['child_report', 'agent_published', 'system'] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
-/** REQ-LIBRARY-099's section filter. */
-export const ARTIFACT_SECTIONS = ['summary', 'key_findings', 'snippets', 'highlights', 'files'] as const;
+/** REQ-LIBRARY-099's section filter, widened by PD-LIBRARY-001 with `commands`. */
+export const ARTIFACT_SECTIONS = ['summary', 'key_findings', 'snippets', 'highlights', 'commands', 'files'] as const;
 export type ArtifactSection = (typeof ARTIFACT_SECTIONS)[number];
 
 /**

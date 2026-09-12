@@ -106,7 +106,7 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(deriveImportance('child_report', 'succeeded')).toBe('normal');
     expect(deriveImportance('agent_published', 'published')).toBe('normal');
     const store = storeFor();
-    const failed = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'tester-1', persona: 'tester', status: 'failed', summary: 's', keyFindings: ['a'], editedFiles: [], createdFiles: [], highlightPaths: [], snippets: [], tags: [] });
+    const failed = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'tester-1', persona: 'tester', status: 'failed', summary: 's', keyFindings: ['a'], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
     expect(failed.ok && failed.value.record.importance).toBe('high');
   });
 
@@ -173,16 +173,47 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(text).not.toContain('## Created Files');
     // `edited_at` is absent until a person edits the body, and no placeholder stands in for it.
     expect(text).not.toContain('edited_at:');
+    // PD-LIBRARY-001: no Commands section while the record carries none, on REQ-LIBRARY-090's omit rule.
+    expect(text).not.toContain('## Commands');
     const full = renderSidecar({
       ...bare.value, summary: 'S', keyFindings: 'K',
       highlightPaths: [{ path: 'a.ts', reason: 'why' }], snippets: [{ path: 'a.ts', language: 'ts', code: 'const x = 1;' }],
       editedFiles: [{ path: 'b.ts', changeType: 'modified' }], createdFiles: ['c.ts'],
+      commands: [{ command: 'pnpm test', exitCode: 0 }, { command: 'wc -l x', exitCode: 1 }, { command: 'tail -f log', exitCode: null }],
     });
     const order = SIDECAR_SECTIONS.map((h) => full.indexOf(`## ${h}`));
     expect(order.every((n) => n > 0)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
     expect(full).toContain('- `a.ts` — why');
     expect(full).toContain('- `b.ts` (modified)');
+    // PD-LIBRARY-001: the status is in WORDS, a success carries no decoration, and the order is the run order.
+    expect(full).toContain('- `pnpm test`\n');
+    expect(full).toContain('- `wc -l x` — **failed, exit 1**');
+    expect(full).toContain('- `tail -f log` — exit status not recorded');
+    expect(full.indexOf('pnpm test')).toBeLessThan(full.indexOf('wc -l x'));
+    // …and Commands sits immediately before Edited Files, which is the only place PD-LIBRARY-001 moves.
+    expect(full.indexOf('## Commands')).toBeLessThan(full.indexOf('## Edited Files'));
+    expect(full.indexOf('## Snippets')).toBeLessThan(full.indexOf('## Commands'));
+  });
+
+  it('PD-LIBRARY-001: a command cannot break the span it is rendered in, and the filter matches the document', () => {
+    const store = storeFor();
+    const bare = store.materialiseChildReport({
+      taskId: 'bg_cmd', canonicalName: 'coding-agent-1', persona: 'coding-agent', status: 'succeeded', summary: 's',
+      keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [], conversationId: 'bg_cmd',
+    });
+    expect(bare.ok).toBe(true);
+    if (!bare.ok) return;
+    // A newline would end the list item and a backtick would close the span: neither may survive verbatim.
+    const awkward = renderSidecar({ ...bare.value.record, commands: [{ command: 'echo "a"\nWrite-Host `b`', exitCode: 0 }] });
+    const line = awkward.split('\n').find((l) => l.startsWith('- `')) ?? '';
+    expect(line).toBe('- `echo "a"\\nWrite-Host ‵b‵`');
+    expect(line.split('`').length - 1).toBe(2);
+    // REQ-LIBRARY-099's filtered view renders from the same columns, so it cannot disagree with the document.
+    const filtered = store.sections({ ...bare.value.record, commands: [{ command: 'pnpm check', exitCode: 2 }] }, ['commands']);
+    expect(filtered).toContain('## Commands');
+    expect(filtered).toContain('- `pnpm check` — **failed, exit 2**');
+    expect(store.sections(bare.value.record, ['commands'])).toBe('');
   });
 
   it('REQ-LIBRARY-094/133: an edit moves the body and `edited_at` and NOTHING else', () => {
@@ -236,11 +267,11 @@ describe('engine/artifacts — the session artifact store', () => {
 
   it('REQ-LIBRARY-092: materialisation is idempotent on the task id and updates IN PLACE, preserving what the requirement lists', () => {
     const store = storeFor();
-    const first = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'tester-1', persona: 'tester', status: 'failed', summary: 'it failed', keyFindings: ['one'], editedFiles: ['a.ts'], createdFiles: [], highlightPaths: [], snippets: [], tags: ['verification'] });
+    const first = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'tester-1', persona: 'tester', status: 'failed', summary: 'it failed', keyFindings: ['one'], editedFiles: ['a.ts'], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: ['verification'] });
     expect(first.ok && first.value.created).toBe(true);
     if (!first.ok) return;
     clock.advance(1000);
-    const again = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'tester-1', persona: 'tester', status: 'succeeded', summary: 'it passed', keyFindings: ['two'], editedFiles: [], createdFiles: [], highlightPaths: [], snippets: [], tags: [] });
+    const again = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'tester-1', persona: 'tester', status: 'succeeded', summary: 'it passed', keyFindings: ['two'], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
     expect(again.ok && again.value.created).toBe(false);
     if (!again.ok) return;
     expect(dal.artifactCount(sid)).toBe(1);
@@ -253,7 +284,7 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(again.value.record.status).toBe('succeeded');
     expect(again.value.record.importance).toBe('normal');
     // The fallback key: the same agent under a new task id updates its own record rather than duplicating.
-    const byName = store.materialiseChildReport({ taskId: 'bg_2', canonicalName: 'tester-1', persona: 'tester', status: 'succeeded', summary: 'again', keyFindings: [], editedFiles: [], createdFiles: [], highlightPaths: [], snippets: [], tags: [] });
+    const byName = store.materialiseChildReport({ taskId: 'bg_2', canonicalName: 'tester-1', persona: 'tester', status: 'succeeded', summary: 'again', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
     expect(byName.ok && byName.value.created).toBe(false);
     expect(dal.artifactCount(sid)).toBe(1);
   });
@@ -264,14 +295,14 @@ describe('engine/artifacts — the session artifact store', () => {
       dal, sessionId: sid, directory: () => join(dir, 'files'), wall: clock, warn: (m) => warnings.push(m),
       timeline: (name, _message, metadata) => { entries.push({ name, metadata }); return { ordinal: entries.length, id: `abcdefabcde${entries.length}` }; },
     });
-    const first = store.materialiseChildReport({ taskId: 'bg_9', canonicalName: 'planner-1', persona: 'planner', status: 'succeeded', summary: 's', keyFindings: [], editedFiles: [], createdFiles: [], highlightPaths: [], snippets: [], tags: [] });
+    const first = store.materialiseChildReport({ taskId: 'bg_9', canonicalName: 'planner-1', persona: 'planner', status: 'succeeded', summary: 's', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     expect(entries).toHaveLength(1);
     expect(entries[0]!.name).toBe('artifact_published');
     expect(entries[0]!.metadata['artifact_id']).toBe(first.value.record.id);
     expect(store.lookup(first.value.record.id)!.timelineEventId).toBe('abcdefabcde1');
-    store.materialiseChildReport({ taskId: 'bg_9', canonicalName: 'planner-1', persona: 'planner', status: 'succeeded', summary: 's2', keyFindings: [], editedFiles: [], createdFiles: [], highlightPaths: [], snippets: [], tags: [] });
+    store.materialiseChildReport({ taskId: 'bg_9', canonicalName: 'planner-1', persona: 'planner', status: 'succeeded', summary: 's2', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
     expect(entries).toHaveLength(1);
   });
 
@@ -282,7 +313,7 @@ describe('engine/artifacts — the session artifact store', () => {
     clock.advance(1000);
     const okNew = publish(store, { slug: 'ok-new' });
     clock.advance(1000);
-    const bad = store.materialiseChildReport({ taskId: 'bg_x', canonicalName: 'tester-1', persona: 'tester', status: 'failed', summary: 'broke', keyFindings: [], editedFiles: [], createdFiles: [], highlightPaths: [], snippets: [], tags: [] });
+    const bad = store.materialiseChildReport({ taskId: 'bg_x', canonicalName: 'tester-1', persona: 'tester', status: 'failed', summary: 'broke', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
     expect(okOld.ok && okNew.ok && bad.ok).toBe(true);
     if (!okOld.ok || !okNew.ok || !bad.ok) return;
     const order = siblingIndexOrder(store.hydrate().records).map((r) => r.slug);

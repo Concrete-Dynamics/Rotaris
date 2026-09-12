@@ -603,6 +603,18 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 16,
+    // PD-LIBRARY-001: the commands a child ran, on the record that materialises its report. The column is
+    // NOT NULL DEFAULT '[]' like every other serialised list here, so a record written before this migration
+    // reads back as "ran no commands" rather than as the parse failure REQ-LIBRARY-091 would skip the record
+    // for. That is the honest reading: the figure was never captured for those rows and cannot be recovered,
+    // and REQ-LIBRARY-090 omits an empty section entirely, so an older artifact renders exactly as it did
+    // rather than growing an empty heading that would claim the child ran nothing.
+    sql: `
+      ALTER TABLE artifacts ADD COLUMN commands TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

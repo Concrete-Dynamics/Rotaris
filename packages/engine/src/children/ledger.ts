@@ -5,6 +5,26 @@ import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
+import type { RanCommand } from '../artifacts/record.js';
+
+/**
+ * PD-LIBRARY-001: the report's `commands` as the artifact record wants them. The report carries `exit_code`
+ * — REQ-ORCH-108's schema, snake-cased like every other field a report holds — and the record carries
+ * `exitCode`, so one hop converts. It is exported because these two shapes meeting is exactly the join a
+ * test has to be able to make without a scheduler and a store standing around it.
+ *
+ * The shape is RE-READ rather than trusted: `storeReport` takes a `Record<string, unknown>`, which is the
+ * boundary a model's own output reaches. A command with no text is dropped rather than rendered as an empty
+ * span, and a non-numeric exit code reads as "not recorded" rather than as the zero that means success.
+ */
+export function commandsForArtifact(v: unknown): RanCommand[] {
+  return (Array.isArray(v) ? v : []).flatMap((x): RanCommand[] => {
+    if (!x || typeof x !== 'object') return [];
+    const o = x as Record<string, unknown>;
+    if (typeof o['command'] !== 'string' || o['command'] === '') return [];
+    return [{ command: o['command'], exitCode: typeof o['exit_code'] === 'number' ? o['exit_code'] : null }];
+  });
+}
 
 /**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
@@ -171,6 +191,7 @@ export class ChildLedger {
       taskId, canonicalName: row.canonical_name, persona: row.persona,
       status: text(report['status']) || row.state, summary: text(report['summary']),
       keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
+      commands: commandsForArtifact(report['commands']),
       highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
     });
     if (!m.ok) this.deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);

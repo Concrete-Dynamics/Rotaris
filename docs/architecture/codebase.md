@@ -1468,6 +1468,104 @@ the first sweep, `code-intel-proof` among them.
 and `transcript-proof` (its 1200-row growth bound, 39.1 ms against 22.1 ms) unchanged, which is the standing rule that a
 batch runner's exit code is not a verdict. The fourth is OQ-56 and stays red by decision, not by accident.
 
+## All twelve critic findings, repaired and measured (2026-09-13)
+
+The owner read the dispositions of the first critic pass and answered them in five words — *"i want you
+to fix ALL of them"* — including the four this session had carried back as needing a ruling. Logged as
+**R-008**, classified **covered** with one open question answered: eleven are craft against the adopted
+language, and the twelfth (UIR-004) **closes OQ-57**, because `docs/design/` defines no checkbox and
+only the owner could decide that the product draws one.
+
+**Every finding is stated as a number the evidence measured before and after**, from the two packs' own
+`geometry.json` and `styles.json` rather than from a claim:
+
+| # | What it was | What it is |
+|---|---|---|
+| UIR-001 | status strip `scrollWidth` **1847** against `clientWidth` 1400 and 1000 | **1400/1400** and **1000/1000** |
+| UIR-002 | a branch fragmented across six lines | elided; **0 boxes past the viewport** at either size |
+| UIR-003 | page headers **30.39, 51.81, 51.44**, two absent | **32** on every view that draws one |
+| UIR-004 | the platform's own 13 × 24 box, `border-radius: 0` | **2 `Checkbox` components** in the pack; seven call sites |
+| UIR-005 | active option `oklch(0.29 0 0)` at **14 px** | `--rt-accent-tint-14` at **11 px** |
+| UIR-006 | **eleven** distinct interactive heights | **three** — 24, 32, and the composer textarea at 80 |
+| UIR-007 | largest empty state **1236 × 636 = 71 %** of its view | **555 × 185 = 21 %** |
+| UIR-008 | the banner's two control centres **5.42 px** apart | both at **81.63** |
+| UIR-009 | four unrelated bands at 1000 × 680 | two declared rows at both sizes |
+| UIR-010 | two selects' left edges **51.04 px** apart; one **729.2 px** wide to hold "single" | one label column; fields bounded to content |
+| UIR-011 | a **393 × 24** button carrying two clauses | **134 × 24**, elided, the sentence unchanged where the requirement puts it |
+| UIR-012 | rightmost extent **1400.44** in a 1400 px window; a **2230 px** history | **1400.00**, and **1063** |
+
+**Three of the twelve were not what the critic thought, and that is worth more than the repairs.**
+UIR-001 reads as a craft preference and is a **`REQ-SHELL-038` violation**: the requirement says "a long
+one is clipped with an ellipsis and keeps its full text in the tooltip", and the items were
+`flex: 0 0 auto`, so nothing ever shrank, no ellipsis ever happened, and the strip overflowed instead.
+UIR-003 reads as a design choice and was a **missing declaration**: `.display` was defined *nowhere* in
+the product, so an `h1` carrying it fell back to the browser's 2em wherever a view had not overridden it
+— Library and Settings at 32 px, Overview and Git overriding to 18, Mission to 20, Requirements to 14.
+And **UIR-011 could not be done as asked**: `REQ-TRACE-390` requires the accessible description to equal
+the **visible** text, so replacing the sentence with a verb would break the clause the control exists
+for. It was bounded and elided instead, which is the repair the language already makes elsewhere.
+
+**UIR-005 found the adopted material disagreeing with itself.** `system/components.css` line 65 draws
+`.seg-opt.is-active` with `background: var(--rt-surface-2)` — a neutral block off the ground ramp — and
+§1.2 of the README that **adopts** that sheet says selection is "a tint plus accent ink, never an
+outlined box and never a filled block", with three tints and no fourth to be invented. The README wins,
+because it is the document that adopts; §1.2 now records where the two differ so the next reader does
+not have to find it again. The other half of that finding was a plain drift: `font: inherit` had
+discarded the adopted `.seg-opt`'s own `--rt-text-xs`.
+
+**Six values were named rather than invented.** `--rt-control-height` (32) and
+`--rt-control-height-compact` (24) are read off the adopted `.btn` and `.btn-compact` — 7 px padding over
+`--rt-text-sm` at 1.2 with a hairline is 32, and `.input` already declared `min-height: 32px` outright.
+`--rt-prose-measure` (340) is the one width the sheet states for a block of secondary text,
+`.empty-state-hint`'s. `--rt-label-column`, `--rt-field-min` and `--rt-tick-width` are the three the
+material does not state, and all six are declared in the theme data where the rendered proof can see
+them — **a token name that resolves to nothing is worse than an honest literal**, which this record
+learned in wave 3, and is why not one of them is a bare `var(--rt-thing, 12px)` fallback.
+
+**The ratchet worked in the direction it was built for.** The repairs took the literal-geometry baseline
+from **163 entries to 158** — `font-size: 18px` and `20px` gone with the per-view titles, four
+`min-height` literals gone with the control scale — and the check refused to pass until the baseline was
+lowered to record it, twice, because that is what "a paid-off allowance cannot be re-spent elsewhere"
+means in practice. Five new literals appeared in the first draft of the checkbox and the guard caught
+every one: a visually-hidden input's `1px` pair, the tick's `2px`, a `420px` cap and a `32px` fallback.
+The checkbox was rebuilt around `appearance: none` on the real input — a better control anyway, since
+the focus ring now lands where the keyboard does — and the rest became tokens or a `vh`.
+
+**Verified.** `pnpm check` green (**1,601 passed, 25 skipped**), `pnpm build`, and eight proofs over
+every surface that changed — `layout-proof`, `git-proof`, `requirements-proof`, `sessions-proof`,
+`settings-proof`, `composer-proof`, `mission-proof`, `library-proof` — all green. `pnpm ui-review`
+reports **0 deterministic findings** on the repaired build, and a second critic cycle read the new pack
+in a fresh context to check the twelve rather than take them on trust.
+
+
+**The second critic cycle checked the twelve rather than taking them on trust, and it is the reason this
+paragraph is not a victory lap.** A fresh-context agent read the repaired pack, decoded pixels rather than
+trusting the downscaled captures, and returned **six verified-resolved, six partial, and twelve new
+findings**. It reproduced every number claimed above from the packs' own evidence. What it caught is that
+**three repairs were the same mistake in different clothes — a bound applied to a child rather than to the
+box the child lives in**: the status strip fitted by cutting nine of twelve items to six-character stubs
+rather than by priority; the worktrees table stopped fragmenting words and took a 549.48 px floor inside a
+346 px card, putting the danger-styled Delete off the card; and the Library panel shrank past its card,
+leaving 248 px of bare ground above a one-sentence message. **All three are repaired** — priority elision
+behind a `data-elide` marker, `table-layout: fixed` so the table takes its card (340 px in a 346 px card),
+and the panel sitting where its first row would. The strip now fits exactly at 1400 and overflows by 79 px
+at 1000, down from 847, with the remainder reachable through the scroll affordance REQ-SHELL-038 keeps.
+
+**Nine findings are carried, and one of the critic's readings is wrong.** UIR-018 calls
+`--rt-accent-tint-14` a fourth tint strength; it is the third of the three §1.2 declares. What is fair in it
+is that two selection idioms now differ in strength — tint-10 on the rail, tint-14 on the segmented control
+— and which one a control takes is the material's to say. The Git header at 1000 × 680 reports
+`clientHeight` 56 against `scrollHeight` 76, a control sitting outside its header with nothing clipped;
+**not repaired**, because the cause is a wrapping flex line and guessing at one from a capture is how a
+repair becomes a regression. The dot grid still paints under the copy, which is the motif's own material.
+
+**The ninety-ninth defect — re-running an iteration deleted the critique written for it.** `ui-audit`
+empties its output directory before it captures, which is right for evidence and fatal for the one file in
+there that is not evidence: a critique is the only record of a reading and it costs a whole pass to produce.
+The second cycle's file was destroyed by a re-capture minutes after it was written, and its content survives
+only in the session transcript and in this paragraph. `ui-review` refuses an iteration that already holds a
+critique now, and `--reshoot` is how you say the loss is intended. **Found by running the loop, again.**
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it

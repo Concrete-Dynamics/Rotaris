@@ -1,5 +1,5 @@
 import type { HookAgentId, HookRow, HooksSummary } from '@rotaris/contracts';
-import { Button as DesignButton, EmptyState as DesignEmptyState, Input as DesignInput, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, EmptyState as DesignEmptyState, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /**
  * Settings → Hooks (REQ-HOOKS-103..105, REQ-HOOKS-109, REQ-HOOKS-136, REQ-HOOKS-137; REQ-CONFIG-354..359):
@@ -95,7 +95,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
                 <tr key={agent} className="hooks__agent" role="row" aria-level={1} aria-expanded="true">
                   <td>
                     <label className="hooks__check">
-                      <DesignInput type="checkbox" checked={rows.length === 0 ? true : agentChecked} disabled={rows.length === 0} onChange={(e) => onToggle(agent, null, e.currentTarget.checked)} title={`Controls ${AGENT_LABELS[agent]}'s hooks for future sessions.`} aria-label={`${AGENT_LABELS[agent]} hooks, for future sessions`} />
+                      <DesignCheckbox className="check" checked={rows.length === 0 ? true : agentChecked} disabled={rows.length === 0} onChange={(e) => onToggle(agent, null, e.currentTarget.checked)} title={`Controls ${AGENT_LABELS[agent]}'s hooks for future sessions.`} aria-label={`${AGENT_LABELS[agent]} hooks, for future sessions`} />
                       <strong>{AGENT_LABELS[agent]}</strong>
                     </label>
                   </td>
@@ -106,7 +106,7 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
                     <td className="hooks__name">
                       {r.checkable ? (
                         <label className="hooks__check">
-                          <DesignInput type="checkbox" checked={r.checked} onChange={(e) => onToggle(agent, r.id, e.currentTarget.checked)} title="Takes effect for runs started afterwards; the run already executing keeps its hook set." aria-label={`${r.name}, for future sessions`} />
+                          <DesignCheckbox className="check" checked={r.checked} onChange={(e) => onToggle(agent, r.id, e.currentTarget.checked)} title="Takes effect for runs started afterwards; the run already executing keeps its hook set." aria-label={`${r.name}, for future sessions`} />
                           <span>{r.name}</span>
                         </label>
                       ) : <span className="hooks__name--static">{r.name}</span>}

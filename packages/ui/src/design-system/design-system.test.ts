@@ -18,7 +18,7 @@ describe('production design-system layer', () => {
   it('exports the approved inventory through one subpath', () => {
     expect(Object.keys(design)).toEqual(expect.arrayContaining([
       'Button', 'Kbd', 'SegmentedControl', 'StatusDot', 'Tag', 'ToggleSwitch',
-      'Input', 'Select', 'Card', 'KpiCard', 'SectionLabel',
+      'Input', 'TextArea', 'Select', 'Checkbox', 'Card', 'KpiCard', 'SectionLabel',
       'ContextRing', 'MeterBar', 'Sparkline', 'Table',
       'Dialog', 'Spinner', 'Tooltip', 'Acknowledgement',
       'Tabs', 'NavRail', 'CommandPalette',
@@ -37,6 +37,7 @@ describe('production design-system layer', () => {
       ['Input', design.Input, {}],
       ['TextArea', design.TextArea, {}],
       ['Select', design.Select, {}],
+      ['Checkbox', design.Checkbox, { label: 'Run isolated' }],
       ['Card', design.Card, {}],
       ['KpiCard', design.KpiCard, { title: 'Runs', value: 4 }],
       ['SectionLabel', design.SectionLabel, {}],
@@ -193,6 +194,29 @@ describe('production design-system layer', () => {
       expect(markup).toContain('<option value="a">A</option>');
       expect(markup).toContain('<option value="c" disabled="">C</option>');
       expect(markup).toContain('class="input select"');
+    });
+  });
+
+  describe('Checkbox — OQ-57, drawn from parts the language declares', () => {
+    it('keeps the native input and puts its label beside it, on one row', () => {
+      const markup = render(design.Checkbox, { label: 'Run in an isolated Git worktree', checked: true, readOnly: true, 'data-testid': 'start-session-isolation' });
+      expect(markup).toContain('type="checkbox"');
+      expect(markup).toContain('checked=""');
+      expect(markup).toContain('data-testid="start-session-isolation"');
+      expect(markup).toContain('class="check"');
+      expect(markup.indexOf('check__input')).toBeLessThan(markup.indexOf('check__label'));
+      expect(markup).toContain('Run in an isolated Git worktree');
+    });
+
+    it('draws no label where the row already names it, and says so in the class', () => {
+      const markup = render(design.Checkbox, { 'aria-label': 'Select session alpha for trajectory export' });
+      expect(markup).toContain('check--bare');
+      expect(markup).not.toContain('check__label');
+      expect(markup).toContain('aria-label="Select session alpha for trajectory export"');
+    });
+
+    it('carries a disabled state onto the control itself, never onto a drawn stand-in', () => {
+      expect(render(design.Checkbox, { label: 'Locked', disabled: true })).toContain('disabled=""');
     });
   });
 

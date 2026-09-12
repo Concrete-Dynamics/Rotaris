@@ -26,7 +26,7 @@ import { createPaneRegistry } from './panes/registry.js';
 // exist, then used by that chrome — and a bundler does not resolve identifiers, so the renderer built cleanly and threw
 // `PANE_TITLE is not defined` the first time a pane opened, which React answers by unmounting the whole tree.
 import { consequenceForDecision, DISCLOSURE_PENDING, DISPATCH_NOTHING_STARTED, LAUNCH_ABANDONED, PANE_TITLE, QUEUE_CONTROL_LABEL, readOnlyEditorRefusal } from './panes-host.js';
-import { Button as DesignButton, EmptyState as DesignEmptyState, Input as DesignInput, Select as DesignSelect } from '../design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, EmptyState as DesignEmptyState, Input as DesignInput, Select as DesignSelect } from '../design-system/index.js';
 
 /**
  * Part AK2 — the Requirements view (spec 08 §Board Surface onwards; REQ-SHELL-023's fourth primary view; ADR-0041's
@@ -837,7 +837,7 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
             <DesignSelect className="input select req-header__select" data-testid="req-axis" value={axis} onChange={(e) => setAxis(axisOf(e.currentTarget.value))} aria-label="Grouping axis" style={{ width: CLOSED_DROPDOWN_WIDTH }}>{AXES.map((a) => <option key={a} value={a}>{columnLabel(a)}</option>)}</DesignSelect></label>
           <label className="req-header__field"><span className="field-label">Sort</span>
             <DesignSelect className="input select req-header__select" data-testid="req-sort" value={sort} onChange={(e) => setSort(sortOrderOf(e.currentTarget.value))} aria-label="Sort order" style={{ width: CLOSED_DROPDOWN_WIDTH }}>{SORT_ORDERS.map((s) => <option key={s} value={s}>{s === 'priority' ? 'Priority, then identifier' : s === 'identifier' ? 'Identifier' : 'Health, then identifier'}</option>)}</DesignSelect></label>
-          <label className="req-header__field req-header__check" title={BLOCKED_COLUMN_DESCRIPTION}><DesignInput type="checkbox" data-testid="req-blocked-column" checked={blockedColumn} onChange={(e) => setBlockedColumn(e.currentTarget.checked)} aria-description={BLOCKED_COLUMN_DESCRIPTION} /><span className="field-label">{BLOCKED_COLUMN_LABEL}</span></label>
+          <DesignCheckbox className="check req-header__field req-header__check" title={BLOCKED_COLUMN_DESCRIPTION} data-testid="req-blocked-column" checked={blockedColumn} onChange={(e) => setBlockedColumn(e.currentTarget.checked)} aria-description={BLOCKED_COLUMN_DESCRIPTION} label={BLOCKED_COLUMN_LABEL} />
           {/* REQ-TRACE-488: the toggle's accessible name alternates; hiding removes the controls from the tab sequence and returns focus here. */}
           <DesignButton ref={filterToggleRef} type="button" className="btn btn-secondary btn-compact" data-testid="req-filter-toggle" aria-expanded={filtersShown} onClick={() => { setFiltersShown((v) => !v); if (filtersShown) requestAnimationFrame(() => filterToggleRef.current?.focus()); }}>{filtersShown ? FILTER_HIDE : FILTER_SHOW}</DesignButton>
           {/* Part R2 — the two board-level panes of REQ-TRACE-375 reachable from the board itself; every other pane is

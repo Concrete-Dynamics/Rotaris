@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { SANDBOX_MODE_NAMES, validateBranchName, type SandboxModeName } from '@rotaris/contracts';
-import { Button as DesignButton, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
 /**
  * REQ-SHELL-125's "Start session" dialog (≥ 460 px wide): Git worktree isolation with its branch (REQ-GIT-118, the
@@ -74,12 +74,11 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, c
       <form className="dialog start-session" role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="start-session-dialog" onSubmit={(event) => { event.preventDefault(); accept(); }}>
         <h2 id={titleId} className="dialog-title">Start session</h2>
         <p className="dialog-body">Two optional choices for the session the next message starts. The workspace is the one this window has open.</p>
-        <fieldset className="start-session__group">
-          <legend className="field-label">Git worktree</legend>
-          <label className="start-session__check" title={runActive ? ISOLATION_REQUIRED_TOOLTIP : undefined}>
-            <DesignInput type="checkbox" data-testid="start-session-isolation" checked={isolation} disabled={isolationLocked} onChange={(event) => setIsolation(event.currentTarget.checked)} />
-            <span>Run in an isolated Git worktree</span>
-          </label>
+        {/* UIR-004: a card with the system's section kicker, where the browser default fieldset drew a
+            hairline rectangle notched by a sentence-case legend — an idiom used nowhere else here. */}
+        <section className="card start-session__group">
+          <div className="card-kicker">Git worktree</div>
+          <DesignCheckbox className="check start-session__check" title={runActive ? ISOLATION_REQUIRED_TOOLTIP : undefined} data-testid="start-session-isolation" checked={isolation} disabled={isolationLocked} onChange={(event) => setIsolation(event.currentTarget.checked)} label="Run in an isolated Git worktree" />
           <p className="start-session__hint text-secondary" data-testid="start-session-hint">{runActive ? ISOLATION_REQUIRED_HINT : ISOLATION_HINT}</p>
           <label className="field">
             <span className="field-label">Branch</span>
@@ -94,14 +93,14 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, c
             </>)}
           </div>
           {attachError !== null && <p className="composer__error" role="alert" data-testid="start-session-attach-error">{attachError}</p>}
-        </fieldset>
-        <fieldset className="start-session__group">
-          <legend className="field-label">Sandbox mode</legend>
+        </section>
+        <section className="card start-session__group">
+          <div className="card-kicker">Sandbox mode</div>
           <DesignSelect className="input select start-session__select" aria-label="Sandbox mode" data-testid="start-session-sandbox" value={sandboxMode} onChange={(event) => setSandboxMode(event.currentTarget.value as SandboxModeName)}>
             {SANDBOX_MODE_NAMES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
           </DesignSelect>
           {!confinementAvailable && <p className="start-session__disclosure text-secondary" data-testid="start-session-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>}
-        </fieldset>
+        </section>
         <div className="dialog-actions">
           <DesignButton type="button" className="btn btn-secondary" disabled={choosing} onClick={onCancel}>Cancel</DesignButton>
           <DesignButton type="submit" className="btn btn-primary" disabled={branchError !== null || choosing} data-testid="start-session-accept">Start session</DesignButton>

@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { markdownCache } from './cache.js';
 import type { Block, ListItem, Span } from './parse.js';
-import { Button as DesignButton, Input as DesignInput, Table as DesignTable } from '../design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, Table as DesignTable } from '../design-system/index.js';
 
 /**
  * ADR-0051, alternative B: the tree rendered to ELEMENTS. No markup string is produced and nothing is
@@ -57,7 +57,7 @@ function Spans({ spans, onOpenLink }: { spans: readonly Span[]; onOpenLink?: ((h
 function Item({ item, onOpenLink }: { item: ListItem; onOpenLink?: ((href: string) => void) | undefined }): ReactNode {
   return (
     <li className={item.task === null ? 'md__item' : 'md__item md__item--task'}>
-      {item.task !== null && <DesignInput type="checkbox" className="md__task" checked={item.task} readOnly aria-label={item.task ? 'done' : 'not done'} />}
+      {item.task !== null && <DesignCheckbox className="check md__task" checked={item.task} readOnly aria-label={item.task ? 'done' : 'not done'} />}
       <Blocks blocks={item.blocks} onOpenLink={onOpenLink} />
     </li>
   );

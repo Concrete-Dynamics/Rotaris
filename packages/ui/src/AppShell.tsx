@@ -153,10 +153,11 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
           )}
         </main>
       </div>
-      <footer className="status-strip" aria-label="Status" aria-description="Scroll horizontally to view every status item." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
+      <footer className="status-strip" aria-label="Status" aria-description="An item too long for the strip is shortened with an ellipsis and keeps its full text in its tooltip." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
+        {/* REQ-SHELL-038: an item that elides keeps its full text in the tooltip — so every item carries one (UIR-001). */}
         {statusItems.map((s, i) => (typeof s === 'string'
-          ? <span key={i} className="status-strip__item">{s}</span>
-          : <span key={i} className="status-strip__item" aria-label={s.name} title={s.title} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>
+          ? <span key={i} className="status-strip__item" data-elide={s.length > 28 ? '1' : undefined} title={s}>{s}</span>
+          : <span key={i} className="status-strip__item" data-elide={s.text.length > 28 ? '1' : undefined} aria-label={s.name} title={s.title ?? s.text} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>
         ))}
       </footer>
       {acknowledgements && <Acknowledgements store={acknowledgements} />}

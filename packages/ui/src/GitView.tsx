@@ -329,12 +329,13 @@ export function GitView(props: GitViewProps) {
                     return (
                       <tr key={row.path} className={isSelected ? 'git__row is-selected' : 'git__row'} data-path={row.path} data-base={row.isBase ? '1' : '0'} data-active={row.isActive ? '1' : '0'} data-session={b?.sessionId ?? ''} aria-selected={isSelected} title={row.path} onClick={(e) => selectRow(e, row.path)}>
                         <td className="mono git__cell-branch">
-                          <span className="git__branch-name">{row.branch ?? 'detached'}</span>
+                          {/* UIR-002: elided, never fragmented — the full branch is the tooltip. */}
+                          <span className="git__branch-name" title={row.branch ?? 'detached'}>{row.branch ?? 'detached'}</span>
                           {row.isBase && <DesignTag className="tag tag-outline" data-testid="git-tag-base">base</DesignTag>}
                           {row.isActive && <DesignTag className="tag tag-accent" data-testid="git-tag-active">active</DesignTag>}
                         </td>
-                        <td className="mono git__cell-session">{b?.sessionId ?? '-'}</td>
-                        <td>{b?.status ?? 'idle'}<span className="git__merge-status text-secondary"> · {b?.mergeStatus ?? 'ready'}</span></td>
+                        <td className="mono git__cell-session" title={b?.sessionId ?? '-'}>{b?.sessionId ?? '-'}</td>
+                        <td className="git__cell-state">{b?.status ?? 'idle'}<span className="git__merge-status text-secondary"> · {b?.mergeStatus ?? 'ready'}</span></td>
                         <td className="mono">{emptyOr(row.ahead)}</td>
                         <td className="mono">{emptyOr(row.behind)}</td>
                         <td className="mono">{filesCell(row)}</td>
@@ -387,6 +388,9 @@ export function GitView(props: GitViewProps) {
             {(state?.history.length ?? 0) === 0 ? (
               <DesignEmptyState className="empty-state git__empty" data-testid="git-history-empty"><span className="empty-state-title">No commit history is available.</span></DesignEmptyState>
             ) : (
+              // UIR-012: the list scrolls inside its own card, so a thirty-commit history ends on the
+              // card's edge instead of running under the status strip.
+              <div className="git__table-body" tabIndex={0} aria-label="Commit history rows" aria-description="Scroll vertically when the history exceeds the card.">
               <DesignTable className="table git__table" aria-label="Commit history">
                 <thead><tr><th>Commit</th><th>Message</th><th>Author</th><th>Age</th></tr></thead>
                 <tbody>
@@ -400,6 +404,7 @@ export function GitView(props: GitViewProps) {
                   ))}
                 </tbody>
               </DesignTable>
+              </div>
             )}
           </Card>
           <Card kicker="Agent commit policy" testId="git-policy">

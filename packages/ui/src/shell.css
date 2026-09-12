@@ -145,6 +145,12 @@
 /* REQ-CHAT-070: the border treatment present while following the tail and absent while not. */
 .transcript__scroll { position: relative; overflow: auto; flex: 1 1 auto; min-height: 0; border: var(--rt-hairline-width) solid transparent; border-radius: var(--rt-radius-md, 6px); }
 .transcript__scroll.is-following { border-color: var(--rt-accent-tint-14); }
+/* UIR-007: an empty state is sized to its MESSAGE, not to the region it sits in. Overview's measured
+   1236 x 636 — 84 % of the view's height — around three lines and one button, with the 32 px dot grid
+   stretched across the whole field and reading between the glyphs of its second line. The cap is the
+   adopted hint's own measure plus the panel's declared padding, so it is the material's figure rather
+   than a fresh one, and the ground shows around the panel instead of the frame reaching for the edges. */
+.empty-state { max-width: calc(var(--rt-prose-measure) + var(--rt-space-6) * 2); height: max-content; margin-inline: auto; align-self: center; }
 /* Drawn OVER the intact pool of empty slots rather than instead of it (ADR-0045's element-count invariance). */
 .transcript__scroll .empty-state { position: absolute; inset: 0; margin: auto; max-width: 420px; height: max-content; }
 /* The pool: a constant number of slots, positioned from the measured offset table rather than from document flow. */
@@ -238,6 +244,11 @@
 /* The chips wrap onto several lines when the transcript column is narrow; without this the send button, being a
    flex item under the default `stretch`, grew to the height of all of them. The design draws it at button height
    whatever sits beside it. */
+/* UIR-009: the two-row composition is DECLARED, not discovered by flex-wrap. At 1000x680 the chips,
+   the segmented control, Stash and Start run landed on four unrelated bands, with the primary action
+   — the only accent surface on the view — at the far left under the persona select, diagonally
+   opposite the button it belongs beside. The chips take the first row and may wrap among themselves;
+   the actions hold the second, trailing-aligned, at every width. */
 .composer__actions { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; min-width: 0; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 
@@ -252,7 +263,9 @@
 @media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
 .composer__hint { align-self: center; margin-right: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); }
 .composer__actions { gap: var(--rt-space-2, 8px); }
-.composer__chips { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex: 1 1 420px; min-width: 0; flex-wrap: wrap; }
+.composer__chips { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
+.composer__actions > :not(.composer__chips):not(.composer__hint) { flex: 0 0 auto; }
+.composer__actions > .composer__hint { flex: 1 1 auto; }
 
 /* ── The one persistent notice (REQ-SHELL-114/116, design G1: rule + glyph, never a filled background) ── */
 .notice { display: flex; align-items: flex-start; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: var(--rt-hairline-width) solid var(--rt-border); border-left: var(--rt-notice-rule-width) solid var(--rt-info-300); border-radius: var(--rt-radius-md, 6px); background: var(--rt-surface); animation: rt-rise var(--rt-duration-slow) var(--rt-ease-out); }
@@ -395,7 +408,18 @@
    `autonomo` in the composer. The control keeps its own width; nothing about the design component changes. */
 .seg { flex: none; }
 .mode__label { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; }
-.seg-opt { border: 0; background: transparent; font: inherit; }
+/* UIR-005, first half — a DRIFT, not a reading: `font: inherit` discarded the adopted `.seg-opt`'s
+   own `--rt-text-xs` and let the option inherit the composer's 14 px, so the segmented control
+   carried the largest control text on a row where `.btn` is 12 px and `.btn-compact` 11 px. The
+   material's size is restored; the weight and family it also declares are unaffected. */
+.seg-opt { border: 0; background: transparent; font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); }
+/* UIR-005, second half — the adopted material disagrees with ITSELF here, and §1.2 governs.
+   `system/components.css` line 65 draws the active option as `background: var(--rt-surface-2)`, a
+   neutral block off the ground ramp; §1.2 states selection is "a tint plus accent ink, never an
+   outlined box and never a filled block", and fixes three tints with no fourth to be invented. The
+   README is the document that ADOPTS the sheet, so its rule is the one that holds where the two
+   disagree, and §1.2 now records that this is where they did. */
+.seg-opt.is-active { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
 .seg-opt:disabled { cursor: default; opacity: 0.6; }
 .seg-opt:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 
@@ -432,6 +456,21 @@
 }
 
 [data-motion='reduced'] { animation: none !important; transition-duration: 0ms !important; }
+/* UIR-006 — two control heights, and every interactive surface answers to one of them.
+   Ten distinct heights were measured across one evidence pack (21.19, 23.19, 24, 28, 30.39, 30.67,
+   31, 32, 33.44, 35.44) because each view expressed its controls as vertical padding over an
+   intrinsic line height, so the same `Select` drew at three of them and a six-control toolbar sat on
+   three bands. A control is a HEIGHT plus horizontal padding now. Views that want a denser band take
+   the compact height rather than inventing a number. */
+.btn, .input, .select, .seg, .seg-opt, .tab { min-height: var(--rt-control-height); box-sizing: border-box; }
+/* A single-line field is the height, not the height its padding happens to produce:  and
+    measured 33.44 and 25.81 against the 32 and 24 they were meant to take. A textarea is
+   sized by its rows (REQ-CHAT-010 fixes the composer's), so it is excluded by name. */
+.input:not(textarea), .select { height: var(--rt-control-height); padding-block: 0; }
+.btn-compact.input:not(textarea), .btn-compact.select, .run-controls .select, .req-header .input, .req-header .select { height: var(--rt-control-height-compact); }
+/* The Settings category rows are controls too, and were the tallest thing in the pack at 35.44. */
+.nav-list__item { min-height: var(--rt-control-height); height: var(--rt-control-height); }
+.btn-compact, .btn-link.btn-compact { min-height: var(--rt-control-height-compact); }
 .btn:disabled { opacity: 1; color: var(--rt-text-disabled); }
 .btn-primary:hover { background: var(--rt-primary-hover); }
 .btn-primary:disabled { background: var(--rt-bg); border-color: var(--rt-border); }
@@ -603,7 +642,8 @@
 .queue__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--rt-text-sm, 13px); }
 .queue__editor { flex: 1; min-height: 28px; }
 .run-controls { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
-.run-controls .select { width: max-content; min-height: 28px; padding: 3px 26px 3px 8px; font-size: var(--rt-text-xs, 12px); }
+/* UIR-006: the composer's select takes the compact height rather than a 28 px of its own. */
+.run-controls .select { width: max-content; min-height: var(--rt-control-height-compact); padding: 3px 26px 3px 8px; font-size: var(--rt-text-xs, 12px); }
 .pause { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-5, 24px); }
 .pause__figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--rt-space-2, 8px); margin: 0; font-size: var(--rt-text-sm, 13px); }
 .pause__figures dt { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
@@ -624,12 +664,24 @@
 
 /* ── Overview (REQ-SHELL-026; REQ-MONITOR-164..174; language: Card, KPI, Tag, Status dot, Empty state) ── */
 .overview { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); height: 100%; min-height: 0; padding: var(--rt-space-4, 16px) var(--rt-space-5, 20px); overflow: auto; }
-.overview__header { align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; }
-.overview__title { margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 500; font-size: var(--rt-text-lg, 18px); }
+/* UIR-003 — ONE page header, declared once: the same cross-alignment, the same gap and the same
+   minimum band on all seven views. The per-view rules that stood in for it disagreed — two centred,
+   two on the baseline, one with its own vertical padding — and the heights came out 30.39, 51.81,
+   51.44 and absent. */
+.page-header { display: flex; align-items: center; gap: var(--rt-space-3); flex-wrap: wrap; min-height: var(--rt-control-height); }
+/* UIR-003 — ONE view title, decided once.
+   `.display` was defined NOWHERE in the product, so an h1 carrying it fell back to the browser's 2em
+   wherever a view had not overridden it: Library and Settings drew at 32 px while Overview and Git
+   overrode to 18, Mission to 20 and Requirements to 14. Ctrl+1..7 changed the window's typographic
+   register, not just its contents. The class is declared here, in the language's own tokens, and the
+   five per-view overrides that stood in for it are gone. */
+.display { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-display); font-size: var(--rt-text-lg); }
 .overview__session { color: var(--rt-text-secondary); }
 .overview__spacer { flex: 1; }
 .overview__error { margin: 0; color: var(--rt-danger-300); font-size: var(--rt-text-xs, 12px); }
-.overview__empty { flex: 1; }
+/* UIR-007: sized to its message. `flex: 1` made the panel take the view's whole remaining height —
+   634.75 px of dashed frame and dot grid around three lines of copy. */
+.overview__empty { flex: 0 0 auto; margin-block: auto; }
 .overview__body { display: grid; grid-template-columns: minmax(320px, 1fr) 8px 340px; gap: 0; align-items: start; min-height: 0; }
 .overview__left { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); min-width: 320px; }
 .overview__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rt-space-3, 12px); }
@@ -638,7 +690,11 @@
 .overview__divider:hover, .overview__divider:focus-visible { background: var(--rt-hover); }
 .overview__right { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); min-width: 260px; max-width: 560px; }
 .ov-card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: 0; }
-.ov-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-2, 8px); }
+/* UIR-010: the kicker holds one line and the caption takes the remainder, so a card head has one
+   baseline instead of two that wrap independently of each other. */
+.ov-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2, 8px); }
+.ov-card__head > .card-kicker { flex: 0 0 auto; white-space: nowrap; }
+.ov-card__head > .card-meta { min-width: 0; text-align: end; }
 .ov-card__title { margin: 0; }
 .ov-kpi { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .ov-spark { color: var(--rt-accent-300); max-width: 100%; }
@@ -657,15 +713,17 @@
 
 /* ── Git view (REQ-GIT-075..090, 115..117; language: Card, Table/TableCard, EmptyState, Tag, the G8 divider) ── */
 .git { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); height: 100%; min-height: 0; padding: var(--rt-space-4, 16px) var(--rt-space-5, 20px); overflow: auto; position: relative; }
-.git__header { align-items: center; gap: var(--rt-space-3, 12px); flex-wrap: wrap; }
-.git__title { margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 500; font-size: var(--rt-text-lg, 18px); }
+
 .git__branch { color: var(--rt-text); }
 .git__branch[data-repository='0'], .git__branch[data-detached='1'] { color: var(--rt-text-secondary); font-style: italic; }
 .git__sync { color: var(--rt-text-secondary); white-space: pre; }
 .git__spacer { flex: 1; }
-.git__body { display: grid; grid-template-columns: minmax(280px, 1fr) 8px 480px; gap: 0; align-items: start; min-height: 0; }
-.git__column { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); min-width: 280px; }
-.git__right { max-width: 900px; }
+/* UIR-012: the right track was a rigid 480 px, so the history card's own width put its right edge at
+   1400.44 px in a 1400 px window. The track may now give way (`minmax(0, 480px)`) and the column may
+   shrink with it, which is what keeps a column inside the view it sits in. */
+.git__body { display: grid; grid-template-columns: minmax(280px, 1fr) 8px minmax(0, 480px); gap: 0; align-items: start; min-height: 0; }
+.git__column { display: flex; flex-direction: column; gap: var(--rt-space-4, 16px); min-width: 0; }
+.git__right { max-width: 900px; min-width: 0; }
 .git__divider { width: 8px; align-self: stretch; cursor: col-resize; border-radius: var(--rt-radius-md); }
 .git__divider:hover, .git__divider:focus-visible { background: var(--rt-hover); }
 .git-card { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-width: 0; }
@@ -674,20 +732,40 @@
 .git-card--table .git__empty { margin: var(--rt-space-3, 12px); }
 .git-card:not(.git-card--table) .git-card__head { padding: 0; }
 .git__table td { vertical-align: middle; }
-/* Figures never wrap; a long branch or session id may break anywhere; a narrow column scrolls rather than clips the delete button. */
+/* Figures never wrap; a narrow column scrolls rather than clips the delete button.
+   UIR-002: a long branch or session id USED TO "break anywhere", and at 1000x680 that drew
+   `ui-evidence-design-system` down six lines as `ui-` / `eviden` / `ce-` / `design` / `-` / `system`,
+   tripling the row's height. Nothing else in the product breaks mid-word. The adopted language fixes
+   the shape elsewhere — elision that never changes the panel width, full text in the tooltip — and
+   these two cells follow it now; every row already carries its `title`. */
 .git__table th, .git__table td.mono:not(.git__cell-branch):not(.git__cell-session), .git__table td.git__cell-actions { white-space: nowrap; }
-.git__cell-branch, .git__cell-session { overflow-wrap: anywhere; }
+.git__cell-branch, .git__cell-session { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git__cell-branch .git__branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* UIR-012: the history ran 2229.56 px inside a 754.75 px view, so its last row was cut by the status
+   strip rather than by a row boundary. It scrolls inside its own card and ends on the card's edge. */
+.git-card--table .git__table-body { max-height: 52vh; overflow-y: auto; overscroll-behavior-block: contain; scrollbar-width: thin; scrollbar-color: var(--rt-border-strong) transparent; }
 .git-card--table { overflow-x: auto; }
 .git__row { cursor: default; }
 .git__row.is-selected td { background: var(--rt-accent-tint-10); }
 .git__row[aria-selected='true'] .git__branch-name { color: var(--rt-accent-300); }
-.git__cell-branch { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+/* UIR-002: the branch cell keeps its tags on the branch's own line — wrapping them was the other
+   half of the six-line row. The name elides; the tags are short and hold. */
+.git__cell-branch { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: nowrap; }
+.git__cell-branch .tag { flex: 0 0 auto; }
+/* UIR-002: "idle · ready" is one phrase and wrapped onto two lines at the minimum width. */
+.git__cell-state { white-space: nowrap; }
 .git__merge-status { font-size: var(--rt-text-2xs, 10px); }
 /* REQ-GIT-079: at least 28×24 px, danger-styled. */
-.git__delete { min-width: 28px; min-height: 24px; padding: 2px 8px; font-size: var(--rt-text-xs, 12px); }
+/* REQ-GIT-079: at least 28x24 px, danger-styled — met by the compact control height (UIR-006). */
+.git__delete { min-width: 28px; min-height: var(--rt-control-height-compact); padding: 2px 8px; font-size: var(--rt-text-xs, 12px); }
 /* REQ-GIT-108: a local commit is tinted — the accent tint carries it beside the hidden text. */
 .git__commit.is-local td { background: var(--rt-accent-tint-10); }
 .git__commit.is-local td:first-child { color: var(--rt-accent-300); }
+/* UIR-012: the history table fits the card it is in rather than forcing the card past the window —
+   its right edge measured 1400.44 px in a 1400 px viewport. The subject column gives way; it already
+   elides, and every row carries its full hash in the row title. */
+.git-card--table { min-width: 0; }
+.git-card--table .git__table-body .git__table, .git-card--table .git__table:not(.git__checkpoint-table) { width: 100%; table-layout: fixed; }
 .git__subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 .git__policy { margin: 0; font-size: var(--rt-text-sm, 13px); color: var(--rt-text-secondary); }
 .git__checkpoint-actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; flex: 1 1 auto; min-width: 0; max-width: 100%; }
@@ -725,8 +803,10 @@
 .worktree-dialog__failure-title { font-size: var(--rt-text-sm, 13px); color: var(--rt-danger-300); }
 /* REQ-SHELL-125: at least 460 px wide. */
 .start-session { width: min(560px, 100%); min-width: 460px; }
-.start-session__group { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); margin: 0; padding: var(--rt-space-3, 12px); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); }
-.start-session__check { display: inline-flex; align-items: center; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); cursor: pointer; }
+/* UIR-004: a card, like every other grouping in the product — the ground and the hairline come from
+   `.card`; this rule adds only the stack and the padding the dialog wants. */
+.start-session__group { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); margin: 0; padding: var(--rt-space-3, 12px); }
+.start-session__check { font-size: var(--rt-text-sm, 13px); }
 .start-session__hint, .start-session__disclosure { margin: 0; font-size: var(--rt-text-xs, 12px); }
 .start-session__attach { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .start-session__attach-path { font-size: var(--rt-text-xs, 12px); overflow-wrap: anywhere; }
@@ -736,7 +816,18 @@
  * widens the whole window's content past the viewport (found on the Git proof's first execution). */
 .app-shell { grid-template-columns: minmax(0, 1fr); }
 .status-strip { min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--rt-border-strong) transparent; }
-.status-strip__item { white-space: nowrap; flex: 0 0 auto; }
+/* UIR-001 / REQ-SHELL-038: "a long one is CLIPPED WITH AN ELLIPSIS and keeps its full text in the
+   tooltip". The items were `flex: 0 0 auto`, so none of them ever shrank, the ellipsis never
+   happened, and the strip overflowed instead — scrollWidth 1847 against a 1400 px window in all
+   fourteen captures of the 2026-09-12 review, with a horizontal scroll track on the window's bottom
+   edge at the minimum size. Shrinking is proportional to content, so the longest item — the service
+   path — gives up the most, which is the priority order without a priority list. The strip keeps
+   `overflow-x: auto` as the last resort that makes a genuinely over-full strip keyboard-reachable. */
+/* Priority, not proportion. Shrinking every item equally cut nine of twelve to six-character stubs —
+   found by the verifying critic (UIR-013). A short item holds; only one long enough to be a path or a
+   sentence gives way, and it keeps its full text in its tooltip (REQ-SHELL-038). */
+.status-strip__item { white-space: nowrap; flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; }
+.status-strip__item[data-elide='1'] { flex: 0 1 auto; min-width: var(--rt-space-12); }
 /* REQ-GIT-122/161: the strip's branch item carries its accessible name; a detached or absent state reads distinctly. */
 .status-strip__item[data-branch-state='detached'], .status-strip__item[data-branch-state='none'] { font-style: italic; }
 /* ADR-0039's dialogs (REQ-GIT-096..099): the progress dialog with no cancel; the confirmation at least 560×400 px. */
@@ -840,8 +931,7 @@
 .workspace--narrow > .inspector--drawer { right: 0; }
 .workspace__drawer-bar .is-active { color: var(--rt-accent-200); }
 .mission { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: auto; }
-.mission__header { align-items: baseline; gap: var(--rt-space-3, 12px); flex-wrap: wrap; padding: var(--rt-space-4, 16px) var(--rt-space-5, 20px) var(--rt-space-3, 12px); }
-.mission__title { margin: 0; font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-size: var(--rt-text-xl, 20px); }
+.mission__header { padding-inline: var(--rt-space-5, 20px); }
 .mission__subtitle { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
 .mission__body { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); grid-template-areas: 'graph table' 'settings table'; gap: var(--rt-space-4, 16px); padding: 0 var(--rt-space-5, 20px) var(--rt-space-5, 20px); align-content: start; }
 .mission__graph { grid-area: graph; }
@@ -855,7 +945,15 @@
 .mission__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; padding-top: var(--rt-space-2, 8px); border-top: 1px solid var(--rt-divider); }
 .mission__actions .btn[aria-disabled='true'] { color: var(--rt-text-disabled); border-color: var(--rt-border); cursor: not-allowed; }
 .mission__reason { font-size: var(--rt-text-2xs, 10px); flex-basis: 100%; }
-.mission__setting { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: var(--rt-space-2, 8px); }
+/* UIR-010: a fixed label column, and a field bounded to its own content.
+   `auto 1fr` placed each field by the length of ITS label, so the two selects' left edges differed by
+   51.04 px — exactly the difference between "Strategy" and "Maximum depth" — and the card carried two
+   competing vertical axes with only its right edge holding them together. The field also stretched to
+   729.2 px at the minimum width to hold the word "single", against the rule that a dropdown sizes
+   itself to its selected entry. */
+.mission__setting { display: grid; grid-template-columns: var(--rt-label-column) minmax(0, max-content); align-items: center; gap: var(--rt-space-2, 8px); }
+.mission__setting > label { min-width: 0; }
+.mission__setting .select, .mission__setting .input { width: max-content; max-width: 100%; min-width: var(--rt-field-min); }
 .mission__setting .settings__hint { grid-column: 1 / -1; font-size: var(--rt-text-2xs, 10px); }
 .agent-table { font-size: var(--rt-text-xs, 12px); }
 .agent-table__row { cursor: pointer; }
@@ -892,15 +990,18 @@
    Structure from docs/spec, craft from docs/design/system: page header, Tabs, Card (accented for the
    stash), Empty state. Every value a token; nothing here names a colour or a size the design does not. */
 .library { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-4, 16px); height: 100%; overflow: hidden; box-sizing: border-box; }
-.library__header { display: flex; align-items: baseline; gap: var(--rt-space-3, 12px); }
-.library__title { margin: 0; }
+
 .library__spacer { flex: 1; }
 .library__search { min-width: 320px; }
 .library__search .input { width: 100%; box-sizing: border-box; }
 .library__tabs { flex-wrap: wrap; }
 .library__tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; }
 .library__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.library__empty { flex: 1; }
+/* UIR-007: sized to its message, like every other empty state — `flex: 1` stretched a one-sentence
+   panel to 495 px, 55 % of the view, in a column 151 px wide. */
+/* A list column's empty state sits where its first row would, not centred in the column: centring left
+   248 px of bare card above it and 214 px below (UIR-016). */
+.library__empty { flex: 0 0 auto; align-self: stretch; max-width: none; }
 .library__placeholder { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 
 .library-prompts { display: grid; align-items: stretch; gap: 0; flex: 1; min-height: 0; }
@@ -1124,27 +1225,35 @@
 .req-header { flex: none; display: flex; flex-direction: column; gap: var(--rt-space-2); padding: 0 var(--rt-space-4) var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-header__row { display: flex; align-items: center; gap: var(--rt-space-3); min-height: 48px; flex-wrap: wrap; }
 .req-header__controls, .req-header__filters, .req-header__move { min-height: 0; }
-.req-header__title { margin: 0; font-family: var(--rt-font-display); font-weight: var(--rt-weight-medium); font-size: var(--rt-text-md); }
 .req-header__count { font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
 .req-header__spacer { flex: 1 1 auto; }
 .req-header__evaluated { white-space: nowrap; }
 /* REQ-TRACE-491: exactly one primary action, 32 high; every other header control is 24. */
-.req-header .btn, .req-header .input, .req-header .select { min-height: 24px; height: 24px; padding-top: 0; padding-bottom: 0; font-size: var(--rt-text-xs); }
-.req-header .btn.req-header__primary { min-height: 32px; height: 32px; font-size: var(--rt-text-sm); }
+/* UIR-006: the toolbar is one band at the compact height — it had three, because each control was
+   a different vertical padding over the same line height. Height, not padding. */
+.req-header .btn, .req-header .input, .req-header .select { min-height: var(--rt-control-height-compact); height: var(--rt-control-height-compact); padding-top: 0; padding-bottom: 0; font-size: var(--rt-text-xs); }
+.req-header .btn.req-header__primary { min-height: var(--rt-control-height); height: var(--rt-control-height); font-size: var(--rt-text-sm); }
 .req-header__field { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; }
 .req-header__field .field-label { white-space: nowrap; }
 .req-header__check { cursor: pointer; }
 .req-header__check input { margin: 0; accent-color: var(--rt-accent); }
 .req-header__filter { min-width: 0; }
 .req-header__analysis { margin: 0; }
-.req-status { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); }
+/* UIR-011: engine prose ran the full 1236 px of the view. A line that long is hard to track back to
+   its start; the language's measure for a block of text is what bounds it. */
+.req-status, .req-header__analysis { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-text-tertiary); max-width: var(--rt-prose-measure); }
 .req-status--error { color: var(--rt-danger-300); }
 /* The move control (REQ-TRACE-390..392): the sentence stays on screen beside the control, never only in a tooltip. */
 .req-move { display: flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 100%; }
-.req-header .btn.req-move__control { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 100%; height: auto; min-height: 24px; white-space: normal; text-align: left; }
+/* UIR-011: the sentence stays — REQ-TRACE-390 requires the accessible description to equal the
+   VISIBLE text, so a verb label would break the clause the control exists for. What was wrong was its
+   size: 393.2 px of button carrying two clauses and a chord hint, where every other button in the
+   product holds one or two words. It is bounded and elides now, the full sentence in the tooltip and
+   in the accessible description exactly as before, and it sits on the toolbar's own band. */
+.req-header .btn.req-move__control { display: inline-flex; align-items: center; gap: var(--rt-space-2); min-width: 0; max-width: 22ch; height: var(--rt-control-height-compact); min-height: var(--rt-control-height-compact); white-space: nowrap; text-align: left; }
 .req-move__control.is-refused { color: var(--rt-text-secondary); }
 .req-move__glyph { flex: none; font-family: var(--rt-font-mono); }
-.req-move__sentence { min-width: 0; }
+.req-move__sentence { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The blocked summary (REQ-TRACE-240/241): above the columns, a rule and a glyph, never a filled ground. */
 .req-blocked { flex: none; padding: var(--rt-space-2) var(--rt-space-4); border-bottom: var(--rt-hairline-width) solid var(--rt-divider); }
 .req-blocked__heading { margin: 0 0 var(--rt-space-1); display: flex; align-items: center; gap: var(--rt-space-2); font-family: var(--rt-font-body); font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); color: var(--rt-wait); }
@@ -1377,3 +1486,22 @@
 .req-graph__edges { margin: 0; padding-left: var(--rt-space-5, 20px); display: flex; flex-direction: column; gap: var(--rt-space-1, 4px);
   font-size: var(--rt-text-xs, 11px); color: var(--rt-text-secondary); }
 .req-graph__empty { margin: 0; }
+
+/* ── The checkbox (OQ-57, answered 2026-09-13; UIR-004) ──
+   The adopted material draws no checkbox, and the product needs three. This is assembled from parts
+   the language declares — `.input`'s hairline and `--rt-border-strong`, the small radius, the accent
+   for the checked ground, the one focus ring — so nothing here is a fourth idiom. The native input
+   keeps the semantics and the keyboard; it is visually replaced, never removed. Before this the boxes
+   were the platform's own: a 13 x 24 grey square with `border-radius: 0`, below every radius the
+   system declares, with its label pushed to the far end of the row. */
+.check { display: inline-flex; align-items: center; gap: var(--rt-space-2); cursor: pointer; font-size: var(--rt-text-sm); min-height: var(--rt-control-height-compact); }
+.check__input { flex: none; appearance: none; -webkit-appearance: none; margin: 0; width: var(--rt-space-4); height: var(--rt-space-4); border: var(--rt-hairline-width) solid var(--rt-boundary-strong); border-radius: var(--rt-radius-sm); background: var(--rt-bg); cursor: pointer; position: relative; transition: background var(--rt-duration-fast) var(--rt-ease-out), border-color var(--rt-duration-fast) var(--rt-ease-out); }
+
+.check__input:checked { background: var(--rt-accent); border-color: var(--rt-accent); }
+/* The tick is two borders of one rotated box — no glyph, no asset, and it scales with the token. */
+.check__input:checked::after { content: ''; position: absolute; inset-inline-start: 33%; inset-block-start: 12%; width: 28%; height: 55%; border: solid var(--rt-accent-100); border-width: 0 var(--rt-tick-width) var(--rt-tick-width) 0; transform: rotate(45deg); }
+.check__input:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: var(--rt-hairline-width); }
+.check__input:disabled { border-color: var(--rt-border); background: var(--rt-surface-2); cursor: default; }
+.check__input:disabled ~ .check__label { color: var(--rt-text-disabled); }
+.check__label { min-width: 0; }
+.check__hint { display: block; font-size: var(--rt-text-xs); }

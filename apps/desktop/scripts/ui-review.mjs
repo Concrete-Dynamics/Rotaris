@@ -50,8 +50,20 @@ const revisionResult = spawnSync('git', ['rev-parse', '--short=12', 'HEAD'], { c
 if (revisionResult.status !== 0) throw new Error(`unable to identify revision: ${revisionResult.stderr}`);
 const revision = revisionResult.stdout.trim();
 const output = join(repo, '.ui-review', revision, `iteration-${iteration}`);
+/**
+ * An iteration that already carries a critique is not re-runnable.
+ *
+ * `ui-audit` empties its output directory before it captures, which is right for evidence and fatal
+ * for the one file in there that is NOT evidence: a critic's `critique.json` is the only record of a
+ * reading, it took a whole pass to produce, and re-running the same iteration deleted one on
+ * 2026-09-13 — the ninety-ninth defect, found by running the loop rather than by reading it. Pass
+ * `--reshoot` to say the loss is intended.
+ */
+if (existsSync(join(output, 'critique.json')) && !argv.includes('--reshoot')) {
+  throw new Error(`iteration ${iteration} already holds a critique (${join(output, 'critique.json')}); capture a new iteration, or pass --reshoot to discard it`);
+}
 const audit = join(repo, 'apps', 'desktop', 'scripts', 'ui-audit.mjs');
-const forwarded = argv.filter((value) => value !== `--iteration=${iteration}` && !value.startsWith('--validate='));
+const forwarded = argv.filter((value) => value !== `--iteration=${iteration}` && value !== '--reshoot' && !value.startsWith('--validate='));
 const run = spawnSync(process.execPath, [audit, `--output=${output}`, ...forwarded], { cwd: repo, stdio: 'inherit' });
 if (run.status !== 0) process.exit(run.status ?? 1);
 

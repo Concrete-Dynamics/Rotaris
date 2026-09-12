@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import type { CheckpointListPayload, CheckpointPreviewPayload } from '@rotaris/contracts';
-import { Button as DesignButton, Input as DesignInput, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, TextArea as DesignTextArea } from './design-system/index.js';
 
 /**
  * ADR-0039's desktop flow, the dialogs (REQ-GIT-096..100): the window-modal indeterminate progress dialog with no
@@ -86,7 +86,7 @@ export function RestoreConfirmDialog({ preview, onConfirm, onCancel }: RestoreCo
           <div className="checkpoint-dialog__warning" role="alert" data-testid="checkpoint-warning">
             <p className="checkpoint-dialog__warning-text">{preview.blockedReason}</p>
             <label className="checkpoint-dialog__check" htmlFor={checkId}>
-              <DesignInput id={checkId} type="checkbox" data-testid="checkpoint-overwrite" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
+              <DesignCheckbox id={checkId} className="check" data-testid="checkpoint-overwrite" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
               <span>Overwrite {preview.dirty.length} uncommitted change(s)</span>
             </label>
           </div>

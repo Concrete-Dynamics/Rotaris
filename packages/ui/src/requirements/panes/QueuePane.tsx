@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { BoardCard, DeliveryQueue } from '@rotaris/contracts';
 import { CONCURRENCY_CEILING, QUEUE_WORDING, clampConcurrency, queueRows, waitingStatement } from './presentation.js';
-import { Button as DesignButton, Input as DesignInput } from '../../design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput } from '../../design-system/index.js';
 
 /**
  * Part AP — the queue pane (spec 08 §Delivery Queue, REQ-TRACE-478..483): the scheduler's entries in its order with
@@ -30,7 +30,7 @@ export function QueuePane(p: QueuePaneProps) {
     <div className="req-pane req-pane--queue" role="region" aria-labelledby={headingId} data-testid="req-pane-queue">
       <h2 id={headingId} className="req-pane__title">Delivery queue</h2>
       <div className="req-pane__controls" role="group" aria-label="Queue controls">
-        <label className="req-pane__control"><DesignInput type="checkbox" checked={p.queue.automatic} onChange={(e) => { void set({ automatic: e.target.checked }, e.target.checked ? QUEUE_WORDING.automaticOn : QUEUE_WORDING.automaticOff); }} aria-label="Automatic scheduling" /><span>Automatic scheduling</span></label>
+        <DesignCheckbox className="check req-pane__control" checked={p.queue.automatic} onChange={(e) => { void set({ automatic: e.target.checked }, e.target.checked ? QUEUE_WORDING.automaticOn : QUEUE_WORDING.automaticOff); }} aria-label="Automatic scheduling" label="Automatic scheduling" />
         <span className="req-pane__hint" data-testid="req-pane-queue-automatic">{p.queue.automatic ? QUEUE_WORDING.automaticOn : QUEUE_WORDING.automaticOff}</span>
         <label className="req-pane__control"><span>Concurrency</span><DesignInput className="input req-pane__number" type="number" min={1} max={CONCURRENCY_CEILING} value={concurrency} onChange={(e) => setConcurrency(e.target.value)} onBlur={() => { const n = clampConcurrency(Number(concurrency)); setConcurrency(String(n)); if (n !== p.queue.concurrency) void set({ concurrency: n }); }} aria-label="Concurrency limit" title={QUEUE_WORDING.concurrency} /></label>
         {p.queue.stopped

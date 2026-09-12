@@ -24,7 +24,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-12** — **the adopted design language, drawn once**: the component view gains
+Last reconciled with the code: **2026-09-13** — **all twelve critic findings, repaired** (R-008): the component
+view's design-system section gains `Checkbox` (the twenty-eighth brief, closing **OQ-57** — the adopted material
+defines none, and the owner ruled that the product draws one), and the count moves to twenty-eight briefs and thirty
+exports. Six named sizes join the theme data — two control heights read off the adopted `.btn` and `.btn-compact`, a
+prose measure read off `.empty-state-hint`, and a label column, a field minimum and a tick width the material does not
+state — so nothing in the repairs resolves to a dangling token. **No package, edge, process, message kind, channel,
+command, window role, store table, run-loop step or control operation moves**, so the process and runtime views are
+unchanged: what changed is what a surface measures, not what crosses a boundary. Before that, **2026-09-12** — **the
+adopted design language, drawn once**: the component view gains
 `ui/design-system` and a responsibilities row for it — the twenty-seven component briefs as one typed layer, the
 verification-only `UiLayoutContract`, and the guard (`tools/check-ui-language.mjs`) that makes it the only place in
 `packages/ui/src` or `apps/desktop/src/renderer` where a design-equivalent control is written. **Edges are unchanged**

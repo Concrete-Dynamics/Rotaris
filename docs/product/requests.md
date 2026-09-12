@@ -20,7 +20,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Seven.** The count is the number of rows below.
+**Eight.** The count is the number of rows below.
 
 ---
 
@@ -33,6 +33,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 | <a id="r-005"></a>R-005 | 2026-09-12 | "if he tries to open two in the same workspace he gets the option to launch a new session / run instead (which will have the same effect as the users intent is to work on multiple things in paralell)" | directive | [`PD-WORKSPACE-001`](directives.md#pd-workspace-001) |
 | <a id="r-006"></a>R-006 | 2026-09-12 | "record a new product spec and wire up the report.commands at a meaningful - UX in mind - place" | directive | [`PD-LIBRARY-001`](directives.md#pd-library-001) |
 | <a id="r-007"></a>R-007 | 2026-09-12 | "identify our skills in the repo, the instructions and workflows so far and see if we could optimize ui generation and debugging based on these insights", followed by "Implement the plan." | covered | The adopted design language and its fidelity workflow govern generation (`docs/design/README.md` section 7); REQ-SHELL-128..160 govern rendered theme, focus, scale, contrast and completeness evidence; REQ-WORKSPACE-051 and REQ-WORKSPACE-053 govern repository-local portable-skill discovery and shape. The implementation adds repository workflow, shared UI components and verification evidence within those bounds |
+| <a id="r-008"></a>R-008 | 2026-09-13 | "i want you to fix ALL of them" — every finding of the first visual-critic pass, including the four this session had carried back as needing a ruling | covered, and **one open question answered** | Eleven of the twelve are craft against the adopted language, which `docs/design/README.md` §7 already obliges. A title register and an empty-state measure are the language's — `REQ-SHELL-023` governs which screens exist and in what order, not their type scale. How a strip, a table or a composer behaves at a width is not what it states (`REQ-SHELL-033`, `REQ-GIT-076`, `REQ-CHAT-010`), and the control-height scale is derived from the module the language already declares. `REQ-TRACE-435`'s one sentence stays unchanged in the tooltip and the accessible description while the button regains a verb. The twelfth is **UIR-004**, raised the previous day as **OQ-57** because `docs/design/` defines no checkbox at all; the instruction to fix it **answers that question** — the product draws one from parts the language does declare, and OQ-57 is closed in place with the ruling |
 
 <!--
 Row shape:

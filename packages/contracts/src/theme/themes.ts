@@ -48,7 +48,20 @@ const spacing = {
   '--rt-space-1': '4px', '--rt-space-2': '8px', '--rt-space-3': '12px', '--rt-space-4': '16px', '--rt-space-5': '20px', '--rt-space-6': '24px', '--rt-space-8': '32px', '--rt-space-10': '40px', '--rt-space-12': '48px', '--rt-space-16': '64px', '--rt-space-24': '96px', '--rt-grid-unit': '32px',
 } as const satisfies ThemeTokenGroup;
 const radius = { '--rt-radius-sm': '5px', '--rt-radius-md': '8px', '--rt-radius-lg': '14px', '--rt-radius-pill': '999px' } as const satisfies ThemeTokenGroup;
-const size = { '--rt-rail-width': '68px', '--rt-nav-item-width': '54px', '--rt-status-dot-size': '6px', '--rt-focus-ring-width': '2px', '--rt-hairline-width': '1px', '--rt-notice-rule-width': '3px', '--rt-title-bar-height': '44px', '--rt-status-bar-height': '26px', '--rt-icon-size': '17px', '--rt-rail-label-size': '9px' } as const satisfies ThemeTokenGroup;
+// UIR-006: the two control heights, DERIVED from the adopted sheet rather than invented — its `.btn`
+// (7 px padding, `--rt-text-sm` at 1.2, a hairline border) resolves to 32 and its `.btn-compact`
+// (4 px, `--rt-text-xs`) to 24, and `.input` already declares `min-height: 32px` outright. Naming them
+// is what stops a view from reaching for a third: the 2026-09-12 review measured TEN distinct
+// interactive heights, with one `Select` drawn at three of them.
+const size = { '--rt-rail-width': '68px', '--rt-nav-item-width': '54px', '--rt-status-dot-size': '6px', '--rt-focus-ring-width': '2px', '--rt-hairline-width': '1px', '--rt-notice-rule-width': '3px', '--rt-title-bar-height': '44px', '--rt-status-bar-height': '26px', '--rt-icon-size': '17px', '--rt-rail-label-size': '9px', '--rt-control-height': '32px', '--rt-control-height-compact': '24px', '--rt-prose-measure': '340px', '--rt-label-column': '120px', '--rt-field-min': '140px', '--rt-tick-width': '2px' } as const satisfies ThemeTokenGroup;
+// `--rt-label-column` and `--rt-field-min` give a settings form ONE axis: a label column wide enough
+// for the longest label in the product's forms, and a field that never shrinks below a readable width
+// (UIR-010 — two selects in one card whose left edges differed by exactly the length of their labels,
+// and one that stretched to 729.2 px to hold the word "single").
+// `--rt-prose-measure` is the ONE width the adopted sheet states for a block of secondary text —
+// `system/components.css`'s `.empty-state-hint { max-width: 340px }`. Named so that prose which is
+// not an empty-state hint can be bounded by the material's own figure instead of a fresh one: the
+// 2026-09-12 review measured engine prose running the full 1236 px of the Requirements view (UIR-011).
 const typography = {
   '--rt-font-display': "'Space Grotesk',system-ui,sans-serif", '--rt-font-body': "'Manrope',system-ui,sans-serif", '--rt-font-mono': "'JetBrains Mono','Cascadia Mono',Menlo,Consolas,monospace", '--rt-weight-display': '500', '--rt-weight-body': '400', '--rt-weight-medium': '500',
   '--rt-text-2xs': '10px', '--rt-text-xs': '11px', '--rt-text-sm': '12px', '--rt-text-base': '14px', '--rt-text-md': '16px', '--rt-h6': '11px', '--rt-h5': '16px', '--rt-h4': '20px', '--rt-h3': '24px', '--rt-h2': '32px', '--rt-h1': '44px', '--rt-tracking-tight': '-0.022em', '--rt-tracking-wide': '0.05em', '--rt-tracking-label': '0.075em', '--rt-leading-tight': '1.12', '--rt-leading-body': '1.62',

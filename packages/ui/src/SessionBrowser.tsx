@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RepairReportPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from './ConfirmDialog.js';
-import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
+import { Button as DesignButton, Card as DesignCard, Checkbox as DesignCheckbox, Input as DesignInput, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
 /** Every action answers a value or a reason; nothing throws across the bridge (ADR-0044). */
 export type ActionOutcome<T = unknown> = { readonly ok: true; readonly value?: T } | { readonly ok: false; readonly reason: string };
@@ -158,7 +158,7 @@ export function SessionBrowser({ sessions, loading, error = null, onOpen, onDism
                 return (
                   <tr key={session.sessionId} data-session-id={session.sessionId} data-stale={session.stale ? 'true' : 'false'} data-unreadable={unreadable ? 'true' : 'false'}>
                     <td className="session-browser__select">
-                      {onExportTrajectory && <DesignInput type="checkbox" className="session-browser__check" aria-label={`Select session ${session.label} for trajectory export`} checked={selected.includes(session.sessionId)} disabled={modal} onChange={() => toggleSelected(session.sessionId)} />}
+                      {onExportTrajectory && <DesignCheckbox className="check session-browser__check" aria-label={`Select session ${session.label} for trajectory export`} checked={selected.includes(session.sessionId)} disabled={modal} onChange={() => toggleSelected(session.sessionId)} />}
                     </td>
                     <td><span className="session-browser__name">{session.label}</span><span className="session-browser__detail mono">{session.detail}</span></td>
                     <td>

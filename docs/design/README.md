@@ -46,6 +46,16 @@ Selection and active states are **a tint plus accent ink**, never an outlined bo
 block. Three tint strengths exist and no fourth may be invented:
 `--rt-accent-tint-07`, `--rt-accent-tint-10`, `--rt-accent-tint-14`.
 
+**Where the imported sheet disagrees with this rule, the rule governs — and it disagrees in one
+place.** `system/components.css` line 65 draws `.seg-opt.is-active` with
+`background: var(--rt-surface-2)`, a neutral block off the ground ramp rather than one of the three
+tints. Found 2026-09-13 by the first visual-critic pass (UIR-005), which measured the product doing
+exactly what the sheet says and read it as a violation of this paragraph — correctly. This document
+is what **adopts** that sheet, so a sentence here outranks a declaration there; the product draws the
+active option as `--rt-accent-tint-14` plus `--rt-accent-200`. The sheet is left as it was imported,
+because it is reference material and not a file this repository authors, and this note is how a
+reader learns the two differ without having to find it again.
+
 `--rt-accent-300` is the readable accent shade for text and links on the dark ground.
 `--rt-accent-200` is link hover.
 

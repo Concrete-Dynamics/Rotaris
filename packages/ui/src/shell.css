@@ -24,7 +24,6 @@
 }
 .title-bar__name { font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 600; }
 .title-bar__version { color: var(--rt-text-tertiary); font-size: var(--rt-text-sm, 12px); }
-.title-bar__spacer { flex: 1; }
 .title-bar__sessions { -webkit-app-region: no-drag; }
 /*
  * Stage B — the workspace chip (REQ-SHELL-033/035, REQ-WORKSPACE-016/017), drawn from the mockup's

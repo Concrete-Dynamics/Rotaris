@@ -46,6 +46,14 @@ describe('REQ-WORKSPACE-149 rule 2 — middle elision against the measured width
     expect(elideMiddle('~/dev/atlas', Number.NaN, byChar)).toBeNull();
   });
 
+  it('hides it rather than trusting a measurer that charges nothing for a label with characters', () => {
+    // Found by driving the built app: `WorkspaceChip.measurerFor` answers `() => 0` wherever a canvas
+    // 2D context or the computed font is unavailable, and with that measurer every candidate fits —
+    // so a 348 px path was drawn into an 87 px chip, clipped, which is the one thing rule 2 forbids.
+    expect(elideMiddle('~/dev/atlas-billing/services/api', 87, () => 0)).toBeNull();
+    expect(elideMiddle('~/dev/atlas-billing/services/api', 87, byChar)).not.toBeNull();
+  });
+
   it('recomputes from the width it is given, which is what lets a resize change the answer', () => {
     const path = '~/dev/atlas-billing/services/api';
     expect(elideMiddle(path, 40, byChar)).toBe(path);

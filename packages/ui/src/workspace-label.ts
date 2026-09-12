@@ -54,7 +54,22 @@ export function collapseHome(path: string, home: string | undefined): string {
 export function elideMiddle(text: string, available: number, measure: (s: string) => number): string | null {
   if (text === '') return text;
   if (!Number.isFinite(available) || available <= 0) return null;
-  if (measure(text) <= available) return text;
+  /*
+   * A measurer that charges nothing for a label that has characters is not measuring, and every
+   * candidate then "fits": the caller draws the whole path into a box too small to hold it, which is
+   * the single outcome rule 2 forbids. Hiding it is the rule's own answer for a width that cannot
+   * hold the label, and it is the safe side of a measurement that cannot be trusted.
+   *
+   * The reason this replaces, kept beside it rather than repaired quietly: `WorkspaceChip` held that
+   * a zero measurer was "the right answer where there is no width — elision is a property of a
+   * surface that was drawn, and nothing was". That is true of a test renderer, where the available
+   * width is zero as well and the clause above has already answered. It is false of a drawn surface
+   * whose canvas context or computed font is unavailable: there the width is real and the old
+   * reasoning drew a full absolute path into an 87 px chip.
+   */
+  const full = measure(text);
+  if (full === 0) return null;
+  if (full <= available) return text;
   if (measure(ELLIPSIS) > available) return null;
   const chars = Array.from(text);
   let head = Math.ceil((chars.length - 1) / 2);

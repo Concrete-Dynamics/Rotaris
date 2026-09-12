@@ -12,6 +12,16 @@ Escalations are cited by number *and* by content, because `open-questions.md` is
 numbering may shift. Where a ruling requires a requirement to be amended, that is noted explicitly: the
 amendment is authorised by this record but is not yet made.
 
+**Where the multi-window planning rulings live — not here.** The four taken while planning the work that reaches
+a project folder from inside the window (build the window builder now rather than a single-window stopgap; the
+new-window route as its own gesture; the same-folder offer in place of a silent no-op; and the refusal of a
+second operating-system process) are requests and directives rather than escalations. Nothing in the record
+contradicted itself: the owner asked for behaviour the specification does not have, which is the one case
+`docs/product/README.md`'s table sends to the directive layer. They are logged in
+[`../product/requests.md`](../product/requests.md) as R-001 to R-005 and ruled in
+[`../product/directives.md`](../product/directives.md) as `PD-SHELL-001` and `PD-WORKSPACE-001`. This document
+stays what it has been: where a corpus that disagrees with itself is settled.
+
 ---
 
 ## Design-material contradictions

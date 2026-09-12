@@ -160,6 +160,14 @@ const CHIP = `JSON.stringify((() => {
     parsed: !!el.querySelector('b'),
     box: { w: Math.round(b.width), h: Math.round(b.height) },
     focusable: el.tabIndex >= 0 || el.tagName === 'BUTTON',
+    // Rule 2 forbids a clipped label, so the proof has to be able to SEE one: a label wider than the box it
+    // sits in is exactly what a measurer that charges nothing produces, and nothing here could read it before.
+    clipped: el.scrollWidth > el.clientWidth + 1,
+    slot: el.parentElement ? Math.round(el.parentElement.clientWidth) : 0,
+    // The three widths the chip's own budget is computed from. A red that prints them says WHY it is red: a span
+    // still at its full width inside a clamped button is a budget that came out larger than the label it measured.
+    chipW: Math.round(b.width),
+    spanW: path ? Math.round(path.getBoundingClientRect().width) : null,
   };
 })())`;
 
@@ -217,7 +225,9 @@ try {
   // 5 / 14 — the chip itself: what it is, what it says, and the three label rules.
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
   {
-    const s = await launch('chip', { workspace: MARKUP, folders: ['(cancel)'] });
+    // Two dismissals armed, one for the pointer route and one for the keyboard route. An exhausted queue falls
+    // back to the REAL native chooser, and a proof that opens one is a proof that waits for a person.
+    const s = await launch('chip', { workspace: MARKUP, folders: ['(cancel)', '(cancel)'] });
     await sleep(1_200);
     const chip = JSON.parse(await s.driver.eval(CHIP));
     check('REQ-SHELL-035 / REQ-WORKSPACE-016: the chip is a button carrying the exact name, tooltip and description',
@@ -241,14 +251,105 @@ try {
     await s.driver.resize(1_000, 680);
     await sleep(600);
     const narrow = JSON.parse(await s.driver.eval(CHIP));
-    const ellipses = (narrow.label ?? '').split('…').length - 1;
-    check('REQ-WORKSPACE-149 rule 2: a narrower window re-elides the label from the middle with exactly one ellipsis',
-      narrow.label !== wide.label ? ellipses === 1 : ellipses === 0,
-      `wide=${JSON.stringify(wide.label)} narrow=${JSON.stringify(narrow.label)} (${ellipses} ellipsis)`);
+    /*
+     * FALSIFIED, kept beside its replacement rather than repaired quietly. This asserted that a NARROWER WINDOW
+     * re-elides, written as `narrow.label !== wide.label ? ellipses === 1 : ellipses === 0` — which lets "the
+     * label did not change" mean "zero ellipses is correct". It could not fail: at REQ-SHELL-022's own floor of
+     * 1000 px the centred slot is still some 760 px wide and every fixture path fits whole, so it passed having
+     * measured nothing. Driving the built app by hand then found the rule genuinely broken behind it, and the
+     * defect was in the measurer rather than in the rules. What rule 2 is about is the width available to the
+     * label, however the layout arrived at it, so the budget is squeezed directly below.
+     */
+    check('REQ-WORKSPACE-149 rule 2: a window resize changes the width the label is measured against',
+      narrow.slot < wide.slot && narrow.label !== null,
+      `the slot went ${wide.slot} px → ${narrow.slot} px, label ${JSON.stringify(narrow.label)}`);
     check('REQ-SHELL-022: the window refuses to be smaller than 1000×680',
       JSON.parse(await s.driver.eval('JSON.stringify({ w: innerWidth, h: innerHeight })')).w >= 990,
       `the viewport is ${await s.driver.eval('`${innerWidth}x${innerHeight}`')} after asking for 800×600`);
     await s.driver.resize(1_440, 900);
+    await sleep(600);
+
+    /*
+     * The budget squeezed directly, which is the only route to rule 2's own subject on a window this platform
+     * will actually give us. `max-width` on the SLOT is what the layout itself varies — the slot has a zero flex
+     * basis, so the title bar decides its width and the chip cannot widen it — so this drives the same path a
+     * resize drives, at widths a resize cannot reach. Each step waits for the observer to deliver and for React
+     * to commit before the label is read; reading at the same instant measures the frame before the change.
+     */
+    const squeeze = async (css) => {
+      // ONE expression: the driver evaluates an expression, so an assignment is wrapped rather than sequenced.
+      await s.driver.eval(`Boolean(document.querySelector('.title-bar__workspace-slot').style.maxWidth = ${JSON.stringify(css)})`);
+      await sleep(700);
+      const first = JSON.parse(await s.driver.eval(CHIP));
+      await sleep(500);
+      const second = JSON.parse(await s.driver.eval(CHIP));
+      /*
+       * Read twice, deliberately. A label read after the observer has delivered but before React has committed is
+       * the frame BEFORE the change, and one reading cannot tell that apart from a label that never moves at all —
+       * the two have the same shape in a report and opposite causes. When they disagree the detail says so.
+       */
+      return { ...second, settled: first.label === second.label, firstLabel: first.label };
+    };
+    const shape = (m) => `slot ${m.slot} px, chip ${m.chipW} px, span ${m.spanW} px${m.settled ? '' : `, UNSETTLED (first read ${JSON.stringify(m.firstLabel)})`}`;
+    const at260 = await squeeze('260px');
+    const at90 = await squeeze('90px');
+    const at46 = await squeeze('46px');
+    const restored = await squeeze('');
+    const ellipsesOf = (label) => (label ?? '').split('…').length - 1;
+    check('REQ-WORKSPACE-149 rule 2: a squeezed budget re-elides from the middle with exactly one ellipsis',
+      ellipsesOf(at260.label) === 1 && ellipsesOf(at90.label) === 1,
+      `260 px → ${JSON.stringify(at260.label)} (${shape(at260)}); 90 px → ${JSON.stringify(at90.label)} (${shape(at90)})`);
+    check('REQ-WORKSPACE-149 rule 2: the label is never drawn clipped, and is hidden where even … will not fit',
+      !at260.clipped && !at90.clipped && at46.label === null,
+      `clipped at 260/90 px = ${at260.clipped}/${at90.clipped}; at 46 px the label is ${at46.label === null ? 'hidden' : JSON.stringify(at46.label)} (${shape(at46)})`);
+    check('REQ-WORKSPACE-149 rule 2: widening restores the whole path, so the elision is not a one-way trip',
+      restored.label === wide.label && ellipsesOf(restored.label) === 0,
+      `restored to ${JSON.stringify(restored.label)} (was ${JSON.stringify(wide.label)}, ${shape(restored)})`);
+
+    /*
+     * The budget must not depend on the label's own box — the assertion whose absence let a latch live for two
+     * days. `WorkspaceChip` computed what the chip spends on its furniture as `button.offsetWidth -
+     * span.offsetWidth`, which is content-independent only while the span is SHRUNK to fit. A measurement taken
+     * while the span still stands at its full width inside a clamped button gives a NEGATIVE spend, hence a
+     * budget larger than the label itself, hence "it fits" — a wrong answer that is self-consistent, so no
+     * further observer delivery ever comes and the label stays clipped for the life of the window. It appeared
+     * twice, intermittently, and no single reading can tell it apart from a frame read too early: both print a
+     * whole label in a narrow chip.
+     *
+     * So the state is forced rather than waited for. The span is pinned to its full width, the slot is nudged by
+     * a pixel so the observer delivers, and the label must still elide. Against the arithmetic above this fails;
+     * against a budget taken from the slot and the fixed furniture alone it passes. `clipped` is deliberately not
+     * asserted here — the pin itself overflows the button, whatever the label says.
+     */
+    await squeeze('260px');
+    /*
+     * The pin is `flex-shrink: 0` WITH a `min-width`, and the first attempt is kept here because it read as a
+     * pass: pinning `width: 444px` alone changes only the flex BASE size, and a span with `flex-shrink: 1` and
+     * the stylesheet's `min-width: 0` shrank straight past it to 198 px. The forced state never existed, the
+     * check reported PASS against the very arithmetic it was written to catch, and a repair could have been
+     * claimed on it. A harness that cannot reach the state it claims to force is the failure mode this file's
+     * header already names once.
+     */
+    await s.driver.eval("Boolean(Object.assign(document.querySelector('.title-bar__workspace-path').style, { flexShrink: '0', minWidth: '444px' }))");
+    const pinned = await squeeze('261px');
+    await s.driver.eval("Boolean(Object.assign(document.querySelector('.title-bar__workspace-path').style, { flexShrink: '', minWidth: '' }))");
+    const unpinned = await squeeze('');
+    check('REQ-WORKSPACE-149 rule 2: the budget ignores the label’s own box, so a stale span cannot latch it whole',
+      ellipsesOf(pinned.label) === 1 && pinned.label !== wide.label,
+      `span pinned to 444 px at a 261 px slot → ${JSON.stringify(pinned.label)} (${shape(pinned)}); unpinned → ${JSON.stringify(unpinned.label)}`);
+
+    /*
+     * The POINTER route, which nothing here reached: every other check drives `workspace.choose` through the
+     * driver's command op, so the chip's own handler could have been unwired — or wired to nothing, which is
+     * what a missing `onChooseWorkspace` prop would leave — and all of them would still pass. A debugging
+     * session mistook exactly this for a product defect when a scrubbed seam opened the real dialog instead.
+     */
+    const beforeClick = (logOf(s).match(/capture: project folder chooser/g) ?? []).length;
+    await s.driver.click('.title-bar__workspace');
+    await sleep(900);
+    const afterClick = (logOf(s).match(/capture: project folder chooser/g) ?? []).length;
+    check('REQ-SHELL-035: a click on the chip opens the chooser, so the control is wired to the command',
+      afterClick > beforeClick, `the chooser opened ${afterClick - beforeClick} more time(s) after a click`);
 
     // Return activates it: the chooser opens, and the seam's `(cancel)` answers it.
     const before = (logOf(s).match(/capture: project folder chooser/g) ?? []).length;

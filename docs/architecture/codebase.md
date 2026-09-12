@@ -1164,6 +1164,59 @@ rather than of the proof: gate 2 has no worktree-integration state to read, and 
 observable unshown interval on a route that shows its window in the same turn it builds it. Gate 3 is not among
 them — it passes, with the requirement's own sentence and no chooser opened.
 
+**Driven by hand two days later: the ninetieth defect.** The proof above was green on 26 checks when the surface
+was put under `pnpm app:drive` on 2026-09-12. Four of the five rule-2 checks it carries now did not exist, and
+the one that did could not fail.
+
+**The ninetieth — the chip's elision budget could latch onto a wrong answer and stay there.** `WorkspaceChip`
+computed what the chip spends on its own furniture as `button.offsetWidth - span.offsetWidth`, reasoning that the
+difference between the chip and its label is the padding, the border, the gaps, the folder glyph and the session
+tail. That holds only while the span is *shrunk to fit*. Take one measurement while the span still stands at its
+full width inside a clamped button and the spend is **negative**: the budget comes out larger than the label
+itself, every candidate "fits", and the label is left whole and drawn clipped — the one outcome
+`REQ-WORKSPACE-149` rule 2 forbids. Nothing re-fires afterwards, because the slot's width has not changed, so the
+wrong answer is stable for the life of the window. It appeared twice, intermittently — once across four widths in
+the debugging session, once in the proof's own run — with green runs on either side of both. The budget is now the
+slot's inner width less the chip's borders, padding, gaps and `flex: none` children, so no term in it depends on
+the label; the gaps are counted from the fixed children rather than from the children present, because a budget
+that grew by one gap the moment the label disappeared could show and hide it alternately at one slot width.
+
+Two repairs sit beside it. `elideMiddle` now refuses a measurer that charges nothing for a label with characters,
+and hides the label instead: `measurerFor` answers `() => 0` wherever a canvas 2D context or the computed font is
+unavailable, and with that measurer every candidate fits — which, in a window that really was drawn, is a full
+absolute path in a chip too small for it. The falsified reason is kept beside its replacement: zero was called
+"the right answer where there is no width", which is true of a test renderer, where the available width is zero
+as well and the clause above it has already answered. And `.title-bar__spacer` is deleted — the eighty-eighth
+defect's repair removed its only use and left the rule standing.
+
+**Four harness defects, three of which read as product failures.**
+
+- The rule-2 check **could not fail**. It resized to `REQ-SHELL-022`'s own floor of 1000 px, where the centred
+  slot is still some 760 px and every fixture path fits whole, and then let `narrow.label === wide.label` mean
+  "zero ellipses is correct". It passed having measured nothing, and the latch lived behind it. The budget is
+  squeezed directly now — `max-width` on the slot, which is what the layout itself varies — at widths no window
+  on this platform can reach.
+- **`pnpm app:drive` could not hand a seam to the app it drives.** `startApp` builds the child's environment from
+  `cleanEnvironment()`, which deletes every `ROTARIS_*` name so a proof measures the product rather than the shell
+  it was started from. An exported `ROTARIS_CAPTURE_PROJECT_FOLDER` therefore never arrived: the chip's click
+  opened the **real** native chooser, nothing appeared in the document, and that read as a control wired to
+  nothing — a diagnosis stated twice before the log was read properly. `--env=KEY=VALUE` hands one over
+  explicitly, and the reply names which seams were armed.
+- **No check had ever exercised the chip's own click.** Every other assertion drives `workspace.choose` through
+  the driver's command op, so an unwired handler — or a missing `onChooseWorkspace` prop, which leaves
+  `onChoose?.()` a silent no-op — would have passed all of them. The pointer route is asserted now, beside the
+  Return route that was already there.
+- The counterfactual **failed to fail**. Pinning the span with `width: 444px` changes only the flex base size, and
+  a span with `flex-shrink: 1` and the stylesheet's `min-width: 0` shrank straight past it to 198 px: the forced
+  state never existed and the check reported PASS against the very arithmetic it was written to catch. Pinned with
+  `flex-shrink: 0` and a real `min-width` it fails before the repair and passes after, with the span still
+  unshrunk at 444 px — which is the repair itself, rather than a number that moved.
+
+The proof is **29 passed, 0 failed, 2 skipped**, the two skips being the same properties of this build as before.
+Every squeeze step is read twice and reports whether the two readings agreed: a label read after the observer has
+delivered but before React has committed is the frame *before* the change, and one reading cannot tell that apart
+from a label that never moves at all.
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it

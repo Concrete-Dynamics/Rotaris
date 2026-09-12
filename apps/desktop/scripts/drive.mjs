@@ -7,6 +7,7 @@
  * editing a proof script and waiting out a launch.
  *
  *   pnpm app:drive start [--workspace=PATH] [--dialect=scripted|...] [--fresh]
+ *   pnpm app:drive start --env=ROTARIS_CAPTURE_PROJECT_FOLDER=D:\a\folder   (repeatable; hands a seam over)
  *   pnpm app:drive waitFor ".board" [--timeout=15000]
  *   pnpm app:drive click ".nav-item" --text=Overview
  *   pnpm app:drive type "hello" --enter
@@ -17,6 +18,7 @@
  *   pnpm app:drive shot screen.png
  *   pnpm app:drive resize 1000 680
  *   pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
+ *   pnpm app:drive windows
  *   pnpm app:drive log [--tail=40]
  *   pnpm app:drive stop
  *
@@ -61,13 +63,32 @@ switch (command) {
       rmSync(endpointFile, { force: true });
     }
     const workspace = flag('workspace', undefined);
+    /*
+     * `--env=KEY=VALUE`, repeatable, handed to the launch as `startApp`'s `extra`.
+     *
+     * It exists because an exported variable does NOT reach a driven app: `startApp` builds the child's
+     * environment from `cleanEnvironment()`, which deletes every `ROTARIS_*` name on purpose, so that a proof
+     * measures the product rather than the shell it was started from. Without a way through, a flow whose seam
+     * is the only thing standing in for a person — the native folder chooser — cannot be driven at all: it
+     * opens the real dialog, nothing appears in the document, and the debugging session reads that as the
+     * product doing nothing. The seam is handed over explicitly and named back in the reply, so a session can
+     * never be confused about which seams were armed.
+     */
+    const extra = Object.fromEntries(
+      argv.filter((a) => a.startsWith('--env=')).map((a) => {
+        const pair = a.slice('--env='.length);
+        const eq = pair.indexOf('=');
+        return eq === -1 ? [pair, ''] : [pair.slice(0, eq), pair.slice(eq + 1)];
+      }),
+    );
     const started = await startApp({
       root,
       ...(typeof workspace === 'string' ? { workspace } : {}),
       dialect: typeof flag('dialect', 'scripted') === 'string' ? flag('dialect', 'scripted') : 'scripted',
       detached: true,
+      extra,
     });
-    print({ pid: started.child.pid, endpoint: started.endpointFile, log: started.logFile, ...(await started.driver.ping()) });
+    print({ pid: started.child.pid, endpoint: started.endpointFile, log: started.logFile, seams: Object.keys(extra), ...(await started.driver.ping()) });
     started.driver.close();
     break;
   }
@@ -123,9 +144,13 @@ switch (command) {
   case 'command':
     await withClient((d) => d.command(JSON.parse(positional[0] ?? '{}')));
     break;
+  // The main windows, most recently focused first. `{ windows, selected }` — an envelope, not a bare list.
+  case 'windows':
+    await withClient((d) => d.windows());
+    break;
   case 'ping':
     await withClient((d) => d.ping());
     break;
   default:
-    print(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 24).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+    print(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 26).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
 }

@@ -41,9 +41,11 @@ export interface WorkspaceChipProps {
  * document is what keeps rule 2 free of a feedback loop: a candidate's width is read without the
  * candidate being laid out, so shortening the label cannot move the budget that decided it.
  *
- * An environment with no 2D context — a test renderer — measures everything as zero, so every label
- * fits and none is shortened. That is the right answer where there is no width: elision is a
- * property of a surface that was drawn, and nothing was.
+ * An environment with no 2D context — a test renderer — measures everything as zero. That answer is
+ * not trusted here: `elideMiddle` refuses a measurer that charges nothing for a label with characters
+ * and hides the label instead, because in a window that really was drawn the alternative is a full
+ * absolute path in a chip too small for it, and clipped is what rule 2 forbids. A test renderer
+ * reaches the same outcome by its available width being zero as well.
  */
 let scratch: HTMLCanvasElement | null = null;
 function measurerFor(el: HTMLElement): (s: string) => number {
@@ -68,21 +70,38 @@ export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceCh
   const [label, setLabel] = useState<string | null>(() => collapseHome(path, home));
 
   /**
-   * The budget is the width the layout has for the label, read from the chip's **slot** rather than
-   * from the chip: the slot is a flex item with a zero basis, so its width is fixed by the title bar
-   * and does not depend on the text inside it. What the chip spends on itself — padding, border,
-   * gaps, the folder glyph, the separator and the session — is the difference between the chip's
-   * width and the label's, which is likewise independent of what the label says. Both halves being
-   * content-independent is what makes this converge instead of ratcheting: reading the budget from
-   * the chip's own box would shrink with every pass and never recover on a widening window.
+   * The budget is the width the layout has for the label: the chip's **slot**, less what the chip spends on
+   * itself. Neither half may depend on the label. The slot is a flex item with a zero basis, so the title bar
+   * fixes its width and the text inside cannot move it; the spend is the chip's own borders, padding and gaps
+   * plus its fixed children — the folder glyph and the session tail, both `flex: none` — so it is fixed too.
+   * That independence is what makes this converge rather than ratchet.
+   *
+   * FALSIFIED, kept beside its replacement rather than repaired quietly. The spend used to be
+   * `button.offsetWidth - span.offsetWidth`, reasoning that the difference between the chip and its label is
+   * exactly the furniture. That holds only while the span is SHRUNK to fit. Take one measurement while the span
+   * still stands at its full width inside a clamped button — which happened twice, intermittently, once in a
+   * debugging session and once in the proof — and the spend is NEGATIVE: the budget comes out larger than the
+   * label, every candidate "fits", and the label is left whole and drawn clipped, which is the one outcome rule
+   * 2 forbids. Nothing then re-fires, because the slot's width has not changed, so the wrong answer is stable
+   * for the life of the window. `pnpm workspace-proof` pins the span and asserts the budget ignores it.
+   *
+   * The gaps are counted from the FIXED children rather than from the children present, so the arithmetic does
+   * not change when the label is hidden. A budget that grew by one gap the moment the label disappeared could
+   * show and hide it alternately at one slot width; counting both gaps always keeps one decision boundary.
    */
   const remeasure = useCallback(() => {
     const button = chip.current;
     const slot = button?.parentElement;
     if (!button || !slot) return;
-    const spent = button.offsetWidth - (text.current?.offsetWidth ?? 0);
-    const style = getComputedStyle(slot);
-    const inner = slot.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+    const px = (value: string) => parseFloat(value) || 0;
+    const slotStyle = getComputedStyle(slot);
+    const inner = slot.clientWidth - px(slotStyle.paddingLeft) - px(slotStyle.paddingRight);
+    const own = getComputedStyle(button);
+    const furniture = Array.from(button.children).filter((element) => element !== text.current);
+    const spent =
+      px(own.paddingLeft) + px(own.paddingRight) + px(own.borderLeftWidth) + px(own.borderRightWidth)
+      + px(own.columnGap) * furniture.length
+      + furniture.reduce((total, element) => total + (element as HTMLElement).offsetWidth, 0);
     // The path span inherits the button's face and size, so the button is a faithful stand-in for
     // the metrics while the label is hidden and the span is not in the document.
     setLabel(workspaceLabel(path, home, inner - spent, measurerFor(text.current ?? button)));

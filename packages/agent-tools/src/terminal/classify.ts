@@ -77,7 +77,15 @@ export function renderAction(a: { command: string; timeout?: number | undefined;
   return parts.join(' ');
 }
 
-/** Strip VT/ANSI control sequences so the observation is plain text (the screen emulator of ADR-0021 lands with streaming). */
+/**
+ * Strip VT/ANSI control sequences from the RAW stream, for the marker scan of ADR-0020 — which works on the
+ * raw stream by design, because the marker has to be found the instant the shell writes it.
+ *
+ * It is NOT what the agent's capture is built from any more. Deleting a sequence is not emulating it: a tab
+ * stop ConPTY expressed as `ESC[<n>C` came back to the agent as `ab` where the screen read `a       b`, and a
+ * `Clear-Host` came back as the rows of the screen left behind as blank lines. That capture is ADR-0021's
+ * headless screen now (`ForegroundSession`); this stays for the scan, and for the marker only.
+ */
 export function stripVt(text: string): string {
   return text
     // CSI: \x1b [ params intermediates final

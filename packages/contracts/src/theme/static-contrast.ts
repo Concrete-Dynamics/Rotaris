@@ -42,6 +42,14 @@ export function themeContrastViolations(theme: Theme): readonly ContrastViolatio
   for (const name of TERM_ANSI_NAMES) check(`terminal ${name} on terminal ground`, `--rt-term-${name}`, '--rt-term-bg', name === 'black' ? 3 : 4.5);
   check('terminal foreground on terminal ground', '--rt-term-fg', '--rt-term-bg', 4.5);
   check('terminal cursor on terminal ground', '--rt-term-cursor', '--rt-term-bg', 3);
+  // REQ-SHELL-145 measures each token "against every background the token is actually painted on",
+  // and this checks `--rt-bg` alone — deliberately, and the reason is worth more than the check.
+  // Widening it to `textBackgrounds` is one line and would fail the ADOPTED palette today: 52%
+  // clears 3.22:1 on the ground and 2.48:1 on a hovered row (OQ-56, raised 2026-09-12 when
+  // `pnpm theme-proof` settled `docs/design/README.md` §5 item 1 from rendered pixels). Widening it
+  // here would turn an owner's decision about approved design material into a silent test failure,
+  // so the narrow check stays, the shortfall is pinned by name in `contracts.test.ts`, and the line
+  // moves when OQ-56 is answered — in the same commit as the token it then admits.
   check('disabled text on disabled surface', '--rt-text-disabled', '--rt-bg', 3);
   const enabled = contrastRatio(resolved(theme, '--rt-text'), resolved(theme, '--rt-bg'));
   const disabled = contrastRatio(resolved(theme, '--rt-text-disabled'), resolved(theme, '--rt-bg'));

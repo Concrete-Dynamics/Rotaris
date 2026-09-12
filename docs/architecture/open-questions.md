@@ -2339,6 +2339,28 @@ the worst case a **configuration** can reach is the flat regime bounded by the d
 than the `streams × windows ÷ 1,000` seconds that applies above it. **ADR-0021's "The cap is load-bearing"
 obligation 2 is discharged by this**, and says so in place.
 
+**OQ-56 — The adopted `--rt-text-disabled` misses `REQ-SHELL-145`'s 3:1 floor on every surface but the page ground.** *(`docs/design/README.md` §5 item 1, which named this token as the one specifically at risk; REQ-SHELL-145, REQ-SHELL-160 (a). Raised 2026-09-12, when `pnpm theme-proof` settled that acceptance item from rendered pixels for the first time.)*
+
+`docs/design/system/tokens/colors.css` sets `--rt-text-disabled` to `oklch(52% 0 0)` and `packages/contracts/src/theme/themes.ts`
+transcribes it without drift, which a test pins by name. Against the default palette's own surfaces that value clears
+**3.22:1 on `--rt-bg`, 3.07:1 on `--rt-chrome`, 2.90:1 on `--rt-surface`, 2.56:1 on `--rt-surface-2` and 2.48:1 on
+`--rt-hover`** — and REQ-SHELL-145 requires 3:1 **on every background the token is actually painted on**. The rendered
+proof measures **2.898:1** on a card for "Cancel selection" (`disabled`) and for Mission's "Pause" (`aria-disabled`,
+which wears the same colour) at 100 %, 125 %, 150 % and 200 %; `nocturne` (60%) and `high-contrast` (62%) clear every
+surface and are not affected. **At 175 % the same pair measures 3.030:1 and passes** — one scale's device-pixel
+rounding is the entire distance to the floor, which is the strongest argument that the value was never measured rather
+than deliberately chosen. The matrix was run twice and both passes name the same strings, the same ratio and the same
+four scale points. The static check in `static-contrast.ts` passed because it tests the ground alone, which is
+**REQ-SHELL-160 (a)'s own sentence** — "a token pair that computes correctly but paints over a different surface fails".
+
+**Two resolutions, and both belong to the owner.** Either the adopted token rises — `oklch(58% 0 0)` clears 3.18:1 at
+the dimmest surface and stays at 4.14:1 on the ground, comfortably under half the enabled 14.86:1 the same requirement
+caps it by, and leaves the default still dimmer than the other two themes — or REQ-SHELL-145's floor is amended to name
+the ground it is measured against. **An agent may not choose between them**: the first changes approved design material
+and the second changes an approved requirement. Until it is answered, `pnpm theme-proof`'s `contrast` section is red on
+`rotaris-dim` at every scale **and on nothing else**, the two tests that pin the shortfall keep it from being lost, and
+the narrow static check stays narrow so the conflict cannot be mistaken for an ordinary test failure.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

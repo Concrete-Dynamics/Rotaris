@@ -23,6 +23,14 @@ export interface Theme {
 const color = {
   '--rt-bg': 'oklch(21% 0 0)', '--rt-surface': 'oklch(25% 0 0)', '--rt-surface-2': 'oklch(29% 0 0)', '--rt-chrome': 'oklch(23% 0 0)', '--rt-hover': 'oklch(30% 0 0)', '--rt-overlay': 'oklch(12% 0 0 / 0.72)',
   '--rt-border': 'oklch(31% 0 0)', '--rt-border-strong': 'oklch(40% 0 0)', '--rt-border-panel': 'oklch(28% 0 0)', '--rt-focus': 'oklch(83% 0.10 292)', '--rt-divider': 'color-mix(in oklch, var(--rt-text) 9%, transparent)',
+  // `--rt-text-disabled` is transcribed from the adopted `docs/design/system/tokens/colors.css` and is
+  // NOT an agent's to correct: at 52% it clears 3.22:1 on `--rt-bg` and 2.48:1 on `--rt-hover`, so
+  // REQ-SHELL-145's 3:1 disabled floor is met on the page ground and missed on every card, panel and
+  // hovered row. `pnpm theme-proof` measures 2.90:1 on a card at every scale (2026-09-12, the first
+  // rendered settlement of `docs/design/README.md` §5 item 1, which had named this token as the one
+  // specifically at risk). Raising it to 58% would clear every surface and stay under half the enabled
+  // ratio — and would be the product drifting from approved design material, which is the owner's
+  // call, not this file's. Recorded as OQ-56; two tests pin the shortfall so it cannot be lost.
   '--rt-text': 'oklch(94% 0 0)', '--rt-text-secondary': 'oklch(80% 0 0)', '--rt-text-tertiary': 'oklch(68% 0 0)', '--rt-text-disabled': 'oklch(52% 0 0)',
   '--rt-accent-100': 'oklch(96% 0.030 292)', '--rt-accent-200': 'oklch(91% 0.060 292)', '--rt-accent-300': 'oklch(83% 0.100 292)', '--rt-accent-400': 'oklch(72% 0.135 292)', '--rt-accent-500': 'oklch(59% 0.160 292)', '--rt-accent-600': 'oklch(50% 0.150 292)', '--rt-accent-700': 'oklch(42% 0.125 292)', '--rt-accent-800': 'oklch(33% 0.090 292)', '--rt-accent-900': 'oklch(24% 0.058 292)', '--rt-accent': 'var(--rt-accent-500)', '--rt-accent-tint-07': 'oklch(59% 0.160 292 / 0.09)', '--rt-accent-tint-10': 'oklch(59% 0.160 292 / 0.13)', '--rt-accent-tint-14': 'oklch(59% 0.160 292 / 0.18)',
   '--rt-axis-x-100': 'oklch(96% 0.045 92)', '--rt-axis-x-200': 'oklch(90% 0.088 90)', '--rt-axis-x-300': 'oklch(82% 0.132 88)', '--rt-axis-x-400': 'oklch(74% 0.168 87)', '--rt-axis-x-500': 'oklch(67% 0.190 86)', '--rt-axis-x-600': 'oklch(57% 0.172 84)', '--rt-axis-x-700': 'oklch(46% 0.146 82)', '--rt-axis-x-800': 'oklch(34% 0.106 80)', '--rt-axis-x-900': 'oklch(23% 0.066 78)',

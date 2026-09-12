@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve, sep } from 'node:path';
 import { buildDesktop, evidenceDirectory, repo } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
+import { evaluateContracts } from './lib/layout-relations.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -73,6 +74,10 @@ const SIZES = String(flag('sizes', '1400x900,1000x680')).split(',').map((s) => {
 });
 const wanted = flag('views', null);
 const views = wanted === null ? VIEWS : VIEWS.filter((v) => String(wanted).split(',').includes(String(v.n)));
+/** REQ-SHELL-128's three; absent, the audit reads whatever the preference store already holds. */
+const THEMES = ['rotaris-dim', 'nocturne', 'high-contrast'];
+const theme = flag('theme', null);
+if (theme !== null && !THEMES.includes(String(theme))) throw new Error(`unknown theme ${theme}; REQ-SHELL-128 names ${THEMES.join(', ')}`);
 
 /**
  * The whole audit, as one expression evaluated in the renderer.
@@ -222,58 +227,39 @@ const AUDIT = `JSON.stringify((() => {
   }
 
   // ── CONTRACTS: explicit relationships published by shared components.
-  const edge = (rect, name) => name === 'right' ? rect.right : name === 'center' ? rect.x + rect.width / 2
-    : name === 'bottom' ? rect.bottom : name === 'middle' ? rect.y + rect.height / 2
-    : name === 'top' ? rect.top : rect.left;
-  const contracts = [];
+  // This block MEASURES only; lib/layout-relations.mjs decides, outside the page, where a
+  // unit test can reach every branch with fixed numbers.
+  const box = (rect) => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+    left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
+  const measured = [];
   for (const el of document.querySelectorAll('[data-ui-contract]')) {
+    const id = el.dataset.ui || cls(el);
     let relations;
     try { relations = JSON.parse(el.dataset.uiContract || '[]'); }
-    catch { contracts.push({ id: el.dataset.ui || cls(el), kind: 'schema', pass: false, detail: 'contract JSON is unreadable' }); continue; }
-    const own = el.getBoundingClientRect();
+    catch { measured.push({ id, unreadable: true, relations: [] }); continue; }
+    const own = box(el.getBoundingClientRect());
+    const rows = [];
     for (const relation of relations) {
-      const tolerance = Number(relation.tolerance ?? 1);
       const target = relation.target ? document.querySelector('[data-ui="' + CSS.escape(relation.target) + '"]') : null;
-      const targetBox = target ? target.getBoundingClientRect() : null;
-      let pass = false, detail = '';
-      if (relation.kind === 'align-x' || relation.kind === 'align-y') {
-        const fallback = relation.kind === 'align-x' ? 'left' : 'top';
-        const ownValue = edge(own, relation.edge || fallback);
-        const targetValue = targetBox ? edge(targetBox, relation.edge || fallback) : NaN;
-        pass = targetBox !== null && Math.abs(ownValue - targetValue) <= tolerance;
-        detail = 'delta ' + (Number.isFinite(targetValue) ? Math.round((ownValue - targetValue) * 100) / 100 + 'px' : 'missing target');
-      } else if (relation.kind === 'equal-width' || relation.kind === 'equal-height') {
-        const dimension = relation.kind === 'equal-width' ? 'width' : 'height';
-        const delta = targetBox ? own[dimension] - targetBox[dimension] : NaN;
-        pass = targetBox !== null && Math.abs(delta) <= tolerance;
-        detail = 'delta ' + (Number.isFinite(delta) ? Math.round(delta * 100) / 100 + 'px' : 'missing target');
-      } else if (relation.kind === 'spacing-token') {
-        const actual = parseFloat(getComputedStyle(el).getPropertyValue(relation.property));
-        const expected = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(relation.token));
-        pass = Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
-        detail = relation.property + ' ' + actual + 'px; ' + relation.token + ' ' + expected + 'px';
-      } else if (relation.kind === 'containment') {
-        const box = targetBox || { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
-        pass = own.left >= box.left - tolerance && own.top >= box.top - tolerance && own.right <= box.right + tolerance && own.bottom <= box.bottom + tolerance;
-        detail = 'box ' + [own.left, own.top, own.right, own.bottom].map(Math.round).join(',');
-      } else if (relation.kind === 'text-fit') {
-        const axis = relation.axis || 'both';
-        const x = el.scrollWidth <= el.clientWidth + tolerance, y = el.scrollHeight <= el.clientHeight + tolerance;
-        pass = axis === 'x' ? x : axis === 'y' ? y : x && y;
-        detail = 'client ' + el.clientWidth + 'x' + el.clientHeight + '; scroll ' + el.scrollWidth + 'x' + el.scrollHeight;
-      } else if (relation.kind === 'hit-test') {
+      const measurement = { own, target: target ? box(target.getBoundingClientRect()) : null,
+        viewport: { x: 0, y: 0, width: innerWidth, height: innerHeight, left: 0, top: 0, right: innerWidth, bottom: innerHeight },
+        scroll: { scrollWidth: el.scrollWidth, scrollHeight: el.scrollHeight, clientWidth: el.clientWidth, clientHeight: el.clientHeight } };
+      if (relation.kind === 'spacing-token') {
+        measurement.computed = {
+          property: parseFloat(getComputedStyle(el).getPropertyValue(relation.property)),
+          token: parseFloat(getComputedStyle(document.documentElement).getPropertyValue(relation.token)),
+        };
+      }
+      if (relation.kind === 'hit-test') {
         const x = Math.round(own.x + own.width / 2), y = Math.round(own.y + own.height / 2);
         const hit = document.elementFromPoint(x, y);
-        pass = hit === el || (hit !== null && (el.contains(hit) || hit.contains(el)));
-        detail = 'centre ' + x + ',' + y + '; hit ' + (hit ? cls(hit) : '(nothing)');
-      } else if (relation.kind === 'viewport-scroll') {
-        const x = el.scrollWidth > el.clientWidth + tolerance, y = el.scrollHeight > el.clientHeight + tolerance;
-        const actual = relation.axis === 'x' ? x : relation.axis === 'y' ? y : x || y;
-        pass = actual === relation.expected;
-        detail = 'scroll ' + x + ',' + y + '; expected ' + relation.expected;
+        measurement.hit = { x, y, element: hit ? cls(hit) : null, self: hit === el,
+          descendant: hit !== null && hit !== el && el.contains(hit),
+          ancestor: hit !== null && hit !== el && hit.contains(el) };
       }
-      contracts.push({ id: el.dataset.ui || cls(el), kind: relation.kind, target: relation.target || null, pass, detail });
+      rows.push({ relation, measurement });
     }
+    measured.push({ id, unreadable: false, relations: rows });
   }
 
   const geometry = [...document.querySelectorAll('[data-ui], [data-ui-component]')].filter(visible).map((el) => {
@@ -295,7 +281,7 @@ const AUDIT = `JSON.stringify((() => {
 
   return { viewport: { w: innerWidth, h: innerHeight },
            counts: { elements: all.length, controls: controls.length, skipped },
-           tracks, escapees, buried, trapped, contracts, geometry, styles };
+           tracks, escapees, buried, trapped, measured, geometry, styles };
 })())`;
 
 /**
@@ -405,6 +391,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 try {
   await d.waitFor('.app-shell', { timeoutMs: 30_000 });
+  // One named theme for the whole pack, so an evidence directory answers for exactly one palette
+  // (REQ-SHELL-128's three). The theme matrix itself is `pnpm theme-proof`'s; this is the review's
+  // choice of ground, recorded in the manifest rather than inferred from a screenshot.
+  if (theme !== null) {
+    await d.command({ kind: 'theme.set', name: String(theme) });
+    const applied = await d.eval('document.documentElement.dataset.theme');
+    if (applied !== theme) throw new Error(`ui-audit asked for theme ${theme} and the document reports ${JSON.stringify(applied)}`);
+    await sleep(300);
+  }
 
   for (const size of SIZES) {
     await d.resize(size.w, size.h);
@@ -423,8 +418,9 @@ try {
       for (const e of a.escapees) note('CONTAINMENT', view.name, size.label, e);
       for (const b of a.buried) note('STACKING', view.name, size.label, b);
       for (const t of a.trapped) note('TRAPPED', view.name, size.label, t);
-      for (const contract of a.contracts.filter((candidate) => !candidate.pass)) note('CONTRACT', view.name, size.label, contract);
-      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + a.contracts.filter((candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${a.contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
+      const contracts = evaluateContracts(a.measured);
+      for (const contract of contracts.filter((candidate) => !candidate.pass)) note('CONTRACT', view.name, size.label, contract);
+      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + contracts.filter((candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
     }
   }
   // ── The overlays, at both sizes. Nothing was open during the sweep above, and every overlay is a surface
@@ -497,7 +493,12 @@ try {
   try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
   const log = existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '';
   writeFileSync(join(output, 'app.log'), log);
-  writeFileSync(join(output, 'report.json'), `${JSON.stringify({ findings }, null, 2)}\n`);
+  writeFileSync(join(output, 'report.json'), `${JSON.stringify({
+    theme: theme === null ? null : String(theme),
+    sizes: SIZES.map((size) => size.label),
+    views: views.map((view) => view.name),
+    findings,
+  }, null, 2)}\n`);
   writeFileSync(join(output, 'geometry.json'), `${JSON.stringify({ captures: geometryEvidence }, null, 2)}\n`);
   writeFileSync(join(output, 'styles.json'), `${JSON.stringify({ captures: styleEvidence }, null, 2)}\n`);
 }

@@ -74,6 +74,9 @@ apps/desktop/.cache/
 .layout-proof/
 # `pnpm ui-audit`: a PNG per view and per overlay at every size, plus report.json. Evidence, never content.
 .ui-audit/
+# `pnpm ui-review`: the same pack under a revision and an iteration, plus the critic's `critique.json`.
+# Evidence, and a report about evidence — read and cited, never committed.
+.ui-review/
 
 # the token proxy's local history database — a tool artifact, never repository content
 rtk/

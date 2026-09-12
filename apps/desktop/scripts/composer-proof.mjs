@@ -167,8 +167,14 @@ const keysAfterA = draftKeys(storedPreferences);
 expect(keysAfterA.length === 1, `expected exactly one registered draft key; found ${JSON.stringify(keysAfterA)}`);
 const keyA = keysAfterA[0];
 expect(storedPreferences[keyA] === DRAFT, `the draft was not stored under ${keyA} character for character: ${JSON.stringify(storedPreferences[keyA])}`);
-// REQ-SHELL-006: the key carries no path — a workspace path holds separators a slash-namespaced key cannot.
-expect(!JSON.stringify(storedPreferences).includes('alpha'), 'the preference file spells a workspace path into a key');
+// REQ-SHELL-006: the KEY carries no path — a workspace path holds separators a slash-namespaced
+// key cannot. This read the whole serialised document until 2026-09-12 — `!JSON.stringify(
+// storedPreferences).includes('alpha')` — and the falsified reason is kept beside its
+// replacement: main's `workspace/lastOpened` (the startup resolution of that day) stores a
+// workspace path as a legitimate VALUE, so the document-wide scan began failing a registration
+// it was never about. What the requirement forbids is a path spelled into a key.
+expect(Object.keys(storedPreferences).every((key) => !key.includes('alpha') && !/[\\:]/.test(key)),
+  `a preference key spells a workspace path: ${JSON.stringify(Object.keys(storedPreferences))}`);
 const draggedTo = storedPreferences['panels/workspace'];
 expect(draggedTo && draggedTo.version === 1 && draggedTo.panes === 2, `the divider did not persist a pane layout: ${JSON.stringify(draggedTo)}`);
 expect(draggedTo.sizes[1] === 180, `three ArrowUp presses of 10 px from 150 px should store 180: ${JSON.stringify(draggedTo.sizes)}`);

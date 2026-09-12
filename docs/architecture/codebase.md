@@ -1312,6 +1312,109 @@ Every squeeze step is read twice and reports whether the two readings agreed: a 
 delivered but before React has committed is the frame *before* the change, and one reading cannot tell that apart
 from a label that never moves at all.
 
+## The adopted language, drawn once — and the evidence a critic reads (2026-09-12)
+
+The owner asked whether the repository's skills, instructions and workflows could make UI generation and debugging
+better. Classified **covered** as R-007: `docs/design/README.md` §7 already governs generation, REQ-SHELL-128..160
+already govern rendered evidence, and REQ-WORKSPACE-051/053 already govern repository-local portable skills. Nothing
+here changes what the product does. What it changes is **where a control is written, and what can be measured about
+one** — `packages/ui/src/design-system/` (twenty-seven briefs, twenty-nine typed exports, sixty-nine drawing files
+migrated onto it), `tools/check-ui-language.mjs` in `pnpm lint`, `pnpm ui-review`'s evidence pack, `theme-proof` moved
+onto the driver, and three portable skills under `.agents/skills/` with thin `.claude/skills/` routers.
+
+**Seven defects, the ninety-first to the ninety-seventh, and five of the seven were in the measuring code.** That ratio
+is the finding, not a coincidence: this delivery is almost entirely measurement, and measurement is where this project
+has repeatedly found its faults.
+
+**The ninety-first — the theme matrix's focus section had been photographing a still image.** `webContents.capturePage()`
+answers with the last COMPOSITED frame, and a window Windows has decided is occluded composites nothing. **Thirty-two
+consecutive focus captures were byte-identical to `settings-13.png`** — the capture succeeded, the PNG was written, the
+PNG decoded, the pixels were measured, and the section concluded that **no control in this product paints a focus ring**:
+ratio 1.000 for every nav item and every Settings category, on every theme at every scale. Nothing about the failure
+looked like a harness fault; it looked like a wholesale accessibility violation. A capture that must be new now says so —
+one pixel of resize forces a frame, three refusals are reported as a stale capture, and a stale capture is excluded from
+the ratios rather than counted as a failing one. With fresh frames the section passes everywhere: **31 of 32 captures
+tested, minima 3.27 to 7.12 against a floor of 3**, one skipped because that Tab landed on no measurable control. The
+counterfactual is worth stating too — `--counterfactual=focus` would have "failed" against the frozen frame as
+convincingly as against a real one, so it discriminated nothing while looking like it discriminated everything.
+
+**The ninety-second — a control disabled by `aria-disabled` was held to the enabled floor.** Mission's Pause is
+`aria-disabled` rather than `disabled`, because REQ-TRACE-435's shape requires it to stay focusable and carry its reason;
+it wears the disabled colour all the same. The metadata's disabled test read `:disabled` alone, so the proof measured a
+disabled label against 4.5:1 instead of REQ-SHELL-145's 3:1. **The floor follows the appearance, not the attribute that
+produced it.** Correcting it did not make the red go away — it made it exact, which is the next paragraph.
+
+**The ninety-third is the product's, and it belongs to the owner: OQ-56.** With the frozen frames gone and the floors
+right, one thing is left standing in the whole matrix. `--rt-text-disabled` is transcribed from the adopted
+`docs/design/system/tokens/colors.css` at `oklch(52% 0 0)`, and against the default palette's own surfaces that clears
+**3.22:1 on `--rt-bg`, 3.07:1 on `--rt-chrome`, 2.90:1 on `--rt-surface`, 2.56:1 on `--rt-surface-2` and 2.48:1 on
+`--rt-hover`**. REQ-SHELL-145 asks for 3:1 **on every background the token is actually painted on**, and the rendered
+proof measures 2.898:1 on a card — for "Cancel selection" (`disabled`) and Mission's "Pause" (`aria-disabled`) — at
+100 %, 125 %, 150 % and 200 %. `nocturne` (60%) and `high-contrast` (62%) clear every surface. **At 175 % it passes, at
+3.030:1**, which is the sharpest thing the matrix says about this token: the same pair, the same palette, and one
+scale's device-pixel rounding is the whole distance to the floor. A value that four scales fail and the fifth clears by
+three hundredths is not a value anyone chose — it is one nobody had measured.
+**`static-contrast.ts` passed it because it checks the page ground alone — which is REQ-SHELL-160 (a)'s own sentence**,
+"a token pair that computes correctly but paints over a different surface fails". Widening that check is one line and
+`oklch(58% 0 0)` clears every surface while staying far under the dimness ceiling; **neither is an agent's to do**, because
+one changes approved design material and the other changes an approved requirement. So the token is unchanged, the
+narrow check stays narrow with its reason written beside it, `docs/design/README.md` §5 item 1 records that the
+acceptance item it had flagged as "specifically at risk" has now been settled from pixels and failed, and OQ-56 carries
+the two resolutions. `pnpm theme-proof` is red on `rotaris-dim`'s `contrast` section and on nothing else until it is answered.
+
+**The matrix was run twice and the two passes are identical.** Fifteen runs each — three themes × five scales — naming
+the same two strings at the same 2.898:1 on the same four scale points, with **zero stale captures**, **31 of 32 focus
+captures tested and one skipped** in every one of the thirty runs, and **no text skipped for animating** in either pass,
+which is the mid-fade repair holding. A verdict that reproduces exactly is what makes the one red attributable to the
+palette rather than to the machine.
+
+**Repaired on the way, and NOT a new number: the mid-fade contrast reading.** 2026-09-08 diagnosed five strings at about
+1.26:1 in the startup notice and attributed them to the notice being photographed mid-fade. It was diagnosed then and
+never repaired; it reappeared here at high-contrast × 2. Waiting harder is not enough on its own — **the notice mounts
+after the settle that preceded the capture**, so its animation was not in the list that was awaited. Settling is a loop
+now, and the metadata carries, per string, whether that element's subtree was still animating when the frame was taken;
+a string that was moving is reported as skipped with its reason and never as a floor violation. Every section of the
+proof now reports **discovered, tested and skipped**, because "no failures" over an empty sample is the shape of a proof
+that cannot fail.
+
+**The ninety-fourth — `composer-proof` failed on a preference that is none of its business.** Its REQ-SHELL-006 check
+read `!JSON.stringify(preferences).includes('alpha')` — the whole serialised document — to assert that no workspace path
+is spelled into a *key*. Main's `workspace/lastOpened`, added the same day by the startup-resolution work, stores a
+workspace path as a legitimate **value**, and the document-wide scan began failing a registration it was never about.
+The assertion reads keys now. **The date it went red is stated and the falsified text is kept beside its replacement.**
+
+**The ninety-fifth — the language guard watched half the code that draws.** `check-ui-language.mjs` scanned
+`packages/ui/src` and stopped, and `apps/desktop/src/renderer/main.tsx` — 120 KB, the terminal and persona window
+bodies — was outside it, where one raw `<button>` toggle sat. A guard that names a rule and enforces it over part of the
+tree is worse than no guard, because the part it does not reach reads as compliant. It scans both roots now, and the
+toggle is the shared `ToggleSwitch` — which was also about to carry **two accessible names**, since the caller names it
+by visible text with `aria-labelledby` and the component always set `aria-label`.
+
+**The ninety-sixth — `TextArea` published another component's name into every capture.** It emitted
+`data-ui-component="Input"`, so every geometry and style row for a textarea in every evidence pack was filed under a
+component it is not. Nothing rendered differently; the *evidence* was wrong, which is the failure mode this whole
+delivery is supposed to make impossible.
+
+**The ninety-seventh — the class helper repeated the token the caller already carried.** The parser-based migration
+passes each caller's exact class string through, so `Button` received `className="btn btn-primary btn-compact"` and
+composed `"btn btn btn-primary btn-compact"`. CSS does not care; a selector written against `className` does, and every
+migrated control in the product carried it. `classes()` keeps the first occurrence of each token now.
+
+**What the baseline is, and why it can only fall.** 163 normalized literal spacing, type, radius and motion entries
+remain, 157 of them in `shell.css`. The check fails on a new one **and on a paid-off one** until the baseline is lowered,
+so an allowance freed in one file cannot be re-spent in another; `compareDebt` is a pure function with both directions
+pinned by a unit test. The same split runs through the audit: the probe inside `ui-audit.mjs` now only **measures**, and
+`lib/layout-relations.mjs` decides, with all nine relations and both directions of each failure covered by fixed
+numbers — a verdict reached inside the page can only be exercised by launching the product.
+
+**Verified on the merged branch.** `pnpm check` green (symbol generator, `tsc --noEmit`, `eslint`, **1,598 passed and 25
+skipped across 135 files**) and `pnpm build`. **Of the thirty-seven proof scripts, thirty-six ran — `slice-proof` alone
+needs the owner's pasted key — and the list was generated from the filesystem rather than typed.** Thirty-two passed on
+the first sweep, `code-intel-proof` among them.
+**Three of the four reds pass alone on an idle machine** — `composer-proof` after the repair above, and `mcp-proof` (229 s)
+and `transcript-proof` (its 1200-row growth bound, 39.1 ms against 22.1 ms) unchanged, which is the standing rule that a
+batch runner's exit code is not a verdict. The fourth is OQ-56 and stays red by decision, not by accident.
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it
@@ -1492,5 +1595,5 @@ free to change.
 | ~~the terminal grid, the pop-out window's content and the transcript preview~~ **done 2026-09-09** (Part AM; `pnpm terminal-proof`; **ADR-0047 first executed** over a scripted frame source; defects fifty-three to fifty-five; the sixteen ANSI colours as `--rt-term-*` tokens in all three palettes with their own contrast floor) | `ui` (`terminal/`), `contracts` (`terminal-keys.ts`, `theme/themes.ts`, `static-contrast.ts`), `transcript/Row.tsx` (the preview block), `apps/desktop/scripts/terminal-proof/` | ~~the window role, title and lifecycle, the toolbar control, Ctrl+Shift+T, the auto-open preference, session focus and new-session clearing (REQ-SHELL-080/081/086/108..111, AL′)~~ **built 2026-09-10**; REQ-SHELL-166 against a real PTY and REQ-SHELL-102 on a live stream (AL′/T″); REQ-SHELL-107's write is the run host's; **closed 2026-09-11** (Part T″: REQ-SHELL-102's three surfaces measured equal on a live stream, the packaged `runtime.terminal_stream_enabled=false` section, and ADR-0021's obligation 2 measured rather than argued). **Three things remain and each is stated, not silent:** defect AL2-3's mid-command resize is measured and NOT repaired because the repair is an ADR-0020 revision; REQ-SHELL-166's full-screen-program limb has no such program in the harness; and the terminal WINDOW is not opened under a packaged launch |
 | ~~the composer's slash-command catalogue~~ **done 2026-09-09** (Part AN; `pnpm slash-proof`; ADR-0050 second, ADR-0049 third, ADR-0048 second execution; defects fifty-six to fifty-eight; `RunHeader.tsx` extracted with the two slots AL′ and AO fill) | `ui` (`slash/`, `RunHeader.tsx`, `WorkspaceView.tsx`, `library/StashDialog.tsx`), `renderer` (the `slash` host wiring), `contracts/theme/colour.ts` (the corrector no longer settles below its floor) | `notice.report` so a renderer can raise the one persistent notice (ADR-0049 defect fifty-seven — the composer draws its own banner meanwhile; AO); `/model`'s withheld-by-provider limb (no per-model verdict reaches the composer); skill commands (REQ-CHAT-034/162 wait on REQ-WORKSPACE-056..064); ~~prompt files (REQ-CHAT-160/161, AO)~~ **built 2026-09-10**, registered where `buildCatalogue` builds the registry because an effect-time registration can never be seen by the popup's memo; ~~`/compress` and `/clear` reach the run host and meet its default refusal until AO arms the two ops~~ **both armed 2026-09-10**; ~~REQ-CHAT-028's rebuild, `/theme`, `/logout` and REQ-CHAT-027's three palettes~~ **measured live 2026-09-11** (Part C″; ADR-0050's third and ADR-0060's fourth execution). Owes: `/model`'s withheld-by-provider limb (no per-model verdict reaches the composer), skill commands (REQ-CHAT-034/162, waiting on REQ-WORKSPACE-056..064), REQ-CHAT-084's busy-transcript limb (no producer), REQ-MONITOR-091's refusal (unreachable by a scripted run), `/logout` against a provider with a validated key (no credential on this machine), ~~and **defect C2-1's draft race**, which is silent loss of a user's composer text and whose repair belongs in `WorkspaceView.tsx`'s draft adoption~~ **repaired 2026-09-11** — `adoptDraft` composes a draft that lands after a load instead of discarding it, so both orders of the race leave the same text (ADR-0042's seventh execution note carries the shape and the one design reading the linter corrected) |
 | ~~opening a project from inside the application~~ **built 2026-09-12** (the builder and the registry over MAIN windows deepened into `MainWindows`, then startup resolution, the deferred first-paint offer, the gated replacement and the title-bar chip; ADR-0048 and ADR-0055 report in place, both finding the sequencing sound; defects eighty-six to eighty-eight; the first two product directives, `PD-SHELL-001` and `PD-WORKSPACE-001`, were minted beside it) | `main` (`MainWindows`, `createElectronMainWindowAdapter`, `workspace.choose`, `switchWorkspace`, `raiseTransient`, the driver seam's window selector), `contracts` (`workspace.choose`), `platform` (`workspace/lastOpened`, main-only by construction), `ui` (`WorkspaceChip.tsx`, `workspace-label.ts`, `AppShell.tsx`, `shell.css`), `renderer` (`home` from `shell.hello`, the chip's handler) | **`pnpm workspace-proof` verified** — multi-window, add/replace, attribution, hand-over, and per-window deferred cancellation paths confirmed passing; **Stage C** — `PD-SHELL-001`'s palette entry and modifier-click and `PD-WORKSPACE-001`'s `start-session` notice action; and the five things the specification asks for that nothing here can yet meet: `REQ-WORKSPACE-013`'s cancellation clause (`REQ-WORKSPACE-109`'s machinery does not exist), `REQ-SHELL-021`'s worktree gate (no such state is observable from main), `REQ-WORKSPACE-017`'s session name (the product has none), `REQ-STARTUP-166`'s workspace-storage determination, and `REQ-SHELL-124`'s dialog as a standalone surface — gate 1 reuses `__rotarisCloseGuard`, not a new dialog. Demo mode (`REQ-SHELL-162`) is a construction parameter the builder does not take yet |
-| ~~the adopted language drawn once, and the evidence a critic reads~~ **built 2026-09-12** (`packages/ui/src/design-system/`, the twenty-seven briefs; `tools/check-ui-language.mjs`; `pnpm ui-review`; `theme-proof` moved onto the driver; the three portable skills under `.agents/skills/`) | `ui` (`design-system/`, and sixty-nine drawing files migrated onto it), `renderer` (`main.tsx`'s one remaining raw control), `apps/desktop/scripts` (`ui-audit.mjs`, `ui-review.mjs`, `theme-proof.mjs`, `lib/driver.mjs`), `tools` (`check-ui-language.mjs`, `ui-language-baseline.json`, `migrate-ui-primitives.mjs`), `.agents/skills/{build-ui,debug-ui,review-ui}` | **IC-2's two palettes are discharged and the theme matrix is the gate that says so**; 163 normalized legacy geometry entries remain as a burn-down baseline (`shell.css` holds 157 of them); the critic is **report-only and opt-in** — it edits evidence files alone and a finding becomes code only when the implementation lead applies it; product-side image transport for the built-in `ui-verifier` persona is a **separate future request** (it reads the textual manifest and the deterministic findings meanwhile); `docs/design/mockup/` is still read for craft and never for structure (`REQ-SHELL-023` governs) |
+| ~~the adopted language drawn once, and the evidence a critic reads~~ **built 2026-09-12** (`packages/ui/src/design-system/`, the twenty-seven briefs; `tools/check-ui-language.mjs`; `pnpm ui-review`; `theme-proof` moved onto the driver; the three portable skills under `.agents/skills/`; defects ninety-one to ninety-seven, **five of them in the measuring code**) | `ui` (`design-system/`, and sixty-nine drawing files migrated onto it), `renderer` (`main.tsx`'s one remaining raw control), `apps/desktop/scripts` (`ui-audit.mjs`, `ui-review.mjs`, `theme-proof.mjs`, `lib/layout-relations.mjs`, `composer-proof.mjs`), `tools` (`check-ui-language.mjs`, `ui-language-debt.mjs`, `ui-language-baseline.json`, `migrate-ui-primitives.mjs`), `.agents/skills/{build-ui,debug-ui,review-ui}` | **OQ-56 — the adopted `--rt-text-disabled` misses REQ-SHELL-145's 3:1 floor on every surface but the page ground in `rotaris-dim`**, and `pnpm theme-proof`'s `contrast` section stays red there until the owner rules between amending the design material and amending the requirement; 163 normalized legacy geometry entries remain as a burn-down baseline (`shell.css` holds 157 of them); the critic is **report-only and opt-in** — it edits evidence files alone and a finding becomes code only when the implementation lead applies it; product-side image transport for the built-in `ui-verifier` persona is a **separate future request** (it reads the textual manifest and the deterministic findings meanwhile); keyboard, pointer and focus BEHAVIOUR of the shared components is proven against the built product and not in vitest, because this repository has no DOM there and a fake one is a second opinion about a document that does not exist; `docs/design/mockup/` is still read for craft and never for structure (`REQ-SHELL-023` governs) |
 | macOS / Linux artifacts | `electron-builder.yml`, `platform/src/instance.ts` | IC-3 |

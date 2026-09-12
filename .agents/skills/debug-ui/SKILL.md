@@ -13,7 +13,7 @@ Read the governing requirement, `packages/ui/CONTEXT.md`, the affected architect
 2. Reproduce through product controls. Capture a screenshot, `inspect` the relevant selectors, and measure boxes and computed styles with `eval`.
 3. Check named grid tracks, viewport and ancestor containment, centre-point hit testing, focus, text fit, scroll extent, and the down-and-up breakpoint transition. Await `document.getAnimations()` before reading moving overlays.
 4. Trace the winning rule or state update to source. Record the falsified cause beside its replacement when an earlier rule encoded a wrong assumption.
-5. Implement the smallest source repair through shared components and tokens. Add or extend a `UiLayoutContract` when the relationship should stay machine-checkable.
+5. Implement the smallest source repair through shared components and tokens. Add or extend a `UiLayoutContract` when the relationship should stay machine-checkable. The probe in `ui-audit.mjs` only measures; the verdict is `apps/desktop/scripts/lib/layout-relations.mjs`, a pure function with a unit test beside it — a new relation is added there, with both directions of its failure pinned.
 6. Add a focused regression that fails on the original behavior and passes on the repair. Extend `layout-proof.mjs` for stable geometry and stacking contracts; use a dedicated proof for behavior with its own lifecycle.
 7. Rebuild, repeat the exact reproduction, inspect the PNG, and run the focused proof. Stop the driven app when complete.
 8. Update the architecture and first-execution records required by `CLAUDE.md`.

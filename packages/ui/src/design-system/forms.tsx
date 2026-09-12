@@ -17,7 +17,7 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   readonly ui?: UiLayoutContract;
 }
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea({ label, className, ui, ...rest }, ref) {
-  const field = <textarea ref={ref} className={componentClass(className, 'input')} data-ui-component="Input" {...layoutContractAttributes(ui)} {...rest} />;
+  const field = <textarea ref={ref} className={componentClass(className, 'input')} data-ui-component="TextArea" {...layoutContractAttributes(ui)} {...rest} />;
   if (label === undefined) return field;
   return <label className="field"><span className="field-label">{label}</span>{field}</label>;
 });

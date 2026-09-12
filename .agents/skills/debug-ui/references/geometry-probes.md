@@ -32,3 +32,6 @@ JSON.stringify((() => {
 - Fixed descendants use the viewport until an ancestor establishes a containing block through transform, filter, perspective, will-change, or contain.
 - A maximized window must leave maximized state before a requested content resize can take effect.
 - A sweep with zero tested controls is a finding about evidence coverage.
+- **A screenshot can be older than the state it is supposed to show.** `capturePage` answers with the last composited frame, and an occluded window composites nothing, so a capture can succeed and be a photograph of an earlier moment. When consecutive captures must differ, compare their bytes; one pixel of resize and back forces a frame. Found 2026-09-12, after thirty-two identical frames read as "no control paints a focus ring".
+- **Settling is a loop, not a step.** A surface that mounts during the wait — the startup notice does — begins animating after `document.getAnimations()` has already been read. Re-read until nothing finite is running, and record per element whether it was still moving, so a string photographed mid-fade is reported as skipped rather than as a contrast failure.
+- A control marked `aria-disabled` wears the disabled colour and answers to the disabled floor; a check that reads `:disabled` alone holds it to the enabled one.

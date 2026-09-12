@@ -69,6 +69,9 @@ const manifest = {
   evidenceStatus: 'verified',
   criticStatus: 'pending',
   generatedAt: new Date().toISOString(),
+  // What ground the pack was captured on. A critique that names a contrast is answerable only
+  // against a named palette, and a screenshot does not say which one it is.
+  captured: { theme: report.theme ?? null, sizes: report.sizes ?? [], views: report.views ?? [] },
   deterministic: { findings: report.findings.length, byKind },
   files,
   previousCritique: previousCritique !== null && existsSync(previousCritique) ? relative(output, previousCritique).replaceAll('\\', '/') : null,

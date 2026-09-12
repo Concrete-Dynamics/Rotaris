@@ -5,6 +5,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import ts from 'typescript';
+import { baselineDocument, compareDebt } from './ui-language-debt.mjs';
 
 const root = join(import.meta.dirname, '..');
 // Every place that draws: the component package and the renderer composition root, which
@@ -56,23 +57,23 @@ for (const path of drawingRoots.flatMap((drawingRoot) => walk(drawingRoot))) {
   }
 }
 
-const normalized = Object.fromEntries(Object.entries(debt).sort(([a], [b]) => a.localeCompare(b)));
+const document = baselineDocument(debt);
+const normalized = document.debt;
 if (writing) {
-  writeFileSync(baselinePath, `${JSON.stringify({ version: 1, debt: normalized }, null, 2)}\n`);
+  writeFileSync(baselinePath, `${JSON.stringify(document, null, 2)}\n`);
   process.stdout.write(`wrote ${Object.keys(normalized).length} normalized UI-language debt entries\n`);
   process.exit(0);
 }
 
 if (!existsSync(baselinePath)) throw new Error(`UI-language baseline is absent: ${baselinePath}`);
 const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')).debt ?? {};
-const growth = Object.entries(normalized).filter(([key, count]) => count > (baseline[key] ?? 0));
 // Burn-down only: a reduction lowers the baseline, so the allowance can never be re-spent
 // elsewhere. Paying debt therefore ends in one command, never in a silently loose ceiling.
-const stale = Object.entries(baseline).filter(([key, count]) => (normalized[key] ?? 0) < count);
+const { growth, stale } = compareDebt(normalized, baseline);
 if (raw.length > 0 || growth.length > 0 || stale.length > 0) {
   if (raw.length > 0) process.stderr.write(`Raw design-equivalent JSX belongs in packages/ui/src/design-system:\n${raw.join('\n')}\n`);
-  if (growth.length > 0) process.stderr.write(`UI-language literal debt grew:\n${growth.map(([key, count]) => `${key}: ${count} > ${baseline[key] ?? 0}`).join('\n')}\n`);
-  if (stale.length > 0) process.stderr.write(`UI-language debt fell below the baseline — lower it with \`node tools/check-ui-language.mjs --write-baseline\`:\n${stale.map(([key, count]) => `${key}: ${normalized[key] ?? 0} < ${count}`).join('\n')}\n`);
+  if (growth.length > 0) process.stderr.write(`UI-language literal debt grew:\n${growth.map(({ key, count, allowed }) => `${key}: ${count} > ${allowed}`).join('\n')}\n`);
+  if (stale.length > 0) process.stderr.write(`UI-language debt fell below the baseline — lower it with \`node tools/check-ui-language.mjs --write-baseline\`:\n${stale.map(({ key, count, allowed }) => `${key}: ${count} < ${allowed}`).join('\n')}\n`);
   process.exitCode = 1;
 } else {
   process.stdout.write(`UI language: 0 raw controls; ${Object.keys(normalized).length} normalized legacy debt entries at the baseline\n`);

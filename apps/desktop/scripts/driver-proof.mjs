@@ -12,7 +12,7 @@
  * design rests on hold — a wait bounded by a deadline reports the selector it gave up on, and a request without
  * the launch secret is refused without taking the window down with it.
  *
- * Evidence under `.driver-proof/`: `app.log`, `screen.png`, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/driver-proof/`: `app.log`, `screen.png`, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';

@@ -22,7 +22,7 @@
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
  *
- * Evidence under `.settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -32,7 +32,7 @@ import { cleanEnvironment } from './lib/harness.mjs';
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.settings-proof');
+const output = resolve(repo, '.proof', 'settings-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

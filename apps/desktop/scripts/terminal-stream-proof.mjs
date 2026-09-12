@@ -23,7 +23,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
-const output = join(repo, '.terminal-stream-proof');
+const output = join(repo, '.proof', 'terminal-stream-proof');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 // Serially (`--no-file-parallelism`): the real-PTY suite must not share the CPU with the synthetic load test, whose

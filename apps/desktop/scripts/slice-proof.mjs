@@ -33,7 +33,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.slice-proof');
+const output = resolve(repo, '.proof', 'slice-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 // --resume keeps the profile (and the credential the owner already pasted) and skips the first launch.
 const resume = process.argv.includes('--resume');

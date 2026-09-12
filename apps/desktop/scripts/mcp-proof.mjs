@@ -21,7 +21,7 @@
  *                    same defects in `.mcp.json` drop the entries and the run proceeds.
  *   9. exit bound  — a server that never answers initialize: discovery returns empty at ≤ 35 s and the application exits.
  *
- * Evidence under `.mcp-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/mcp-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -36,7 +36,7 @@ const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
 const fixture = join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs');
-const output = resolve(repo, '.mcp-proof');
+const output = resolve(repo, '.proof', 'mcp-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

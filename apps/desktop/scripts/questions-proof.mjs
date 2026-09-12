@@ -18,7 +18,7 @@
  *   5. invalid     — an action violating REQ-CHAT-092 is rejected before anything is shown: no trailer ever appears,
  *                    and the rejection names every violation.
  *
- * Evidence under `.questions-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/questions-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -31,7 +31,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.questions-proof');
+const output = resolve(repo, '.proof', 'questions-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

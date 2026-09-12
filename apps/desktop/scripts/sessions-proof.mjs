@@ -25,7 +25,7 @@
  *   9. isolated         New session → isolation → write,answer → E in a worktree, its ref in the shared repository.
  *  10. delete-isolated  Delete E → its ref gone from the shared repository's namespace.
  *
- * Evidence under `.sessions-proof/`: one PNG and one log per launch, the delete confirmation's PNG, the exported files,
+ * Evidence under `.proof/sessions-proof/`: one PNG and one log per launch, the delete confirmation's PNG, the exported files,
  * `results.json` with the delete times and the export sizes and times. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -39,7 +39,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.sessions-proof');
+const output = resolve(repo, '.proof', 'sessions-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 mkdirSync(output, { recursive: true });

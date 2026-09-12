@@ -42,7 +42,7 @@
  *                  `providers.save`, signed out by the command, the store read back on both sides and the file gone),
  *                  and REQ-CHAT-028's rebuild on a LIBRARY change and on a SETTINGS change, both without a restart.
  *
- * Evidence under `.slash-proof/`: `catalogue.png` (the end), `popup.png` (the popup open), `catalogue.log`,
+ * Evidence under `.proof/slash-proof/`: `catalogue.png` (the end), `popup.png` (the popup open), `catalogue.log`,
  * one log and PNG per later launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -53,7 +53,7 @@ import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` wr
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.slash-proof');
+const output = resolve(repo, '.proof', 'slash-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

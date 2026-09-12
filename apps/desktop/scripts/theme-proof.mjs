@@ -16,7 +16,7 @@ const selectedThemes = arg('--theme') ? [arg('--theme')] : themes;
 const selectedScales = arg('--scale') ? [Number(arg('--scale'))] : scales;
 const counterfactual = arg('--counterfactual');
 const keep = process.argv.includes('--keep');
-const output = resolve(arg('--output') ?? join(repo, '.theme-proof'));
+const output = resolve(arg('--output') ?? join(repo, '.proof', 'theme-proof'));
 
 if (!process.argv.includes('--skip-build')) {
   const built = process.platform === 'win32'

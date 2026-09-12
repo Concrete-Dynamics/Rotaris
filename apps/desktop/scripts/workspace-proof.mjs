@@ -15,7 +15,7 @@
  * REQ-SHELL-012's reminder is reached with nobody at the machine. Both are compiled out of a packaged build by
  * `__ROTARIS_SEAMS__`.
  *
- * Evidence under `.workspace-proof/`: one `app.log` per launch and `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/workspace-proof/`: one `app.log` per launch and `results.json`. `--skip-build` skips the build.
  *
  * A trap this file's own first execution fell into, recorded so the next harness does not: the driver's two
  * reading ops answer in DIFFERENT shapes. `command` and `windows` resolve an already-parsed value (the client

@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
-const output = join(repo, '.attachments-proof');
+const output = join(repo, '.proof', 'attachments-proof');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const args = ['exec', 'vitest', 'run', 'packages/ui/src/attachments.test.ts', 'packages/engine/src/attachments.test.ts', 'packages/store/src/store.test.ts'];

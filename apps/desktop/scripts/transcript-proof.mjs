@@ -15,7 +15,7 @@
  *                   one, timed at REQ-CHAT-055's stated point: after the frame showing the update has been
  *                   painted, never a synchronous figure.
  *
- * Evidence under `.transcript-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -28,7 +28,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.transcript-proof');
+const output = resolve(repo, '.proof', 'transcript-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

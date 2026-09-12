@@ -18,7 +18,7 @@
  *   4. THE BREAKPOINT ENGAGES ON A LIVE RESIZE. REQ-MONITOR-051's drawer layout below 1180 px, asserted after a
  *      resize rather than at startup, because the defect was precisely that it worked at mount and never again.
  *
- * Evidence under `.layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

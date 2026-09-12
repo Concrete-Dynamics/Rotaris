@@ -25,7 +25,7 @@
  * The control is same-origin because the renderer's policy is `connect-src 'none'` / `img-src 'self' data:`
  * (ADR-0056): a remote control would be stopped before the network layer and would never reach the observer.
  *
- * Evidence under `.rows-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/rows-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -35,7 +35,7 @@ import { cleanEnvironment } from './lib/harness.mjs';
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.rows-proof');
+const output = resolve(repo, '.proof', 'rows-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

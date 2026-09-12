@@ -24,14 +24,14 @@ import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs'
  *   7. settings    — the strategy selector and the depth control write their keys; Settings shows the same; the toggle writes.
  *   8. reconcile   — a child left `running` on a completed session presents settled on every surface.
  *
- * Evidence under `.mission-proof/`: PNGs, logs, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/mission-proof/`: PNGs, logs, `results.json`. `--skip-build` skips the build.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.mission-proof');
+const output = resolve(repo, '.proof', 'mission-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

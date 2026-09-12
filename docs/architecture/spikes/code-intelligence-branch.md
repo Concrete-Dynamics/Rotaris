@@ -78,4 +78,4 @@ processes over 12 samples, unknown subcommand → 2; **packaged** `initialize` 4
 preamble `0d0a`, exit 0 at 6,549 ms, `Rotaris` and `python` the only processes over 12 samples, unknown subcommand → 2.
 Launch 7 (packaged, outbound blocked, a fresh home, an empty npm cache): `tools/list` at 4,909 ms; the symbol overview
 errored in 712 ms with the runtime's own text naming `npm install --prefix ./ typescript@5.9.3` — IC-7's evidence.
-Figures in `.code-intel-proof/results.json`.
+Figures in `.proof/code-intel-proof/results.json`.

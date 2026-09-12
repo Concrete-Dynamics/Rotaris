@@ -3,7 +3,7 @@
 - **Date:** 2026-09-05
 - **Host:** Windows 11 Pro 10.0.26200, x64; Electron 44.1.1; Node 24.11.0 (the host's node.exe as the fixture's runtime)
 - **Command:** `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package`, then
-  `node apps/desktop/scripts/mcp-console-spike.mjs` (evidence under `.mcp-proof/console-spike/`)
+  `node apps/desktop/scripts/mcp-console-spike.mjs` (evidence under `.proof/mcp-proof/console-spike/`)
 - **Requirements:** REQ-MCP-113, REQ-MCP-033 (the reserved token's child)
 - **Decision records:** ADR-0033 consequence 3; spike-list item 4 in `open-questions.md`
 

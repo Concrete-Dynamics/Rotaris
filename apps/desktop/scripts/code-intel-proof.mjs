@@ -22,7 +22,7 @@
  *   7. contained  — (packaged only) the packaged executable with the token, outbound blocked, a fresh runtime home:
  *                   tools/list answers; the symbol overview either answers or names what the runtime tried to fetch.
  *
- * Evidence under `.code-intel-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/code-intel-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -38,7 +38,7 @@ const electron = join(repo, 'node_modules', 'electron', 'dist', 'electron.exe');
 const mainEntry = join(app, 'out', 'main', 'index.js');
 const packagedExe = join(app, 'release', 'win-unpacked', 'Rotaris.exe');
 const packaged = process.env['ROTARIS_CODE_INTEL_PACKAGED'] === '1';
-const output = resolve(repo, '.code-intel-proof');
+const output = resolve(repo, '.proof', 'code-intel-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 const TOKEN = 'builtin:code-intelligence';
 // `--steps=1,2` runs a subset (the launches are long); `--keep` leaves the previous evidence and merges results.json.
@@ -51,7 +51,7 @@ const keepOutput = process.argv.includes('--keep');
 const root = join(output, 'profile');
 const local = join(root, 'local');
 const runtimeHome = join(local, 'rotaris', 'data', 'code-intelligence');
-const keep = join(repo, '.code-intel-proof-home.tmp');
+const keep = join(repo, '.proof', '.code-intel-proof-home.tmp');
 let previous = {};
 if (keepOutput && existsSync(join(output, 'results.json'))) { try { previous = JSON.parse(readFileSync(join(output, 'results.json'), 'utf8')); } catch { previous = {}; } }
 if (!keepOutput) {

@@ -29,7 +29,7 @@ import { spawnSync } from 'node:child_process';
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.traceability-proof');
+const output = resolve(repo, '.proof', 'traceability-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 // Windows can refuse a removal for a moment after a child process exits or while an indexer holds a new file; retried.
 const RM = { recursive: true, force: true, maxRetries: 10, retryDelay: 200 };
@@ -116,7 +116,7 @@ try {
   plant(fixtureCopy);
   results.scratch = scratch;
   const test = run('vitest', 'pnpm', ['exec', 'vitest', 'run', 'packages/workspace/src/traceability/traceability.proof.test.ts'], { ROTARIS_TRACEABILITY_PROOF: output, ROTARIS_TRACEABILITY_FIXTURE: fixtureCopy });
-  expect(test.status === 0, `the proof test file failed (see .traceability-proof/vitest.log):\n${(test.stdout ?? '').split('\n').filter((l) => /×|Error|expected/.test(l)).slice(0, 30).join('\n')}`);
+  expect(test.status === 0, `the proof test file failed (see .proof/traceability-proof/vitest.log):\n${(test.stdout ?? '').split('\n').filter((l) => /×|Error|expected/.test(l)).slice(0, 30).join('\n')}`);
   const spike = JSON.parse(readFileSync(join(output, 'spike-results.json'), 'utf8'));
   const fixtureResults = JSON.parse(readFileSync(join(output, 'fixture-results.json'), 'utf8'));
   results.spike = spike;
@@ -147,7 +147,7 @@ try {
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
   const drove = spawnSync(electron, [driver, join(app, 'out', 'main', 'workspace-service.js'), processFixture, scale, processOut], { cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true, env });
   writeFileSync(join(output, 'process.log'), `${drove.stdout ?? ''}\n${drove.stderr ?? ''}`);
-  expect(drove.status === 0, `the Electron driver exited ${drove.status ?? drove.signal ?? 'unknown'} (see .traceability-proof/process.log)`);
+  expect(drove.status === 0, `the Electron driver exited ${drove.status ?? drove.signal ?? 'unknown'} (see .proof/traceability-proof/process.log)`);
   const proc = JSON.parse(readFileSync(processOut, 'utf8'));
   results.process = proc;
   expect(proc.hello.kind === 'hello' && proc.hello.process === 'workspace-service', 'the service did not answer hello');
@@ -184,7 +184,7 @@ try {
 
   // 4: the Settings card's sentences (§1481) over those real replies — the same pure mapping the card renders.
   const ui = run('vitest-ui', 'pnpm', ['exec', 'vitest', 'run', 'packages/ui/src/settings/ProjectSettings.test.ts'], { ROTARIS_TRACEABILITY_PROCESS_RESULTS: processOut });
-  expect(ui.status === 0, `the card's sentence test failed over the real replies (see .traceability-proof/vitest-ui.log):\n${(ui.stdout ?? '').split('\n').filter((l) => /×|Error|expected/.test(l)).slice(0, 30).join('\n')}`);
+  expect(ui.status === 0, `the card's sentence test failed over the real replies (see .proof/traceability-proof/vitest-ui.log):\n${(ui.stdout ?? '').split('\n').filter((l) => /×|Error|expected/.test(l)).slice(0, 30).join('\n')}`);
   results.passed = true;
 } finally {
   // The generated trees and the two fixture copies hold TypeScript the linter would otherwise parse; the numbers,

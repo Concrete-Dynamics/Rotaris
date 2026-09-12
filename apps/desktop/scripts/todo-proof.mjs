@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
-const output = join(repo, '.todo-proof');
+const output = join(repo, '.proof', 'todo-proof');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const args = ['exec', 'vitest', 'run', 'packages/engine/src/todo-view.test.ts', 'packages/engine/src/control.test.ts', 'packages/agent-tools/src/tools/tools.test.ts', 'packages/ui/src/todo.test.ts'];

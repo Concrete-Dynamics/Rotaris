@@ -9,7 +9,7 @@
   thread, timing enumeration, reading and matching alone. Both name the **linear-growth clause as the binding
   one**. ADR-0040 §"Revisit if" says no measurement existed and that a measurement reporting one number would not
   decide which phase misses a budget. Does the streaming design (specific 1) meet both, and does it grow linearly?
-- **Reproduce:** `pnpm traceability-proof` (stage 1; numbers in `.traceability-proof/spike-results.json`). The
+- **Reproduce:** `pnpm traceability-proof` (stage 1; numbers in `.proof/traceability-proof/spike-results.json`). The
   generator is `packages/workspace/src/traceability/scale-fixture.ts` and is deterministic.
 
 ## Method

@@ -18,7 +18,7 @@
  *
  * Each scenario asserts the tool row's observation from the store's `tool_calls` and the server's request log, and
  * reads the run host's `fetch: egress policy read … in N ms` line for the per-call load's cost.
- * Evidence under `.fetch-proof/`: one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/fetch-proof/`: one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -32,7 +32,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.fetch-proof');
+const output = resolve(repo, '.proof', 'fetch-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

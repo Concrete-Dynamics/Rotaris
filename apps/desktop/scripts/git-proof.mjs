@@ -19,7 +19,7 @@
  *   6. no-git    — PATH without Git: the header's empty version, `Working without Git` raised, no dialog; then a plain
  *                  folder that is not a repository: no notice (REQ-GIT-104).
  *
- * Evidence under `.git-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/git-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -33,7 +33,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.git-proof');
+const output = resolve(repo, '.proof', 'git-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 mkdirSync(output, { recursive: true });
@@ -266,7 +266,7 @@ const noGit = launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_
   results.noGit = { header: 'not a git repository', noticeRaised: true, noticeOnScreenAtCapture: headlines.some((h) => /Working without Git/.test(h)), headlinesAtCapture: headlines, dialog: false, strip: text(p, '[data-testid="strip-branch"]')[0], png: noGit.png };
 }
 // 6b. A plain folder that is not a repository: the same header, and no notice. It must live OUTSIDE this repository —
-// a folder under `.git-proof/` is inside the product's own checkout, and Git (asked, REQ-GIT-103) rightly says so.
+// a folder under `.proof/git-proof/` is inside the product's own checkout, and Git (asked, REQ-GIT-103) rightly says so.
 const plain = mkdtempSync(join(tmpdir(), 'rotaris-git-proof-plain-'));
 mkdirSync(join(plain, '.rotaris'), { recursive: true });
 writeFileSync(join(plain, '.rotaris', 'agents.yaml'), readFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'utf8'));

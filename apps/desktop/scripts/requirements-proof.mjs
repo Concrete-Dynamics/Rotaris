@@ -63,7 +63,7 @@
  *               on a non-delivery axis refused in words, a column count agreeing with the widgets in it, and the card
  *               and its detail agreeing on health. The rotated-rail clause is asserted in `fold`, which has a rail.
  *
- * Evidence under `.requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
+ * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -75,7 +75,7 @@ import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = join(repo, '.requirements-proof');
+const output = join(repo, '.proof', 'requirements-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 const RM = { recursive: true, force: true, maxRetries: 10, retryDelay: 200 };
 rmSync(output, RM);

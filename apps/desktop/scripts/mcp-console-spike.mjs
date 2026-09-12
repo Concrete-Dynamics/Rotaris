@@ -25,7 +25,7 @@ const app = join(repo, 'apps', 'desktop');
 const exe = join(app, 'release', 'win-unpacked', 'Rotaris.exe');
 if (!existsSync(exe)) throw new Error(`the packaged application is absent: ${exe} (run pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 first)`);
 const fixture = join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs');
-const output = resolve(repo, '.mcp-proof', 'console-spike');
+const output = resolve(repo, '.proof', 'mcp-proof', 'console-spike');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const root = join(output, 'profile');

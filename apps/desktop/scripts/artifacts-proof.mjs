@@ -19,7 +19,7 @@
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
  *                  record is still listed and the inspector reports the failure (REQ-LIBRARY-091, 134).
  *
- * Evidence under `.artifacts-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/artifacts-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -32,7 +32,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.artifacts-proof');
+const output = resolve(repo, '.proof', 'artifacts-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

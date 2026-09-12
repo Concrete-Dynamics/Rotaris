@@ -29,7 +29,7 @@
  *   4. restart          the same store opened again and the session resumed from the browser: the snapshot is empty and
  *                       the empty state shows (REQ-CHAT-084's atomic clear held across a restart; REQ-CHAT-073).
  *
- * Evidence under `.chat-controls-proof/`: one `.log` and `.png` per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/chat-controls-proof/`: one `.log` and `.png` per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -42,7 +42,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.chat-controls-proof');
+const output = resolve(repo, '.proof', 'chat-controls-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 // Part AO: Windows refuses this wipe with EPERM while a previous launch's run host or workspace service still holds the
 // scratch workspace as its working directory — the second of two runs started back to back died here, before a single

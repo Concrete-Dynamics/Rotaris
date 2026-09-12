@@ -594,7 +594,7 @@ The theme write is synchronous and flushed. `ROTARIS_CAPTURE_THEME`, `ROTARIS_CA
 at scale factors 1, 1.25, 1.5, 1.75 and 2. Each process captures all seven views, all thirteen Settings
 categories, keyboard focus positions and a live theme switch. The script samples painted PNG pixels, checks
 focus bands, rail-label fit, vector-icon scale, complete recolouring, preserved composer/view state and
-renderer errors, then writes its result table under `.theme-proof/`. Two counterfactual commands lower text or
+renderer errors, then writes its result table under `.proof/theme-proof/`. Two counterfactual commands lower text or
 focus contrast and must exit non-zero. The first execution and its coverage boundary are
 `spikes/theme-proof.md`.
 
@@ -614,7 +614,7 @@ once with a scripted agent repeating one tool call (asserting three activations,
 `agent_session_aborted` stop reason from the store); then a first run that completes, a `running` child row
 planted by hand, and a relaunch that opens the stored session from the Sessions browser and continues it
 (asserting the identity, the row order, the carried-intent status row, the settled child, one ordinal series
-and no lock left behind). Its evidence lands under `.part-h-proof/`.
+and no lock left behind). Its evidence lands under `.proof/part-h-proof/`.
 
 **Configuration.** `packages/config/src/` — `load.ts` (the one entry point, no database handle), `merge.ts` (the four
 classes; the overlay shared with the per-field writer through a mapping adapter), `sections/`, `slots.ts`, `validate.ts`,
@@ -656,9 +656,9 @@ picks, the bootstrapped `agents.yaml`, and a log free of the key are asserted; (
 usage figures and the terminal result from the store; (4) spike 6's live harness against the same endpoint with the
 stored credential; (3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small
 slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
-the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.slice-proof/`. `--from=<scenario>` replays the
+the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
-key (`.slice-proof/results.json`), after two runs that each found a defect.
+key (`.proof/slice-proof/results.json`), after two runs that each found a defect.
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
@@ -724,7 +724,7 @@ Overview read afterwards through `ROTARIS_CAPTURE_END_VIEW` and `ROTARIS_CAPTURE
 against the store, the sparkline's sample count, the cost qualifier, the tool chips against `tool_calls`, the agents
 caption against the ledger and the configured caps, the branch, the session row with its duration and focused
 marker; (3) a relaunch — the samples identical and a pane split written to the preference store restored. Evidence
-under `.overview-proof/`. On 2026-09-05 it passed once the start-time read was corrected (entry 19).
+under `.proof/overview-proof/`. On 2026-09-05 it passed once the start-time read was corrected (entry 19).
 
 **What `pnpm fetch-proof` does.** It builds Electron, starts a `node:http` server on 127.0.0.1 that records every
 request path, and launches the app seven times against a scratch workspace whose `agents.yaml` it rewrites between
@@ -732,7 +732,7 @@ launches, each run scripted `fetch:<url>,answer`: `/ok` under `autonomous`; the 
 requests; `/redirect` (302 to `localhost`, a different host name) refused, then followed once `localhost` is
 allow-listed; `127.0.0.1` denied so the server sees nothing; `/404` as `http_error` with the body; `/slow` under a
 one-second `tool_call_timeout`. The tool row's observation is read from `tool_calls`; the per-call policy read's cost
-from the run host's log. Evidence under `.fetch-proof/`.
+from the run host's log. Evidence under `.proof/fetch-proof/`.
 
 **What `pnpm git-proof` does.** It builds Electron, makes a scratch repository with a local bare remote (one commit
 ahead, so a local-tinted row and `ahead 1` exist) and a `.gitignore` holding `.rotaris/`, and launches the app seven
@@ -741,7 +741,7 @@ card's sentence, the strip, the divider moved by keyboard and written to `panels
 the dialog beside the workspace; an isolated session started through the launch dialog whose scripted `write_file`
 lands in `.rotaris/worktrees/<sid>` and not in the base; the manual worktree deleted through the two-step confirm
 against Git's real refusal; a relaunch restoring the split; `PATH` without Git (the empty header, the notice, no
-dialog); a plain folder in the OS temp directory (no notice). Evidence under `.git-proof/`.
+dialog); a plain folder in the OS temp directory (no notice). Evidence under `.proof/git-proof/`.
 
 **What `pnpm checkpoint-proof` does.** It builds Electron and launches the app twelve times against a scratch repository:
 two scripted iterations capture checkpoints 1 and 2 (the refs, the fixed identity, the message, HEAD and the index bytes
@@ -750,7 +750,7 @@ preview-first dialog (the warning, the checkbox, the safety checkpoint holding t
 notice); a session with no rows, a ref deleted from outside, a live run's refusal, a stale session repaired on opening; a
 retention of two trimming rows and refs together; an isolated run whose checkpoints land in the shared repository and
 whose restore touches the worktree only; `enabled: false`. Figures — invocations and times per capture, preview and
-restore — land in `.checkpoint-proof/results.json`. The Git proof's isolated launch now asserts one checkpoint row where it asserted the card's
+restore — land in `.proof/checkpoint-proof/results.json`. The Git proof's isolated launch now asserts one checkpoint row where it asserted the card's
 empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch.
 
 **What `pnpm resilience-proof` does.** It builds Electron and launches the app nine times with scripted fault steps: a 429
@@ -758,7 +758,7 @@ with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (th
 header with REQ-NOTIFY-063's notice); a quota with a same-tier candidate (the transparent fallback); a quota with none
 (the indefinite wait, `setModel` from the header, the override honoured after a relaunch); an unresponsive model with
 and without a role fallback; a hung child under a small `child_timeout` with and without a fallback; a 503 (one
-transient retry) and a 401 (no retry). Evidence under `.resilience-proof/`.
+transient retry) and a 401 (no retry). Evidence under `.proof/resilience-proof/`.
 
 **What `pnpm mission-proof` does.** It builds Electron and launches the app ten times for eight items: the Mission view
 painted with the run row, the tree and the table, elapsed advancing between two probes; the three trees' parity and a
@@ -767,7 +767,7 @@ selected; a cancel naming the agent and its cascade; open-agent under both prefe
 persona window per persona reused, hidden on close, shown again, destroyed on a new session; the inspector following the
 latest author, pinning, steering, the chips' order across a state change; the strategy and depth controls written to
 `agents.yaml` and read back in Settings; every surface showing a planted running child settled. Figures — the refresh
-time, the persona window's first paint — land in `.mission-proof/results.json`.
+time, the persona window's first paint — land in `.proof/mission-proof/results.json`.
 
 **What `pnpm mcp-proof` does.** It builds Electron and launches the app nine times against hand-written fixture servers
 (`scripts/fixtures/mcp-fixture-server.mjs`, four protocol eras, pid files per launch): discovery and the byte-exact prompt
@@ -777,7 +777,7 @@ child; a mid-run narrowing refused; a server crashing after connect, warned once
 drop rules per persona and a session toggle gone after a relaunch; the Settings category probing every row twice with the
 `.cmd` stand-in for `browser` healthy through the wrap; two fatal YAML defects reported together and the same defects
 dropped from a discovery file; a server that never answers `initialize` bounded at 35 s with the exit 1.5 s after the
-quit. Evidence under `.mcp-proof/`.
+quit. Evidence under `.proof/mcp-proof/`.
 
 
 **What `pnpm sessions-proof` does.** It builds Electron and launches the app ten times against a scratch store and
@@ -786,7 +786,7 @@ spawns is left alone; "nothing was stale" on a second press); a delete with two 
 refs in the shared repository, a session whose repository moved, a live run refused; the four-record export of a
 capped audit and of an empty session, and the trajectory export of one, of two in reverse order, of a resumed and of a
 capped history — every file parsed by a SEPARATE node process holding no product code; an unreadable session listed
-and deleted; the backup disclosure panel. Evidence under `.sessions-proof/`.
+and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`.
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it
 launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on
@@ -795,14 +795,14 @@ propagated); discovery of the real runtime through the token with the tier's nam
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —
 completed, skipped on the marker, `skipped-no-code`, a launch-less entry refused, a cancel mid-step; the manifest's
 drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7). Evidence under
-`.code-intel-proof/`.
+`.proof/code-intel-proof/`.
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other
 line as written, the global file untouched); Settings → Models chooses a slot and its strength and saves; a toggle
 then Discard writes nothing; the composer's control writes `runtime.permission_mode` with no run active; a file
 with `max_depth: many` refuses the run naming the file, the workspace scope and `runtime.max_depth`, and the corrected
-file runs to completion. Its evidence lands under `.config-proof/`; the load time is read from the app log.
+file runs to completion. Its evidence lands under `.proof/config-proof/`; the load time is read from the app log.
 
 **The control channel.** `contracts/src/control.ts` (the twenty-two operations, the pause payload), store v6
 (`queued_prompts`, `sessions.message_limit`, `sessions.paused_at_count`), the writer's units, `engine/src/run/run.ts`
@@ -819,7 +819,7 @@ message typed during a run is queued and consumed once as a completed task; a st
 card and injected; Pause then the composer's Continue run leave the pause row and two run starts; a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
-records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.part-j-proof/`. The queue
+records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue
 launch's capture sat on a knife-edge the Parts R and S merge found (2026-09-05): the launch reaches `session.start` about
 1.2 s in and the run needs about 8 s from there — a silent 4.2 s gap at the iteration boundary of a scripted run,
 identical on both branches and on main, not diagnosed — so three runs landed 100 ms either side of the 9 s capture; it
@@ -847,7 +847,7 @@ still in the stash after the application is quit and **relaunched**; "Use" copie
 focuses it while the entry stays stashed, and "Use and remove" under a filter removes the row chosen and not the row
 at that screen position; twenty writes in a burst settle with the last visible and the typed search text untouched;
 201 history entries leave 200 with the oldest gone and no notice; a notice carrying `open-library` opens the named
-tab. Evidence under `.library-proof/`. Two of its assertions were rewritten at the Parts X/Y merge and the reason is
+tab. Evidence under `.proof/library-proof/`. Two of its assertions were rewritten at the Parts X/Y merge and the reason is
 recorded there: the store version is asserted as "at least v11" (the ladder is asserted whole in `store.test.ts`) and
 the Artifacts tab's body is now the real tab rather than the placeholder Part X supplied.
 
@@ -859,7 +859,7 @@ sections REQ-LIBRARY-090 names, in its order, with the empty ones absent; a two-
 an invalid tag refuses the publish whole, leaving no row and no file, in REQ-LIBRARY-089's own words; the inspector
 opens on the selected row, saves, and the status cell reads `published · edited`, and re-opening the same id
 re-raises the one dialog rather than a second; a body file deleted underneath leaves the record listed with Save
-disabled and the failure stated once. Evidence under `.artifacts-proof/`. Every launch clicks the Artifacts tab after
+disabled and the failure stated once. Evidence under `.proof/artifacts-proof/`. Every launch clicks the Artifacts tab after
 switching view — the Library opens on Prompts, REQ-LIBRARY-103's first tab.
 
 ## The driver — a step that waits instead of guessing (2026-09-11)

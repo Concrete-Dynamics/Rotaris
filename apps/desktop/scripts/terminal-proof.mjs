@@ -6,12 +6,12 @@
  *      audit buffer, the geometry guard, the labels, and the display emulator over frames (`terminal.test.ts`), plus the
  *      contracts suite that asserts the terminal tokens clear their floors in every palette.
  *   2. The page: `packages/ui/src/terminal/proof-entry.tsx` bundled with esbuild — the SAME sources the renderer
- *      bundles — with the design system's CSS, the shell's, xterm's and the bundled fonts, into `.terminal-proof/page/`.
+ *      bundles — with the design system's CSS, the shell's, xterm's and the bundled fonts, into `.proof/terminal-proof/page/`.
  *      No renderer role exists for it because `renderer/main.tsx` is wave 2's; this is a verification bundle only.
  *   3. Electron on `terminal-proof/main.cjs`: a 900×620 window, real key/wheel/pointer input, DOM and pixel readings,
  *      `results.json`, two screenshots for the design check.
  *
- * Evidence under `.terminal-proof/`. `--skip-tests` skips step 1.
+ * Evidence under `.proof/terminal-proof/`. `--skip-tests` skips step 1.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -22,7 +22,7 @@ import { cleanEnvironment } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.terminal-proof');
+const output = resolve(repo, '.proof', 'terminal-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });

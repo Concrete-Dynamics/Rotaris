@@ -64,7 +64,7 @@ export function oneDatabase(local) {
  * composed from a caller's string, and a proof that deleted a tree outside the repository would do it recursively.
  */
 export function evidenceDirectory(name) {
-  const output = resolve(repo, name);
+  const output = name.endsWith('-proof') ? resolve(repo, '.proof', name.replace(/^\./, '')) : resolve(repo, name);
   const inside = relative(repo, output);
   if (inside === '' || inside === '..' || inside.startsWith(`..${sep}`)) throw new Error(`proof output escaped the repository: ${output}`);
   return output;

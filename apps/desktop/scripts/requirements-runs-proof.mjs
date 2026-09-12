@@ -12,7 +12,7 @@
  * The suite is skipped in an ordinary `pnpm test` — it needs the repository and the two directories this script
  * makes — so a red here names an assertion, never a missing fixture. Every other Part AP suite must be green too.
  *
- * Evidence under `.requirements-runs-proof/`: `workspace/` (the scratch repository and the worktrees the launches
+ * Evidence under `.proof/requirements-runs-proof/`: `workspace/` (the scratch repository and the worktrees the launches
  * provisioned), `store/`, `config/`, `vitest.json`, `tests.log`, `suite-results.json`, `results.json`.
  */
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -20,7 +20,7 @@ import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
-const output = join(repo, '.requirements-runs-proof');
+const output = join(repo, '.proof', 'requirements-runs-proof');
 const workspace = join(output, 'workspace');
 const fixture = join(repo, 'apps', 'desktop', 'scripts', 'fixtures', 'requirements-store');
 

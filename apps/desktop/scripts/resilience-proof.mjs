@@ -94,7 +94,7 @@ const expect = (cond, message) => { if (!cond) throw new Error(message); };
 // 1. A 429 with retry-after 2 s: a 2 s wait the header counts down, auto-resume, the run completes; the wait issue and no transient budget spent.
 const s1 = scenario('retry-after', []);
 {
-  const r = launch('retry-after', s1, { ROTARIS_SCRIPT: 'fail:429:retry-after=2,answer', ROTARIS_CAPTURE_PROMPT: 'rate limit me', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@1700', ROTARIS_CAPTURE_PROBE: '.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = launch('retry-after', s1, { ROTARIS_SCRIPT: 'fail:429:retry-after=2,answer', ROTARIS_CAPTURE_PROMPT: 'rate limit me', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@~6000', ROTARIS_CAPTURE_PROBE: '.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s1);
   const row = session(db);
   const list = names(db, row.session_id).map((t) => t.name);
@@ -109,7 +109,7 @@ const s1 = scenario('retry-after', []);
   expect(!kinds.some((i) => i.kind === 'transient_llm_error'), 'a 429 was spent from the transient budget (REQ-ORCH-092)');
   expect(!list.includes('model_fallback'), 'a same-tier fallback happened with no candidate configured');
   expect(rows.some((b) => b.startsWith('Waiting on a provider limit') && b.includes('Wait 2 s')), `no wait row naming the interval: ${rows.join(' | ')}`);
-  const during = probes(r.log, 'probe-at 1700');
+  const during = probes(r.log, 'probe-at ~6000');
   const header = during[0]?.found[0];
   expect(header !== undefined, 'the wait header was not on screen 1.7 s into the run');
   expect(/Resumes automatically in 0:0[0-2]\./.test(header.text) && header.data['data-exhausted'] === '0', `the header did not count down: ${JSON.stringify(header)}`);
@@ -122,7 +122,7 @@ const s1 = scenario('retry-after', []);
 // 2. A 429 with no retry-after: a 60 s wait computed locally; cancel from the header ends the run user_cancelled with REQ-NOTIFY-063's notice.
 const s2 = scenario('cancel', []);
 {
-  const r = launch('cancel', s2, { ROTARIS_SCRIPT: 'fail:429,answer', ROTARIS_CAPTURE_PROMPT: 'limit then cancel', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@1700', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-waiting.png')}@1800`, ROTARIS_CAPTURE_CLICKS: '.wait-header .btn-danger>>Cancel the run@2200;;.dialog-actions .btn-danger>>Cancel the run@2800', ROTARIS_CAPTURE_PROBE: '.notice-slot;;.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '1200' });
+  const r = launch('cancel', s2, { ROTARIS_SCRIPT: 'fail:429,answer', ROTARIS_CAPTURE_PROMPT: 'limit then cancel', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@~6000', ROTARIS_CAPTURE_PNG_WHEN: '.wait-header', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-waiting.png')}@~6000`, ROTARIS_CAPTURE_CLICKS: '.wait-header .btn-danger>>Cancel the run@~10000;;.dialog-actions .btn-danger>>Cancel the run@~10000', ROTARIS_CAPTURE_PROBE: '.notice-slot;;.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '1200' });
   const db = open(s2);
   const row = session(db);
   const kinds = issues(db, row.session_id);
@@ -131,7 +131,7 @@ const s2 = scenario('cancel', []);
   expect(row.stop_reason === 'user_cancelled' && row.execution_status === 'paused', `cancel during the wait did not end the run user_cancelled: ${JSON.stringify(row)}`);
   const wait = kinds.find((i) => i.kind === 'model_wait');
   expect(wait !== undefined && JSON.parse(wait.metadata).wait_seconds === 60, `the local backoff is not 60 s: ${wait?.metadata}`);
-  const header = probes(r.log, 'probe-at 1700')[0]?.found[0];
+  const header = probes(r.log, 'probe-at ~6000')[0]?.found[0];
   expect(header !== undefined && /Resumes automatically in (1:00|0:5[0-9])\./.test(header.text), `the header did not show the 60 s countdown: ${JSON.stringify(header)}`);
   expect(!/Wait \d+ s/.test(header.text), `the wording named an interval the provider did not supply: ${header.text}`);
   const error = events[0]?.result?.error ?? null;
@@ -169,7 +169,7 @@ const s3 = scenario('same-tier', [], { snapshot: true });
 // 4. Quota with no candidate: an indefinite wait; setModel from the header → rebuilt, completes; the override persists; a relaunch and resume uses it.
 const s4 = scenario('override', []);
 {
-  const r = launch('override', s4, { ROTARIS_SCRIPT: 'fail:quota,answer,answer', ROTARIS_CAPTURE_PROMPT: 'quota with no candidate', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@1700;;.wait-header@3300', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'override-waiting.png')}@1800`, ROTARIS_CAPTURE_CLICKS: '.wait-header .btn-secondary>>Change model@2400', ROTARIS_CAPTURE_SELECT: '.wait-header select>>beta@2900', ROTARIS_CAPTURE_PROBE: '.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = launch('override', s4, { ROTARIS_SCRIPT: 'fail:quota,answer,answer', ROTARIS_CAPTURE_PROMPT: 'quota with no candidate', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@~6000;;.wait-header@9000', ROTARIS_CAPTURE_PNG_WHEN: '.wait-header', ROTARIS_CAPTURE_PNG_AT: `${join(output, 'override-waiting.png')}@~6000`, ROTARIS_CAPTURE_CLICKS: '.wait-header .btn-secondary>>Change model@~10000', ROTARIS_CAPTURE_SELECT: '.wait-header select>>beta@~10000', ROTARIS_CAPTURE_PROBE: '.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s4);
   const row = session(db);
   const list = names(db, row.session_id);
@@ -177,7 +177,7 @@ const s4 = scenario('override', []);
   const rows = systemRows(db, row.session_id);
   db.close();
   expect(row.execution_status === 'completed', `the run did not complete after the model change: ${JSON.stringify(row)}`);
-  const header = probes(r.log, 'probe-at 1700')[0]?.found[0];
+  const header = probes(r.log, 'probe-at ~6000')[0]?.found[0];
   expect(header !== undefined && /Resumes only when you decide\./.test(header.text) && header.data['data-exhausted'] === '1' && /provider marked exhausted/.test(header.text), `the indefinite wait is not shown as such: ${JSON.stringify(header)}`);
   const wait = kinds.find((i) => i.kind === 'model_wait');
   expect(wait !== undefined && JSON.parse(wait.metadata).auto_resume === false && JSON.parse(wait.metadata).wait_seconds === null, `the wait issue is not indefinite: ${wait?.metadata}`);
@@ -187,7 +187,9 @@ const s4 = scenario('override', []);
   expect(!list.some((t) => t.name === 'model_fallback'), 'a same-tier fallback happened with no candidate');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta', `the run did not resume on beta: ${JSON.stringify(calls)}`);
-  const gone = probes(r.log, 'probe-at 3300')[0]?.found ?? [];
+  // EVIDENCE, not an assertion: an absence cannot be waited FOR, so this one stays an appointment, moved out to
+  // 9 s so a slow machine reports the header gone because it went rather than because the sample came early.
+  const gone = probes(r.log, 'probe-at 9000')[0]?.found ?? [];
   results.override = { status: row.execution_status, headerDuringWait: header.text, override: JSON.parse(override.metadata), calls, headerAfterChange: gone.length, png: r.png, elapsedMs: r.elapsedMs };
   // The relaunch: the stored session opened from the browser and continued; the first call of the continuation goes to beta.
   const again = launch('override-resume', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'continue on the override', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });

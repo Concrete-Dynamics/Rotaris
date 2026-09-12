@@ -2120,20 +2120,47 @@ async function main(): Promise<void> {
     }
     // ROTARIS_CAPTURE_CLICKS="selector>>text@ms;;…" and ROTARIS_CAPTURE_SELECT="selector>>value@ms;;…": real clicks on
     // Settings controls and a value chosen in a select, for the configuration proof (verification only).
+    /**
+     * `selector@ms` fires once at that instant. `selector@~ms` instead waits for the selector to MATCH and
+     * acts as soon as it does, giving up at `ms` — the time becomes a deadline rather than an appointment.
+     *
+     * The distinction is opt-in because both readings are wanted. A proof that samples the same selector at
+     * 7500, 8500 and 9500 ms is watching a value CHANGE, and waiting-for-present would collapse the series
+     * into three readings of the first match. A proof that asserts "the wait header was on screen during the
+     * wait" wants the header, not the instant: pinning it to 1700 ms makes a busy machine indistinguishable
+     * from a broken product, which is how `resilience-proof` came to fail on three different probes with
+     * nothing wrong with the code under them (measured 2026-09-12: 4/5 green quiet, 1/4 green under load).
+     */
     const steps = (raw: string | undefined) => (raw ?? '').split(';;').map((s) => s.trim()).filter((s) => s !== '').map((s) => {
-      const at = Number(s.slice(s.lastIndexOf('@') + 1));
+      const rawAt = s.slice(s.lastIndexOf('@') + 1);
+      const until = rawAt.startsWith('~');
+      const at = Number(until ? rawAt.slice(1) : rawAt);
       const body = s.slice(0, s.lastIndexOf('@'));
       const sep = body.indexOf('>>');
-      return { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at };
+      return { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at, until };
     });
+    /** Resolves when the selector (and the optional exact text) matches, or at the deadline. Never throws. */
+    const settleAt = async (step: { selector: string; arg: string | null; at: number; until: boolean }): Promise<void> => {
+      const pause = (ms: number) => new Promise<void>((r) => { clocks.timers.after(millis(ms), () => r()); });
+      if (!step.until) { await pause(step.at); return; }
+      const deadline = Date.now() + step.at;
+      const probe = `(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].some((x) => ${step.arg === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(step.arg)}`}))()`;
+      for (;;) {
+        const hit = await win.webContents.executeJavaScript(probe).catch(() => false) as boolean;
+        if (hit) { log(`capture: ${step.selector} matched with ${deadline - Date.now()} ms to spare`); return; }
+        if (Date.now() >= deadline) { log(`capture: ${step.selector} never matched within ${step.at} ms`); return; }
+        await pause(50);
+      }
+    };
     for (const step of steps(process.env['ROTARIS_CAPTURE_CLICKS'])) {
-      clocks.timers.after(millis(step.at), async () => {
+      void (async () => {
+        await settleAt(step);
         const rect = await win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(step.selector)})].find((x) => ${step.arg === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(step.arg)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
         if (!rect) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return; }
         win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(rect.x), y: Math.round(rect.y), button: 'left', clickCount: 1 });
         log(`capture: clicked "${step.arg ?? step.selector}"`);
-      });
+      })();
     }
     // ROTARIS_CAPTURE_TYPE="text@ms;;…": real key events into whatever control holds focus, then Enter (the composer's submit, REQ-CHAT-001).
     for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE'])) {
@@ -2303,19 +2330,24 @@ async function main(): Promise<void> {
     // ROTARIS_CAPTURE_PNG_AT="path@ms;;…": a capture of the painted window at that time, beside the one at the end — the wait
     // header read by eye while the run still waits (Part Q's proof; verification only).
     for (const step of steps(process.env['ROTARIS_CAPTURE_PNG_AT'])) {
-      clocks.timers.after(millis(step.at), async () => {
+      void (async () => {
+        // `path@~ms` waits for `ROTARIS_CAPTURE_PNG_WHEN` to be on screen first, so the picture is OF something.
+        await settleAt(step.until ? { ...step, selector: process.env['ROTARIS_CAPTURE_PNG_WHEN'] ?? step.selector, arg: null } : step);
         const image = await win.webContents.capturePage();
         writeFileSync(step.selector, image.toPNG());
-        log(`capture: png-at ${step.at} → ${step.selector}`);
-      });
+        log(`capture: png-at ${step.until ? '~' : ''}${step.at} → ${step.selector}`);
+      })();
     }
     // ROTARIS_CAPTURE_PROBE_AT="selector@ms;;…": a probe taken mid-run at that time (the same JSON as the end probes), so a proof
     // can read a state that is gone by the capture — the wait header's countdown (Part Q's proof; verification only).
     for (const step of steps(process.env['ROTARIS_CAPTURE_PROBE_AT'])) {
-      clocks.timers.after(millis(step.at), async () => {
+      void (async () => {
+        await settleAt(step);
         const found = await win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
-        log(`capture: probe-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
-      });
+        // The label keeps the REQUESTED form, `~` included, so a reader of the log can tell a sampled instant
+        // from a waited-for one, and `probes(log, 'probe-at <n>')` in a proof still matches what it asked for.
+        log(`capture: probe-at ${step.until ? '~' : ''}${step.at} ${step.selector} → ${JSON.stringify(found)}`);
+      })();
     }
     // Part AC's seam (verification only). ROTARIS_CAPTURE_QUESTION_ELSEWHERE="<option>@ms": the prompt the open stepper
     // is showing, answered from ANOTHER surface — main reads the request id off the stepper and sends `answerQuestion`

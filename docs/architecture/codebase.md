@@ -840,6 +840,21 @@ header with REQ-NOTIFY-063's notice); a quota with a same-tier candidate (the tr
 and without a role fallback; a hung child under a small `child_timeout` with and without a fallback; a 503 (one
 transient retry) and a 401 (no retry). Evidence under `.proof/resilience-proof/`.
 
+**A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
+fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong
+under them: measured that day, 4/5 green quiet and 1/4 green while three worktrees were building Electron.
+`ROTARIS_CAPTURE_PROBE_AT`, `_CLICKS`, `_SELECT` and `_PNG_AT` now accept `@~ms`, which WAITS for the selector to match
+and acts as soon as it does, giving up at `ms`; plain `@ms` is untouched, because a proof that samples one selector at
+7500, 8500 and 9500 ms is watching a value change and waiting-for-present would collapse the series into three readings
+of the first match. **The margin the old form had was 169 ms**: the header lands at ~1531 ms and the appointment was at
+1700. That is the whole defect, and it is why the failures moved between three different probes rather than settling on
+one. The clicks were worse — the cancel dialog's button was clicked at a fixed 2800 ms whether or not the click at 2200
+had opened it. **What could not be shown:** the ambient flake was not reproducible on demand afterwards (the baseline
+went 6/6 green under CPU load and under a concurrent Electron proof), so the mechanism was demonstrated directly
+instead — an appointment moved to 300 ms reproduces the original error text verbatim, `the wait header was not on
+screen 1.7 s into the run`, and the deadline form passes on the same machine in the same minute. An absence still
+cannot be waited FOR, so the one probe that reads the header GONE stays an appointment and was moved out to 9 s.
+
 **What `pnpm mission-proof` does.** It builds Electron and launches the app ten times for eight items: the Mission view
 painted with the run row, the tree and the table, elapsed advancing between two probes; the three trees' parity and a
 23-agent republish timed against the 250 ms budget; a pause refused with a child selected and honoured with the run

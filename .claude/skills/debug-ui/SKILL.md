@@ -190,7 +190,10 @@ affected view in `docs/architecture/views/` plus the "last reconciled" date in i
 | --- | --- | --- |
 | `resize` on a maximized window | `setContentSize` is a no-op; the op now **refuses** rather than reporting a size nobody got (defect 84) | let it unmaximize itself; never assume a sweep ran at three sizes without reading the replies |
 | The packaged app | `__ROTARIS_SEAMS__` strips the driver at build time; `pnpm package` proves it | debug against `pnpm build`, never against a packaged binary |
-| Measuring too early | a rect read mid-transition is a rect of nothing | `waitFor` the selector, then ~600 ms before geometry |
+| Measuring too early | a rect read mid-transition is a rect of nothing; an overlay that rises into place matches its selector ~300 px from where it settles | `waitFor`, then await `document.getAnimations()` before reading geometry — not a guessed duration |
+| A guard that excludes everything | a sweep that skips every control reports CLEAN having tested nothing | report the *tested* count beside the finding count, and treat `tested === 0` as a finding |
+| Backticks inside a probe string | the measurement scripts are template literals; one backtick in a comment ends the literal and Node fails to parse the file | write probe comments without backticks, and say so in the comment |
+| A slash command typed and submitted in one burst | Enter arrives before the popup has filtered, the command never runs, and the composer keeps the literal text | type, settle ~450 ms, then send `Return` as its own chord |
 | Zero-size matches | the locator refuses them on purpose — a control in a collapsed panel is present and unclickable | if `waitFor` times out on an element you can see, check its box before your selector |
 | `cmd \| tail` | reports **tail's** exit status, so a red suite reads as green | redirect to a file and read the file |
 | Full-suite reds in `terminal.test.ts` | real-PTY flake under parallel load | re-run the file alone before believing it |

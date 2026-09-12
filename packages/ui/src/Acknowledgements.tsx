@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import { ACKNOWLEDGEMENT_KIND_WORDS, ACKNOWLEDGEMENT_SEVERITY, SEVERITY_GLYPHS } from '@rotaris/contracts';
 import { type Acknowledgement, type AcknowledgementStore } from '@rotaris/ui-core';
 import { markMotionStart } from './motion.js';
+import { startNewSessionFromOffer } from './workspace-host.js';
 
 /**
  * REQ-NOTIFY-013 / REQ-SHELL-112 / REQ-SHELL-113 — the window's ONE transient acknowledgement surface. There is no
@@ -73,6 +74,26 @@ function AcknowledgementRow({ item, count, onClose }: { item: Acknowledgement; c
       <div className="ack__text">
         <span className="ack__title" data-testid="acknowledgement-title">{item.title}</span>
         {item.body !== '' && <span className="ack__body text-secondary">{item.body}</span>}
+        {/*
+          * Stage C — `PD-WORKSPACE-001`'s one action, which `REQ-NOTIFY-013` permits by being extended rather
+          * than by a second surface standing beside it. Taking it does NOT close the acknowledgement: the
+          * lifetime is the surface's (REQ-NOTIFY-011) and REQ-NOTIFY-020 leaves the close control as the only
+          * thing that interacts with it, so the offer withdraws on its own timer whether it was taken or not —
+          * which is also the directive's own wording for the three ways it can end.
+          *
+          * It is focusable but never focused: REQ-NOTIFY-015 forbids the surface taking focus from what the
+          * user was doing, and nothing here autofocuses.
+          */}
+        {item.action && (
+          <button
+            type="button"
+            className="ack__action"
+            data-testid="acknowledgement-action"
+            onClick={() => { if (item.action?.kind === 'start-session') startNewSessionFromOffer(); }}
+          >
+            {item.action.label}
+          </button>
+        )}
       </div>
       <button type="button" className="ack__close" aria-label={`Close the ${word.toLowerCase()} “${item.title}”`} onClick={close}>×</button>
     </div>

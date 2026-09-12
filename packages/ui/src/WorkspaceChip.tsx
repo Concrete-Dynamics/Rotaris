@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { detectPlatform } from './commands/registry.js';
 import { collapseHome, workspaceLabel } from './workspace-label.js';
 
 /**
@@ -26,7 +27,13 @@ export interface WorkspaceChipProps {
   readonly home?: string | undefined;
   /** The current session's name, when the product ever has one; `—` is drawn for its absence. */
   readonly sessionName?: string | null | undefined;
-  readonly onChoose?: (() => void) | undefined;
+  /**
+   * Stage C — `PD-SHELL-001`: `newWindow` is true when the platform's secondary-activation modifier was held,
+   * which is one of that directive's exactly two add-route gestures. The gesture decides the outcome before the
+   * chooser opens, because a native chooser carries no buttons of ours (REQ-SHELL-164) and the two routes have
+   * different gate sets — a replacement evaluates REQ-SHELL-021's three, an addition evaluates none.
+   */
+  readonly onChoose?: ((newWindow: boolean) => void) | undefined;
 }
 
 /**
@@ -104,7 +111,9 @@ export function WorkspaceChip({ path, home, sessionName, onChoose }: WorkspaceCh
       aria-label="Open project folder"
       aria-description={`Current project: ${path}. Opens the native project folder chooser.`}
       title="Open another project folder"
-      onClick={() => onChoose?.()}
+      // The secondary-activation modifier is the platform's own: Command on macOS, Control elsewhere. Reading
+      // both would accept a Control-click on macOS, which that platform reserves for the context menu.
+      onClick={(event) => { onChoose?.(detectPlatform() === 'mac' ? event.metaKey : event.ctrlKey); }}
     >
       <i className="ph ph-folder-open" aria-hidden="true" />
       {/* Hidden entirely rather than drawn clipped where even `…` will not fit (rule 2). */}

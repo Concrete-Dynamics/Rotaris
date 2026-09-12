@@ -80,7 +80,10 @@ whatever is current, one given is a compare-and-clear — REQ-NOTIFY-026), **`no
 project-folder flow. It carries **no folder and no window** — main evaluates REQ-SHELL-021's three gates in that
 requirement's fixed order, opens the native chooser asynchronously (ADR-0019's application-wide prohibition on a
 synchronous one) and interprets every answer the host can return, so no surface can skip a gate or name a folder
-it was not given; the request is attributed to the window that sent it, REQ-SHELL-020),
+it was not given; the request is attributed to the window that sent it, REQ-SHELL-020. **`newWindow`** is
+`PD-SHELL-001`'s add route, decided by the gesture before the chooser opens — a palette entry or the chip with the
+platform's secondary-activation modifier — on which REQ-SHELL-021's three gates are not evaluated and no window is
+closed; a folder another window already holds surfaces that window and builds none, on REQ-STARTUP-163's rule),
 `shell.switchView`, `window.modality {active}` (Part W: the main window's application-modal surface — the command
 palette, the keyboard help — registering itself open or closed; main's registry disables input in every persona window
 of that family for the duration, ADR-0048; a persona window sending it is refused `window.notMain`),

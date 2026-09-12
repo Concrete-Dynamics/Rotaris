@@ -1,6 +1,7 @@
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
 import { openTerminalWindow } from '../terminal/host.js'; // Part AL2
 import { compressFromPalette } from '../slash/host.js'; // Part AO
+import { openProjectFolderInNewWindow } from '../workspace-host.js'; // Stage C — PD-SHELL-001
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
@@ -94,6 +95,12 @@ export const COMMANDS: readonly Command[] = [
   // when run while no run executes (the palette hides an unavailable entry, so "listed with its reason" is the refusal on
   // activation); its slash mirror is `/compress-context`, beside the built-in `/compress` (REQ-CHAT-028's rule keeps both).
   { id: 'run.compress', label: 'Compress context', keywords: ['compress', 'context', 'condense', 'compact', 'memory'], available: always, run: () => compressFromPalette() },
+  // Stage C — PD-SHELL-001: one of the add route's exactly two gestures (the other is the chip with the platform's
+  // secondary-activation modifier held). Shortcut-less and labelled as the directive words it. Registering it HERE
+  // rather than binding it privately is what puts it in the keyboard help and the composer's slash catalogue too,
+  // by construction: REQ-SHELL-048 makes this table the window's one action vocabulary. In a window with no opener
+  // bound — an auxiliary window — it does nothing, on the same terms as `Open terminal` above.
+  { id: 'workspace.chooseNewWindow', label: 'Open project folder in a new window', keywords: ['project', 'folder', 'workspace', 'window', 'open', 'second', 'another'], available: always, run: () => { openProjectFolderInNewWindow(); } },
 ];
 
 /** REQ-SHELL-048's last sentence applied to REQ-SHELL-049's table: what is not offered, and why. Owed, not dropped. */

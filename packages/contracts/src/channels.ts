@@ -4,7 +4,7 @@ import { ApprovalPayloadSchema, QuestionPromptSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ConfigSnapshotSchema } from './config.js';
-import { AcknowledgementKindSchema, NoticeSchema } from './notices.js';
+import { AcknowledgementActionSchema, AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 import { RequirementsChangedSchema } from './requirements.js'; // Part AK
 import { TerminalStreamMetaSchema } from './terminal.js';
 
@@ -321,6 +321,8 @@ export const AcknowledgementPublishSchema = z.object({
   title: z.string().min(1),
   body: z.string().optional(),
   timeoutMs: z.number().int().optional(),
+  /** Stage C: at most one action, and only the one `AcknowledgementActionSchema` allows (`PD-WORKSPACE-001`). */
+  action: AcknowledgementActionSchema.optional(),
 });
 export type AcknowledgementPublish = z.infer<typeof AcknowledgementPublishSchema>;
 

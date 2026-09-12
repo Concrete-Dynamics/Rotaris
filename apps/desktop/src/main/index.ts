@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
+import { type AcknowledgementAction, CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type NoticeAction, type NoticeSeverity, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
@@ -1068,10 +1068,30 @@ async function main(): Promise<void> {
    * ADR-0052's per-channel counter is kept honest through `relay.count`, which exists for exactly this case — a
    * delivery made outside `relaySequenced` and `broadcast`, as `main/terminal.ts` does for channel 3.
    */
-  const raiseTransient = (w: MainWindowState, kind: 'info' | 'ok' | 'warn' | 'fail', title: string, body?: string): void => {
+  const raiseTransient = (w: MainWindowState, kind: 'info' | 'ok' | 'warn' | 'fail', title: string, body?: string, action?: AcknowledgementAction): void => {
     if (w.win.isDestroyed()) return;
     relay.count(CHANNEL.acknowledgementPublish);
-    w.win.webContents.send(CHANNEL.acknowledgementPublish, { v: CONTRACT_SCHEMA_VERSION, kind, title, ...(body === undefined ? {} : { body }) });
+    w.win.webContents.send(CHANNEL.acknowledgementPublish, { v: CONTRACT_SCHEMA_VERSION, kind, title, ...(body === undefined ? {} : { body }), ...(action === undefined ? {} : { action }) });
+  };
+
+  /**
+   * REQ-STARTUP-163's rule, which `PD-SHELL-001` and `PD-WORKSPACE-001` both cite rather than restate: whether a
+   * main window already has this directory open. `samePath` is the one place that question is answered — the same
+   * rule REQ-SHELL-021's same-folder test and REQ-STARTUP-052 are taken on.
+   */
+  const windowHolding = (root: string): MainWindowState | undefined => {
+    for (const w of mainWindows.values()) {
+      if (w.win.isDestroyed() || w.workspace === '(no workspace)') continue;
+      if (samePath(root, w.workspace)) return w;
+    }
+    return undefined;
+  };
+
+  /** `PD-WORKSPACE-001`: the folder this window already has open. A transient in THIS window and in no other. */
+  const offerNewSession = (w: MainWindowState, root: string): CommandOutcome => {
+    log(`the chosen folder ${root} is already open in window ${w.wcId}; offering a new session (PD-WORKSPACE-001)`);
+    raiseTransient(w, 'info', 'That project folder is already open in this window.', undefined, { kind: 'start-session', label: 'Start a new session' });
+    return { ok: true, value: { unchanged: true, workspace: w.workspace, offered: 'start-session' } };
   };
 
   /**
@@ -1086,11 +1106,28 @@ async function main(): Promise<void> {
    * What comes back is CANONICAL (REQ-STARTUP-163's rule, through `canonicalPath`): every later comparison and the
    * stored preference must be the resolved form, never the spelling the host dialog happened to hand back.
    */
+  /** The seam's remaining answers, read once so the queue survives across chooser invocations. */
+  const forcedFolders: string[] = (__ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] ?? '' : '').split(';;').filter((s) => s !== '');
   const chooseProjectFolder = async (parent: BrowserWindow, startAt: string | undefined): Promise<string | null> => {
     // Verification only, beside the two seams that already exist. `(cancel)` answers as a dismissal, which is how
     // a proof reaches REQ-SHELL-012's reminder with nobody at the machine.
-    const forced = capturing ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] : undefined;
-    if (forced) { log(`capture: project folder chooser → ${forced}`); return forced === '(cancel)' ? null : canonicalPath(forced); }
+    // The eighty-ninth defect, found by writing `workspace-proof`: this read was gated on `capturing`, which is
+    // `ROTARIS_CAPTURE_PNG` — and that variable ALSO arms the screenshot-and-exit path further down. The seam was
+    // therefore unreachable by the only harness that can drive this flow: a proof that set it to answer the chooser
+    // would have had the app photograph itself and quit instead. The gate is `__ROTARIS_SEAMS__` now, exactly as the
+    // driver endpoint's is (`driverEndpoint` below), so the seam is absent from a packaged build and present for a
+    // driven one. A seam a harness cannot reach is a seam that is not there.
+    const forced = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_PROJECT_FOLDER'] : undefined;
+    if (forced) {
+      // A QUEUE, `;;`-separated, one answer consumed per chooser (the convention `ROTARIS_CAPTURE_CLICKS` uses).
+      // One launch has to answer the chooser differently several times over — cancel, then a folder, then the
+      // folder already open — and a single value would have forced a relaunch per assertion, which is how a
+      // proof ends up measuring a different process than the one whose behaviour it claims. The last answer
+      // repeats once the queue is empty, so a flow that opens one more chooser than expected still terminates.
+      const answer = forcedFolders.length > 1 ? forcedFolders.shift()! : forcedFolders[0]!;
+      log(`capture: project folder chooser → ${answer}`);
+      return answer === '(cancel)' ? null : canonicalPath(answer);
+    }
     const r = await dialog.showOpenDialog(parent, { title: 'Open a project folder', properties: ['openDirectory'], defaultPath: startAt ?? homedir() });
     return r.canceled || r.filePaths.length === 0 ? null : canonicalPath(r.filePaths[0]!);
   };
@@ -1217,6 +1254,47 @@ async function main(): Promise<void> {
     if (!replacement.win.isDestroyed()) replacement.win.focus();
     log(`workspace switched to ${chosen} in window ${replacement.wcId} (REQ-SHELL-017)`);
     return { ok: true, value: { workspace: chosen, wcId: replacement.wcId } };
+  };
+
+  /**
+   * Stage C — `PD-SHELL-001`'s add route. The same builder as the replacement (ADR-0055 consequence 6: two
+   * entrances, one builder), and three deliberate differences from `switchWorkspace` above, each the directive's:
+   *
+   *   - **No gate is evaluated.** An active run, an unsaved settings edit or a running worktree integration — in
+   *     the requesting window or any other — neither blocks this nor is disturbed by it, because this adds a
+   *     window rather than displacing one. That is REQ-STARTUP-163's own reasoning for a launch-carried folder,
+   *     extended to a request raised inside a window.
+   *   - **No window is closed**, so there is no veto to honour and nothing to discard on one.
+   *   - **The last-opened preference is written here**, on REQ-WORKSPACE-005's terms for a folder chosen through
+   *     the chooser — not on REQ-SHELL-017's terms, which make it conditional on the old window closing.
+   *
+   * A failure reports on REQ-SHELL-019's terms and leaves every open window usable, which costs nothing to
+   * guarantee here: nothing has been closed by the time anything can fail.
+   */
+  const addWorkspaceWindow = async (requester: MainWindowState, chosen: string): Promise<CommandOutcome> => {
+    let added: MainWindowState;
+    try {
+      added = await buildMainWindow({ workspace: chosen, origin: 'open-request' });
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      raiseTransient(requester, 'fail', `Could not open the selected project: ${reason}`);
+      log(`the added window could not be built: ${reason} (PD-SHELL-001, REQ-SHELL-019)`);
+      return { ok: false, code: 'workspace.buildFailed', headline: `Could not open the selected project: ${reason}` };
+    }
+    const opened = await openWorkspace(chosen, added).catch(() => undefined);
+    if (!opened) {
+      const reason = `${chosen} could not be opened as a workspace.`;
+      raiseTransient(requester, 'fail', `Could not open the selected project: ${reason}`);
+      log(`the added window could not open ${chosen}; destroying it and leaving every other window as it was`);
+      if (!added.win.isDestroyed()) added.win.destroy();
+      return { ok: false, code: 'workspace.openFailed', headline: `Could not open the selected project: ${reason}` };
+    }
+    // REQ-SHELL-161: show, raise and activate is a REQUEST to the window manager; a decline is a supported
+    // outcome and this still counts as having succeeded, so nothing here retries or reports.
+    if (!added.win.isDestroyed()) { added.win.show(); added.win.focus(); }
+    await preferences.write('workspace/lastOpened', chosen);
+    log(`added main window ${added.wcId} on ${chosen}; ${mainWindows.size} main windows open (PD-SHELL-001)`);
+    return { ok: true, value: { workspace: chosen, wcId: added.wcId, added: true } };
   };
 
   /**
@@ -2089,7 +2167,12 @@ async function main(): Promise<void> {
         // The deferred offer must never appear over a chooser the user opened, and a gate that declines still
         // answered it — the user asked, and was told why not.
         workspaceQuestionAnswered = true;
-        const gated = await workspaceOpenGates(w);
+        // Stage C — `PD-SHELL-001`: the GESTURE decides the route, and it decided before this handler ran. On the
+        // add route REQ-SHELL-021's gates are not evaluated at all; that is the whole difference, and it is why
+        // the flag rides the command rather than being asked after the chooser (REQ-SHELL-164: a native chooser
+        // carries no buttons of ours, so there is nowhere to ask).
+        const adding = req.newWindow === true;
+        const gated = adding ? { ok: true } as const : await workspaceOpenGates(w);
         if (!gated.ok) return gated.outcome;
         const chosen = await chooseProjectFolder(w.win, w.workspace === '(no workspace)' ? undefined : w.workspace);
         if (chosen === null) {
@@ -2098,14 +2181,26 @@ async function main(): Promise<void> {
           raiseTransient(w, 'info', 'Open a project folder when you\'re ready by selecting the workspace path in the title bar.');
           return { ok: true, value: { cancelled: true } };
         }
-        // REQ-WORKSPACE-010 / REQ-SHELL-021: the folder already open builds no replacement and leaves this window
-        // in place. WHETHER it is the folder already open is REQ-STARTUP-163's rule, cited through `samePath`
-        // rather than restated. PD-WORKSPACE-001 adds the new-session offer at this exact point in Stage C.
-        if (w.workspace !== '(no workspace)' && samePath(chosen, w.workspace)) {
-          log(`the chosen folder ${chosen} is already open in window ${w.wcId}; nothing to do (REQ-WORKSPACE-010)`);
-          return { ok: true, value: { unchanged: true, workspace: w.workspace } };
+        /*
+         * Whether the chosen folder is one a window already has open is REQ-STARTUP-163's rule, cited through
+         * `samePath` rather than restated — the same rule both directives cite. Three outcomes, and the route
+         * does not change any of them:
+         *
+         *   - the REQUESTING window already has it open → `PD-WORKSPACE-001`'s offer, which supersedes
+         *     REQ-WORKSPACE-010's silent no-op. No window is built and none is closed.
+         *   - ANOTHER window already has it open → that window is surfaced and none is built, which is what
+         *     REQ-STARTUP-163 fixes for a directory already open somewhere. Building a second window on one
+         *     workspace is the state no requirement asks for and two processes would have produced.
+         *   - nobody has it open → the route decides: add a window, or replace this one.
+         */
+        const holder = windowHolding(chosen);
+        if (holder?.wcId === w.wcId) return offerNewSession(w, chosen);
+        if (holder) {
+          log(`the chosen folder ${chosen} is already open in window ${holder.wcId}; surfacing it and building nothing (REQ-STARTUP-163)`);
+          if (!holder.win.isDestroyed()) { holder.win.show(); holder.win.focus(); }
+          return { ok: true, value: { unchanged: true, workspace: holder.workspace, surfaced: holder.wcId } };
         }
-        return switchWorkspace(w, chosen);
+        return adding ? addWorkspaceWindow(w, chosen) : switchWorkspace(w, chosen);
       }
       case 'session.prompt': {
         const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));

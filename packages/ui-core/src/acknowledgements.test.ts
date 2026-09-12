@@ -10,6 +10,25 @@ describe('the acknowledgement stack — REQ-NOTIFY-011 to REQ-NOTIFY-021', () =>
     expect(ACKNOWLEDGEMENT_STACK_DEPTH).toBe(3);
   });
 
+  it('PD-WORKSPACE-001: carries at most one action, over channel 8 as well as locally', () => {
+    const s = createAcknowledgementStore();
+    s.getState().publish({ kind: 'info', title: 'local', action: { kind: 'start-session', label: 'Start a new session' } });
+    expect(s.getState().items[0]?.action).toEqual({ kind: 'start-session', label: 'Start a new session' });
+
+    // The action has to survive the wire, or main can raise the offer and the window will draw a bare toast.
+    expect(s.getState().apply({
+      v: CONTRACT_SCHEMA_VERSION, kind: 'info', title: 'from main',
+      action: { kind: 'start-session', label: 'Start a new session' },
+    })).toBe(true);
+    expect(s.getState().items.at(-1)?.action?.label).toBe('Start a new session');
+
+    // An acknowledgement without one keeps the field absent rather than carrying an empty object.
+    s.getState().publish({ kind: 'ok', title: 'no action' });
+    expect(s.getState().items.at(-1)?.action).toBeUndefined();
+    // A member outside the one-member union does not parse, which is what keeps this vocabulary closed.
+    expect(s.getState().apply({ v: CONTRACT_SCHEMA_VERSION, kind: 'info', title: 'bad', action: { kind: 'open-settings', label: 'x' } })).toBe(false);
+  });
+
   it('shows three at most, the fourth removing the oldest, and never reorders what stands', () => {
     const s = createAcknowledgementStore();
     for (const t of ['one', 'two', 'three']) s.getState().publish({ kind: 'info', title: t });

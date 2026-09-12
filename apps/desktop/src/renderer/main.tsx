@@ -8,7 +8,7 @@ import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type
 // preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
 import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -497,6 +497,12 @@ bindPromptRootsReader(async () => {
   const r = await bridge.command({ kind: 'prompts.roots.read' });
   return r.ok ? (r.value as PromptsRootsResult) : { files: [], skipped: [{ path: '', reason: r.detail ?? r.headline }] };
 });
+
+// Stage C — PD-SHELL-001's palette entry ("Open project folder in a new window") acts through this. The registry
+// runs against a `CommandContext` that carries no command channel, and `packages/ui` never holds the bridge, so
+// the window binds the opener once at module scope. The command carries no folder: main opens the chooser,
+// evaluates no gate on this route, and adds a window rather than displacing one.
+bindProjectFolderOpener(() => { void bridge.command({ kind: 'workspace.choose', newWindow: true }); });
 
 // Part AN — the two openers the slash catalogue needs from App's own state: the launch dialog (REQ-SHELL-125, `/new`)
 // and the session browser (REQ-SHELL-126, `/resume` and `/sessions`). App registers them once mounted; Workspace calls
@@ -1196,7 +1202,11 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   useEffect(() => {
     slashOpeners.newSession = openStartDialog;
     slashOpeners.openSessions = () => { void loadSessions(); };
-    return () => { delete slashOpeners.newSession; delete slashOpeners.openSessions; };
+    // Stage C — PD-WORKSPACE-001: the transient offer's action opens THIS window's own start-session surface,
+    // the same REQ-SHELL-125 dialog `/new` and the Overview's control open. `Acknowledgements.tsx` is a leaf
+    // with no bridge and no access to App's state, so it reads this binding at the moment it is activated.
+    bindNewSessionOpener(() => { void openStartDialog(); });
+    return () => { delete slashOpeners.newSession; delete slashOpeners.openSessions; bindNewSessionOpener(null); };
   }, [openStartDialog, loadSessions]);
   /** Part U: the browser's actions. Each is a command answered with a value or a reason; the list is read again afterwards. */
   const refreshSessions = useCallback(async (): Promise<void> => {
@@ -1272,7 +1282,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
    * to this window by its sender). The outcome reaches this window as a notice or a new window, never
    * as a return value worth reading here.
    */
-  const chooseWorkspace = useCallback(() => { void bridge.command({ kind: 'workspace.choose' }); }, []);
+  const chooseWorkspace = useCallback((newWindow: boolean) => { void bridge.command({ kind: 'workspace.choose', ...(newWindow ? { newWindow: true } : {}) }); }, []);
   const openRequirementSession = useCallback((id: string) => { void openSession(id); }, [openSession]); // Part AK2 — REQ-TRACE-266/269: the board's session opener is the window's own, memoised so the host is built once.
   return (<>
     <AppShell

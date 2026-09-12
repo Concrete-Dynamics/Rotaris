@@ -203,3 +203,37 @@ directives are committed, and what the committed register claims is checked sepa
 a test that needs to know neither count: `DIRECTIVE_COUNT` must equal the number of `PD` symbols beside it.
 25/25 again. Recorded as the eighty-seventh defect in `codebase.md`'s ledger, which is where a proof defect
 belongs — `first-executions.md` excludes them by its own terms.
+
+## Third execution, 2026-09-12 — a directive that did not name everything it had to govern
+
+Both directives were built the day after they were written, and the behaviour in each held. What did not hold
+was the **disposition list**, and it failed in the one way this layer is least able to absorb.
+
+`PD-WORKSPACE-001` asks for a transient notice carrying one action. `REQ-NOTIFY-013` is the product's single
+definition of that surface and its structure carries no action at all; `REQ-NOTIFY-003` says an outcome carrying
+a recovery action is *additionally* published as a persistent notice, which this offer deliberately is not. The
+directive named `REQ-WORKSPACE-010` and `REQ-SHELL-021` and neither of those two. By this layer's own rule — a
+directive governs over the requirements it names, per identifier and never wholesale — building it as written
+would have been an ungoverned deviation from two live requirements, dressed as compliance with a third.
+
+The fix is bookkeeping, not behaviour: the dispositions now name both, and each carries its back-pointer. Two
+things are worth keeping beside it.
+
+**The specification named its own remedy.** `REQ-NOTIFY-013` ends *"A surface that needs different behaviour
+extends this requirement rather than adding a second acknowledgement surface beside it."* The corpus had already
+been asked this question and had answered it; what was missing was not a decision but a reading.
+
+**The cheap widening was the wrong one, and it was one line away.** The persistent banner already carries
+actions, so adding `start-session` to `NoticeActionSchema` would have compiled and worked. It would also have
+extended `REQ-SHELL-115`'s **closed** list of thirteen operations a banner action may perform — a product
+statement no directive asked for. The transient's action is a closed one-member type of its own instead, and
+`notices.test.ts` now asserts the banner union still refuses `start-session`, so the shortcut fails a test rather
+than passing review.
+
+**What this changes about writing directives.** A directive's dispositions are written by reading the
+requirements the *mechanism* touches, not the ones the request mentions. The request here was about workspaces;
+two of the four requirements it governs belong to notifications. Neither the owner's words nor the domain the
+directive is numbered in would have led anyone to them — only asking "which requirement defines the surface this
+behaviour lands on" does. Recorded as the **eighty-ninth** entry in `codebase.md`'s ledger alongside the seam
+defect found the same hour, and as a row in `first-executions.md`, because this is the directive layer's first
+execution and the rule is that a mechanism's first execution reports back into the record that decided it.

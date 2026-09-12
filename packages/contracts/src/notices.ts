@@ -30,6 +30,25 @@ export const ACKNOWLEDGEMENT_SEVERITY: Readonly<Record<AcknowledgementKind, Noti
 export const ACKNOWLEDGEMENT_KIND_WORDS: Readonly<Record<AcknowledgementKind, string>> = { info: 'Notice', ok: 'Done', warn: 'Warning', fail: 'Failed' };
 
 /**
+ * Stage C — the ONE action a transient acknowledgement may carry, under `PD-WORKSPACE-001`.
+ *
+ * This is deliberately NOT `NoticeActionSchema`. That union is the persistent banner's vocabulary, and
+ * `REQ-SHELL-115` fixes what a banner action may do as a closed list of thirteen operations which does not
+ * include starting a session; widening it would have made a product statement the directive never asked for.
+ * A separate one-member union keeps that list closed and makes the transient's action unable to grow a
+ * vocabulary behind it: a second member is a visible change to this type, not a new string somewhere.
+ *
+ * `REQ-NOTIFY-013` is the product's single definition of this surface and says in its own closing sentence
+ * that a surface needing different behaviour extends it rather than standing a second one beside it — which
+ * is why `PD-WORKSPACE-001` names it, and `REQ-NOTIFY-003`, in its dispositions.
+ */
+export const AcknowledgementActionSchema = z.object({
+  kind: z.literal('start-session'),
+  label: z.string().min(1),
+});
+export type AcknowledgementAction = z.infer<typeof AcknowledgementActionSchema>;
+
+/**
  * REQ-LIBRARY-103: the Library's three tab names, a closed set stated there and cited here. REQ-SHELL-115 names the two a
  * notice action may open. The Library view is not drawn yet; the dispatcher validates against this list and has no target.
  */

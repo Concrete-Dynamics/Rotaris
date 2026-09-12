@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { AcknowledgementPublishSchema, type AcknowledgementKind } from '@rotaris/contracts';
+import { AcknowledgementPublishSchema, type AcknowledgementAction, type AcknowledgementKind } from '@rotaris/contracts';
 
 /**
  * ADR-0049 (Part V) — the transient acknowledgement stack, ONE per window.
@@ -32,12 +32,18 @@ export interface Acknowledgement {
   readonly body: string;
   /** Milliseconds on screen; zero or less never expires (REQ-NOTIFY-020). */
   readonly timeoutMs: number;
+  /**
+   * Stage C — at most one action, under `PD-WORKSPACE-001`, which extends `REQ-NOTIFY-013` to allow it. The
+   * surface draws a control for it; taking it neither closes nor prolongs the acknowledgement, since the
+   * lifetime of REQ-NOTIFY-011 is the surface's and not the action's.
+   */
+  readonly action?: AcknowledgementAction | undefined;
 }
 
 export interface AcknowledgementState {
   readonly items: readonly Acknowledgement[];
   /** Raises one and returns its identifier. The oldest goes where a fourth arrives (REQ-NOTIFY-016). */
-  publish(input: { kind: AcknowledgementKind; title: string; body?: string; timeoutMs?: number }): number;
+  publish(input: { kind: AcknowledgementKind; title: string; body?: string; timeoutMs?: number; action?: AcknowledgementAction }): number;
   /** Channel 8's payload; false where the message did not parse (the window ignores what it cannot read). */
   apply(payload: unknown): boolean;
   /** Removes one by identifier; removing one that is already gone does nothing (REQ-NOTIFY-020). */
@@ -53,9 +59,9 @@ export function createAcknowledgementStore(): AcknowledgementStore {
   let seq = 0;
   return createStore<AcknowledgementState>((set, get) => ({
     items: [],
-    publish({ kind, title, body, timeoutMs }) {
+    publish({ kind, title, body, timeoutMs, action }) {
       const id = ++seq;
-      const item: Acknowledgement = { id, kind, title, body: body ?? '', timeoutMs: timeoutMs ?? ACKNOWLEDGEMENT_LIFETIME_MS };
+      const item: Acknowledgement = { id, kind, title, body: body ?? '', timeoutMs: timeoutMs ?? ACKNOWLEDGEMENT_LIFETIME_MS, ...(action === undefined ? {} : { action }) };
       // Newest last, oldest evicted; no existing member is reordered or replaced where it stands (REQ-NOTIFY-017).
       const kept = [...get().items, item];
       set({ items: kept.length > ACKNOWLEDGEMENT_STACK_DEPTH ? kept.slice(kept.length - ACKNOWLEDGEMENT_STACK_DEPTH) : kept });
@@ -64,8 +70,8 @@ export function createAcknowledgementStore(): AcknowledgementStore {
     apply(payload) {
       const parsed = AcknowledgementPublishSchema.safeParse(payload);
       if (!parsed.success) return false;
-      const { kind, title, body, timeoutMs } = parsed.data;
-      get().publish({ kind, title, ...(body === undefined ? {} : { body }), ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+      const { kind, title, body, timeoutMs, action } = parsed.data;
+      get().publish({ kind, title, ...(body === undefined ? {} : { body }), ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(action === undefined ? {} : { action }) });
       return true;
     },
     close(id) {

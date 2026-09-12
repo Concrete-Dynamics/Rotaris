@@ -41,6 +41,10 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       ['requirements.move', 'Move requirement', 'Ctrl+M'],
       ['terminal.open', 'Open terminal', 'Ctrl+Shift+T'], // Part AL2 — the sixth chord, back from the omitted list
       ['run.compress', 'Compress context', null], // Part AO — REQ-MONITOR-097's palette entry, shortcut-less
+      // Stage C — PD-SHELL-001's palette entry, one of the add route's exactly two gestures. Shortcut-less and
+      // labelled as the directive words it; the pin is what makes a silent relabelling of a directive's own
+      // gesture fail a test rather than pass review.
+      ['workspace.chooseNewWindow', 'Open project folder in a new window', null],
     ]);
   });
 

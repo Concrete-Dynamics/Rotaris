@@ -71,6 +71,8 @@ apps/desktop/.cache/
 .drive/
 .driver-proof/
 .layout-proof/
+# pnpm workspace-proof: one app.log per launch and results.json. Evidence, never content.
+.workspace-proof/
 
 # the token proxy's local history database — a tool artifact, never repository content
 rtk/

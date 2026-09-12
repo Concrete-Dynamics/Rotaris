@@ -29,7 +29,11 @@ window is now built by one builder and lives in a registry keyed by `webContents
 second main window possible and makes a command answerable for the window that sent it; the renderer gains one
 command, `workspace.choose`, carrying no folder so that main owns the gates and the chooser; and main gains the
 `workspace/lastOpened` preference key that no renderer may name. Both are in the process view — the main row and
-the renderer → main command list. No process, channel, message kind, store table, run-loop step, control
+the renderer → main command list. Later the same day, the two product directives: that command gains a `newWindow`
+flag (an added main window, no gate evaluated, nothing closed) and **channel 8's payload gains an optional
+action** — the transient acknowledgement may carry exactly one, a closed one-member type that leaves
+REQ-NOTIFY-044's banner vocabulary and REQ-SHELL-115's closed list untouched; the process view's command list
+carries both. No process, channel, message kind, store table, run-loop step, control
 operation or package edge was added or moved, so the component and runtime views are unchanged, and the window
 role set is unchanged with them: a second main window is another window of the `main` role rather than a new
 role. Before that **2026-09-11** — three times that day. Third, the **driver seam**: main gains a

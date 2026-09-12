@@ -306,6 +306,22 @@
 .ack__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .ack__title { font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium, 500); }
 .ack__body { font-size: var(--rt-text-xs, 12px); }
+/*
+ * Stage C — PD-WORKSPACE-001's single action on a transient. The mockup draws no acknowledgement surface at
+ * all (design README §3.2 lists it among the undrawn), so there is no craft to follow here and this comes from
+ * the language: a quiet text action in the accent, no filled background (G1 keeps severity off fills), at the
+ * body's own scale, sitting under the text rather than beside the close control so the row's shape is unchanged
+ * when there is no action.
+ */
+.ack__action {
+  align-self: flex-start; margin-top: 2px; padding: 2px var(--rt-space-1, 4px);
+  border: 0; border-radius: var(--rt-radius-sm, 5px);
+  background: transparent; color: var(--rt-accent-300);
+  font: inherit; font-size: var(--rt-text-xs, 12px); font-weight: var(--rt-weight-medium, 500);
+  cursor: pointer;
+}
+.ack__action:hover { background: var(--rt-hover); }
+.ack__action:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .ack__close {
   margin-left: auto; flex: none; background: none; border: none; padding: 2px; cursor: pointer;
   color: var(--rt-text-tertiary); font-size: 13px; line-height: 1; border-radius: var(--rt-radius-sm, 4px);

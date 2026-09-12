@@ -93,6 +93,7 @@ notice for a change to a window; and a notice was chosen over a dialog deliberat
 who re-picked their own folder should not be interrupted more heavily than the no-op this replaces.
 
 > **Supersedes:** REQ-WORKSPACE-010
+> **Extends:** REQ-NOTIFY-003, REQ-NOTIFY-013
 > **Extends:** REQ-SHELL-021
 
 *Raised by the owner, 2026-09-12; logged as [R-005](requests.md#r-005).*

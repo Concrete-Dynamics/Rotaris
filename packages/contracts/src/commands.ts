@@ -148,7 +148,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    * Answered `{ cancelled: true }` for a gate that declined or a chooser the user dismissed, which REQ-SHELL-021
    * makes the same observable outcome: no window, workspace or stored preference moves.
    */
-  z.object({ kind: z.literal('workspace.choose') }),
+  /**
+   * Stage B / Stage C. It carries no folder — main owns the gates, the chooser and the reading of every answer.
+   * `newWindow` is `PD-SHELL-001`'s add route, decided by the GESTURE before the chooser opens (a native chooser
+   * carries no buttons of ours, REQ-SHELL-164), and it is the whole difference between the two outcomes: with it,
+   * REQ-SHELL-021's three gates are not evaluated and no window is closed.
+   */
+  z.object({ kind: z.literal('workspace.choose'), newWindow: z.boolean().optional() }),
   z.object({ kind: z.literal('shell.switchView'), view: z.string() }),
   /**
    * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER. The renderer is

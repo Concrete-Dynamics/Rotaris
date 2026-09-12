@@ -1089,6 +1089,81 @@ no-op that names the state it would read. And this product has **no session name
 carries an identifier, a status, a workspace root, timestamps and run state, so `REQ-WORKSPACE-017`'s "the
 current session name (or `—` when there is none)" can only honestly render `—`, which the chip does.
 
+## The two directives, built — and what the directive layer learned about itself (2026-09-12)
+
+`PD-SHELL-001` (a chosen folder may open in an *additional* main window, by a palette entry or the chip with the
+platform's secondary-activation modifier) and `PD-WORKSPACE-001` (choosing the folder a window already has open
+offers a new session) are built. `workspace.choose` carries a `newWindow` flag decided by the **gesture**, before
+the chooser opens, because a native chooser carries no buttons of ours (`REQ-SHELL-164`) and the two routes differ
+in exactly one way that matters: the add route evaluates none of `REQ-SHELL-021`'s gates and closes no window.
+`REQ-STARTUP-163`'s rule — cited by both directives rather than restated — settles all three same-folder cases in
+one place: the requesting window offers a session, another window is surfaced, nobody holding it means the route
+decides.
+
+**The eighty-ninth — a verification seam no harness could reach.** Stage B's project-folder seam read its answer
+behind `capturing`, which is `ROTARIS_CAPTURE_PNG` — and that same variable arms the screenshot-and-exit path. A
+proof that set the seam to answer the chooser would have had the app photograph itself and quit instead, so the
+seam existed and was unreachable by the only harness that can drive the flow. It is gated on `__ROTARIS_SEAMS__`
+now, exactly as the driver endpoint is, and it takes a `;;`-separated queue of answers, because one launch has to
+answer the chooser differently several times over and a single value forces a relaunch per assertion — which is
+how a proof ends up measuring a different process from the one whose behaviour it claims.
+
+**What the directive layer learned about itself, one day after it was written.** Both directives were buildable
+as *behaviour*. Neither named every requirement it had to govern. `PD-WORKSPACE-001` asks for a transient notice
+carrying an action; `REQ-NOTIFY-013` is the product's single definition of that surface and its structure carries
+none, and `REQ-NOTIFY-003` says an outcome carrying a recovery action is *additionally* published as a persistent
+notice — which this offer deliberately is not. The directive named only `REQ-WORKSPACE-010` and `REQ-SHELL-021`.
+Under the layer's own rule — a directive governs over the requirements it names, per identifier and never
+wholesale — that is not a judgement call an implementer may make silently; building it as written would have been
+an ungoverned deviation from two requirements. The dispositions now name both, with back-pointers at each, and
+`REQ-NOTIFY-013` turned out to prescribe the remedy in its own closing sentence: *a surface that needs different
+behaviour extends this requirement rather than adding a second acknowledgement surface beside it.*
+
+One thing was deliberately **not** widened. `REQ-SHELL-115` fixes what a persistent banner action may do as a
+closed list of thirteen operations, and starting a session is not among them. Rather than add a member — a product
+statement no directive asked for — the transient's action is its own closed one-member type, and
+`notices.test.ts` asserts that the banner union still refuses `start-session`. The cheap widening is the one a
+later part would reach for, so the assertion is what keeps the list closed.
+
+**`pnpm workspace-proof` — 24 passed, 0 failed, 2 skipped, and every defect it found was its own.** The flow is
+measured against the built app: the working-directory fallback, `REQ-SHELL-011`'s deferral at 1002 ms against a
+650 ms floor, `REQ-SHELL-012`'s exact reminder, a remembered folder reopened with no prompt, a vanished one
+falling back **without** being overwritten, the chip's name, tooltip and description verbatim, a hostile folder
+name rendered as text, the 1000×680 floor, Return activating the chip, `REQ-SHELL-017`'s build-before-close and
+its preference written only afterwards, `REQ-SHELL-018`'s discarded replacement on a veto, `REQ-SHELL-019`'s
+sentence with the old window still usable, and `PD-SHELL-001`'s two windows alive at once with no gate evaluated
+and both answering for themselves.
+
+Five defects, all in the harness, and **each one would have read as a product failure**:
+
+- A folder literally named `<b>bold</b>` cannot exist on Windows, so rule 3's fixture killed the run before it
+  measured anything. The entity form (`project-&lt;b&gt;-and-{x}`) is the better test anyway: if any surface ever
+  rendered that label as markup, `&lt;b&gt;` would *display* as `<b>`.
+- `d.command` resolves an already-parsed value while `d.eval` resolves a string. Parsing a command's answer
+  failed at the first assertion with `"[object Object]" is not valid JSON`.
+- `d.windows()` answers `{ windows, selected }`, not a list. Three window assertions compared `undefined`,
+  printed `? window(s)` and reported FAIL about a product that had done exactly the right thing.
+- `d.chord` sends `keyDown` and `keyUp` and **no `char` event**, which is what Chromium needs to perform a
+  focused button's native activation; `type`'s Enter path sends all three. So "Return activates the chip" failed
+  for want of a keystroke. Asserting through `type` keeps the activation the platform's, which is the whole
+  reason the chip is a real `<button>` — the fix was to send the right key, never to weaken the claim.
+- `session.start` **carries** its prompt and the schema refuses a start without one, so `{ kind: 'session.start' }`
+  was answered `command.malformed` and the active-run gate went unexercised. This one is the most instructive:
+  the harness reported it as a SKIP with an honest reason, and a skip reads as "the product cannot be asked
+  this" when what was true is "the proof asked wrongly". Gate 3 is the only place `REQ-SHELL-021`'s exact
+  sentence is checked, so it was repaired rather than left skipped, and the choose is now issued with no wait
+  after the start — a sleep there would let a scripted run finish first and turn a real gate into a no-op that
+  passes.
+
+Two further lessons are in the file itself. A proof that dies mid-run reports *nothing* about the assertions
+below the crash, which reads exactly like a shorter proof — so a harness error is now recorded as a failed check
+rather than allowed to kill the process. And one app runs at a time: seven live Electron processes were competing
+with a 650 ms measurement, and a finished launch's socket rejecting with nobody awaiting it took the run down
+twice. The two remaining skips are stated rather than quietly passed, and both are properties of this build
+rather than of the proof: gate 2 has no worktree-integration state to read, and `REQ-STARTUP-043` has no
+observable unshown interval on a route that shows its window in the same turn it builds it. Gate 3 is not among
+them — it passes, with the requirement's own sentence and no chooser opened.
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it

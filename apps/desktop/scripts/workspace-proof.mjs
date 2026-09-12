@@ -1,0 +1,436 @@
+/**
+ * `pnpm workspace-proof` — reaching a project folder from inside the application, measured against the built app.
+ *
+ * Stage A built one window through one builder, Stage B the resolution precedence, the chooser, the gates and the
+ * switch, Stage C the two product directives. None of it had an assertion of its own: `layout-proof` measures the
+ * Workspace grid and `sessions-proof` clicks the title bar's Sessions control, and neither can see a second main
+ * window, a vetoed close or a preference written at the wrong moment.
+ *
+ * Each check here is the one whose absence lets a specific defect live, and the ones that cannot be reached in this
+ * build SKIP with the reason named rather than passing quietly — a proof that reports PASS having tested nothing is
+ * a failure mode this repository has already met (`ui-audit`'s "tested === 0 is a finding").
+ *
+ * The seams: `ROTARIS_DRIVER` (the control socket, `main/driver.ts`) and `ROTARIS_CAPTURE_PROJECT_FOLDER`, a
+ * `;;`-separated QUEUE of answers for the native folder chooser — `(cancel)` answers as a dismissal, which is how
+ * REQ-SHELL-012's reminder is reached with nobody at the machine. Both are compiled out of a packaged build by
+ * `__ROTARIS_SEAMS__`.
+ *
+ * Evidence under `.workspace-proof/`: one `app.log` per launch and `results.json`. `--skip-build` skips the build.
+ *
+ * A trap this file's own first execution fell into, recorded so the next harness does not: the driver's two
+ * reading ops answer in DIFFERENT shapes. `command` and `windows` resolve an already-parsed value (the client
+ * returns `reply.value`), while `eval` resolves a string — which is why every `eval` here evaluates a
+ * `JSON.stringify(...)` and is parsed, and why nothing parses a `command`. Parsing a command's answer fails with
+ * `"[object Object]" is not valid JSON` at the first assertion, before anything has been measured.
+ */
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
+import { startApp } from './lib/driver.mjs';
+
+const output = evidenceDirectory('.workspace-proof');
+rmSync(output, { recursive: true, force: true });
+mkdirSync(output, { recursive: true });
+if (!process.argv.includes('--skip-build')) buildDesktop(output);
+
+const results = [];
+let failures = 0;
+const check = (name, ok, detail) => {
+  results.push({ name, verdict: ok ? 'PASS' : 'FAIL', detail });
+  if (!ok) failures += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
+};
+/** Not reachable in this build, and why. A skip is never a pass: it is counted and printed separately. */
+const skip = (name, reason) => {
+  results.push({ name, verdict: 'SKIP', detail: reason });
+  console.log(`SKIP  ${name} — ${reason}`);
+};
+
+const AGENTS = [
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'runtime:', '  permission_mode: autonomous',
+  'mcp_servers:', '  code_intelligence: { enabled: false }',
+  'rotaris:', '  delegation_strategy: single', '',
+].join('\n');
+
+/** A throwaway project folder. The name is a parameter because REQ-WORKSPACE-149 rule 3 is about names. */
+function project(name) {
+  const root = join(output, name);
+  mkdirSync(join(root, '.rotaris'), { recursive: true });
+  writeFileSync(join(root, 'README.md'), `# ${name}\n`);
+  writeFileSync(join(root, '.rotaris', 'agents.yaml'), AGENTS);
+  return root;
+}
+
+const A = project('project-a');
+const B = project('project-b');
+/**
+ * REQ-WORKSPACE-149 rule 3: a folder name must reach the window as literal text, whatever it contains.
+ *
+ * The obvious fixture — a folder literally named `<b>bold</b>` — cannot exist on this platform: Windows forbids
+ * `<`, `>` and `/` in a path component, and the first attempt died creating the fixture rather than testing
+ * anything. The entity form is the better test anyway: if any surface ever rendered this label as markup, `&lt;b&gt;`
+ * would DISPLAY as `<b>`, so the characters are dangerous exactly where the rule is about. The braces and the
+ * ampersand cover a template literal and an entity, which are the two ways a label reaches code that parses it.
+ */
+const MARKUP_NAME = 'project-&lt;b&gt;-and-{x}';
+const MARKUP = project(MARKUP_NAME);
+
+const launches = [];
+/** Quit every app still running, keeping its log as evidence. Idempotent, so `finally` may call it again. */
+async function closeAll() {
+  for (const { name, started } of launches.splice(0)) {
+    writeFileSync(join(output, `app-${name}.log`), existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
+    await started.driver.quit().catch(() => undefined);
+    started.driver.close();
+    try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
+  }
+}
+/**
+ * One launch of the built app, with its own preference store unless `preferences` is supplied, so a scenario that
+ * asserts what was remembered cannot be contaminated by the one before it.
+ */
+async function launch(name, { workspace, folders = [], extra = {}, preferences } = {}) {
+  // At most ONE app alive at a time. The first version kept every launch open until the end, which cost two
+  // things: seven Electron processes competing for the machine while a 650 ms budget was being measured, and a
+  // crash — a finished launch's driver socket rejects its pending promises when the app exits, and with nobody
+  // awaiting them Node took the unhandled rejection and killed the run after the sixteenth check.
+  await closeAll();
+  const root = join(output, `app-${name}`);
+  if (preferences) {
+    mkdirSync(join(root, 'preferences'), { recursive: true });
+    writeFileSync(join(root, 'preferences', 'preferences.json'), `${JSON.stringify(preferences, null, 2)}\n`);
+  }
+  const started = await startApp({
+    root,
+    ...(workspace === undefined ? {} : { workspace }),
+    timeoutMs: 90_000,
+    extra: { ...(folders.length > 0 ? { ROTARIS_CAPTURE_PROJECT_FOLDER: folders.join(';;') } : {}), ...extra },
+  });
+  launches.push({ name, started });
+  await started.driver.waitFor('.app-shell', { timeoutMs: 30_000 });
+  return started;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * The main windows open, most recently focused first. The driver answers `{ windows, selected }` rather than a
+ * bare list, and the first version of this file read the envelope as the list: every window assertion then
+ * compared `undefined` and reported `? window(s)` — a guard that cannot pass is as useless as one that cannot
+ * fail, and it hid whether the product had done the right thing in three checks at once.
+ */
+const windowsOf = async (d) => {
+  const r = await d.windows();
+  return Array.isArray(r?.windows) ? r.windows : [];
+};
+const logOf = (started) => (existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
+const preferenceFile = (started) => {
+  const file = join(started.preferences, 'preferences.json');
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+};
+/** The elapsed milliseconds between two log lines, read from the log's own timestamps. */
+function elapsedBetween(log, first, second) {
+  const stamp = (needle) => {
+    const line = log.split('\n').find((l) => l.includes(needle));
+    // `[main 2026-09-12T12:44:37.959Z] …` — the process name sits between the bracket and the stamp. The first
+    // version of this anchored the stamp to the bracket, captured nothing, and reported "the log does not carry
+    // both lines" about a log that carried both: a timing assertion that cannot read the clock fails the product
+    // for the harness's mistake, which is the one direction a proof must never fail in.
+    const iso = line?.match(/^\[\w+ ([\d\-T:.Z]+)\]/)?.[1];
+    return iso ? Date.parse(iso) : Number.NaN;
+  };
+  return stamp(second) - stamp(first);
+}
+/** Every acknowledgement currently on screen, with its action label where it carries one. */
+const TOASTS = `JSON.stringify([...document.querySelectorAll('[data-testid="acknowledgement"]')].map((el) => ({
+  title: el.querySelector('[data-testid="acknowledgement-title"]')?.textContent ?? '',
+  action: el.querySelector('[data-testid="acknowledgement-action"]')?.textContent ?? null,
+})))`;
+const CHIP = `JSON.stringify((() => {
+  const el = document.querySelector('.title-bar__workspace');
+  if (!el) return { missing: true };
+  const path = el.querySelector('.title-bar__workspace-path');
+  const b = el.getBoundingClientRect();
+  return {
+    tag: el.tagName, name: el.getAttribute('aria-label'), description: el.getAttribute('aria-description'),
+    tooltip: el.getAttribute('title'), text: el.textContent ?? '', label: path ? path.textContent : null,
+    labelDrawn: path ? path.getBoundingClientRect().width > 0 : false,
+    icon: !!el.querySelector('i.ph'), html: el.innerHTML,
+    // Rule 3: if the label were ever treated as markup, the folder's name would have BUILT this element.
+    parsed: !!el.querySelector('b'),
+    box: { w: Math.round(b.width), h: Math.round(b.height) },
+    focusable: el.tabIndex >= 0 || el.tagName === 'BUTTON',
+  };
+})())`;
+
+try {
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 1 / 2 — cold launch, no argv, nothing remembered: the working directory, then the deferred chooser cancelled.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('cold', { folders: ['(cancel)'] });
+    await sleep(2_500);
+    const log = logOf(s);
+    const hello = await s.driver.command({ kind: 'shell.hello' });
+    const workspace = hello?.value?.workspace ?? '(unread)';
+    check('REQ-SHELL-010 (c): a launch carrying nothing opens on the working directory, not on the sentinel',
+      workspace !== '(no workspace)' && workspace !== '(unread)',
+      `the window is open on ${workspace}`);
+
+    const deferred = elapsedBetween(log, 'loaded for', 'capture: project folder chooser');
+    check('REQ-SHELL-011: the first-launch chooser is deferred at least 650 ms past the window being shown',
+      Number.isFinite(deferred) ? deferred >= 650 : false,
+      Number.isFinite(deferred) ? `${deferred} ms between the window loading and the chooser opening` : 'the log does not carry both lines');
+
+    const toasts = JSON.parse(await s.driver.eval(TOASTS));
+    check('REQ-SHELL-012: cancelling the chooser leaves the desktop usable and shows the reminder',
+      toasts.some((t) => t.title.includes('Open a project folder when you’re ready') || t.title.includes("Open a project folder when you're ready")),
+      `${toasts.length} acknowledgement(s): ${JSON.stringify(toasts.map((t) => t.title))}`);
+    check('REQ-WORKSPACE-009: a cancelled chooser writes no remembered workspace',
+      preferenceFile(s)['workspace/lastOpened'] === undefined,
+      `workspace/lastOpened is ${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 3 / 4 — what is remembered, and what a remembered path that has gone must not become.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('remembered', { preferences: { 'workspace/lastOpened': A }, folders: ['(cancel)'] });
+    await sleep(2_000);
+    const hello = await s.driver.command({ kind: 'shell.hello' });
+    const onA = String(hello?.value?.workspace ?? '').toLowerCase() === A.toLowerCase();
+    check('REQ-WORKSPACE-006: a remembered folder that still exists is reopened with no prompt at all',
+      onA && !logOf(s).includes('capture: project folder chooser'),
+      `open on ${hello?.value?.workspace}, chooser ${logOf(s).includes('capture: project folder chooser') ? 'opened' : 'never opened'}`);
+  }
+  {
+    const gone = join(output, 'deleted-project');
+    const s = await launch('gone', { preferences: { 'workspace/lastOpened': gone }, folders: ['(cancel)'] });
+    await sleep(2_500);
+    const hello = await s.driver.command({ kind: 'shell.hello' });
+    check('REQ-WORKSPACE-007: a remembered folder that no longer exists falls back and is NOT overwritten',
+      String(hello?.value?.workspace ?? '').toLowerCase() !== gone.toLowerCase() && preferenceFile(s)['workspace/lastOpened'] === gone,
+      `open on ${hello?.value?.workspace}; the stored value is still ${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 5 / 14 — the chip itself: what it is, what it says, and the three label rules.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('chip', { workspace: MARKUP, folders: ['(cancel)'] });
+    await sleep(1_200);
+    const chip = JSON.parse(await s.driver.eval(CHIP));
+    check('REQ-SHELL-035 / REQ-WORKSPACE-016: the chip is a button carrying the exact name, tooltip and description',
+      chip.tag === 'BUTTON' && chip.name === 'Open project folder' && chip.tooltip === 'Open another project folder'
+        && chip.description === `Current project: ${MARKUP}. Opens the native project folder chooser.` && chip.focusable,
+      `<${chip.tag}> name=${JSON.stringify(chip.name)} tooltip=${JSON.stringify(chip.tooltip)} description=${JSON.stringify(chip.description)}`);
+    check('REQ-WORKSPACE-017: a folder icon, the path, a · separator and an em dash for the session this product has no name for',
+      chip.icon && chip.text.includes('·') && chip.text.includes('—'),
+      `icon=${chip.icon} text=${JSON.stringify(chip.text)}`);
+    /*
+     * Asserted on the accessible description and on the DOM's shape rather than on a substring of the label,
+     * because the label is subject to rule 2: a narrow window may have elided the very characters being
+     * checked, and an assertion that passes only at one window width is not the rule this requirement states.
+     */
+    check('REQ-WORKSPACE-149 rule 3: a folder name reaches the window as literal text, never as markup',
+      chip.description.includes(MARKUP_NAME) && !chip.parsed && !chip.html.includes('<b>'),
+      `the description carries the raw name (${chip.description.includes(MARKUP_NAME)}), no element was built from it (${!chip.parsed})`);
+
+    // Rule 2 — the budget is the rendered width, so the assertion has to change the width and read the label again.
+    const wide = JSON.parse(await s.driver.eval(CHIP));
+    await s.driver.resize(1_000, 680);
+    await sleep(600);
+    const narrow = JSON.parse(await s.driver.eval(CHIP));
+    const ellipses = (narrow.label ?? '').split('…').length - 1;
+    check('REQ-WORKSPACE-149 rule 2: a narrower window re-elides the label from the middle with exactly one ellipsis',
+      narrow.label !== wide.label ? ellipses === 1 : ellipses === 0,
+      `wide=${JSON.stringify(wide.label)} narrow=${JSON.stringify(narrow.label)} (${ellipses} ellipsis)`);
+    check('REQ-SHELL-022: the window refuses to be smaller than 1000×680',
+      JSON.parse(await s.driver.eval('JSON.stringify({ w: innerWidth, h: innerHeight })')).w >= 990,
+      `the viewport is ${await s.driver.eval('`${innerWidth}x${innerHeight}`')} after asking for 800×600`);
+    await s.driver.resize(1_440, 900);
+
+    // Return activates it: the chooser opens, and the seam's `(cancel)` answers it.
+    const before = (logOf(s).match(/capture: project folder chooser/g) ?? []).length;
+    /*
+     * `type('', { enter: true })` rather than `chord('Return')`, and the difference is the point rather than a
+     * convenience. The driver's `chord` op sends `keyDown` + `keyUp`; its `type` op's Enter path sends
+     * `keyDown` + **`char`** + `keyUp`, and Chromium performs a focused button's native activation only with
+     * that `char` event. `chord` therefore cannot exercise REQ-SHELL-035's Return activation at all — the first
+     * run of this file read that as the product failing to be keyboard-activatable, which it is not: what was
+     * missing was the keystroke. Asserting through `type` keeps the activation the PLATFORM's, which is the
+     * whole reason the chip is a real `<button>`.
+     */
+    await s.driver.eval(`document.querySelector('.title-bar__workspace').focus()`);
+    await s.driver.type('', { enter: true });
+    await sleep(800);
+    const after = (logOf(s).match(/capture: project folder chooser/g) ?? []).length;
+    check('REQ-SHELL-035: Return on the focused chip opens the chooser',
+      after > before, `the chooser opened ${after - before} more time(s) after Return`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 7 — PD-WORKSPACE-001: the folder this window already has open.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('same-folder', { workspace: A, folders: [A] });
+    await sleep(1_200);
+    await s.driver.command({ kind: 'workspace.choose' });
+    await sleep(1_200);
+    const toasts = JSON.parse(await s.driver.eval(TOASTS));
+    const windows = await windowsOf(s.driver);
+    check('PD-WORKSPACE-001: choosing the folder already open offers a new session instead of doing nothing',
+      toasts.some((t) => t.action === 'Start a new session'),
+      `${toasts.length} acknowledgement(s): ${JSON.stringify(toasts)}`);
+    check('PD-WORKSPACE-001: no window is built and none is closed by that offer',
+      windows.length === 1,
+      `${windows.length} main window(s) open`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8 / 9 — the replacement, and the veto that must discard it.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('replace', { workspace: A, folders: [B] });
+    await sleep(1_200);
+    await s.driver.command({ kind: 'workspace.choose' });
+    await sleep(3_000);
+    const log = logOf(s);
+    const windows = await windowsOf(s.driver);
+    check('REQ-SHELL-017: the replacement is built and shown BEFORE the old window is closed',
+      log.indexOf('main window 2 loaded') !== -1 && log.indexOf('main window 2 loaded') < log.indexOf('workspace switched to'),
+      `the build ${log.includes('main window 2 loaded') ? 'is logged' : 'is NOT logged'} ahead of the switch`);
+    check('REQ-SHELL-017: one main window is left, on the chosen folder, and it is what is remembered',
+      windows.length === 1 && preferenceFile(s)['workspace/lastOpened'] === B,
+      `${windows.length} window(s); lastOpened=${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
+  }
+  {
+    const s = await launch('veto', { workspace: A, folders: [B] });
+    await sleep(1_200);
+    // The guard the window's own close asks — the second caller of one mechanism (REQ-SHELL-021 gate 1's note).
+    // ONE expression, not two statements: the driver evaluates what it is given as an expression, so
+    // `x = y; true` fails with "Script failed to execute" — which killed the first two runs of this file after
+    // the sixteenth check and reported nothing at all about the eight assertions below it.
+    await s.driver.eval('Boolean(window.__rotarisCloseGuard = () => false)');
+    await s.driver.command({ kind: 'workspace.choose' });
+    await sleep(3_000);
+    const windows = await windowsOf(s.driver);
+    check('REQ-SHELL-018: a refused close discards the REPLACEMENT and changes nothing',
+      windows.length === 1 && preferenceFile(s)['workspace/lastOpened'] !== B,
+      `${windows.length} window(s); lastOpened=${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 10 — a folder that cannot be opened as a workspace leaves the window usable and says so.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const notADirectory = join(output, 'project-a', 'README.md');
+    const s = await launch('open-failure', { workspace: A, folders: [notADirectory] });
+    await sleep(1_200);
+    await s.driver.command({ kind: 'workspace.choose' });
+    await sleep(3_000);
+    const windows = await windowsOf(s.driver);
+    const shell = JSON.parse(await s.driver.eval(`JSON.stringify({ alive: !!document.querySelector('.app-shell'), body: document.body.innerText.slice(0, 4000) })`));
+    check('REQ-SHELL-019: a failure to open the selected project leaves the old window usable and reports the reason',
+      shell.alive && windows.length === 1 && shell.body.includes('Could not open the selected project'),
+      `${windows.length} window(s), shell ${shell.alive ? 'alive' : 'gone'}, the sentence ${shell.body.includes('Could not open the selected project') ? 'is shown' : 'is NOT shown'}`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 11 — PD-SHELL-001: the add route, and that it evaluates no gate.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('add-window', { workspace: A, folders: [B] });
+    await sleep(1_200);
+    // The unsaved-settings guard says NO. On the add route it is never asked, so this must change nothing.
+    // ONE expression, not two statements: the driver evaluates what it is given as an expression, so
+    // `x = y; true` fails with "Script failed to execute" — which killed the first two runs of this file after
+    // the sixteenth check and reported nothing at all about the eight assertions below it.
+    await s.driver.eval('Boolean(window.__rotarisCloseGuard = () => false)');
+    await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+    await sleep(3_500);
+    const windows = await windowsOf(s.driver);
+    const count = windows.length;
+    const roots = windows.map((w) => String(w.workspace ?? w).toLowerCase());
+    check('PD-SHELL-001: the add route holds TWO main windows open at once, one per project',
+      count === 2 && roots.some((r) => r.includes('project-a')) && roots.some((r) => r.includes('project-b')),
+      `${count} main window(s): ${JSON.stringify(windows)}`);
+    check('PD-SHELL-001: no gate is evaluated on the add route — a guard that refuses every close changes nothing',
+      count === 2 && !logOf(s).includes('REQ-SHELL-021 gate 1'),
+      `the unsaved-settings gate ${logOf(s).includes('REQ-SHELL-021 gate 1') ? 'WAS' : 'was not'} evaluated`);
+    check('PD-SHELL-001 / REQ-WORKSPACE-005: the added window’s folder is what is remembered',
+      preferenceFile(s)['workspace/lastOpened'] === B,
+      `lastOpened=${JSON.stringify(preferenceFile(s)['workspace/lastOpened'])}`);
+
+    // Both windows must be usable: each answers for itself, which is REQ-SHELL-020's attribution.
+    const second = windows.find((w) => String(w.workspace ?? '').toLowerCase().includes('project-b'));
+    if (second) {
+      await s.driver.useWindow('project-b');
+      const shell = await s.driver.eval(`JSON.stringify({ view: document.querySelector('.app-shell')?.dataset?.view ?? null })`);
+      await s.driver.useWindow('project-a');
+      const first = await s.driver.eval(`JSON.stringify({ view: document.querySelector('.app-shell')?.dataset?.view ?? null })`);
+      check('REQ-STARTUP-161: both main windows of the one instance are alive and answer for themselves',
+        JSON.parse(shell).view !== null && JSON.parse(first).view !== null,
+        `project-b is on ${JSON.parse(shell).view}, project-a on ${JSON.parse(first).view}`);
+      await s.driver.useWindow();
+    } else {
+      skip('REQ-STARTUP-161: both main windows answer for themselves', 'the second window was never built, so there is nothing to address');
+    }
+
+    // REQ-STARTUP-163's rule, cited by both directives: a folder already open is SURFACED, never opened twice.
+    await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+    await sleep(2_000);
+    const afterDuplicate = await windowsOf(s.driver);
+    check('REQ-STARTUP-163: choosing a folder another window already holds surfaces that window and builds none',
+      afterDuplicate.length === 2,
+      `${afterDuplicate.length} main window(s) after choosing an already-open folder`);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 6 — the gate with the exact sentence. Left last: it needs a run, and a run leaves state behind.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    const s = await launch('run-active', { workspace: A, folders: [B] });
+    await sleep(1_200);
+    /*
+     * `session.start` CARRIES the prompt — the schema refuses a start without one, and the first run of this
+     * file sent `{ kind: 'session.start' }`, was answered `command.malformed`, and skipped the only assertion
+     * that checks a requirement's exact sentence. There is no separate prompt call to make afterwards.
+     *
+     * And the choose is issued immediately, with no sleep between: the gate reads `runs.active` from the run
+     * host, so what must be true is that a run is in flight at that instant. A wait here would let a scripted
+     * run finish first and turn a real gate into a passing no-op.
+     */
+    const started = await s.driver.command({ kind: 'session.start', prompt: 'Keep running while the gate is asked.' });
+    if (started?.ok) {
+      const answer = await s.driver.command({ kind: 'workspace.choose' });
+      const declined = JSON.stringify(answer).includes('Finish the active run before opening another project.');
+      const log = logOf(s);
+      check('REQ-SHELL-021 gate 3: with a run active the flow is declined with the exact sentence and no chooser opens',
+        declined && (log.match(/capture: project folder chooser/g) ?? []).length === 0,
+        declined ? 'declined with the requirement’s own sentence, and the chooser never opened' : `the answer was ${JSON.stringify(answer).slice(0, 300)}`);
+    } else {
+      skip('REQ-SHELL-021 gate 3: the active-run decline', `no session could be started to make a run active (${JSON.stringify(started).slice(0, 200)})`);
+    }
+    skip('REQ-SHELL-021 gate 2: the worktree-integration decline',
+      'no in-flight worktree integration is observable from main in this build — `worktree.integrate` does not exist and `integrating` is an unread MERGE_STATUSES member, so the gate has no state to read');
+    skip('REQ-STARTUP-043: a constructed-but-unshown window opens no network connection',
+      'the add route shows its window in the same turn it builds it, so there is no observable unshown interval to measure from outside the process');
+  }
+} catch (cause) {
+  /*
+   * A harness error is a FAILURE OF THIS FILE and is reported as one, rather than being allowed to kill the
+   * run. Twice now an exception after the sixteenth check took the process down with a stack trace, and the
+   * eight assertions below it reported nothing — neither pass nor fail — which reads exactly like a shorter
+   * proof. A proof that stops early must say so in the same place it says everything else.
+   */
+  check('the harness ran to the end', false, `it threw instead: ${cause instanceof Error ? cause.message : String(cause)}`);
+} finally {
+  await closeAll();
+  writeFileSync(join(output, 'results.json'), `${JSON.stringify({ checks: results, failures }, null, 2)}\n`);
+}
+
+const passed = results.filter((r) => r.verdict === 'PASS').length;
+const skipped = results.filter((r) => r.verdict === 'SKIP').length;
+console.log(`\n${passed} passed, ${failures} failed, ${skipped} skipped — evidence in ${output}`);
+process.exit(failures === 0 ? 0 : 1);

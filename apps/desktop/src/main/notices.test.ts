@@ -193,6 +193,11 @@ describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
     expect(NoticeActionSchema.safeParse({ kind: 'open-view', view: 'terminal' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'open-library', tab: 'prompts' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'delete-everything' }).success).toBe(false);
+    // Stage C — PD-WORKSPACE-001 gave the TRANSIENT surface one action and left this union alone, because
+    // REQ-SHELL-115 fixes what a banner action may do as a closed list of thirteen which does not include
+    // starting a session. This assertion is what keeps that list closed: the transient's action is a type of
+    // its own (`AcknowledgementActionSchema`), and a later part reaching for the easy widening fails here.
+    expect(NoticeActionSchema.safeParse({ kind: 'start-session' }).success).toBe(false);
     expect(NoticeActionSchema.safeParse({ kind: 'focus-session' }).success).toBe(false);
     // ESC-34: both members added on 2026-09-06 carry their object — the review always, the setup where one is named.
     expect(NoticeActionSchema.safeParse({ kind: 'open-hook-review' }).success).toBe(false);

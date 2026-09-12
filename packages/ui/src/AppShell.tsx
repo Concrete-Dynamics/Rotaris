@@ -42,8 +42,11 @@ export interface AppShellProps {
   readonly home?: string | undefined;
   /** REQ-WORKSPACE-017's session half; `—` is drawn for its absence, which is all this product has. */
   readonly sessionName?: string | null | undefined;
-  /** REQ-SHELL-035: activating the chip opens the chooser flow of REQ-SHELL-021 (`workspace.choose`). */
-  readonly onChooseWorkspace?: (() => void) | undefined;
+  /**
+   * REQ-SHELL-035: activating the chip opens the chooser flow of REQ-SHELL-021 (`workspace.choose`).
+   * `newWindow` is `PD-SHELL-001`'s add route, true when the secondary-activation modifier was held.
+   */
+  readonly onChooseWorkspace?: ((newWindow: boolean) => void) | undefined;
   readonly statusItems: readonly StatusItem[];
   readonly views?: Partial<Record<ViewId, ReactNode>>;
   /** ADR-0049: the one current notice, mirrored from main's store; the banner itself is `Notice.tsx`. */

@@ -29,8 +29,14 @@ import type { CommandOutcome } from '@rotaris/contracts';
  */
 
 export interface DriverDeps {
-  /** The window the driver acts on; `null` once it is gone, which every op reports rather than throwing. */
-  window: () => BrowserWindow | null;
+  /**
+   * The window the driver acts on; `null` when the selector names none, which every op reports rather than
+   * throwing. `which` is an index into the most-recently-focused ordering or a suffix of a window's workspace
+   * path; absent means the active window, which is what every proof written before two windows existed meant.
+   */
+  window: (which?: string) => BrowserWindow | null;
+  /** Every main window open, in that same order — what a proof asserting on two windows reads. */
+  windows: () => readonly { readonly index: number; readonly workspace: string; readonly wcId: number }[];
   timers: Timers;
   monotonic: MonotonicClock;
   log: (message: string) => void;
@@ -52,6 +58,8 @@ interface Request {
   expression?: string;
   path?: string;
   chord?: string;
+  /** A4: which main window an op acts on, and what `useWindow` selects for the ops after it. */
+  window?: string;
   enter?: boolean;
   width?: number;
   height?: number;
@@ -144,9 +152,28 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
     try { rmSync(endpointFile, { force: true }); } catch { /* the endpoint file is evidence, not state; its removal never fails a run */ }
   };
 
-  const windowOrThrow = (): BrowserWindow => {
-    const win = deps.window();
-    if (!win || win.isDestroyed()) throw new Error('the main window is gone');
+  /**
+   * A4: which window the ops act on. `useWindow` sets it, a per-request `window` overrides it for one op, and
+   * absent means the active window — so every proof written when there was only one keeps its meaning.
+   */
+  let selected: string | undefined;
+
+  /**
+   * A selection that names no window is REFUSED, and the refusal says what is open.
+   *
+   * That is the eighty-fourth defect's lesson applied to a second case: the `resize` op used to call
+   * `setContentSize` — a no-op on a maximized window — and then return `getContentSize()`, reporting a size
+   * nobody had asked for, so a whole size sweep was measured at one size and read as three. A driver that
+   * cannot do what it was told must say so, or every assertion downstream of it is about a window that never
+   * existed. Selecting a window is the same shape: silently falling back to the active window would let a
+   * two-window assertion pass while measuring one window twice.
+   */
+  const windowOrThrow = (which = selected): BrowserWindow => {
+    const win = deps.window(which);
+    if (!win || win.isDestroyed()) {
+      if (which === undefined) throw new Error('the main window is gone');
+      throw new Error(`no main window matches ${JSON.stringify(which)}; open: ${JSON.stringify(deps.windows())}`);
+    }
     return win;
   };
 
@@ -192,7 +219,18 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
     const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     switch (request.op) {
       case 'ping':
-        return { pid: process.pid, window: deps.window() !== null };
+        return { pid: process.pid, window: deps.window(selected) !== null };
+      /** A4: the main windows open, so a proof can assert on two of them rather than on "the" window. */
+      case 'windows':
+        return { windows: deps.windows(), selected: selected ?? null };
+      /** A4: point the ops after this one at a window. Refuses rather than silently keeping the old one. */
+      case 'useWindow': {
+        const which = request.window;
+        if (which === undefined) { selected = undefined; return { selected: null }; }
+        windowOrThrow(which);
+        selected = which;
+        return { selected: which };
+      }
       case 'waitFor': {
         if (!request.selector) throw new Error('waitFor needs a selector');
         return waitFor(request.selector, request.text, timeoutMs);

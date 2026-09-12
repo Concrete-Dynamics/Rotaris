@@ -81,6 +81,13 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     endpoint,
     send,
     ping: () => send('ping'),
+    /** A4: the main windows open, most recently focused first — what a two-window assertion reads. */
+    windows: () => send('windows'),
+    /**
+     * A4: point every op after this one at a window, by index or by a suffix of its workspace path. Pass
+     * nothing to go back to the active window. A selector matching no window is refused, not ignored.
+     */
+    useWindow: (which) => send('useWindow', which === undefined ? {} : { window: String(which) }),
     waitFor: (selector, options = {}) => send('waitFor', { selector, ...options }),
     click: (selector, options = {}) => send('click', { selector, ...options }),
     type: (text, options = {}) => send('type', { text, ...options }),

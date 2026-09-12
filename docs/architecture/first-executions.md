@@ -90,6 +90,7 @@ file leaves the hole open rather than inventing a row to fill it.
 | 2026-09-09 | the delivery store and requirements contracts (Part AK) | ADR-0041 | 46 *(codebase)* | one at the Part, and `sessions-proof`'s fifteen-table cascade pin at the merge-1 proof pass |
 | 2026-09-09 | the terminal stream in the run host (Part AL) | ADR-0021 | 50–52 *(codebase)* | three, the last being two registered keys nothing read |
 | 2026-09-09 | the terminal grid and pop-out content (Part AM) | ADR-0047 | 53–55 *(codebase)* | three, over a scripted frame source |
+| 2026-09-12 | the main window builder and the registry over MAIN windows | ADR-0048 / ADR-0055 | — | **found nothing**; the three defects it exposed were in the code it replaced, and two orderings turned out load-bearing that paper had not shown |
 | **2026-09-11** | **the live run** (`pnpm live-run`) | **`AGENTS.md`** | — | **the persisted tool-call total was the entry agent's own, not the session's** (`REQ-MONITOR-102`): `sessions.tool_calls = 9` against 25 ring rows, so Overview's card read short and the synthetic run row read **0 tool calls** on any run that delegated |
 | **2026-09-11** | **the requirements board against a real model** (`pnpm live-run --only=requirements`, the fifth scenario) | **`codebase.md`** (the live-run record) | **81** *(codebase)* | **a store whose every document was rejected read exactly like an empty one**: the body state was decided from the card count alone, so the board said "holds no requirement documents yet" and named nothing while the projection carried the engine's errors. Found by the hand-driven precursor; the scenario built from it then passed 21 checks at once and found nothing of its own |
 | **2026-09-12** | **the product-directive layer's enforcement** (`pnpm directive-proof`) | **`../product/README.md`** | — *(toolchain, not the product ledger)* | **the check refused a directive that displaces nothing**: the symbol generator decided whether a directive had stated a disposition by counting the requirement identifiers it named, and `New` names none, so every directive adding behaviour the product did not have before was rejected with the message meant for one that had said nothing at all. Nine of the ten counterfactuals passed on the first run — the check was not weak, it was wrong in one direction, and that direction was the strict one |
@@ -113,7 +114,7 @@ its five Parts in merge order from 46 and carries on to **80**.
 inside the other's, which is precisely what "a changed requirement gets a new revision, not a new number"
 forbids by analogy. So:
 
-- **`codebase.md` holds the canonical defect ledger** — continuous, current, 1→80, counting *every defect the
+- **`codebase.md` holds the canonical defect ledger** — continuous, current, 1→86, counting *every defect the
   build found, whatever found it*. **Anywhere but this file's own table, a number cited without a ledger means
   this one**; inside the table the historic rows predate it, so there an unlabelled number is ADR-0058's.
 - **ADR-0058's sentence is a superseded parallel narrative**, 1→53, closed on 2026-09-11, counting *mechanisms

@@ -9,7 +9,7 @@ import { createLibraryRevision } from './library.js';
 import { startDriver } from './driver.js';
 // Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
 import { createRequirementsRelay } from './requirements.js';
-// Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey` beside `currentWorkspace`).
+// Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
@@ -142,7 +142,103 @@ async function main(): Promise<void> {
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
-  let currentWorkspaceId: string | undefined;
+  /**
+   * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
+   *
+   * What belongs to ONE MAIN WINDOW rather than to the application, gathered into a record so that the
+   * application-wide services around it — the notice store, the workspace open, the board's run coordinator —
+   * read a window's state through a holder instead of through a variable that assumes there is only ever one.
+   * The capacity is still exactly one and nothing here changes behaviour; lifting it is A3's job, and the
+   * reason it is worth a step of its own is that `REQ-SHELL-017` needs two of these alive at once.
+   */
+  interface MainWindowState {
+    readonly win: BrowserWindow;
+    readonly wcId: number;
+    /** REQ-SHELL-010's resolved workspace for this window, or the sentinel until one is open. */
+    workspace: string;
+    /** The identifier the workspace service answered with (REQ-SESSION-197), once its store is open. */
+    workspaceId: string | undefined;
+    /** REQ-SHELL-072 / REQ-NOTIFY-028: the session this window's renderer last subscribed to. */
+    followedSessionId: string | null;
+    /**
+     * A3 — REQ-TOOLS-063: "exactly one approval dialog is open **per window**, and approval dialogs never
+     * stack". So the pending queue and the dialog that is up are the WINDOW's, not the application's. They had
+     * been one of each for the whole process, which satisfied the requirement only while there was one window:
+     * with two, one window's approval would have blocked the other's, and the parent was picked by scanning
+     * `getAllWindows()` — so project A's permission prompt could have opened over project B's window. ADR-0019
+     * measured what that costs: a prompt the user cannot answer where they are looking lapses, and a lapsed
+     * presenter denies the agent's own tool calls silently.
+     */
+    approvals: ApprovalPayload[];
+    openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null;
+    /**
+     * ADR-0048: at most one persona window PER PERSONA and exactly one terminal window PER MAIN WINDOW, all
+     * owned by their main window and destroyed with it. Two main windows therefore need two of each registry,
+     * which is why these are the window's and not the process's.
+     */
+    readonly personaWindows: PersonaWindows;
+    readonly terminalWindows: TerminalWindows;
+    /** REQ-GIT-118: the id the launch dialog last showed in THIS window, consumed by its next isolated start. */
+    mintedSessionId: string | null;
+  }
+  /**
+   * A2 — the registry, and ADR-0055 consequence 5's ordering. Keyed by the window's `webContents` id, which is
+   * what every message from a renderer carries, so "which window asked this" is a lookup rather than a guess.
+   * `order` is most-recently-focused first and is maintained on FOCUS rather than on creation, because
+   * `REQ-STARTUP-162` needs "the main window that most recently held keyboard focus, falling back to the one
+   * built first" and that ordering "must survive a workspace switch in which two main windows are briefly
+   * alive at once". Persona and terminal windows are deliberately absent: they are not main windows.
+   *
+   * The capacity is still one until A3. What this step buys is that nothing below asks "the main window" any
+   * more — it asks for the ACTIVE one or for the SENDER's one, and those two questions have different answers
+   * the moment there are two.
+   */
+  const mainWindows = new Map<number, MainWindowState>();
+  const focusOrder: number[] = [];
+  const rememberFocus = (id: number): void => {
+    const at = focusOrder.indexOf(id);
+    if (at >= 0) focusOrder.splice(at, 1);
+    focusOrder.unshift(id);
+  };
+  const forgetWindow = (id: number): void => {
+    mainWindows.delete(id);
+    const at = focusOrder.indexOf(id);
+    if (at >= 0) focusOrder.splice(at, 1);
+  };
+  /** The window a message came from, when that sender is a main window at all (a dialog or a persona window is not). */
+  const windowFor = (senderId: number): MainWindowState | undefined => mainWindows.get(senderId);
+  /**
+   * REQ-STARTUP-162's ordering: most recently focused, else the one built first. Every application-wide service
+   * that has to name *a* window — the notice store's focused session, the provider bootstrap, a notice's recovery
+   * action — reads this one rather than a variable that assumed there was only ever one window to read.
+   */
+  const activeWindow = (): MainWindowState | undefined => {
+    for (const id of focusOrder) { const w = mainWindows.get(id); if (w && !w.win.isDestroyed()) return w; }
+    for (const w of mainWindows.values()) if (!w.win.isDestroyed()) return w;
+    return undefined;
+  };
+  /**
+   * The live main windows in REQ-STARTUP-162's order — most recently focused first, then the rest as built.
+   * The driver seam reads this to address a window by index (A4); nothing in the product depends on it.
+   */
+  const orderedMainWindows = (): readonly MainWindowState[] => {
+    const out: MainWindowState[] = [];
+    const seen = new Set<number>();
+    for (const id of focusOrder) {
+      const w = mainWindows.get(id);
+      if (w && !w.win.isDestroyed()) { out.push(w); seen.add(id); }
+    }
+    for (const [id, w] of mainWindows) if (!seen.has(id) && !w.win.isDestroyed()) out.push(w);
+    return out;
+  };
+  /**
+   * REQ-TRACE-312's per-workspace fold key reads the active window's workspace, and the literal fallback key
+   * when there is none — which is why it is a function and not a value: the answer changes with the window.
+   */
+  const foldsWorkspace = (): string | undefined => {
+    const w = activeWindow();
+    return w === undefined || w.workspace === '(no workspace)' ? undefined : w.workspace;
+  };
   // The window paints BEFORE the workspace opens (REQ-STARTUP-156's first paint comes first), so a view's start-time
   // read — the Overview's session list and repository read (REQ-GIT-102: "beginning after the window has first been
   // drawn") — arrives while no workspace is open yet. Found on the Overview's first execution (ADR-0055 note): those
@@ -181,7 +277,10 @@ async function main(): Promise<void> {
     // W-18: the run host is HANDED the resolved path; it never reads the identifier file.
     const ack = await runHost.request({ kind: 'workspace.opened', workspaceId: opened.workspaceId, storeFile: opened.storeFile, workspaceRoot: key }, millis(5_000));
     log(`workspace ${key} → ${opened.workspaceId} (schema v${opened.schemaVersion}); run host: ${ack.kind}`);
-    if (ack.kind === 'workspace.ack') currentWorkspaceId = opened.workspaceId;
+    // A2: the window this open was performed for. B gives `openWorkspace` an explicit window; until then the
+    // active one is the only one, and naming it here is what makes that assumption visible instead of implicit.
+    const opening = activeWindow();
+    if (ack.kind === 'workspace.ack' && opening) opening.workspaceId = opened.workspaceId;
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
@@ -217,7 +316,7 @@ async function main(): Promise<void> {
     pushAcknowledgement: (a) => relay.broadcast(CHANNEL.acknowledgementPublish, a),
     // REQ-NOTIFY-268: the entry goes to the session's timeline, which the run host owns (ADR-0002); main never writes it.
     record: async (entry) => {
-      const workspaceId = currentWorkspaceId;
+      const workspaceId = activeWindow()?.workspaceId;
       if (workspaceId === null || workspaceId === undefined) return false;
       // REQ-SESSION-134: the entry's severity is the record's own column. The notice vocabulary of REQ-NOTIFY-023 is
       // not the timeline's (it carries `success`, which no timeline entry may), so it is mapped rather than passed
@@ -227,7 +326,7 @@ async function main(): Promise<void> {
       return r?.kind === 'timeline.appended';
     },
     log,
-    focusedSession: () => followedSessionId,
+    focusedSession: () => activeWindow()?.followedSessionId ?? null,
   });
   /**
    * Part X (REQ-LIBRARY-105): the library revision, and the ONE place it is broadcast from. `bump` takes a member of
@@ -381,43 +480,77 @@ async function main(): Promise<void> {
   };
   /** After any change to the credential store or the snapshot: the workspace's starter file if absent, the load again, every window told. */
   const afterProviderChange = async (): Promise<void> => {
-    if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return;
-    const svc = services.get(canonicalPath(currentWorkspace));
+    const target = activeWindow();
+    if (!target?.workspaceId || target.workspace === '(no workspace)') return;
+    const root = canonicalPath(target.workspace);
+    const svc = services.get(root);
     if (!svc) return;
-    const r = await svc.link.request({ kind: 'config.bootstrap', workspaceRoot: canonicalPath(currentWorkspace) }, millis(30_000)).catch(() => null);
+    const r = await svc.link.request({ kind: 'config.bootstrap', workspaceRoot: root }, millis(30_000)).catch(() => null);
     if (r?.kind === 'config.snapshot') for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
     // ADR-0037 Tier B: the run host's next load folds the snapshot itself; nothing to hand over.
     if (notices.current()?.title === NO_PROVIDER_HEADLINE && providers.list().some((row) => row.authenticated)) void notices.dismiss(notices.current()?.id);
   };
-  const queue: ApprovalPayload[] = [];
-  let openDialog: { requestId: string; win: BrowserWindow; answered: boolean } | null = null;
   const parentWindowIds = new Set<string>();
-  const presentNext = async (): Promise<void> => {
-    if (openDialog || queue.length === 0) return;
-    queue.sort((a, b) => a.sequence - b.sequence);
-    const payload = queue.shift()!;
-    const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id));
-    if (!parent) { await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined); return; }
+  /**
+   * A3 — which main window owns a session's approval. `REQ-TOOLS-063` ends "each presentation makes the dialog
+   * the focused window of **its parent**", so the parent has to be the window the run is being watched in
+   * rather than whichever window `getAllWindows()` happened to list first.
+   *
+   * The answer is derived, not chosen: a session belongs to one workspace, and at most one main window is open
+   * on a workspace — `REQ-STARTUP-163` surfaces the existing window rather than building a second for a folder
+   * already open, and the same-folder case offers a new session instead (the owner's decision recorded with
+   * this part). `REQ-MONITOR-243`'s "one live session may be displayed in as many windows as the user has open"
+   * is therefore about persona and terminal windows, not two main windows on one folder. So:
+   *
+   *   1. the MAIN window subscribed to that session, which the relay already knows (ADR-0043's subscription is
+   *      bound to the sender, so this needs no second bookkeeping);
+   *   2. else the active main window — where a background session's first approval lands.
+   */
+  const ownerOf = (sessionId: string): MainWindowState | undefined => {
+    for (const sink of relay.subscribersOf(sessionId)) {
+      const w = mainWindows.get(sink.id);
+      if (w && !w.win.isDestroyed()) return w;
+    }
+    return activeWindow();
+  };
+  /**
+   * The main window that owns an AUXILIARY window, found by asking each window's own registries whether the
+   * sender is theirs (ADR-0048: a persona or terminal window belongs to its main window). A payload command
+   * from one of those windows arrives from the auxiliary window itself, so `windowFor` — which answers only for
+   * main windows — cannot resolve it, and with two main windows alive "the main window" is not an answer.
+   */
+  const ownerOfAuxiliary = (senderId: number): MainWindowState | undefined => {
+    for (const w of mainWindows.values()) {
+      if (w.personaWindows.bySender(senderId) ?? w.terminalWindows.bySender(senderId)) return w;
+    }
+    return undefined;
+  };
+  const presentNext = async (w: MainWindowState): Promise<void> => {
+    if (w.openDialog || w.approvals.length === 0) return;
+    // REQ-TOOLS-061/063: oldest first by the published sequence, which ADR-0019 states orders presentation ACROSS windows.
+    w.approvals.sort((a, b) => a.sequence - b.sequence);
+    const payload = w.approvals.shift()!;
+    if (w.win.isDestroyed()) { await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined); return; }
     const dlg = new BrowserWindow({
-      parent, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: themeBackground(),
+      parent: w.win, modal: true, width: 560, height: 380, minWidth: 560, minHeight: 380, show: false, title: 'Permission required', backgroundColor: themeBackground(),
       resizable: true, minimizable: false, maximizable: false,
       webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     const entry = { requestId: payload.request_id, win: dlg, answered: false };
-    openDialog = entry;
+    w.openDialog = entry;
     // Read once, up front: `webContents` on a destroyed window throws, and a throw from a `closed` handler is an
     // uncaught exception that raises the platform's native error box and wedges main (found on first execution).
     const dlgWcId = dlg.webContents.id;
     dialogs.set(dlgWcId, entry);
-    dialogPayloads.set(dlgWcId, { payload, othersWaiting: queue.length });
+    dialogPayloads.set(dlgWcId, { payload, othersWaiting: w.approvals.length });
     dlg.setMenuBarVisibility(false);
     dlg.on('closed', () => {
       dialogs.delete(dlgWcId);
       dialogPayloads.delete(dlgWcId);
-      if (openDialog === entry) openDialog = null;
+      if (w.openDialog === entry) w.openDialog = null;
       // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
       if (!entry.answered) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
-      clocks.timers.after(millis(50), () => { void presentNext(); });
+      clocks.timers.after(millis(50), () => { void presentNext(w); });
     });
     try {
       if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?role=approval`);
@@ -425,7 +558,7 @@ async function main(): Promise<void> {
       dlg.show();
       dlg.focus();
       await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: true }, millis(5_000));
-      log(`approval ${payload.request_id} presented (${payload.tool_name}, rule ${payload.rule_id}); ${queue.length} waiting`);
+      log(`approval ${payload.request_id} presented (${payload.tool_name}, rule ${payload.rule_id}); ${w.approvals.length} waiting`);
       // Verification seam (only with ROTARIS_CAPTURE_PNG): answer the dialog with a real click or Escape.
       const scripted = capturing ? process.env['ROTARIS_CAPTURE_APPROVAL'] : undefined;
       if (scripted) {
@@ -457,8 +590,9 @@ async function main(): Promise<void> {
    */
   const reviewPayloads = new Map<number, { workspace: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>();
   const openHookReview = async (): Promise<CommandOutcome> => {
-    if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reviewing its hooks' };
-    const r = await runHost.request({ kind: 'hooks.summary', workspaceId: currentWorkspaceId }, millis(10_000));
+    const workspaceId = activeWindow()?.workspaceId;
+    if (!workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reviewing its hooks' };
+    const r = await runHost.request({ kind: 'hooks.summary', workspaceId }, millis(10_000));
     if (r.kind !== 'hooks.summary') return refusal(r, 'The hooks could not be read');
     if (r.summary.declaredCount === 0) return { ok: false, code: 'hooks.none', headline: 'This workspace declares no hooks' };
     const parent = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !dialogs.has(w.webContents.id) && !reviewPayloads.has(w.webContents.id));
@@ -468,7 +602,6 @@ async function main(): Promise<void> {
       webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     const wc = dlg.webContents.id;
-    const workspaceId = currentWorkspaceId;
     const entry = { workspace: r.summary.workspace, entries: r.summary.review, decided: false, win: dlg };
     reviewPayloads.set(wc, entry);
     dlg.setMenuBarVisibility(false);
@@ -517,12 +650,24 @@ async function main(): Promise<void> {
       // ADR-0019: the reply carries the windows main holds; answered at once, never from a blocked loop.
       void runHost.request({ kind: 'presenter.pollReply', seq: e.seq, windows: [...parentWindowIds] }, millis(5_000)).catch(() => undefined);
     }
-    else if (e.kind === 'approval.present') { queue.push(e.payload); void presentNext(); }
+    else if (e.kind === 'approval.present') {
+      // A3: the request joins the queue of the window the run is being watched in, and only that window
+      // presents it. With no main window at all there is nobody to ask, which REQ-TOOLS-064 answers through
+      // the headless policy — main says "not shown" and decides nothing itself (ADR-0019).
+      const owner = ownerOf(e.payload.session_id);
+      if (owner) { owner.approvals.push(e.payload); void presentNext(owner); }
+      else void runHost.request({ kind: 'approval.shown', requestId: e.payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined);
+    }
     else if (e.kind === 'approval.close') {
-      // Answered or cancelled elsewhere: the open dialog closes without asking again; a queued one is dropped unshown.
-      const idx = queue.findIndex((p) => p.request_id === e.requestId);
-      if (idx >= 0) queue.splice(idx, 1);
-      if (openDialog && openDialog.requestId === e.requestId) { openDialog.answered = true; if (!openDialog.win.isDestroyed()) openDialog.win.close(); }
+      // Answered or cancelled elsewhere: the open dialog closes without asking again; a queued one is dropped
+      // unshown. Every window is searched, because the request was queued against its owner rather than
+      // against the active window, and the two need not be the same.
+      for (const candidate of mainWindows.values()) {
+        const idx = candidate.approvals.findIndex((p) => p.request_id === e.requestId);
+        if (idx >= 0) candidate.approvals.splice(idx, 1);
+        const open = candidate.openDialog;
+        if (open && open.requestId === e.requestId) { open.answered = true; if (!open.win.isDestroyed()) open.win.close(); }
+      }
     }
     else if (e.kind === 'notice.publish') {
       // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
@@ -531,7 +676,7 @@ async function main(): Promise<void> {
       void notices.report({
         severity: e.severity, title: e.title, message: e.message, detail: e.detail, persistent: e.persistent, sessionId: e.sessionId,
         ...(e.key === undefined ? {} : { key: e.key }),
-        ...(recoveryFor(e.action, currentWorkspace).length === 0 ? {} : { action: recoveryFor(e.action, currentWorkspace)[0]! }),
+        ...(recoveryFor(e.action, activeWindow()?.workspace).length === 0 ? {} : { action: recoveryFor(e.action, activeWindow()?.workspace)[0]! }),
       });
       log(`notice from the run host: ${e.title}${e.action ? ` [${e.action}]` : ''}${e.sessionId === '' ? '' : ` (session ${e.sessionId})`}`);
     }
@@ -567,14 +712,15 @@ async function main(): Promise<void> {
   const terminalFrames = new FrameDeliveryLimiter({ relay, clocks, log });
   runHost.onEvent((e) => { if (e.kind === 'publish.terminal') terminalFrames.deliver(e.payload); });
   const processes: ProcessKind[] = ['run-host'];
-  let currentWorkspace = argvWorkspace ?? '(no workspace)';
+  // A1: the resolved workspace is a field of the window record built below. Nothing outside a window may
+  // assume there is one, so every reader above that point goes through `mainWindow`.
   // Part AK2 — REQ-TRACE-312 (spec 08 §Persisted state): the board's column folds are keyed by the workspace this
   // instance has open, and the renderer names them by the ONE placeholder `contracts` registers; main resolves it
   // here, as `composer.readDraft` resolves the draft's key, so a window can only ever read or write its own
   // workspace's folds. Every other key of the `prefs.*` enum passes through unchanged; with no workspace open the
   // literal fallback key applies (`requirementColumnFoldsKey(undefined)`). The two `prefs.*` call sites below use it.
   const requirementsPreferenceKey = (key: PreferenceKey | typeof REQUIREMENT_FOLDS_PREFERENCE_KEY): PreferenceKey =>
-    (key === REQUIREMENT_FOLDS_PREFERENCE_KEY ? requirementColumnFoldsKey(currentWorkspace === '(no workspace)' ? undefined : currentWorkspace) : key);
+    (key === REQUIREMENT_FOLDS_PREFERENCE_KEY ? requirementColumnFoldsKey(foldsWorkspace()) : key);
   // Part AP — the board's run coordinator (REQ-TRACE-463..477): the SYSTEM actor of the `requirements.run.*` family. It claims
   // the scheduler's dispatches from the workspace service, starts each through the run host's `session.start` with the
   // elevation confined to that start (REQ-TRACE-470/471; the residues are stated in `requirements-runs.ts`), records the session
@@ -582,8 +728,8 @@ async function main(): Promise<void> {
   // marks a run waiting on a person from its snapshots (REQ-TRACE-466), reaps after the host's exit (REQ-TRACE-476) and cancels
   // the board's runs when the last window closes (REQ-TRACE-464). Channel 10 is broadcast only after the service's committed reply.
   const requirementsRuns = createRequirementsRuns({
-    currentWorkspace: () => (currentWorkspaceId && currentWorkspace !== '(no workspace)' ? canonicalPath(currentWorkspace) : undefined),
-    currentWorkspaceId: () => currentWorkspaceId,
+    currentWorkspace: () => { const w = activeWindow(); return w?.workspaceId && w.workspace !== '(no workspace)' ? canonicalPath(w.workspace) : undefined; },
+    currentWorkspaceId: () => activeWindow()?.workspaceId,
     service: (root, r, bound) => services.get(root)?.link.request(r, bound),
     runHost: { request: (r, bound) => runHost.request(r, bound), onEvent: (fn) => runHost.onEvent(fn) },
     onRunHostExit: (fn) => { runHostChild.on('exit', (code) => fn(code ?? -1)); },
@@ -594,64 +740,8 @@ async function main(): Promise<void> {
   });
   app.on('window-all-closed', () => { void requirementsRuns.cancelAll('the last window closed'); });
 
-  const win = new BrowserWindow({
-    width: 1280, height: 820, show: false, backgroundColor: themeBackground(), title: 'Rotaris',
-    webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
-  });
-  // The id is read once, up front: `webContents` on a destroyed window throws, and a throw from a
-  // `closed` handler during exit is an uncaught exception, which wedges the process (ADR-0044 note).
-  const wcId = win.webContents.id;
-  // Verification only: an occluded window stops painting, and a capture then returns a frame older than the DOM the
-  // probes read (found on the Git proof's first execution: the PNG showed the split before the drag the probes saw).
-  if (capturing) win.webContents.setBackgroundThrottling(false);
-  relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
-  // ADR-0019 c.1: registration is explicit and prompt — on creation, and revoked on close (the last one closing makes the application unattended).
-  parentWindowIds.add(String(wcId));
-  void runHost.request({ kind: 'presenter.register', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
-  win.on('closed', () => {
-    relay.detach(wcId);
-    parentWindowIds.delete(String(wcId));
-    void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
-    // REQ-SHELL-078: the persona windows are owned by this main window and do not outlive it.
-    personaWindows.destroyAll('the main window closed');
-  });
-  /** The session the main window follows — what a persona window is opened onto (REQ-SHELL-072; Part R). */
-  let followedSessionId: string | null = null;
-  /**
-   * ADR-0048's window registry, first executed (Part R): the persona windows — one per persona, hide on close, destroyed
-   * with the main window and on a new session. A persona window is a full renderer of the one bundle (`role=persona`),
-   * attached to the relay like the main window; it subscribes and unsubscribes itself as it is shown and hidden.
-   */
-  const personaWindows = new PersonaWindows({
-    create: (persona) => {
-      const dlg = new BrowserWindow({
-        width: 820, height: 620, minWidth: 560, minHeight: 420, show: false, title: `Rotaris · ${persona}`, backgroundColor: themeBackground(),
-        webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
-      });
-      dlg.setMenuBarVisibility(false);
-      // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
-      if (capturing) dlg.webContents.setBackgroundThrottling(false);
-      return dlg;
-    },
-    load: async (dlg, persona) => {
-      const query = { role: 'persona', persona };
-      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
-      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
-    },
-    select: (dlg, agentId, focusSteer) => dlg.webContents.executeJavaScript(`typeof window.__rotarisPersonaSelect === 'function' ? window.__rotarisPersonaSelect(${JSON.stringify(agentId)}, ${focusSteer ? 'true' : 'false'}) : false`).then(() => undefined),
-    onCreated: (dlg, persona) => {
-      const id = dlg.webContents.id;
-      relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
-      if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: persona "${persona}" renderer console: ${message} (${sourceId}:${line})`); });
-    },
-    onDestroyed: (id) => { relay.detach(id); },
-    log,
-  });
-  // ADR-0048 (Part W): a modal surface cannot outlive the renderer that opened it — a navigation, a reload or a crash of the
-  // main window's renderer restores input to every persona window (the close destroys them, REQ-SHELL-078).
-  const releaseModality = (why: string) => { if (personaWindows.isFamilyModal()) { const n = personaWindows.setFamilyModal(false); log(`application modality released: ${why} (${n} persona window(s) enabled; ADR-0048)`); } };
-  win.webContents.on('did-start-navigation', (details) => { if (details.isMainFrame) releaseModality('the main window navigated'); });
-  win.webContents.on('render-process-gone', (_event, details) => releaseModality(`the main window's renderer is gone (${details.reason})`));
+  // A3: hoisted out of the builder below — `runCommand` calls this for whichever window opened the persona
+  // window, and it closes over nothing per window (the window it measures is its argument).
   /**
    * Verification only: after a show, poll the window for the instant its renderer painted the first frame that carried a
    * whole-session update (`__rotarisPersonaPainted`, set after the snapshot's paint), and log the time from the show request.
@@ -671,45 +761,186 @@ async function main(): Promise<void> {
   };
 
   /**
-   * Part AL2 — the terminal window (REQ-SHELL-079..111; ADR-0021's and ADR-0047's window, first executed together here).
-   * ONE per main window, a full renderer of the one bundle (`role=terminal`), attached to the relay like a persona window;
-   * it subscribes to the followed session ITSELF (the sender is the subscriber, ADR-0043's note) and asks the run host for
-   * a resync, so it is given the output accumulated so far (REQ-SHELL-104). A close DESTROYS it and the next open rebuilds
-   * it (REQ-SHELL-086) — the deliberate difference from the persona window above (ADR-0047 consequence 3; not unified).
-   * Everything the window needs from main sits in this one block: the registry (`main/windows.ts`), its five commands
-   * (`terminalWindowCommand`, dispatched from the `terminal.*` case block below), REQ-SHELL-109's auto-open observer over
-   * the frames the run host publishes, and the ownership by this main window. The main window's renderer reports the
-   * session it follows through `window.terminalSession` (REQ-SHELL-110/111: the window closes, and reopens without focus
-   * only when it had been open on a session before — the reading is stated on `TerminalWindows.onSessionChange`).
+   * A3 — the main window builder. ADR-0055 consequence 6 is "two entrances, one builder": a folder carried in
+   * by a launch and a folder asked for from inside the application are the SAME construction, and what differs
+   * between them — which close gates were evaluated, whether a workspace is carried — belongs to the caller.
+   *
+   * Everything in here is per window: the window, its relay attachment, its presenter registration, its persona
+   * and terminal registries, its close guard and its record in the registry. Everything it reads that is per
+   * application — the run host, the credential store, the provider service, the preference store, the `services`
+   * map — is built once above and reached through that record.
+   *
+   * `origin` is recorded, never branched on: it is what `app.log` tells a two-window proof about which entrance
+   * built which window. The renderer load is awaited LAST, so every listener this window needs is attached
+   * before its renderer can send anything — and the ONE call site sits below `CHANNEL.command`'s handler for
+   * the same reason, since a renderer's first act is a command.
+   *
+   * The body is NOT re-indented beyond the one level the function adds, and nothing in it is reordered: what
+   * this move is answerable for is that the construction can be called twice, and a diff that also reflowed
+   * a hundred and forty lines would hide that claim rather than support it.
    */
-  const terminalWindows = new TerminalWindows({
-    create: () => {
-      const dlg = new BrowserWindow({
-        // REQ-SHELL-081: 900×620 initially; the title is seeded here and the renderer sets the final one (`terminalWindowTitle`).
-        width: 900, height: 620, minWidth: 560, minHeight: 360, show: false, title: 'Rotaris · Terminal', backgroundColor: themeBackground(),
-        webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+  const buildMainWindow = async (
+    { workspace, origin }: { workspace: string; origin: 'launch' | 'open-request' | 'hand-over' },
+  ): Promise<MainWindowState> => {
+    const win = new BrowserWindow({
+      // A5 — REQ-SHELL-022 is the product's single definition of both figures: the main window "opens at 1440×900
+      // logical pixels, and refuses to be resized below 1000×680 in either dimension". It had been built 1280×820
+      // with no minimum at all, so the floor that every view's layout is measured against was not enforced by the
+      // window itself; a user could drag below it and reach the states REQ-SHELL-064/065/106 forbid.
+      width: 1440, height: 900, minWidth: 1000, minHeight: 680, show: false, backgroundColor: themeBackground(), title: 'Rotaris',
+      webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    // The id is read once, up front: `webContents` on a destroyed window throws, and a throw from a
+    // `closed` handler during exit is an uncaught exception, which wedges the process (ADR-0044 note).
+    const wcId = win.webContents.id;
+    // A3: the record is built below, once this window's persona and terminal registries exist — they are fields
+    // of it, so a second window gets its own pair rather than sharing one process-wide pair.
+    // Verification only: an occluded window stops painting, and a capture then returns a frame older than the DOM the
+    // probes read (found on the Git proof's first execution: the PNG showed the split before the drag the probes saw).
+    if (capturing) win.webContents.setBackgroundThrottling(false);
+    relay.attach({ id: wcId, send: (c, p) => { if (!win.isDestroyed()) win.webContents.send(c, p); } });
+    // ADR-0019 c.1: registration is explicit and prompt — on creation, and revoked on close (the last one closing makes the application unattended).
+    parentWindowIds.add(String(wcId));
+    void runHost.request({ kind: 'presenter.register', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+    win.on('closed', () => {
+      // A2: out of the registry and out of the focus ordering before anything else reads either.
+      forgetWindow(wcId);
+      relay.detach(wcId);
+      parentWindowIds.delete(String(wcId));
+      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+      // REQ-SHELL-078: the persona windows are owned by this main window and do not outlive it.
+      personaWindows.destroyAll('the main window closed');
+    });
+    // A1: the followed session is a field of `mainWin` below (REQ-SHELL-072; Part R). A persona window is opened
+    // onto the session of the main window that owns it, which is why it cannot be one variable per application.
+    /**
+     * ADR-0048's window registry, first executed (Part R): the persona windows — one per persona, hide on close, destroyed
+     * with the main window and on a new session. A persona window is a full renderer of the one bundle (`role=persona`),
+     * attached to the relay like the main window; it subscribes and unsubscribes itself as it is shown and hidden.
+     */
+    const personaWindows = new PersonaWindows({
+      create: (persona) => {
+        const dlg = new BrowserWindow({
+          width: 820, height: 620, minWidth: 560, minHeight: 420, show: false, title: `Rotaris · ${persona}`, backgroundColor: themeBackground(),
+          webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+        });
+        dlg.setMenuBarVisibility(false);
+        // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
+        if (capturing) dlg.webContents.setBackgroundThrottling(false);
+        return dlg;
+      },
+      load: async (dlg, persona) => {
+        const query = { role: 'persona', persona };
+        if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+        else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+      },
+      select: (dlg, agentId, focusSteer) => dlg.webContents.executeJavaScript(`typeof window.__rotarisPersonaSelect === 'function' ? window.__rotarisPersonaSelect(${JSON.stringify(agentId)}, ${focusSteer ? 'true' : 'false'}) : false`).then(() => undefined),
+      onCreated: (dlg, persona) => {
+        const id = dlg.webContents.id;
+        relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
+        if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: persona "${persona}" renderer console: ${message} (${sourceId}:${line})`); });
+      },
+      onDestroyed: (id) => { relay.detach(id); },
+      log,
+    });
+    // ADR-0048 (Part W): a modal surface cannot outlive the renderer that opened it — a navigation, a reload or a crash of the
+    // main window's renderer restores input to every persona window (the close destroys them, REQ-SHELL-078).
+    const releaseModality = (why: string) => { if (personaWindows.isFamilyModal()) { const n = personaWindows.setFamilyModal(false); log(`application modality released: ${why} (${n} persona window(s) enabled; ADR-0048)`); } };
+    win.webContents.on('did-start-navigation', (details) => { if (details.isMainFrame) releaseModality('the main window navigated'); });
+    win.webContents.on('render-process-gone', (_event, details) => releaseModality(`the main window's renderer is gone (${details.reason})`));
+
+    /**
+     * Part AL2 — the terminal window (REQ-SHELL-079..111; ADR-0021's and ADR-0047's window, first executed together here).
+     * ONE per main window, a full renderer of the one bundle (`role=terminal`), attached to the relay like a persona window;
+     * it subscribes to the followed session ITSELF (the sender is the subscriber, ADR-0043's note) and asks the run host for
+     * a resync, so it is given the output accumulated so far (REQ-SHELL-104). A close DESTROYS it and the next open rebuilds
+     * it (REQ-SHELL-086) — the deliberate difference from the persona window above (ADR-0047 consequence 3; not unified).
+     * Everything the window needs from main sits in this one block: the registry (`main/windows.ts`), its five commands
+     * (`terminalWindowCommand`, dispatched from the `terminal.*` case block below), REQ-SHELL-109's auto-open observer over
+     * the frames the run host publishes, and the ownership by this main window. The main window's renderer reports the
+     * session it follows through `window.terminalSession` (REQ-SHELL-110/111: the window closes, and reopens without focus
+     * only when it had been open on a session before — the reading is stated on `TerminalWindows.onSessionChange`).
+     */
+    const terminalWindows = new TerminalWindows({
+      create: () => {
+        const dlg = new BrowserWindow({
+          // REQ-SHELL-081: 900×620 initially; the title is seeded here and the renderer sets the final one (`terminalWindowTitle`).
+          width: 900, height: 620, minWidth: 560, minHeight: 360, show: false, title: 'Rotaris · Terminal', backgroundColor: themeBackground(),
+          webPreferences: { preload: join(__dirname, '../preload/index.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+        });
+        dlg.setMenuBarVisibility(false);
+        // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
+        if (capturing) dlg.webContents.setBackgroundThrottling(false);
+        return dlg;
+      },
+      load: async (dlg) => {
+        const query = { role: TERMINAL_WINDOW_ROLE };
+        if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
+        else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
+      },
+      focusStream: (dlg, streamId) => dlg.webContents.executeJavaScript(`typeof window.__rotarisTerminalFocus === 'function' ? window.__rotarisTerminalFocus(${JSON.stringify(streamId)}) : false`).then(() => undefined),
+      onCreated: (dlg) => {
+        const id = dlg.webContents.id;
+        relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
+        if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: terminal window renderer console: ${message} (${sourceId}:${line})`); });
+      },
+      onDestroyed: (id) => { relay.detach(id); terminalFrames.forget(id); },
+      log,
+    });
+    // REQ-SHELL-081's "per main window": the terminal window goes with the main window that owns it.
+    win.on('closed', () => terminalWindows.destroyWithOwner());
+    /**
+     * A1/A3: this window's own state, and the holder through which the application-wide services above read it.
+     * The workspace is the caller's — REQ-SHELL-010 (a)'s explicitly-built-for folder at a launch, a folder
+     * chosen from inside the application, or the sentinel standing for the interval before a workspace is open,
+     * which ADR-0055 requires to exist at all because the first paint is rendered from stored preferences and
+     * constants and therefore precedes the workspace read.
+     */
+    const mainWin: MainWindowState = {
+      win, wcId, workspace, workspaceId: undefined, followedSessionId: null,
+      approvals: [], openDialog: null, personaWindows, terminalWindows, mintedSessionId: null,
+    };
+    mainWindows.set(wcId, mainWin);
+    rememberFocus(wcId);
+    // ADR-0055 c.5: the ordering is maintained on focus, not on creation, so a switch that briefly holds two
+    // windows still answers "which window" with the one the user is actually looking at.
+    win.on('focus', () => rememberFocus(wcId));
+    // REQ-CONFIG-287: a user-initiated close asks the window's unsaved-settings guard; a cancelled guard leaves the window open.
+    let closeConfirmed = false;
+    win.on('close', (event) => {
+      if (closeConfirmed || win.isDestroyed()) return;
+      event.preventDefault();
+      void win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true').then((proceed: unknown) => {
+        if (proceed === false) return;
+        closeConfirmed = true;
+        win.close();
+      }).catch(() => { closeConfirmed = true; win.close(); });
+    });
+    win.once('ready-to-show', () => win.show());
+    /**
+     * Part AA's verification seams (only with `ROTARIS_CAPTURE_PNG`).
+     *
+     * `ROTARIS_CAPTURE_NET=1` logs **every request this window's session issues**, from the MAIN process rather
+     * than from the page — REQ-CHAT-056's "no image is ever loaded from a Markdown image reference" is a claim
+     * about the process, and a page cannot honestly measure itself. The observer sees the app's own `file:` assets too;
+     * the proof reads the whole list rather than a filtered one.
+     *
+     * `ROTARIS_ROWS_PROOF=1` loads the renderer in the `rows-proof` role — the row renderer mounted over a fixture
+     * array, which is the surface Part AA can prove before Part Z's pool exists (the plan's own instruction).
+     */
+    if (capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {
+      win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
+        log(`capture: net ${details.method} ${details.resourceType} ${details.url}`);
+        callback({});
       });
-      dlg.setMenuBarVisibility(false);
-      // Verification only (the same reason as the main window's): an occluded window stops painting, and a capture would lag the DOM.
-      if (capturing) dlg.webContents.setBackgroundThrottling(false);
-      return dlg;
-    },
-    load: async (dlg) => {
-      const query = { role: TERMINAL_WINDOW_ROLE };
-      if (process.env['ELECTRON_RENDERER_URL']) await dlg.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
-      else await dlg.loadFile(join(__dirname, '../renderer/index.html'), { query });
-    },
-    focusStream: (dlg, streamId) => dlg.webContents.executeJavaScript(`typeof window.__rotarisTerminalFocus === 'function' ? window.__rotarisTerminalFocus(${JSON.stringify(streamId)}) : false`).then(() => undefined),
-    onCreated: (dlg) => {
-      const id = dlg.webContents.id;
-      relay.attach({ id, send: (c, payload) => { if (!dlg.isDestroyed()) dlg.webContents.send(c, payload); } });
-      if (capturing) dlg.webContents.on('console-message', (_event, level, message, line, sourceId) => { if (level >= 2) log(`capture: terminal window renderer console: ${message} (${sourceId}:${line})`); });
-    },
-    onDestroyed: (id) => { relay.detach(id); terminalFrames.forget(id); },
-    log,
-  });
-  // REQ-SHELL-081's "per main window": the terminal window goes with the main window that owns it.
-  win.on('closed', () => terminalWindows.destroyWithOwner());
+    }
+    const rowsProof = capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
+    if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(rowsProof ? `${process.env['ELECTRON_RENDERER_URL']}?role=rows-proof` : process.env['ELECTRON_RENDERER_URL']);
+    else await win.loadFile(join(__dirname, '../renderer/index.html'), rowsProof ? { query: { role: 'rows-proof' } } : undefined);
+    log(`main window ${wcId} loaded for ${workspace} (origin ${origin})`);
+    return mainWin;
+  };
+
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,
    * the terminal window opens without taking keyboard focus. The window is never auto-opened for a stream that has
@@ -718,29 +949,39 @@ async function main(): Promise<void> {
    */
   runHost.onEvent((e) => {
     if (e.kind !== 'publish.terminal' || e.payload.kind !== 'meta' || e.payload.meta?.running !== true) return;
-    if (terminalWindows.isOpen() || e.payload.sessionId !== (terminalWindows.followed() ?? followedSessionId)) return;
+    // A3: the frame belongs to a session, and the window that auto-opens for it is the window watching that
+    // session — never "the" main window, which with two open would auto-open a terminal over the wrong project.
+    const owner = ownerOf(e.payload.sessionId);
+    if (!owner) return;
+    if (owner.terminalWindows.isOpen() || e.payload.sessionId !== (owner.terminalWindows.followed() ?? owner.followedSessionId)) return;
     if (preferences.read(TERMINAL_AUTO_OPEN_PREFERENCE) !== true) return;
     log(`terminal window auto-opening for ${e.payload.streamId} (REQ-SHELL-109)`);
-    void terminalWindows.open({ automatic: true, streamId: e.payload.streamId }).catch((cause: unknown) => log(`terminal window auto-open failed: ${String(cause)}`));
+    void owner.terminalWindows.open({ automatic: true, streamId: e.payload.streamId }).catch((cause: unknown) => log(`terminal window auto-open failed: ${String(cause)}`));
   });
   /** The five `window.*` commands of the terminal window (contracts `terminal.ts`); dispatched from `runCommand`'s terminal case block. */
   const terminalWindowCommand = async (req: TerminalWindowCommand, senderId: number): Promise<CommandOutcome> => {
     switch (req.kind) {
       case 'window.openTerminal': {
         // REQ-SHELL-080/081/085: open or raise, as a request (REQ-SHELL-161); the stream is brought forward when retained.
-        const r = await terminalWindows.open({ automatic: false, streamId: req.streamId ?? null });
+        // A3: the asking main window's own terminal window — REQ-SHELL-081 is "exactly one per main window".
+        const asking = windowFor(senderId) ?? activeWindow();
+        if (!asking) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
+        const r = await asking.terminalWindows.open({ automatic: false, streamId: req.streamId ?? null });
         const value: TerminalWindowOpened = { opened: true, reused: r.reused };
         return { ok: true, value };
       }
       case 'window.terminalPayload': {
-        if (!terminalWindows.bySender(senderId)) return { ok: false, code: 'window.unknown', headline: 'This window is not the terminal window' };
-        const value: TerminalWindowPayload = { sessionId: terminalWindows.followed() ?? followedSessionId, focusStream: terminalWindows.takeFocus(senderId), autoOpen: preferences.read(TERMINAL_AUTO_OPEN_PREFERENCE) === true };
+        // A3: this command comes FROM the terminal window, so its owner is found through the registries.
+        const owner = ownerOfAuxiliary(senderId);
+        if (!owner?.terminalWindows.bySender(senderId)) return { ok: false, code: 'window.unknown', headline: 'This window is not the terminal window' };
+        const value: TerminalWindowPayload = { sessionId: owner.terminalWindows.followed() ?? owner.followedSessionId, focusStream: owner.terminalWindows.takeFocus(senderId), autoOpen: preferences.read(TERMINAL_AUTO_OPEN_PREFERENCE) === true };
         return { ok: true, value };
       }
       case 'window.terminalSession': {
         // Only the main window follows a session; a terminal or persona window reporting one is refused.
-        if (senderId !== wcId) return { ok: false, code: 'window.notMain', headline: 'Only the main window reports the session it follows' };
-        const reopened = await terminalWindows.onSessionChange(req.sessionId);
+        const reporting = windowFor(senderId);
+        if (reporting === undefined) return { ok: false, code: 'window.notMain', headline: 'Only the main window reports the session it follows' };
+        const reopened = await reporting.terminalWindows.onSessionChange(req.sessionId);
         return { ok: true, value: { reopened } };
       }
       case 'window.terminalAutoOpen': {
@@ -750,9 +991,13 @@ async function main(): Promise<void> {
       }
       case 'window.showWorkspace': {
         // REQ-SHELL-083's "Go to Workspace": the main window switches to the Workspace view and is surfaced, as a request (REQ-SHELL-161).
-        void win.webContents.executeJavaScript('typeof window.__rotarisShowWorkspace === "function" ? window.__rotarisShowWorkspace() : false').catch(() => undefined);
-        if (win.isMinimized()) win.restore();
-        if (!win.isVisible()) win.show(); else win.focus();
+        // A3: the command comes FROM a terminal window, so the window to surface is the one that owns it. With two
+        // open, "the main window" would raise the other project's window over the one the user asked from.
+        const home = ownerOfAuxiliary(senderId) ?? windowFor(senderId) ?? activeWindow();
+        if (!home) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
+        void home.win.webContents.executeJavaScript('typeof window.__rotarisShowWorkspace === "function" ? window.__rotarisShowWorkspace() : false').catch(() => undefined);
+        if (home.win.isMinimized()) home.win.restore();
+        if (!home.win.isVisible()) home.win.show(); else home.win.focus();
         return { ok: true };
       }
     }
@@ -764,44 +1009,54 @@ async function main(): Promise<void> {
    * ROTARIS_CAPTURE_ANSWERS in order. A user-driven run never enters these branches.
    */
   const scriptedAnswers = (process.env['ROTARIS_CAPTURE_ANSWERS'] ?? '').split(',').filter((s) => s.length > 0).map(Number);
-  const chooseSave = async (opts: Electron.SaveDialogOptions): Promise<string | null> => {
+  /**
+   * A3 — every one of these takes the window it is to be shown over. They had all closed over the one main
+   * window, which is invisible as a bug until there are two: a modal parented onto the other window blocks a
+   * window the user is not looking at, and `REQ-SHELL-164` holds the product answerable for what it hands the
+   * host dialog. The parent is the window whose command asked, which `runCommand` now resolves (REQ-SHELL-020).
+   *
+   * All five use the ASYNCHRONOUS form, which ADR-0019 makes an application-wide prohibition rather than a
+   * preference: a `…Sync` dialog on main stops every timer and every IPC reply for as long as it is open,
+   * which lapses the presenter registration and silently denies the user's own agent's tool calls.
+   */
+  const chooseSave = async (parent: BrowserWindow, opts: Electron.SaveDialogOptions): Promise<string | null> => {
     const forced = capturing ? process.env['ROTARIS_CAPTURE_BACKUP_TO'] : undefined;
     if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
-    const r = await dialog.showSaveDialog(win, opts);
+    const r = await dialog.showSaveDialog(parent, opts);
     return r.canceled || !r.filePath ? null : r.filePath;
   };
   // Part U: ROTARIS_CAPTURE_SAVE_PATH answers the EXPORT save dialogs (REQ-SESSION-189/199) in a scripted launch — a
   // separate seam from the backup's, so a proof can exercise both in one launch; verification only.
   // The seam takes `;;`-separated paths, consumed in order, so one launch can take several exports.
   const scriptedSavePaths = (capturing ? process.env['ROTARIS_CAPTURE_SAVE_PATH'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
-  const chooseExportPath = async (opts: Electron.SaveDialogOptions): Promise<string | null> => {
+  const chooseExportPath = async (parent: BrowserWindow, opts: Electron.SaveDialogOptions): Promise<string | null> => {
     const forced = scriptedSavePaths.shift();
     if (forced) { log(`capture: save dialog "${opts.title}" → ${forced}`); return forced; }
-    const r = await dialog.showSaveDialog(win, opts);
+    const r = await dialog.showSaveDialog(parent, opts);
     return r.canceled || !r.filePath ? null : r.filePath;
   };
-  const chooseOpen = async (opts: Electron.OpenDialogOptions): Promise<string | null> => {
+  const chooseOpen = async (parent: BrowserWindow, opts: Electron.OpenDialogOptions): Promise<string | null> => {
     const forced = capturing ? process.env['ROTARIS_CAPTURE_RESTORE_FROM'] : undefined;
     if (forced) { log(`capture: open dialog "${opts.title}" → ${forced}`); return forced; }
-    const r = await dialog.showOpenDialog(win, opts);
+    const r = await dialog.showOpenDialog(parent, opts);
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
   };
   // ROTARIS_CAPTURE_DIRECTORY: the folder chooser's answer for the attach flow (REQ-GIT-158); verification only.
-  const chooseDirectory = async (opts: Electron.OpenDialogOptions): Promise<string | null> => {
+  const chooseDirectory = async (parent: BrowserWindow, opts: Electron.OpenDialogOptions): Promise<string | null> => {
     const forced = capturing ? process.env['ROTARIS_CAPTURE_DIRECTORY'] : undefined;
     if (forced) { log(`capture: folder chooser "${opts.title}" → ${forced}`); return forced; }
-    const r = await dialog.showOpenDialog(win, opts);
+    const r = await dialog.showOpenDialog(parent, opts);
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
   };
-  // REQ-GIT-118: the id the launch dialog last showed; consumed by the next isolated or attached start.
-  let mintedSessionId: string | null = null;
-  const askBox = async (opts: Electron.MessageBoxOptions): Promise<number> => {
+  // A3: REQ-GIT-118's "id the launch dialog last showed" is a field of the window record — the dialog belongs
+  // to one window, and a second window's launch dialog must not consume the first window's minted id.
+  const askBox = async (parent: BrowserWindow, opts: Electron.MessageBoxOptions): Promise<number> => {
     if (capturing && scriptedAnswers.length > 0) {
       const answer = scriptedAnswers.shift()!;
       log(`capture: message box "${opts.title}" | ${opts.message} | ${opts.detail ?? ''} | buttons ${JSON.stringify(opts.buttons)} default ${opts.defaultId} → answered ${answer} (${opts.buttons?.[answer]})`);
       return answer;
     }
-    return (await dialog.showMessageBox(win, opts)).response;
+    return (await dialog.showMessageBox(parent, opts)).response;
   };
 
   /**
@@ -809,15 +1064,15 @@ async function main(): Promise<void> {
    * default everywhere, and the work in the workspace service. ADR-0058's identifier cases and ESC-26's
    * confirmation; D9's foreign rows as one condition with the risk stated.
    */
-  const restoreFlow = async (): Promise<CommandOutcome> => {
-    if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before restoring its session store' };
-    const root = canonicalPath(currentWorkspace);
+  const restoreFlow = async (w: MainWindowState): Promise<CommandOutcome> => {
+    if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before restoring its session store' };
+    const root = canonicalPath(w.workspace);
     const svc = services.get(root);
     if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
     // REQ-SESSION-201 / REQ-SHELL-021's gate: refused while a run is active; the service's liveness gates hold it for the whole restore.
-    const active = await runHost.request({ kind: 'runs.active', workspaceId: currentWorkspaceId }, millis(5_000));
+    const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000));
     if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'run.active', headline: 'Finish the active run before restoring the session store.' };
-    const artifact = await chooseOpen({ title: 'Restore a session store backup', properties: ['openFile'], filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }] });
+    const artifact = await chooseOpen(w.win, { title: 'Restore a session store backup', properties: ['openFile'], filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }] });
     if (!artifact) return { ok: true, value: { cancelled: true } };
     const assessed = await svc.link.request({ kind: 'workspace.restore.assess', workspaceRoot: root, artifact }, millis(120_000));
     if (assessed.kind !== 'workspace.restore.assessment') return refusal(assessed, 'The backup could not be assessed');
@@ -831,7 +1086,7 @@ async function main(): Promise<void> {
     const nowText = a.target.exists
       ? `The store this backup restores into currently holds ${plural(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${plural(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
       : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${plural(a.artifact.sessions, 'session')}.`;
-    const first = await askBox({
+    const first = await askBox(w.win, {
       type: 'question', title: 'Restore the session store', message: `This backup was taken from ${from} on ${a.artifact.takenAtUtc}.`, detail: nowText,
       buttons: ['Cancel', 'Restore'], defaultId: 0, cancelId: 0, noLink: true,
     });
@@ -842,7 +1097,7 @@ async function main(): Promise<void> {
     if (a.identifier.case === 'different') {
       const mine = a.identifier.current ?? '';
       const theirs = a.artifact.workspaceId;
-      const second = await askBox({
+      const second = await askBox(w.win, {
         type: 'warning', title: 'This workspace carries a different identifier',
         message: `This workspace's identifier is ${mine}. The backup was taken under ${theirs}.`,
         detail: `Restore into the backup's own store: the sessions are restored under ${theirs}, this workspace keeps ${mine}, and they will not appear here until a workspace carrying ${theirs} is opened.\n\nReplace this workspace's identifier with ${theirs} and restore: this workspace's existing sessions, recorded under ${mine}, become unreachable from this workspace. The store under ${mine} is kept intact; writing ${mine} back into .rotaris/workspace-id is a complete undo.`,
@@ -855,7 +1110,7 @@ async function main(): Promise<void> {
     // 3 — D9 / IC-4: lock rows naming another machine, together, with the risk stated. Cancel is the default.
     let proceedWithForeignLocks = false;
     if (a.target.foreignLocks.length > 0) {
-      const third = await askBox({
+      const third = await askBox(w.win, {
         type: 'warning', title: 'Lock records name another machine',
         message: `${plural(a.target.foreignLocks.length, 'session')} in the store carry lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
         detail: 'Nothing on this machine is writing under them. If this store genuinely is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. Nothing needs to be cleared one at a time.',
@@ -897,13 +1152,13 @@ async function main(): Promise<void> {
     checkpointOp = p;
     return p;
   };
-  const checkpointContext = async (): Promise<{ workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } } | CommandOutcome> => {
+  const checkpointContext = async (w: MainWindowState): Promise<{ workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } } | CommandOutcome> => {
     await awaitWorkspace();
-    if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
-    const root = canonicalPath(currentWorkspace);
+    if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
+    const root = canonicalPath(w.workspace);
     const svc = services.get(root);
     if (!svc) return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
-    return { workspaceId: currentWorkspaceId, root, svc };
+    return { workspaceId: w.workspaceId, root, svc };
   };
   const readListing = async (workspaceId: string, sessionId: string): Promise<CheckpointListPayload | CommandOutcome> => {
     const r = await runHost.request({ kind: 'checkpoint.list', workspaceId, sessionId }, millis(15_000));
@@ -938,8 +1193,8 @@ async function main(): Promise<void> {
     log(`checkpoint preview ${l.sessionId}/${sequence}: ${r.treeState}, ${r.entries.length} entr${r.entries.length === 1 ? 'y' : 'ies'}, ${r.dirty.length} dirty; ${r.invocations} git invocations, ${r.elapsedMs} ms in the service, ${Math.round(clocks.monotonic.now() - started)} ms end to end`);
     return { row, ...r };
   };
-  const checkpointPreview = async (sessionId: string, sequence: number): Promise<CommandOutcome> => {
-    const ctx = await checkpointContext();
+  const checkpointPreview = async (w: MainWindowState, sessionId: string, sequence: number): Promise<CommandOutcome> => {
+    const ctx = await checkpointContext(w);
     if (isOutcome(ctx)) return ctx;
     const l = await readListing(ctx.workspaceId, sessionId);
     if (isOutcome(l)) return l;
@@ -951,8 +1206,8 @@ async function main(): Promise<void> {
     const value: CheckpointPreviewPayload = { sessionId, sequence, treeRoot: l.treeRoot, entries: p.entries, dirty: p.dirty, blockedReason: p.blockedReason, text: p.text, summary: restoreSummary(sequence, p.entries.length, l.treeRoot), restorable: p.treeState === 'ok' };
     return { ok: true, value };
   };
-  const checkpointRestore = async (sessionId: string, sequence: number, force: boolean): Promise<CommandOutcome> => {
-    const ctx = await checkpointContext();
+  const checkpointRestore = async (w: MainWindowState, sessionId: string, sequence: number, force: boolean): Promise<CommandOutcome> => {
+    const ctx = await checkpointContext(w);
     if (isOutcome(ctx)) return ctx;
     const l = await readListing(ctx.workspaceId, sessionId);
     if (isOutcome(l)) return l;
@@ -1005,7 +1260,21 @@ async function main(): Promise<void> {
     return outcome({ restored: true, safetySequence, changedPaths: restored.touched.length, blockedReason: '' });
   };
 
-  const runCommand = async (raw: unknown, senderId = wcId): Promise<CommandOutcome> => {
+  const runCommand = async (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => {
+    /**
+     * A2 — REQ-SHELL-020: a command is answered for the window that RAISED it, so every workspace-scoped read
+     * below resolves against the sender rather than against "the main window". A sender that is not a main
+     * window at all (an approval dialog, a persona or terminal window asking for its own payload) falls back to
+     * the active window, which while the capacity is one is the same object either way.
+     *
+     * A3: the default sender is the ACTIVE window's id (ADR-0055 c.5) — a verification seam and the driver speak
+     * for no window, and what they mean is the window the user is looking at. It has to be a real id and not a
+     * sentinel, because a subscription is keyed by the sender (Part R's twenty-seventh defect, noted below at
+     * `session.follow`). With no main window open at all the command is refused rather than answered for a
+     * window that is gone.
+     */
+    const w = windowFor(senderId) ?? activeWindow();
+    if (!w) return { ok: false, code: 'window.notMain', headline: 'No main window is open' };
     const parsed = CommandRequestSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
     const req = parsed.data;
@@ -1016,7 +1285,7 @@ async function main(): Promise<void> {
       }
       case 'approval.raise': {
         // Part AC — REQ-CHAT-098/103: the approval trailer re-opens what is already up. Main raises; it never decides.
-        const open = openDialog;
+        const open = w.openDialog;
         if (!open || open.requestId !== req.requestId || open.win.isDestroyed()) return { ok: false, code: 'approval.none', headline: 'No approval dialog is open for that request' };
         open.win.show();
         open.win.focus();
@@ -1106,8 +1375,8 @@ async function main(): Promise<void> {
         return { ok: true, value: { resumed: r.resumed, messageLimit: r.messageLimit } };
       }
       case 'hooks.summary': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace to see its hooks' };
-        const r = await runHost.request({ kind: 'hooks.summary', workspaceId: currentWorkspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace to see its hooks' };
+        const r = await runHost.request({ kind: 'hooks.summary', workspaceId: w.workspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));
         return r.kind === 'hooks.summary' ? { ok: true, value: r.summary } : refusal(r, 'The hooks could not be read');
       }
       case 'hooks.review':
@@ -1123,8 +1392,8 @@ async function main(): Promise<void> {
       case 'hooks.reviewDecide': {
         const p = reviewPayloads.get(senderId);
         if (!p || p.decided) return { ok: false, code: 'hooks.review.none', headline: 'No review is open for this window' };
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'The workspace is no longer open' };
-        const r = await runHost.request({ kind: 'hooks.decide', workspaceId: currentWorkspaceId, trusted: req.trusted }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'The workspace is no longer open' };
+        const r = await runHost.request({ kind: 'hooks.decide', workspaceId: w.workspaceId, trusted: req.trusted }, millis(10_000));
         if (r.kind !== 'ack') return refusal(r, 'The decision could not be saved');
         p.decided = true;
         log(`hook review → ${req.trusted ? 'allowed' : 'refused'}`);
@@ -1132,8 +1401,8 @@ async function main(): Promise<void> {
         return { ok: true };
       }
       case 'hooks.clearDecision': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'hooks.clearDecision', workspaceId: currentWorkspaceId }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'hooks.clearDecision', workspaceId: w.workspaceId }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The stored decision could not be removed');
       }
       case 'hooks.setToggle': {
@@ -1142,13 +1411,13 @@ async function main(): Promise<void> {
       }
       // ADR-0034 (Part S): the MCP category is answered by the run host, the one holder of the pipeline, the probe and the session override.
       case 'mcp.list': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.list', workspaceId: currentWorkspaceId }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.list', workspaceId: w.workspaceId }, millis(10_000));
         return r.kind === 'mcp.list' ? { ok: true, value: r.listing } : refusal(r, 'The MCP servers could not be listed');
       }
       case 'mcp.probe': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.probe', workspaceId: currentWorkspaceId, ...(req.name === undefined ? {} : { name: req.name }) }, millis(req.name === undefined ? 120_000 : 12_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.probe', workspaceId: w.workspaceId, ...(req.name === undefined ? {} : { name: req.name }) }, millis(req.name === undefined ? 120_000 : 12_000));
         return r.kind === 'mcp.probe' ? { ok: true, value: r.results } : refusal(r, 'The MCP server could not be probed');
       }
       case 'mcp.setEnabled': {
@@ -1156,24 +1425,24 @@ async function main(): Promise<void> {
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session toggle could not be applied');
       }
       case 'mcp.secrets': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: currentWorkspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: w.workspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
         return r.kind === 'mcp.secrets' ? { ok: true, value: r.view } : refusal(r, 'The stored secrets could not be read');
       }
       // ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup runs in the run host; main relays the action and the status.
       case 'mcp.setup': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.setup', workspaceId: currentWorkspaceId, action: req.action }, millis(15_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'mcp.setup', workspaceId: w.workspaceId, action: req.action }, millis(15_000));
         return r.kind === 'mcp.setup' ? { ok: true, value: r.status } : refusal(r, 'The code-intelligence setup could not be started');
       }
       case 'shell.hello': {
-        const cb = currentWorkspaceId
-          ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: currentWorkspaceId }, millis(5_000))
+        const cb = w.workspaceId
+          ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: w.workspaceId }, millis(5_000))
           : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
         // REQ-SHELL-140 (Part AG): the About page's product card reads its four local facts from here; it makes no
         // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398).
         return { ok: true, value: {
-          version: app.getVersion(), workspace: currentWorkspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
+          version: app.getVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
           circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
           build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
         } };
@@ -1267,15 +1536,15 @@ async function main(): Promise<void> {
        * write is a silent no-op, which is the state a window is in before its first workspace opens.
        */
       case 'composer.readDraft':
-        if (currentWorkspace === '(no workspace)') return { ok: true, value: { text: '' } };
-        return { ok: true, value: { text: preferences.read(composerDraftKey(currentWorkspace)) } };
+        if (w.workspace === '(no workspace)') return { ok: true, value: { text: '' } };
+        return { ok: true, value: { text: preferences.read(composerDraftKey(w.workspace)) } };
       case 'composer.writeDraft': {
-        if (currentWorkspace === '(no workspace)') return { ok: true };
-        await preferences.write(composerDraftKey(currentWorkspace), req.text);
+        if (w.workspace === '(no workspace)') return { ok: true };
+        await preferences.write(composerDraftKey(w.workspace), req.text);
         return { ok: true };
       }
       case 'session.start': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
         // REQ-GIT-021: the two conflicting choices, refused before anything is created (REQ-GIT-158 makes this unreachable from the dialog).
         if (req.isolation && req.attach) return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' };
         /**
@@ -1285,12 +1554,12 @@ async function main(): Promise<void> {
          */
         let binding: WorktreeBinding | undefined;
         let sessionId: string | undefined;
-        const root = canonicalPath(currentWorkspace);
+        const root = canonicalPath(w.workspace);
         const svc = services.get(root);
         if (req.isolation || req.attach) {
           if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-          sessionId = mintedSessionId ?? randomUUID();
-          mintedSessionId = null;
+          sessionId = w.mintedSessionId ?? randomUUID();
+          w.mintedSessionId = null;
           const bindFailure = (r: ProcessReply): CommandOutcome => {
             const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
             const headline = `Error: could not create or attach the requested worktree: ${detail}`;
@@ -1308,7 +1577,7 @@ async function main(): Promise<void> {
             binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
           }
         }
-        const r = await runHost.request({ kind: 'session.start', workspaceId: currentWorkspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
+        const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
         if (r.kind !== 'session.started') {
           // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
           if (binding?.created_by_session && svc) {
@@ -1325,21 +1594,21 @@ async function main(): Promise<void> {
         // scoped to this same session; a notice about another session survives, whatever order the events arrived in.
         await notices.clearForRunStart(r.sessionId);
         // REQ-SHELL-078: a new session starts — every persona window and its cache go.
-        personaWindows.destroyAll('a new session started');
+        w.personaWindows.destroyAll('a new session started');
         return { ok: true, value: { sessionId: r.sessionId } };
       }
       case 'session.newId': {
         // REQ-GIT-118: the id the launch dialog shows; the next isolated or attached start takes it.
-        mintedSessionId = randomUUID();
-        return { ok: true, value: { sessionId: mintedSessionId } };
+        w.mintedSessionId = randomUUID();
+        return { ok: true, value: { sessionId: w.mintedSessionId } };
       }
       case 'git.read': {
         await awaitWorkspace();
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
         // REQ-GIT-102: 15 s per read is the bound; a refresh of a repository with many worktrees is many reads.
-        const r = await svc.link.request({ kind: 'git.view', workspaceRoot: canonicalPath(currentWorkspace) }, millis(600_000));
+        const r = await svc.link.request({ kind: 'git.view', workspaceRoot: canonicalPath(w.workspace) }, millis(600_000));
         if (r.kind !== 'git.state') return refusal(r, 'The repository could not be read');
         const st = r.state;
         log(`git view: ${st.reads} reads in ${st.readMs} ms (git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? (st.detached ? 'detached' : '-')} +${st.ahead}/-${st.behind} worktrees=${st.worktrees.length} history=${st.history.length}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''})`);
@@ -1348,20 +1617,20 @@ async function main(): Promise<void> {
         return { ok: true, value: st };
       }
       case 'worktree.create': {
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before creating a worktree' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before creating a worktree' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
         // REQ-GIT-110/115: the user's own path, not collision-safe — a typed name is created exactly or refused with Git's wording.
-        const r = await svc.link.request({ kind: 'worktree.create', workspaceRoot: canonicalPath(currentWorkspace), branch: req.branch, collisionSafe: false, target: { kind: 'path', path: req.path } }, millis(120_000));
+        const r = await svc.link.request({ kind: 'worktree.create', workspaceRoot: canonicalPath(w.workspace), branch: req.branch, collisionSafe: false, target: { kind: 'path', path: req.path } }, millis(120_000));
         if (r.kind !== 'worktree.created') { log(`worktree create refused: ${r.kind === 'refused' ? r.headline : r.kind}`); return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline, ...(r.detail === undefined ? {} : { detail: r.detail }) } : refusal(r, 'The worktree could not be created'); }
         log(`worktree created by the user: ${r.branch} at ${r.path}`);
         return { ok: true, value: { path: r.path, branch: r.branch } };
       }
       case 'worktree.remove': {
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a worktree' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a worktree' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const r = await svc.link.request({ kind: 'worktree.remove', workspaceRoot: canonicalPath(currentWorkspace), path: req.path, force: req.force }, millis(120_000));
+        const r = await svc.link.request({ kind: 'worktree.remove', workspaceRoot: canonicalPath(w.workspace), path: req.path, force: req.force }, millis(120_000));
         if (r.kind !== 'worktree.removed') {
           // REQ-GIT-117: the one refusal force would cure is named by its code; everything else is Git's wording.
           if (r.kind === 'refused') { log(`worktree remove refused${r.needsForce ? ' (needs force)' : ''}: ${r.headline}`); return { ok: false, code: r.needsForce ? 'worktree.needs-force' : r.code, headline: r.headline }; }
@@ -1371,27 +1640,27 @@ async function main(): Promise<void> {
         return { ok: true, value: { path: r.path } };
       }
       case 'worktree.chooseAttach': {
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before attaching a worktree' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before attaching a worktree' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const chosen = await chooseDirectory({ title: 'Attach to an existing worktree', properties: ['openDirectory'] });
+        const chosen = await chooseDirectory(w.win, { title: 'Attach to an existing worktree', properties: ['openDirectory'] });
         if (!chosen) return { ok: true, value: { cancelled: true } };
         // REQ-GIT-158: validated exactly as REQ-GIT-011 validates an attach, before any session exists.
-        const r = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: canonicalPath(currentWorkspace), path: chosen }, millis(60_000));
+        const r = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: canonicalPath(w.workspace), path: chosen }, millis(60_000));
         if (r.kind !== 'worktree.attachable') return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline } : refusal(r, 'The worktree could not be checked');
         return { ok: true, value: { path: r.path, branch: r.branch } };
       }
       case 'checkpoints.list':
         return checkpointGate(async () => {
-          const ctx = await checkpointContext();
+          const ctx = await checkpointContext(w);
           if (isOutcome(ctx)) return ctx;
           const l = await readListing(ctx.workspaceId, req.sessionId);
           return isOutcome(l) ? l : { ok: true, value: l };
         });
       case 'checkpoints.preview':
-        return checkpointGate(() => checkpointPreview(req.sessionId, req.sequence));
+        return checkpointGate(() => checkpointPreview(w, req.sessionId, req.sequence));
       case 'checkpoints.restore':
-        return checkpointGate(() => checkpointRestore(req.sessionId, req.sequence, req.force));
+        return checkpointGate(() => checkpointRestore(w, req.sessionId, req.sequence, req.force));
       case 'worktree.probePath': {
         try {
           if (!existsSync(req.path)) return { ok: true, value: { exists: false, nonEmpty: false } };
@@ -1401,27 +1670,27 @@ async function main(): Promise<void> {
       }
       case 'session.list': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
-        const r = await runHost.request({ kind: 'session.list', workspaceId: currentWorkspaceId }, millis(5_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
+        const r = await runHost.request({ kind: 'session.list', workspaceId: w.workspaceId }, millis(5_000));
         return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
       }
       // ---- Part Y: the Library's Artifacts tab (REQ-LIBRARY-108/131..136). Main relays; the run host owns the store and the files. ----
       case 'artifacts.list': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing artifacts' };
-        const r = await runHost.request({ kind: 'artifacts.list', workspaceId: currentWorkspaceId }, millis(5_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing artifacts' };
+        const r = await runHost.request({ kind: 'artifacts.list', workspaceId: w.workspaceId }, millis(5_000));
         return r.kind === 'artifacts.state' ? { ok: true, value: r.state } : refusal(r, 'The session artifacts could not be read');
       }
       case 'artifacts.body': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before opening an artifact' };
-        const r = await runHost.request({ kind: 'artifacts.body', workspaceId: currentWorkspaceId, ref: req.ref }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before opening an artifact' };
+        const r = await runHost.request({ kind: 'artifacts.body', workspaceId: w.workspaceId, ref: req.ref }, millis(10_000));
         return r.kind === 'artifacts.body' ? { ok: true, value: { id: r.id, slug: r.slug, title: r.title, artifactKind: r.kind_, status: r.status, producer: r.producer, persona: r.persona, edited: r.edited, body: r.body, fallback: r.fallback } } : refusal(r, 'The artifact could not be loaded');
       }
       case 'artifacts.save': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before saving an artifact' };
-        const r = await runHost.request({ kind: 'artifacts.save', workspaceId: currentWorkspaceId, ref: req.ref, body: req.body }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before saving an artifact' };
+        const r = await runHost.request({ kind: 'artifacts.save', workspaceId: w.workspaceId, ref: req.ref, body: req.body }, millis(10_000));
         if (r.kind !== 'artifacts.saved') return refusal(r, 'The artifact could not be saved');
         // REQ-LIBRARY-105: the session artifact store is one of the closed four, so a hand edit that reached the
         // store IS a library change and every live window re-reads — the same counter a prompt write moves.
@@ -1431,8 +1700,8 @@ async function main(): Promise<void> {
       // ---- Part U: the session browser's actions (REQ-SESSION-182). Main supplies the dialogs and the platform's file manager; the run host does the work. ----
       case 'session.repair': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before repairing its sessions' };
-        const r = await runHost.request({ kind: 'session.repair', workspaceId: currentWorkspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(30_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before repairing its sessions' };
+        const r = await runHost.request({ kind: 'session.repair', workspaceId: w.workspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(30_000));
         if (r.kind !== 'session.repaired') return refusal(r, 'The repair could not be carried out');
         for (const x of r.report.repaired) log(`session ${x.sessionId} repaired: '${x.from}' → interrupted (${x.reason})`);
         if (r.report.nothingStale) log(`session repair: nothing was stale`);
@@ -1440,11 +1709,11 @@ async function main(): Promise<void> {
       }
       case 'session.delete': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a session' };
-        const r = await runHost.request({ kind: 'session.delete', workspaceId: currentWorkspaceId, sessionId: req.sessionId }, millis(120_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a session' };
+        const r = await runHost.request({ kind: 'session.delete', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(120_000));
         if (r.kind !== 'session.deleted') { if (r.kind === 'refused') raiseNotice('error', 'The session was not deleted', r.headline); return refusal(r, 'The session was not deleted'); }
         if (r.refsLeft !== null) log(`session ${req.sessionId}: checkpoint refs remain under ${r.refsLeft} (REQ-GIT-069, best-effort)`);
-        if (followedSessionId === req.sessionId) { followedSessionId = null; personaWindows.destroyAll('the followed session was deleted'); }
+        if (w.followedSessionId === req.sessionId) { w.followedSessionId = null; w.personaWindows.destroyAll('the followed session was deleted'); }
         if (r.existed) raiseNotice('info', `Deleted session ${req.sessionId}.`, `${r.refsDeleted} checkpoint ref${r.refsDeleted === 1 ? '' : 's'} removed${r.refsLeft === null ? '' : `; some refs remain under ${r.refsLeft}`}.`);
         return { ok: true, value: { sessionId: r.sessionId, existed: r.existed, refsDeleted: r.refsDeleted, refsLeft: r.refsLeft, filesRemoved: r.filesRemoved, unreadable: r.unreadable, elapsedMs: r.elapsedMs } };
       }
@@ -1452,16 +1721,16 @@ async function main(): Promise<void> {
       case 'session.exportTrajectory': {
         // REQ-SESSION-189/199: a file the user chooses; nothing is written until then; not a channel.
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before exporting a session' };
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before exporting a session' };
         const ids = req.kind === 'session.export' ? [req.sessionId] : req.sessionIds;
         const stamp = new Date(clocks.wall.instant()).toISOString().replace(/[:.]/g, '-');
-        const destination = await chooseExportPath(req.kind === 'session.export'
+        const destination = await chooseExportPath(w.win, req.kind === 'session.export'
           ? { title: 'Export the session records', defaultPath: `rotaris-session-${req.sessionId}-records-${stamp}.json`, filters: [{ name: 'JSON document', extensions: ['json'] }] }
           : { title: ids.length === 1 ? 'Export the trajectory' : `Export ${ids.length} trajectories`, defaultPath: ids.length === 1 ? `rotaris-trajectory-${ids[0]}-${stamp}.json` : `rotaris-trajectories-${ids.length}-${stamp}.json`, filters: [{ name: 'JSON document', extensions: ['json'] }] });
         if (!destination) return { ok: true, value: { cancelled: true } };
         const r = await runHost.request(req.kind === 'session.export'
-          ? { kind: 'session.export', workspaceId: currentWorkspaceId, sessionId: req.sessionId, destination }
-          : { kind: 'session.exportTrajectory', workspaceId: currentWorkspaceId, sessionIds: [...req.sessionIds], destination }, millis(120_000));
+          ? { kind: 'session.export', workspaceId: w.workspaceId, sessionId: req.sessionId, destination }
+          : { kind: 'session.exportTrajectory', workspaceId: w.workspaceId, sessionIds: [...req.sessionIds], destination }, millis(120_000));
         if (r.kind !== 'session.exported') { if (r.kind === 'refused') raiseNotice('error', 'The export could not be written', [r.headline, r.detail].filter(Boolean).join(': ')); return refusal(r, 'The export could not be written'); }
         raiseNotice(r.warnings.length > 0 ? 'warning' : 'info', `Wrote ${r.documents} ${req.kind === 'session.export' ? 'records document' : `trajectory document${r.documents === 1 ? '' : 's'}`} to ${r.destination}.`, r.warnings.length > 0 ? r.warnings.join(' ') : undefined);
         return { ok: true, value: { destination: r.destination, bytes: r.bytes, documents: r.documents, warnings: r.warnings, elapsedMs: r.elapsedMs } };
@@ -1470,8 +1739,8 @@ async function main(): Promise<void> {
       case 'session.revealFiles': {
         // REQ-SESSION-191: the log opened for reading, the files revealed in the platform's file manager; a missing file is reported, never faked.
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'session.files', workspaceId: currentWorkspaceId, sessionId: req.sessionId }, millis(10_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'session.files', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
         if (r.kind !== 'session.files') return refusal(r, 'The session files could not be located');
         if (req.kind === 'session.openLog') {
           if (r.files.log === null) return { ok: false, code: 'session.no-log', headline: 'No log is kept for this session', detail: `Nothing was logged at or above the configured level, so no log file exists in ${r.files.directory}.` };
@@ -1489,11 +1758,11 @@ async function main(): Promise<void> {
       case 'prompts.push':
       case 'prompts.take': {
         await awaitWorkspace();
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its saved prompts' };
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its saved prompts' };
         const r = await runHost.request(
-          req.kind === 'prompts.read' ? { kind: 'prompts.read', workspaceId: currentWorkspaceId }
-            : req.kind === 'prompts.push' ? { kind: 'prompts.push', workspaceId: currentWorkspaceId, list: req.list, text: req.text }
-              : { kind: 'prompts.take', workspaceId: currentWorkspaceId, list: req.list, index: req.index, remove: req.remove },
+          req.kind === 'prompts.read' ? { kind: 'prompts.read', workspaceId: w.workspaceId }
+            : req.kind === 'prompts.push' ? { kind: 'prompts.push', workspaceId: w.workspaceId, list: req.list, text: req.text }
+              : { kind: 'prompts.take', workspaceId: w.workspaceId, list: req.list, index: req.index, remove: req.remove },
           millis(10_000),
         ).catch((e: Error) => ({ kind: 'refused' as const, code: 'prompts.ask', headline: 'Could not save prompt history', detail: e.message }));
         if (r.kind !== 'prompts.state' && r.kind !== 'prompts.taken') {
@@ -1509,17 +1778,17 @@ async function main(): Promise<void> {
         return { ok: true, value: r.kind === 'prompts.state' ? { state: r.state } : { text: r.text, state: r.state } };
       }
       case 'session.resume': {
-        if (!currentWorkspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };
-        const active = await runHost.request({ kind: 'runs.active', workspaceId: currentWorkspaceId }, millis(5_000));
+        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };
+        const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000));
         if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
-        const r = await runHost.request({ kind: 'session.resume', workspaceId: currentWorkspaceId, sessionId: req.sessionId }, millis(10_000));
+        const r = await runHost.request({ kind: 'session.resume', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
         if (r.kind !== 'session.resumed') {
           if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
           return refusal(r, 'The session could not be loaded');
         }
         raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
         // REQ-SHELL-078 read for a loaded session too: the windows were opened onto the previous session's agents and would otherwise show them (Part R's reading, ADR-0048 note).
-        if (followedSessionId !== null && followedSessionId !== r.sessionId) personaWindows.destroyAll('a different session was loaded');
+        if (w.followedSessionId !== null && w.followedSessionId !== r.sessionId) w.personaWindows.destroyAll('a different session was loaded');
         return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
       }
       case 'config.read': {
@@ -1527,31 +1796,31 @@ async function main(): Promise<void> {
         // this wait the answer was `workspace.none`, the run header's model list stayed empty (REQ-MONITOR-144) and the wait header
         // had no "Change model" to offer. `repository.read` already waited; this read did not.
         await awaitWorkspace();
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its configuration' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its configuration' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const r = await svc.link.request({ kind: 'config.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(10_000));
+        const r = await svc.link.request({ kind: 'config.read', workspaceRoot: canonicalPath(w.workspace) }, millis(10_000));
         return r.kind === 'config.snapshot' ? { ok: true, value: r.snapshot } : refusal(r, 'The configuration could not be read');
       }
       case 'repository.read': {
         await awaitWorkspace();
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
         // REQ-GIT-102: five reads at 15 s each is the bound; the request waits for all of them.
-        const r = await svc.link.request({ kind: 'repository.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(80_000));
+        const r = await svc.link.request({ kind: 'repository.read', workspaceRoot: canonicalPath(w.workspace) }, millis(80_000));
         if (r.kind !== 'repository.state') return refusal(r, 'The repository could not be read');
         const st = r.state;
-        log(`repository ${canonicalPath(currentWorkspace)}: git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? '-'} base=${st.base ?? '-'} +${st.ahead}/-${st.behind} touched=${st.touched} uncommitted=${st.uncommitted}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''} in ${st.readMs} ms`);
+        log(`repository ${canonicalPath(w.workspace)}: git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? '-'} base=${st.base ?? '-'} +${st.ahead}/-${st.behind} touched=${st.touched} uncommitted=${st.uncommitted}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''} in ${st.readMs} ms`);
         return { ok: true, value: st };
       }
       case 'config.save':
       case 'config.setField': {
         // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423).
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before changing its configuration' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before changing its configuration' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const root = canonicalPath(currentWorkspace);
+        const root = canonicalPath(w.workspace);
         const r = await svc.link.request(req.kind === 'config.save' ? { kind: 'config.save', workspaceRoot: root, save: req.save } : { kind: 'config.setField', workspaceRoot: root, ...(req.scope ? { scope: req.scope } : {}), patch: req.patch }, millis(30_000));
         if (r.kind !== 'config.snapshot') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The configuration could not be written'); }
         for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
@@ -1620,30 +1889,30 @@ async function main(): Promise<void> {
       }
       case 'prompts.roots.read': {
         await awaitWorkspace();
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its prompt files' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its prompt files' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const r = await svc.link.request({ kind: 'prompts.roots.read', workspaceRoot: canonicalPath(currentWorkspace) }, millis(10_000));
+        const r = await svc.link.request({ kind: 'prompts.roots.read', workspaceRoot: canonicalPath(w.workspace) }, millis(10_000));
         return r.kind === 'prompts.roots' ? { ok: true, value: r.result } : refusal(r, 'The prompt files could not be read');
       }
       case 'workspace.backup': {
         // REQ-SESSION-201: the destination is a file the user chooses; nothing is written until then.
-        if (!currentWorkspaceId || currentWorkspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before backing up its session store' };
-        const svc = services.get(canonicalPath(currentWorkspace));
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before backing up its session store' };
+        const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
         const stamp = new Date(clocks.wall.instant()).toISOString().replace(/[:.]/g, '-');
-        const destination = await chooseSave({
-          title: 'Back up the session store', defaultPath: `rotaris-sessions-${currentWorkspaceId}-${stamp}.tar`,
+        const destination = await chooseSave(w.win, {
+          title: 'Back up the session store', defaultPath: `rotaris-sessions-${w.workspaceId}-${stamp}.tar`,
           filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }],
         });
         if (!destination) return { ok: true, value: { cancelled: true } };
-        const r = await svc.link.request({ kind: 'workspace.backup', workspaceRoot: canonicalPath(currentWorkspace), destination }, millis(600_000));
+        const r = await svc.link.request({ kind: 'workspace.backup', workspaceRoot: canonicalPath(w.workspace), destination }, millis(600_000));
         if (r.kind !== 'workspace.backedUp') { if (r.kind === 'refused') raiseNotice('error', 'The backup could not be taken', [r.headline, r.detail].filter(Boolean).join(': ')); return refusal(r, 'The backup could not be taken'); }
         raiseNotice('info', `Backed up ${r.sessions} session${r.sessions === 1 ? '' : 's'} to ${r.destination}.`);
         return { ok: true, value: { destination: r.destination, sessions: r.sessions, bytes: r.bytes } };
       }
       case 'workspace.restore':
-        return restoreFlow();
+        return restoreFlow(w);
       case 'session.prompt': {
         const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
@@ -1658,35 +1927,39 @@ async function main(): Promise<void> {
         // second renderer on one session (ADR-0043's "several windows", REQ-SHELL-076) would have fed the main window twice and
         // itself never; unseen because only the main window had ever subscribed. The sender is the subscriber (ADR-0043 note).
         relay.subscribe(senderId, req.sessionId);
-        if (senderId === wcId) followedSessionId = req.sessionId;
+        // A2: the follow belongs to whichever MAIN window subscribed — a persona or terminal window subscribes
+        // for itself (the twenty-seventh defect above) and must not move any main window's followed session.
+        { const sender = windowFor(senderId); if (sender) sender.followedSessionId = req.sessionId; }
         const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
         return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be followed');
       }
       case 'session.unsubscribe':
         relay.unsubscribe(senderId, req.sessionId);
-        if (senderId === wcId && followedSessionId === req.sessionId) followedSessionId = null;
+        { const sender = windowFor(senderId); if (sender && sender.followedSessionId === req.sessionId) sender.followedSessionId = null; }
         void runHost.request({ kind: 'session.detach', sessionId: req.sessionId }, millis(5_000)).catch(() => undefined);
         return { ok: true };
       case 'window.openPersona': {
         // REQ-SHELL-072: an unknown agent — here, no followed session for it to belong to — is a silent no-op; the renderer
         // sends the command only for an id its replica holds (the reading in ADR-0048's note).
-        if (followedSessionId === null) { log(`persona window for ${req.agentId} not opened: no session is followed`); return { ok: true, value: { opened: false } }; }
+        if (w.followedSessionId === null) { log(`persona window for ${req.agentId} not opened: no session is followed`); return { ok: true, value: { opened: false } }; }
         const shownAt = Date.now();
-        const wasVisible = personaWindows.entry(req.persona)?.win.isVisible() ?? false;
-        const entry = await personaWindows.open(req.persona, req.agentId, req.focusSteer ?? false);
+        const wasVisible = w.personaWindows.entry(req.persona)?.win.isVisible() ?? false;
+        const entry = await w.personaWindows.open(req.persona, req.agentId, req.focusSteer ?? false);
         if (!wasVisible) measurePersonaPaint(req.persona, entry.win, shownAt);
         return { ok: true, value: { opened: true, reused: wasVisible } };
       }
       case 'window.personaPayload': {
-        const entry = personaWindows.bySender(senderId);
-        if (!entry) return { ok: false, code: 'window.unknown', headline: 'This window is not a persona window' };
-        return { ok: true, value: { persona: entry.persona, sessionId: followedSessionId, select: personaWindows.takeSelection(senderId) } };
+        // A3: from the persona window itself, so its owner is found through the registries rather than assumed.
+        const owner = ownerOfAuxiliary(senderId);
+        const entry = owner?.personaWindows.bySender(senderId);
+        if (!owner || !entry) return { ok: false, code: 'window.unknown', headline: 'This window is not a persona window' };
+        return { ok: true, value: { persona: entry.persona, sessionId: owner.followedSessionId, select: owner.personaWindows.takeSelection(senderId) } };
       }
       case 'window.modality': {
         // ADR-0048's application modality, second execution (Part W): the main window's palette or keyboard help is open or
         // closed; every persona window of the family stops taking input, or takes it again. Only the main window may say so.
-        if (senderId !== wcId) return { ok: false, code: 'window.notMain', headline: 'Only the main window registers an application-modal surface' };
-        const n = personaWindows.setFamilyModal(req.active);
+        if (windowFor(senderId) === undefined) return { ok: false, code: 'window.notMain', headline: 'Only the main window registers an application-modal surface' };
+        const n = w.personaWindows.setFamilyModal(req.active);
         log(`application modality ${req.active ? 'on' : 'off'}: ${n} persona window(s) ${req.active ? 'disabled' : 'enabled'} (ADR-0048)`);
         return { ok: true, value: { windows: n } };
       }
@@ -1703,7 +1976,7 @@ async function main(): Promise<void> {
       // instance has open; the service answers from its store; a write broadcasts channel 10 AFTER the reply.
       case 'requirements': {
         return createRequirementsRelay({
-          currentWorkspace: () => (currentWorkspaceId && currentWorkspace !== '(no workspace)' ? canonicalPath(currentWorkspace) : undefined),
+          currentWorkspace: () => (w.workspaceId && w.workspace !== '(no workspace)' ? canonicalPath(w.workspace) : undefined),
           awaitWorkspace,
           request: (root, r, bound) => services.get(root)?.link.request(r, bound),
           person: () => { try { return userInfo().username; } catch { return process.env['USERNAME'] ?? process.env['USER'] ?? 'unknown'; } },
@@ -1717,28 +1990,35 @@ async function main(): Promise<void> {
   };
   ipcMain.handle(CHANNEL.command, (e, raw) => runCommand(raw, e.sender.id));
 
+  /**
+   * A3: the one call today. REQ-SHELL-010's resolution — the remembered folder, the working directory and the
+   * deferred chooser — is Stage B's; until then a launch either carries a folder or the window opens on the
+   * sentinel, which is the interval ADR-0055 requires to exist at all because the first paint precedes the
+   * workspace read.
+   */
+  const mainWin = await buildMainWindow({ workspace: argvWorkspace ?? '(no workspace)', origin: 'launch' });
+  /**
+   * The verification seams at the end of this function drive the FIRST main window on purpose — a capture is a
+   * photograph of one window — so they go on reading `win`. A proof that wants the second window addresses it
+   * through the driver seam (`useWindow`), and every product path resolves its own window.
+   */
+  const win = mainWin.win;
+
   surface = (h) => {
     // REQ-STARTUP-162/163: surface the window; honour a carried workspace.
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-    if (h.workspace) { void openWorkspace(h.workspace).then(() => { currentWorkspace = h.workspace!; }); }
+    // A3: WHICH window — the most recently focused one (ADR-0055 c.5). REQ-STARTUP-163's "adds a window" for a
+    // carried directory is Stage B's, and the builder above is what will answer it; today the carried folder is
+    // opened in the window that is surfaced, which is what the single-window build did.
+    const target = activeWindow();
+    if (!target) { log('hand-over received with no main window to surface'); return; }
+    if (target.win.isMinimized()) target.win.restore();
+    target.win.show();
+    target.win.focus();
+    if (h.workspace) { void openWorkspace(h.workspace).then(() => { target.workspace = h.workspace!; }); }
     log(`hand-over received${h.workspace ? ` with workspace ${h.workspace}` : ''}`);
   };
   for (const h of pendingHandOvers.splice(0)) surface(h);
 
-  // REQ-CONFIG-287: a user-initiated close asks the window's unsaved-settings guard; a cancelled guard leaves the window open.
-  let closeConfirmed = false;
-  win.on('close', (event) => {
-    if (closeConfirmed || win.isDestroyed()) return;
-    event.preventDefault();
-    void win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true').then((proceed: unknown) => {
-      if (proceed === false) return;
-      closeConfirmed = true;
-      win.close();
-    }).catch(() => { closeConfirmed = true; win.close(); });
-  });
-  win.once('ready-to-show', () => win.show());
   /**
    * The driver seam (verification only). `ROTARIS_DRIVER=<path>` starts a loopback listener and writes the port
    * and this launch's secret to that path; with the variable unset nothing listens and nothing is written.
@@ -1752,7 +2032,22 @@ async function main(): Promise<void> {
   const driverEndpoint = __ROTARIS_SEAMS__ ? process.env['ROTARIS_DRIVER'] : undefined;
   if (driverEndpoint) {
     const driver = startDriver(driverEndpoint, {
-      window: () => (win.isDestroyed() ? null : win),
+      /**
+       * A4: the seam addresses a window instead of assuming there is one. `which` is an index into the
+       * most-recently-focused ordering, or a suffix of a window's workspace path so a proof can say which
+       * project it means; absent is the active window, which is what every proof written before two windows
+       * existed already meant. A selector that matches nothing returns null and the driver refuses.
+       */
+      window: (which) => {
+        const ordered = orderedMainWindows();
+        const picked = which === undefined
+          ? activeWindow()
+          : /^\d+$/.test(which)
+            ? ordered[Number(which)]
+            : ordered.find((candidate) => candidate.workspace.toLowerCase().endsWith(which.toLowerCase()));
+        return picked && !picked.win.isDestroyed() ? picked.win : null;
+      },
+      windows: () => orderedMainWindows().map((candidate, index) => ({ index, workspace: candidate.workspace, wcId: candidate.wcId })),
       timers: clocks.timers,
       monotonic: clocks.monotonic,
       log,
@@ -1761,26 +2056,6 @@ async function main(): Promise<void> {
     });
     app.on('will-quit', () => driver.close());
   }
-  /**
-   * Part AA's verification seams (only with `ROTARIS_CAPTURE_PNG`).
-   *
-   * `ROTARIS_CAPTURE_NET=1` logs **every request this window's session issues**, from the MAIN process rather
-   * than from the page — REQ-CHAT-056's "no image is ever loaded from a Markdown image reference" is a claim
-   * about the process, and a page cannot honestly measure itself. The observer sees the app's own `file:` assets too;
-   * the proof reads the whole list rather than a filtered one.
-   *
-   * `ROTARIS_ROWS_PROOF=1` loads the renderer in the `rows-proof` role — the row renderer mounted over a fixture
-   * array, which is the surface Part AA can prove before Part Z's pool exists (the plan's own instruction).
-   */
-  if (capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {
-    win.webContents.session.webRequest.onBeforeRequest((details, callback) => {
-      log(`capture: net ${details.method} ${details.resourceType} ${details.url}`);
-      callback({});
-    });
-  }
-  const rowsProof = capturing && process.env['ROTARIS_ROWS_PROOF'] === '1';
-  if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(rowsProof ? `${process.env['ELECTRON_RENDERER_URL']}?role=rows-proof` : process.env['ELECTRON_RENDERER_URL']);
-  else await win.loadFile(join(__dirname, '../renderer/index.html'), rowsProof ? { query: { role: 'rows-proof' } } : undefined);
 
   if (argvWorkspace) await openWorkspace(argvWorkspace);
 
@@ -2284,23 +2559,23 @@ async function main(): Promise<void> {
      */
     for (const step of steps(process.env['ROTARIS_CAPTURE_GAP_AT'])) {
       clocks.timers.after(millis(step.at), () => {
-        if (!followedSessionId) { log(`capture: gap-at ${step.at}: no session followed`); return; }
+        if (!mainWin.followedSessionId) { log(`capture: gap-at ${step.at}: no session followed`); return; }
         const count = Math.max(1, Number(step.selector) || 1);
         for (let i = 0; i < count; i += 1) {
           win.webContents.send(CHANNEL.transcriptIncrement, {
-            v: CONTRACT_SCHEMA_VERSION, sessionId: followedSessionId, seq: 1_000_000 + i, earliestChanged: 0, rows: [], diffs: [], personas: [],
+            v: CONTRACT_SCHEMA_VERSION, sessionId: mainWin.followedSessionId, seq: 1_000_000 + i, earliestChanged: 0, rows: [], diffs: [], personas: [],
           });
         }
         log(`capture: gap-at ${step.at} → ${count} publications numbered from 1000000`);
       });
     }
     for (const step of steps(process.env['ROTARIS_CAPTURE_RECONCILE_AT'])) {
-      clocks.timers.after(millis(step.at), () => { if (followedSessionId) { void runCommand({ kind: 'session.reconcile', sessionId: followedSessionId }); log(`capture: reconcile at ${step.at}`); } else log(`capture: reconcile at ${step.at}: no session followed`); });
+      clocks.timers.after(millis(step.at), () => { if (mainWin.followedSessionId) { void runCommand({ kind: 'session.reconcile', sessionId: mainWin.followedSessionId }); log(`capture: reconcile at ${step.at}`); } else log(`capture: reconcile at ${step.at}: no session followed`); });
     }
     for (const step of steps(process.env['ROTARIS_CAPTURE_WINDOWS_AT'])) {
-      clocks.timers.after(millis(step.at), () => { log(`capture: windows-at ${step.at} → ${JSON.stringify(personaWindows.list())}`); });
+      clocks.timers.after(millis(step.at), () => { log(`capture: windows-at ${step.at} → ${JSON.stringify(mainWin.personaWindows.list())}`); });
     }
-    const firstPersona = () => personaWindows.list().map((w) => personaWindows.entry(w.persona)).find((e) => e !== undefined && !e.win.isDestroyed()) ?? null;
+    const firstPersona = () => mainWin.personaWindows.list().map((p) => mainWin.personaWindows.entry(p.persona)).find((e) => e !== undefined && !e.win.isDestroyed()) ?? null;
     for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_PNG_AT'])) {
       clocks.timers.after(millis(step.at), async () => {
         const e = firstPersona();

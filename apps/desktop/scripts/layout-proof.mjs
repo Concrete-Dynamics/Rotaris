@@ -87,7 +87,17 @@ const measure = async () => JSON.parse(await d.eval(MEASURE));
 
 try {
   await d.waitFor('.app-shell', { timeoutMs: 30_000 });
-  await d.chord('Ctrl+2');
+  /**
+   * Navigate by CLICKING the rail rather than by sending Ctrl+2 (REQ-SHELL-028: "a click checks the button and
+   * switches the view"). The chord used to be sent immediately after `.app-shell` first matched, and the
+   * driver's `chord` op sends the key event with no readiness wait of its own — so the keystroke could arrive
+   * before the shell had bound its window keydown handler, be silently lost, and leave this proof waiting the
+   * full 15 s for a view it had never actually asked for. It passed only because the first frame used to be
+   * cheap enough that the handler was bound within the ~10 ms the driver took to get there; widening the window
+   * to REQ-SHELL-022's 1440×900 made the first paint dearer and the race visible. `click` waits for its target,
+   * so the navigation this proof depends on is now an assertion instead of a hope.
+   */
+  await d.click('.nav-item', { text: 'Workspace', timeoutMs: 15_000 });
   await d.waitFor('.workspace', { timeoutMs: 15_000 });
 
   /** The two structural assertions, at whatever size is current. */

@@ -105,6 +105,59 @@ must be green before a commit. `pnpm build` then `electron apps/desktop/out/main
 real OpenRouter key in a throwaway workspace, bounded by the provider's own accounting. It spends the owner's
 money, it is never automatic, and an agent asks before running it.
 
+## Where the work happens — a temporary branch in a temporary worktree
+
+**Every change is built on a temporary branch in its own temporary worktree, and lands on `main` by a merge
+the agent performs itself.** The primary checkout at `D:\Development\Apps\Rotaris-crw` is not a place to
+write: another agent may be working in it, `apps/desktop/out` is shared by every Electron proof so two builds
+in one tree corrupt each other, and a half-finished edit there is indistinguishable from someone else's. Only
+trivially reversible, single-file edits to documentation may be made in place, and only when `git status` is
+clean.
+
+**Take the worktree first, before the first edit:**
+
+```
+git log --oneline -1 main                     # the merge base, read before anything
+git worktree add -b <topic> ../Rotaris-crw-wt-<short> main
+cd ../Rotaris-crw-wt-<short>
+pnpm install --prefer-offline
+node node_modules/electron/install.js         # electron's dist/ is NOT installed into a worktree;
+                                              # the first proof launch fails without it
+```
+
+Branch names say what the work is (`part-<letter>-<topic>`, `fix-<topic>`). The worktree directory is
+`../Rotaris-crw-wt-<short>` so it sits beside the checkout and never inside it.
+
+**Then merge it back, and persevere.** Work is not done when the branch is green; it is done when `main` is
+green with the branch in it. Abandoning a branch because the merge is hard is not an outcome an agent may
+choose — the cost of an unmerged branch is paid later, by someone who cannot see what was meant.
+
+- **Re-read `main` before merging.** It moves: the owner commits to it directly, and other lanes land. A merge
+  base from an hour ago is a guess. A trailer-less commit on `main` authored by the owner is theirs — surface a
+  collision with it, never reset it.
+- **Resolve every conflict by reading both sides.** Conflicts here come in five shapes and only one of them is
+  keep-both: disjoint blocks in one file (concatenate), a shared array or object literal both sides extended
+  (merge the entries), a shared import line naming different symbols (the wider form wins, or a symbol binds
+  twice), prose one side revised in place rather than added beside (splice the clause into the newer copy, or
+  one side's content is silently dropped), and a real implementation against the other branch's placeholder
+  (the implementation wins, or the stub shadows it). Guessing produces a silently dead branch.
+- **Never `git add -A` or `git commit -a` during a merge, or in a shared checkout.** Stage the conflicted paths
+  by name. Anything else picks up another agent's work or un-ignored evidence directories.
+- **After a keep-both merge, run the compiler, not a sweep you wrote.** Command ids, preference keys, barrel
+  re-exports, zod literal kinds, `case` labels, script names and ignore entries all duplicate silently, and
+  `tsc` finds in seconds what a regex misses entirely.
+- **Verify on merged `main`, never in the worktree.** `pnpm check` green in a worktree is not evidence that it
+  is green anywhere: proofs that reach into per-workspace state have passed in the tree they were written in
+  and failed in the primary checkout on a directory name alone. A merged product holds defect shapes neither
+  half can see.
+- **Remove the worktree once it is merged**: `git worktree remove ../Rotaris-crw-wt-<short>` and
+  `git branch -d <topic>`, so the next session inherits a list of live work rather than a graveyard.
+
+One trap that has cost a whole-file diff before: `core.autocrlf=true` checks the working copy out CRLF while
+every blob in the repository is bare LF. Read and write files with the line ending the working copy already
+has, match `\r?\n` in any regex, and read `git diff --stat` — or
+`git diff --ignore-cr-at-eol --numstat` — before committing a scripted edit.
+
 ## The architecture views — consult before, maintain after
 
 `docs/architecture/views/` holds the system as built from three perspectives: the **component view**
